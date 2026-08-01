@@ -312,6 +312,11 @@ shape whether the step ran inside a scenario or via `do`.
   make, through `ctx.request()` and the page alike; non-GET/HEAD counts as
   a write. It is what run-time keyword enforcement and read-only
   environments act on — measured, never declared (see Keyword semantics).
+- `used` (present only when non-empty) lists the receipt ids whose results
+  this execution actually read through `ctx.resultOf` — the accessor is
+  tool-provided, so the reads are measurable. The dependency is thus
+  visible twice: statically as an import, at run time as provenance in the
+  receipt chain.
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
