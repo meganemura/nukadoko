@@ -1,12 +1,12 @@
-# nuka specification
+# nukadoko specification
 
-> nuka — a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
+> nukadoko — a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
 
 Status: design draft. No code exists yet.
 
-## What nuka is
+## What nukadoko is
 
-nuka is an agent-first engine that runs Gherkin. Humans write and review the durable
+nukadoko is an agent-first engine that runs Gherkin. Humans write and review the durable
 artifacts — feature files, typed step definitions, sign-off records — and
 agents execute them. Everything about the runtime is optimized for an agent's
 trial-and-error loop: every step has a typed contract, every step can be run
@@ -22,24 +22,24 @@ vocabulary lacks an operation, the agent scaffolds and implements a new step
 and a human reviews the PR. Every interface prefers machine-readable output;
 human prettiness is delegated to Allure.
 
-A nuka-doko is the fermented rice-bran bed that turns cucumbers into pickles.
+A nukadoko is the fermented rice-bran bed that turns cucumbers into pickles.
 It is alive: tended daily it matures, neglected it dies. That is the claim
 this tool makes about step definitions — they are a living culture, not a
 write-once test asset — and the agent is what tends them.
 
-nuka deliberately owns as little as possible:
+nukadoko deliberately owns as little as possible:
 
 | Concern | Owner |
 |---|---|
 | Gherkin syntax (Background, Scenario Outline, tables, docstrings, tags) | `@cucumber/gherkin` — the official parser compiles features into flat "pickles" |
 | Step pattern matching (`{string}`, `{int}`, custom parameter types) | `@cucumber/cucumber-expressions` |
-| Pretty reports | Allure — nuka emits `allure-results`, never renders HTML |
+| Pretty reports | Allure — nukadoko emits `allure-results`, never renders HTML |
 | Approval of what-would-prove-what | git — PR review of features and step definitions, CODEOWNERS |
-| **Typed step contracts** | **nuka** |
-| **Execution and measurement (receipts)** | **nuka** |
-| **Sessions, environments, secrets** | **nuka** |
-| **Keyword semantics (Then must not mutate)** | **nuka** |
-| **Sign-off records** | **nuka** |
+| **Typed step contracts** | **nukadoko** |
+| **Execution and measurement (receipts)** | **nukadoko** |
+| **Sessions, environments, secrets** | **nukadoko** |
+| **Keyword semantics (Then must not mutate)** | **nukadoko** |
+| **Sign-off records** | **nukadoko** |
 
 ## Problem
 
@@ -59,20 +59,20 @@ results. Nothing structurally prevents it from reporting a plausible result
 without executing anything, and the improvised operations leave no reviewable
 artifact behind.
 
-nuka closes both: the vocabulary of operations is committed, typed, and
+nukadoko closes both: the vocabulary of operations is committed, typed, and
 reviewed; execution is owned by the tool, which measures what happened
 instead of trusting anyone's account of it.
 
 ## Typed steps
 
-nuka follows Cucumber's layout convention: feature files and the code that
+nukadoko follows Cucumber's layout convention: feature files and the code that
 supports them live together under `features/`, so a migrating team keeps its
 mental model and its directory tree. The suggested home for typed steps is
 `features/steps/`, 1 step = 1 file: `features/steps/<name>.ts` (kebab-case;
 the file name is the step name).
 
 ```ts
-import { defineStep } from "nuka";
+import { defineStep } from "nukadoko";
 import { z } from "zod";
 
 export default defineStep({
@@ -139,12 +139,12 @@ import:
 
 ```ts
 // before: import { Given, When, Then } from "@cucumber/cucumber";
-import { Given, When, Then } from "nuka/compat";
+import { Given, When, Then } from "nukadoko/compat";
 ```
 
 - Compat steps run as-is: same pattern syntax, a World (`this`) whose
-  `page` / `request` are provided and managed by nuka's harness. Custom
-  World classes extend nuka's base via `setWorldConstructor`. The supported
+  `page` / `request` are provided and managed by nukadoko's harness. Custom
+  World classes extend nukadoko's base via `setWorldConstructor`. The supported
   API is the commonly used subset (Given/When/Then, World, Before/After);
   it grows on demand, not speculatively.
 - Because the harness owns the browser and request objects, compat steps
@@ -164,7 +164,7 @@ nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--tag
 
 `@cucumber/gherkin` compiles the file into pickles — flat, self-contained
 scenarios with Background merged, Scenario Outline expanded, and tables
-attached. nuka matches each pickle step against the committed patterns and
+attached. nukadoko matches each pickle step against the committed patterns and
 executes the steps in order. One receipt per step; one scenario record
 (feature path, scenario name, ordered receipt ids, status) per pickle.
 
@@ -206,7 +206,7 @@ shape whether the step ran inside a scenario or via `do`.
   "started_at": "...",
   "finished_at": "...",
   "evidence": {
-    "dir": ".nuka/receipts/rcpt-20260801-143022-a1b2",
+    "dir": ".nukadoko/receipts/rcpt-20260801-143022-a1b2",
     "trace": "trace.zip",
     "screenshots": ["final.png"],
     "http": "http.jsonl"
@@ -220,7 +220,7 @@ shape whether the step ran inside a scenario or via `do`.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `ctx.request()`
   call logged to http.jsonl, the receipt itself as the primary record.
-- Receipts live under the state directory (`.nuka/`, gitignored). They are
+- Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
 ## Sessions, environments, secrets
@@ -241,14 +241,14 @@ The execution infrastructure Cucumber never had:
   zero-config detection and classification of secret sources, `secrets.md`
   optional. To be redesigned before M1 is finalized.
 
-Configuration lives in `nuka.config.ts` (`defineConfig`): `featuresDir`
+Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
-`.nuka`), `browser`.
+`.nukadoko`), `browser`.
 
 ### The state directory
 
-Everything nuka writes at run time lives under `.nuka/` (gitignored by
+Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 `init`); none of it is meant to be committed:
 
 - `receipts/<id>/` — one directory per receipt: the receipt JSON, its
@@ -278,7 +278,7 @@ nuka signoff create \
   additionally checks the scenario record: every step ran ok, in order.
   Failed attempts under a cited tag are recorded as attempts, visible but
   never treated as evidence.
-- The reasoning — why these facts prove those criteria — is judgment. nuka
+- The reasoning — why these facts prove those criteria — is judgment. nukadoko
   does not evaluate it; it preserves it for human review, permanently
   separated from the facts it cites.
 - There is no plan subsystem. The question "what would prove this?" is
@@ -292,7 +292,7 @@ nuka signoff create \
 
 ## Allure emitter
 
-nuka's only presentation layer is the `allure-results` directory (Allure 2
+nukadoko's only presentation layer is the `allure-results` directory (Allure 2
 file format, readable by Allure 2 and 3):
 
 - A scenario run maps to one Allure test result: steps as steps, evidence
@@ -300,7 +300,7 @@ file format, readable by Allure 2 and 3):
   parameters.
 - A `do` sequence grouped by `--tag` maps to one test result named by the
   tag — agent sessions and CI replays land in the same dashboard.
-- Viewing, history, trends, flakiness: all Allure's job. nuka has no web UI.
+- Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
 
 ## Self-healing, audited
 
@@ -313,12 +313,14 @@ matches reality), the repair loop is:
 3. The diff between script and receipts becomes a PR: updated typed steps
    and/or an updated feature file, reviewed like any other change.
 
-nuka's contribution is that every stage leaves a record; the authoring is an
+nukadoko's contribution is that every stage leaves a record; the authoring is an
 agent workflow (bundled skill), not engine magic. Self-healing without an
 audit trail is how test suites silently stop testing anything — the deviation
 record is the point.
 
 ## CLI summary
+
+The npm package is `nukadoko`; the one command it installs is `nuka`.
 
 ```
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results
@@ -340,18 +342,18 @@ nuka skill path|install       install the agent-facing skill
 
 - Semantic truth of a step's implementation rests on PR review. The tool
   guarantees the shape of inputs/outputs and the fact of execution.
-- nuka cannot stop an agent with shell access from reading `.env` directly;
+- nukadoko cannot stop an agent with shell access from reading `.env` directly;
   it removes the structural necessity of secrets passing through the agent's
   context.
 - A sign-off is not a proof; it is a durable, reviewable record of a judgment.
 - No test parallelism, sharding, retries, or CI reporting. No outbound
-  network I/O by nuka itself. No HTML rendering — that is Allure's job.
+  network I/O by nukadoko itself. No HTML rendering — that is Allure's job.
 
 ## Roadmap
 
 - **M1 — engine core**: `defineStep`, `do`, `run` over pickles, receipts,
   sessions/environments, `check`, `init`. Secrets onboarding redesigned.
-- **M2 — compat API**: `nuka/compat` (Given/When/Then/World/hooks subset),
+- **M2 — compat API**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
 - **M3 — Allure emitter**: allure-results for scenario runs and tag
   sequences; drop-in dashboard story.

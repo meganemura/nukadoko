@@ -13,9 +13,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/meganemura/nuka.git"
+    "url": "git+https://github.com/meganemura/nukadoko.git"
   },
-  "homepage": "https://github.com/meganemura/nuka#readme",
+  "homepage": "https://github.com/meganemura/nukadoko#readme",
   "author": "meganemura",
   "license": "MIT",
   "files": [],
