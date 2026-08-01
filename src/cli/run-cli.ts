@@ -5,6 +5,7 @@ import yargs from "yargs";
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
+import { runCheck } from "./check.js";
 import { runDo } from "./do.js";
 import { runInit } from "./init.js";
 import { runScaffold } from "./scaffold.js";
@@ -13,15 +14,17 @@ import { loadVocabulary, describeContract, formatVocabularyError, summarize } fr
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`, `session list`/`clear`, `init`, `scaffold`) to yargs and turns any
+// `do`, `session list`/`clear`, `init`, `scaffold`, `check`) to yargs and turns any
 // failure — yargs' own (bad flags, no command) or ours (config/discovery
 // errors, unknown step name) — into stderr output plus a non-zero exit
 // code, without ever calling `process.exit` itself. That is `cli.ts`'s job,
 // so this function stays callable directly from tests. `do`'s own setup/
 // execution split and receipt writing lives in cli/do.ts; `session`'s own
 // list/clear logic lives in cli/session.ts; `init`/`scaffold`'s own
-// generation logic lives in cli/init.ts and cli/scaffold.ts; this module
-// only wires their argv shapes and reports their exit codes.
+// generation logic lives in cli/init.ts and cli/scaffold.ts; `check`'s own
+// analysis lives in cli/check.ts (thin wiring) and src/check/* (the actual
+// checks); this module only wires their argv shapes and reports their exit
+// codes.
 
 export type { WritableSink } from "./writable-sink.js";
 
@@ -62,6 +65,10 @@ interface InitArgs {
 
 interface ScaffoldArgs {
   name: string;
+}
+
+interface CheckArgs {
+  json?: boolean;
 }
 
 export async function runCli(
@@ -252,6 +259,26 @@ export async function runCli(
     },
   };
 
+  const checkCommand: CommandModule<Record<string, never>, CheckArgs> = {
+    command: "check",
+    describe:
+      "static checks: pattern/schema mismatches, Then binding to mutating steps, undefined steps per feature, duplicate patterns, config coherence",
+    builder: (y: Argv) =>
+      y.option("json", {
+        type: "boolean",
+        default: false,
+        describe: "machine-readable output",
+      }) as Argv<CheckArgs>,
+    handler: async (args: Arguments<CheckArgs>) => {
+      exitCode = await runCheck({
+        rootDir,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const sessionCommand: CommandModule = {
     command: "session",
     describe: "list|clear sessions",
@@ -277,6 +304,7 @@ export async function runCli(
     .command(sessionCommand)
     .command(initCommand)
     .command(scaffoldCommand)
+    .command(checkCommand)
     .demandCommand(1)
     .strict()
     .help();
