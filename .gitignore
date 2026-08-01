@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .nukadoko/
+tests/.tmp-fixtures/
 .env
 .env.*
 !.env.example

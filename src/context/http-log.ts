@@ -1,0 +1,72 @@
+import { appendFile } from "node:fs/promises";
+import type { APIRequestContext, APIResponse } from "playwright";
+
+// Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
+// step's `run()` so every HTTP call it makes is measured and appended to
+// http.jsonl — one JSON object per line, method/url/status/duration_ms only
+// (never request/response bodies: docs/spec.md "Receipts" says evidence is
+// collected by the harness, not asserted by the step, and bodies may carry
+// secrets this slice has no redaction story for yet).
+//
+// A manual per-method wrapper, not a Proxy: Playwright's client classes are
+// plain JS objects/prototypes as far as this package can see, but a Proxy
+// still changes `this` to the proxy itself for any method invoked through
+// it. Explicit delegation keeps `this` bound to the real context for every
+// call, logged or not, with no reliance on how Playwright implements state
+// internally.
+
+async function logCall(
+  logPath: string,
+  method: string,
+  url: string,
+  send: () => Promise<APIResponse>,
+): Promise<APIResponse> {
+  const startedAt = performance.now();
+  const response = await send();
+  const durationMs = Math.round(performance.now() - startedAt);
+  const entry = { method, url, status: response.status(), duration_ms: durationMs };
+  await appendFile(logPath, `${JSON.stringify(entry)}\n`);
+  return response;
+}
+
+function urlOf(target: Parameters<APIRequestContext["fetch"]>[0]): string {
+  return typeof target === "string" ? target : target.url();
+}
+
+// `options?.method` wins when given; otherwise a Request object (unlike a
+// bare URL string) already knows its own method, so ask it rather than
+// defaulting to GET and misreporting e.g. a POST Request passed with no
+// `options` at all.
+function methodOf(
+  target: Parameters<APIRequestContext["fetch"]>[0],
+  options?: Parameters<APIRequestContext["fetch"]>[1],
+): string {
+  const method = options?.method ?? (typeof target === "string" ? undefined : target.method());
+  return (method ?? "GET").toUpperCase();
+}
+
+/** Wraps `target` so get/post/put/patch/delete/head/fetch are logged to
+ * `logPath`; `dispose`/`storageState` pass straight through unlogged. */
+export function wrapRequestContextWithLogging(
+  target: APIRequestContext,
+  logPath: string,
+): APIRequestContext {
+  return {
+    get: (url, options) => logCall(logPath, "GET", url, () => target.get(url, options)),
+    post: (url, options) => logCall(logPath, "POST", url, () => target.post(url, options)),
+    put: (url, options) => logCall(logPath, "PUT", url, () => target.put(url, options)),
+    patch: (url, options) => logCall(logPath, "PATCH", url, () => target.patch(url, options)),
+    delete: (url, options) => logCall(logPath, "DELETE", url, () => target.delete(url, options)),
+    head: (url, options) => logCall(logPath, "HEAD", url, () => target.head(url, options)),
+    fetch: (urlOrRequest, options) =>
+      logCall(logPath, methodOf(urlOrRequest, options), urlOf(urlOrRequest), () =>
+        target.fetch(urlOrRequest, options),
+      ),
+    dispose: (options) => target.dispose(options),
+    storageState: (options) => target.storageState(options),
+    // Pass-through, not logged: `tracing` isn't an HTTP call, and
+    // `[Symbol.asyncDispose]` is `dispose()`'s `using`-syntax alias.
+    tracing: target.tracing,
+    [Symbol.asyncDispose]: () => target[Symbol.asyncDispose](),
+  };
+}

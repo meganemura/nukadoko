@@ -1,9 +1,17 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  fixture,
+  removeTempDir,
+  repoRoot,
+} from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -97,6 +105,185 @@ describe("nuka describe", () => {
   });
 });
 
+describe("nuka do", () => {
+  it("executes a pure ok step and writes a receipt", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["do", "echo", "--args", JSON.stringify({ value: "hi" })], {
+        rootDir,
+        stdout,
+        stderr,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stderr.text()).toBe("");
+      const receipt = JSON.parse(stdout.text());
+      expect(receipt.status).toBe("ok");
+      expect(receipt.step).toBe("echo");
+      expect(receipt.kind).toBe("do");
+      expect(receipt.args).toEqual({ value: "hi" });
+      expect(receipt.result).toEqual({ value: "hi" });
+      expect(receipt.environment).toBe("default");
+      expect(receipt.session).toBeNull();
+      expect(receipt.scenario).toBeNull();
+      expect(receipt.tag).toBeNull();
+      expect(receipt.evidence.dir).toBe(path.join(".nukadoko", "receipts", receipt.receipt_id));
+      expect(receipt.evidence.screenshots).toEqual([]);
+      expect(receipt.evidence.trace).toBeUndefined();
+      expect(receipt.evidence.http).toBeUndefined();
+
+      const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
+      expect(existsSync(receiptPath)).toBe(true);
+      const onDisk = JSON.parse(await readFile(receiptPath, "utf8"));
+      expect(onDisk).toEqual(receipt);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("threads --tag through to the receipt, defaulting to null", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(
+        ["do", "echo", "--args", JSON.stringify({ value: "hi" }), "--tag", "issue-123"],
+        { rootDir, stdout, stderr: createCaptureSink() },
+      );
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(stdout.text()).tag).toBe("issue-123");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("writes a failed receipt with exit 1 when args fail schema validation", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["do", "echo", "--args", "{}"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(1);
+      const receipt = JSON.parse(stdout.text());
+      expect(receipt.status).toBe("failed");
+      expect(receipt.result).toBeUndefined();
+      expect(receipt.error.message).toBeTruthy();
+      expect(existsSync(path.join(rootDir, receipt.evidence.dir, "receipt.json"))).toBe(true);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("writes a failed receipt with exit 1 when run throws", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["do", "throws", "--args", "{}"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(1);
+      const receipt = JSON.parse(stdout.text());
+      expect(receipt.status).toBe("failed");
+      expect(receipt.error.message).toBe("boom");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("writes a failed receipt with exit 1 when the result fails its returns schema", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["do", "bad-returns", "--args", "{}"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(1);
+      const receipt = JSON.parse(stdout.text());
+      expect(receipt.status).toBe("failed");
+      expect(receipt.error.message).toContain("returns");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("does not create a receipts directory for an unknown step", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["do", "no-such-step", "--args", "{}"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr,
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderr.text()).toContain("no-such-step");
+      expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("does not create a receipts directory for malformed --args JSON", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["do", "echo", "--args", "{not json"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr,
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderr.text()).not.toBe("");
+      expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("executes create-project against basic-project end to end (acceptance scenario)", async () => {
+    const rootDir = await copyFixtureToTempDir("basic-project");
+    try {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(
+        ["do", "create-project", "--args", JSON.stringify({ name: "x" })],
+        { rootDir, stdout, stderr },
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stderr.text()).toBe("");
+      const receipt = JSON.parse(stdout.text());
+      expect(receipt.status).toBe("ok");
+      expect(receipt.result).toEqual({ id: "p_0001", name: "x" });
+
+      const receiptPath = path.join(
+        rootDir,
+        ".nukadoko",
+        "receipts",
+        receipt.receipt_id,
+        "receipt.json",
+      );
+      expect(existsSync(receiptPath)).toBe(true);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+});
+
 describe("nuka (process)", () => {
   it("runs end-to-end via tsx against a fixture project", async () => {
     const cliPath = path.join(repoRoot, "src", "cli.ts");
@@ -113,5 +300,35 @@ describe("nuka (process)", () => {
       "get-project",
       "list-projects",
     ]);
+  });
+
+  it("runs `do` end-to-end via tsx against a fixture project, receipt.json included", async () => {
+    const cliPath = path.join(repoRoot, "src", "cli.ts");
+    const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
+    const rootDir = await copyFixtureToTempDir("basic-project");
+
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        tsxBin,
+        [cliPath, "do", "create-project", "--args", '{"name":"x"}'],
+        { cwd: rootDir },
+      );
+
+      expect(stderr).toBe("");
+      const receipt = JSON.parse(stdout);
+      expect(receipt.status).toBe("ok");
+      expect(receipt.result).toEqual({ id: "p_0001", name: "x" });
+
+      const receiptPath = path.join(
+        rootDir,
+        ".nukadoko",
+        "receipts",
+        receipt.receipt_id,
+        "receipt.json",
+      );
+      expect(existsSync(receiptPath)).toBe(true);
+    } finally {
+      await removeTempDir(rootDir);
+    }
   });
 });

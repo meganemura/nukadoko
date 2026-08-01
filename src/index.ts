@@ -7,5 +7,6 @@ export type { NukadokoConfig, NukadokoConfigInput } from "./config/schema.js";
 export { defineConfig } from "./config/define-config.js";
 export { ConfigError } from "./config/errors.js";
 export type { PollOptions, StepContext } from "./context.js";
+export type { EvidenceMeta, Receipt, ReceiptFailed, ReceiptOk } from "./receipt/types.js";
 export type { Step, StepDefinitionInput } from "./step/define-step.js";
 export { defineStep } from "./step/define-step.js";

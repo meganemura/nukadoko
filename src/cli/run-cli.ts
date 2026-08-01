@@ -5,21 +5,19 @@ import yargs from "yargs";
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
+import { runDo } from "./do.js";
 import { loadVocabulary, describeContract, formatVocabularyError, summarize } from "./vocabulary.js";
+import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: wires the two commands this slice ships (`steps`,
-// `describe`) to yargs and turns any failure — yargs' own (bad flags, no
-// command) or ours (config/discovery errors, unknown step name) — into
-// stderr output plus a non-zero exit code, without ever calling
-// `process.exit` itself. That is `cli.ts`'s job, so this function stays
-// callable directly from tests.
+// Responsibility: wires the commands this slice ships (`steps`, `describe`,
+// `do`) to yargs and turns any failure — yargs' own (bad flags, no command)
+// or ours (config/discovery errors, unknown step name) — into stderr output
+// plus a non-zero exit code, without ever calling `process.exit` itself.
+// That is `cli.ts`'s job, so this function stays callable directly from
+// tests. `do`'s own setup/execution split and receipt writing lives in
+// cli/do.ts; this module only wires its argv shape and reports its exit code.
 
-// Narrower than NodeJS.WritableStream on purpose: it's the entire surface
-// this module needs, and it's trivial to fake in a test without matching
-// the real stream interface's many unrelated members.
-export interface WritableSink {
-  write(chunk: string): unknown;
-}
+export type { WritableSink } from "./writable-sink.js";
 
 export interface RunCliOptions {
   rootDir?: string;
@@ -33,6 +31,12 @@ interface StepsArgs {
 
 interface DescribeArgs {
   name: string;
+}
+
+interface DoArgs {
+  name: string;
+  args: string;
+  tag?: string;
 }
 
 export async function runCli(
@@ -101,6 +105,37 @@ export async function runCli(
     },
   };
 
+  const doCommand: CommandModule<Record<string, never>, DoArgs> = {
+    command: "do <name>",
+    describe: "execute one typed step; receipt to stdout",
+    builder: (y: Argv) =>
+      y
+        .positional("name", {
+          type: "string",
+          demandOption: true,
+          describe: "step name (as listed by `nuka steps`)",
+        })
+        .option("args", {
+          type: "string",
+          demandOption: true,
+          describe: "step arguments as a JSON object",
+        })
+        .option("tag", {
+          type: "string",
+          describe: "group this call under a tag",
+        }) as Argv<DoArgs>,
+    handler: async (args: Arguments<DoArgs>) => {
+      exitCode = await runDo({
+        rootDir,
+        name: args.name,
+        argsJson: args.args,
+        tag: args.tag ?? null,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const parser = yargs(argv)
     .scriptName("nuka")
     .exitProcess(false)
@@ -110,6 +145,7 @@ export async function runCli(
     })
     .command(stepsCommand)
     .command(describeCommand)
+    .command(doCommand)
     .demandCommand(1)
     .strict()
     .help();

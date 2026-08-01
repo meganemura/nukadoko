@@ -27,6 +27,7 @@ export interface StepContext {
   section(name: string): void;
   /** Environment variables from the configured envFiles (read-only). */
   readonly env: Readonly<Record<string, string | undefined>>;
-  /** The configured baseURL. */
-  readonly baseURL: string;
+  /** The configured baseURL. `undefined` when the config doesn't set one;
+   * `request()` is what raises the "which key to set" error, not this type. */
+  readonly baseURL: string | undefined;
 }
