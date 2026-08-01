@@ -163,24 +163,49 @@ export default defineStep({
 - `ctx.section(name)` — names a stretch of the run in its progress log.
 - `ctx.env` — environment variables from the configured envFiles (read-only).
 - `ctx.baseURL` — the configured baseURL.
+- `ctx.resultOf(stepModule)` — the validated result of that step's most
+  recent successful execution in the current scenario; `undefined` under
+  `nuka do` or when the step hasn't succeeded yet. This is the scenario
+  path's data channel, and it is deliberately not a World: nothing can be
+  written to it, only results that passed their `returns` schema can be
+  read from it, and the dependency is a visible `import` of the other step
+  module — typed by that step's own schema, reviewable in the diff. A
+  feature line like "that listing is closed" is implementable exactly to
+  the extent its referent produced a validated result.
 
 ### Keyword semantics
 
-Gherkin keywords stop being decoration:
+Gherkin keywords stop being decoration — not because declarations are
+trusted, but because the tool measures. Real corpora forced this split:
+the same sentence legitimately appears in both Action and Outcome
+positions, idiomatic suites chain actions after `Then` via `And`, and a
+step wrapping an arbitrary command has no single truthful `mutates` value.
+A per-step boolean cannot carry a per-occurrence fact, so enforcement is
+layered:
 
-- A step bound in **Then position** must be `mutates: false`. `nuka check`
-  and `nuka run` both enforce it.
-- Given/When positions accept any step.
-- Compat (untyped) steps cannot be checked; they get a soft warning instead.
+- `mutates` stays as the step's **declared intent** (default `true`;
+  read-only steps declare `false`).
+- **Statically**, `nuka check` warns — not errors — when a declared-
+  mutating step is bound in Then position. The tension deserves human
+  eyes, but the declaration alone cannot settle it.
+- **At run time**, the receipt records what the execution actually did:
+  every network call the tool saw (through `ctx.request()` and the page
+  alike), with non-GET/HEAD calls counted as observed writes. A step
+  executing in Then position whose execution observes writes fails — per
+  occurrence, measured, regardless of what was declared.
 - Gherkin classifies an `And`/`But` step by inheriting the pickle step type
-  of the preceding primary keyword (Given/When/Then) — this is gherkin's
-  own pickle-compilation behavior, not a nukadoko choice. A scenario
-  written `Then ...` followed by `And ...` therefore binds that `And` line
-  in Then position too, even though its prose reads as an action, so the
-  `mutates: false` requirement applies to it exactly as it does to the
-  `Then` line. This is a hazard worth knowing, not a rule change here — how
-  nukadoko should treat a step that legitimately occurs in both Given/When
-  and Then position is part of the mutates redesign already underway.
+  of the preceding primary keyword (Given/When/Then) — gherkin's own
+  pickle-compilation behavior, not a nukadoko choice. An action chained
+  after `Then` therefore runs under Then-position observation: fine while
+  it only reads, failed the moment it writes.
+- Read-only environments refuse declared-mutating steps before execution
+  and additionally fail any execution that observes writes — a false
+  `mutates: false` cannot slip through the policy.
+- Honest limits: observation sees network writes only. Purely client-side
+  state and a server that mutates on GET are invisible to it; the
+  declaration and PR review still carry those.
+- Compat (untyped) steps cannot be checked statically; run-time
+  observation applies to them unchanged.
 
 ## Compat steps (the migration door)
 
@@ -227,8 +252,8 @@ scenario record is what says "skipped"). Evidence follows its natural
 scope: each step's receipt carries that step's http.jsonl, while the
 Playwright trace spans the shared context and therefore lives in the
 scenario's own directory, not on any single step. Then-position
-enforcement (`mutates: false`) applies at run time exactly as in `nuka
-check`.
+enforcement applies at run time by observation: a Then-positioned
+execution that observes network writes fails (see Keyword semantics).
 
 An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
@@ -260,6 +285,7 @@ shape whether the step ran inside a scenario or via `do`.
   "args": { "name": "acme" },
   "result": { "id": "p_0001", "name": "acme" },
   "status": "ok",
+  "observed": { "http_reads": 2, "http_writes": 1 },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
@@ -282,6 +308,10 @@ shape whether the step ran inside a scenario or via `do`.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `ctx.request()`
   call logged to http.jsonl, the receipt itself as the primary record.
+- `observed` counts the network calls the tool itself saw the execution
+  make, through `ctx.request()` and the page alike; non-GET/HEAD counts as
+  a write. It is what run-time keyword enforcement and read-only
+  environments act on — measured, never declared (see Keyword semantics).
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 

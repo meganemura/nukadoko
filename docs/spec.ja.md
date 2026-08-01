@@ -131,21 +131,37 @@ export default defineStep({
 - `ctx.section(name)`(progress log の中で実行の一区間に名前を付ける)
 - `ctx.env`(設定された envFiles から得られる環境変数、読み取り専用)
 - `ctx.baseURL`(設定された baseURL)
+- `ctx.resultOf(stepModule)` は、現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
+  `nuka do` の下では、あるいはその step がまだ成功していない場合は `undefined` になります。
+  これは scenario 経路のデータチャネルであり、意図的に World ではありません。
+  そこには何も書き込めず、読み取れるのは `returns` のスキーマを通過した結果だけで、依存関係は他の step モジュールへの目に見える `import` になります(その step 自身のスキーマによって型付けられ、diff の中でレビューできます)。
+  「その listing は閉じている」のような feature の一文は、その参照先がバリデーション済みの結果を生成した範囲でのみ実装できます。
 
 ### キーワードの意味論
 
-Gherkin のキーワードは装飾であることをやめます:
+Gherkin のキーワードは装飾であることをやめますが、それは宣言が信頼されるからではなく、ツールが計測するからです。
+実際の corpus がこの分割を強いたのは、同じ文が Action の位置と Outcome の位置の両方に正当に現れ、慣用的なスイートが `And` を使って `Then` の後に操作を連ね、任意のコマンドをラップする step には単一の正直な `mutates` の値がないからです。
+step ごとの boolean は出現ごとの事実を運べないため、強制は層になっています:
 
-- **Then の位置**に結び付いた step は `mutates: false` でなければなりません。
-  これは `nuka check` と `nuka run` の両方で強制されます。
-- Given/When の位置にはどんな step も置けます。
-- Compat(型のない)step はチェックできず、代わりに警告にとどまります。
+- `mutates` は step の**宣言された意図**のままです(デフォルトは `true`。読み取り専用の step は `false` を宣言します)。
+- **静的には**、宣言上 mutate する step が Then の位置に結び付けられていると、`nuka check` はエラーではなく警告を出します。
+  この緊張関係は人の目でのレビューに値しますが、宣言だけではそれを解決できません。
+- **実行時には**、receipt がその実行が実際に行ったことを記録します。
+  ツールが見たすべてのネットワーク呼び出しが対象であり(`ctx.request()` と page の両方を通じたもの)、GET/HEAD 以外の呼び出しはすべて観測された書き込みとして数えられます。
+  Then の位置で実行される step は、その実行が書き込みを観測すると失敗します。
+  これは宣言が何であったかにかかわらず、出現ごとに計測に基づいて判定されます。
 - gherkin は `And`/`But` の step を、直前の主要なキーワード(Given/When/Then)の pickle step type を継承することで分類します。
   これは nukadoko の選択ではなく、gherkin 自身の pickle コンパイルの挙動です。
-  そのため `Then ...` の直後に `And ...` と書かれた scenario では、その `And` の行の散文が操作に読めても、その行も同じく Then の位置に結び付きます。
-  結果として `mutates: false` の要求は、`Then` の行とまったく同じようにその行にも適用されます。
-  これは知っておくべき hazard であり、ここでの規則変更ではありません。
-  Given/When の位置と Then の位置の両方に正当に現れる step をどう扱うべきかは、現在進行中の mutates の再設計の一部です。
+  そのため `Then` の後に連なる操作は、Then の位置の観測のもとで実行されます。
+  読み取りだけをしている間は問題なく、書き込みをした瞬間に失敗します。
+- 読み取り専用の environment は、宣言上 mutate する step を実行前に拒否し、さらに書き込みを観測したあらゆる実行を失敗させます。
+  誤った `mutates: false` の宣言が、このポリシーをすり抜けることはできません。
+- 正直な限界があります。
+  観測が見るのはネットワークの書き込みだけです。
+  純粋にクライアント側だけの状態や、GET で mutate するサーバーはそこからは見えません。
+  それらは宣言と PR レビューが引き続き担います。
+- Compat(型のない)step は静的にチェックできません。
+  実行時の観測は変わらず適用されます。
 
 ## Compat step(移行の扉)
 
@@ -182,7 +198,8 @@ pickle ごとに 1 つの scenario record(feature のパス、scenario 名、順
 失敗した step は scenario の残りをスキップし、スキップされた step には receipt が作られません(始まってすらいない実行が引用可能であってはならず、「skipped」と言うのは scenario record の役目です)。
 Evidence は自然なスコープに従います。
 各 step の receipt はその step の http.jsonl を持ち、一方 Playwright の trace は共有された context にまたがるため、個々の step ではなく scenario 自身のディレクトリに置かれます。
-Then の位置に対する強制(`mutates: false`)は、`nuka check` とまったく同じように実行時にも適用されます。
+Then の位置に対する強制は、観測によって実行時に適用されます。
+Then の位置で実行され、ネットワークへの書き込みを観測した実行は失敗します(キーワードの意味論を参照)。
 
 undefined な step は、マッチに失敗したテキストを名指しして scenario を失敗させ、`nuka scaffold` を提案します。
 同梱の skill に従う agent が、欠けている型付き step を作成して PR として提出します。
@@ -211,6 +228,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   "args": { "name": "acme" },
   "result": { "id": "p_0001", "name": "acme" },
   "status": "ok",
+  "observed": { "http_reads": 2, "http_writes": 1 },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
@@ -233,6 +251,9 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   compat の step は `result: null` を記録します。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`ctx.request()` の呼び出しはすべて http.jsonl に記録され、receipt 自体が一次記録になります。
+- `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`ctx.request()` と page の両方を通じたもの)。
+  GET/HEAD 以外はすべて書き込みとして数えられます。
+  これは実行時のキーワード強制と読み取り専用の environment が作用する対象であり、常に計測されたものであって宣言されたものでは決してありません(キーワードの意味論を参照)。
 - receipt は state directory(`.nukadoko/`、gitignore 対象)の下に置かれます。
   それらはローカルな作業記録であり、耐久性のある成果物は sign-off です。
 
@@ -333,6 +354,8 @@ nukadoko の貢献は、すべての段階が記録を残すことです。
 逸脱の記録こそが要点です。
 
 ## CLI summary
+
+npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
 
 ```
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results
