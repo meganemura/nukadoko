@@ -123,21 +123,25 @@ export default defineStep({
 
 ### Context API
 
-`run(ctx, args)` に渡される `ctx`:
+`run(ctx, args)` に渡される `ctx` は、executor が注入しなければ存在し得ないもの(ツールが所有する状態と、計測された連鎖)だけを運び、それ以外は何も運びません。
+純粋なヘルパーは context のメンバーではなく import です。
+この 1 つの規則が、今後のあらゆる「これは ctx に置くべきか」という問いを決めます。
 
-- `await ctx.page()`(Playwright の Page。初回呼び出しでブラウザが起動し、session の storageState から復元されます)
+- `await ctx.page()`(Playwright の Page。初回呼び出しでブラウザが起動し、session の storageState から復元され、設定された baseURL が browser context に配線されるため `page.goto("/path")` はそれを基準に解決されます)
 - `await ctx.request()`(設定された baseURL と session の cookie を持つ Playwright の APIRequestContext)
-- `ctx.poll(fn, { timeout, interval, description })`(非同期ジョブに対する submit-poll-fetch)
-- `ctx.section(name)`(progress log の中で実行の一区間に名前を付ける)
-- `ctx.env`(設定された envFiles から得られる環境変数、読み取り専用)
-- `ctx.baseURL`(設定された baseURL)
+- `ctx.env`(設定された envFiles から得られる環境変数、読み取り専用)。
+  これは便利機能ではなく、決定論(プロセス環境は決してマージされない)と secrets の赤塗り(redact できるのは nukadoko 自身がロードした値だけ)が強制される場所です。
+- `ctx.baseURL`(設定された baseURL。自分で URL を組み立てる、まれな場合のためのものです。よくある経路には上記のとおり配線済みです)
 - `ctx.resultOf(stepModule)` は、現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
   `nuka do` の下では、あるいはその step がまだ成功していない場合は `undefined` になります。
   これは scenario 経路のデータチャネルであり、意図的に World ではありません。
   そこには何も書き込めず、読み取れるのは `returns` のスキーマを通過した結果だけで、依存関係は他の step モジュールへの目に見える `import` になります(その step 自身のスキーマによって型付けられ、diff の中でレビューできます)。
   「その listing は閉じている」のような feature の一文は、その参照先がバリデーション済みの結果を生成した範囲でのみ実装できます。
 
-### キーワードの意味論
+ヘルパーは import として提供されます: `import { poll } from "nukadoko"` が非同期ジョブに対する submit-poll-fetch のループです。
+これは executor が所有するものを何も必要としないため、`ctx` には置かれません。
+`ctx.section` がまだ無いのは逆向きの同じ理由です: 今は何もしないはずのもので、何もしない API メンバーは検証されていない約束だからです。
+これは progress log の機能とともに戻ってきます。そのとき「実行の一区間に名前を付ける」はツールが記録する対象になります。
 
 Gherkin のキーワードは装飾であることをやめますが、それは宣言が信頼されるからではなく、ツールが計測するからです。
 実際の corpus がこの分割を強いたのは、同じ文が Action の位置と Outcome の位置の両方に正当に現れ、慣用的なスイートが `And` を使って `Then` の後に操作を連ね、任意のコマンドをラップする step には単一の正直な `mutates` の値がないからです。

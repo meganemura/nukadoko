@@ -152,17 +152,23 @@ export default defineStep({
 
 ### Context API
 
-`ctx` passed to `run(ctx, args)`:
+`ctx` passed to `run(ctx, args)` carries exactly what the executor must
+inject — state the tool owns and the measured chain — and nothing else.
+Pure helpers are imports, not context members; that one rule decides
+every future "does this belong on ctx?" question.
 
 - `await ctx.page()` — Playwright Page; browser launches on first call,
-  restored from the session's storageState.
+  restored from the session's storageState, with the configured baseURL
+  wired into the browser context so `page.goto("/path")` resolves against
+  it.
 - `await ctx.request()` — Playwright APIRequestContext with the configured
   baseURL and the session's cookies.
-- `ctx.poll(fn, { timeout, interval, description })` — submit-poll-fetch
-  against asynchronous jobs.
-- `ctx.section(name)` — names a stretch of the run in its progress log.
-- `ctx.env` — environment variables from the configured envFiles (read-only).
-- `ctx.baseURL` — the configured baseURL.
+- `ctx.env` — environment variables from the configured envFiles
+  (read-only). Not a convenience: it is where determinism (the process
+  environment is never merged) and secrets redaction (only values nukadoko
+  itself loaded are redactable) are enforced.
+- `ctx.baseURL` — the configured baseURL, for the occasional URL assembled
+  by hand; the common paths get it wired in above.
 - `ctx.resultOf(stepModule)` — the validated result of that step's most
   recent successful execution in the current scenario; `undefined` under
   `nuka do` or when the step hasn't succeeded yet. This is the scenario
@@ -172,6 +178,14 @@ export default defineStep({
   module — typed by that step's own schema, reviewable in the diff. A
   feature line like "that listing is closed" is implementable exactly to
   the extent its referent produced a validated result.
+
+Helpers live as imports: `import { poll } from "nukadoko"` gives the
+submit-poll-fetch loop for asynchronous jobs — it needs nothing the
+executor owns, so it is not on `ctx`. There is no `ctx.section` yet for
+the inverse reason: it would do nothing today, and an API member that
+does nothing is an unvalidated promise. It returns with the progress-log
+feature, where naming a stretch of a run becomes something the tool
+records.
 
 ### Keyword semantics
 
