@@ -256,6 +256,18 @@ Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
 `.nukadoko`), `browser`, `secrets`.
 
+An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
+version?: () => string | Promise<string> }`. Its `baseURL` overrides the
+top-level one; its `envFiles` append after the top-level list (later files
+win — the common-plus-override layering dotenv users already know);
+`policy` and `version` exist only per environment. No `--env` means the
+name `default`, which needs no entry; an explicitly named environment must
+exist — naming one asserts it does. The `version` probe is a function
+because config is executable TypeScript already (a URL+jsonPath DSL would
+be a worse way to write `fetch`); the tool calls it once per run with a
+10-second budget, and a throw or timeout costs only `target_version`,
+never the run.
+
 ### The state directory
 
 Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
