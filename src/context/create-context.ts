@@ -22,6 +22,18 @@ import { poll } from "./poll.js";
 // whichever one *should* be persisted, but never writes it to disk itself —
 // that stays the executor's job too (this task's spec, item 2).
 //
+// `nuka run` shares one `ctx` across every step of a pickle (docs/spec.md
+// "Running": "Steps in one pickle share one context"), but each step's
+// http.jsonl still belongs to that step's own receipt dir, while a browser's
+// trace/screenshots belong to the scenario as a whole (m1-run task spec,
+// decision 5). `setHttpLogDir` on the handle (never on `ctx` itself — sink
+// switching stays executor-only, same rule as `dispose`) is the minimal seam
+// that split needs: `evidenceDir` still anchors the browser's trace/
+// screenshots for this ctx's whole lifetime, while the http log's directory
+// is a separate, mutable pointer the executor advances at each step
+// boundary. `nuka do` never calls `setHttpLogDir`, so its behavior — one
+// fixed dir for both — is unchanged.
+//
 // `env` arrives already loaded and merged (m1-secrets task spec, decision
 // 2): the executor is the one place that knows the full envFiles list *and*
 // which of them are secret sources, so it loads env and builds the run's
@@ -56,11 +68,20 @@ export interface StepContextHandle {
    * "Receipts": only files that exist), and hands back the storageState (if
    * any) the executor should persist for this run's session. */
   dispose(status: "ok" | "failed"): Promise<DisposeResult>;
+  /** Executor-only: redirects where the *next* `ctx.request()` call logs to
+   * (http.jsonl), without disturbing an already-memoized request context's
+   * cookies. `nuka run`'s executor calls this once per step, right before
+   * running it, so a pickle's shared ctx still logs each step's HTTP calls
+   * under that step's own receipt dir (this task's spec, decision 5). Never
+   * exposed on `ctx` — same executor-only rule as `dispose`. */
+  setHttpLogDir(dir: string): void;
 }
 
 export interface CreateStepContextOptions {
   config: NukadokoConfig;
-  /** Absolute path to this receipt's evidence directory; must already exist. */
+  /** Absolute path to this execution's browser evidence directory (trace.zip,
+   * screenshots) and, until `setHttpLogDir` first moves it, http.jsonl too;
+   * must already exist. */
   evidenceDir: string;
   /** `ctx.env`'s value, already loaded and merged by the executor from every
    * configured envFile (this task's spec, decision 2) — this module never
@@ -90,7 +111,10 @@ function isBrowserHeadless(config: NukadokoConfig): boolean {
 
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
   const { config, evidenceDir, env, secrets = [], storageState } = options;
-  const httpLogPath = path.join(evidenceDir, "http.jsonl");
+  // Mutable, unlike browser evidence's fixed `evidenceDir`: `setHttpLogDir`
+  // (below) is the only way this ever changes, and `do` never calls it, so
+  // `do`'s http.jsonl stays exactly where it always has.
+  let httpLogDir = evidenceDir;
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -119,7 +143,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           baseURL: config.baseURL,
           ...(storageState ? { storageState } : {}),
         });
-        requestContext = wrapRequestContextWithLogging(raw, httpLogPath, secrets);
+        requestContext = wrapRequestContextWithLogging(
+          raw,
+          () => path.join(httpLogDir, "http.jsonl"),
+          secrets,
+        );
       }
       return requestContext;
     },
@@ -175,7 +203,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // written incrementally as calls happen, so it is unaffected by a
         // dispose() failure here.
       }
-      if (existsSync(httpLogPath)) {
+      // Reflects whichever directory is *current* at dispose time. For `do`
+      // that is always `evidenceDir` (it never calls `setHttpLogDir`); for
+      // `nuka run`, dispose() only ever runs once, at the whole scenario's
+      // end, so this field is not what a step's own receipt relies on — the
+      // executor checks each step's own receipt dir directly, right after
+      // that step finishes, before the log dir advances again.
+      if (existsSync(path.join(httpLogDir, "http.jsonl"))) {
         evidence.http = "http.jsonl";
       }
     }
@@ -194,5 +228,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return { evidence, storageState: storageStateToPersist };
   }
 
-  return { ctx, dispose };
+  function setHttpLogDir(dir: string): void {
+    httpLogDir = dir;
+  }
+
+  return { ctx, dispose, setHttpLogDir };
 }

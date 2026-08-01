@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import type { z } from "zod";
+import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -83,15 +83,6 @@ export interface RunDoOptions {
   env: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
-}
-
-function formatValidationIssues(issues: readonly z.core.$ZodIssue[]): string {
-  return issues
-    .map((issue) => {
-      const key = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-      return `${key}: ${issue.message}`;
-    })
-    .join("; ");
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {

@@ -20,9 +20,17 @@ import type { SecretSet } from "../secrets/types.js";
 // it. Explicit delegation keeps `this` bound to the real context for every
 // call, logged or not, with no reliance on how Playwright implements state
 // internally.
+//
+// `logPath` is a getter, not a fixed string, so `nuka run`'s scenario-shared
+// context (create-context.ts) can redirect where the *next* logged call
+// lands without recreating the wrapped context itself: a pickle's steps
+// share one ctx (and therefore one memoized request context, cookies
+// intact), but each step's http.jsonl must land in that step's own receipt
+// dir (this task's spec, decision 5) — the executor advances the getter's
+// target at each step boundary; this module just reads it at call time.
 
 async function logCall(
-  logPath: string,
+  logPath: () => string,
   method: string,
   url: string,
   secrets: SecretSet,
@@ -35,7 +43,7 @@ async function logCall(
     { method, url, status: response.status(), duration_ms: durationMs },
     secrets,
   );
-  await appendFile(logPath, `${JSON.stringify(entry)}\n`);
+  await appendFile(logPath(), `${JSON.stringify(entry)}\n`);
   return response;
 }
 
@@ -56,11 +64,11 @@ function methodOf(
 }
 
 /** Wraps `target` so get/post/put/patch/delete/head/fetch are logged to
- * `logPath`, with `secrets` redacted from each logged line; `dispose`/
- * `storageState` pass straight through unlogged. */
+ * whatever `logPath()` currently returns, with `secrets` redacted from each
+ * logged line; `dispose`/`storageState` pass straight through unlogged. */
 export function wrapRequestContextWithLogging(
   target: APIRequestContext,
-  logPath: string,
+  logPath: () => string,
   secrets: SecretSet,
 ): APIRequestContext {
   return {

@@ -1,13 +1,16 @@
 // Responsibility: the receipt shape from docs/spec.md "Receipts", typed as
 // the discriminated union `status` actually implies — `ReceiptOk` carries
-// `result`, `ReceiptFailed` carries `error`, never both. `scenario` is typed
-// as its only possible value (`null`) today because `nuka run` is a later
-// slice; `session` and `environment` were each widened in turn as their own
-// slices landed instead of being left open from the start — `session` from
-// a `null`-only placeholder to `string | null` (sessions slice), and now
-// `environment` from a `"default"`-only placeholder to `string`, plus the
-// new optional `target_version` (m1-environments task spec, decision 6) —
-// the deliberate widening this file's original comment anticipated.
+// `result`, `ReceiptFailed` carries `error`, never both. `session` and
+// `environment` were each widened in turn as their own slices landed instead
+// of being left open from the start — `session` from a `null`-only
+// placeholder to `string | null` (sessions slice), and `environment` from a
+// `"default"`-only placeholder to `string`, plus the optional
+// `target_version` (m1-environments task spec, decision 6). `kind` and
+// `scenario` are widened again now that `nuka run` exists (m1-run task spec,
+// decision 5): `kind: "do" | "run"` tells a receipt's origin apart — the
+// distinction matters for the Allure mapping and sign-off contexts, per
+// docs/spec.md — and `scenario: string | null` carries the owning scenario's
+// id for a `run`-originated receipt, `null` for a `do`-originated one.
 
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
@@ -24,8 +27,13 @@ export interface EvidenceMeta {
 interface ReceiptBase {
   receipt_id: string;
   step: string;
-  kind: "do";
-  /** Exactly what `--args` deserialized to, unvalidated and uncoerced. */
+  /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka
+   * run` scenario (docs/spec.md "Receipts": "the same shape whether the step
+   * ran inside a scenario or via `do`"). */
+  kind: "do" | "run";
+  /** Exactly what `--args` deserialized to (`do`) or what the pickle step's
+   * captures/table/docstring bound (`run`) — unvalidated and uncoerced by
+   * the step's own `args` schema either way. */
   args: unknown;
   /** The `--env` name this run targeted; `"default"` when `--env` was
    * omitted. Not a special value in the schema sense — docs/spec.md
@@ -38,8 +46,9 @@ interface ReceiptBase {
    * an implicit shared session). */
   session: string | null;
   tag: string | null;
-  /** Scenario runs (`nuka run`) are a later slice; always null from `do`. */
-  scenario: null;
+  /** The owning scenario's id for a `run`-originated receipt (`kind: "run"`);
+   * always `null` for a `do`-originated one. */
+  scenario: string | null;
   started_at: string;
   finished_at: string;
   evidence: EvidenceMeta;

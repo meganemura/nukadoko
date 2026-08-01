@@ -15,6 +15,12 @@ import { IdGenerator, type Pickle } from "@cucumber/messages";
 // feature's issues too (mirrors src/discover/discover-steps.ts's own
 // tolerance for a missing featuresDir: an empty/partial answer beats a
 // crash).
+//
+// `parseFeatureSource` is exported so `nuka run` (src/run/select-pickles.ts)
+// can parse the one feature file it was pointed at without walking a whole
+// directory — the same gherkin invocation, not a second copy of it; that
+// module's own errors (missing file, `:line` matching nothing) are its
+// business, not this one's.
 
 export interface FeatureFile {
   readonly relativePath: string;
@@ -54,6 +60,21 @@ function walkFeatureFiles(dir: string): string[] {
   return files;
 }
 
+/**
+ * Parses one feature file's already-read source into pickles. A fresh id
+ * generator and parser per call: AstBuilder accumulates parse state (its own
+ * node stack), so reusing one across files would risk one file's state
+ * leaking into the next after a parse error. Throws whatever
+ * `@cucumber/gherkin` throws on malformed input — callers decide how to
+ * report that (a per-file entry here, a setup failure in `nuka run`).
+ */
+export function parseFeatureSource(source: string, relativePath: string): readonly Pickle[] {
+  const newId = IdGenerator.uuid();
+  const parser = new Parser(new AstBuilder(newId), new GherkinClassicTokenMatcher());
+  const document = parser.parse(source);
+  return compile(document, relativePath, newId);
+}
+
 export function loadFeatures(rootDir: string, featuresDir: string): LoadFeaturesResult {
   const featuresRoot = path.join(rootDir, featuresDir);
   const filePaths = walkFeatureFiles(featuresRoot);
@@ -65,14 +86,8 @@ export function loadFeatures(rootDir: string, featuresDir: string): LoadFeatures
     const relativePath = path.relative(rootDir, filePath);
     const source = readFileSync(filePath, "utf8");
 
-    // A fresh id generator and parser per file: AstBuilder accumulates parse
-    // state (its own node stack), so reusing one across files would risk
-    // one file's state leaking into the next after a parse error.
-    const newId = IdGenerator.uuid();
-    const parser = new Parser(new AstBuilder(newId), new GherkinClassicTokenMatcher());
     try {
-      const document = parser.parse(source);
-      const pickles = compile(document, relativePath, newId);
+      const pickles = parseFeatureSource(source, relativePath);
       features.push({ relativePath, pickles });
     } catch (error) {
       parseErrors.push({
