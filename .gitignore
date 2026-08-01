@@ -5,4 +5,9 @@ tests/.tmp-fixtures/
 .env
 .env.*
 !.env.example
+# Fixture env files are test data, not real secrets; without this negation
+# the .env.* rule above silently eats them and a fresh clone fails tests.
+# Copies under tests/.tmp-fixtures/ stay ignored (that whole directory is),
+# which is what keeps them classified as secret sources in tests.
+!tests/fixtures/**/.env.*
 .claude-team/
