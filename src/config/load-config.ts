@@ -6,7 +6,10 @@ import type { z } from "zod";
 import { ConfigError } from "./errors.js";
 import { configSchema, type NukadokoConfig } from "./schema.js";
 
-const CONFIG_FILE_NAME = "nukadoko.config.ts";
+// Exported (not just module-private) so `nuka init` can check for this
+// exact file's existence before generating anything, and `nuka scaffold`'s
+// tests can reason about it, without either duplicating the literal.
+export const CONFIG_FILE_NAME = "nukadoko.config.ts";
 
 // Responsibility: find nukadoko.config.ts under a project root, load it at
 // run time (it is TypeScript, not something Node can import unassisted —

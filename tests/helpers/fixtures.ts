@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +42,55 @@ export async function copyFixtureToTempDir(name: string): Promise<string> {
 
 export async function removeTempDir(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
+}
+
+/**
+ * A fresh, genuinely empty project directory — for `nuka init`, which
+ * refuses to run at all against a directory that already has a
+ * `nukadoko.config.ts` (m1-init-scaffold task spec, decision 1), so it can't
+ * be tested against a copy of any existing fixture. Nested under
+ * `tempFixturesRoot` for the same reason `copyFixtureToTempDir` is: files
+ * later written here (by `nuka init`/`nuka scaffold`) still resolve bare
+ * specifiers like "zod" by walking up to this repo's own node_modules.
+ */
+export async function createEmptyTempDir(): Promise<string> {
+  await mkdir(tempFixturesRoot, { recursive: true });
+  return mkdtemp(path.join(tempFixturesRoot, "empty-"));
+}
+
+const nukadokoShimDir = path.join(tempFixturesRoot, "node_modules", "nukadoko");
+
+/**
+ * Makes the bare specifier `"nukadoko"` resolve, for any file created under
+ * `tempFixturesRoot`, to this repo's own `src/index.ts` — Node's module
+ * resolution walks up *every* ancestor directory's `node_modules`, so one
+ * shim placed at `tempFixturesRoot` covers every temp project nested under
+ * it, whether created by this file's `createEmptyTempDir` or
+ * `copyFixtureToTempDir`.
+ *
+ * `nuka init`/`nuka scaffold` generate real-user-facing artifacts that
+ * import from `"nukadoko"` (the published package name), not from a
+ * fixture-relative shim path (m1-init-scaffold task spec: "生成物そのものは
+ * 実利用者向けの形にする") — but the published package doesn't exist yet in
+ * this repo's own `node_modules`. This is the same stand-in
+ * `tests/fixtures/*\/nukadoko-shim.ts` provides for hand-written fixtures,
+ * just packaged as a real `node_modules` entry so the bare specifier itself
+ * — which generated files use, unlike fixtures — resolves.
+ */
+export async function ensureNukadokoShim(): Promise<void> {
+  await mkdir(nukadokoShimDir, { recursive: true });
+  await writeFile(
+    path.join(nukadokoShimDir, "package.json"),
+    `${JSON.stringify(
+      { name: "nukadoko", version: "0.0.0", type: "module", exports: { ".": "./index.js" } },
+      null,
+      2,
+    )}\n`,
+  );
+  const target = path.join(repoRoot, "src", "index.js");
+  const relative = path.relative(nukadokoShimDir, target).split(path.sep).join("/");
+  const specifier = relative.startsWith(".") ? relative : `./${relative}`;
+  await writeFile(path.join(nukadokoShimDir, "index.ts"), `export * from "${specifier}";\n`);
 }
 
 /** A minimal in-memory sink satisfying cli/run-cli.ts's WritableSink. */

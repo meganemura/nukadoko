@@ -6,19 +6,22 @@ import yargs from "yargs";
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
 import { runDo } from "./do.js";
+import { runInit } from "./init.js";
+import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
 import { loadVocabulary, describeContract, formatVocabularyError, summarize } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`, `session list`/`clear`) to yargs and turns any failure — yargs' own
-// (bad flags, no command) or ours (config/discovery errors, unknown step
-// name) — into stderr output plus a non-zero exit code, without ever
-// calling `process.exit` itself. That is `cli.ts`'s job, so this function
-// stays callable directly from tests. `do`'s own setup/execution split and
-// receipt writing lives in cli/do.ts; `session`'s own list/clear logic
-// lives in cli/session.ts; this module only wires their argv shapes and
-// reports their exit codes.
+// `do`, `session list`/`clear`, `init`, `scaffold`) to yargs and turns any
+// failure — yargs' own (bad flags, no command) or ours (config/discovery
+// errors, unknown step name) — into stderr output plus a non-zero exit
+// code, without ever calling `process.exit` itself. That is `cli.ts`'s job,
+// so this function stays callable directly from tests. `do`'s own setup/
+// execution split and receipt writing lives in cli/do.ts; `session`'s own
+// list/clear logic lives in cli/session.ts; `init`/`scaffold`'s own
+// generation logic lives in cli/init.ts and cli/scaffold.ts; this module
+// only wires their argv shapes and reports their exit codes.
 
 export type { WritableSink } from "./writable-sink.js";
 
@@ -51,6 +54,14 @@ interface SessionListArgs {
 interface SessionClearArgs {
   name?: string;
   env: string;
+}
+
+interface InitArgs {
+  baseUrl?: string;
+}
+
+interface ScaffoldArgs {
+  name: string;
 }
 
 export async function runCli(
@@ -204,6 +215,43 @@ export async function runCli(
     },
   };
 
+  const initCommand: CommandModule<Record<string, never>, InitArgs> = {
+    command: "init",
+    describe: "set up a project; ends with a self-check",
+    builder: (y: Argv) =>
+      y.option("base-url", {
+        type: "string",
+        describe: "baseURL to record in the generated config",
+      }) as Argv<InitArgs>,
+    handler: async (args: Arguments<InitArgs>) => {
+      exitCode = await runInit({
+        rootDir,
+        baseUrl: args.baseUrl ?? null,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const scaffoldCommand: CommandModule<Record<string, never>, ScaffoldArgs> = {
+    command: "scaffold <name>",
+    describe: "typed step template that fails until implemented",
+    builder: (y: Argv) =>
+      y.positional("name", {
+        type: "string",
+        demandOption: true,
+        describe: "step name, kebab-case (becomes the step's file name)",
+      }) as Argv<ScaffoldArgs>,
+    handler: async (args: Arguments<ScaffoldArgs>) => {
+      exitCode = await runScaffold({
+        rootDir,
+        name: args.name,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const sessionCommand: CommandModule = {
     command: "session",
     describe: "list|clear sessions",
@@ -227,6 +275,8 @@ export async function runCli(
     .command(describeCommand)
     .command(doCommand)
     .command(sessionCommand)
+    .command(initCommand)
+    .command(scaffoldCommand)
     .demandCommand(1)
     .strict()
     .help();
