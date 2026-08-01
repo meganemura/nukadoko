@@ -41,7 +41,9 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
       file: parseError.relativePath,
     });
   }
-  errors.push(...checkFeatures(features, vocabulary, bindingResult.patterns));
+  const featureResult = checkFeatures(features, vocabulary, bindingResult.patterns);
+  errors.push(...featureResult.errors);
+  warnings.push(...featureResult.warnings);
 
   return { errors, warnings };
 }

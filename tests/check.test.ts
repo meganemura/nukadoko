@@ -30,7 +30,7 @@ describe("nuka check", () => {
     expect(stdout.text()).toContain("ok: no issues found");
   });
 
-  it("exits 0 with warnings only: env-file-missing, environment-env-file-missing, secrets-public-key-unknown", async () => {
+  it("exits 0 with warnings only: env-file-missing, environment-env-file-missing, secrets-public-key-unknown, then-mutates", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-warnings-project"),
@@ -45,9 +45,28 @@ describe("nuka check", () => {
         expect.objectContaining({ code: "env-file-missing" }),
         expect.objectContaining({ code: "environment-env-file-missing" }),
         expect.objectContaining({ code: "secrets-public-key-unknown" }),
+        expect.objectContaining({ code: "then-mutates" }),
       ]),
     );
-    expect(report.warnings).toHaveLength(3);
+    expect(report.warnings).toHaveLength(4);
+    expect(exitCode).toBe(0);
+  });
+
+  it("then-mutates is a warning (declaration/position tension), not an error: check still exits 0", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-warnings-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const thenMutates = report.warnings.find(
+      (issue: { code: string }) => issue.code === "then-mutates",
+    );
+    expect(thenMutates).toBeDefined();
+    expect(thenMutates.message).toContain("bound in Then position");
+    expect(thenMutates.message).toContain("run time");
     expect(exitCode).toBe(0);
   });
 
@@ -87,7 +106,6 @@ describe("nuka check", () => {
       "alias-key-mismatch",
       "duplicate-pattern",
       "ambiguous-step",
-      "then-mutates",
       "table-docstring-key-mismatch",
       "undefined-step",
       "feature-parse-error",

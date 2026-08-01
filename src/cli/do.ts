@@ -39,7 +39,11 @@ import type { WritableSink } from "./writable-sink.js";
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
 //      a step whose args and returns both validate and whose `run` doesn't
-//      throw is `status: "ok"`.
+//      throw is `status: "ok"`. The setup phase's read-only refusal above
+//      only ever sees the step's *declared* `mutates`; the execution phase
+//      adds a measured backstop for it here — an otherwise-"ok" run that
+//      nonetheless observed a network write in a read-only environment is
+//      demoted to `status: "failed"` (m2pre-observed task spec, decision 4).
 //
 // `--env` is resolved (environment/resolve-environment.ts) right after
 // config loads and before anything session-related, because session paths
@@ -262,6 +266,20 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       }
     }
 
+    // Measured, not declared (this task's spec, decision 4): a read-only
+    // environment already refused a *declared* mutator above, in setup,
+    // before anything ran — this is the backstop for a step that declared
+    // `mutates: false` (or was never checked, since read-only refusal keys
+    // off the declaration) yet still wrote over the wire. Only promotes an
+    // otherwise-"ok" status: a step that already failed for its own reason
+    // (args/returns validation, its own throw) is already a truthful
+    // failure, and that message is kept rather than replaced.
+    const observed = contextHandle.observedCounts();
+    if (status === "ok" && resolvedEnv.policy === "read-only" && observed.http_writes > 0) {
+      status = "failed";
+      errorMessage = `Step "${name}" observed ${observed.http_writes} network write${observed.http_writes === 1 ? "" : "s"} but environment "${resolvedEnv.name}" has policy "read-only"`;
+    }
+
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
     try {
@@ -313,6 +331,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
             evidence: { dir: relativeDir, ...evidence },
+            observed,
           }
         : {
             receipt_id: receiptId,
@@ -329,6 +348,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
             evidence: { dir: relativeDir, ...evidence },
+            observed,
           };
 
     // Redacted once, as one object — args/result/error.message and every

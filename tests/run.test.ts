@@ -77,6 +77,9 @@ describe("nuka run", () => {
       expect(receipt.environment).toBe("default");
       expect(receipt.session).toBeNull();
       expect(receipt.tag).toBeNull();
+      // A pure step makes no network calls at all (this task's spec,
+      // decision 3): `observed` is still always present, at zero.
+      expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 0 });
     }
   });
 
@@ -156,25 +159,11 @@ describe("nuka run", () => {
     expect(record.steps[0].error.message).toContain("ambiguous-b");
   });
 
-  it("rejects a Then-position step declaring mutates: true before executing it, with no receipt", async () => {
-    const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/then-mutates.feature"], {
-      rootDir,
-      stdout,
-      stderr: createCaptureSink(),
-    });
-
-    expect(exitCode).toBe(1);
-    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-
-    expect(record.status).toBe("failed");
-    expect(record.steps[0].status).toBe("passed");
-    expect(record.steps[1].status).toBe("failed");
-    expect(record.steps[1].receipt).toBeNull();
-    expect(record.steps[1].error.message).toBe(
-      'Step "mutating-outcome" is bound in Then position but declares mutates: true',
-    );
-  });
+  // Then-position measured enforcement (a declared-mutating step's *actual*
+  // network writes, not the declaration itself) needs a real HTTP server, so
+  // it lives in its own file — tests/observed.test.ts — following this
+  // file's own split-by-evidence-type convention (see this file's header
+  // comment).
 
   it("binds a table to the one unconsumed key; a second scenario violates that rule and still writes a failed receipt", async () => {
     const stdout = createCaptureSink();

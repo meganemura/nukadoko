@@ -2,6 +2,7 @@ import { appendFile } from "node:fs/promises";
 import type { APIRequestContext, APIResponse } from "playwright";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
+import type { ObservedCollector } from "./observed.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
@@ -13,6 +14,12 @@ import type { SecretSet } from "../secrets/types.js";
 // point the line is built, before it ever reaches disk — one of the three
 // exits docs/spec.md "Secrets" requires redaction at, alongside receipt.json
 // and `do`'s stdout copy (both handled by cli/do.ts).
+//
+// Every call is also tallied into `observed` (an `ObservedCollector` this
+// module never creates, only writes to — create-context.ts owns and resets
+// it, this task's spec's m2pre-observed spec, scope item 1): GET/HEAD counts
+// as a read, anything else as a write, the same measured-not-declared fact
+// docs/spec.md "Keyword semantics" and "Receipts" (`observed`) describe.
 //
 // A manual per-method wrapper, not a Proxy: Playwright's client classes are
 // plain JS objects/prototypes as far as this package can see, but a Proxy
@@ -34,8 +41,14 @@ async function logCall(
   method: string,
   url: string,
   secrets: SecretSet,
+  observed: ObservedCollector,
   send: () => Promise<APIResponse>,
 ): Promise<APIResponse> {
+  // Recorded before `send()` resolves, not after: the method is known
+  // upfront regardless of outcome, and a write attempt that fails on the
+  // wire (thrown, never reaching the append below) is still an observed
+  // write, not a declared one that quietly didn't happen.
+  observed.record(method);
   const startedAt = performance.now();
   const response = await send();
   const durationMs = Math.round(performance.now() - startedAt);
@@ -65,28 +78,35 @@ function methodOf(
 
 /** Wraps `target` so get/post/put/patch/delete/head/fetch are logged to
  * whatever `logPath()` currently returns, with `secrets` redacted from each
- * logged line; `dispose`/`storageState` pass straight through unlogged. */
+ * logged line, and tallied into `observed`; `dispose`/`storageState` pass
+ * straight through unlogged and untallied. */
 export function wrapRequestContextWithLogging(
   target: APIRequestContext,
   logPath: () => string,
   secrets: SecretSet,
+  observed: ObservedCollector,
 ): APIRequestContext {
   return {
     get: (url, options) =>
-      logCall(logPath, "GET", url, secrets, () => target.get(url, options)),
+      logCall(logPath, "GET", url, secrets, observed, () => target.get(url, options)),
     post: (url, options) =>
-      logCall(logPath, "POST", url, secrets, () => target.post(url, options)),
+      logCall(logPath, "POST", url, secrets, observed, () => target.post(url, options)),
     put: (url, options) =>
-      logCall(logPath, "PUT", url, secrets, () => target.put(url, options)),
+      logCall(logPath, "PUT", url, secrets, observed, () => target.put(url, options)),
     patch: (url, options) =>
-      logCall(logPath, "PATCH", url, secrets, () => target.patch(url, options)),
+      logCall(logPath, "PATCH", url, secrets, observed, () => target.patch(url, options)),
     delete: (url, options) =>
-      logCall(logPath, "DELETE", url, secrets, () => target.delete(url, options)),
+      logCall(logPath, "DELETE", url, secrets, observed, () => target.delete(url, options)),
     head: (url, options) =>
-      logCall(logPath, "HEAD", url, secrets, () => target.head(url, options)),
+      logCall(logPath, "HEAD", url, secrets, observed, () => target.head(url, options)),
     fetch: (urlOrRequest, options) =>
-      logCall(logPath, methodOf(urlOrRequest, options), urlOf(urlOrRequest), secrets, () =>
-        target.fetch(urlOrRequest, options),
+      logCall(
+        logPath,
+        methodOf(urlOrRequest, options),
+        urlOf(urlOrRequest),
+        secrets,
+        observed,
+        () => target.fetch(urlOrRequest, options),
       ),
     dispose: (options) => target.dispose(options),
     storageState: (options) => target.storageState(options),

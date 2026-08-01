@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import type { StorageState } from "../session/storage-state.js";
+import type { ObservedCollector } from "./observed.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
 // calls `ctx.page()` — launch chromium, trace the whole browser context,
@@ -11,6 +12,18 @@ import type { StorageState } from "../session/storage-state.js";
 // mirrored teardown. `finalize` is never reachable from a step's `run`: only
 // create-context.ts's `dispose` (executor-only) calls it, after `run` has
 // already returned or thrown.
+//
+// The browser context's own `request` events are also tallied into
+// `observed` (this task's spec, scope item 2): every request the page
+// itself issues — navigation, fetch, XHR — is counted read/write the same
+// way http-log.ts counts `ctx.request()` calls, but deliberately never
+// appended to http.jsonl. That file is `ctx.request()`'s own record
+// (docs/spec.md "Receipts"); widening its meaning to include page traffic
+// nukadoko never asserted the shape of would be a different, larger change
+// than this task's spec asks for. The subscription is set up once, at
+// context creation, and lives for the context's whole lifetime — it is
+// `observed`'s own `reset()` (create-context.ts's `beginStep`) that advances
+// the step boundary, not resubscribing.
 
 export interface LaunchBrowserOptions {
   /** Maps to `config.browser.headless`, default true. */
@@ -21,6 +34,9 @@ export interface LaunchBrowserOptions {
    * `undefined` for a session's first-ever use or when `--session` wasn't
    * given at all. */
   storageState?: StorageState;
+  /** Tallies every request this browser context's page(s) make — see this
+   * module's header comment. */
+  observed: ObservedCollector;
 }
 
 export interface BrowserEvidenceHandle {
@@ -50,6 +66,9 @@ export async function launchBrowserWithTracing(
   const context: BrowserContext = await browser.newContext(
     options.storageState ? { storageState: options.storageState } : {},
   );
+  context.on("request", (request) => {
+    options.observed.record(request.method());
+  });
   await context.tracing.start({ screenshots: true, snapshots: true });
   const page = await context.newPage();
 

@@ -14,12 +14,20 @@ import type { CheckIssue } from "./types.js";
 // this task's spec's per-feature check items: undefined steps (with a
 // scaffold hint, plus a near-miss escape hint — see findEscapeHint below),
 // ambiguous matches (2+ steps matching one pickle step), Then-position steps
-// that mutate, and a table/docstring's "exactly one unconsumed required key"
-// rule. Deliberately knows nothing about *why* a pattern failed to build
-// (that is binding-check's own issue already) — a pattern missing from
-// `patterns` (because it errored there) simply cannot match anything here,
-// which is the right behavior: this module must not report the same root
-// cause a second time under a different code.
+// that declare mutation, and a table/docstring's "exactly one unconsumed
+// required key" rule. Deliberately knows nothing about *why* a pattern
+// failed to build (that is binding-check's own issue already) — a pattern
+// missing from `patterns` (because it errored there) simply cannot match
+// anything here, which is the right behavior: this module must not report
+// the same root cause a second time under a different code.
+//
+// `then-mutates` is a *warning*, not an error (m2pre-observed task spec,
+// decision 5, superseding this module's earlier classification): a
+// declared-mutating step bound in Then position is a tension worth a
+// reviewer's eyes, but the declaration alone can't settle whether a given
+// occurrence's execution actually writes — only run-time observation can
+// (docs/spec.md "Keyword semantics"). Every other issue this module reports
+// stays an error.
 
 interface MatchResult {
   readonly stepNames: readonly string[];
@@ -75,12 +83,18 @@ function matchPickleStepText(text: string, patterns: readonly CheckedPattern[]):
   return { stepNames, matched };
 }
 
+export interface FeatureCheckResult {
+  readonly errors: readonly CheckIssue[];
+  readonly warnings: readonly CheckIssue[];
+}
+
 export function checkFeatures(
   features: readonly FeatureFile[],
   vocabulary: Vocabulary,
   patterns: readonly CheckedPattern[],
-): CheckIssue[] {
-  const issues: CheckIssue[] = [];
+): FeatureCheckResult {
+  const errors: CheckIssue[] = [];
+  const warnings: CheckIssue[] = [];
 
   for (const feature of features) {
     const reportedUndefinedText = new Set<string>();
@@ -100,7 +114,7 @@ export function checkFeatures(
           const hintSuffix = escapeHint
             ? ` — hint: would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped — cucumber-expressions reads bare ( ) as optional text and / as alternation`
             : "";
-          issues.push({
+          errors.push({
             code: "undefined-step",
             message: `No step definition matches "${step.text}"; run \`nuka scaffold <name>\` to add one${hintSuffix}`,
             file: feature.relativePath,
@@ -110,7 +124,7 @@ export function checkFeatures(
         }
 
         if (stepNames.length > 1) {
-          issues.push({
+          errors.push({
             code: "ambiguous-step",
             message: `"${step.text}" matches more than one step: ${[...stepNames].sort().join(", ")}`,
             file: feature.relativePath,
@@ -130,9 +144,9 @@ export function checkFeatures(
         }
 
         if (step.type === PickleStepType.OUTCOME && entry.step.mutates) {
-          issues.push({
+          warnings.push({
             code: "then-mutates",
-            message: `Step "${stepName}" is bound in Then position but declares mutates: true`,
+            message: `Step "${stepName}" is bound in Then position but declares mutates: true — declaration and position are in tension here; a per-occurrence execution's observed network writes settle it at run time (docs/spec.md "Keyword semantics")`,
             file: feature.relativePath,
             line,
             step: stepName,
@@ -152,7 +166,7 @@ export function checkFeatures(
                 unconsumedRequired.length === 0
                   ? "every args key is already consumed by named captures"
                   : `${unconsumedRequired.length} args keys are left unconsumed (${unconsumedRequired.join(", ")}); exactly one is required`;
-              issues.push({
+              errors.push({
                 code: "table-docstring-key-mismatch",
                 message: `Step "${stepName}" has a table/docstring attached but ${detail}`,
                 file: feature.relativePath,
@@ -166,5 +180,5 @@ export function checkFeatures(
     }
   }
 
-  return issues;
+  return { errors, warnings };
 }

@@ -47,6 +47,7 @@ describe("writeReceipt", () => {
       started_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
       evidence: { dir: ".nukadoko/receipts/rcpt-20260801-143022-a1b2", screenshots: [] },
+      observed: { http_reads: 0, http_writes: 0 },
     };
 
     await writeReceipt(dir, receipt);

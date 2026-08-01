@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
@@ -130,4 +132,62 @@ describe("createStepContext / ctx.page()", () => {
       "browser-evidence.test.ts: chromium unavailable, browser-path tests skipped",
     );
   }
+});
+
+// Responsibility: the page-side half of measured mutates (m2pre-observed
+// task spec, scope item 2 and decision 2) — a real local http server, so
+// `ctx.page()` can issue a genuine GET (navigation) and POST (in-page
+// fetch), proving `observedCounts()` tallies both and that neither ever
+// reaches http.jsonl (that file stays `ctx.request()`'s own record,
+// docs/spec.md "Receipts"). Kept in its own describe block, with its own
+// server, rather than folded into the block above: the existing tests there
+// use `page.setContent`, deliberately with no navigation and no server.
+describe("createStepContext / ctx.page(): observed network writes", () => {
+  let evidenceDir: string;
+  let server: Server;
+  let baseURL: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-observed-"));
+    server = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body>ok</body></html>");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address() as AddressInfo;
+    baseURL = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    "counts a page navigation as a read and a page-issued POST as a write, without adding either to http.jsonl",
+    async () => {
+      const { ctx, dispose, observedCounts } = createStepContext({
+        config: baseConfig(),
+        evidenceDir,
+        env: {},
+      });
+
+      const page = await ctx.page();
+      await page.goto(baseURL);
+      await page.evaluate(
+        async (url) => {
+          await fetch(url, { method: "POST" });
+        },
+        `${baseURL}/`,
+      );
+
+      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 1 });
+
+      const { evidence } = await dispose("ok");
+      // `ctx.request()` was never called this run — page traffic must not
+      // have been folded into http.jsonl (this task's spec, scope item 2).
+      expect(evidence.http).toBeUndefined();
+      expect(existsSync(path.join(evidenceDir, "http.jsonl"))).toBe(false);
+    },
+  );
 });

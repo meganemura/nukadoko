@@ -11,6 +11,14 @@
 // distinction matters for the Allure mapping and sign-off contexts, per
 // docs/spec.md — and `scenario: string | null` carries the owning scenario's
 // id for a `run`-originated receipt, `null` for a `do`-originated one.
+//
+// `observed` is added now (m2pre-observed task spec, decision 3): the
+// network calls the tool itself measured this execution making, never what
+// a step declared. It is required on both `ReceiptOk` and `ReceiptFailed` —
+// unlike `target_version`, there is no "not applicable" case for it, only
+// "zero calls happened" (`{ http_reads: 0, http_writes: 0 }`).
+
+import type { ObservedCounts } from "../context/observed.js";
 
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
@@ -52,6 +60,12 @@ interface ReceiptBase {
   started_at: string;
   finished_at: string;
   evidence: EvidenceMeta;
+  /** Network calls the tool itself saw this execution make, through
+   * `ctx.request()` and the page alike — GET/HEAD as reads, everything else
+   * as writes. Measured, never declared: this is what run-time keyword
+   * enforcement and read-only environments act on (docs/spec.md "Keyword
+   * semantics", "Receipts"; this task's spec, decisions 1-4). */
+  observed: ObservedCounts;
   /** The environment's `version` probe result (docs/spec.md "Receipts":
    * optional, "(when probed)"). Present only when the environment configures
    * a probe *and* it resolved to a string within its timeout; omitted — not

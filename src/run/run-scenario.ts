@@ -22,22 +22,32 @@ import { writeScenarioRecord } from "./write-record.js";
 // "シナリオ実行器") — the scenario-level counterpart to cli/do.ts's execution
 // phase. One `ctx` is created for the whole pickle and shared by every step
 // (docs/spec.md "Running": "Steps in one pickle share one context"); a
-// step's own failure/undefined/ambiguous/Then-mutates-rejection stops
+// step's own failure/undefined/ambiguous/Then-position-observed-write stops
 // matching or running any further step in this scenario, but every step
 // still gets a scenario-record entry (`skipped` for the rest). Evidence
 // follows its natural scope (this task's spec, decision 5): the browser's
 // trace/screenshots belong to the scenario as a whole (one `dispose()` call,
 // at the very end), while each step's own http.jsonl belongs to that step's
-// receipt dir — reached by calling `contextHandle.setHttpLogDir` right
-// before running each step that begins execution.
+// receipt dir — reached by calling `contextHandle.beginStep` right before
+// running each step that begins execution.
 //
-// The three "never began" outcomes (undefined, ambiguous, a Then-position
-// step declaring `mutates: true`) are resolved *before* a receipt id or
-// directory is created — matching docs/spec.md "an execution that never
-// began must not be citable". Every other failure (binding, args
-// validation, the step's own throw, returns validation) happens *after* that
-// point and therefore always gets a failed receipt, mirroring `nuka do`'s
-// own setup/execution split (this task's spec, decision 4).
+// The two "never began" outcomes (undefined, ambiguous) are resolved
+// *before* a receipt id or directory is created — matching docs/spec.md "an
+// execution that never began must not be citable". Every other failure
+// (binding, args validation, the step's own throw, returns validation)
+// happens *after* that point and therefore always gets a failed receipt,
+// mirroring `nuka do`'s own setup/execution split (this task's spec,
+// decision 4).
+//
+// A Then-position (`PickleStepType.OUTCOME`) step is no longer rejected
+// ahead of execution for its *declared* `mutates` (m2pre-observed task
+// spec, decisions 4-5, superseding this file's earlier static check): the
+// same step text can legitimately appear in both Action and Outcome
+// position, so only what a given occurrence's execution actually observed
+// can settle it. The step always runs and always gets a receipt; if it is
+// bound in Then position and its execution observed a network write, the
+// receipt is demoted to `status: "failed"` afterward — measured, per
+// occurrence, regardless of what `run` returned or what was declared.
 
 export interface RunScenarioOptions {
   readonly rootDir: string;
@@ -65,11 +75,11 @@ export interface RunScenarioOptions {
   readonly sessionFilePath: string | null;
 }
 
-/** The Then-position + `mutates: true` rejection message, in the same
- * vocabulary `nuka check`'s own `then-mutates` issue uses (this task's spec,
- * decision 3). */
-function thenMutatesMessage(stepName: string): string {
-  return `Step "${stepName}" is bound in Then position but declares mutates: true`;
+/** The Then-position + observed-write failure message (this task's spec,
+ * decision 4): states the fact this receipt now records — writes were
+ * measured, not merely declared, while bound in Then position. */
+function thenObservedWritesMessage(stepName: string, writes: number): string {
+  return `Step "${stepName}" is bound in Then position and observed ${writes} network write${writes === 1 ? "" : "s"}: Then must not mutate`;
 }
 
 function undefinedStepMessage(text: string): string {
@@ -153,24 +163,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       continue;
     }
 
-    if (pickleStep.type === PickleStepType.OUTCOME && entry.step.mutates) {
-      scenarioFailed = true;
-      stepRecords.push({
-        text: pickleStep.text,
-        status: "failed",
-        receipt: null,
-        error: { message: thenMutatesMessage(outcome.stepName) },
-      });
-      continue;
-    }
-
     // --- This step's execution has begun: a receipt is always written from
     // here, whatever happens (mirrors cli/do.ts's own execution phase). ---
     const receiptId = generateReceiptId();
     const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
     const receiptDir = path.join(rootDir, relativeReceiptDir);
     await mkdir(receiptDir, { recursive: true });
-    contextHandle.setHttpLogDir(receiptDir);
+    contextHandle.beginStep(receiptDir);
 
     const bindResult = bindStepArgs(
       outcome.stepName,
@@ -212,6 +211,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
     }
 
+    // Then-position measured enforcement (this task's spec, decision 4):
+    // only demotes an otherwise-"ok" status — a step that already failed
+    // for its own reason keeps that truthful failure and message rather
+    // than being overwritten by this one. Checked regardless of what the
+    // step declared; `entry.step.mutates` plays no part here.
+    const observed = contextHandle.observedCounts();
+    if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
+      status = "failed";
+      errorMessage = thenObservedWritesMessage(outcome.stepName, observed.http_writes);
+    }
+
     const stepFinishedAt = new Date();
     const httpLogExists = existsSync(path.join(receiptDir, "http.jsonl"));
 
@@ -236,6 +246,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
             },
+            observed,
           }
         : {
             receipt_id: receiptId,
@@ -256,6 +267,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
             },
+            observed,
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,

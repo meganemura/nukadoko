@@ -133,6 +133,9 @@ describe("nuka do", () => {
       expect(receipt.evidence.screenshots).toEqual([]);
       expect(receipt.evidence.trace).toBeUndefined();
       expect(receipt.evidence.http).toBeUndefined();
+      // No network call was ever made (this task's spec, decision 3):
+      // `observed` is still always present on the receipt, at zero.
+      expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 0 });
 
       const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
       expect(existsSync(receiptPath)).toBe(true);
