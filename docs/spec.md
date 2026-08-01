@@ -180,7 +180,19 @@ nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--tag
 scenarios with Background merged, Scenario Outline expanded, and tables
 attached. nukadoko matches each pickle step against the committed patterns and
 executes the steps in order. One receipt per step; one scenario record
-(feature path, scenario name, ordered receipt ids, status) per pickle.
+(feature path, scenario name, ordered receipt ids, per-step status) per
+pickle.
+
+Steps in one pickle share one context — the World semantics Cucumber users
+expect: a Background that logs in hands its browser and cookies to every
+later step. A failed step skips the rest of the scenario, and skipped steps
+get no receipt (an execution that never began must not be citable; the
+scenario record is what says "skipped"). Evidence follows its natural
+scope: each step's receipt carries that step's http.jsonl, while the
+Playwright trace spans the shared context and therefore lives in the
+scenario's own directory, not on any single step. Then-position
+enforcement (`mutates: false`) applies at run time exactly as in `nuka
+check`.
 
 An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
@@ -288,7 +300,9 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 
 - `receipts/<id>/` — one directory per receipt: the receipt JSON, its
   evidence files (trace.zip, screenshots, http.jsonl), and the progress log
-- `scenarios/<id>.json` — scenario records written by `nuka run`
+- `scenarios/<id>/` — one directory per scenario run: `record.json` plus
+  the scenario-scoped evidence (trace.zip, final screenshot) — mirroring
+  Playwright's own per-test `test-results/` convention one level up
 - `sessions/<env>/<name>.json` — storageState; live credentials in
   plaintext, created with restricted permissions
 - `allure-results/` — the emitter's output, regenerated freely
