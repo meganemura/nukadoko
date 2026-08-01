@@ -235,17 +235,26 @@ The execution infrastructure Cucumber never had:
   `envFiles`, `policy: "read-only"` (refuses mutating steps), and an optional
   `version` probe recorded on every receipt as `target_version`. Sign-off
   machine-checks that cited receipts share one environment and version.
-- **Secrets**: values loaded from uncommitted env files are classified as
-  secrets and redacted (`{{secret.NAME}}`) in receipts and HTTP logs.
-  Traces and screenshots are not redacted; the state directory is sensitive.
-  ⚠ Open design area: redaction is settled, onboarding is not. Goal:
-  zero-config detection and classification of secret sources, `secrets.md`
-  optional. To be redesigned before M1 is finalized.
+- **Secrets**: git is the classifier. An env file git does not track —
+  ignored or untracked — is a secret source: every value it defines is a
+  secret, no declaration needed. Tracked env files are plain configuration
+  (a committed value is not a secret, and nukadoko will not pretend
+  otherwise). Outside a git repository every envFile is treated as a secret
+  source. Individual keys can be demoted in config
+  (`secrets: { public: [...] }`); there is no manifest file and no
+  promotion. Secret values are redacted (`{{secret.NAME}}`) wherever a
+  receipt is emitted — receipt.json, `do`'s stdout copy, http.jsonl —
+  applied by the executor at write time, never controllable from a step's
+  `run`. Honest limits: values shorter than 4 characters are never
+  redacted, and only values nukadoko itself loaded are redactable — a fresh
+  token inside a step's result is not caught. Traces and screenshots are
+  not redacted; the state directory is sensitive. `nuka check` reports each
+  env file's classification and secret-key names (never values).
 
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
-`.nukadoko`), `browser`.
+`.nukadoko`), `browser`, `secrets`.
 
 ### The state directory
 
