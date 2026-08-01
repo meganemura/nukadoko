@@ -16,13 +16,6 @@ and the state directory (`.nukadoko/`) are all **nukadoko**. The one thing
 called **nuka** is the CLI command the package installs. Keep prose and
 identifiers on that line.
 
-## Session-to-session state
-
-Current status and the next planned action live in `.claude-team/HANDOFF.md`
-(untracked; may be absent in a fresh clone). Task specs for implementer
-subagents live under `.claude-team/<task-slug>/spec.md`. Read the handoff
-before starting work.
-
 ## Hard rules
 
 - Dependencies are exact-pinned. Adding, removing, or changing a version
