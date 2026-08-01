@@ -31,6 +31,7 @@ identifiers on that line.
   release).
 - Commits are semantic units, in English, matching the existing message
   style; the user reviews direction, the session reviews code.
-- README.md and README.ja.md are kept in sync (Japanese: one sentence per
-  line). Code comments explain why, not what; each module opens with its
+- README.md/README.ja.md and docs/spec.md/docs/spec.ja.md are kept in sync
+  (Japanese: one sentence per line; the English file is the source of
+  truth). Code comments explain why, not what; each module opens with its
   responsibility and boundaries.
