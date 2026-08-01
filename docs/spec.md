@@ -89,7 +89,8 @@ export default defineStep({
 ```
 
 - `pattern` binds the step to Gherkin text. `patterns: [...]` allows
-  aliases. A step may omit patterns entirely — then it is CLI-only
+  aliases; giving both concatenates them, `pattern` first. A step may omit
+  patterns entirely — then it is CLI-only
   vocabulary for agents, invisible to feature files but importable by other
   steps: a typed building block, whose `args`/`returns` schemas keep the
   composition checked.
