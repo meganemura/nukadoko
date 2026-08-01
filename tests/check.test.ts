@@ -129,6 +129,37 @@ describe("nuka check", () => {
     }
   });
 
+  it("undefined-step hints at an escapable near-miss pattern (fineract-style bare parens)", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-escape-hint-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const undefinedIssues = report.errors.filter(
+      (issue: { code: string }) => issue.code === "undefined-step",
+    );
+    expect(undefinedIssues).toHaveLength(2);
+
+    const hinted = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes('the amount (USD) is "100"'),
+    );
+    expect(hinted).toBeDefined();
+    expect(hinted.message).toContain("hint:");
+    expect(hinted.message).toContain('pattern "the amount (USD) is {amount:string}"');
+    expect(hinted.message).toContain("escaped");
+
+    const unrelated = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes("matches nothing at all"),
+    );
+    expect(unrelated).toBeDefined();
+    expect(unrelated.message).not.toContain("hint:");
+
+    expect(exitCode).toBe(1);
+  });
+
   it("propagates a ConfigError as stderr + exit 1, no report on stdout", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

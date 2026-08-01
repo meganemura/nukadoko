@@ -106,6 +106,30 @@ export default defineStep({
   values silently when keys are reordered, and no static check can catch
   that. The binding must survive review by being visible in the pattern
   itself. Aliases must all bind the same key set.
+- A pattern's literal text is still cucumber-expressions syntax, not free
+  prose: bare `(` `)` mean optional text and bare `/` means alternation, so
+  literal occurrences must be escaped — as `\\(`, `\\)`, `\\/` in the
+  `pattern` string literal (one backslash in the parsed expression means
+  two in TS source) — to match literally. Unlike a schema mismatch, an
+  unescaped occurrence still compiles — `nuka check` passes and the step
+  registers — and the pattern then silently never matches the pickle text
+  it was written for (hit independently in two corpora during validation).
+- A parameter cannot appear inside an optional group — an inherited
+  cucumber-expressions constraint. A step whose variants differ only by a
+  trailing location clause therefore cannot collapse into one step with an
+  optional parameter; each variant needs its own step definition. The
+  extra step count is an accepted design trade-off, not a gap nukadoko is
+  expected to close.
+- Aliases are for prose that is genuinely interchangeable at the args
+  level: same keys, same `run()` behavior no matter which phrasing
+  matched. If `run()` needs to know which variant matched — behavior forks
+  on the phrasing itself — give each variant its own step even when their
+  key sets coincide; folding them into one alias would hide that fork from
+  reviewers.
+- Plurals: a pure suffix plural (`message(s)`) uses cucumber-expressions'
+  own optional text `(s)`, no alias needed. When the noun itself changes
+  shape rather than just gaining a trailing `s`, use a `patterns` alias
+  instead.
 - `args` / `returns` are zod schemas, validated at the run boundary (args
   before execution, returns after). A validation failure is a failed run; no
   result is stored. Captures are coerced by the parameter type (`{int}` →
@@ -148,6 +172,15 @@ Gherkin keywords stop being decoration:
   and `nuka run` both enforce it.
 - Given/When positions accept any step.
 - Compat (untyped) steps cannot be checked; they get a soft warning instead.
+- Gherkin classifies an `And`/`But` step by inheriting the pickle step type
+  of the preceding primary keyword (Given/When/Then) — this is gherkin's
+  own pickle-compilation behavior, not a nukadoko choice. A scenario
+  written `Then ...` followed by `And ...` therefore binds that `And` line
+  in Then position too, even though its prose reads as an action, so the
+  `mutates: false` requirement applies to it exactly as it does to the
+  `Then` line. This is a hazard worth knowing, not a rule change here — how
+  nukadoko should treat a step that legitimately occurs in both Given/When
+  and Then position is part of the mutates redesign already underway.
 
 ## Compat steps (the migration door)
 
