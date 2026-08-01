@@ -2,7 +2,10 @@
 
 > nukadoko — a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
 
-Status: design draft. No code exists yet.
+Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
+`check`/`init`/`scaffold`, sessions, environments, secrets. Pre-0.1: the
+real-world validation gate (below, Implementation notes) is still ahead,
+and M2+ (compat, Allure, sign-off) exist only as design.
 
 ## What nukadoko is
 

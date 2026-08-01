@@ -7,7 +7,8 @@ Project context for agent sessions working in this repository.
 nukadoko is an agent-first engine that runs Gherkin: typed step contracts,
 tool-measured execution records (receipts), and sign-offs. The design source
 of truth is `docs/spec.md` — read it before changing behavior. Status:
-pre-0.1, milestone M1 (engine core) in progress.
+pre-0.1; M1 (engine core) is implemented, the real-world validation gate
+(docs/spec.md, Implementation notes) is next, and M2+ are design-only.
 
 ## Naming rule
 
