@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import type { StorageState } from "../session/storage-state.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
 // calls `ctx.page()` — launch chromium, trace the whole browser context,
@@ -16,10 +17,25 @@ export interface LaunchBrowserOptions {
   headless: boolean;
   /** Where trace.zip and screenshot(s) are written. Must already exist. */
   evidenceDir: string;
+  /** Restores a `--session`'s prior storageState, when one was loaded;
+   * `undefined` for a session's first-ever use or when `--session` wasn't
+   * given at all. */
+  storageState?: StorageState;
 }
 
 export interface BrowserEvidenceHandle {
   readonly page: Page;
+  /** Snapshot of the browser context's current storageState, for the
+   * executor to persist as the session's new state. Must be called *before*
+   * `finalize()` (which closes the context) — collected on a still-open
+   * context is the only way `context.storageState()` can succeed at all.
+   * Swallows failures (returns `undefined`) rather than throwing: a step can
+   * reach the browser via `ctx.page()` and close or crash it before
+   * returning, and losing this snapshot must not cost the receipt (or, per
+   * docs/spec.md's sessions design, force the session's file to be deleted —
+   * `undefined` here means create-context.ts's `dispose` leaves the
+   * existing session file untouched). */
+  collectStorageState(): Promise<StorageState | undefined>;
   /** Stops tracing, saves trace.zip, captures screenshot(s), and closes the
    * browser. Returns the screenshot file names actually written (best
    * effort: a screenshot failure here must never mask the step's real
@@ -31,9 +47,20 @@ export async function launchBrowserWithTracing(
   options: LaunchBrowserOptions,
 ): Promise<BrowserEvidenceHandle> {
   const browser: Browser = await chromium.launch({ headless: options.headless });
-  const context: BrowserContext = await browser.newContext();
+  const context: BrowserContext = await browser.newContext(
+    options.storageState ? { storageState: options.storageState } : {},
+  );
   await context.tracing.start({ screenshots: true, snapshots: true });
   const page = await context.newPage();
+
+  async function collectStorageState(): Promise<StorageState | undefined> {
+    try {
+      return await context.storageState();
+    } catch {
+      // See doc comment above.
+      return undefined;
+    }
+  }
 
   async function finalize(status: "ok" | "failed"): Promise<string[]> {
     const screenshots: string[] = [];
@@ -76,5 +103,5 @@ export async function launchBrowserWithTracing(
     return screenshots;
   }
 
-  return { page, finalize };
+  return { page, collectStorageState, finalize };
 }

@@ -6,16 +6,19 @@ import yargs from "yargs";
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
 import { runDo } from "./do.js";
+import { runSessionClear, runSessionList } from "./session.js";
 import { loadVocabulary, describeContract, formatVocabularyError, summarize } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`) to yargs and turns any failure — yargs' own (bad flags, no command)
-// or ours (config/discovery errors, unknown step name) — into stderr output
-// plus a non-zero exit code, without ever calling `process.exit` itself.
-// That is `cli.ts`'s job, so this function stays callable directly from
-// tests. `do`'s own setup/execution split and receipt writing lives in
-// cli/do.ts; this module only wires its argv shape and reports its exit code.
+// `do`, `session list`/`clear`) to yargs and turns any failure — yargs' own
+// (bad flags, no command) or ours (config/discovery errors, unknown step
+// name) — into stderr output plus a non-zero exit code, without ever
+// calling `process.exit` itself. That is `cli.ts`'s job, so this function
+// stays callable directly from tests. `do`'s own setup/execution split and
+// receipt writing lives in cli/do.ts; `session`'s own list/clear logic
+// lives in cli/session.ts; this module only wires their argv shapes and
+// reports their exit codes.
 
 export type { WritableSink } from "./writable-sink.js";
 
@@ -37,6 +40,15 @@ interface DoArgs {
   name: string;
   args: string;
   tag?: string;
+  session?: string;
+}
+
+interface SessionListArgs {
+  json?: boolean;
+}
+
+interface SessionClearArgs {
+  name?: string;
 }
 
 export async function runCli(
@@ -123,6 +135,10 @@ export async function runCli(
         .option("tag", {
           type: "string",
           describe: "group this call under a tag",
+        })
+        .option("session", {
+          type: "string",
+          describe: "carry login state across calls via a named session",
         }) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       exitCode = await runDo({
@@ -130,9 +146,59 @@ export async function runCli(
         name: args.name,
         argsJson: args.args,
         tag: args.tag ?? null,
+        session: args.session ?? null,
         stdout,
         stderr,
       });
+    },
+  };
+
+  const sessionListCommand: CommandModule<Record<string, never>, SessionListArgs> = {
+    command: "list",
+    describe: "list sessions for the default environment",
+    builder: (y: Argv) =>
+      y.option("json", {
+        type: "boolean",
+        default: false,
+        describe: "machine-readable output",
+      }) as Argv<SessionListArgs>,
+    handler: async (args: Arguments<SessionListArgs>) => {
+      exitCode = await runSessionList({
+        rootDir,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const sessionClearCommand: CommandModule<Record<string, never>, SessionClearArgs> = {
+    command: "clear [name]",
+    describe: "delete a session, or every session for the default environment when no name is given",
+    builder: (y: Argv) =>
+      y.positional("name", {
+        type: "string",
+        describe: "session name; omit to clear every session",
+      }) as Argv<SessionClearArgs>,
+    handler: async (args: Arguments<SessionClearArgs>) => {
+      exitCode = await runSessionClear({
+        rootDir,
+        name: args.name ?? null,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const sessionCommand: CommandModule = {
+    command: "session",
+    describe: "list|clear sessions",
+    builder: (y: Argv) =>
+      y.command(sessionListCommand).command(sessionClearCommand).demandCommand(1).strict(),
+    handler: () => {
+      // Never invoked: `demandCommand(1)` on the sub-builder above requires
+      // one of `list`/`clear`, so this bare handler only exists to satisfy
+      // yargs' CommandModule shape.
     },
   };
 
@@ -146,6 +212,7 @@ export async function runCli(
     .command(stepsCommand)
     .command(describeCommand)
     .command(doCommand)
+    .command(sessionCommand)
     .demandCommand(1)
     .strict()
     .help();

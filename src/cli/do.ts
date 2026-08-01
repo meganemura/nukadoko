@@ -2,11 +2,15 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
-import { createStepContext, type EvidenceResult } from "../context/create-context.js";
+import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
 import type { Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
+import { acquireLock, releaseLock } from "../session/lock.js";
+import { validateSessionName } from "../session/name.js";
+import { sessionFilePath, sessionLockPath } from "../session/paths.js";
+import { readSessionFile, writeSessionFile } from "../session/store.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -14,11 +18,12 @@ import type { WritableSink } from "./writable-sink.js";
 // unit-testable without going through yargs (same split as vocabulary.ts).
 // Two phases, matching docs/spec.md's "Running"/"Receipts" split exactly:
 //
-//   1. Setup — malformed --args JSON, an unknown step name, or a config/
-//      discovery error. None of these write a receipt: the run never
-//      started, so there is nothing to attest to (a receipt for an
-//      execution that never began would let a nonexistent run be cited
-//      later as if it had happened).
+//   1. Setup — malformed --args JSON, an unknown step name, a config/
+//      discovery error, or (this task's spec) an invalid `--session` name,
+//      a lock held by another live process, or a malformed session file.
+//      None of these write a receipt: the run never started, so there is
+//      nothing to attest to (a receipt for an execution that never began
+//      would let a nonexistent run be cited later as if it had happened).
 //   2. Execution — from here a receipt is always written, whatever
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
@@ -27,13 +32,21 @@ import type { WritableSink } from "./writable-sink.js";
 //
 // The evidence-collecting side of ctx (browser/http/trace) is created and
 // disposed here, never handed to the step itself — see
-// context/create-context.ts's header for why that split exists.
+// context/create-context.ts's header for why that split exists. Sessions
+// follow the same rule: this module is the only place a session's file is
+// actually read or written; `--session`'s lock is acquired right after it
+// passes setup's name/config checks and is always released in `finally`,
+// covering every return path below it (this task's spec, decision 4).
 
 export interface RunDoOptions {
   rootDir: string;
   name: string;
   argsJson: string;
   tag: string | null;
+  /** Carries login state across `do` calls as Playwright storageState;
+   * `null` means a clean start — no session file is read or written
+   * (docs/spec.md "Sessions..."). */
+  session: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -48,7 +61,7 @@ function formatValidationIssues(issues: readonly z.core.$ZodIssue[]): string {
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
-  const { rootDir, name, argsJson, tag, stdout, stderr } = options;
+  const { rootDir, name, argsJson, tag, session, stdout, stderr } = options;
 
   // --- Setup phase: any failure here writes nothing. ---
   let parsedArgs: unknown;
@@ -69,103 +82,177 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return 1;
   }
 
-  let vocabulary;
-  try {
-    vocabulary = await discoverSteps(rootDir, config.featuresDir);
-  } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
-  }
-
-  const entry = vocabulary.get(name);
-  if (!entry) {
-    stderr.write(`Unknown step: ${name}\n`);
-    return 1;
-  }
-
-  // --- Execution phase: a receipt is always written from here on. ---
-  const receiptId = generateReceiptId();
-  const relativeDir = path.join(config.stateDir, "receipts", receiptId);
-  const evidenceDir = path.join(rootDir, relativeDir);
-  await mkdir(evidenceDir, { recursive: true });
-
-  const contextHandle = createStepContext({ rootDir, config, evidenceDir });
-  const startedAt = new Date();
-
-  let status: "ok" | "failed";
-  let result: unknown;
-  let errorMessage = "";
-
-  const argsResult = entry.step.args.safeParse(parsedArgs);
-  if (!argsResult.success) {
-    status = "failed";
-    errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
-  } else {
+  // Name validation and lock acquisition happen together, still in setup:
+  // a name that fails validation never reaches the filesystem at all, and a
+  // lock conflict is reported before anything else about this run is
+  // decided (this task's spec, decisions 4-5). `lockPath` stays `null`
+  // exactly when `session` is `null`, so the `finally` below knows whether
+  // there is anything to release.
+  let lockPath: string | null = null;
+  if (session !== null) {
     try {
-      const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
-      const returnsResult = entry.step.returns.safeParse(runResult);
-      if (!returnsResult.success) {
-        status = "failed";
-        errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
-      } else {
-        status = "ok";
-        result = returnsResult.data;
-      }
+      validateSessionName(session);
     } catch (error) {
-      status = "failed";
-      errorMessage = error instanceof Error ? error.message : String(error);
+      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+    lockPath = sessionLockPath(rootDir, config.stateDir, session);
+    try {
+      await acquireLock(lockPath, session);
+    } catch (error) {
+      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
     }
   }
 
-  const finishedAt = new Date();
-  let evidence: EvidenceResult;
   try {
-    evidence = await contextHandle.dispose(status);
-  } catch {
-    // Last resort: browser-evidence.ts and create-context.ts's own dispose
-    // already swallow their teardown failures, but this catch is the final
-    // backstop so a failure neither of them anticipated still can't take
-    // the receipt down with it (docs/spec.md "Receipts": a receipt is
-    // written for every execution that started). No evidence file is known
-    // to exist in that case, so none is listed.
-    evidence = { screenshots: [] };
-  }
+    // A malformed session file is also a setup failure: unlike a missing
+    // one (a session's first-ever use), it's data nukadoko itself owns, so
+    // silently treating it as "no session" would risk restoring nothing
+    // without saying so.
+    let loadedStorageState: Awaited<ReturnType<typeof readSessionFile>> = null;
+    if (session !== null) {
+      try {
+        loadedStorageState = await readSessionFile(
+          sessionFilePath(rootDir, config.stateDir, session),
+          session,
+        );
+      } catch (error) {
+        stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return 1;
+      }
+    }
 
-  const receipt: Receipt =
-    status === "ok"
-      ? {
-          receipt_id: receiptId,
-          step: name,
-          kind: "do",
-          args: parsedArgs,
-          result,
-          status: "ok",
-          environment: "default",
-          session: null,
-          tag,
-          scenario: null,
-          started_at: startedAt.toISOString(),
-          finished_at: finishedAt.toISOString(),
-          evidence: { dir: relativeDir, ...evidence },
+    let vocabulary;
+    try {
+      vocabulary = await discoverSteps(rootDir, config.featuresDir);
+    } catch (error) {
+      stderr.write(`${formatVocabularyError(error)}\n`);
+      return 1;
+    }
+
+    const entry = vocabulary.get(name);
+    if (!entry) {
+      stderr.write(`Unknown step: ${name}\n`);
+      return 1;
+    }
+
+    // --- Execution phase: a receipt is always written from here on. ---
+    const receiptId = generateReceiptId();
+    const relativeDir = path.join(config.stateDir, "receipts", receiptId);
+    const evidenceDir = path.join(rootDir, relativeDir);
+    await mkdir(evidenceDir, { recursive: true });
+
+    const contextHandle = createStepContext({
+      rootDir,
+      config,
+      evidenceDir,
+      storageState: loadedStorageState ?? undefined,
+    });
+    const startedAt = new Date();
+
+    let status: "ok" | "failed";
+    let result: unknown;
+    let errorMessage = "";
+
+    const argsResult = entry.step.args.safeParse(parsedArgs);
+    if (!argsResult.success) {
+      status = "failed";
+      errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+    } else {
+      try {
+        const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
+        const returnsResult = entry.step.returns.safeParse(runResult);
+        if (!returnsResult.success) {
+          status = "failed";
+          errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+        } else {
+          status = "ok";
+          result = returnsResult.data;
         }
-      : {
-          receipt_id: receiptId,
-          step: name,
-          kind: "do",
-          args: parsedArgs,
-          error: { message: errorMessage },
-          status: "failed",
-          environment: "default",
-          session: null,
-          tag,
-          scenario: null,
-          started_at: startedAt.toISOString(),
-          finished_at: finishedAt.toISOString(),
-          evidence: { dir: relativeDir, ...evidence },
-        };
+      } catch (error) {
+        status = "failed";
+        errorMessage = error instanceof Error ? error.message : String(error);
+      }
+    }
 
-  await writeReceipt(evidenceDir, receipt);
+    const finishedAt = new Date();
+    let disposeResult: DisposeResult;
+    try {
+      disposeResult = await contextHandle.dispose(status);
+    } catch {
+      // Last resort: browser-evidence.ts and create-context.ts's own dispose
+      // already swallow their teardown failures, but this catch is the final
+      // backstop so a failure neither of them anticipated still can't take
+      // the receipt down with it (docs/spec.md "Receipts": a receipt is
+      // written for every execution that started). No evidence file is known
+      // to exist in that case, so none is listed, and there is nothing to
+      // persist for the session either.
+      disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+    }
+    const { evidence, storageState: storageStateToPersist } = disposeResult;
 
-  stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
-  return status === "ok" ? 0 : 1;
+    // Save whenever a session was requested *and* dispose() actually
+    // produced something to persist (this task's spec, decision 2): a run
+    // that never opened a browser or request context leaves storageState
+    // `undefined`, and the session file is left untouched — not created,
+    // not overwritten, not deleted.
+    if (session !== null && storageStateToPersist !== undefined) {
+      try {
+        await writeSessionFile(
+          sessionFilePath(rootDir, config.stateDir, session),
+          storageStateToPersist,
+        );
+      } catch {
+        // Persisting the session must not cost the receipt, mirroring
+        // dispose()'s own fault tolerance above; a write failure here just
+        // leaves the session's previous file (if any) in place.
+      }
+    }
+
+    const receipt: Receipt =
+      status === "ok"
+        ? {
+            receipt_id: receiptId,
+            step: name,
+            kind: "do",
+            args: parsedArgs,
+            result,
+            status: "ok",
+            environment: "default",
+            session,
+            tag,
+            scenario: null,
+            started_at: startedAt.toISOString(),
+            finished_at: finishedAt.toISOString(),
+            evidence: { dir: relativeDir, ...evidence },
+          }
+        : {
+            receipt_id: receiptId,
+            step: name,
+            kind: "do",
+            args: parsedArgs,
+            error: { message: errorMessage },
+            status: "failed",
+            environment: "default",
+            session,
+            tag,
+            scenario: null,
+            started_at: startedAt.toISOString(),
+            finished_at: finishedAt.toISOString(),
+            evidence: { dir: relativeDir, ...evidence },
+          };
+
+    await writeReceipt(evidenceDir, receipt);
+
+    stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+    return status === "ok" ? 0 : 1;
+  } finally {
+    // Released regardless of which path above returned — setup failure,
+    // execution failure, or success (this task's spec, decision 4: "実行
+    // 終了時に必ず解放").
+    if (lockPath !== null) {
+      await releaseLock(lockPath);
+    }
+  }
 }

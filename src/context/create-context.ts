@@ -3,6 +3,7 @@ import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
+import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
 import { loadEnvFiles } from "./env.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
@@ -16,6 +17,10 @@ import { poll } from "./poll.js";
 // cannot control its own receipt or evidence collection, so nothing
 // evidence-related is exposed on the object passed into `run`; only the
 // executor (src/cli/do.ts), which never hands `dispose` onward, can call it.
+// The same split applies to sessions: this module restores a loaded
+// storageState into whichever context(s) a step opens and hands back
+// whichever one *should* be persisted, but never writes it to disk itself —
+// that stays the executor's job too (this task's spec, item 2).
 
 export interface EvidenceResult {
   trace?: string;
@@ -23,12 +28,25 @@ export interface EvidenceResult {
   http?: string;
 }
 
+export interface DisposeResult {
+  evidence: EvidenceResult;
+  /** The storageState the executor should persist for this run's
+   * `--session`, or `undefined` when there is nothing to persist — either
+   * because neither `ctx.page()` nor `ctx.request()` was ever called this
+   * run, or because collecting it failed (see browser-evidence.ts's
+   * `collectStorageState`). `undefined` must not be read as "clear the
+   * session": the executor's own contract (this task's spec, item 2) is to
+   * leave an existing session file untouched when this is `undefined`. */
+  storageState: StorageState | undefined;
+}
+
 export interface StepContextHandle {
   ctx: StepContext;
-  /** Closes whatever this execution opened (browser, request context) and
-   * reports which evidence files it actually produced, so the receipt only
-   * ever lists files that exist (docs/spec.md "Receipts"). */
-  dispose(status: "ok" | "failed"): Promise<EvidenceResult>;
+  /** Closes whatever this execution opened (browser, request context),
+   * reports which evidence files it actually produced (docs/spec.md
+   * "Receipts": only files that exist), and hands back the storageState (if
+   * any) the executor should persist for this run's session. */
+  dispose(status: "ok" | "failed"): Promise<DisposeResult>;
 }
 
 export interface CreateStepContextOptions {
@@ -36,6 +54,12 @@ export interface CreateStepContextOptions {
   config: NukadokoConfig;
   /** Absolute path to this receipt's evidence directory; must already exist. */
   evidenceDir: string;
+  /** A `--session`'s previously saved storageState, when one was loaded and
+   * parsed successfully; `undefined` for a session's first-ever use or when
+   * `--session` wasn't given. Restored into whichever of `ctx.page()` /
+   * `ctx.request()` the step actually opens — never both eagerly, since
+   * neither is created until first use. */
+  storageState?: StorageState;
 }
 
 function isBrowserHeadless(config: NukadokoConfig): boolean {
@@ -48,7 +72,7 @@ function isBrowserHeadless(config: NukadokoConfig): boolean {
 }
 
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
-  const { rootDir, config, evidenceDir } = options;
+  const { rootDir, config, evidenceDir, storageState } = options;
   const env = loadEnvFiles(rootDir, config.envFiles ?? []);
   const httpLogPath = path.join(evidenceDir, "http.jsonl");
 
@@ -63,6 +87,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         browserHandle = await launchBrowserWithTracing({
           headless: isBrowserHeadless(config),
           evidenceDir,
+          storageState,
         });
       }
       return browserHandle.page;
@@ -74,7 +99,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
             'ctx.request() requires a baseURL: set "baseURL" in nukadoko.config.ts',
           );
         }
-        const raw = await playwrightRequest.newContext({ baseURL: config.baseURL });
+        const raw = await playwrightRequest.newContext({
+          baseURL: config.baseURL,
+          ...(storageState ? { storageState } : {}),
+        });
         requestContext = wrapRequestContextWithLogging(raw, httpLogPath);
       }
       return requestContext;
@@ -89,10 +117,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
   };
 
-  async function dispose(status: "ok" | "failed"): Promise<EvidenceResult> {
+  async function dispose(status: "ok" | "failed"): Promise<DisposeResult> {
     const evidence: EvidenceResult = { screenshots: [] };
+    let browserStorageState: StorageState | undefined;
+    let requestStorageState: StorageState | undefined;
 
     if (browserHandle) {
+      // Must run before finalize() below: finalize() closes the context,
+      // and storageState() can only succeed on one that's still open (see
+      // browser-evidence.ts's collectStorageState doc comment).
+      browserStorageState = await browserHandle.collectStorageState();
       evidence.screenshots = await browserHandle.finalize(status);
       // Only claim trace.zip exists if tracing.stop actually got to write
       // it: browser-evidence.ts's finalize swallows tracing.stop failures
@@ -106,6 +140,18 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
     if (requestContext) {
       try {
+        // Collected before dispose() below for the same reason as the
+        // browser context above, though request contexts don't actually
+        // close their cookie jar on dispose() the way a browser context
+        // does — kept symmetric with the browser path regardless.
+        requestStorageState = await requestContext.storageState();
+      } catch {
+        // A step can dispose its own request context before returning;
+        // losing this snapshot must not block teardown below, nor cost the
+        // receipt (see DisposeResult's doc comment: `undefined` here means
+        // "leave the existing session file untouched", never "clear it").
+      }
+      try {
         await requestContext.dispose();
       } catch {
         // As with browser teardown above, losing the request context's own
@@ -118,7 +164,18 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       }
     }
 
-    return evidence;
+    // Browser wins whenever one was opened, whether or not a request
+    // context was *also* opened (this task's spec, decision 3): it carries
+    // cookies + localStorage where the request context only carries
+    // cookies, and Playwright's two cookie jars are independent, so merging
+    // them would synthesize a state that never actually existed. This also
+    // covers the case where `browserStorageState` itself is `undefined`
+    // (collection failed) — falling back to the request context's value
+    // there would contradict "collection failing means skip the save, keep
+    // the existing file" (this task's spec, decision 2).
+    const storageStateToPersist = browserHandle ? browserStorageState : requestStorageState;
+
+    return { evidence, storageState: storageStateToPersist };
   }
 
   return { ctx, dispose };

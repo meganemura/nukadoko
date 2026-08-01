@@ -1,10 +1,13 @@
 // Responsibility: the receipt shape from docs/spec.md "Receipts", typed as
 // the discriminated union `status` actually implies — `ReceiptOk` carries
-// `result`, `ReceiptFailed` carries `error`, never both. Fields this slice
-// cannot yet populate for real (`environment`, `session`, `scenario`) are
-// typed as their only possible value today rather than left open, so a
-// later slice that implements environments/sessions/`nuka run` has to widen
-// these types deliberately instead of silently becoming valid.
+// `result`, `ReceiptFailed` carries `error`, never both. Fields a slice
+// cannot yet populate for real (`environment`, `scenario`) are typed as
+// their only possible value today rather than left open, so a later slice
+// that implements environments/`nuka run` has to widen these types
+// deliberately instead of silently becoming valid. `session` was widened by
+// the sessions slice (this task's spec, item 3) from its own `null`-only
+// placeholder to `string | null` — the deliberate widening this file's
+// original comment anticipated.
 
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
@@ -29,8 +32,10 @@ interface ReceiptBase {
    * receipt regardless, so it is populated with its only possible value
    * today rather than omitted. */
   environment: "default";
-  /** Sessions are a later slice; always null until then. */
-  session: null;
+  /** The `--session` name this run carried, or `null` when none was given
+   * (docs/spec.md "Sessions...": no `--session` means a clean start, never
+   * an implicit shared session). */
+  session: string | null;
   tag: string | null;
   /** Scenario runs (`nuka run`) are a later slice; always null from `do`. */
   scenario: null;

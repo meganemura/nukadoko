@@ -55,7 +55,7 @@ describe("createStepContext / ctx.request()", () => {
     const missing = await request.get("/missing");
     expect(missing.status()).toBe(404);
 
-    const evidence = await dispose("ok");
+    const { evidence } = await dispose("ok");
     expect(evidence.http).toBe("http.jsonl");
     expect(evidence.trace).toBeUndefined();
     expect(evidence.screenshots).toEqual([]);
@@ -110,7 +110,7 @@ describe("createStepContext / ctx.request()", () => {
       evidenceDir,
     });
 
-    const evidence = await dispose("ok");
+    const { evidence } = await dispose("ok");
     expect(evidence.http).toBeUndefined();
   });
 

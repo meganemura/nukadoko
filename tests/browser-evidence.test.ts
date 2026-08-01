@@ -57,12 +57,16 @@ describe("createStepContext / ctx.page()", () => {
       const page = await ctx.page();
       await page.setContent("<html><body>hello</body></html>");
 
-      const evidence = await dispose("ok");
+      const { evidence, storageState } = await dispose("ok");
 
       expect(evidence.trace).toBe("trace.zip");
       expect(evidence.screenshots).toEqual(["final.png"]);
       expect(existsSync(path.join(evidenceDir, "trace.zip"))).toBe(true);
       expect(existsSync(path.join(evidenceDir, "final.png"))).toBe(true);
+      // A browser context was opened, so there is always something to
+      // persist for a session, even one with no cookies yet (this task's
+      // spec, decision 2).
+      expect(storageState).toBeDefined();
     },
   );
 
@@ -78,7 +82,7 @@ describe("createStepContext / ctx.page()", () => {
       const page = await ctx.page();
       await page.setContent("<html><body>hello</body></html>");
 
-      const evidence = await dispose("failed");
+      const { evidence } = await dispose("failed");
 
       expect(evidence.screenshots.sort()).toEqual(["failure.png", "final.png"]);
       expect(existsSync(path.join(evidenceDir, "failure.png"))).toBe(true);
@@ -106,12 +110,15 @@ describe("createStepContext / ctx.page()", () => {
       const page = await ctx.page();
       await page.context().browser()?.close();
 
-      const evidence = await dispose("failed");
+      const { evidence, storageState } = await dispose("failed");
 
       expect(evidence.screenshots).toEqual([]);
       expect(evidence.trace).toBeUndefined();
       expect(existsSync(path.join(evidenceDir, "trace.zip"))).toBe(false);
       expect(existsSync(path.join(evidenceDir, "final.png"))).toBe(false);
+      // The context was already closed, so collectStorageState() must have
+      // swallowed its own failure the same way finalize()'s teardown does.
+      expect(storageState).toBeUndefined();
     },
   );
 
