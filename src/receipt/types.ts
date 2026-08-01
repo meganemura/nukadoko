@@ -1,13 +1,13 @@
 // Responsibility: the receipt shape from docs/spec.md "Receipts", typed as
 // the discriminated union `status` actually implies — `ReceiptOk` carries
-// `result`, `ReceiptFailed` carries `error`, never both. Fields a slice
-// cannot yet populate for real (`environment`, `scenario`) are typed as
-// their only possible value today rather than left open, so a later slice
-// that implements environments/`nuka run` has to widen these types
-// deliberately instead of silently becoming valid. `session` was widened by
-// the sessions slice (this task's spec, item 3) from its own `null`-only
-// placeholder to `string | null` — the deliberate widening this file's
-// original comment anticipated.
+// `result`, `ReceiptFailed` carries `error`, never both. `scenario` is typed
+// as its only possible value (`null`) today because `nuka run` is a later
+// slice; `session` and `environment` were each widened in turn as their own
+// slices landed instead of being left open from the start — `session` from
+// a `null`-only placeholder to `string | null` (sessions slice), and now
+// `environment` from a `"default"`-only placeholder to `string`, plus the
+// new optional `target_version` (m1-environments task spec, decision 6) —
+// the deliberate widening this file's original comment anticipated.
 
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
@@ -27,11 +27,12 @@ interface ReceiptBase {
   kind: "do";
   /** Exactly what `--args` deserialized to, unvalidated and uncoerced. */
   args: unknown;
-  /** Fixed "default": named environments (docs/spec.md "Sessions,
-   * environments, secrets") are a later slice; this field exists on every
-   * receipt regardless, so it is populated with its only possible value
-   * today rather than omitted. */
-  environment: "default";
+  /** The `--env` name this run targeted; `"default"` when `--env` was
+   * omitted. Not a special value in the schema sense — docs/spec.md
+   * "Sessions, environments, secrets": default is just the name of an
+   * environment that may or may not itself be configured (this task's spec,
+   * decision 2). */
+  environment: string;
   /** The `--session` name this run carried, or `null` when none was given
    * (docs/spec.md "Sessions...": no `--session` means a clean start, never
    * an implicit shared session). */
@@ -42,6 +43,13 @@ interface ReceiptBase {
   started_at: string;
   finished_at: string;
   evidence: EvidenceMeta;
+  /** The environment's `version` probe result (docs/spec.md "Receipts":
+   * optional, "(when probed)"). Present only when the environment configures
+   * a probe *and* it resolved to a string within its timeout; omitted — not
+   * `null` — when there is no probe, it throws, or it times out, since a
+   * probe's absence or failure is metadata about the target, never a reason
+   * to fail the run itself (this task's spec, decision 5). */
+  target_version?: string;
 }
 
 export interface ReceiptOk extends ReceiptBase {

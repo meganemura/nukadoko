@@ -41,6 +41,7 @@ interface DoArgs {
   args: string;
   tag?: string;
   session?: string;
+  env?: string;
 }
 
 interface SessionListArgs {
@@ -49,6 +50,7 @@ interface SessionListArgs {
 
 interface SessionClearArgs {
   name?: string;
+  env: string;
 }
 
 export async function runCli(
@@ -139,6 +141,10 @@ export async function runCli(
         .option("session", {
           type: "string",
           describe: "carry login state across calls via a named session",
+        })
+        .option("env", {
+          type: "string",
+          describe: 'target a named environment (omit for the "default" environment)',
         }) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       exitCode = await runDo({
@@ -147,6 +153,7 @@ export async function runCli(
         argsJson: args.args,
         tag: args.tag ?? null,
         session: args.session ?? null,
+        env: args.env ?? null,
         stdout,
         stderr,
       });
@@ -174,16 +181,23 @@ export async function runCli(
 
   const sessionClearCommand: CommandModule<Record<string, never>, SessionClearArgs> = {
     command: "clear [name]",
-    describe: "delete a session, or every session for the default environment when no name is given",
+    describe: "delete a session, or every session for the environment when no name is given",
     builder: (y: Argv) =>
-      y.positional("name", {
-        type: "string",
-        describe: "session name; omit to clear every session",
-      }) as Argv<SessionClearArgs>,
+      y
+        .positional("name", {
+          type: "string",
+          describe: "session name; omit to clear every session in the environment",
+        })
+        .option("env", {
+          type: "string",
+          default: "default",
+          describe: "environment to clear sessions from",
+        }) as Argv<SessionClearArgs>,
     handler: async (args: Arguments<SessionClearArgs>) => {
       exitCode = await runSessionClear({
         rootDir,
         name: args.name ?? null,
+        environment: args.env,
         stdout,
         stderr,
       });

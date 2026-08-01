@@ -61,3 +61,57 @@ describe("configSchema", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("configSchema: environments", () => {
+  it("accepts baseURL, envFiles, policy: read-only, and a version function", () => {
+    const version = () => "1.0.0";
+    const result = configSchema.safeParse({
+      environments: {
+        staging: {
+          baseURL: "http://staging.example",
+          envFiles: [".env.staging"],
+          policy: "read-only",
+          version,
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.environments?.staging).toEqual({
+        baseURL: "http://staging.example",
+        envFiles: [".env.staging"],
+        policy: "read-only",
+        version,
+      });
+    }
+  });
+
+  it("accepts an environment with no fields at all", () => {
+    const result = configSchema.safeParse({ environments: { staging: {} } });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an environment name outside [a-z0-9_-]+", () => {
+    const result = configSchema.safeParse({ environments: { "Bad Name": {} } });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown key inside an environment entry", () => {
+    const result = configSchema.safeParse({ environments: { staging: { typo: true } } });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a policy value other than the literal read-only", () => {
+    const result = configSchema.safeParse({
+      environments: { staging: { policy: "readonly" } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-function version", () => {
+    const result = configSchema.safeParse({
+      environments: { staging: { version: "1.0.0" } },
+    });
+    expect(result.success).toBe(false);
+  });
+});

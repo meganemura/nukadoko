@@ -5,6 +5,12 @@ import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
 import { discoverSteps } from "../discover/discover-steps.js";
+import { probeVersion } from "../environment/probe-version.js";
+import {
+  DEFAULT_ENVIRONMENT_NAME,
+  resolveEnvironment,
+  type ResolvedEnvironment,
+} from "../environment/resolve-environment.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
 import type { Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
@@ -23,16 +29,26 @@ import type { WritableSink } from "./writable-sink.js";
 // Two phases, matching docs/spec.md's "Running"/"Receipts" split exactly:
 //
 //   1. Setup — malformed --args JSON, an unknown step name, a config/
-//      discovery error, or (this task's spec) an invalid `--session` name,
-//      a lock held by another live process, or a malformed session file.
-//      None of these write a receipt: the run never started, so there is
-//      nothing to attest to (a receipt for an execution that never began
-//      would let a nonexistent run be cited later as if it had happened).
+//      discovery error, an unknown `--env` name, a mutating step against a
+//      `policy: "read-only"` environment, or an invalid `--session` name, a
+//      lock held by another live process, or a malformed session file. None
+//      of these write a receipt: the run never started, so there is nothing
+//      to attest to (a receipt for an execution that never began would let a
+//      nonexistent run be cited later as if it had happened).
 //   2. Execution — from here a receipt is always written, whatever
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
 //      a step whose args and returns both validate and whose `run` doesn't
 //      throw is `status: "ok"`.
+//
+// `--env` is resolved (environment/resolve-environment.ts) right after
+// config loads and before anything session-related, because session paths
+// are now per-environment (this task's spec, decision 7) — the resolved
+// environment's name, not the raw `--env` string, is what every later
+// sessions/<env>/ path uses. The version probe runs once, at the very top of
+// the execution phase (decision 5): metadata about the target, never
+// reachable from a step's own `run`, and its failure/timeout never fails the
+// run — only `target_version` is omitted, with one stderr warning line.
 //
 // The evidence-collecting side of ctx (browser/http/trace) is created and
 // disposed here, never handed to the step itself — see
@@ -44,10 +60,12 @@ import type { WritableSink } from "./writable-sink.js";
 //
 // This is also the one place a run's SecretSet is built (m1-secrets task
 // spec, decision 2) and the one place a receipt gets redacted (decision 3):
-// env is loaded and classified at the top of the execution phase, and the
-// finished receipt is redacted once, as a whole object, before either
-// receipt.json or the stdout copy is written from it — never twice,
-// independently, which could let the two drift apart.
+// env is loaded and classified at the top of the execution phase against the
+// *effective* envFiles (top-level + the resolved environment's own, m1-
+// environments task spec, decision 8), and the finished receipt is redacted
+// once, as a whole object, before either receipt.json or the stdout copy is
+// written from it — never twice, independently, which could let the two
+// drift apart.
 
 export interface RunDoOptions {
   rootDir: string;
@@ -58,6 +76,11 @@ export interface RunDoOptions {
    * `null` means a clean start — no session file is read or written
    * (docs/spec.md "Sessions..."). */
   session: string | null;
+  /** `--env`'s value, or `null` when it was omitted. `null` is not the same
+   * as the string `"default"`: it is what tells resolveEnvironment() not to
+   * require a matching `environments` entry (this task's spec, decision 2).
+   */
+  env: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -72,7 +95,7 @@ function formatValidationIssues(issues: readonly z.core.$ZodIssue[]): string {
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
-  const { rootDir, name, argsJson, tag, session, stdout, stderr } = options;
+  const { rootDir, name, argsJson, tag, session, env, stdout, stderr } = options;
 
   // --- Setup phase: any failure here writes nothing. ---
   let parsedArgs: unknown;
@@ -93,6 +116,20 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return 1;
   }
 
+  // Environment resolution comes before anything session-related: session
+  // paths below are per-environment, so the resolved environment's name has
+  // to exist first. `env !== null` is what distinguishes "explicit --env
+  // that must exist in config.environments" from "implicit default, no such
+  // requirement" (this task's spec, decision 2) — see
+  // resolve-environment.ts's header for the reasoning.
+  let resolvedEnv: ResolvedEnvironment;
+  try {
+    resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+  } catch (error) {
+    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+
   // Name validation and lock acquisition happen together, still in setup:
   // a name that fails validation never reaches the filesystem at all, and a
   // lock conflict is reported before anything else about this run is
@@ -107,7 +144,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
     }
-    lockPath = sessionLockPath(rootDir, config.stateDir, session);
+    lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
     try {
       await acquireLock(lockPath, session);
     } catch (error) {
@@ -125,7 +162,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     if (session !== null) {
       try {
         loadedStorageState = await readSessionFile(
-          sessionFilePath(rootDir, config.stateDir, session),
+          sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session),
           session,
         );
       } catch (error) {
@@ -148,27 +185,62 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
+    // Read-only refusal is a setup failure, not an execution failure (this
+    // task's spec, decision 4): the step never runs, so nothing was
+    // executed, so no receipt is written — writing one would let a run that
+    // never happened be cited later as if it had. Read-only steps
+    // (`mutates: false`) are unaffected regardless of policy.
+    if (resolvedEnv.policy === "read-only" && entry.step.mutates) {
+      stderr.write(
+        `Step "${name}" mutates state but environment "${resolvedEnv.name}" has policy "read-only"\n`,
+      );
+      return 1;
+    }
+
     // --- Execution phase: a receipt is always written from here on. ---
     const receiptId = generateReceiptId();
     const relativeDir = path.join(config.stateDir, "receipts", receiptId);
     const evidenceDir = path.join(rootDir, relativeDir);
     await mkdir(evidenceDir, { recursive: true });
 
+    // The version probe runs first in the execution phase (this task's
+    // spec, decision 5): it is metadata about the target the tool records
+    // for itself, never something a step's own `run` can see or trigger. A
+    // probe that throws or times out only costs `target_version`, never the
+    // run — the step still executes normally below.
+    const probeResult = await probeVersion(resolvedEnv.version);
+    let targetVersion: string | undefined;
+    if (probeResult !== undefined) {
+      if (probeResult.ok) {
+        targetVersion = probeResult.version;
+      } else {
+        stderr.write(
+          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${probeResult.reason}\n`,
+        );
+      }
+    }
+
     // env is loaded once here (ctx.env's full, merged value) and classified
     // once here (which of those same envFiles are secret sources, per git —
     // m1-secrets task spec, decision 1); a classification failure (no git,
     // rootDir outside a repository) is itself handled inside
     // classifyEnvFiles by falling back to "everything is a secret source",
-    // so it never surfaces here as a reason to fail this run.
-    const envFiles = config.envFiles ?? [];
-    const env = loadEnvFiles(rootDir, envFiles);
+    // so it never surfaces here as a reason to fail this run. `envFiles`
+    // here is the *effective* list — top-level plus the resolved
+    // environment's own, later-wins (m1-environments task spec, decision 8)
+    // — not just the top-level config's.
+    const envFiles = resolvedEnv.envFiles;
+    const envVars = loadEnvFiles(rootDir, envFiles);
     const classification = await classifyEnvFiles(rootDir, envFiles);
     const secrets = buildSecretSet(rootDir, classification.secretSource, config.secrets.public);
 
     const contextHandle = createStepContext({
-      config,
+      // Only `baseURL` is overridden from the resolved environment: every
+      // other config field (featuresDir, stateDir, browser, ...) has no
+      // per-environment counterpart (this task's spec, decision 3).
+      config: { ...config, baseURL: resolvedEnv.baseURL },
       evidenceDir,
-      env,
+      env: envVars,
       secrets,
       storageState: loadedStorageState ?? undefined,
     });
@@ -223,7 +295,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     if (session !== null && storageStateToPersist !== undefined) {
       try {
         await writeSessionFile(
-          sessionFilePath(rootDir, config.stateDir, session),
+          sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session),
           storageStateToPersist,
         );
       } catch {
@@ -242,7 +314,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             args: parsedArgs,
             result,
             status: "ok",
-            environment: "default",
+            environment: resolvedEnv.name,
+            target_version: targetVersion,
             session,
             tag,
             scenario: null,
@@ -257,7 +330,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             args: parsedArgs,
             error: { message: errorMessage },
             status: "failed",
-            environment: "default",
+            environment: resolvedEnv.name,
+            target_version: targetVersion,
             session,
             tag,
             scenario: null,

@@ -1,4 +1,5 @@
 import { loadConfig } from "../config/load-config.js";
+import { validateEnvironmentName } from "../environment/name.js";
 import { clearAllSessions, clearSession, listSessions } from "../session/manage.js";
 import { validateSessionName } from "../session/name.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -7,8 +8,11 @@ import type { WritableSink } from "./writable-sink.js";
 // Responsibility: `nuka session list`/`clear`'s CLI-facing wiring, kept out
 // of run-cli.ts so it's unit-testable without going through yargs (same
 // split as cli/do.ts vs cli/run-cli.ts). Both commands need the project's
-// stateDir (for sessions/default/) but never touch its step vocabulary, so
+// stateDir (for sessions/<env>/) but never touch its step vocabulary, so
 // neither loads or discovers steps the way `do`/`steps`/`describe` do.
+// `list` always reports every environment; `clear` takes `--env` (default
+// "default") and only ever touches that one environment's subdirectory
+// (m1-environments task spec, decision 7).
 
 export interface RunSessionListOptions {
   rootDir: string;
@@ -44,14 +48,17 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
 
 export interface RunSessionClearOptions {
   rootDir: string;
-  /** `null` clears every session for the default environment. */
+  /** `null` clears every session for `environment`. */
   name: string | null;
+  /** `--env`'s value; "default" when omitted (this task's spec, decision 7 —
+   * there is no all-environments clear). */
+  environment: string;
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 export async function runSessionClear(options: RunSessionClearOptions): Promise<number> {
-  const { rootDir, name, stderr } = options;
+  const { rootDir, name, environment, stderr } = options;
 
   let config;
   try {
@@ -62,11 +69,12 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
   }
 
   try {
+    validateEnvironmentName(environment);
     if (name === null) {
-      await clearAllSessions(rootDir, config.stateDir);
+      await clearAllSessions(rootDir, config.stateDir, environment);
     } else {
       validateSessionName(name);
-      await clearSession(rootDir, config.stateDir, name);
+      await clearSession(rootDir, config.stateDir, environment, name);
     }
   } catch (error) {
     stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
