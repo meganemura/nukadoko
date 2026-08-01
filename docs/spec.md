@@ -76,7 +76,7 @@ import { defineStep } from "nukadoko";
 import { z } from "zod";
 
 export default defineStep({
-  pattern: "a project {string} exists",       // cucumber-expressions syntax
+  pattern: "a project {name:string} exists",  // named capture, see below
   description: "Create a project and return its id",
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
@@ -94,13 +94,26 @@ export default defineStep({
   vocabulary for agents, invisible to feature files but importable by other
   steps: a typed building block, whose `args`/`returns` schemas keep the
   composition checked.
+- Every parameter in a pattern is named: `{key:type}` binds that capture to
+  the args key `key`. Matching strips the names and hands plain `{type}` to
+  `@cucumber/cucumber-expressions` — the syntax owner is unchanged, names
+  are a thin layer above it. Names are required (an unnamed `{string}` in a
+  pattern is a `nuka check` error) because the alternative — binding
+  captures to schema keys by declaration order — swaps two same-typed
+  values silently when keys are reordered, and no static check can catch
+  that. The binding must survive review by being visible in the pattern
+  itself. Aliases must all bind the same key set.
 - `args` / `returns` are zod schemas, validated at the run boundary (args
   before execution, returns after). A validation failure is a failed run; no
-  result is stored. Captures from the pattern are coerced into `args` and the
-  mapping is statically checkable (`nuka check`).
-- A data table or docstring attached to the step arrives as the final
-  argument and is validated by the schema like everything else — Gherkin
-  tables get types for the first time.
+  result is stored. Captures are coerced by the parameter type (`{int}` →
+  number, custom types by their transformer), then the schema is the
+  contract; the mapping is statically checkable (`nuka check`).
+- A data table or docstring attached to the step binds to the one required
+  args key the named captures left unconsumed (tables as `string[][]`,
+  docstrings as `string`), validated by the schema like everything else —
+  Gherkin tables get types for the first time. Zero or several unconsumed
+  required keys with an attachment present is a `check`/`run` error; no
+  reserved key name exists.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
 - The `run` body is free TypeScript on the provided context. Composition is
