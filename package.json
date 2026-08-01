@@ -2,6 +2,23 @@
   "name": "nukadoko",
   "version": "0.0.0",
   "description": "A living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.",
+  "type": "module",
+  "bin": {
+    "nuka": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
   "keywords": [
     "gherkin",
     "cucumber",
