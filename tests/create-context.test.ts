@@ -12,6 +12,7 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     featuresDir: "features",
     stateDir: ".nukadoko",
     envFiles: [],
+    secrets: { public: [] },
     ...overrides,
   };
 }
@@ -44,9 +45,9 @@ describe("createStepContext / ctx.request()", () => {
 
   it("logs method/url/status/duration_ms for each request to http.jsonl", async () => {
     const { ctx, dispose } = createStepContext({
-      rootDir: evidenceDir,
       config: baseConfig({ baseURL }),
       evidenceDir,
+      env: {},
     });
 
     const request = await ctx.request();
@@ -84,9 +85,9 @@ describe("createStepContext / ctx.request()", () => {
     // before any Request-vs-string check), per the task spec's allowance
     // to substitute this case and note it.
     const { ctx, dispose } = createStepContext({
-      rootDir: evidenceDir,
       config: baseConfig({ baseURL }),
       evidenceDir,
+      env: {},
     });
 
     const request = await ctx.request();
@@ -105,9 +106,9 @@ describe("createStepContext / ctx.request()", () => {
 
   it("omits evidence.http when request() was never called", async () => {
     const { dispose } = createStepContext({
-      rootDir: evidenceDir,
       config: baseConfig({ baseURL }),
       evidenceDir,
+      env: {},
     });
 
     const { evidence } = await dispose("ok");
@@ -116,9 +117,9 @@ describe("createStepContext / ctx.request()", () => {
 
   it("throws an error naming the baseURL config key when unset", async () => {
     const { ctx } = createStepContext({
-      rootDir: evidenceDir,
       config: baseConfig({ baseURL: undefined }),
       evidenceDir,
+      env: {},
     });
 
     await expect(ctx.request()).rejects.toThrow(/baseURL/);

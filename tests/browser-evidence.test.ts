@@ -30,6 +30,7 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     featuresDir: "features",
     stateDir: ".nukadoko",
     envFiles: [],
+    secrets: { public: [] },
     ...overrides,
   };
 }
@@ -49,9 +50,9 @@ describe("createStepContext / ctx.page()", () => {
     "launches chromium, traces the run, and saves a final screenshot",
     async () => {
       const { ctx, dispose } = createStepContext({
-        rootDir: evidenceDir,
         config: baseConfig(),
         evidenceDir,
+        env: {},
       });
 
       const page = await ctx.page();
@@ -74,9 +75,9 @@ describe("createStepContext / ctx.page()", () => {
     "additionally saves failure.png when the execution failed",
     async () => {
       const { ctx, dispose } = createStepContext({
-        rootDir: evidenceDir,
         config: baseConfig(),
         evidenceDir,
+        env: {},
       });
 
       const page = await ctx.page();
@@ -102,9 +103,9 @@ describe("createStepContext / ctx.page()", () => {
       // when tracing.stop actually got to write it (create-context.ts's
       // dispose).
       const { ctx, dispose } = createStepContext({
-        rootDir: evidenceDir,
         config: baseConfig(),
         evidenceDir,
+        env: {},
       });
 
       const page = await ctx.page();

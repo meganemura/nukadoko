@@ -44,6 +44,20 @@ describe("configSchema", () => {
     if (result.success) {
       expect(result.data.featuresDir).toBe("features");
       expect(result.data.stateDir).toBe(".nukadoko");
+      expect(result.data.secrets).toEqual({ public: [] });
     }
+  });
+
+  it("accepts an explicit secrets.public list", () => {
+    const result = configSchema.safeParse({ secrets: { public: ["API_TOKEN"] } });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.secrets).toEqual({ public: ["API_TOKEN"] });
+    }
+  });
+
+  it("rejects an unknown key inside secrets", () => {
+    const result = configSchema.safeParse({ secrets: { publick: ["oops"] } });
+    expect(result.success).toBe(false);
   });
 });

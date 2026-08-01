@@ -3,9 +3,9 @@ import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
+import type { SecretSet } from "../secrets/types.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
-import { loadEnvFiles } from "./env.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { poll } from "./poll.js";
 
@@ -21,6 +21,15 @@ import { poll } from "./poll.js";
 // storageState into whichever context(s) a step opens and hands back
 // whichever one *should* be persisted, but never writes it to disk itself —
 // that stays the executor's job too (this task's spec, item 2).
+//
+// `env` arrives already loaded and merged (m1-secrets task spec, decision
+// 2): the executor is the one place that knows the full envFiles list *and*
+// which of them are secret sources, so it loads env and builds the run's
+// SecretSet itself, once, and hands both down — this module never reads an
+// envFile and never decides what is secret. `secrets` only ever reaches
+// http-log.ts's redaction; nothing here exposes it on `ctx`, matching
+// docs/spec.md "Secrets": redaction is applied by the executor, never
+// controllable from a step's `run`.
 
 export interface EvidenceResult {
   trace?: string;
@@ -50,10 +59,18 @@ export interface StepContextHandle {
 }
 
 export interface CreateStepContextOptions {
-  rootDir: string;
   config: NukadokoConfig;
   /** Absolute path to this receipt's evidence directory; must already exist. */
   evidenceDir: string;
+  /** `ctx.env`'s value, already loaded and merged by the executor from every
+   * configured envFile (this task's spec, decision 2) — this module never
+   * reads an envFile itself, so a run's env files are parsed exactly once no
+   * matter how many contexts get created from them. */
+  env: Readonly<Record<string, string>>;
+  /** Values this run's HTTP log (http.jsonl) must redact; defaults to empty
+   * when there is nothing secret to log. Never exposed on `ctx` — only
+   * `wrapRequestContextWithLogging` (http-log.ts) sees it. */
+  secrets?: SecretSet;
   /** A `--session`'s previously saved storageState, when one was loaded and
    * parsed successfully; `undefined` for a session's first-ever use or when
    * `--session` wasn't given. Restored into whichever of `ctx.page()` /
@@ -72,8 +89,7 @@ function isBrowserHeadless(config: NukadokoConfig): boolean {
 }
 
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
-  const { rootDir, config, evidenceDir, storageState } = options;
-  const env = loadEnvFiles(rootDir, config.envFiles ?? []);
+  const { config, evidenceDir, env, secrets = [], storageState } = options;
   const httpLogPath = path.join(evidenceDir, "http.jsonl");
 
   let browserHandle: BrowserEvidenceHandle | undefined;
@@ -103,7 +119,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           baseURL: config.baseURL,
           ...(storageState ? { storageState } : {}),
         });
-        requestContext = wrapRequestContextWithLogging(raw, httpLogPath);
+        requestContext = wrapRequestContextWithLogging(raw, httpLogPath, secrets);
       }
       return requestContext;
     },

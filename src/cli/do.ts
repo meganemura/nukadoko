@@ -3,10 +3,14 @@ import path from "node:path";
 import type { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
+import { loadEnvFiles } from "../context/env.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
 import type { Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
+import { buildSecretSet } from "../secrets/build-secret-set.js";
+import { classifyEnvFiles } from "../secrets/classify-env-files.js";
+import { redact } from "../secrets/redact.js";
 import { acquireLock, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
@@ -37,6 +41,13 @@ import type { WritableSink } from "./writable-sink.js";
 // actually read or written; `--session`'s lock is acquired right after it
 // passes setup's name/config checks and is always released in `finally`,
 // covering every return path below it (this task's spec, decision 4).
+//
+// This is also the one place a run's SecretSet is built (m1-secrets task
+// spec, decision 2) and the one place a receipt gets redacted (decision 3):
+// env is loaded and classified at the top of the execution phase, and the
+// finished receipt is redacted once, as a whole object, before either
+// receipt.json or the stdout copy is written from it — never twice,
+// independently, which could let the two drift apart.
 
 export interface RunDoOptions {
   rootDir: string;
@@ -143,10 +154,22 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const evidenceDir = path.join(rootDir, relativeDir);
     await mkdir(evidenceDir, { recursive: true });
 
+    // env is loaded once here (ctx.env's full, merged value) and classified
+    // once here (which of those same envFiles are secret sources, per git —
+    // m1-secrets task spec, decision 1); a classification failure (no git,
+    // rootDir outside a repository) is itself handled inside
+    // classifyEnvFiles by falling back to "everything is a secret source",
+    // so it never surfaces here as a reason to fail this run.
+    const envFiles = config.envFiles ?? [];
+    const env = loadEnvFiles(rootDir, envFiles);
+    const classification = await classifyEnvFiles(rootDir, envFiles);
+    const secrets = buildSecretSet(rootDir, classification.secretSource, config.secrets.public);
+
     const contextHandle = createStepContext({
-      rootDir,
       config,
       evidenceDir,
+      env,
+      secrets,
       storageState: loadedStorageState ?? undefined,
     });
     const startedAt = new Date();
@@ -243,9 +266,17 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             evidence: { dir: relativeDir, ...evidence },
           };
 
-    await writeReceipt(evidenceDir, receipt);
+    // Redacted once, as one object — args/result/error.message and every
+    // other field alike — then that single redacted object is what both
+    // exits show (m1-secrets task spec, decision 3): receipt.json and the
+    // stdout copy must never be able to disagree about what got redacted.
+    // `redact` is structurally shape-preserving (only string leaves ever
+    // change), so this cast just tells the compiler what's already true.
+    const redactedReceipt = redact(receipt, secrets) as Receipt;
 
-    stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+    await writeReceipt(evidenceDir, redactedReceipt);
+
+    stdout.write(`${JSON.stringify(redactedReceipt, null, 2)}\n`);
     return status === "ok" ? 0 : 1;
   } finally {
     // Released regardless of which path above returned — setup failure,

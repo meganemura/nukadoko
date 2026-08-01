@@ -1,12 +1,18 @@
 import { appendFile } from "node:fs/promises";
 import type { APIRequestContext, APIResponse } from "playwright";
+import { redact } from "../secrets/redact.js";
+import type { SecretSet } from "../secrets/types.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
 // http.jsonl — one JSON object per line, method/url/status/duration_ms only
 // (never request/response bodies: docs/spec.md "Receipts" says evidence is
-// collected by the harness, not asserted by the step, and bodies may carry
-// secrets this slice has no redaction story for yet).
+// collected by the harness, not asserted by the step). `url` is the one
+// field that can carry a secret (e.g. a token in a query string, per the
+// step in this task's spec's integration test): it is redacted at the same
+// point the line is built, before it ever reaches disk — one of the three
+// exits docs/spec.md "Secrets" requires redaction at, alongside receipt.json
+// and `do`'s stdout copy (both handled by cli/do.ts).
 //
 // A manual per-method wrapper, not a Proxy: Playwright's client classes are
 // plain JS objects/prototypes as far as this package can see, but a Proxy
@@ -19,12 +25,16 @@ async function logCall(
   logPath: string,
   method: string,
   url: string,
+  secrets: SecretSet,
   send: () => Promise<APIResponse>,
 ): Promise<APIResponse> {
   const startedAt = performance.now();
   const response = await send();
   const durationMs = Math.round(performance.now() - startedAt);
-  const entry = { method, url, status: response.status(), duration_ms: durationMs };
+  const entry = redact(
+    { method, url, status: response.status(), duration_ms: durationMs },
+    secrets,
+  );
   await appendFile(logPath, `${JSON.stringify(entry)}\n`);
   return response;
 }
@@ -46,20 +56,28 @@ function methodOf(
 }
 
 /** Wraps `target` so get/post/put/patch/delete/head/fetch are logged to
- * `logPath`; `dispose`/`storageState` pass straight through unlogged. */
+ * `logPath`, with `secrets` redacted from each logged line; `dispose`/
+ * `storageState` pass straight through unlogged. */
 export function wrapRequestContextWithLogging(
   target: APIRequestContext,
   logPath: string,
+  secrets: SecretSet,
 ): APIRequestContext {
   return {
-    get: (url, options) => logCall(logPath, "GET", url, () => target.get(url, options)),
-    post: (url, options) => logCall(logPath, "POST", url, () => target.post(url, options)),
-    put: (url, options) => logCall(logPath, "PUT", url, () => target.put(url, options)),
-    patch: (url, options) => logCall(logPath, "PATCH", url, () => target.patch(url, options)),
-    delete: (url, options) => logCall(logPath, "DELETE", url, () => target.delete(url, options)),
-    head: (url, options) => logCall(logPath, "HEAD", url, () => target.head(url, options)),
+    get: (url, options) =>
+      logCall(logPath, "GET", url, secrets, () => target.get(url, options)),
+    post: (url, options) =>
+      logCall(logPath, "POST", url, secrets, () => target.post(url, options)),
+    put: (url, options) =>
+      logCall(logPath, "PUT", url, secrets, () => target.put(url, options)),
+    patch: (url, options) =>
+      logCall(logPath, "PATCH", url, secrets, () => target.patch(url, options)),
+    delete: (url, options) =>
+      logCall(logPath, "DELETE", url, secrets, () => target.delete(url, options)),
+    head: (url, options) =>
+      logCall(logPath, "HEAD", url, secrets, () => target.head(url, options)),
     fetch: (urlOrRequest, options) =>
-      logCall(logPath, methodOf(urlOrRequest, options), urlOf(urlOrRequest), () =>
+      logCall(logPath, methodOf(urlOrRequest, options), urlOf(urlOrRequest), secrets, () =>
         target.fetch(urlOrRequest, options),
       ),
     dispose: (options) => target.dispose(options),

@@ -10,8 +10,14 @@ import path from "node:path";
 // never merged in: docs/spec.md's determinism goal means the same envFiles
 // must produce the same ctx.env on any machine, whether or not it happens to
 // have unrelated variables already set.
+//
+// `parseEnvFile` is exported so src/secrets/build-secret-set.ts can reuse the
+// exact same KEY=VALUE parsing when it merges only the secret-source subset
+// of envFiles into a SecretSet, without either module re-implementing the
+// format or this module taking on any secrets-specific knowledge itself
+// (m1-secrets task spec, decision 2).
 
-function parseEnvFile(content: string): Record<string, string> {
+export function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
