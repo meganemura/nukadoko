@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile } from "@cucumber/gherkin";
-import { IdGenerator, type Pickle } from "@cucumber/messages";
+import { IdGenerator, type GherkinDocument, type Pickle } from "@cucumber/messages";
 
 // Responsibility: walk `featuresDir` for `**/*.feature` files and turn each
 // into pickles via @cucumber/gherkin — the official parser owns Background
@@ -21,6 +21,15 @@ import { IdGenerator, type Pickle } from "@cucumber/messages";
 // directory — the same gherkin invocation, not a second copy of it; that
 // module's own errors (missing file, `:line` matching nothing) are its
 // business, not this one's.
+//
+// m21b-compat-execution task spec, item 3: `parseFeatureSource` used to
+// parse, then keep only `compile()`'s pickles and throw away `parser.parse`'s
+// own `GherkinDocument` — the exact document a Before/After hook's
+// `HookParameter.gherkinDocument` needs (src/compat/hooks.ts). Returning it
+// alongside the pickles, rather than reconstructing or half-populating one
+// later, is what keeps a hook's `gherkinDocument` from becoming its own new
+// "silently read something undefined/partial" gap (this task's own reason
+// for existing).
 
 export interface FeatureFile {
   readonly relativePath: string;
@@ -60,19 +69,26 @@ function walkFeatureFiles(dir: string): string[] {
   return files;
 }
 
+export interface ParsedFeature {
+  readonly gherkinDocument: GherkinDocument;
+  readonly pickles: readonly Pickle[];
+}
+
 /**
- * Parses one feature file's already-read source into pickles. A fresh id
- * generator and parser per call: AstBuilder accumulates parse state (its own
- * node stack), so reusing one across files would risk one file's state
- * leaking into the next after a parse error. Throws whatever
- * `@cucumber/gherkin` throws on malformed input — callers decide how to
- * report that (a per-file entry here, a setup failure in `nuka run`).
+ * Parses one feature file's already-read source into a `GherkinDocument`
+ * plus the pickles `compile()` expands from it. A fresh id generator and
+ * parser per call: AstBuilder accumulates parse state (its own node stack),
+ * so reusing one across files would risk one file's state leaking into the
+ * next after a parse error. Throws whatever `@cucumber/gherkin` throws on
+ * malformed input — callers decide how to report that (a per-file entry
+ * here, a setup failure in `nuka run`).
  */
-export function parseFeatureSource(source: string, relativePath: string): readonly Pickle[] {
+export function parseFeatureSource(source: string, relativePath: string): ParsedFeature {
   const newId = IdGenerator.uuid();
   const parser = new Parser(new AstBuilder(newId), new GherkinClassicTokenMatcher());
-  const document = parser.parse(source);
-  return compile(document, relativePath, newId);
+  const gherkinDocument = parser.parse(source);
+  const pickles = compile(gherkinDocument, relativePath, newId);
+  return { gherkinDocument, pickles };
 }
 
 export function loadFeatures(rootDir: string, featuresDir: string): LoadFeaturesResult {
@@ -87,7 +103,12 @@ export function loadFeatures(rootDir: string, featuresDir: string): LoadFeatures
     const source = readFileSync(filePath, "utf8");
 
     try {
-      const pickles = parseFeatureSource(source, relativePath);
+      // `loadFeatures` (src/check/*.ts's own caller) has no hook to run
+      // against — its own `FeatureFile` keeps `pickles` only, same as before
+      // this task; the `gherkinDocument` this returns is exclusively for
+      // `nuka run`'s own path (src/run/select-pickles.ts) onward to
+      // src/run/run-scenario.ts.
+      const { pickles } = parseFeatureSource(source, relativePath);
       features.push({ relativePath, pickles });
     } catch (error) {
       parseErrors.push({

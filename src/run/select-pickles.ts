@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { Pickle } from "@cucumber/messages";
+import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { parseFeatureSource } from "../feature/load-features.js";
 import { FeatureFileNotFoundError, FeatureParseFailedError, NoMatchingScenarioError } from "./errors.js";
 
@@ -36,6 +36,11 @@ export function parseFeatureTarget(featureArg: string): FeatureTarget {
 export interface SelectedScenarios {
   readonly relativePath: string;
   readonly pickles: readonly Pickle[];
+  /** This feature file's own parsed document (m21b-compat-execution task
+   * spec, item 3) — threaded through to every `runScenario` call so a
+   * Before/After hook's `HookParameter.gherkinDocument` is this run's real
+   * document, not a stand-in. */
+  readonly gherkinDocument: GherkinDocument;
 }
 
 /**
@@ -58,20 +63,21 @@ export function selectPickles(rootDir: string, featureArg: string): SelectedScen
     throw new FeatureFileNotFoundError(target.relativePath);
   }
 
+  let gherkinDocument: GherkinDocument;
   let allPickles: readonly Pickle[];
   try {
-    allPickles = parseFeatureSource(source, target.relativePath);
+    ({ gherkinDocument, pickles: allPickles } = parseFeatureSource(source, target.relativePath));
   } catch (error) {
     throw new FeatureParseFailedError(target.relativePath, error);
   }
 
   if (target.line === null) {
-    return { relativePath: target.relativePath, pickles: allPickles };
+    return { relativePath: target.relativePath, pickles: allPickles, gherkinDocument };
   }
 
   const matching = allPickles.filter((pickle) => pickle.location?.line === target.line);
   if (matching.length === 0) {
     throw new NoMatchingScenarioError(target.relativePath, target.line);
   }
-  return { relativePath: target.relativePath, pickles: matching };
+  return { relativePath: target.relativePath, pickles: matching, gherkinDocument };
 }

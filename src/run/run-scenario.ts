@@ -1,7 +1,12 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { PickleStepType, type Pickle, type PickleStep } from "@cucumber/messages";
+import {
+  PickleStepType,
+  type GherkinDocument,
+  type Pickle,
+  type PickleStep,
+} from "@cucumber/messages";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { DataTable } from "../compat/data-table.js";
 import {
@@ -9,7 +14,7 @@ import {
   setActiveDeclaredCollector,
   type DeclaredCollector,
 } from "../compat/declared.js";
-import type { HookRegistration } from "../compat/hooks.js";
+import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
@@ -128,6 +133,17 @@ import { writeScenarioRecord } from "./write-record.js";
 // exactly like a compat step's does, since both the registered allure-js
 // `TestRuntime` and a compat World's own attach/log/link read the same
 // active pointer).
+//
+// m21b-compat-execution task spec: closes the "silent behavior change" gaps
+// left in compat step/hook *execution* (as opposed to A's registration-time
+// closures) — a compat step's or hook's own `{ timeout }` is now actually
+// enforced (`runWithTimeout`, item 2), every Before/After hook is called
+// with a real `HookParameter` instead of zero arguments (`buildHookParameter`,
+// item 3), and a string return of `"pending"`/`"skipped"` or an apparent
+// `done`-callback arity both fail loudly instead of silently passing (items
+// 4-5) — all four checks apply only to compat steps and hooks, never to a
+// typed step, whose fixed `run(ctx, args)` arity and zod-validated `returns`
+// make none of cucumber-js's own conventions here relevant to it.
 
 /** The declared-mutates read-only refusal message (this task's spec,
  * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
@@ -163,6 +179,12 @@ export interface RunScenarioOptions {
   readonly config: NukadokoConfig;
   readonly pickle: Pickle;
   readonly relativeFeaturePath: string;
+  /** This pickle's own feature file, already parsed (src/feature/load-
+   * features.ts's `parseFeatureSource`, m21b-compat-execution task spec,
+   * item 3) — every Before/After hook's `HookParameter.gherkinDocument`
+   * below is this exact object, never a partial/reconstructed stand-in
+   * (this task's spec: "部分的なオブジェクトを渡してお茶を濁さないこと"). */
+  readonly gherkinDocument: GherkinDocument;
   readonly vocabulary: Vocabulary;
   readonly bindings: readonly StepBinding[];
   readonly environment: string;
@@ -218,12 +240,114 @@ function ambiguousStepMessage(text: string, stepNames: readonly string[]): strin
   return `"${text}" matches more than one step: ${[...stepNames].sort().join(", ")}`;
 }
 
+// --- m21b-compat-execution task spec, items 2, 4, 5: compat step/hook
+// execution honesty (only compat entries and Before/After hooks — the audit
+// this task closes is entirely about hand-written, cucumber-js-style glue;
+// a typed step's `run(ctx, args)` has a fixed arity and a zod-validated
+// return, so none of these three checks apply to one). ---
+
+/** Item 2's failure message: names which timeout fired (a step's own
+ * `{ timeout }` vs a hook's), on what, and the configured value. */
+function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number): string {
+  return `${kind} "${name}" timed out after ${timeoutMs}ms (its own registered timeout)`;
+}
+
+/** Item 4: cucumber-js interprets the string returns `"pending"`/`"skipped"`
+ * as their own outcomes; nukadoko's receipt/record schema has no such status
+ * (implementing it for real is explicitly out of this task's scope), so
+ * rather than silently passing through as success, a step/hook that returns
+ * one of these two strings is failed with a message a migrator can act on. */
+function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: string): string {
+  return (
+    `${kind} "${name}" returned ${JSON.stringify(value)}, which nukadoko does not interpret ` +
+    `as pending/skipped (unlike cucumber-js) — see docs/migration.md`
+  );
+}
+
+/** Item 5: cucumber-js infers a `done` callback from a glue function
+ * declaring one more parameter than it is actually called with, and passes
+ * that extra argument a callback nukadoko never provides. Detected by arity
+ * *before* calling the function at all — calling it would already be the
+ * silent failure this closes (the callback never fires, the function
+ * "succeeds" immediately having done none of its real work yet, and that
+ * work keeps running unobserved after this step/hook is already recorded). */
+function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
+  return (
+    `${kind} "${name}" appears to expect a done() callback (it declares more parameters ` +
+    `than nukadoko passes it) — nukadoko has no callback form; rewrite it to return a ` +
+    `Promise (async/await). See docs/migration.md`
+  );
+}
+
+/**
+ * Races `run()` against `timeoutMs` (when given) and returns whichever
+ * settles first. Honest limit, spelled out here because it is easy to miss
+ * (this task's spec, item 2): JavaScript cannot cancel an in-flight
+ * Promise — a timed-out call's own body keeps executing to completion in
+ * the background no matter what this function returns. All this actually
+ * guarantees is that the step/hook that started it is recorded as failed
+ * and `runScenario` moves on to whatever comes next; it does not stop the
+ * timed-out work itself.
+ *
+ * `run()`'s own promise is given a no-op `.catch` up front regardless of
+ * which side of the race wins: if it eventually rejects *after* losing to
+ * the timeout, that rejection would otherwise be "unhandled" from Node's
+ * point of view (Node terminates the whole process for an unhandled
+ * rejection by default since Node 15) — precisely the kind of hard crash a
+ * per-step timeout must never cause.
+ *
+ * The timer itself is always cleared, on every path, so a step/hook that
+ * finishes in time never leaks a pending Node timer (this task's spec:
+ * "タイマーは必ず解除する").
+ */
+async function runWithTimeout<T>(
+  run: () => Promise<T>,
+  timeoutMs: number | undefined,
+  kind: "Step" | "Hook",
+  name: string,
+): Promise<T> {
+  if (timeoutMs === undefined) {
+    return run();
+  }
+  const inFlight = run();
+  inFlight.catch(() => {});
+  let timer: ReturnType<typeof setTimeout>;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(timeoutMessage(kind, name, timeoutMs))), timeoutMs);
+  });
+  try {
+    return await Promise.race([inFlight, timedOut]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
+/** Builds this hook invocation's own `HookParameter` (this task's spec, item
+ * 3) — `result` is included only for an After hook (`resultStatus !==
+ * undefined`), matching cucumber-js's own convention of never setting it for
+ * Before. */
+function buildHookParameter(
+  gherkinDocument: GherkinDocument,
+  pickle: Pickle,
+  testCaseStartedId: string,
+  resultStatus: "PASSED" | "FAILED" | undefined,
+): HookParameter {
+  return {
+    gherkinDocument,
+    pickle,
+    testCaseStartedId,
+    willBeRetried: false,
+    ...(resultStatus !== undefined ? { result: { status: resultStatus } } : {}),
+  };
+}
+
 export async function runScenario(options: RunScenarioOptions): Promise<ScenarioRecord> {
   const {
     rootDir,
     config,
     pickle,
     relativeFeaturePath,
+    gherkinDocument,
     vocabulary,
     bindings,
     environment,
@@ -471,8 +595,24 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // limit for hooks, unchanged by this task — see this file's own
     // header).
     declaredCollector.beginStep(scenarioDir);
+    // Item 3: `HookParameter.result` is absent for a Before hook (cucumber-js
+    // never sets it there either — a scenario's outcome isn't known yet).
+    const hookParameter = buildHookParameter(gherkinDocument, pickle, scenarioId, undefined);
     try {
-      await hook.fn.call(world);
+      // Item 5's arity check, before the call itself (see runWithTimeout's
+      // own header for why calling it at all would already be the failure).
+      if (hook.fn.length >= 2) {
+        throw new Error(doneCallbackMessage("Hook", "Before"));
+      }
+      const returnValue = await runWithTimeout(
+        () => Promise.resolve(hook.fn.call(world, hookParameter)),
+        hook.timeoutMs,
+        "Hook",
+        "Before",
+      );
+      if (returnValue === "pending" || returnValue === "skipped") {
+        throw new Error(pendingOrSkippedMessage("Hook", "Before", returnValue));
+      }
       const declared = declaredCollector.snapshot();
       hookRecords.push({ type: "before", status: "ok", ...(declared ? { declared } : {}) });
     } catch (error) {
@@ -706,11 +846,39 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const stepStartedAt = new Date();
         let status: "ok" | "failed" = "ok";
         let errorMessage = "";
-        try {
-          await entry.compat.fn.apply(world, positionalArgs);
-        } catch (error) {
+        // Item 5's arity check, before the call itself: a compat step's
+        // glue function declaring more parameters than `positionalArgs`
+        // actually supplies is cucumber-js's own signal for a `done`
+        // callback — nukadoko never passes one (see `doneCallbackMessage`'s
+        // own header for why calling it anyway would already be the
+        // failure this closes).
+        if (entry.compat.fn.length > positionalArgs.length) {
           status = "failed";
-          errorMessage = error instanceof Error ? error.message : String(error);
+          errorMessage = doneCallbackMessage("Step", outcome.stepName);
+        } else {
+          try {
+            // Item 2: `entry.compat.timeoutMs` is this step's own
+            // `{ timeout }` (wired through discover-steps.ts's
+            // `CompatStepDefinition.timeoutMs`) — `undefined` runs
+            // unbounded, same as before this task.
+            const returnValue = await runWithTimeout(
+              () => Promise.resolve(entry.compat.fn.apply(world, positionalArgs)),
+              entry.compat.timeoutMs,
+              "Step",
+              outcome.stepName,
+            );
+            // Item 4: cucumber-js's own pending/skipped return convention —
+            // nukadoko doesn't implement either, so this fails loudly
+            // instead of quietly passing (see `pendingOrSkippedMessage`'s
+            // own header).
+            if (returnValue === "pending" || returnValue === "skipped") {
+              status = "failed";
+              errorMessage = pendingOrSkippedMessage("Step", outcome.stepName, returnValue);
+            }
+          } catch (error) {
+            status = "failed";
+            errorMessage = error instanceof Error ? error.message : String(error);
+          }
         }
 
         // `result: null` unconditionally on a non-throwing run (docs/
@@ -802,8 +970,31 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // spec, item 4) — reset right before, read right after, so one After
     // hook's own declared data never bleeds into a sibling's.
     declaredCollector.beginStep(scenarioDir);
+    // Item 3: `result.status` reflects the scenario's outcome *as of right
+    // before this After hook runs* — every Before hook and every step has
+    // already had its chance to set `scenarioFailed`, and an earlier After
+    // hook in this same loop (if any) already folded its own failure in too
+    // (cucumber-js's own convention: each After hook sees the running
+    // outcome, not only the pre-teardown one).
+    const hookParameter = buildHookParameter(
+      gherkinDocument,
+      pickle,
+      scenarioId,
+      scenarioFailed ? "FAILED" : "PASSED",
+    );
     try {
-      await hook.fn.call(world);
+      if (hook.fn.length >= 2) {
+        throw new Error(doneCallbackMessage("Hook", "After"));
+      }
+      const returnValue = await runWithTimeout(
+        () => Promise.resolve(hook.fn.call(world, hookParameter)),
+        hook.timeoutMs,
+        "Hook",
+        "After",
+      );
+      if (returnValue === "pending" || returnValue === "skipped") {
+        throw new Error(pendingOrSkippedMessage("Hook", "After", returnValue));
+      }
       const declared = declaredCollector.snapshot();
       hookRecords.push({ type: "after", status: "ok", ...(declared ? { declared } : {}) });
     } catch (error) {

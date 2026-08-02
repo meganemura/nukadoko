@@ -67,6 +67,12 @@ import type { WritableSink } from "./writable-sink.js";
 // registered `TestRuntime`; src/run/run-scenario.ts is what repoints which
 // collector is "active" per pickle and per step/hook boundary.
 //
+// m21b-compat-execution task spec, item 3: `selected.gherkinDocument` (src/
+// run/select-pickles.ts) is threaded into every `runScenario` call below —
+// the same document for every pickle in this feature file, since a
+// Before/After hook's own `HookParameter.gherkinDocument` is this file's
+// document regardless of which pickle triggered the hook.
+//
 // m2b-compat-execution task spec closes m2a-compat-registry's two temporary
 // asymmetries: `buildStepBindings` now receives `compatParameterTypes` too
 // (previously dropped here as "irrelevant to this slice"), and
@@ -227,6 +233,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           config: runConfig,
           pickle,
           relativeFeaturePath: selected.relativePath,
+          gherkinDocument: selected.gherkinDocument,
           vocabulary,
           bindings,
           environment: resolvedEnv.name,

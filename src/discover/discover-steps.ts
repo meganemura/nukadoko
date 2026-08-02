@@ -78,6 +78,13 @@ export interface CompatStepDefinition {
   readonly pattern: string | RegExp;
   readonly patternSource: string;
   readonly fn: CompatStepFn;
+  /** From the registration's own `{ timeout }` (m21b-compat-execution task
+   * spec, item 2) — carried through so src/run/run-scenario.ts can actually
+   * enforce it; src/compat/registry.ts only records it (that file's own
+   * `CompatStepRegistration.timeoutMs` comment). Previously dropped right
+   * here, which is why a `{ timeout }` step never actually timed out despite
+   * A already keeping the value on `CompatStepRegistration`. */
+  readonly timeoutMs?: number;
   readonly registrationOrder: number;
 }
 
@@ -260,6 +267,7 @@ export async function discoverSteps(
             pattern: registration.pattern,
             patternSource,
             fn: registration.fn,
+            timeoutMs: registration.timeoutMs,
             registrationOrder: registration.registrationOrder,
           },
         });
