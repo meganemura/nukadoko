@@ -49,6 +49,13 @@ import type { WritableSink } from "./writable-sink.js";
 // session's lock, when `--session` is given, is acquired once for the whole
 // run and always released in `finally` (this task's spec, decision 8),
 // covering every scenario rather than one lock per scenario.
+//
+// `resolvedEnv.policy` is threaded into every `runScenario` call now
+// (m2pre-resultof task spec, decision 3): this file previously never passed
+// it at all, so `nuka run` enforced no read-only policy whatsoever, unlike
+// `nuka do` — run-scenario.ts is where the actual refusal/backstop logic
+// lives, since it needs a per-step, per-position view this module doesn't
+// have.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -168,6 +175,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         vocabulary,
         bindings,
         environment: resolvedEnv.name,
+        policy: resolvedEnv.policy,
         targetVersion,
         session,
         tag,

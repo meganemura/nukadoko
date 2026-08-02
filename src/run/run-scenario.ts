@@ -13,6 +13,7 @@ import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
+import type { Step } from "../step/define-step.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
 import { generateScenarioId } from "./scenario-id.js";
@@ -48,6 +49,64 @@ import { writeScenarioRecord } from "./write-record.js";
 // bound in Then position and its execution observed a network write, the
 // receipt is demoted to `status: "failed"` afterward — measured, per
 // occurrence, regardless of what `run` returned or what was declared.
+//
+// `policy: "read-only"` enforcement (m2pre-resultof task spec, decision 3)
+// closes a gap this file always had: unlike cli/do.ts, `nuka run` never
+// looked at the resolved environment's policy at all. It is two checks, one
+// declared and one measured, exactly mirroring cli/do.ts's own split: a step
+// whose *declared* `mutates` is `true` is refused before it ever runs — a
+// "never began" outcome, alongside undefined/ambiguous, with `receipt: null`
+// and the rest of the scenario skipped — while a step that declares
+// `mutates: false` yet is *measured* observing a network write still gets a
+// failed receipt afterward (the same lie backstop `nuka do` already has).
+// The measured backstop can coincide with the Then-position measured check
+// above (both key off the same `observed.http_writes`); when both apply to
+// the same occurrence, `errorMessage` says both rather than picking one.
+//
+// `ctx.resultOf` (m2pre-resultof task spec, decisions 1-2): this file is the
+// one place a pickle's result chain is held — a `Map` keyed by the Step
+// object itself (not by name), updated only when a step's *final* status
+// (after every demotion above) is `"ok"`. The chain is created fresh per
+// scenario and never escapes this function, so it cannot leak between
+// pickles; a step's own reader is wired into createStepContext's `resultOf`
+// option as a plain closure over this map, and every value-returning read is
+// reflected back afterward via `contextHandle.usedReceiptIds()` onto that
+// step's own receipt (`used`).
+//
+// Object identity survives a step file importing another step file
+// (m2pre-module-identity task spec): src/discover/discover-steps.ts loads
+// every file through one shared tsx module registration for the whole
+// discovery run, so a step file's own relative import of another step
+// file's default export is the same object discovery put in this chain's
+// key space. See tests/resultof.test.ts's header comment for the
+// empirical proof this relies on.
+
+/** The declared-mutates read-only refusal message (this task's spec,
+ * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
+ * this is the same fact about the same policy, just reached from `nuka run`
+ * this time. */
+function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
+  return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
+}
+
+/** The measured read-only backstop message (this task's spec, decision 3):
+ * matches cli/do.ts's own execution-phase backstop wording — a declared
+ * `mutates: false` that the execution's own observed writes contradict. */
+function readOnlyObservedWritesMessage(
+  stepName: string,
+  environment: string,
+  writes: number,
+): string {
+  return `Step "${stepName}" observed ${writes} network write${writes === 1 ? "" : "s"} but environment "${environment}" has policy "read-only"`;
+}
+
+/** One pickle's own result chain: which Step object most recently finished
+ * with `status: "ok"`, and what its validated result plus receipt id were
+ * (this task's spec, decision 1). */
+interface ChainEntry {
+  readonly result: unknown;
+  readonly receiptId: string;
+}
 
 export interface RunScenarioOptions {
   readonly rootDir: string;
@@ -59,6 +118,12 @@ export interface RunScenarioOptions {
   readonly vocabulary: Vocabulary;
   readonly bindings: readonly StepBinding[];
   readonly environment: string;
+  /** The resolved environment's `policy` (cli/run.ts's `resolvedEnv.policy`)
+   * — `"read-only"` refuses a declared-mutating step before it runs and
+   * backstops a declared `mutates: false` step whose execution is measured
+   * writing anyway (this task's spec, decision 3); `undefined` means no
+   * restriction. */
+  readonly policy: "read-only" | undefined;
   readonly targetVersion: string | undefined;
   readonly session: string | null;
   readonly tag: string | null;
@@ -99,6 +164,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     vocabulary,
     bindings,
     environment,
+    policy,
     targetVersion,
     session,
     tag,
@@ -115,12 +181,23 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const startedAt = new Date();
 
+  // This scenario's own result chain (this task's spec, decision 1) — kept
+  // here, not inside create-context.ts, so it never outlives this one
+  // pickle's execution. `readChain` is the plain closure createStepContext
+  // wraps into `ctx.resultOf`; this function is the only place that ever
+  // writes to `chain`.
+  const chain = new Map<Step, ChainEntry>();
+  function readChain(step: Step): ChainEntry | undefined {
+    return chain.get(step);
+  }
+
   const contextHandle = createStepContext({
     config,
     evidenceDir: scenarioDir,
     env,
     secrets,
     storageState: storageState ?? undefined,
+    resultOf: readChain,
   });
 
   const stepRecords: ScenarioStepRecord[] = [];
@@ -160,6 +237,24 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     if (!entry) {
       // Unreachable: `outcome.stepName` only ever comes from a binding built
       // from this same vocabulary (match-step.ts's buildStepBindings).
+      continue;
+    }
+
+    // Read-only policy, declared-mutates refusal (this task's spec, decision
+    // 3): a "never began" outcome, alongside undefined/ambiguous above — no
+    // receipt id or directory is created, and the rest of the scenario is
+    // skipped, matching cli/do.ts's own setup-phase refusal for the same
+    // policy. `mutates: false` steps are unaffected regardless of policy; the
+    // measured backstop for a *false* declaration lives further down, after
+    // the step has actually run.
+    if (policy === "read-only" && entry.step.mutates) {
+      scenarioFailed = true;
+      stepRecords.push({
+        text: pickleStep.text,
+        status: "failed",
+        receipt: null,
+        error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
+      });
       continue;
     }
 
@@ -211,15 +306,36 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
     }
 
-    // Then-position measured enforcement (this task's spec, decision 4):
-    // only demotes an otherwise-"ok" status — a step that already failed
-    // for its own reason keeps that truthful failure and message rather
-    // than being overwritten by this one. Checked regardless of what the
-    // step declared; `entry.step.mutates` plays no part here.
+    // Then-position measured enforcement (m2pre-observed task spec, decision
+    // 4) and the read-only measured backstop (this task's spec, decision 3)
+    // both only ever demote an otherwise-"ok" status — a step that already
+    // failed for its own reason keeps that truthful failure and message
+    // rather than being overwritten by either of these. Both key off the
+    // same `observed.http_writes` and can therefore both apply to the same
+    // occurrence at once; when they do, `errorMessage` says both rather than
+    // picking one (this task's spec, decision 3).
     const observed = contextHandle.observedCounts();
+    const usedReceiptIds = contextHandle.usedReceiptIds();
+    const demotionMessages: string[] = [];
     if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
+      demotionMessages.push(thenObservedWritesMessage(outcome.stepName, observed.http_writes));
+    }
+    if (status === "ok" && policy === "read-only" && observed.http_writes > 0) {
+      demotionMessages.push(
+        readOnlyObservedWritesMessage(outcome.stepName, environment, observed.http_writes),
+      );
+    }
+    if (demotionMessages.length > 0) {
       status = "failed";
-      errorMessage = thenObservedWritesMessage(outcome.stepName, observed.http_writes);
+      errorMessage = demotionMessages.join("; ");
+    }
+
+    // Only a step whose *final* status is "ok" ever becomes readable via
+    // `ctx.resultOf` (this task's spec, decision 1) — a step demoted by
+    // either check just above never enters the chain, matching "only a
+    // validated result is citable" exactly.
+    if (status === "ok") {
+      chain.set(entry.step, { result, receiptId });
     }
 
     const stepFinishedAt = new Date();
@@ -247,6 +363,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
             },
             observed,
+            ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
           }
         : {
             receipt_id: receiptId,
@@ -268,6 +385,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
             },
             observed,
+            ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,

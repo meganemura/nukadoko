@@ -238,6 +238,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       env: envVars,
       secrets,
       storageState: loadedStorageState ?? undefined,
+      // `nuka do` has no scenario, so no chain: `ctx.resultOf` always
+      // returns `undefined` here (docs/spec.md "Context API"; m2pre-
+      // resultof task spec, decisions 1 and scope item 3). This matches
+      // createStepContext's own default when `resultOf` is omitted — spelled
+      // out explicitly here so this file's own contract with `ctx.resultOf`
+      // is visible in the diff, not just inherited silently.
+      resultOf: () => undefined,
     });
     const startedAt = new Date();
 

@@ -17,6 +17,13 @@
 // a step declared. It is required on both `ReceiptOk` and `ReceiptFailed` —
 // unlike `target_version`, there is no "not applicable" case for it, only
 // "zero calls happened" (`{ http_reads: 0, http_writes: 0 }`).
+//
+// `used` is added now (m2pre-resultof task spec, decision 4): measured
+// provenance, the receipt ids `ctx.resultOf` actually read a value from
+// during this execution (docs/spec.md "Receipts"). Optional and omitted when
+// empty — unlike `observed`, "no reads happened" is the overwhelmingly
+// common case (most steps never call `resultOf` at all), so this follows
+// `target_version`'s "absence is the normal case" convention instead.
 
 import type { ObservedCounts } from "../context/observed.js";
 
@@ -66,6 +73,11 @@ interface ReceiptBase {
    * enforcement and read-only environments act on (docs/spec.md "Keyword
    * semantics", "Receipts"; this task's spec, decisions 1-4). */
   observed: ObservedCounts;
+  /** Receipt ids whose validated results this execution actually read
+   * through `ctx.resultOf` (docs/spec.md "Receipts"; this task's spec,
+   * decisions 1-2). Present only when non-empty; deduplicated, in read
+   * order. */
+  used?: string[];
   /** The environment's `version` probe result (docs/spec.md "Receipts":
    * optional, "(when probed)"). Present only when the environment configures
    * a probe *and* it resolved to a string within its timeout; omitted — not

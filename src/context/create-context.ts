@@ -1,14 +1,17 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
+import type { z } from "zod";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
 import type { SecretSet } from "../secrets/types.js";
+import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
 import { poll } from "./poll.js";
+import { createUsedCollector } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution hands
 // to a step's `run(ctx, args)` — env, baseURL, lazy browser, lazy logged
@@ -54,6 +57,18 @@ import { poll } from "./poll.js";
 // http-log.ts's redaction; nothing here exposes it on `ctx`, matching
 // docs/spec.md "Secrets": redaction is applied by the executor, never
 // controllable from a step's `run`.
+//
+// `resultOf` (m2pre-resultof task spec, decisions 1-2): the *lookup* — "does
+// this Step object have a most-recent successful result, and under which
+// receipt id" — is the executor's own knowledge (run-scenario.ts's chain, or
+// `nuka do`'s always-`undefined` reader), passed in here as `options.resultOf`
+// and never computed by this module. What this module owns is the *wrapper*:
+// `ctx.resultOf` calls that lookup and, only when it actually returns a
+// value, records the receipt id on the `used` collector below — the same
+// "step cannot see or reset its own observation" trust rule as `observed`,
+// applied to provenance instead of network calls. `usedReceiptIds()` (the
+// handle's read side) and `beginStep`'s reset mirror `observedCounts()`/its
+// own reset exactly, for the same reason: one step boundary, two tallies.
 
 export interface EvidenceResult {
   trace?: string;
@@ -86,6 +101,11 @@ export interface StepContextHandle {
    * else as writes, through `ctx.request()` and the page alike (m2pre-
    * observed task spec, decisions 1-2). Never exposed on `ctx`. */
   observedCounts(): ObservedCounts;
+  /** Executor-only: the receipt ids `ctx.resultOf` actually read a value from
+   * since the current step boundary began, deduplicated, in read order
+   * (m2pre-resultof task spec, decision 2). Never exposed on `ctx` — same
+   * rule as `observedCounts()`. */
+  usedReceiptIds(): string[];
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
@@ -118,6 +138,14 @@ export interface CreateStepContextOptions {
    * `ctx.request()` the step actually opens — never both eagerly, since
    * neither is created until first use. */
   storageState?: StorageState;
+  /** Looks up `step`'s most recent successful result by object identity
+   * (m2pre-resultof task spec, decision 1) — the executor's own connection
+   * to `ctx.resultOf`. Defaults to a reader that always returns `undefined`,
+   * matching `nuka do`'s contract (docs/spec.md "Context API": "undefined
+   * under `nuka do`") without every caller that doesn't care about chaining
+   * having to say so. `nuka run`'s executor (run-scenario.ts) passes one
+   * backed by the current pickle's own chain instead. */
+  resultOf?: (step: Step) => { result: unknown; receiptId: string } | undefined;
 }
 
 function isBrowserHeadless(config: NukadokoConfig): boolean {
@@ -130,7 +158,14 @@ function isBrowserHeadless(config: NukadokoConfig): boolean {
 }
 
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
-  const { config, evidenceDir, env, secrets = [], storageState } = options;
+  const {
+    config,
+    evidenceDir,
+    env,
+    secrets = [],
+    storageState,
+    resultOf: readResultOf = () => undefined,
+  } = options;
   // Mutable, unlike browser evidence's fixed `evidenceDir`: `beginStep`
   // (below) is the only way this ever changes, and `do` never calls it, so
   // `do`'s http.jsonl stays exactly where it always has.
@@ -139,6 +174,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // *counts*, never replaces the object itself, so every network path
   // opened before or after a reset still tallies into the same instance.
   const observed = createObservedCollector();
+  // Same lifetime rule as `observed`, for provenance instead of network
+  // calls (m2pre-resultof task spec, decision 2).
+  const used = createUsedCollector();
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -178,6 +216,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       return requestContext;
     },
     poll,
+    resultOf<S extends Step>(step: S) {
+      const entry = readResultOf(step);
+      if (entry === undefined) {
+        return undefined;
+      }
+      // Recorded only on an actual read (m2pre-resultof task spec, decision
+      // 2: "空なら省略" — a call that returned `undefined` leaves no trace).
+      used.record(entry.receiptId);
+      return entry.result as z.infer<S["returns"]>;
+    },
     section() {
       // No-op for now: the progress log this would append to is a later
       // slice (docs/spec.md "Context API" lists `section`, but nothing
@@ -258,10 +306,15 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return observed.snapshot();
   }
 
+  function usedReceiptIds(): string[] {
+    return used.snapshot();
+  }
+
   function beginStep(dir: string): void {
     httpLogDir = dir;
     observed.reset();
+    used.reset();
   }
 
-  return { ctx, dispose, observedCounts, beginStep };
+  return { ctx, dispose, observedCounts, usedReceiptIds, beginStep };
 }
