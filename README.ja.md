@@ -31,8 +31,8 @@ nukadoko がなくすのは、そもそも agent の説明を信頼する必要�
 ## Status
 
 **Pre-0.1。**
-M1(engine core)と M2(compat の扉)は実装済みです: `steps`、`describe`、`do`、`run`、`check`、`init`、`scaffold`、session、environment、secret、そして `nukadoko/compat`。
-レポートの emitter(M3)は設計のみでまだ実装されていません。
+M1(engine core)、M2(compat の扉)、M3(レポートの emitter)は実装済みです: `steps`、`describe`、`do`、`run`、`check`、`init`、`scaffold`、session、environment、secret、`nukadoko/compat`、Allure emitter、そして cucumber-messages emitter。
+残るは M4(sign-off)だけです。
 roadmap の全体は [Design](#design) を参照してください。
 
 ## Evaluate nukadoko against your project
@@ -147,14 +147,14 @@ step を `defineStep` に昇格させるかどうかは、そのあと step ご�
 import を戻せば、ただの cucumber-js に戻ります。
 手順を追ったガイド(監査結果も収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](examples/migration) を参照してください。
 
-**M3(設計済み、未実装): レポートが自動で満ちる。**
+**M3: レポートが自動で満ちる。**
 従来の Cucumber の実行でレポートに映る evidence は、チームが自分で配線した分です(trace やスクリーンショットのためのフック boilerplate を、プロジェクトごとに書いて保守する形)。
-計画されている Allure の emitter は、配線ゼロで全 receipt からレポートを満たします: バリデーション済みの result、trace、HTTP log、observed な読み書き、environment と version です。
+Allure の emitter は、配線ゼロで全 receipt からレポートを満たします: バリデーション済みの result、trace、HTTP log、observed な読み書き、environment と version です。
 そのうちの 1 つ(バリデーション済みの per-step result)は、レポート側のどんな努力でも足せません。
 従来の Cucumber は step の返り値を捨てているからです。
-あわせて cucumber-messages(NDJSON)の emitter も用意し、移行するチームの既存フォーマッタと CI のレポートをそのまま動かし続けます。
-どちらもまだ存在しません。
-[docs/spec.md](docs/spec.md#allure-emitter) を参照してください。
+あわせて cucumber-messages(NDJSON)の emitter も用意されており、移行するチームの既存フォーマッタと JUnit ベースの CI をそのまま動かし続けます。
+これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
+[docs/spec.ja.md](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
 
 ## Design
 

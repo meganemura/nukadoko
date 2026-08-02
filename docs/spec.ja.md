@@ -8,7 +8,7 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降のうち Allure emitter は実装済みであり、messages emitter と sign-off は設計としてのみ存在します。
+Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off だけが設計としてのみ存在します。
 
 ## nukadoko とは
 
@@ -352,7 +352,7 @@ Cucumber が持ったことのない実行インフラです:
   state directory は機密性の高いものです。
   `nuka check` は各 env file の分類と secret のキー名を報告します(値は決して報告しません)。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
 
 `parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
 たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。
@@ -380,6 +380,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
 - `sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)
+- `messages.ndjson`(messages emitter の出力。run ごとに 1 つのストリームで、`nuka run` のたびに先頭が truncate される。Messages emitter を参照)
 
 耐久性のある成果物はその代わりにリポジトリの中に置かれます: feature ファイル、型付き step、sign-off の記録です。
 
@@ -442,12 +443,57 @@ nuka signoff create \
 - 表示、履歴、傾向、flakiness はすべて Allure の仕事です。
   nukadoko に web UI はありません。
 
-まだ実装されていないもの: cucumber messages プロトコルの emitter(NDJSON。`@cucumber/messages` は既に依存に入っています。現代の cucumber の formatter はすべて messages を消費するため、これが存在すれば公式の HTML レポート、CI 向けの JUnit XML、サードパーティの消費者が無料で付いてくるはずです)、フック自身の duration(record.json は今のところ hook ごとの timestamp を持たないため、フックの開始と終了はどちらも scenario 自身の境界に潰れます)、BeforeAll/AfterAll(emitter がそこから map できる run レベルの record が存在しません)、そして link-template の設定(`@issue:123` のような tag を URL に対応付けるもの)です。
+まだ実装されていないもの: フック自身の duration(record.json は今のところ hook ごとの timestamp を持たないため、フックの開始と終了はどちらも scenario 自身の境界に潰れます)、BeforeAll/AfterAll(emitter がそこから map できる run レベルの record が存在しません)、そして link-template の設定(`@issue:123` のような tag を URL に対応付けるもの)です。
 
 要点はフォーマットの派閥争いではありません: 従来の cucumber の実行が Allure レポートを満たすのは、glue の作者が手で evidence を添付した箇所だけです。
 一方で nukadoko の harness はどのみちすべてを計測しており、Allure 自身のモデル(attachment、label、parameter)には、その全部の一級の置き場所が既にありました。
 Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日既に見えるようになる場所です。
-上に書いた messages emitter は、それが実現すれば 2 つ目のより狭い出力になります。
+下にある messages emitter は 2 つ目の、より狭い出力であり、その役割は計測の余剰ではなく compat の忠実さです。
+
+## Messages emitter
+
+`nuka run` は呼び出しごとに 1 つの cucumber messages ストリーム(NDJSON、`@cucumber/messages` 経由で 1 行 1 envelope)を書き込み、デフォルトの出力先は `.nukadoko/messages.ndjson` です。
+`nukadoko.config.ts` の `messages.output` で、root からの相対パスであれば他の任意の場所に移せます。
+`enabled` フラグも CLI フラグもありません(Allure と同じです)。
+emitter は常に実行され、スキップされるのは `nuka run` の呼び出しが 0 件の pickle を選んだときだけです。
+
+- 1 回の run は 1 つのストリームであり 1 つのファイルです。
+  `begin` は追記ではなく truncate します。
+  追記だと 1 つのファイルに `testRunStarted` の envelope が 2 つ残ってしまい、読み戻せる単一の well-formed なストリームでなくなるからです。
+  `nuka run` は呼び出しごとに 1 つの feature を実行するため、続けて 2 つ目の feature を実行すると最初のストリームは上書きされます。
+  これは「1 ファイル、truncate」という設計の意図した帰結であり、見落としではありません。
+- この emitter の役割は Allure emitter の逆です。
+  Allure は nukadoko の計測の余剰が見えるようになる場所であり、こちらは compat の忠実さそのものです。
+  唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko が生成した run を従来の cucumber-js の run と同じように読み続けられることです。
+- receipt の内部情報はストリームに一切出ません。
+  バリデーション済みの result も、`mutates` も、`observed` の件数も、`error.kind` もです。
+  `TestStepResult` と `TestStepFinished` は closed schema(`additionalProperties: false`)であり、そのどれにもフィールドがなく、Allure 自身の `[nukadoko.failure=<kind>]` label のような marker を通じてこっそり忍び込ませることもできません。
+- Attachment は step が自分自身について宣言したものに限られます: `declared` の attachment とログの行で、後者は cucumber-js 自身の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)に乗ります。
+  trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。
+  その計測の余剰にはすでに置き場所があり、ここで trace を base64 で埋め込んでも、それを望む消費者がいないままストリームを太らせるだけだからです。
+- `testRunFinished.success` は常に run 自身の exit code と一致します。
+  BeforeAll/AfterAll はこのストリームに書き込む場所を持ちません(emitter が汲み取れる run スコープの record が存在しないからです)。
+  そのため run スコープのフックが失敗した run は、どの scenario の中にも現れず、ここにしか現れません。
+- 構造的に自己無矛盾であるだけでなく、実際の消費者に対しても確認済みです。
+  自前の `messages.ndjson` を `@cucumber/junit-xml-formatter@0.14.0`(envelope ストリームの上で `@cucumber/query` を駆動するもの)に通してもエラーは投げられず、解決が必要なすべての id(pickle から testCase、testStepFinished へ、そして `pickleStepId` から gherkin の step へ)は解決できます。
+  失敗した scenario の `<failure>` は step 自身のエラーメッセージを運び、`<system-out>` は step ごとの passed/failed/skipped の trace を運び、`<testsuite tests="...">` は実際の scenario 数と一致します。
+  `<failure>` 自体には `type` も `message` の属性も付きません。
+  `TestStepResult.exception` が決してセットされないからです(後述)。
+  この確認ができているのは junit-xml の経路だけです。
+  公式の HTML レポートやサードパーティの formatter はまだこのストリームに対して試されていません。
+  確認できているのは、これが実際の消費者がエラーなく読める well-formed な cucumber messages ストリームであるということであり、既存のあらゆる formatter がこれをレンダリングできるということではありません。
+
+正直な限界も、隠さずに書いておきます。
+フックは 1 つの汎用 Before と 1 つの汎用 After に潰れます。
+scenario record にはどの個別の登録が実行されたかの記録が無いからです。
+フック自身の duration は常にゼロです。
+これは Allure emitter が抱えるのと同じ限界です。
+`declared` の label、link、parameter はプロトコルの closed schema に入れる場所が無く、落とされます。
+`stepDefinition` の envelope は出力されません。
+record は step 自身の定義の位置情報を保持しておらず、それでも出力すればでっち上げの事実になってしまうからです。
+そして `TestStepResult.exception` は決してセットされません。
+プロトコルが `Exception.type` を要求する一方、receipt が運ぶのは常にメッセージだけだからです。
+これが、失敗した step の JUnit `<failure>` が body だけになる理由です。
 
 ## Self-healing(監査付き)
 
