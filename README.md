@@ -1,99 +1,78 @@
 # nukadoko
 
-> A living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
+> Typed step contracts and tool-measured receipts for Cucumber + Playwright
+> suites — switch one import to adopt it, switch it back to leave.
 
-A **nukadoko** (ぬか床) is the fermented rice-bran bed that turns
-cucumbers into pickles. It is alive: tended daily it matures, neglected
-it dies. That is the claim this tool makes about your Gherkin: feature
-files and the typed steps behind them are a living culture, not a
-write-once test asset — and tending them, daily, is what an agent is for.
+If you maintain a cucumber-js suite, you know the failure modes: step
+definitions that duplicate until no one knows which one matched, a `this`
+that holds whatever the last step put there, and a report that says
+`passed` without recording what was actually sent or received. nukadoko
+takes on exactly those, and leaves Gherkin's syntax, pattern matching,
+review, and the dashboard to the tools that already own them.
 
-Your `.feature` files are the asset that appreciates in the AI era. Gherkin
-is already the largest corpus of executable natural-language specs there
-is, and every year agents get better at reading it, running it, and
-repairing it — so that corpus is worth more, not less, the longer it lives.
-Two things hold it back: glue code that rots invisibly, and reports nobody
-can trust. nukadoko takes on exactly those two and leaves the rest —
-Gherkin's own syntax, pattern matching, review, the dashboard — to the
-tools that already own them well.
+Gherkin is the plain-language format Cucumber runs — `Given` / `When` /
+`Then` scenarios in `.feature` files, with the code behind each line
+("glue") written separately:
 
-That trust question isn't about the scripted scenario run — there, the
-tool is already the executor, so there's nothing to distrust. It matters in
-the agent's everyday work around that run: the exploratory loop before a
-scenario even exists, an agent verifying its own PR, self-healing a
-scenario the app broke — and in checking what an agent wrote, not just what
-it ran, since a step's execution is measured against its own `mutates`
-declaration. nukadoko doesn't call its receipts unforgeable: an agent with
-shell access can write any file, receipts included, the same honest limit
-secrets have. What it removes is the need to trust the agent's account in
-the first place — execution and measurement stay with the tool, not with
-the agent describing them.
+```gherkin
+Feature: Projects
+
+  Scenario: A new project appears in the list
+    Given a project "acme" exists
+    Then the project list includes "acme"
+```
+
+nukadoko runs those same files. What changes is the code behind them.
 
 ## Status
 
-**Pre-0.1.** M1 (engine core), M2 (the compat door), and M3 (the reporting
-emitters) are implemented: `steps`, `describe`, `do`, `run`, `check`,
-`init`, `scaffold`, sessions, environments, secrets, `nukadoko/compat`,
-the Allure emitter, and the cucumber-messages emitter. What's left is M4
-(sign-off) — see [Design](#design) for the full roadmap.
+**Pre-0.1, and this is version 0.0.1** — the first published one. The
+public API can change without a major bump until 0.1.
 
-## Evaluate nukadoko against your project
+Implemented and covered by 523 tests: typed steps, receipts, sessions,
+environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
+emitters, sign-off (`nuka accept`), and two agent skills. Not implemented:
+compat gap detection in `nuka check`, an AI-assisted glue converter, and
+scenario harvesting — see the [roadmap](docs/spec.md#roadmap).
 
-Paste this into an agent working inside your own repository:
+Maintenance is one person working in the open. Every claim below that
+carries a number was measured; where something was only reasoned about,
+this README says so.
 
-```
-You are evaluating whether to adopt nukadoko (github.com/meganemura/nukadoko)
-for this project's end-to-end / acceptance tests.
+## Install
 
-1. Read nukadoko's README and its full design spec, docs/spec.md, to
-   understand what it actually does today versus what is only designed.
-2. Survey this project's existing E2E / acceptance test assets: feature
-   files (or equivalent scenarios), the glue/step code behind them, and how
-   CI runs them.
-3. Report back under exactly these five headings, in this order:
-
-1. Current state — what test suite exists today: scope, coverage, what
-   executes it.
-2. Fit — how typed steps + receipts would change the way an agent runs
-   this suite's checks: which flows become vocabulary, and what the
-   explore-execute-decide loop looks like concretely here.
-3. First three migration moves — the first commands to run and the first
-   slice of steps to bind (e.g. `nuka init`, binding an initial slice of
-   steps, promoting the hottest existing step to a typed one).
-4. Risks and costs — an estimate of vocabulary size (how many distinct
-   typed steps this suite would need), how much of the existing `Then`
-   usage is hygienic (assertion only, nothing chained that mutates) versus
-   not, and where secrets currently live relative to where nukadoko expects
-   them.
-5. Verdict — adopt / trial / not-yet, with the reasoning.
-
-Do not guess at nukadoko internals beyond what its README and docs/spec.md
-state. If something is unclear, not yet implemented, or you don't have
-access to a document you need, say so rather than assuming.
+```sh
+npm install -D nukadoko
+npx nuka init          # writes nukadoko.config.ts and .nukadoko/ ignores
+npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
-## When do you reach for which command
+nukadoko is a devDependency: it ships its own TypeScript source alongside
+`dist/`, so stack traces land on real code and an agent reading
+`node_modules` can see why a thing works, not just its type.
 
-Five moments, five commands.
+## What it fixes
 
-| When | Commands | Why |
-|---|---|---|
-| Setting up | `nuka init` → `nuka scaffold` | Bootstrap a project; scaffold a step template that fails until implemented. |
-| Exploring (the agent's loop) | `nuka steps --json` → `nuka describe` → `nuka do` | Discover the vocabulary, read a contract, execute one step and read its receipt to decide the next call. |
-| Checking the vocabulary | `nuka check` | Static checks — pattern/schema mismatches, a mutating step bound to `Then`, undefined steps — before a PR or in CI. |
-| Verifying for real | `nuka run` | Execute a scenario; its receipts are the primary evidence trail. |
-| Keeping posture | `nuka session list` / `nuka session clear`, `--env <name>` | Carry or clear login state across calls; point a run at a deployment target. |
+| The failure | What nukadoko does about it |
+|---|---|
+| Duplicate steps — which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
+| `this.foo` — an untyped bag | A step returns a value against a `returns` schema; the next step reads it through `ctx.resultOf`, which is an import you can see and a receipt entry you can audit |
+| A report that only says `passed` | Every execution writes a receipt: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
+| Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
+| A `Then` that quietly mutates state | `mutates` is declared per step and **checked against what the run observed** — a Then-position step that writes fails, whatever it declared |
 
-`check` is the cheap, static gate; `run` is the one that leaves a receipt
-trail worth pointing at.
+The last one is worth being precise about, because declaration alone would
+be worthless: the tool counts the non-GET calls an execution actually made
+through its own request context and page, and fails on the measurement, not
+on the promise.
 
 ## Before / after
 
-This is true today, not aspirational: promoting a step from regex glue to a
-typed one. The feature line's text doesn't change — only the step
-definition behind it does.
+Promoting a step from regex glue to a typed one. The feature line's text
+doesn't change — only the step definition behind it does.
 
-Before (cucumber-js, position capture, untyped, stashed on the World):
+Before (cucumber-js, position capture, untyped, stashed on the World — the
+per-scenario `this` object cucumber-js gives every step):
 
 ```ts
 // features/steps/project.ts (cucumber-js)
@@ -133,50 +112,176 @@ export default defineStep({
 - `args` and `returns` are zod schemas validated at the run boundary —
   `result` in the receipt is something the tool validated, not just
   whatever the step handed back.
-- `nuka check` turns a class of glue mistakes — schema mismatches, unnamed
-  captures, a mutating step bound to `Then` — into a static error or
-  warning instead of something that fails silently at run time, or not at
-  all.
 - `nuka do create-project --args '{"name":"acme"}'` runs this one step
   alone and prints its receipt — the unit an agent's explore loop is built
   on, with nothing to stand up first.
 
-**M2: a compat door.** The migration path for an existing Cucumber +
-Playwright suite is switching one import — `nukadoko/compat` in place of
-`@cucumber/cucumber` — keeping the same pattern syntax, hooks, and World
-working while nukadoko's harness starts measuring receipts underneath them.
-How much else has to change was measured rather than assumed. Against eight
-public cucumber-js suites, none went through on the import alone when the
-audit ran; closing the blockers it found has since brought two of them to
-where nothing in their glue is rejected. The other six still need a short
-mechanical pass first — a few imports `nukadoko/compat` doesn't export, and
-for CommonJS suites a module-format change — and every one of those
-blockers fails at the import or the first run instead of quietly changing
-what the suite does. Promoting a step to `defineStep` is
-then a per-step decision instead of a rewrite, and the door swings back —
-switching the import again returns to plain cucumber-js. See
-[docs/migration.md](docs/migration.md) for the step-by-step guide, the
-audit's findings included, and [examples/migration](examples/migration) for
-a worked example running end to end.
+## The compat door, and the way back
 
-**M3: reports fill themselves.** A classic Cucumber run shows the evidence
-a team wired up itself — hook boilerplate for traces and screenshots,
-written and maintained per project. The Allure emitter fills the report
-from every receipt with zero wiring — validated result, trace, HTTP log,
-observed reads and writes, environment and version — and one of those no
-report-side effort could ever add, because classic Cucumber discards step
-return values: the validated per-step result. A cucumber-messages
-(NDJSON) emitter ships alongside it so a migrating team's existing
-formatters and JUnit-based CI keep working — confirmed by running our own
-stream through `@cucumber/junit-xml-formatter`, not just asserted. See
-[docs/spec.md](docs/spec.md#allure-emitter) and
+The migration path for an existing Cucumber + Playwright suite is switching
+one import — `nukadoko/compat` in place of `@cucumber/cucumber` — keeping
+the same pattern syntax, hooks, and World working while nukadoko's harness
+starts measuring receipts underneath them. Promoting a step to `defineStep`
+is then a per-step decision rather than a rewrite, and a suite that is half
+promoted keeps passing.
+
+**Switching the import back returns a plain cucumber-js suite.** That is a
+standing design rule, not a happy accident: compat assets must survive both
+the switch and a partial migration, so leaving is always one edit away.
+This is the answer to the fair question of whether to bet an existing suite
+on a 0.0.1 tool from one maintainer.
+
+How much else has to change was measured rather than assumed. Against eight
+public cucumber-js suites, **none went through on the import alone** when
+the audit ran; closing the blockers it found has since brought two of the
+eight to where nothing in their glue is rejected. The other six still need
+a short mechanical pass first, and every blocker fails loudly at the import
+or the first run rather than quietly changing what the suite does.
+
+One blocker deserves naming up front, because it is a go/no-go rather than
+a pass: **a CommonJS suite cannot use the door at all.**
+`require("nukadoko/compat")` fails outright — nukadoko is ESM-only — so a
+CommonJS suite needs a module-format change before anything else. Two of
+the eight audited suites were CommonJS throughout.
+
+See [docs/migration.md](docs/migration.md) for the step-by-step guide with
+the audit's findings, and [examples/migration](examples/migration) for a
+worked example running end to end.
+
+## Reports fill themselves
+
+A classic Cucumber run shows the evidence a team wired up itself — hook
+boilerplate for traces and screenshots, written and maintained per project.
+[Allure](https://allurereport.org/) is a test-report dashboard; nukadoko
+emits results in its format and never renders HTML itself. The emitter
+fills the report from every receipt with zero wiring:
+validated result, trace, HTTP log, observed reads and writes, environment
+and version — including one no report-side effort could ever add, because
+classic Cucumber discards step return values: the validated per-step
+result.
+
+A cucumber-messages (NDJSON) emitter ships alongside it so a migrating
+team's existing formatters and JUnit-based CI keep working — confirmed by
+running our own stream through `@cucumber/junit-xml-formatter`, not just
+asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
 [Messages emitter](docs/spec.md#messages-emitter).
+
+## Skills for coding agents
+
+nukadoko ships two skills following the
+[Agent Skills specification](https://agentskills.io/specification), so
+Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
+
+- **acceptance** — takes a ticket's acceptance criteria through to a
+  committed record: read the vocabulary, scaffold what's missing, write the
+  feature, run it green, `nuka accept` it.
+- **migration** — moves a cucumber-js suite across in two stages, and
+  explains which differences are the point rather than listing recipes.
+
+```sh
+gh skill install meganemura/nukadoko     # any Agent Skills host
+nuka skill path                          # the copy matching your installed version
+```
+
+Neither skill writes down what the CLI can answer — vocabulary, contracts,
+refusal reasons all come from `nuka steps`, `nuka describe`, and stderr —
+because a skill that copies those starts lying the moment a command
+changes.
+
+## When do you reach for which command
+
+| When | Commands |
+|---|---|
+| Setting up | `nuka init` → `nuka scaffold <name>` |
+| Exploring (the agent's loop) | `nuka steps --json` → `nuka describe <step>` → `nuka do <step> --args '<json>'` |
+| Checking before running | `nuka check [feature]` |
+| Verifying for real | `nuka run <feature>` |
+| Recording an acceptance | `nuka accept <feature>` |
+| Keeping posture | `nuka session list` / `clear`, `--env <name>` |
+| Handing the loop to an agent | `nuka skill path` |
+
+`check` is the cheap static gate; `run` leaves the receipt trail; `accept`
+freezes one green run as a committed record beside its feature.
+
+## Try it against your own suite first
+
+You don't have to migrate anything to find out whether this fits. Point an
+agent at your repository with the prompt below; it reports back on your
+suite's shape, what a migration would cost, and what could go wrong.
+
+<details>
+<summary>Evaluation prompt (paste into an agent working in your repo)</summary>
+
+```
+You are evaluating whether to adopt nukadoko (github.com/meganemura/nukadoko)
+for this project's end-to-end / acceptance tests.
+
+1. Read nukadoko's README and its full design spec, docs/spec.md, to
+   understand what it actually does today versus what is only designed.
+2. Survey this project's existing E2E / acceptance test assets: feature
+   files (or equivalent scenarios), the glue/step code behind them, and how
+   CI runs them.
+3. Report back under exactly these five headings, in this order:
+
+1. Current state — what test suite exists today: scope, coverage, what
+   executes it.
+2. Fit — how typed steps + receipts would change the way an agent runs
+   this suite's checks: which flows become vocabulary, and what the
+   explore-execute-decide loop looks like concretely here.
+3. First three migration moves — the first commands to run and the first
+   slice of steps to bind (e.g. `nuka init`, binding an initial slice of
+   steps, promoting the hottest existing step to a typed one).
+4. Risks and costs — an estimate of vocabulary size (how many distinct
+   typed steps this suite would need), how much of the existing `Then`
+   usage is hygienic (assertion only, nothing chained that mutates) versus
+   not, whether the suite is CommonJS, and where secrets currently live
+   relative to where nukadoko expects them.
+5. Verdict — adopt / trial / not-yet, with the reasoning.
+
+Do not guess at nukadoko internals beyond what its README and docs/spec.md
+state. If something is unclear, not yet implemented, or you don't have
+access to a document you need, say so rather than assuming.
+```
+
+</details>
+
+## What this does not do
+
+- **Receipts are not unforgeable.** An agent with shell access can write
+  any file, receipts included — the same honest limit secrets have. What
+  nukadoko removes is the need to trust an agent's *account* of a run:
+  execution and measurement stay with the tool, not with the agent
+  describing them.
+- **It does not check that an assertion asserts anything.** Whether a step
+  truthfully does what its description claims rests on PR review. The tool
+  guarantees the shape of inputs and outputs and the fact of execution —
+  a typed contract makes an empty assertion easier to spot in review, but
+  nothing rejects one automatically.
+- **CommonJS suites cannot use `nukadoko/compat`** without a module-format
+  change first (above).
+- No test parallelism, sharding, retries, or CI reporting. No HTML
+  rendering — that is Allure's job.
+
+## Why not just drop Cucumber?
+
+That is a fair question, and nukadoko is not an answer to it. If a team
+concludes the Gherkin layer isn't earning its keep, moving to Playwright
+Test directly is a reasonable decision and this tool doesn't argue against
+it.
+
+nukadoko is for teams who want to keep Gherkin — usually because
+non-engineers read and review the `.feature` files, and that review is the
+point — but are paying for it in glue that rots and reports that can't be
+trusted. It replaces those two costs while leaving the scenarios, and who
+reads them, untouched.
 
 ## Design
 
 The full design — problem statement, typed steps, keyword semantics,
 receipts, sessions/environments/secrets, sign-off, roadmap, and honest
 limits — lives in a single place: [docs/spec.md](docs/spec.md).
+
+Japanese: [README.ja.md](README.ja.md) / [docs/spec.ja.md](docs/spec.ja.md)
 
 ## License
 

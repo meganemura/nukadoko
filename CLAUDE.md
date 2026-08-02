@@ -10,8 +10,9 @@ of truth is `docs/spec.md` — read it before changing behavior. Status:
 pre-0.1; M1 (engine core) and M2 (compat) are implemented, both real-world
 gates have been run (typed-step drafting, and the compat audit reported
 under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
-cucumber-messages emitter are both implemented (`docs/spec.md` "Allure
-emitter", "Messages emitter"); sign-off alone is still design-only.
+cucumber-messages emitter, sign-off (`nuka accept`), and both agent skills
+are implemented; the migration skill's prerequisite — compat gap detection
+in `nuka check` — is not.
 
 ## Naming rule
 

@@ -18,8 +18,10 @@ nukadoko is an agent-first engine that runs Gherkin. Humans write and review the
 artifacts — feature files, typed step definitions, sign-off records — and
 agents execute them. Everything about the runtime is optimized for an agent's
 trial-and-error loop: every step has a typed contract, every step can be run
-on its own from the CLI, and every execution leaves a receipt the agent
-cannot forge.
+on its own from the CLI, and every execution leaves a receipt the tool
+wrote rather than the agent. Not a receipt the agent *cannot* forge — an
+agent with shell access can write any file — but one it never had to be
+asked to produce (see "Out of scope").
 
 Agent-first is a design constraint, not a slogan. An agent must be able to
 complete the whole loop unassisted: discover the vocabulary
@@ -761,9 +763,11 @@ nuka describe <step>          full contract, schemas as JSON Schema
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
-                              feature, duplicate patterns, config coherence;
-                              a feature argument checks that one file instead
-                              of featuresDir, for a feature living outside it
+                              feature, ambiguous steps (one line two patterns
+                              both match), duplicate patterns, config
+                              coherence; a feature argument checks that one
+                              file instead of featuresDir, for a feature
+                              living outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
