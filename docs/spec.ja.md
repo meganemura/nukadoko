@@ -440,7 +440,7 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
 5. commit します。
    run は、まだチェックアウトされているその commit で、クリーンな working tree に対して行われた場合にしか凍結できないため、dirty な working tree に対するデバッグ用の run はかまいません。
    ただそれらは accept できないだけです。
-6. green になるまで `nuka run` します。
+6. green になるまで `nuka run <feature>` します。
 7. `nuka accept <feature>` し、それが書いた記録を commit します。
 
 手順 1-4 が作業とレビューの場所です(新しい型付き step と feature 自体は通常の PR の題材であり、基準から scenario への翻訳こそがレビュアーがチェックするための判断です)。
@@ -571,7 +571,8 @@ nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
 nuka init [--base-url <url>]  set up a project; ends with a self-check
-nuka skill path|install       install the agent-facing skill
+nuka skill path               where the bundled skill lives, for a project
+                              that wants the copy matching this nukadoko
 ```
 
 ## Out of scope(正直な限界)
@@ -595,9 +596,13 @@ nuka skill path|install       install the agent-facing skill
 - **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)エミッタ(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results エミッタ。
   drop-in なダッシュボードのストーリー。
 - **M4(sign-off)**: `nuka accept`、それが拒否の根拠にする commit と working tree のクリーンさのチェック、そして feature の隣に書かれる凍結された記録です。
-- **M5(skills)**: `nuka skill path|install` と、それが同梱する skill です。
+- **M5(skills)**: nukadoko が同梱する skill と、`nuka skill path` です。
   CLI は意図的に小さな動詞の集まりです。
   skill は、それらを agent が指示なしに従えるワークフローに変えるものであり、そのどれもエンジンを変えません。
+  skill は Agent Skills specification に従うため、`gh skill install` と Claude Code の plugin marketplace の両方が複数ホストへの配布を担います。
+  nukadoko 自身はどのホストのディレクトリにもファイルをコピーしません。
+  `nuka skill path` が残るのは、その 2 つには出せないものを答えるためです(インストール済みの nukadoko と同じバージョンの skill の在り処)。
+  skill は CLI を説明したものなので、両者のバージョンがずれると記述が虚構になります。
   2 つが計画されています。
   **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、そして green になるまで `run` して `accept` する)。
   これは出荷済みです。
