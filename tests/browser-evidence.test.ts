@@ -191,3 +191,51 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
     },
   );
 });
+
+// Responsibility: proves the browser-context half of docs/spec.md "Context
+// API"'s baseURL wiring (m2pre-ctx-surface task spec, decision 3) —
+// `page.goto("/path")` must resolve against `config.baseURL` without the
+// step assembling the full URL itself, unlike `ctx.request()`'s own baseURL
+// handling (already covered by create-context.test.ts). Own server, own
+// describe block, same reasoning as the "observed network writes" block
+// above.
+describe("createStepContext / ctx.page(): baseURL wired into the browser context", () => {
+  let evidenceDir: string;
+  let server: Server;
+  let baseURL: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-baseurl-"));
+    server = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(`<html><body>${req.url}</body></html>`);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address() as AddressInfo;
+    baseURL = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    'resolves page.goto("/path") against the configured baseURL',
+    async () => {
+      const { ctx, dispose } = createStepContext({
+        config: baseConfig({ baseURL }),
+        evidenceDir,
+        env: {},
+      });
+
+      const page = await ctx.page();
+      const response = await page.goto("/hello");
+
+      expect(response?.ok()).toBe(true);
+      expect(page.url()).toBe(`${baseURL}/hello`);
+
+      await dispose("ok");
+    },
+  );
+});

@@ -14,25 +14,21 @@ import type { Step } from "./step/define-step.js";
 // (both sides use `import type`), which TypeScript resolves fine since
 // neither import survives to a runtime value (m2pre-resultof task spec,
 // decision 1).
-
-export interface PollOptions {
-  /** Total time budget for polling, in milliseconds. */
-  timeout?: number;
-  /** Delay between poll attempts, in milliseconds. */
-  interval?: number;
-  /** Human-readable label surfaced in the run's progress log. */
-  description?: string;
-}
+//
+// The boundary rule (docs/spec.md "Context API"): `ctx` carries only what
+// the executor must inject; pure helpers are imports, not context members.
+// `poll` (`import { poll } from "nukadoko"`, src/context/poll.ts) needs
+// nothing the executor owns, so it is not here. `section` is not here
+// either, for the opposite reason — it would do nothing until the
+// progress-log feature exists (m2pre-ctx-surface task spec).
 
 export interface StepContext {
-  /** Playwright Page; browser launches on first call, restored from the session's storageState. */
+  /** Playwright Page; browser launches on first call, restored from the
+   * session's storageState, with the configured baseURL wired into the
+   * browser context so `page.goto("/path")` resolves against it. */
   page(): Promise<Page>;
   /** Playwright APIRequestContext with the configured baseURL and the session's cookies. */
   request(): Promise<APIRequestContext>;
-  /** submit-poll-fetch against asynchronous jobs. */
-  poll<T>(fn: () => Promise<T>, options?: PollOptions): Promise<T>;
-  /** Names a stretch of the run in its progress log. */
-  section(name: string): void;
   /** Environment variables from the configured envFiles (read-only). */
   readonly env: Readonly<Record<string, string | undefined>>;
   /** The configured baseURL. `undefined` when the config doesn't set one;

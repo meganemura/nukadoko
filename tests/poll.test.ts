@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { poll, PollTimeoutError } from "../src/context/poll.js";
+import { poll, PollTimeoutError } from "../src/index.js";
 
 describe("poll", () => {
   it("returns the value once fn stops returning undefined", async () => {

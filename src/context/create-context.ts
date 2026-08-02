@@ -10,17 +10,21 @@ import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
-import { poll } from "./poll.js";
 import { createUsedCollector } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution hands
-// to a step's `run(ctx, args)` — env, baseURL, lazy browser, lazy logged
-// HTTP context, poll, and a no-op section — plus a `dispose` the executor
-// calls *after* `run` returns, never itself reachable from `ctx`. That split
-// is the whole point: docs/spec.md's trust model requires that a step
-// cannot control its own receipt or evidence collection, so nothing
-// evidence-related is exposed on the object passed into `run`; only the
-// executor (src/cli/do.ts), which never hands `dispose` onward, can call it.
+// to a step's `run(ctx, args)` — env, baseURL (also wired into the browser
+// context so `page.goto("/path")` resolves against it), lazy browser, lazy
+// logged HTTP context — plus a `dispose` the executor calls *after* `run`
+// returns, never itself reachable from `ctx`. `poll` and `section` are
+// deliberately not assembled here: `poll` is a pure helper exported directly
+// from the package (src/context/poll.ts, src/index.ts), and `section` does
+// not exist yet (m2pre-ctx-surface task spec, decision 1 — docs/spec.md
+// "Context API"'s boundary rule). That split is the whole point: docs/spec.md's
+// trust model requires that a step cannot control its own receipt or
+// evidence collection, so nothing evidence-related is exposed on the object
+// passed into `run`; only the executor (src/cli/do.ts), which never hands
+// `dispose` onward, can call it.
 // The same split applies to sessions: this module restores a loaded
 // storageState into whichever context(s) a step opens and hands back
 // whichever one *should* be persisted, but never writes it to disk itself —
@@ -191,6 +195,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           evidenceDir,
           storageState,
           observed,
+          baseURL: config.baseURL,
         });
       }
       return browserHandle.page;
@@ -215,7 +220,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       }
       return requestContext;
     },
-    poll,
     resultOf<S extends Step>(step: S) {
       const entry = readResultOf(step);
       if (entry === undefined) {
@@ -225,13 +229,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // 2: "空なら省略" — a call that returned `undefined` leaves no trace).
       used.record(entry.receiptId);
       return entry.result as z.infer<S["returns"]>;
-    },
-    section() {
-      // No-op for now: the progress log this would append to is a later
-      // slice (docs/spec.md "Context API" lists `section`, but nothing
-      // reads a progress log yet). Kept as a real, callable no-op rather
-      // than omitted so step code written against the full Context API
-      // type-checks and runs today, unchanged once progress logs land.
     },
   };
 

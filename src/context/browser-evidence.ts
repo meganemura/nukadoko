@@ -37,6 +37,12 @@ export interface LaunchBrowserOptions {
   /** Tallies every request this browser context's page(s) make — see this
    * module's header comment. */
   observed: ObservedCollector;
+  /** `config.baseURL`, wired into the browser context so `page.goto("/path")`
+   * resolves against it (docs/spec.md "Context API"). Omitted from
+   * `newContext` when unset — Playwright's own default for an unset
+   * `baseURL` (relative navigation stays an error) is preferable to nukadoko
+   * inventing one. */
+  baseURL?: string;
 }
 
 export interface BrowserEvidenceHandle {
@@ -63,9 +69,10 @@ export async function launchBrowserWithTracing(
   options: LaunchBrowserOptions,
 ): Promise<BrowserEvidenceHandle> {
   const browser: Browser = await chromium.launch({ headless: options.headless });
-  const context: BrowserContext = await browser.newContext(
-    options.storageState ? { storageState: options.storageState } : {},
-  );
+  const context: BrowserContext = await browser.newContext({
+    ...(options.storageState ? { storageState: options.storageState } : {}),
+    ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+  });
   context.on("request", (request) => {
     options.observed.record(request.method());
   });

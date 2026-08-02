@@ -1,10 +1,17 @@
-import type { PollOptions } from "../context.js";
+// Responsibility: `poll` per docs/spec.md "Context API" — submit-poll-fetch
+// against asynchronous jobs, exported as `import { poll } from "nukadoko"`
+// (src/index.ts). It needs nothing the executor owns, so it lives outside
+// `StepContext` entirely rather than as a `ctx` member (m2pre-ctx-surface
+// task spec, decision 1: pure helpers are imports, not context members).
 
-// Responsibility: `ctx.poll` per docs/spec.md "Context API" — submit-poll-
-// fetch against asynchronous jobs. Kept independent of
-// context/create-context.ts so it's unit-testable on its own and trivially
-// reusable as the literal `poll` property there (same signature as
-// `StepContext["poll"]`, so no adapter is needed at the call site).
+export interface PollOptions {
+  /** Total time budget for polling, in milliseconds. */
+  timeout?: number;
+  /** Delay between poll attempts, in milliseconds. */
+  interval?: number;
+  /** Human-readable label surfaced in the run's progress log. */
+  description?: string;
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_INTERVAL_MS = 500;
