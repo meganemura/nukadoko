@@ -183,6 +183,10 @@ import { Given, When, Then } from "nukadoko/compat";
 - harness がブラウザと request のオブジェクトを所有しているため、compat の step もコードを一切変更せずに、計測済みの receipt(status、timing、trace、screenshots、HTTP log)をすでに得られます。
 - compat の step に欠けているのは、型付きの契約、receipt 内でバリデーションされた `result`、単体 step の CLI 実行、そして Then の強制です。
   よく使う step を `defineStep` に昇格させることが、1 step ずつ進めるアップグレードです。
+- この節と、移行に触れる今後のすべての設計に適用される恒久的な設計規則: 今日動いている compat の資産は、チームが nukadoko を採用したことや、他のどこかを typed 側へ動かしたことを理由に、動かなくなってはなりません。
+  移行途中の「住まいが 2 つある」状態(support コードに登録された parameter type と config に住む parameter type、World のバッグと typed の result の併存)は、禁止するのではなく受け入れます。
+  ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
+  扉は両方向に開きます: import を元に戻せることは維持されます。
 
 ## 実行
 

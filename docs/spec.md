@@ -242,6 +242,16 @@ import { Given, When, Then } from "nukadoko/compat";
 - What compat steps lack: typed contracts, a validated `result` in the
   receipt, single-step CLI execution, and Then enforcement. Promoting a hot
   step to `defineStep` is the upgrade, one step at a time.
+- Standing design rule, for this section and every future design that
+  touches migration: a compat asset that works today must not stop working
+  because the team adopted nukadoko or moved some other piece toward the
+  typed side. Transitional two-home states (a parameter type registered in
+  support code while another lives in config; a World bag alongside typed
+  results) are accepted rather than forbidden — but they must share one
+  underlying mechanism, the split must be surfaced by `nuka check` instead
+  of hidden, and every individual migration move must be
+  semantics-preserving so it can be taken early and safely. The door
+  swings both ways: switching the import back must remain possible.
 
 ## Running
 
