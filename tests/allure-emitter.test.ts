@@ -134,6 +134,7 @@ describe("createAllureEmitter", () => {
 
       const record: ScenarioRecord = {
         scenario_id: "scn-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -258,6 +259,7 @@ describe("createAllureEmitter", () => {
 
       const record: ScenarioRecord = {
         scenario_id: `scn-outline-${index}`,
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "checkout as <role>",
         line: 7,
@@ -286,6 +288,7 @@ describe("createAllureEmitter", () => {
     const pickle = pickles[0]!;
     const record: ScenarioRecord = {
       scenario_id: "scn-first",
+      run_id: "run-1",
       feature: "features/checkout.feature",
       scenario: "a customer checks out",
       line: 3,
@@ -357,6 +360,7 @@ describe("createAllureEmitter", () => {
       writeReceiptFile(rootDir, receipt);
       const record: ScenarioRecord = {
         scenario_id: "scn-fail-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -382,6 +386,7 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
       const record: ScenarioRecord = {
         scenario_id: "scn-pass-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -412,6 +417,7 @@ describe("createAllureEmitter", () => {
       };
       const record: ScenarioRecord = {
         scenario_id: "scn-hook-fail-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -436,6 +442,7 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
       const record: ScenarioRecord = {
         scenario_id: "scn-unresolved-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -472,6 +479,7 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
       const record: ScenarioRecord = {
         scenario_id: "scn-missing-receipt",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -508,6 +516,7 @@ describe("createAllureEmitter", () => {
       // a later scenario's failure.
       const healthyRecord: ScenarioRecord = {
         scenario_id: "scn-healthy",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -553,6 +562,7 @@ describe("createAllureEmitter", () => {
 
       const brokenRecord: ScenarioRecord = {
         scenario_id: "scn-broken",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,

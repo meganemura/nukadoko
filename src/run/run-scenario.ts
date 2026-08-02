@@ -31,6 +31,7 @@ import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
 import type { Step } from "../step/define-step.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
+import type { GitState } from "./probe-git.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
@@ -158,6 +159,12 @@ import { writeScenarioRecord } from "./write-record.js";
 // execution (this task's spec, item 2 — a run-scope hook, not a per-pickle
 // one, so it does not belong in this file) reuses the exact same
 // timeout-racing/message logic rather than a second, drifting copy of it.
+//
+// m4a-run-provenance task spec: `runId` and `git` are both computed once by
+// the caller (cli/run.ts), before this run's own pickle loop, and threaded
+// into every `runScenario` call unchanged — the same "measured once per
+// run, not once per pickle" shape `targetVersion` above already has. This
+// file only ever copies them onto each scenario record it writes.
 
 /** The declared-mutates read-only refusal message (this task's spec,
  * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
@@ -201,6 +208,18 @@ export interface RunScenarioOptions {
   readonly gherkinDocument: GherkinDocument;
   readonly vocabulary: Vocabulary;
   readonly bindings: readonly StepBinding[];
+  /** This `nuka run` invocation's own id (m4a-run-provenance task spec,
+   * decision 1) — generated once by the caller (cli/run.ts), before any
+   * pickle runs, and copied verbatim onto every scenario record this
+   * invocation writes (`ScenarioRecord.run_id`). */
+  readonly runId: string;
+  /** The commit and cleanliness of the working tree when this run started
+   * (m4a-run-provenance task spec, decisions 2 and 4) — probed once by the
+   * caller (`src/run/probe-git.ts`), before any pickle runs, and copied
+   * verbatim onto every scenario record this invocation writes
+   * (`ScenarioRecord.git`). `undefined` outside a git repository or when
+   * the probe itself failed; never causes this run to fail. */
+  readonly git: GitState | undefined;
   readonly environment: string;
   /** The resolved environment's `policy` (cli/run.ts's `resolvedEnv.policy`)
    * — `"read-only"` refuses a declared-mutating step before it runs and
@@ -414,6 +433,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     gherkinDocument,
     vocabulary,
     bindings,
+    runId,
+    git,
     environment,
     policy,
     targetVersion,
@@ -1202,6 +1223,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const record: ScenarioRecord = {
     scenario_id: scenarioId,
+    run_id: runId,
     feature: relativeFeaturePath,
     scenario: pickle.name,
     line: pickle.location?.line ?? 0,
@@ -1213,6 +1235,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     finished_at: finishedAt.toISOString(),
     steps: stepRecords,
     hooks: hookRecords,
+    ...(git !== undefined ? { git } : {}),
     evidence: {
       dir: relativeScenarioDir,
       screenshots: browserEvidence.screenshots,

@@ -32,6 +32,19 @@
 // only `timeout`, `unsupported` (done-callback arity, pending/skipped
 // return), `world_invalid` (a declared World key's write, since a hook runs
 // against the same World a compat step does), and `step_error`.
+//
+// `ScenarioRecord.run_id` and `.git` are added now (m4a-run-provenance task
+// spec) — recording-side groundwork for `nuka accept` (docs/spec.md
+// "Sign-off"), which is not implemented yet and does not read either field
+// itself. `run_id` identifies "every scenario record one `nuka run`
+// invocation wrote" — a fact no existing field carries, since `scenario_id`
+// is unique per pickle. `git` is the commit and cleanliness of the working
+// tree "when the run started" (docs/spec.md "Sign-off" verbatim) — absent
+// outside a git repository, before the first commit, or when the git call
+// itself fails (src/run/probe-git.ts), the same fail-safe convention
+// `target_version`'s probe already uses
+// (src/environment/probe-version.ts): the run itself never fails over
+// either field.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ErrorKind } from "../receipt/types.js";
@@ -81,6 +94,11 @@ export interface ScenarioEvidence {
 
 export interface ScenarioRecord {
   readonly scenario_id: string;
+  /** This run's own id (m4a-run-provenance task spec, decision 1) — every
+   * scenario record one `nuka run` invocation writes shares the same value,
+   * generated once per invocation, never per pickle. Required, unlike
+   * `git` below: every run has one, regardless of git. */
+  readonly run_id: string;
   /** The feature file's path, relative to the project root. */
   readonly feature: string;
   /** The pickle's own name (Scenario Outline rows all share their outline's
@@ -99,5 +117,20 @@ export interface ScenarioRecord {
   readonly finished_at: string;
   readonly steps: readonly ScenarioStepRecord[];
   readonly hooks: readonly ScenarioHookRecord[];
+  /** The commit and cleanliness of the working tree when this run started
+   * (m4a-run-provenance task spec, decision 2; docs/spec.md "Sign-off": "the
+   * commit the working tree was at when the run started"). Absent outside a
+   * git repository, before the first commit, or when the git call fails —
+   * see this file's own header. Measured once per run, not once per pickle
+   * (decision 4): every scenario record from the same `nuka run` invocation
+   * carries the same value, even if a step during the run itself edits a
+   * tracked file. */
+  readonly git?: {
+    /** Full 40-character sha. */
+    readonly commit: string;
+    /** No line other than a `#`-prefixed header appeared in `git status
+     * --porcelain=v2 --branch`'s own output. */
+    readonly clean: boolean;
+  };
   readonly evidence: ScenarioEvidence;
 }

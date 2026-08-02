@@ -30,6 +30,7 @@ function parse() {
 function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
   return {
     scenario_id: "scn-1",
+    run_id: "run-1",
     feature: "features/checkout.feature",
     scenario: "a customer checks out",
     line: 2,

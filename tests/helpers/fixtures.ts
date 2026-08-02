@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 // Responsibility: the one place tests compute absolute paths to
 // tests/fixtures/* and the repo root, so individual test files don't each
@@ -126,6 +128,31 @@ export async function ensureNukadokoShim(): Promise<void> {
     path.join(nukadokoShimDir, "compat.ts"),
     `export * from "${compatSpecifier}";\n`,
   );
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * `git init`s `dir` (already containing whatever files a test wants
+ * committed) and commits everything in it in one commit — the "一時ディレク
+ * トリで git init する手立て" src/run/probe-git.ts's own tests need (m4a-run-
+ * provenance task spec). `dir`'s own `.git` is what git actually resolves,
+ * closest-ancestor-wins, regardless of `dir` sitting inside this repo's own
+ * working tree (e.g. under `tempFixturesRoot` above) — a nested repo never
+ * needs its ancestor's `.git` consulted at all. The identity is configured
+ * `--local` (this call's own `cwd`), never `--global`: a test must not read
+ * or write the machine's real git config. Returns the resulting commit's
+ * full 40-character sha, for a test to assert `git.commit` against.
+ */
+export async function initGitRepo(dir: string): Promise<string> {
+  const git = (args: string[]) => execFileAsync("git", args, { cwd: dir, encoding: "utf8" });
+  await git(["init", "-q"]);
+  await git(["config", "user.email", "nukadoko-tests@example.invalid"]);
+  await git(["config", "user.name", "nukadoko tests"]);
+  await git(["add", "-A"]);
+  await git(["commit", "-q", "-m", "initial"]);
+  const { stdout } = await git(["rev-parse", "HEAD"]);
+  return stdout.trim();
 }
 
 /** A minimal in-memory sink satisfying cli/run-cli.ts's WritableSink. */

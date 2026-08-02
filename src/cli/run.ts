@@ -13,6 +13,8 @@ import {
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
+import { probeGitState } from "../run/probe-git.js";
+import { generateRunId } from "../run/run-id.js";
 import {
   doneCallbackMessage,
   pendingOrSkippedMessage,
@@ -59,6 +61,11 @@ import type { WritableSink } from "./writable-sink.js";
 // session's lock, when `--session` is given, is acquired once for the whole
 // run and always released in `finally` (this task's spec, decision 8),
 // covering every scenario rather than one lock per scenario.
+//
+// m4a-run-provenance task spec: `runId` (src/run/run-id.ts) and `git`
+// (src/run/probe-git.ts) join that same "computed once, at the top of the
+// execution phase" group — one id and one git snapshot shared by every
+// scenario record this invocation writes, alongside `targetVersion` above.
 //
 // `resolvedEnv.policy` is threaded into every `runScenario` call now
 // (m2pre-resultof task spec, decision 3): this file previously never passed
@@ -273,6 +280,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
     }
 
+    const runId = generateRunId();
+    const git = await probeGitState(rootDir);
+
     const envFiles = resolvedEnv.envFiles;
     const envVars = loadEnvFiles(rootDir, envFiles);
     const classification = await classifyEnvFiles(rootDir, envFiles);
@@ -442,6 +452,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             gherkinDocument: selected.gherkinDocument,
             vocabulary,
             bindings,
+            runId,
+            git,
             environment: resolvedEnv.name,
             policy: resolvedEnv.policy,
             targetVersion,

@@ -109,6 +109,7 @@ describe("createMessagesEmitter", () => {
       const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
       const record: ScenarioRecord = {
         scenario_id: "scn-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
@@ -125,6 +126,7 @@ describe("createMessagesEmitter", () => {
 
       const record2: ScenarioRecord = {
         scenario_id: "scn-2",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "checkout as <role>",
         line: 7,
@@ -285,6 +287,7 @@ describe("createMessagesEmitter", () => {
 
     const record: ScenarioRecord = {
       scenario_id: "scn-missing-file",
+      run_id: "run-1",
       feature: "features/checkout.feature",
       scenario: "a customer checks out",
       line: 3,
@@ -334,6 +337,7 @@ describe("createMessagesEmitter", () => {
 
       const record: ScenarioRecord = {
         scenario_id: "scn-1",
+        run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
