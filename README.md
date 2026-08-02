@@ -145,12 +145,14 @@ export default defineStep({
 Playwright suite is switching one import — `nukadoko/compat` in place of
 `@cucumber/cucumber` — keeping the same pattern syntax, hooks, and World
 working while nukadoko's harness starts measuring receipts underneath them.
-How much else has to change was measured rather than assumed: against eight
-public cucumber-js suites, none went through on the import alone. Each
-needed a short mechanical pass first — a few imports `nukadoko/compat`
-doesn't export, and for CommonJS suites a module-format change — and every
-one of those blockers fails at the import or the first run instead of
-quietly changing what the suite does. Promoting a step to `defineStep` is
+How much else has to change was measured rather than assumed. Against eight
+public cucumber-js suites, none went through on the import alone when the
+audit ran; closing the blockers it found has since brought two of them to
+where nothing in their glue is rejected. The other six still need a short
+mechanical pass first — a few imports `nukadoko/compat` doesn't export, and
+for CommonJS suites a module-format change — and every one of those
+blockers fails at the import or the first run instead of quietly changing
+what the suite does. Promoting a step to `defineStep` is
 then a per-step decision instead of a rewrite, and the door swings back —
 switching the import again returns to plain cucumber-js. See
 [docs/migration.md](docs/migration.md) for the step-by-step guide, the

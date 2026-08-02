@@ -55,21 +55,37 @@ Everything below that import keeps working, unchanged:
   friction, measured migrating examples/migration's own suite).
 - `allure.*` calls (`attach`/`log`/`link`, labels, parameters) inside
   glue — they land in the receipt's `declared` field, not vanishing.
+- `setDefaultTimeout(ms)`, filling in for any step or hook that didn't
+  declare its own timeout, last call winning as in cucumber-js. Never
+  calling it leaves steps unbounded rather than adopting cucumber's
+  5-second default: a suite shouldn't start failing for slow steps because
+  it migrated.
+- `BeforeAll` / `AfterAll`, bracketing the whole run, with `{ timeout }` if
+  you pass one. They run only when at least one scenario was selected, take
+  no `tags`, and get no World (`this`) — none exists yet when `BeforeAll`
+  runs. `BeforeAll` stops at its first failure and no scenario runs;
+  `AfterAll` is attempted anyway, every registration runs even if a sibling
+  threw, and teardown unwinds in reverse registration order.
 
 ### What the switch does not carry
 
 Eight public cucumber-js suites were audited against this door, their glue
-read as text and never run. **None of them ran on the import switch alone**,
-so budget a short pass before it. Everything below fails loudly — at the
-import, or on the first `nuka run` — so the pass is a list you can work
-through, not a hunt.
+read as text and never run. **When that audit ran, none of them went
+through on the import switch alone.** Supporting the most common blockers
+it found has since brought two of the eight to where nothing in their glue
+is rejected any more; the other six still need a short pass first. (Read as
+a static claim, which is what it is: their glue no longer contains anything
+this door turns away. Nobody ran those suites.) Everything below fails
+loudly — at the import, or on the first `nuka run` — so the pass is a list
+you can work through, not a hunt.
 
-- **Names `nukadoko/compat` does not export**: `BeforeAll`, `AfterAll`,
-  `setDefaultTimeout`, `AfterStep`, `Status`, `setParallelCanAssign`, and
-  the `IWorldOptions` / `ITestCaseHookParameter` types. All eight suites
-  imported at least one of them. An ES module's named import is resolved at
-  link time, so a single unsupported name takes its whole import statement —
-  and with it the file — down; split the import or drop the call.
+- **Names `nukadoko/compat` does not export**: `AfterStep`, `Status`,
+  `setParallelCanAssign`, and the `IWorldOptions` /
+  `ITestCaseHookParameter` types. An ES module's named import is resolved
+  at link time, so a single unsupported name takes its whole import
+  statement — and with it the file — down; split the import or drop the
+  call. (`BeforeAll`, `AfterAll` and `setDefaultTimeout` were on this list
+  when the audit ran and are now supported; see below.)
 - **CommonJS glue**: nukadoko is ESM-only, so `require("nukadoko/compat")`
   fails outright with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Two of the eight
   suites are CommonJS throughout. The door admits ES module glue only.
@@ -145,3 +161,6 @@ replaced), and the suite is a plain cucumber-js suite again.
   fields never appear in `world.reads`/`world.writes`, by construction.
 - Declared attachment file contents are not redacted — the same honest
   limit traces and screenshots already have.
+- A `BeforeAll`/`AfterAll` failure is reported on stderr and in the exit
+  code only. Records are written per scenario, and these hooks belong to no
+  scenario, so there is nowhere yet for a run-level one to go.

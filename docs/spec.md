@@ -274,6 +274,13 @@ import { Given, When, Then } from "nukadoko/compat";
   only — anything fancier fails loudly rather than mismatching silently —
   appear in the scenario record's `hooks` array rather than as receipts,
   and their network traffic sits outside any step's boundary.
+  `BeforeAll`/`AfterAll` bracket the whole run instead of a scenario — no
+  tags, no World, skipped entirely when no scenario was selected — and
+  report through the exit code, since a record is a scenario-shaped thing
+  and these belong to no scenario. `setDefaultTimeout` supplies the default
+  for anything that didn't declare its own; leaving it uncalled keeps steps
+  unbounded rather than importing cucumber's five-second ceiling, which
+  would fail slow suites for no reason but migrating.
 - The World is measured, always: every compat step's receipt records
   which World keys it read and wrote, in access order — the data flow
   `this.foo` used to hide. The measured surface is the bag's own data
@@ -292,8 +299,10 @@ import { Given, When, Then } from "nukadoko/compat";
   step to `defineStep` is the upgrade, one step at a time.
 - The door's width is measured, not asserted. Eight public cucumber-js
   suites were audited against it — their glue read as text, never run — and
-  none of them ran on the import switch alone; what each needed first is
-  enumerated in [docs/migration.md](migration.md). The rule that follows,
+  none of them ran on the import switch alone at the time, and closing the
+  blockers it found has since brought two of the eight to where nothing in
+  their glue is rejected; what the rest still need is enumerated in
+  [docs/migration.md](migration.md). The rule that follows,
   and that the audit's findings were spent on: whatever compat does not
   support must fail at the import or on the first run, never quietly. A
   migrating team can act on a loud failure and cannot see a silent one, so
