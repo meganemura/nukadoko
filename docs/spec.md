@@ -461,6 +461,13 @@ file format, readable by Allure 2 and 3):
   repairing or writing a scenario, and that scenario run is what Allure
   shows.
 - Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
+- Alongside Allure, `nuka run` will emit the cucumber messages protocol
+  (NDJSON, `@cucumber/messages` — already a dependency): every modern
+  cucumber formatter consumes messages, so the official HTML report, JUnit
+  XML for CI, and third-party consumers come for free. A migrating team's
+  report pipeline is a working asset, and the migration door must not
+  break it; Allure stays the flagship because receipts and evidence map
+  richer than the standard vocabulary carries.
 
 ## Self-healing, audited
 
@@ -519,8 +526,10 @@ nuka skill path|install       install the agent-facing skill
   sessions/environments, `check`, `init`. Secrets onboarding redesigned.
 - **M2 — compat API**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
-- **M3 — Allure emitter**: allure-results for scenario runs; drop-in
-  dashboard story.
+- **M3 — reporting interop**: a cucumber messages (NDJSON) emitter for
+  scenario runs — the compatibility surface that keeps a migrating team's
+  existing formatters, JUnit-based CI, and HTML reports working — plus the
+  allure-results emitter as the flagship dashboard.
 - **M4 — sign-off**: records, machine checks, CI tripwire recipe.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),

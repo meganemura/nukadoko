@@ -364,6 +364,10 @@ nukadoko の唯一の presentation 層は `allure-results` ディレクトリで
   探索が証明することは、scenario を修復するか新しく書くことで表現され、その scenario の実行こそが Allure に表示されるものです。
 - 表示、履歴、傾向、flakiness はすべて Allure の仕事です。
   nukadoko に web UI はありません。
+- Allure と並んで、`nuka run` は cucumber messages プロトコル(NDJSON、`@cucumber/messages` — 既に依存に入っています)を出力する予定です。
+  現代の cucumber の formatter はすべて messages を消費するため、公式の HTML レポート、CI 向けの JUnit XML、サードパーティの消費者が無料で付いてきます。
+  移行するチームのレポート配管は「動いている資産」であり、移行の扉がそれを壊してはなりません。
+  Allure が旗艦であり続けるのは、receipt と evidence のマッピングが標準語彙の運べる範囲より濃いからです。
 
 ## Self-healing(監査付き)
 
@@ -420,7 +424,7 @@ nuka skill path|install       install the agent-facing skill
 - **M1(engine core)**: `defineStep`、`do`、pickle に対する `run`、receipt、session/environment、`check`、`init`。
   secret のオンボーディングは再設計されました。
 - **M2(compat API)**: `nukadoko/compat`(Given/When/Then/World/hooks のサブセット)、cucumber-js + Playwright のスイート向け移行ガイド。
-- **M3(Allure emitter)**: scenario の実行のための allure-results。
+- **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)エミッタ(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results エミッタ。
   drop-in なダッシュボードのストーリー。
 - **M4(sign-off)**: 記録、機械チェック、CI トリップワイヤのレシピ。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
