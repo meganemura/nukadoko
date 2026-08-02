@@ -14,9 +14,8 @@ import {
 } from "allure-js-commons/sdk/reporter";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../../cli/writable-sink.js";
-import { readReceipt } from "../../receipt/read-receipt.js";
-import type { Receipt } from "../../receipt/types.js";
 import type { ScenarioRecord } from "../../run/record-types.js";
+import { readReceiptsForRecord } from "../receipts.js";
 import { redactString } from "../../secrets/redact.js";
 import type { SecretSet } from "../../secrets/types.js";
 import { buildCategories } from "./categories.js";
@@ -40,13 +39,12 @@ import { createAtomicWriter } from "./writer.js";
 // this task (this task's spec: "スキーマの変更をしない方針を優先").
 //
 // AllureEmitterOptions carries no `stateDir` of its own (this task's spec,
-// decision 12 pins its exact shape). A step's receipt directory is instead
-// derived from `record.evidence.dir` (`"<stateDir>/scenarios/<scenarioId>"`,
-// src/run/run-scenario.ts:431): two levels up is the same `<stateDir>` every
-// step receipt in this run was written under
-// (`<stateDir>/receipts/<receiptId>`, run-scenario.ts:854/941). Deriving it
-// from a value the record already carries — rather than growing the pinned
-// options shape — keeps decision 12's own interface untouched.
+// decision 12 pins its exact shape): `readReceiptsForRecord`
+// (src/report/receipts.ts, m3c-messages-emitter task spec, decision 2 —
+// pulled up from this file's own `receiptsForRecord`, now shared with
+// src/report/messages/emitter.ts) derives a step's receipt directory from
+// `record.evidence.dir` instead, keeping decision 12's own interface
+// untouched.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -110,17 +108,6 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   const categories: Category[] = buildCategories();
   const runtime = new ReporterRuntime({ writer, categories, environmentInfo });
 
-  function receiptsForRecord(record: ScenarioRecord): ReadonlyMap<string, Receipt | null> {
-    const receiptsDir = path.join(options.rootDir, path.dirname(path.dirname(record.evidence.dir)), "receipts");
-    const receipts = new Map<string, Receipt | null>();
-    for (const step of record.steps) {
-      if (step.receipt !== null && !receipts.has(step.receipt)) {
-        receipts.set(step.receipt, readReceipt(path.join(receiptsDir, step.receipt)));
-      }
-    }
-    return receipts;
-  }
-
   function toAbsolute(relativePath: string): string {
     return path.join(options.rootDir, relativePath);
   }
@@ -180,7 +167,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       try {
         const { record, gherkinDocument, pickle, relativeFeaturePath } = input;
         const posixPath = toPosixPath(relativeFeaturePath);
-        const receipts = receiptsForRecord(record);
+        const receipts = readReceiptsForRecord(options.rootDir, record);
         const mapped = mapScenario({ record, receipts, gherkinDocument, pickle, posixPath });
 
         // The scenario's own overall status is the worst of every step and

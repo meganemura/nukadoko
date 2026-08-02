@@ -11,6 +11,7 @@ import type {
 import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { ErrorKind, Receipt } from "../../receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
+import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module
 // (m3b-allure-emitter task spec, decision 2's own words: "map-scenario.ts
@@ -332,31 +333,12 @@ function dedupeLinks(links: readonly MappedLink[]): MappedLink[] {
 // --- declared attachments/logs/links/labels (this task's spec, decisions
 // 4, 6-7) — shared by both a step's own `receipt.declared` and a hook's own
 // `record.hooks[].declared`, same shape either way. ---
-
-// The reverse of src/compat/declared.ts's own `EXTENSION_BY_MEDIA_TYPE`
-// (this task's spec: "参考にしてよいが、あのモジュールを変更しない") —
-// duplicated rather than imported so this module's own import list stays
-// limited to plain data modules; the pair only needs to agree on a handful
-// of common extensions, not stay byte-identical.
-const MEDIA_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
-  ".txt": "text/plain",
-  ".html": "text/html",
-  ".csv": "text/csv",
-  ".json": "application/json",
-  ".xml": "application/xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".svg": "image/svg+xml",
-};
-
-function contentTypeForFileName(fileName: string): string {
-  const dot = fileName.lastIndexOf(".");
-  if (dot === -1) {
-    return "application/octet-stream";
-  }
-  const extension = fileName.slice(dot).toLowerCase();
-  return MEDIA_TYPE_BY_EXTENSION[extension] ?? "application/octet-stream";
-}
+//
+// `contentTypeForFileName` (and the extension table backing it) now lives in
+// src/report/media-type.ts (m3c-messages-emitter task spec, decision 2):
+// src/report/messages/map-scenario.ts needs the identical lookup, so it was
+// pulled up rather than becoming a third copy. Behavior here is unchanged —
+// only the import moved.
 
 function joinRelative(dir: string, fileName: string): string {
   return `${dir.replace(/\/+$/, "")}/${fileName}`;
