@@ -143,14 +143,19 @@ export default defineStep({
 
 **M2: a compat door.** The migration path for an existing Cucumber +
 Playwright suite is switching one import — `nukadoko/compat` in place of
-`@cucumber/cucumber` — keeping the same pattern syntax and World working
-while nukadoko's harness starts measuring receipts underneath it: unchanged
-code, one line of diff. Promoting a step to `defineStep` is then a per-step
-decision instead of a rewrite, and the door swings back — switching the
-import again returns to plain cucumber-js. See
-[docs/migration.md](docs/migration.md) for the step-by-step guide, and
-[examples/migration](examples/migration) for a worked example running end
-to end.
+`@cucumber/cucumber` — keeping the same pattern syntax, hooks, and World
+working while nukadoko's harness starts measuring receipts underneath them.
+How much else has to change was measured rather than assumed: against eight
+public cucumber-js suites, none went through on the import alone. Each
+needed a short mechanical pass first — a few imports `nukadoko/compat`
+doesn't export, and for CommonJS suites a module-format change — and every
+one of those blockers fails at the import or the first run instead of
+quietly changing what the suite does. Promoting a step to `defineStep` is
+then a per-step decision instead of a rewrite, and the door swings back —
+switching the import again returns to plain cucumber-js. See
+[docs/migration.md](docs/migration.md) for the step-by-step guide, the
+audit's findings included, and [examples/migration](examples/migration) for
+a worked example running end to end.
 
 **M3 (designed, not implemented): reports fill themselves.** A classic
 Cucumber run shows the evidence a team wired up itself — hook boilerplate

@@ -5,8 +5,9 @@
 Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
 `check`/`init`/`scaffold`, sessions, environments, secrets. M2 (compat,
 below) is implemented too — `nukadoko/compat`, typed World measurement, and
-a migration guide. Pre-0.1: the real-world validation gate (below,
-Implementation notes) is still ahead, and M3+ (Allure/messages emitters,
+a migration guide. Both real-world gates have now been run — typed steps
+drafted against real feature files, and the compat door audited against
+real cucumber-js glue (below). Pre-0.1, and M3+ (Allure/messages emitters,
 sign-off) exist only as design.
 
 ## What nukadoko is
@@ -245,7 +246,11 @@ import { Given, When, Then } from "nukadoko/compat";
   the scenario decides at run time, exactly as in Cucumber. Patterns are
   strings (plain cucumber-expressions — named captures are not required
   here; that discipline belongs to typed steps) or RegExp, since legacy
-  glue is regex-heavy and the door must admit it. Discovery imports the
+  glue is regex-heavy and the door must admit it. Both call shapes
+  cucumber-js accepts are accepted — `Given(pattern, fn)` and
+  `Given(pattern, { timeout }, fn)`, the timeout honored — and an
+  unrecognized option key throws at registration rather than disappearing.
+  Discovery imports the
   files and attributes each registration to the file that made it; a
   compat step's identity is its pattern text, `nuka steps` lists it with
   its kind, `nuka describe` shows the contract it doesn't have, and
@@ -263,10 +268,12 @@ import { Given, When, Then } from "nukadoko/compat";
   cookies and all. Tables arrive as a thin, dependency-free `DataTable`
   (raw/rows/hashes/rowsHash/transpose), because `table.hashes()` glue
   must not break on an import switch; docstrings stay plain strings.
-  Before/After hooks filter on `@tag` / `not @tag` only — anything
-  fancier fails loudly rather than mismatching silently — appear in the
-  scenario record's `hooks` array rather than as receipts, and their
-  network traffic sits outside any step's boundary.
+  Before/After hooks may be written any of the three ways cucumber-js
+  accepts (`Before(fn)`, `Before({ tags }, fn)`, `Before("@tag", fn)`),
+  receive cucumber's own hook parameter, filter on `@tag` / `not @tag`
+  only — anything fancier fails loudly rather than mismatching silently —
+  appear in the scenario record's `hooks` array rather than as receipts,
+  and their network traffic sits outside any step's boundary.
 - The World is measured, always: every compat step's receipt records
   which World keys it read and wrote, in access order — the data flow
   `this.foo` used to hide. The measured surface is the bag's own data
@@ -283,6 +290,15 @@ import { Given, When, Then } from "nukadoko/compat";
 - What compat steps lack: typed contracts, a validated `result` in the
   receipt, single-step CLI execution, and Then enforcement. Promoting a hot
   step to `defineStep` is the upgrade, one step at a time.
+- The door's width is measured, not asserted. Eight public cucumber-js
+  suites were audited against it — their glue read as text, never run — and
+  none of them ran on the import switch alone; what each needed first is
+  enumerated in [docs/migration.md](migration.md). The rule that follows,
+  and that the audit's findings were spent on: whatever compat does not
+  support must fail at the import or on the first run, never quietly. A
+  migrating team can act on a loud failure and cannot see a silent one, so
+  a gap that changes behavior without saying so costs more trust than the
+  missing feature ever cost time.
 - Standing design rule, for this section and every future design that
   touches migration: a compat asset that works today must not stop working
   because the team adopted nukadoko or moved some other piece toward the
@@ -603,4 +619,7 @@ nuka skill path|install       install the agent-facing skill
   from the state directory, so TAB stays fast regardless of vocabulary size.
 - The first real-world validation gate (before M2 is designed in detail):
   bind ~10 real feature files and measure whether reviewing AI-drafted typed
-  steps actually beats writing glue by hand.
+  steps actually beats writing glue by hand. Run against 11 feature files
+  from seven public projects; the answer was yes in six of the seven. The
+  second gate measured the compat door rather than the typed one, and is
+  reported under Compat steps above.

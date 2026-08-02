@@ -42,19 +42,46 @@ Everything below that import keeps working, unchanged:
 
 - string and RegExp patterns, matched exactly as cucumber-js matches them
   (no named-capture requirement — that discipline belongs to typed steps).
-- a `World` (`this`); `Before`/`After` hooks filtered by a single `@tag` or
-  `not @tag`; custom `setWorldConstructor` subclasses.
+- both registration shapes: `Given(pattern, fn)` and
+  `Given(pattern, { timeout }, fn)`, with that timeout honored.
+- a `World` (`this`); `Before`/`After` hooks written any of the three ways
+  cucumber-js accepts — `Before(fn)`, `Before({ tags }, fn)`, or the
+  bare-string `Before("@tag", fn)` — filtered by a single `@tag` or
+  `not @tag`; custom `setWorldConstructor` subclasses. A hook receives
+  cucumber's hook parameter, so `Before(function ({ pickle }) {...})` works
+  as written.
 - `DataTable` — `raw()`/`rows()`/`hashes()`/`rowsHash()`/`transpose()` — a
   step calling `table.hashes()` keeps working exactly as written (zero
   friction, measured migrating examples/migration's own suite).
 - `allure.*` calls (`attach`/`log`/`link`, labels, parameters) inside
   glue — they land in the receipt's `declared` field, not vanishing.
 
-Some things fail loudly instead of silently misbehaving: `BeforeAll`,
-`AfterAll`, and `setDefaultTimeout` aren't exported by `nukadoko/compat` at
-all, so importing any of them raises an immediate error naming the missing
-export. A hook's tag expression beyond a single `@tag`/`not @tag` (`and`/
-`or`/parentheses) fails the same way, the moment you `nuka run`.
+### What the switch does not carry
+
+Eight public cucumber-js suites were audited against this door, their glue
+read as text and never run. **None of them ran on the import switch alone**,
+so budget a short pass before it. Everything below fails loudly — at the
+import, or on the first `nuka run` — so the pass is a list you can work
+through, not a hunt.
+
+- **Names `nukadoko/compat` does not export**: `BeforeAll`, `AfterAll`,
+  `setDefaultTimeout`, `AfterStep`, `Status`, `setParallelCanAssign`, and
+  the `IWorldOptions` / `ITestCaseHookParameter` types. All eight suites
+  imported at least one of them. An ES module's named import is resolved at
+  link time, so a single unsupported name takes its whole import statement —
+  and with it the file — down; split the import or drop the call.
+- **CommonJS glue**: nukadoko is ESM-only, so `require("nukadoko/compat")`
+  fails outright with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Two of the eight
+  suites are CommonJS throughout. The door admits ES module glue only.
+- **Deep subpath imports** such as
+  `import DataTable from "@cucumber/cucumber/lib/models/data_table"` have no
+  equivalent here; import `DataTable` from `nukadoko/compat` instead.
+- **A hook's tag expression beyond a single `@tag` / `not @tag`** (`and`,
+  `or`, parentheses) fails the moment you `nuka run`.
+- **Returning `"pending"` or `"skipped"`** from a step or hook, and
+  **done-callback glue** (`function (arg, done) {...}`), each fail with a
+  message naming what to write instead. cucumber-js gives both of these
+  meaning; nukadoko does not, and says so rather than passing the step.
 
 Run the suite with `nuka run features/your.feature`. Every step gets a
 receipt; nothing else has to change for that to start happening.
