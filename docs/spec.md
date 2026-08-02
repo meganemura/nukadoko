@@ -8,7 +8,8 @@ below) is implemented too — `nukadoko/compat`, typed World measurement, and
 a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter and the
-messages emitter are both implemented, while sign-off exists only as design.
+messages emitter are both implemented, while sign-off and the skills exist
+only as design — `nuka skill` has no implementation yet.
 
 ## What nukadoko is
 
@@ -789,6 +790,18 @@ nuka skill path|install       install the agent-facing skill
   allure-results emitter as the flagship dashboard.
 - **M4 — sign-off**: `nuka accept`, the commit and cleanliness checks it
   refuses on, and the frozen record written beside the feature.
+- **M5 — skills**: `nuka skill path|install`, and the skills it ships. The
+  CLI is deliberately a set of small verbs; a skill is what turns them into
+  a workflow an agent can follow without being told, and none of it changes
+  the engine. Two are planned. The **acceptance skill** drives the
+  acceptance loop end to end — criteria in, vocabulary read with `steps`
+  and `describe`, missing operations scaffolded and implemented, the
+  scenario written, then `run` until green and `accept` (needs M4). The
+  **migration skill** carries what the compat audit measured: the gaps a
+  real cucumber-js suite actually hits, in the order they bite rather than
+  the order they are documented (needs only M2, so it can come first).
+  Until this milestone lands, "the bundled skill" referred to above does
+  not exist.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
