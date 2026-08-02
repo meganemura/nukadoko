@@ -437,6 +437,9 @@ nuka skill path|install       install the agent-facing skill
 
 - 予定されているランタイム依存: `@cucumber/gherkin`、`@cucumber/cucumber-expressions`、`playwright`、`zod`、`tsx`(実行時の TS インポート)、CLI フレームワークは TBD。
   Node は 20 以上。
+- 形式やプロトコルに公式の SDK があるときは、nukadoko は形式を再実装せず、その SDK を通して書きます(allure-results は allure-js-commons の reporter 機構を、cucumber messages は `@cucumber/messages` を通して)。
+  nukadoko 自身はその上の薄い写像層に留まります。
+  公式機構の一部を上書きするのは、具体的な必要が現れたときに行う計測された判断であって、既定の選択ではありません。
 - id の形式: `<kind>-<timestamp>-<short random>`。
 - `nuka steps` と `nuka describe` は step モジュールをインポートします(compat の登録と pattern を集めるにはそれが必要だからです)。
   インポートはファイルのトップレベルのコードを実行するため、実行時と同じ注意が必要です。

@@ -548,6 +548,12 @@ nuka skill path|install       install the agent-facing skill
 - Planned runtime dependencies: `@cucumber/gherkin`,
   `@cucumber/cucumber-expressions`, `playwright`, `zod`, `tsx` (runtime TS
   import), CLI framework TBD. Node >= 20.
+- When a format or protocol has an official SDK, nukadoko writes through it
+  rather than reimplementing the format — allure-results through
+  allure-js-commons' reporter machinery, cucumber messages through
+  `@cucumber/messages` — and stays a thin mapping layer on top. Overriding
+  a piece of the official machinery is a measured decision taken when a
+  concrete need appears, never the default.
 - id format: `<kind>-<timestamp>-<short random>`.
 - `nuka steps` and `nuka describe` import step modules — collecting compat
   registrations and patterns requires it — and importing executes a file's
