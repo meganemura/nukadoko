@@ -466,8 +466,15 @@ file format, readable by Allure 2 and 3):
   cucumber formatter consumes messages, so the official HTML report, JUnit
   XML for CI, and third-party consumers come for free. A migrating team's
   report pipeline is a working asset, and the migration door must not
-  break it; Allure stays the flagship because receipts and evidence map
-  richer than the standard vocabulary carries.
+  break it.
+- The two outputs differ in what fills them, not in format politics. A
+  classic cucumber run fills an Allure report only where glue authors
+  hand-attached evidence; nukadoko's harness measures everything anyway —
+  validated results, traces, HTTP logs, observed writes, environment and
+  version — and Allure's model (attachments, labels, parameters) has a
+  first-class place for all of it. The messages stream says what any
+  cucumber run can say; the Allure emitter is where nukadoko's
+  measurement surplus becomes visible, automatically.
 
 ## Self-healing, audited
 
