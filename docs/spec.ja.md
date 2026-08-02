@@ -195,6 +195,21 @@ import { Given, When, Then } from "nukadoko/compat";
   登録を config へ移してもどの pattern のマッチも変わらないことが、この移動を早く安全に行えるものにしています。
   `nuka check` は support 由来の登録を警告として列挙します。
   config が、それらの引退先です。
+- 実行は、扉の約束を 2 つの方法で守ります。
+  自前で Playwright を起動する glue は計測されないまま動き続けます。
+  一方で `await this.openPage()` / `await this.openRequest()` は harness の計測される page と request を渡します(混在 scenario の typed step と同じ context を共有し、cookie も共通です)。
+  table は依存ゼロの薄い `DataTable`(raw / rows / hashes / rowsHash / transpose)として届きます。
+  `table.hashes()` を呼ぶ glue が import の差し替えで壊れてはならないからです。
+  docstring は素の string のままです。
+  Before / After フックのタグ絞り込みは `@tag` と `not @tag` のみで、それ以上の式は黙って誤マッチする代わりに大きな声で失敗します。
+  フックは receipt ではなく scenario record の `hooks` 配列に現れ、フック中のネットワークはどの step の境界にも属しません。
+- World は常に計測されます。
+  すべての compat step の receipt は、その step が World のどのキーを読み書きしたかをアクセス順で記録します(`this.foo` が隠していたデータフローです)。
+  計測面はバッグの own データプロパティです。
+  `#private` の状態は構造上そこに現れません(バグではなく、名前の付いた境界です)。
+  `defineWorld({ key: zodSchema })` はキー単位で検証を有効にし(スキーマに失敗した書き込みは step の失敗であり、write としては記録されません)、`class MyWorld extends defineWorld({...})` で `this` に型が付きます。
+  cucumber 自身の `attach` / `log` / `link` / `parameters` は予約キーです。
+  計測されず、宣言もできず、上書きは黙った破壊の代わりにエラーになります。
 - harness がブラウザと request のオブジェクトを所有しているため、compat の step もコードを一切変更せずに、計測済みの receipt(status、timing、trace、screenshots、HTTP log)をすでに得られます。
 - compat の step に欠けているのは、型付きの契約、receipt 内でバリデーションされた `result`、単体 step の CLI 実行、そして Then の強制です。
   よく使う step を `defineStep` に昇格させることが、1 step ずつ進めるアップグレードです。

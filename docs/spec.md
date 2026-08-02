@@ -254,6 +254,27 @@ import { Given, When, Then } from "nukadoko/compat";
   changes nothing about what any pattern matches, which is what makes the
   move safe to take early. `nuka check` lists support-origin registrations
   as warnings: config is where they retire to.
+- Execution keeps the door's promise two ways: glue that launches its own
+  Playwright keeps working, unmeasured, while `await this.openPage()` /
+  `await this.openRequest()` hand out the harness's measured page and
+  request — the same context a mixed scenario's typed steps share,
+  cookies and all. Tables arrive as a thin, dependency-free `DataTable`
+  (raw/rows/hashes/rowsHash/transpose), because `table.hashes()` glue
+  must not break on an import switch; docstrings stay plain strings.
+  Before/After hooks filter on `@tag` / `not @tag` only — anything
+  fancier fails loudly rather than mismatching silently — appear in the
+  scenario record's `hooks` array rather than as receipts, and their
+  network traffic sits outside any step's boundary.
+- The World is measured, always: every compat step's receipt records
+  which World keys it read and wrote, in access order — the data flow
+  `this.foo` used to hide. The measured surface is the bag's own data
+  properties; `#private` state never appears there, by construction — a
+  named boundary, not a bug. `defineWorld({ key: zodSchema })` opts
+  individual keys into validation (a write that fails its schema fails
+  the step and is never recorded as a write) and types `this` via
+  `class MyWorld extends defineWorld({...})`. Cucumber's own
+  `attach`/`log`/`link`/`parameters` are reserved: never measured, never
+  declarable, and clobbering one is an error instead of a silent break.
 - Because the harness owns the browser and request objects, compat steps
   already get measured receipts — status, timing, trace, screenshots, HTTP
   log — with zero code change.
