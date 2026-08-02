@@ -24,6 +24,28 @@ Feature: Projects
 
 nukadoko runs those same files. What changes is the code behind them.
 
+## Agent-first is a design constraint, not a slogan
+
+An agent must be able to complete the whole loop unassisted: discover the
+vocabulary (`nuka steps --json`), read a contract (`nuka describe`, schemas
+as JSON Schema), execute one step (`nuka do`, receipt on stdout, meaningful
+exit code), read the validated result, and decide the next call. When the
+vocabulary lacks an operation, the agent scaffolds and implements a new step
+and a human reviews the PR.
+
+That constraint is what produced most of the design. A step has to be
+runnable alone, so its dependencies must appear in its signature rather than
+on a World — which is also why `this.foo` stops being a place to hide data
+flow. A result has to be readable by the next call, so it has to be
+validated rather than discarded. An agent's report of a run cannot be the
+record of it, so the tool writes the receipt. None of these were built for
+agents and then justified for humans; they are the same properties either
+way, and a suite that an agent can drive turns out to be a suite a person
+can debug.
+
+Everything prefers machine-readable output. Human prettiness is delegated to
+Allure.
+
 ## Status
 
 **Pre-0.1, and this is version 0.0.1** — the first published one. The
@@ -50,6 +72,12 @@ npx nuka steps         # the vocabulary, empty until you add a step
 nukadoko is a devDependency: it ships its own TypeScript source alongside
 `dist/`, so stack traces land on real code and an agent reading
 `node_modules` can see why a thing works, not just its type.
+
+**Starting from nothing rather than migrating?** Skip the compat door
+entirely. Write `defineStep`s directly (see [Before / after](#before--after))
+and let the `acceptance` skill carry a ticket's criteria through to a
+committed record. Nothing in the typed path assumes a cucumber-js suite came
+first — the compat sections below are for suites that already exist.
 
 ## What it fixes
 
@@ -166,6 +194,39 @@ running our own stream through `@cucumber/junit-xml-formatter`, not just
 asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
 [Messages emitter](docs/spec.md#messages-emitter).
 
+## Self-healing, with the deviation on the record
+
+A scripted scenario breaks because the app changed, not because the test was
+wrong. The repair loop nukadoko is built for:
+
+1. An agent re-runs the goal adaptively through `nuka do`, one step at a
+   time, reading each receipt to decide the next call. It is not replaying
+   the broken scenario; it is finding out what works now.
+2. Those receipts record the sequence that actually worked — which, by
+   definition, deviates from the scripted one. They are the narrative of the
+   repair, not its proof, and the agent cites them in the PR as exactly
+   that.
+3. The PR updates the typed steps or the feature file, and its proof is the
+   repaired scenario running green: a scenario record and its receipts,
+   reviewed like any other change.
+
+The point is step 2. **Self-healing without an audit trail is how a suite
+silently stops testing anything** — a scenario quietly rewritten to match
+whatever the app now does still passes, and nobody can see that the thing it
+used to check is gone. Here the deviation is a record a reviewer reads, and
+attestation always flows through the scenario rather than an ad-hoc
+sequence.
+
+nukadoko's contribution is that every stage leaves a record. The authoring is
+an agent workflow (the bundled skills, below), not engine magic. See
+[Self-healing, audited](docs/spec.md#self-healing-audited).
+
+What this loop does **not** catch is the other way a suite goes hollow: a
+scenario left intact while its `Then` quietly gets weaker. A receipt records
+what the execution did, not whether an assertion still means anything — that
+one stays with review, and [What this does not do](#what-this-does-not-do)
+says so plainly.
+
 ## Skills for coding agents
 
 nukadoko ships two skills following the
@@ -187,6 +248,14 @@ Neither skill writes down what the CLI can answer — vocabulary, contracts,
 refusal reasons all come from `nuka steps`, `nuka describe`, and stderr —
 because a skill that copies those starts lying the moment a command
 changes.
+
+What they do carry is the discipline an agent won't invent on its own: stop
+after three failed repair attempts and report where things stand instead of
+guessing further; ask once before the first run of a step whose contract
+says it mutates; never hand-edit a written record, and never delete one to
+produce a cleaner one. An agent optimizing for a green run will otherwise
+find the cheapest path to green, and the cheapest path is usually a weaker
+assertion.
 
 ## When do you reach for which command
 
@@ -257,6 +326,10 @@ access to a document you need, say so rather than assuming.
   guarantees the shape of inputs and outputs and the fact of execution —
   a typed contract makes an empty assertion easier to spot in review, but
   nothing rejects one automatically.
+- **Mutation observation sees network writes only.** A Then-position step
+  that writes over HTTP fails on the measurement. Purely client-side state,
+  or a server that mutates on a GET, is invisible to it — the `mutates`
+  declaration and review carry those cases.
 - **CommonJS suites cannot use `nukadoko/compat`** without a module-format
   change first (above).
 - No test parallelism, sharding, retries, or CI reporting. No HTML
