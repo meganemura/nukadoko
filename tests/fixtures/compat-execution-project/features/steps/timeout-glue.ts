@@ -3,7 +3,7 @@ import { Given, When } from "../../nukadoko-compat-shim.js";
 // m21b-compat-execution task spec, item 2: a compat step's own `{ timeout }`
 // is now actually enforced (previously kept but never applied). The first
 // step below sleeps well past its own timeout — the point is that
-// `{ timeout }` cuts the wait short at 20ms, not that the 500ms sleep itself
+// `{ timeout }` cuts the wait short at 20ms, not that its own longer sleep
 // ever completes (the honest limitation this task's spec, item 2 documents:
 // the sleep keeps running in the background regardless).
 
@@ -12,11 +12,14 @@ function sleep(ms: number): Promise<void> {
 }
 
 // Outlives its own 20ms timeout — always fails, promptly, at ~20ms, never
-// at 2000ms (tests/compat-execution.test.ts asserts the elapsed wall time
-// to prove this; the gap to 2000ms is deliberately wide so that ordinary
-// process/discovery overhead can never make the assertion flaky).
+// at 5000ms (tests/compat-execution.test.ts asserts the elapsed wall time to
+// prove this; the gap to 5000ms is deliberately wide — m4a-probe-cost task
+// spec, decision 2: raised from an original 2000ms so the passing assertion
+// itself can use a threshold far below both numbers without going flaky
+// under parallel-worker load — so that ordinary process/discovery overhead
+// can never make the assertion flaky).
 Given("a legacy step that outlives its own timeout", { timeout: 20 }, async function () {
-  await sleep(2000);
+  await sleep(5000);
 });
 
 // 12345ms is a distinctive, otherwise-unlikely-to-collide timeout value

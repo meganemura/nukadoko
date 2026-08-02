@@ -45,12 +45,16 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const elapsedMs = Date.now() - startedAt;
 
       expect(exitCode).toBe(1);
-      // The glue's own sleep is 2000ms; a run that actually waited for it
-      // would take at least that long. The 1200ms bound leaves generous
-      // headroom over ordinary CLI/discovery overhead while still being far
-      // short of 2000ms, so this proves the 20ms timeout — not the glue's
-      // own duration — is what this scenario waited on.
-      expect(elapsedMs).toBeLessThan(1200);
+      // The glue's own sleep is 5000ms (m4a-probe-cost task spec, decision
+      // 2: raised from an original 2000ms precisely so this bound could stay
+      // generous without chasing 5000ms too); a run that actually waited for
+      // it would take at least that long. The 3000ms bound leaves generous
+      // headroom over ordinary CLI/discovery overhead — even under the
+      // parallel-worker contention a full `vitest run` puts on process
+      // startup — while still being far short of 5000ms, so this proves the
+      // 20ms timeout — not the glue's own duration — is what this scenario
+      // waited on.
+      expect(elapsedMs).toBeLessThan(3000);
 
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("failed");
