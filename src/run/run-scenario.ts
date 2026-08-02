@@ -1,9 +1,14 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { PickleStepType, type Pickle } from "@cucumber/messages";
+import { PickleStepType, type Pickle, type PickleStep } from "@cucumber/messages";
 import { formatValidationIssues } from "../binding/format-issues.js";
+import { DataTable } from "../compat/data-table.js";
+import type { HookRegistration } from "../compat/hooks.js";
+import { hookApplies } from "../compat/tag-expression.js";
+import type { World } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
+import type { StepContext } from "../context.js";
 import { createStepContext } from "../context/create-context.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
@@ -15,7 +20,7 @@ import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
 import type { Step } from "../step/define-step.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
 
@@ -71,7 +76,11 @@ import { writeScenarioRecord } from "./write-record.js";
 // pickles; a step's own reader is wired into createStepContext's `resultOf`
 // option as a plain closure over this map, and every value-returning read is
 // reflected back afterward via `contextHandle.usedReceiptIds()` onto that
-// step's own receipt (`used`).
+// step's own receipt (`used`). Only a *typed* step's chain key ever exists
+// (compat has no Step object, and no validated result to offer — see below),
+// so this chain is exclusively typed-to-typed provenance, unchanged by this
+// slice's compat additions (m2-design.md section 6: "interop の データの橋は
+// v1 では作らない").
 //
 // Object identity survives a step file importing another step file
 // (m2pre-module-identity task spec): src/discover/discover-steps.ts loads
@@ -80,6 +89,28 @@ import { writeScenarioRecord } from "./write-record.js";
 // file's default export is the same object discovery put in this chain's
 // key space. See tests/resultof.test.ts's header comment for the
 // empirical proof this relies on.
+//
+// m2b-compat-execution task spec: this file now also runs compat steps and
+// Before/After hooks, closing m2a-compat-registry's two temporary
+// asymmetries (`buildStepBindings`/`matchPickleStep`, src/run/match-step.ts,
+// already match through compat entries; this file is where a *matched*
+// compat entry now actually executes instead of being skipped). One World
+// is constructed per pickle (item 4: "1 pickle = 1 World = 1 ctx"), shared
+// by every compat step and hook in it, wrapping the exact same `ctx` a typed
+// step's `run(ctx, args)` receives — so a typed step's `ctx.request()` and a
+// compat step's `this.request` (after `await this.openRequest()`) are the
+// identical Playwright object, cookies and all. A compat step's own
+// execution is much simpler than a typed step's: no args/returns schema,
+// so no binding-failure branch and no `chain` entry ever gets written for
+// one (`result: null` always, per docs/spec.md "Receipts": "Compat steps
+// record result: null" — regardless of what the glue function itself
+// returned). Before/After hooks run against that same World, outside any
+// step's own receipt boundary — `contextHandle.beginStep(scenarioDir)`
+// before each hook phase redirects http.jsonl logging and the `observed`
+// tally away from any step's own receipt dir (this task's spec, item 5:
+// "フック内のネットワークは step 境界外", a documented v1 limit rather than a
+// bug: a hook's own network activity is neither measured on any step's
+// receipt nor visible in the scenario record at all).
 
 /** The declared-mutates read-only refusal message (this task's spec,
  * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
@@ -137,6 +168,15 @@ export interface RunScenarioOptions {
   /** Where to persist this scenario's ending storageState, or `null` when
    * `--session` wasn't given (nothing is read or written). */
   readonly sessionFilePath: string | null;
+  /** Constructs this pickle's own World (src/discover/discover-steps.ts's
+   * `DiscoveryResult.instantiateCompatWorld`, m2b-compat-execution task spec,
+   * item 4). Called exactly once per pickle. */
+  readonly instantiateCompatWorld: (ctx: StepContext) => World;
+  /** Every registered Before/After hook (src/discover/discover-steps.ts's
+   * `DiscoveryResult.compatHooks`) — already validated for tag-expression
+   * support by the caller (cli/run.ts's setup phase); this file only
+   * filters by this pickle's own tags (this task's spec, item 5). */
+  readonly compatHooks: readonly HookRegistration[];
 }
 
 /** The Then-position + observed-write failure message (this task's spec,
@@ -170,6 +210,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     secrets,
     storageState,
     sessionFilePath,
+    instantiateCompatWorld,
+    compatHooks,
   } = options;
 
   const scenarioId = generateScenarioId();
@@ -199,7 +241,172 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   });
 
   const stepRecords: ScenarioStepRecord[] = [];
+  const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
+
+  /**
+   * Shared by the typed and compat branches below (this task's spec, item
+   * 2's asymmetry-closing and item 3's compat receipt shape): applies the
+   * Then-position and read-only *measured* demotions (identical, regardless
+   * of kind — both key off `observed.http_writes`, which every network path
+   * this ctx opens tallies into whichever kind of step opened it), records
+   * this step in `chain` when `chainKey` is given and the final status is
+   * `"ok"` (typed only — `undefined` for a compat step, this task's spec,
+   * item 4: "World は compat 同士"), then builds, redacts, and writes the
+   * receipt and this step's own scenario-record entry. A closure over this
+   * function's own `chain`/`contextHandle`/`environment`/`policy`/
+   * `targetVersion`/`session`/`scenarioId`/`secrets`, and mutates the outer
+   * `scenarioFailed`/`stepRecords` — kept as a nested function rather than
+   * a free one specifically so it can reach all of that without threading
+   * every one of those through its own parameter list.
+   */
+  async function finishExecutedStep(
+    pickleStep: PickleStep,
+    begun: { readonly receiptId: string; readonly receiptDir: string; readonly relativeReceiptDir: string },
+    stepStartedAt: Date,
+    outcomeStepName: string,
+    initialStatus: "ok" | "failed",
+    initialErrorMessage: string,
+    result: unknown,
+    rawArgs: unknown,
+    chainKey: Step | undefined,
+  ): Promise<void> {
+    let status = initialStatus;
+    let errorMessage = initialErrorMessage;
+
+    // Then-position measured enforcement (m2pre-observed task spec,
+    // decision 4) and the read-only measured backstop (m2pre-resultof task
+    // spec, decision 3) both only ever demote an otherwise-"ok" status — a
+    // step that already failed for its own reason keeps that truthful
+    // failure and message rather than being overwritten by either of
+    // these. Both key off the same `observed.http_writes` and can
+    // therefore both apply to the same occurrence at once; when they do,
+    // `errorMessage` says both rather than picking one. Applied uniformly
+    // regardless of kind (m2b-compat-execution task spec, item 6: "compat
+    // step にも実行時の観測強制がそのまま適用される").
+    const observed = contextHandle.observedCounts();
+    const usedReceiptIds = contextHandle.usedReceiptIds();
+    const demotionMessages: string[] = [];
+    if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
+      demotionMessages.push(thenObservedWritesMessage(outcomeStepName, observed.http_writes));
+    }
+    if (status === "ok" && policy === "read-only" && observed.http_writes > 0) {
+      demotionMessages.push(
+        readOnlyObservedWritesMessage(outcomeStepName, environment, observed.http_writes),
+      );
+    }
+    if (demotionMessages.length > 0) {
+      status = "failed";
+      errorMessage = demotionMessages.join("; ");
+    }
+
+    // Only a step whose *final* status is "ok" ever becomes readable via
+    // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
+    if (status === "ok" && chainKey !== undefined) {
+      chain.set(chainKey, { result, receiptId: begun.receiptId });
+    }
+
+    const stepFinishedAt = new Date();
+    const httpLogExists = existsSync(path.join(begun.receiptDir, "http.jsonl"));
+
+    const receipt: Receipt =
+      status === "ok"
+        ? {
+            receipt_id: begun.receiptId,
+            step: outcomeStepName,
+            kind: "run",
+            args: rawArgs,
+            result,
+            status: "ok",
+            environment,
+            target_version: targetVersion,
+            session,
+            scenario: scenarioId,
+            started_at: stepStartedAt.toISOString(),
+            finished_at: stepFinishedAt.toISOString(),
+            evidence: {
+              dir: begun.relativeReceiptDir,
+              screenshots: [],
+              ...(httpLogExists ? { http: "http.jsonl" } : {}),
+            },
+            observed,
+            ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+          }
+        : {
+            receipt_id: begun.receiptId,
+            step: outcomeStepName,
+            kind: "run",
+            args: rawArgs,
+            error: { message: errorMessage },
+            status: "failed",
+            environment,
+            target_version: targetVersion,
+            session,
+            scenario: scenarioId,
+            started_at: stepStartedAt.toISOString(),
+            finished_at: stepFinishedAt.toISOString(),
+            evidence: {
+              dir: begun.relativeReceiptDir,
+              screenshots: [],
+              ...(httpLogExists ? { http: "http.jsonl" } : {}),
+            },
+            observed,
+            ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+          };
+
+    // Redacted once, as one object, same as `nuka do` (this task's spec,
+    // decision 6): receipt.json must never be able to disagree with the
+    // scenario record about what got redacted.
+    const redactedReceipt = redact(receipt, secrets) as Receipt;
+    await writeReceipt(begun.receiptDir, redactedReceipt);
+
+    if (status === "failed") {
+      scenarioFailed = true;
+    }
+    stepRecords.push({
+      text: pickleStep.text,
+      status: status === "ok" ? "passed" : "failed",
+      receipt: begun.receiptId,
+      ...(status === "failed" ? { error: { message: errorMessage } } : {}),
+    });
+  }
+
+  // --- Hooks + World (m2b-compat-execution task spec, items 4-5) ---
+  // One World per pickle, shared by every compat step and hook that runs in
+  // it, wrapping this same `contextHandle.ctx` a typed step's `run` also
+  // receives (item 4: "1 pickle = 1 World = 1 ctx").
+  const world = instantiateCompatWorld(contextHandle.ctx);
+  const pickleTags = pickle.tags.map((tag) => tag.name);
+  const beforeHooks = compatHooks.filter(
+    (hook) => hook.type === "before" && hookApplies(hook.tags, pickleTags),
+  );
+  // After hooks run in reverse registration order — cucumber-js's own
+  // convention: teardown unwinds in the opposite order setup ran in.
+  const afterHooks = compatHooks
+    .filter((hook) => hook.type === "after" && hookApplies(hook.tags, pickleTags))
+    .slice()
+    .reverse();
+
+  // Hooks get their own boundary, never a step's own receipt dir (this
+  // task's spec, item 5: "フック内のネットワークは step 境界外") — redirected
+  // to the scenario dir itself, the same place `httpLogDir` already starts
+  // out pointed at before any step's own `beginStep()` call ever runs.
+  contextHandle.beginStep(scenarioDir);
+  for (const hook of beforeHooks) {
+    try {
+      await hook.fn.call(world);
+      hookRecords.push({ type: "before", status: "ok" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      hookRecords.push({ type: "before", status: "failed", error: { message } });
+      scenarioFailed = true;
+      // Stop at the first Before failure (this task's spec, item 5: "Before
+      // 失敗 = 全 step skip"): this scenario's setup already didn't
+      // complete, so there is nothing left for a later Before hook to
+      // prepare into.
+      break;
+    }
+  }
 
   for (const pickleStep of pickle.steps) {
     if (scenarioFailed) {
@@ -271,186 +478,169 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // from this same vocabulary (match-step.ts's buildStepBindings).
         continue;
       }
-      // Temporary asymmetry (m2a-compat-registry task spec, item 7):
-      // buildStepBindings only ever binds typed vocabulary entries in this
-      // slice (see that file's own comment), so `entry` here can only ever
-      // be the "typed" branch of the union `Vocabulary` now carries — this
-      // is a type narrowing, not new run-time behavior. Compat step
-      // execution is M2's slice B.
-      if (entry.kind !== "typed") {
-        continue;
-      }
 
-      // Read-only policy, declared-mutates refusal (this task's spec, decision
-      // 3): a "never began" outcome, alongside undefined/ambiguous above — no
-      // receipt id or directory is created, and the rest of the scenario is
-      // skipped, matching cli/do.ts's own setup-phase refusal for the same
-      // policy. `mutates: false` steps are unaffected regardless of policy; the
-      // measured backstop for a *false* declaration lives further down, after
-      // the step has actually run.
-      if (policy === "read-only" && entry.step.mutates) {
-        scenarioFailed = true;
-        stepRecords.push({
-          text: pickleStep.text,
-          status: "failed",
-          receipt: null,
-          error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
-        });
-        continue;
-      }
+      if (entry.kind === "typed") {
+        // Read-only policy, declared-mutates refusal (this task's spec,
+        // decision 3): a "never began" outcome, alongside undefined/
+        // ambiguous above — no receipt id or directory is created, and the
+        // rest of the scenario is skipped, matching cli/do.ts's own
+        // setup-phase refusal for the same policy. `mutates: false` steps
+        // are unaffected regardless of policy; the measured backstop for a
+        // *false* declaration lives inside `finishExecutedStep`, after the
+        // step has actually run. A compat entry has no declared `mutates`
+        // at all (m2b-compat-execution task spec, item 2), so this check
+        // simply does not apply to one — only the measured backstop below
+        // ever catches a compat step's read-only violation.
+        if (policy === "read-only" && entry.step.mutates) {
+          scenarioFailed = true;
+          stepRecords.push({
+            text: pickleStep.text,
+            status: "failed",
+            receipt: null,
+            error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
+          });
+          continue;
+        }
 
-      // --- This step's execution has begun: a receipt is always written from
-      // here, whatever happens (mirrors cli/do.ts's own execution phase). ---
-      const receiptId = generateReceiptId();
-      const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
-      const receiptDir = path.join(rootDir, relativeReceiptDir);
-      await mkdir(receiptDir, { recursive: true });
-      contextHandle.beginStep(receiptDir);
-      began = {
-        receiptId,
-        receiptDir,
-        relativeReceiptDir,
-        stepName: outcome.stepName,
-        startedAt: new Date(),
-        rawArgs: undefined,
-      };
+        // --- This step's execution has begun: a receipt is always written
+        // from here, whatever happens (mirrors cli/do.ts's own execution
+        // phase). ---
+        const receiptId = generateReceiptId();
+        const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
+        const receiptDir = path.join(rootDir, relativeReceiptDir);
+        await mkdir(receiptDir, { recursive: true });
+        contextHandle.beginStep(receiptDir);
+        began = {
+          receiptId,
+          receiptDir,
+          relativeReceiptDir,
+          stepName: outcome.stepName,
+          startedAt: new Date(),
+          rawArgs: undefined,
+        };
 
-      const bindResult = bindStepArgs(
-        outcome.stepName,
-        outcome.captures,
-        outcome.values,
-        pickleStep.argument,
-        entry.step.args,
-      );
+        const bindResult = bindStepArgs(
+          outcome.stepName,
+          outcome.captures,
+          outcome.values,
+          pickleStep.argument,
+          entry.step.args,
+        );
 
-      const stepStartedAt = new Date();
-      let status: "ok" | "failed";
-      let result: unknown;
-      let errorMessage = "";
-      const rawArgs: unknown = bindResult.ok ? bindResult.value : bindResult.partialValue;
-      began.rawArgs = rawArgs;
+        const stepStartedAt = new Date();
+        let status: "ok" | "failed";
+        let result: unknown;
+        let errorMessage = "";
+        const rawArgs: unknown = bindResult.ok ? bindResult.value : bindResult.partialValue;
+        began.rawArgs = rawArgs;
 
-      if (!bindResult.ok) {
-        status = "failed";
-        errorMessage = bindResult.message;
-      } else {
-        const argsResult = entry.step.args.safeParse(bindResult.value);
-        if (!argsResult.success) {
+        if (!bindResult.ok) {
           status = "failed";
-          errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+          errorMessage = bindResult.message;
         } else {
-          try {
-            const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
-            const returnsResult = entry.step.returns.safeParse(runResult);
-            if (!returnsResult.success) {
-              status = "failed";
-              errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
-            } else {
-              status = "ok";
-              result = returnsResult.data;
-            }
-          } catch (error) {
+          const argsResult = entry.step.args.safeParse(bindResult.value);
+          if (!argsResult.success) {
             status = "failed";
-            errorMessage = error instanceof Error ? error.message : String(error);
+            errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+          } else {
+            try {
+              const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
+              const returnsResult = entry.step.returns.safeParse(runResult);
+              if (!returnsResult.success) {
+                status = "failed";
+                errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+              } else {
+                status = "ok";
+                result = returnsResult.data;
+              }
+            } catch (error) {
+              status = "failed";
+              errorMessage = error instanceof Error ? error.message : String(error);
+            }
           }
         }
-      }
 
-      // Then-position measured enforcement (m2pre-observed task spec, decision
-      // 4) and the read-only measured backstop (this task's spec, decision 3)
-      // both only ever demote an otherwise-"ok" status — a step that already
-      // failed for its own reason keeps that truthful failure and message
-      // rather than being overwritten by either of these. Both key off the
-      // same `observed.http_writes` and can therefore both apply to the same
-      // occurrence at once; when they do, `errorMessage` says both rather than
-      // picking one (this task's spec, decision 3).
-      const observed = contextHandle.observedCounts();
-      const usedReceiptIds = contextHandle.usedReceiptIds();
-      const demotionMessages: string[] = [];
-      if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
-        demotionMessages.push(thenObservedWritesMessage(outcome.stepName, observed.http_writes));
-      }
-      if (status === "ok" && policy === "read-only" && observed.http_writes > 0) {
-        demotionMessages.push(
-          readOnlyObservedWritesMessage(outcome.stepName, environment, observed.http_writes),
+        await finishExecutedStep(
+          pickleStep,
+          { receiptId, receiptDir, relativeReceiptDir },
+          stepStartedAt,
+          outcome.stepName,
+          status,
+          errorMessage,
+          result,
+          rawArgs,
+          entry.step,
+        );
+      } else {
+        // entry.kind === "compat" (m2b-compat-execution task spec, items
+        // 2-3): fn is called with `this = World` and positional arguments —
+        // no args/returns schema exists to validate against, so there is no
+        // binding-failure branch here the way there is for a typed step.
+        const receiptId = generateReceiptId();
+        const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
+        const receiptDir = path.join(rootDir, relativeReceiptDir);
+        await mkdir(receiptDir, { recursive: true });
+        contextHandle.beginStep(receiptDir);
+        began = {
+          receiptId,
+          receiptDir,
+          relativeReceiptDir,
+          stepName: outcome.stepName,
+          startedAt: new Date(),
+          rawArgs: undefined,
+        };
+
+        // Positional args: the matched values, then — when the pickle step
+        // carries a table or docstring — one more argument (this task's
+        // spec, item 3). The receipt's own `args` stays JSON-plain
+        // (`string[][]`/`string`); the *function call* gets a richer
+        // `DataTable` wrapping those same rows (2026-08-02 lead scope
+        // addendum: a raw `string[][]` would break existing glue calling
+        // `table.hashes()`/`.rowsHash()`, which the migration-door rule
+        // forbids) — two shapes for two different consumers of the exact
+        // same data; the DataTable object itself is never what gets
+        // serialized.
+        const positionalArgs: unknown[] = [...outcome.values];
+        const rawArgsList: unknown[] = [...outcome.values];
+        if (pickleStep.argument?.dataTable !== undefined) {
+          const rows = pickleStep.argument.dataTable.rows.map((row) =>
+            row.cells.map((cell) => cell.value),
+          );
+          positionalArgs.push(new DataTable(rows));
+          rawArgsList.push(rows);
+        } else if (pickleStep.argument?.docString !== undefined) {
+          positionalArgs.push(pickleStep.argument.docString.content);
+          rawArgsList.push(pickleStep.argument.docString.content);
+        }
+        began.rawArgs = rawArgsList;
+
+        const stepStartedAt = new Date();
+        let status: "ok" | "failed" = "ok";
+        let errorMessage = "";
+        try {
+          await entry.compat.fn.apply(world, positionalArgs);
+        } catch (error) {
+          status = "failed";
+          errorMessage = error instanceof Error ? error.message : String(error);
+        }
+
+        // `result: null` unconditionally on a non-throwing run (docs/
+        // spec.md "Receipts": "Compat steps record result: null") — never
+        // whatever `fn` itself happened to return, and no `chain` entry
+        // (compat has no validated result to make citable via
+        // `ctx.resultOf`, and no Step object to key one on).
+        await finishExecutedStep(
+          pickleStep,
+          { receiptId, receiptDir, relativeReceiptDir },
+          stepStartedAt,
+          outcome.stepName,
+          status,
+          errorMessage,
+          null,
+          rawArgsList,
+          undefined,
         );
       }
-      if (demotionMessages.length > 0) {
-        status = "failed";
-        errorMessage = demotionMessages.join("; ");
-      }
-
-      // Only a step whose *final* status is "ok" ever becomes readable via
-      // `ctx.resultOf` (this task's spec, decision 1) — a step demoted by
-      // either check just above never enters the chain, matching "only a
-      // validated result is citable" exactly.
-      if (status === "ok") {
-        chain.set(entry.step, { result, receiptId });
-      }
-
-      const stepFinishedAt = new Date();
-      const httpLogExists = existsSync(path.join(receiptDir, "http.jsonl"));
-
-      const receipt: Receipt =
-        status === "ok"
-          ? {
-              receipt_id: receiptId,
-              step: outcome.stepName,
-              kind: "run",
-              args: rawArgs,
-              result,
-              status: "ok",
-              environment,
-              target_version: targetVersion,
-              session,
-              scenario: scenarioId,
-              started_at: stepStartedAt.toISOString(),
-              finished_at: stepFinishedAt.toISOString(),
-              evidence: {
-                dir: relativeReceiptDir,
-                screenshots: [],
-                ...(httpLogExists ? { http: "http.jsonl" } : {}),
-              },
-              observed,
-              ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
-            }
-          : {
-              receipt_id: receiptId,
-              step: outcome.stepName,
-              kind: "run",
-              args: rawArgs,
-              error: { message: errorMessage },
-              status: "failed",
-              environment,
-              target_version: targetVersion,
-              session,
-              scenario: scenarioId,
-              started_at: stepStartedAt.toISOString(),
-              finished_at: stepFinishedAt.toISOString(),
-              evidence: {
-                dir: relativeReceiptDir,
-                screenshots: [],
-                ...(httpLogExists ? { http: "http.jsonl" } : {}),
-              },
-              observed,
-              ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
-            };
-
-      // Redacted once, as one object, same as `nuka do` (this task's spec,
-      // decision 6): receipt.json must never be able to disagree with the
-      // scenario record about what got redacted.
-      const redactedReceipt = redact(receipt, secrets) as Receipt;
-      await writeReceipt(receiptDir, redactedReceipt);
-
-      if (status === "failed") {
-        scenarioFailed = true;
-      }
-      stepRecords.push({
-        text: pickleStep.text,
-        status: status === "ok" ? "passed" : "failed",
-        receipt: receiptId,
-        ...(status === "failed" ? { error: { message: errorMessage } } : {}),
-      });
     } catch (error) {
       // The backstop itself (see the comment above `began`): anything that
       // threw without ever being turned into a `status`/`errorMessage` pair
@@ -504,6 +694,24 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     }
   }
 
+  // After hooks are attempted regardless of Before/step outcome (this
+  // task's spec, item 5), before dispose() so a hook can still use
+  // `this.page`/`this.request` while the browser/request context is open —
+  // redirected to the scenario's own boundary for the same reason Before
+  // hooks are, above, rather than left pointed at whichever step happened
+  // to run last.
+  contextHandle.beginStep(scenarioDir);
+  for (const hook of afterHooks) {
+    try {
+      await hook.fn.call(world);
+      hookRecords.push({ type: "after", status: "ok" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      hookRecords.push({ type: "after", status: "failed", error: { message } });
+      scenarioFailed = true;
+    }
+  }
+
   const finishedAt = new Date();
   const scenarioStatusForEvidence: "ok" | "failed" = scenarioFailed ? "failed" : "ok";
 
@@ -538,6 +746,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     started_at: startedAt.toISOString(),
     finished_at: finishedAt.toISOString(),
     steps: stepRecords,
+    hooks: hookRecords,
     evidence: {
       dir: relativeScenarioDir,
       screenshots: browserEvidence.screenshots,

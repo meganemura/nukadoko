@@ -1,4 +1,4 @@
-import type { Argument, CucumberExpression } from "@cucumber/cucumber-expressions";
+import { CucumberExpression } from "@cucumber/cucumber-expressions";
 import type { PickleStepArgument } from "@cucumber/messages";
 import type { z } from "zod";
 import { buildExpression } from "../binding/expression.js";
@@ -9,62 +9,111 @@ import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 
 // Responsibility: the run-time half of capture-binding-design.md's shared
-// seam — build the matching CucumberExpression for every pattern in the
-// vocabulary directly from src/binding/* (not src/check/binding-check.ts,
-// which mixes in check-only issue reporting; this task's spec, decision 1:
-// "run が同じ層でマッチ + 束縛を行う前提で、check 専用の知識を混ぜない"), match
-// one pickle step's text against them, and zip the matched Argument values
-// onto the step's named capture keys plus the one table/docstring key they
-// left unconsumed (capture-binding-design.md's "final argument" rule,
-// enforced here at run time exactly as `nuka check` enforces it statically).
-// A pattern that fails to build (bad capture name, unknown parameter type)
-// can never match anything at run time either — reporting *why* it failed to
-// build is `nuka check`'s job, not this module's; here it is simply skipped,
-// so any pickle step text relying on it surfaces as "undefined" instead.
+// seam — build the matching CucumberExpression (or, for a compat RegExp
+// pattern, nothing to build at all) for every pattern in the vocabulary
+// directly from src/binding/* (not src/check/binding-check.ts, which mixes
+// in check-only issue reporting; this task's spec, decision 1: "run が同じ層
+// でマッチ + 束縛を行う前提で、check 専用の知識を混ぜない"), match one pickle
+// step's text against them, and zip the matched values onto the step's named
+// capture keys plus the one table/docstring key they left unconsumed
+// (capture-binding-design.md's "final argument" rule, enforced here at run
+// time exactly as `nuka check` enforces it statically). A pattern that fails
+// to build (bad capture name, unknown parameter type) can never match
+// anything at run time either — reporting *why* it failed to build is `nuka
+// check`'s job, not this module's; here it is simply skipped, so any pickle
+// step text relying on it surfaces as "undefined" instead.
+//
+// m2b-compat-execution task spec, item 2 closes m2a-compat-registry's
+// "temporary asymmetry #2": a compat entry now contributes a binding here
+// too, on equal footing with a typed one — a compat *string* pattern builds
+// a plain `CucumberExpression` with no named-capture requirement (identical
+// treatment to src/check/binding-check.ts's own compat handling: the
+// migration door's promise is unmodified cucumber-expressions syntax), and a
+// compat *RegExp* pattern needs no building at all, matched via `.exec()`
+// with its captured group strings as positional values (cucumber-js's own
+// semantics). `buildStepBindings`'s registry is built from
+// `[...customTypes, ...compatParameterTypes]` — the exact same composition
+// order src/check/binding-check.ts already uses — so a pattern using a
+// compat-registered `defineParameterType` matches here exactly as `nuka
+// check` already treats it as defined (this closes the other half of that
+// same asymmetry).
 
-export interface StepBinding {
-  readonly stepName: string;
-  readonly pattern: string;
-  readonly captures: readonly Capture[];
-  readonly expression: CucumberExpression;
-}
+export type StepBinding =
+  | {
+      readonly matcherKind: "expression";
+      readonly stepName: string;
+      readonly pattern: string;
+      readonly captures: readonly Capture[];
+      readonly expression: CucumberExpression;
+    }
+  | {
+      readonly matcherKind: "regexp";
+      readonly stepName: string;
+      readonly pattern: string;
+      /** Always `[]`: a compat RegExp pattern has no named-capture concept
+       * to zip a table/docstring key against. */
+      readonly captures: readonly Capture[];
+      readonly regexp: RegExp;
+    };
 
 /**
  * @throws {ParameterTypeCollisionError} `customTypes` (config.parameterTypes)
- *   names a type that collides with a built-in type or another entry in the
- *   same list (src/binding/registry.ts) — a config-authoring error, not a
- *   per-pattern one, so it is not caught here; callers (src/cli/run.ts) treat
- *   it as a setup failure, same as any other malformed config.
+ *   or `compatParameterTypes` (a compat `defineParameterType` call) names a
+ *   type that collides with a built-in type or another entry in the same
+ *   composed list (src/binding/registry.ts) — a config/support-authoring
+ *   error, not a per-pattern one, so it is not caught here; callers
+ *   (src/cli/run.ts) treat it as a setup failure, same as any other
+ *   malformed config.
  */
 export function buildStepBindings(
   vocabulary: Vocabulary,
   customTypes: readonly ParameterTypeConfig[] = [],
+  compatParameterTypes: readonly ParameterTypeConfig[] = [],
 ): readonly StepBinding[] {
-  const registry = createParameterTypeRegistry(customTypes);
+  const registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);
   const bindings: StepBinding[] = [];
   for (const entry of vocabulary.values()) {
-    // Temporary asymmetry (m2a-compat-registry task spec, item 7): `nuka
-    // run`'s matching stays typed-only in this slice. Compat step execution
-    // — World lifecycle, receipt shape, mixed-kind matching — is M2's slice
-    // B; until it lands, a pickle line that only a compat pattern matches is
-    // still "undefined" here even though `nuka check` (src/check/binding-
-    // check.ts) already treats it as defined, since check considers compat
-    // patterns too. This gap closes in slice B, not here.
-    if (entry.kind !== "typed") {
+    if (entry.kind === "typed") {
+      for (const pattern of entry.step.patterns) {
+        let built: ReturnType<typeof buildExpression>;
+        try {
+          built = buildExpression(pattern, registry);
+        } catch {
+          continue;
+        }
+        bindings.push({
+          matcherKind: "expression",
+          stepName: entry.name,
+          pattern,
+          captures: built.captures,
+          expression: built.expression,
+        });
+      }
       continue;
     }
-    for (const pattern of entry.step.patterns) {
-      let built: ReturnType<typeof buildExpression>;
+
+    // entry.kind === "compat" (m2b-compat-execution task spec, item 2): one
+    // pattern per entry, no aliases, no named captures — see this file's own
+    // header.
+    const pattern = entry.compat.patternSource;
+    if (typeof entry.compat.pattern === "string") {
+      let expression: CucumberExpression;
       try {
-        built = buildExpression(pattern, registry);
+        // No `buildExpression`/`stripCaptureNames` here, on purpose: a
+        // compat string pattern is unmodified cucumber-expressions syntax
+        // (src/check/binding-check.ts's own compat branch does the same).
+        expression = new CucumberExpression(entry.compat.pattern, registry);
       } catch {
         continue;
       }
+      bindings.push({ matcherKind: "expression", stepName: entry.name, pattern, captures: [], expression });
+    } else {
       bindings.push({
+        matcherKind: "regexp",
         stepName: entry.name,
         pattern,
-        captures: built.captures,
-        expression: built.expression,
+        captures: [],
+        regexp: entry.compat.pattern,
       });
     }
   }
@@ -84,33 +133,54 @@ export type MatchOutcome =
 /**
  * Matches `text` against every binding, one candidate per distinct step name
  * — two patterns/aliases of the *same* step both matching is not ambiguous,
- * only two *different* steps matching is (the same rule src/check/
- * feature-check.ts applies statically). Coercion happens here via
- * `Argument.getValue` (the parameter type's transformer, e.g. `{int}` ->
- * number, or a `config.parameterTypes` entry's own transformer). Neither
- * `getValue` nor this function ever `await`s the result, so a custom
- * transformer must be synchronous — an async one would hand back an
- * unresolved Promise as the captured value instead of the value it resolves
- * to, which then fails the step's own args schema. If a transformer throws,
- * that throw propagates unchanged, straight out of this function (this
- * task's spec, decision 5: cucumber-expressions itself does no try/catch
- * around a transformer call, and this module deliberately adds none of its
- * own) — src/run/run-scenario.ts calls this function outside any try/catch
- * of its own too, so today that surfaces as an uncaught exception failing
- * the whole `nuka run` invocation, not a per-step failed receipt. `nuka
- * check` never reaches this code path at all: src/check/feature-check.ts's
- * own matching only calls `expression.match()`, never `Argument.getValue()`,
- * so a transformer is only ever invoked at `nuka run` time.
+ * only two *different* steps (typed or compat alike — this task's spec,
+ * item 2: "kind またぎ ambiguous は check と同じ意味論で run エラー扱い")
+ * matching is (the same rule src/check/feature-check.ts applies statically).
+ * Coercion happens here via `Argument.getValue` (the parameter type's
+ * transformer, e.g. `{int}` -> number, or a `config.parameterTypes`/compat
+ * `defineParameterType` entry's own transformer). Neither `getValue` nor this
+ * function ever `await`s the result, so a custom transformer must be
+ * synchronous — an async one would hand back an unresolved Promise as the
+ * captured value instead of the value it resolves to, which then fails a
+ * typed step's own args schema (a compat step has none to fail, but the same
+ * unresolved-Promise value would still reach its glue function as-is). If a
+ * transformer throws, that throw propagates unchanged, straight out of this
+ * function (this task's spec, decision 5: cucumber-expressions itself does
+ * no try/catch around a transformer call, and this module deliberately adds
+ * none of its own) — src/run/run-scenario.ts calls this function outside any
+ * try/catch of its own too, so today that surfaces as an uncaught exception
+ * failing the whole `nuka run` invocation, not a per-step failed receipt.
+ * `nuka check` never reaches this code path at all: src/check/feature-
+ * check.ts's own matching only calls `expression.match()`/`RegExp.test()`,
+ * never `Argument.getValue()`, so a transformer is only ever invoked at
+ * `nuka run` time.
+ *
+ * A compat RegExp binding is matched with a *fresh* `RegExp` built from its
+ * `source`/`flags` (m2b-compat-execution task spec, item 2), for the exact
+ * reason src/check/feature-check.ts's own `checkedPatternMatches` already
+ * documents: a `/g`/`/y`-flagged pattern's `lastIndex` must not carry state
+ * across the many pickle-step texts this function is called with, one at a
+ * time, over a `nuka run` invocation's lifetime.
  */
 export function matchPickleStep(text: string, bindings: readonly StepBinding[]): MatchOutcome {
-  const byStep = new Map<string, { binding: StepBinding; args: readonly Argument[] }>();
+  const byStep = new Map<string, { binding: StepBinding; values: readonly unknown[] }>();
   for (const binding of bindings) {
     if (byStep.has(binding.stepName)) {
       continue;
     }
+    if (binding.matcherKind === "regexp") {
+      const match = new RegExp(binding.regexp.source, binding.regexp.flags).exec(text);
+      if (match !== null) {
+        byStep.set(binding.stepName, { binding, values: match.slice(1) });
+      }
+      continue;
+    }
     const args = binding.expression.match(text);
     if (args !== null) {
-      byStep.set(binding.stepName, { binding, args });
+      byStep.set(binding.stepName, {
+        binding,
+        values: args.map((argument) => argument.getValue(null)),
+      });
     }
   }
   const stepNames = [...byStep.keys()];
@@ -121,8 +191,7 @@ export function matchPickleStep(text: string, bindings: readonly StepBinding[]):
     return { kind: "ambiguous", stepNames };
   }
   // Safe: exactly one key exists in `byStep` when `stepNames.length === 1`.
-  const { binding, args } = byStep.get(stepNames[0]!)!;
-  const values = args.map((argument) => argument.getValue(null));
+  const { binding, values } = byStep.get(stepNames[0]!)!;
   return { kind: "matched", stepName: binding.stepName, captures: binding.captures, values };
 }
 

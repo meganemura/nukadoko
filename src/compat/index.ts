@@ -7,17 +7,25 @@
 // toward the typed side (docs/spec.md, migration-door rule) — the door
 // swings both ways.
 //
-// v1 scope for this slice (m2a-compat-registry task spec, decision 1):
+// v1 scope, slice A (m2a-compat-registry task spec, decision 1):
 // `Given`/`When`/`Then` (all the same registration function — see
-// registry.ts's own comment) and `defineParameterType`. No placeholders for
-// what slice B adds (World, Before/After, setWorldConstructor) — this module
-// registers a step's pattern and glue function; it does not run anything.
+// registry.ts's own comment) and `defineParameterType`. Slice B (m2b-
+// compat-execution task spec) adds World/setWorldConstructor, Before/After,
+// and DataTable — execution, not just registration.
 //
-// Kept as a thin re-export of registry.ts, not the buffers' own home:
-// src/discover/discover-steps.ts needs to land on the *exact* module
-// instance this file's own registrations go into (registry.ts's header
-// explains why), by importing "./registry.js" directly via its own relative
-// path — that only converges on the same instance as this file's own
-// "./registry.js" import if this file does nothing to registry.ts's exports
+// Kept as a thin re-export of each surface's own module, not their buffers'
+// home: src/discover/discover-steps.ts needs to land on the *exact* module
+// instance a step file's own registrations/World/hooks go into (registry.ts
+// and world.ts's own headers explain why), by importing each one directly
+// via its own relative path — that only converges on the same instance as
+// this file's own imports if this file does nothing to any of their exports
 // beyond re-exporting them verbatim (no wrapping, no re-instantiation).
 export { Given, When, Then, defineParameterType } from "./registry.js";
+export {
+  World,
+  setWorldConstructor,
+  type WorldConstructor,
+  type WorldConstructorParams,
+} from "./world.js";
+export { Before, After, type HookFn, type HookOptions } from "./hooks.js";
+export { DataTable } from "./data-table.js";

@@ -1,3 +1,4 @@
+import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { discoverSteps } from "../discover/discover-steps.js";
@@ -56,6 +57,18 @@ import type { WritableSink } from "./writable-sink.js";
 // `nuka do` — run-scenario.ts is where the actual refusal/backstop logic
 // lives, since it needs a per-step, per-position view this module doesn't
 // have.
+//
+// m2b-compat-execution task spec closes m2a-compat-registry's two temporary
+// asymmetries: `buildStepBindings` now receives `compatParameterTypes` too
+// (previously dropped here as "irrelevant to this slice"), and
+// `discoverSteps`'s `instantiateCompatWorld`/`compatHooks` are threaded into
+// every `runScenario` call. Every registered hook's own tag expression (if
+// any) is validated once, here in the setup phase, before any pickle runs
+// (this task's spec, item 5): an unsupported tag expression's syntax is
+// either supported or not, independent of which pickle a given `nuka run`
+// invocation happens to select, so discovering it only when a matching
+// pickle came along would make the failure look scenario-dependent, which
+// it isn't.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -106,15 +119,28 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
   try {
     let vocabulary;
+    let compatParameterTypes;
+    let instantiateCompatWorld;
+    let compatHooks;
     try {
-      // Compat-origin parameter types (m2a-compat-registry task spec) are
-      // dropped here on purpose: `nuka run`'s matching stays typed-only in
-      // this slice (see src/run/match-step.ts's own comment on the
-      // temporary asymmetry) — compat step execution, and wiring compat's
-      // registry additions into it, is M2's slice B.
-      ({ vocabulary } = await discoverSteps(rootDir, config.featuresDir));
+      ({ vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks } =
+        await discoverSteps(rootDir, config.featuresDir));
     } catch (error) {
       stderr.write(`${formatVocabularyError(error)}\n`);
+      return 1;
+    }
+
+    // Every registered hook's own tag expression (this task's spec, item
+    // 5) — a setup failure, same family as the parameterTypes collision
+    // below, not attributable to any one pickle.
+    try {
+      for (const hook of compatHooks) {
+        if (hook.tags !== undefined) {
+          validateTagExpression(hook.tags);
+        }
+      }
+    } catch (error) {
+      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
     }
 
@@ -129,13 +155,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // --- Execution phase: from here, every pickle that begins gets a
     // scenario record written, whatever happens inside it. ---
     // Building bindings is the one exception: it happens once, before any
-    // pickle's own record exists, so a config.parameterTypes name collision
-    // here (src/binding/registry.ts's ParameterTypeCollisionError) is treated
-    // as a setup failure, not a scenario failure (m2pre-parameter-types task
-    // spec, decision 3) — no scenario record is ever written for it.
+    // pickle's own record exists, so a config.parameterTypes/compat
+    // defineParameterType name collision here (src/binding/registry.ts's
+    // ParameterTypeCollisionError) is treated as a setup failure, not a
+    // scenario failure (m2pre-parameter-types task spec, decision 3) — no
+    // scenario record is ever written for it.
     let bindings: readonly StepBinding[];
     try {
-      bindings = buildStepBindings(vocabulary, config.parameterTypes);
+      bindings = buildStepBindings(vocabulary, config.parameterTypes, compatParameterTypes);
     } catch (error) {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
@@ -197,6 +224,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         secrets,
         storageState,
         sessionFilePath: thisSessionFilePath,
+        instantiateCompatWorld,
+        compatHooks,
       });
 
       // One JSON line per completed scenario record, streamed as it

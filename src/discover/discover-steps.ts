@@ -3,11 +3,14 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { register } from "tsx/esm/api";
+import type { HookRegistration } from "../compat/hooks.js";
 import type {
   CompatKeyword,
   CompatParameterTypeRegistration,
   CompatStepFn,
 } from "../compat/registry.js";
+import type { World } from "../compat/world.js";
+import type { StepContext } from "../context.js";
 import { isStep, type Step } from "../step/define-step.js";
 import { DuplicateCompatStepError, DuplicateStepError } from "./errors.js";
 
@@ -102,6 +105,20 @@ export interface CompatParameterTypeEntry extends CompatParameterTypeRegistratio
 export interface DiscoveryResult {
   readonly vocabulary: Vocabulary;
   readonly compatParameterTypes: readonly CompatParameterTypeEntry[];
+  /** Constructs one pickle's own World — base `World`, or whatever this
+   * run's step files last passed to `setWorldConstructor` (m2b-compat-
+   * execution task spec, item 1) — with `ctx` attached as the runtime bridge
+   * `World.openPage()`/`openRequest()` read from. Bound to the *exact*
+   * module instance this discovery run's own scoped tsx import loaded
+   * src/compat/world.ts through (see that file's header for why identity
+   * matters here) — callers (src/run/run-scenario.ts) never import
+   * world.js directly themselves. */
+  readonly instantiateCompatWorld: (ctx: StepContext) => World;
+  /** Every Before/After hook any step file registered during this run
+   * (m2b-compat-execution task spec, item 5) — not attributed to a file
+   * (see src/compat/hooks.ts's header), read once here after every file's
+   * import has finished. */
+  readonly compatHooks: readonly HookRegistration[];
 }
 
 function compatPatternSource(pattern: string | RegExp): string {
@@ -158,6 +175,19 @@ export async function discoverSteps(
       new URL("../compat/registry.js", import.meta.url).href,
       import.meta.url,
     )) as typeof import("../compat/registry.js");
+    // Same identity reasoning as compatRegistry above, extended to World
+    // (m2b-compat-execution task spec, item 1) and Before/After (item 5):
+    // loaded through this run's own scoped import, never a plain top-level
+    // one, so `setWorldConstructor`/`Before`/`After` calls a step file makes
+    // via "nukadoko/compat" land in the exact instances captured here.
+    const compatWorld = (await scoped.import(
+      new URL("../compat/world.js", import.meta.url).href,
+      import.meta.url,
+    )) as typeof import("../compat/world.js");
+    const compatHooksModule = (await scoped.import(
+      new URL("../compat/hooks.js", import.meta.url).href,
+      import.meta.url,
+    )) as typeof import("../compat/hooks.js");
 
     const vocabulary = new Map<string, VocabularyEntry>();
     const compatParameterTypes: CompatParameterTypeEntry[] = [];
@@ -209,7 +239,16 @@ export async function discoverSteps(
       }
     }
 
-    return { vocabulary, compatParameterTypes };
+    return {
+      vocabulary,
+      compatParameterTypes,
+      // Read once, after every file's import has finished (this file's own
+      // header, "並行 discovery の安全性"): a World constructor/hook isn't
+      // attributed to any one file, unlike a compat step, so there is
+      // nothing to drain per file — just this run's own final state.
+      instantiateCompatWorld: compatWorld.instantiateWorldForPickle,
+      compatHooks: compatHooksModule.getRegisteredHooks(),
+    };
   } finally {
     await scoped.unregister();
   }

@@ -6,6 +6,13 @@
 // for it (`skipped`/`undefined`/`ambiguous`) — the scenario record is what is
 // allowed to say that, per docs/spec.md "an execution that never began must
 // not be citable".
+//
+// `hooks` is added now (m2b-compat-execution task spec, item 5): compat's
+// Before/After hooks have no receipt of their own (they run against the
+// pickle's shared World, not any one step), so their own ok/failed outcome
+// is recorded here instead, on the scenario record. Always present, even
+// when empty (no compat hooks matched this pickle's tags, or none are
+// registered at all) — same convention as `steps`.
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
@@ -19,6 +26,17 @@ export interface ScenarioStepRecord {
   /** Present whenever `status` is anything but `passed`/`skipped`: `skipped`
    * needs no explanation (it is a symptom of an earlier step's failure, not
    * its own), and `passed` has nothing to explain. */
+  readonly error?: { readonly message: string };
+}
+
+/** One Before/After hook's own outcome (m2b-compat-execution task spec,
+ * item 5) — a hook that didn't apply to this pickle (tag mismatch) is
+ * simply absent, the same way a step nothing matched doesn't appear here
+ * either. */
+export interface ScenarioHookRecord {
+  readonly type: "before" | "after";
+  readonly status: "ok" | "failed";
+  /** Present only when `status` is `"failed"`. */
   readonly error?: { readonly message: string };
 }
 
@@ -51,5 +69,6 @@ export interface ScenarioRecord {
   readonly started_at: string;
   readonly finished_at: string;
   readonly steps: readonly ScenarioStepRecord[];
+  readonly hooks: readonly ScenarioHookRecord[];
   readonly evidence: ScenarioEvidence;
 }
