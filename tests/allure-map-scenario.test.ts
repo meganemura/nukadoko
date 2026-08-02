@@ -178,6 +178,92 @@ describe("mapScenario: status mapping", () => {
   });
 });
 
+describe("mapScenario: test.message (M3-C spec item 1)", () => {
+  it("sets test.message to the first failure's own marked message, same as the step's own message", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({ status: "failed", error: { message: "it broke", kind: "step_error" } });
+    delete (receipt as { result?: unknown }).result;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", receipt: "rcpt-1" };
+    const record = baseRecord({ status: "failed", steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.test.message).toBe("[nukadoko.failure=step_error] it broke");
+    expect(mapped.test.message).toBe(mapped.steps[0]!.message);
+  });
+
+  it("leaves test.message undefined for a passed scenario", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({ status: "ok", result: null });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.test.message).toBeUndefined();
+  });
+
+  it("sets test.message from a before hook's own failure when it is the first failure", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const beforeHook: ScenarioHookRecord = {
+      type: "before",
+      status: "failed",
+      error: { message: "hook blew up", kind: "step_error" },
+    };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "skipped", receipt: null };
+    const record = baseRecord({ status: "failed", hooks: [beforeHook], steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.test.message).toBe("[nukadoko.failure=step_error] hook blew up");
+    expect(mapped.test.labels).toContainEqual({ name: "nukadoko.failure", value: "step_error" });
+  });
+
+  it("sets test.message to the plain (unmarked) message when the first failure has no resolvable kind", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = {
+      text: "an unknown step",
+      status: "undefined",
+      receipt: null,
+      error: { message: "no matching step definition" },
+    };
+    const record = baseRecord({ status: "failed", steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.test.message).toBe("no matching step definition");
+    expect(mapped.test.labels.some((l) => l.name === "nukadoko.failure")).toBe(false);
+  });
+});
+
 describe("mapScenario: zero-width time for receiptless steps", () => {
   it("pins a receiptless step's start/stop to the previous step's own stop", () => {
     const { gherkinDocument, pickles } = parse();

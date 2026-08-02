@@ -112,6 +112,13 @@ export interface MappedTest {
   readonly startMs: number;
   readonly stopMs: number;
   readonly attachments: MappedAttachment[];
+  /** The first failure's own (already `[nukadoko.failure=<kind>]`-marked, or
+   * — when no kind resolved — plain) message, `undefined` when nothing
+   * failed (M3-C spec item 1). emitter.ts sets this as `partialTest.
+   * statusDetails.message`, the field Allure 2's own categories matching
+   * (`extractErrorMatchingData`) reads at the test level — see this task's
+   * own report for the Allure-3-config alternative this doesn't attempt. */
+  readonly message?: string;
 }
 
 export interface MappedScenario {
@@ -612,33 +619,48 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
   });
 }
 
-// --- nukadoko.failure label value: the first failure in execution order
-// (before hooks -> steps -> after hooks), this task's spec, decision 4.
-// `undefined` both when nothing failed and when the first failure has no
-// resolvable kind (the same "never began"/unreadable-receipt edge case
-// `resolveStepOutcome` already falls back for) — the search stops at the
-// first failure either way rather than skipping ahead to a later one that
-// happens to have a kind, since the label's own meaning is "the first
-// failure's kind", not "the first classifiable failure's kind".
+// --- first failure in execution order (before hooks -> steps -> after
+// hooks), this task's spec, decision 4, extended by M3-C spec item 1: one
+// search now returns both the `nukadoko.failure` label's kind *and* that
+// same failure's already-marked message, so the two can never drift apart
+// (the alternative — searching twice, once for kind and once for message —
+// risks picking a different failure for each if the two searches were ever
+// edited independently). `kind` is `undefined` both when nothing failed and
+// when the first failure has no resolvable kind (the same "never began"/
+// unreadable-receipt edge case `resolveStepOutcome` already falls back for)
+// — the search stops at the first failure either way rather than skipping
+// ahead to a later one that happens to have a kind, since the label's own
+// meaning is "the first failure's kind", not "the first classifiable
+// failure's kind". `message`, unlike `kind`, is populated even when `kind`
+// isn't: `resolveStepOutcome`'s own unmarked fallback (`step.error?.message`)
+// already flows into `entry.step.message`/`entry.hook.message` regardless of
+// whether a kind was resolved, so this function only has to forward
+// whichever of the two is already there (M3-C spec item 1: "メッセージが
+// あるならそれを載せる").
 
-function firstFailureKind(
+interface FirstFailure {
+  readonly kind?: ErrorKind;
+  readonly message?: string;
+}
+
+function firstFailure(
   beforeHooks: readonly HookMapping[],
   steps: readonly StepMapping[],
   afterHooks: readonly HookMapping[],
-): ErrorKind | undefined {
+): FirstFailure | undefined {
   for (const entry of beforeHooks) {
     if (entry.hook.status !== "passed") {
-      return entry.kind;
+      return { kind: entry.kind, message: entry.hook.message };
     }
   }
   for (const entry of steps) {
     if (entry.step.status !== "passed" && entry.step.status !== "skipped") {
-      return entry.kind;
+      return { kind: entry.kind, message: entry.step.message };
     }
   }
   for (const entry of afterHooks) {
     if (entry.hook.status !== "passed") {
-      return entry.kind;
+      return { kind: entry.kind, message: entry.hook.message };
     }
   }
   return undefined;
@@ -676,7 +698,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     ...hookMappings.flatMap((entry) => entry.declaredParameters),
   ];
 
-  const failureKind = firstFailureKind(beforeHookMappings, stepMappings, afterHookMappings);
+  const failure = firstFailure(beforeHookMappings, stepMappings, afterHookMappings);
 
   const labels: MappedLabel[] = [
     { name: "feature", value: featureName },
@@ -684,7 +706,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     ...resolveTagLabels(pickle),
     { name: "env", value: record.environment },
     ...declaredLabels,
-    ...(failureKind ? [{ name: "nukadoko.failure", value: failureKind }] : []),
+    ...(failure?.kind ? [{ name: "nukadoko.failure", value: failure.kind }] : []),
   ];
 
   const contextParameters: MappedParameter[] = [
@@ -725,6 +747,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
       startMs: scenarioStartMs,
       stopMs: scenarioStopMs,
       attachments: testAttachments,
+      message: failure?.message,
     },
     steps: stepMappings.map((entry) => entry.step),
     hooks: hookMappings.map((entry) => entry.hook),

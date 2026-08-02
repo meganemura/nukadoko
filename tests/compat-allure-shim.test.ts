@@ -61,7 +61,13 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
 
     const receipt = await readReceipt(rootDir, record.steps[0].receipt);
     expect(receipt.declared).toEqual({
-      attachments: ["evidence"],
+      // ".txt": the fixture's own `attachment("evidence", "...", "text/plain")`
+      // declares a contentType but no fileExtension — src/compat/allure-
+      // runtime.ts now falls back to declared.ts's own
+      // `extensionForMediaType` for exactly this case (M3-C spec item 2;
+      // render-check.md section 4's "declared 添付の content-type が宣言と
+      // 食い違う" finding).
+      attachments: ["evidence.txt"],
       labels: [{ name: "owner", value: "team-nukadoko" }],
       links: [{ url: "https://example.com/ticket/1", name: "ticket" }],
       parameters: [{ name: "mode", value: "smoke" }],
@@ -69,8 +75,8 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     });
 
     const receiptDir = path.join(rootDir, (receipt.evidence as { dir: string }).dir);
-    expect(existsSync(path.join(receiptDir, "evidence"))).toBe(true);
-    const attachmentContent = await readFile(path.join(receiptDir, "evidence"), "utf8");
+    expect(existsSync(path.join(receiptDir, "evidence.txt"))).toBe(true);
+    const attachmentContent = await readFile(path.join(receiptDir, "evidence.txt"), "utf8");
     expect(attachmentContent).toBe("hello from compat");
   });
 
@@ -112,7 +118,10 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const beforeHook = record.hooks.find((h: { type: string }) => h.type === "before");
     expect(beforeHook.status).toBe("ok");
     expect(beforeHook.declared).toEqual({
-      attachments: ["hook-evidence"],
+      // ".txt": same `extensionForMediaType` fallback as the compat-declared
+      // fixture above (M3-C spec item 2) — this hook's own glue also
+      // declares `contentType: "text/plain"` with no `fileExtension`.
+      attachments: ["hook-evidence.txt"],
       labels: [{ name: "hook-owner", value: "team-nukadoko" }],
     });
 
@@ -120,7 +129,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     expect(receipt.declared).toBeUndefined();
 
     const scenarioDir = path.join(rootDir, record.evidence.dir);
-    expect(existsSync(path.join(scenarioDir, "hook-evidence"))).toBe(true);
+    expect(existsSync(path.join(scenarioDir, "hook-evidence.txt"))).toBe(true);
   });
 
   it("a typed step importing the allure facade directly still gets declared on its own receipt (kind-independent)", async () => {

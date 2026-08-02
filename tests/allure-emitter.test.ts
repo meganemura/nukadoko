@@ -327,6 +327,145 @@ describe("createAllureEmitter", () => {
     expect(afterSecondRun.size).toBeGreaterThan(firstRunFiles.size);
   });
 
+  describe("test.statusDetails.message (M3-C spec item 1)", () => {
+    function readTestResult(name: string): { statusDetails?: { message?: string }; status?: string } {
+      const results = readResultFiles(resultsDir) as { name?: string; statusDetails?: { message?: string }; status?: string }[];
+      const match = results.find((r) => r.name === name);
+      expect(match).toBeDefined();
+      return match!;
+    }
+
+    it("sets statusDetails.message, marked with [nukadoko.failure=<kind>], for a failed scenario", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles[0]!;
+      const receipt: Receipt = {
+        receipt_id: "rcpt-fail-1",
+        step: "the cart has items",
+        kind: "run",
+        args: {},
+        status: "failed",
+        environment: "staging",
+        session: null,
+        scenario: "scn-fail-1",
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:00.500Z",
+        evidence: { dir: ".nukadoko/receipts/rcpt-fail-1", screenshots: [] },
+        observed: { http_reads: 0, http_writes: 0 },
+        mutates: true,
+        error: { message: "it broke on purpose", kind: "step_error" },
+      };
+      writeReceiptFile(rootDir, receipt);
+      const record: ScenarioRecord = {
+        scenario_id: "scn-fail-1",
+        feature: "features/checkout.feature",
+        scenario: "a customer checks out",
+        line: 3,
+        status: "failed",
+        environment: "staging",
+        session: null,
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:00.500Z",
+        steps: [{ text: "the cart has items", status: "failed", receipt: "rcpt-fail-1" }],
+        hooks: [],
+        evidence: { dir: ".nukadoko/scenarios/scn-fail-1", screenshots: [] },
+      };
+
+      emitter.emitScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+      const test = readTestResult("a customer checks out");
+      expect(test.status).toBe("failed");
+      expect(test.statusDetails?.message).toBe("[nukadoko.failure=step_error] it broke on purpose");
+    });
+
+    it("leaves statusDetails unset for a passed scenario", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles[0]!;
+      const record: ScenarioRecord = {
+        scenario_id: "scn-pass-1",
+        feature: "features/checkout.feature",
+        scenario: "a customer checks out",
+        line: 3,
+        status: "passed",
+        environment: "staging",
+        session: null,
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:00.500Z",
+        steps: [{ text: "the cart has items", status: "passed", receipt: null }],
+        hooks: [],
+        evidence: { dir: ".nukadoko/scenarios/scn-pass-1", screenshots: [] },
+      };
+
+      emitter.emitScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+      const test = readTestResult("a customer checks out");
+      expect(test.status).toBe("passed");
+      expect(test.statusDetails?.message).toBeUndefined();
+    });
+
+    it("sets statusDetails.message from a before hook's own failure when it is the first failure", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles[0]!;
+      const beforeHook: ScenarioHookRecord = {
+        type: "before",
+        status: "failed",
+        error: { message: "hook blew up", kind: "step_error" },
+      };
+      const record: ScenarioRecord = {
+        scenario_id: "scn-hook-fail-1",
+        feature: "features/checkout.feature",
+        scenario: "a customer checks out",
+        line: 3,
+        status: "failed",
+        environment: "staging",
+        session: null,
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:00.500Z",
+        steps: [{ text: "the cart has items", status: "skipped", receipt: null }],
+        hooks: [beforeHook],
+        evidence: { dir: ".nukadoko/scenarios/scn-hook-fail-1", screenshots: [] },
+      };
+
+      emitter.emitScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+      const test = readTestResult("a customer checks out");
+      expect(test.statusDetails?.message).toBe("[nukadoko.failure=step_error] hook blew up");
+    });
+
+    it("sets statusDetails.message to the plain (unmarked) message when the first failure has no resolvable kind", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles[0]!;
+      const record: ScenarioRecord = {
+        scenario_id: "scn-unresolved-1",
+        feature: "features/checkout.feature",
+        scenario: "a customer checks out",
+        line: 3,
+        status: "failed",
+        environment: "staging",
+        session: null,
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:00.500Z",
+        steps: [
+          {
+            text: "the cart has items",
+            status: "undefined",
+            receipt: null,
+            error: { message: "no matching step definition" },
+          },
+        ],
+        hooks: [],
+        evidence: { dir: ".nukadoko/scenarios/scn-unresolved-1", screenshots: [] },
+      };
+
+      emitter.emitScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+      const test = readTestResult("a customer checks out");
+      expect(test.statusDetails?.message).toBe("no matching step definition");
+      expect((test as { labels?: { name: string }[] }).labels?.some((l) => l.name === "nukadoko.failure")).toBe(
+        false,
+      );
+    });
+  });
+
   describe("failure isolation", () => {
     it("degrades gracefully (no throw, a normal result file) when a step's receipt.json simply doesn't exist", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");

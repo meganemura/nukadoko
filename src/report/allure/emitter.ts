@@ -240,6 +240,14 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           ],
           links: mapped.test.links,
           parameters: mapped.test.parameters,
+          // Allure 2's own categories matching reads `error.message`/
+          // `statusDetails.message` at the *test* level, never a step's
+          // (render-check.md section 10 — verified against the real
+          // @allurereport/plugin-classic source) — without this, the nine
+          // categories.json rules this emitter also writes can never match
+          // anything, no matter how correct their own regexes are (this
+          // task's spec, M3-C item 1).
+          ...(mapped.test.message !== undefined ? { statusDetails: { message: mapped.test.message } } : {}),
         };
         // Mutates `partialTest.labels` in place, appending suite labels only
         // when none are already present (this task's spec, decision 6: "返

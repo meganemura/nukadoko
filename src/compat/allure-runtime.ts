@@ -1,6 +1,6 @@
 import type { RuntimeMessage } from "allure-js-commons/sdk";
 import { MessageTestRuntime, setGlobalTestRuntime } from "allure-js-commons/sdk/runtime";
-import { getActiveDeclaredCollector, normalizeFileExtension } from "./declared.js";
+import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtension } from "./declared.js";
 
 // Responsibility: the interception point itself (m2d-allure-shim task spec,
 // item 1; verified in .claude-team/m3-allure-research.md section 10.2) — a
@@ -86,12 +86,20 @@ export class NukadokoAllureTestRuntime extends MessageTestRuntime {
         break;
       }
       case "attachment_content": {
-        const { name, content, encoding, fileExtension } = message.data;
-        collector.recordAttachment(
-          name,
-          Buffer.from(content, encoding),
-          normalizeFileExtension(fileExtension),
-        );
+        const { name, content, encoding, contentType, fileExtension } = message.data;
+        // A glue call to `attachment(name, content, { contentType })` with no
+        // `fileExtension` reaches here with `fileExtension` empty (the
+        // caller declared a content-type but not a file extension) — falling
+        // back to `extensionForMediaType` (declared.ts's own table, already
+        // used for World's `attach(data, mediaType)`) means the collector
+        // still saves a file whose extension matches what was declared,
+        // instead of an extensionless one map-scenario.ts's own
+        // `contentTypeForFileName` can only resolve to
+        // `application/octet-stream` (render-check.md section 4, M3-C spec
+        // item 2). Reusing the same table here rather than adding a second
+        // one is deliberate (this task's spec: "新しい表を作らない").
+        const extension = normalizeFileExtension(fileExtension) || extensionForMediaType(contentType);
+        collector.recordAttachment(name, Buffer.from(content, encoding), extension);
         break;
       }
       default:
