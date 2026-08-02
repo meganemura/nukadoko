@@ -207,3 +207,34 @@ describe("configSchema: allure", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("configSchema: messages", () => {
+  it("leaves messages undefined when omitted (the <stateDir>/messages.ndjson default is applied by the caller, not this schema)", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.messages).toBeUndefined();
+    }
+  });
+
+  it("accepts an explicit, root-relative output path", () => {
+    const result = configSchema.safeParse({ messages: { output: "reports/messages.ndjson" } });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.messages).toEqual({ output: "reports/messages.ndjson" });
+    }
+  });
+
+  it("accepts messages with no fields at all", () => {
+    const result = configSchema.safeParse({ messages: {} });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.messages).toEqual({});
+    }
+  });
+
+  it("rejects an unknown key inside messages (there is no `enabled`)", () => {
+    const result = configSchema.safeParse({ messages: { enabled: false } });
+    expect(result.success).toBe(false);
+  });
+});

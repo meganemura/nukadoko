@@ -124,6 +124,14 @@ export const configSchema = z
      * emitter is always on — zero configuration already gets a full report,
      * so there is nothing to opt into). No CLI flag either. */
     allure: z.object({ resultsDir: z.string().optional() }).strict().optional(),
+    /** `output` is root-relative; omitted, it defaults to
+     * `<stateDir>/messages.ndjson` — that default is applied where
+     * `stateDir` is resolved (src/cli/run.ts), not here, same split as
+     * `allure.resultsDir` above. No `enabled` key (m3c-messages-emitter
+     * spec-b task spec: the emitter is always on, same reason as `allure`
+     * above — zero configuration already gets a full stream). No CLI flag
+     * either. */
+    messages: z.object({ output: z.string().optional() }).strict().optional(),
   })
   .strict();
 

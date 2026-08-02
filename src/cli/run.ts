@@ -11,6 +11,7 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
+import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import {
   doneCallbackMessage,
@@ -131,6 +132,28 @@ import type { WritableSink } from "./writable-sink.js";
 // emit failure, and it isn't, since `emitScenario` itself never throws.
 // `record.status`/the run's exit code/stdout's content are all otherwise
 // untouched by any of this.
+//
+// m3c-messages-emitter spec-b task spec, item 2: the messages emitter is
+// built and `begin()`-ed right after the Allure emitter above — same
+// `hasPickles` gate, same one try/catch around construction+`begin()`, same
+// stderr-warning-only failure handling, for the same reasons (see the
+// paragraph above and src/report/messages/emitter.ts's own header). Its
+// `emitScenario` call sits immediately after the Allure emitter's own, both
+// still after the pickle loop's `stdout.write` of that scenario's record.
+// `end(allPassed)` is placed after the AfterAll loop below, immediately
+// before this function's own `return` (item 2, decision 4): it is the one
+// place `allPassed` has already absorbed every BeforeAll/AfterAll failure,
+// so `testRunFinished.success` in the emitted stream is guaranteed to equal
+// this run's own exit code — this emitter's only channel for a run-scope
+// hook's failure, since neither hook has a record of its own to carry it.
+//
+// Output-file semantics (item 3): one `nuka run` invocation is one stream,
+// written to one file; `begin()` truncates it (appending would produce a
+// second `testRunStarted` in what must read back as a single well-formed
+// message stream). Since `nuka run` only ever runs one feature file per
+// invocation, running a second feature afterward overwrites the first run's
+// stream rather than appending to it — a deliberate consequence of "one
+// file, truncated on begin", not a bug.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -337,6 +360,30 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
 
+      // See this file's own header (m3c-messages-emitter spec-b task spec,
+      // item 2) for the gate, the try/catch shape, and the output-file
+      // truncate semantics.
+      let messagesEmitter: MessagesEmitter | null = null;
+      if (hasPickles) {
+        try {
+          const output = path.join(
+            rootDir,
+            config.messages?.output ?? path.join(config.stateDir, "messages.ndjson"),
+          );
+          messagesEmitter = createMessagesEmitter({ output, rootDir, stderr });
+          messagesEmitter.begin({
+            relativeFeaturePath: selected.relativePath,
+            gherkinDocument: selected.gherkinDocument,
+            pickles: selected.pickles,
+          });
+        } catch (error) {
+          messagesEmitter = null;
+          stderr.write(
+            `Warning: messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
+          );
+        }
+      }
+
       const beforeAllHooks = compatRunHooks.filter((hook) => hook.type === "beforeAll");
       // Same LIFO convention as src/run/run-scenario.ts's own After-hook
       // loop (that file's own comment: "teardown unwinds in the opposite
@@ -422,6 +469,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             pickle,
             relativeFeaturePath: selected.relativePath,
           });
+          messagesEmitter?.emitScenario({ record, pickle });
           if (record.status !== "passed") {
             allPassed = false;
           }
@@ -443,6 +491,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           }
         }
       }
+
+      // See this file's own header (m3c-messages-emitter spec-b task spec,
+      // item 2) for why this must run here — after BeforeAll/AfterAll have
+      // had their chance to flip `allPassed`, immediately before the
+      // `return` below that turns it into this run's own exit code.
+      messagesEmitter?.end(allPassed);
 
       return allPassed ? 0 : 1;
     } finally {
