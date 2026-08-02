@@ -436,8 +436,8 @@ The execution infrastructure Cucumber never had:
   means a clean start; there is no implicit shared state. No daemon.
 - **Environments** name deployment targets: per-environment `baseURL`,
   `envFiles`, `policy: "read-only"` (refuses mutating steps), and an optional
-  `version` probe recorded on every receipt as `target_version`. Sign-off
-  machine-checks that cited receipts share one environment and version.
+  `version` probe recorded on every receipt as `target_version`. A sign-off
+  freezes both, so a record names the deployment it was green against.
 - **Secrets**: git is the classifier. An env file git does not track —
   ignored or untracked — is a secret source: every value it defines is a
   secret, no declaration needed. Tracked env files are plain configuration
@@ -506,32 +506,84 @@ steps, and sign-off records.
 
 ## Sign-off
 
-A sign-off turns "the criteria are met" from a claim that evaporates in
-conversation into a recorded, reviewable artifact:
+A sign-off records that an agreed scenario ran green at a named commit. It
+exists for acceptance — confirming once that a ticket's criteria are met —
+not for regression. The scenario is written from the ticket's acceptance
+criteria, run until it is green, and then kept as a record; re-running it
+later is not the point, and nothing in nukadoko re-runs it.
 
 ```sh
-nuka signoff create \
-  --criteria 'A project can be created and looked up by id' \
-  (--receipts <id,...> | --scenario <feature:line>) \
-  --reasoning 'create-project returned ok; get-project returned the same name'
+nuka run acceptance/PROJ-123.feature     # execute, as often as needed
+nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 ```
 
-- Machine checks at creation: every cited receipt exists, is ok, shares one
-  environment and (when probed) one `target_version`. Citing a scenario
-  additionally checks the scenario record: every step ran ok, in order.
-  The scenario citation is the primary form — a reviewed feature that ran
-  green; explicit receipt ids cover the ad-hoc rest.
-- The reasoning — why these facts prove those criteria — is judgment. nukadoko
-  does not evaluate it; it preserves it for human review, permanently
-  separated from the facts it cites.
-- There is no plan subsystem. The question "what would prove this?" is
-  answered by the feature file and the typed steps it binds to, and both are
-  approved the git-native way: PR review, CODEOWNERS, merge. A sign-off is
-  the record that the agreed check actually ran.
-- Sign-off records are small structured files meant to be committed
-  (default `docs/acceptance/`). Git history carries how verification evolved;
-  a CI tripwire ("fail a product PR when nothing under docs/acceptance
-  changed") keeps the recording habit alive.
+- `accept` does not execute. Signing off is an explicit act, not a side
+  effect of a green run — "keep accepting until it passes" is not a
+  meaningful loop. It takes the newest green run of that feature and
+  freezes it. Runs are identified by feature path, never by id: run ids
+  exist for machines reading `nuka run`'s output, not for humans to type.
+- It refuses unless the working tree is completely clean, untracked files
+  included, and the run it is freezing happened at the current HEAD. The
+  record's whole claim is "this scenario was green at commit X"; an
+  untracked step file the discovery would have loaded, or a commit made
+  between the run and the sign-off, makes that claim false. The scenario
+  record grows one field to make this checkable: the commit the working
+  tree was at when the run started.
+- A red run produces nothing. There is no verdict field and no record of
+  failure: a scenario that did not pass gets fixed and re-run, and what is
+  worth keeping is the outcome, not the attempts.
+- The record is written beside the feature it came from, named
+  `<feature-basename>.<date>-<sha>.md`. nukadoko does not choose a
+  directory — where acceptance work lives is the project's decision. A
+  project that wants these out of its regression suite puts the feature
+  outside `featuresDir`, and the record follows it there.
+- It carries the feature's full text, the scenario record, and each step's
+  receipt with evidence stripped — traces and screenshots stay in
+  `.nukadoko/`, and a CI artifact is where they belong when they are
+  wanted at all. The copy is made by the tool, never transcribed by a
+  human: transcription would demote a measurement back to a claim.
+- Nothing in the record links to a ticket, because Gherkin already has the
+  room. A tag and the free description under `Feature:` carry the ticket
+  id, its URL, and the acceptance criteria in the reviewer's own words;
+  freezing the feature freezes all of it. nukadoko has no concept of a
+  ticket and needs none.
+- There is no plan subsystem and no reasoning field. The question "what
+  would prove this?" is answered by the feature file and the typed steps it
+  binds to, and the judgment that the scenario really expresses the
+  criteria is made where the translation happens — in PR review of that
+  feature, the git-native way. A sign-off is the record that the agreed
+  check actually ran.
+
+A sign-off only ever speaks in the past tense, and that is what keeps it
+from rotting the way a requirements traceability matrix does. A matrix
+claims to describe the system as it is now, so it drifts the moment the
+system moves; "green at commit X" stays true forever. What the record
+deliberately does not claim is that the software still behaves that way
+today.
+
+### The acceptance loop
+
+What an agent does when a ticket's acceptance criteria are handed to it:
+
+1. Read the vocabulary — `nuka steps --json`, then `nuka describe <step>`
+   for the contract of anything that looks relevant.
+2. When an operation is missing, `nuka scaffold <name>`, implement it, and
+   exercise it alone with `nuka do` until its receipt looks right.
+3. Write the feature. A tag and the description under `Feature:` carry the
+   ticket id and the criteria in the reviewer's words; the scenarios are
+   those criteria translated into the vocabulary.
+4. `nuka check` — undefined steps, pattern/schema mismatches, a Then bound
+   to a mutating step — before anything runs.
+5. Commit. A run can only be frozen if it happened on a clean tree at the
+   commit still checked out, so debugging runs against a dirty tree are
+   fine; they simply cannot be accepted.
+6. `nuka run` until green.
+7. `nuka accept <feature>`, then commit the record it wrote.
+
+Steps 1-4 are where the work and the review are: new typed steps and the
+feature itself are ordinary PR material, and the translation from criteria
+to scenarios is the judgment a reviewer is there to check. Steps 5-7 are
+mechanical, and the tool refuses rather than let them go wrong quietly.
 
 ## Allure emitter
 
@@ -706,7 +758,8 @@ nuka scaffold <name>          typed step template that fails until implemented
 nuka check                    static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, duplicate patterns, config coherence
-nuka signoff create|list|show verification records
+nuka accept <feature>         freeze that feature's last green run as a
+                              committed acceptance record beside it
 nuka session list|clear
 nuka init [--base-url <url>]  set up a project; ends with a self-check
 nuka skill path|install       install the agent-facing skill
@@ -719,7 +772,8 @@ nuka skill path|install       install the agent-facing skill
 - nukadoko cannot stop an agent with shell access from reading `.env` directly;
   it removes the structural necessity of secrets passing through the agent's
   context.
-- A sign-off is not a proof; it is a durable, reviewable record of a judgment.
+- A sign-off is not a proof that the software is correct. It records that an
+  agreed scenario was green at one named commit, and says nothing about today.
 - No test parallelism, sharding, retries, or CI reporting. No outbound
   network I/O by nukadoko itself. No HTML rendering — that is Allure's job.
 
@@ -733,7 +787,8 @@ nuka skill path|install       install the agent-facing skill
   scenario runs — the compatibility surface that keeps a migrating team's
   existing formatters, JUnit-based CI, and HTML reports working — plus the
   allure-results emitter as the flagship dashboard.
-- **M4 — sign-off**: records, machine checks, CI tripwire recipe.
+- **M4 — sign-off**: `nuka accept`, the commit and cleanliness checks it
+  refuses on, and the frozen record written beside the feature.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
