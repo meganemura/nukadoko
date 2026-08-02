@@ -1,6 +1,8 @@
 import type { APIRequestContext, Page } from "playwright";
+import type { z } from "zod";
 import type { StepContext } from "../context.js";
 import { WorldNotOpenedError } from "./errors.js";
+import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instrumentation.js";
 
 // Responsibility: cucumber-js's own World shape (proto-typed-world findings,
 // question 5 — a single-argument constructor receiving `{ attach, log,
@@ -141,16 +143,44 @@ export function setWorldConstructor(ctor: WorldConstructor): void {
   registeredConstructor = ctor;
 }
 
+/** What `instantiateWorldForPickle` hands back: the constructed World a
+ * compat step/hook runs against, plus the instrumentation handle
+ * src/run/run-scenario.ts calls at each step boundary (`beginStep()`) and
+ * reads (`snapshot()`) to build that step's receipt's `world` field (m2c-
+ * typed-world task spec, item 3). Two separate values rather than one
+ * augmented object: the instrumentation handle is executor-only, the same
+ * "a step cannot see or reset its own observation" rule create-context.ts's
+ * header documents for `observed`/`used` — nothing about `World` itself
+ * exposes it. */
+export interface InstantiatedWorld {
+  readonly world: World;
+  readonly instrumentation: WorldInstrumentationHandle;
+}
+
 /**
  * Constructs this pickle's own World (base `World`, or whatever
- * `setWorldConstructor` last registered) and attaches `ctx` as the runtime
- * bridge `openPage()`/`openRequest()` read from. Called exactly once per
+ * `setWorldConstructor` last registered), attaches `ctx` as the runtime
+ * bridge `openPage()`/`openRequest()` read from, and wraps the fresh
+ * instance for measurement + optional declared-key validation (m2c-typed-
+ * world task spec, items 1-2; proto-typed-world/findings.md's verified
+ * own-data-defineProperty mechanism), applied right here, before any hook or
+ * step ever sees this instance ("instantiateWorldForPickle が生成直後の
+ * World に適用" — this task's spec, item 1). Called exactly once per
  * pickle (m2b-compat-execution task spec, item 4: "1 pickle = 1 World = 1
  * ctx") by src/run/run-scenario.ts, through the reference
  * src/discover/discover-steps.ts captured via its own scoped tsx import —
  * see this file's header for why that indirection matters.
+ *
+ * @param declaredWorldSchemas This run's `defineWorld` registration (src/
+ * compat/define-world.ts), already resolved by discovery — this function
+ * never reads that module's buffer itself, so it does not care which of
+ * this run's step files (if any) called `defineWorld`, only what the result
+ * was.
  */
-export function instantiateWorldForPickle(ctx: StepContext): World {
+export function instantiateWorldForPickle(
+  ctx: StepContext,
+  declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>>,
+): InstantiatedWorld {
   const Ctor = registeredConstructor ?? World;
   const held: HeldDeclarations = { attachments: [], logs: [], links: [] };
   const params: WorldConstructorParams = {
@@ -168,5 +198,6 @@ export function instantiateWorldForPickle(ctx: StepContext): World {
   const instance = new Ctor(params);
   runtimeByWorld.set(instance, ctx);
   heldByWorld.set(instance, held);
-  return instance;
+  const instrumentation = instrumentWorld(instance, declaredWorldSchemas);
+  return { world: instance, instrumentation };
 }

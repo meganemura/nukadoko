@@ -38,3 +38,25 @@ export class DuplicateCompatStepError extends Error {
     this.duplicateFilePath = duplicateFilePath;
   }
 }
+
+/** `defineWorld` was called more than once in a single discovery run (m2c-
+ * typed-world task spec, item 2: "2 回目はエラー") — whether both calls are
+ * in one file (`firstFilePath === duplicateFilePath`) or two, since
+ * src/compat/define-world.ts's own buffer only ever holds registrations,
+ * never rejects one itself (the same reason src/compat/registry.ts's
+ * `defineParameterType` buffer doesn't either — see that file's header):
+ * this function is the one place with the full per-file picture needed to
+ * name both offending files. */
+export class DuplicateWorldDefinitionError extends Error {
+  readonly firstFilePath: string;
+  readonly duplicateFilePath: string;
+
+  constructor(firstFilePath: string, duplicateFilePath: string) {
+    super(
+      `Duplicate defineWorld() registration: already defined at ${firstFilePath}, also found at ${duplicateFilePath}`,
+    );
+    this.name = "DuplicateWorldDefinitionError";
+    this.firstFilePath = firstFilePath;
+    this.duplicateFilePath = duplicateFilePath;
+  }
+}

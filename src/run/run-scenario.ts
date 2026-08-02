@@ -6,7 +6,7 @@ import { formatValidationIssues } from "../binding/format-issues.js";
 import { DataTable } from "../compat/data-table.js";
 import type { HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
-import type { World } from "../compat/world.js";
+import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
 import { createStepContext } from "../context/create-context.js";
@@ -170,8 +170,10 @@ export interface RunScenarioOptions {
   readonly sessionFilePath: string | null;
   /** Constructs this pickle's own World (src/discover/discover-steps.ts's
    * `DiscoveryResult.instantiateCompatWorld`, m2b-compat-execution task spec,
-   * item 4). Called exactly once per pickle. */
-  readonly instantiateCompatWorld: (ctx: StepContext) => World;
+   * item 4), already wrapped for measurement + this run's own `defineWorld`
+   * schemas (m2c-typed-world task spec, items 1-2). Called exactly once per
+   * pickle. */
+  readonly instantiateCompatWorld: (ctx: StepContext) => InstantiatedWorld;
   /** Every registered Before/After hook (src/discover/discover-steps.ts's
    * `DiscoveryResult.compatHooks`) — already validated for tag-expression
    * support by the caller (cli/run.ts's setup phase); this file only
@@ -286,6 +288,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // step にも実行時の観測強制がそのまま適用される").
     const observed = contextHandle.observedCounts();
     const usedReceiptIds = contextHandle.usedReceiptIds();
+    // World reads/writes tallied since the current step boundary began (m2c-
+    // typed-world task spec, item 3) — always empty for a typed step (no
+    // `this`), so the `world` field below is naturally omitted for one,
+    // with no separate kind check needed.
+    const worldReadsWrites = worldInstrumentation.snapshot();
     const demotionMessages: string[] = [];
     if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
       demotionMessages.push(thenObservedWritesMessage(outcomeStepName, observed.http_writes));
@@ -331,6 +338,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+            ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
+              ? { world: worldReadsWrites }
+              : {}),
           }
         : {
             receipt_id: begun.receiptId,
@@ -352,6 +362,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+            ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
+              ? { world: worldReadsWrites }
+              : {}),
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,
@@ -374,8 +387,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // --- Hooks + World (m2b-compat-execution task spec, items 4-5) ---
   // One World per pickle, shared by every compat step and hook that runs in
   // it, wrapping this same `contextHandle.ctx` a typed step's `run` also
-  // receives (item 4: "1 pickle = 1 World = 1 ctx").
-  const world = instantiateCompatWorld(contextHandle.ctx);
+  // receives (item 4: "1 pickle = 1 World = 1 ctx"). `worldInstrumentation`
+  // is this same World's own measurement handle (m2c-typed-world task spec,
+  // items 1-3) — advanced (`beginStep()`) at the exact same points
+  // `contextHandle.beginStep()` is called below, and read (`snapshot()`)
+  // inside `finishExecutedStep` and this function's own backstop catch.
+  const { world, instrumentation: worldInstrumentation } = instantiateCompatWorld(
+    contextHandle.ctx,
+  );
   const pickleTags = pickle.tags.map((tag) => tag.name);
   const beforeHooks = compatHooks.filter(
     (hook) => hook.type === "before" && hookApplies(hook.tags, pickleTags),
@@ -392,6 +411,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // to the scenario dir itself, the same place `httpLogDir` already starts
   // out pointed at before any step's own `beginStep()` call ever runs.
   contextHandle.beginStep(scenarioDir);
+  // Same step-boundary point for the World's own instrumentation (m2c-typed-
+  // world task spec, item 1's reconcile + item 3's per-boundary reset) — a
+  // Before hook's own World reads/writes get tallied here but are discarded
+  // by the very next `beginStep()` call (before step 1), so they are never
+  // attributed to any step's receipt, the same isolation `observed`/`used`
+  // already give hooks.
+  worldInstrumentation.beginStep();
   for (const hook of beforeHooks) {
     try {
       await hook.fn.call(world);
@@ -510,6 +536,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const receiptDir = path.join(rootDir, relativeReceiptDir);
         await mkdir(receiptDir, { recursive: true });
         contextHandle.beginStep(receiptDir);
+        worldInstrumentation.beginStep();
         began = {
           receiptId,
           receiptDir,
@@ -581,6 +608,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const receiptDir = path.join(rootDir, relativeReceiptDir);
         await mkdir(receiptDir, { recursive: true });
         contextHandle.beginStep(receiptDir);
+        worldInstrumentation.beginStep();
         began = {
           receiptId,
           receiptDir,
@@ -661,6 +689,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const httpLogExists = existsSync(path.join(began.receiptDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
         const usedReceiptIds = contextHandle.usedReceiptIds();
+        const worldReadsWrites = worldInstrumentation.snapshot();
         const receipt: Receipt = {
           receipt_id: began.receiptId,
           step: began.stepName,
@@ -681,6 +710,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           },
           observed,
           ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+          ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
+            ? { world: worldReadsWrites }
+            : {}),
         };
         const redactedReceipt = redact(receipt, secrets) as Receipt;
         await writeReceipt(began.receiptDir, redactedReceipt);
@@ -701,6 +733,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // hooks are, above, rather than left pointed at whichever step happened
   // to run last.
   contextHandle.beginStep(scenarioDir);
+  worldInstrumentation.beginStep();
   for (const hook of afterHooks) {
     try {
       await hook.fn.call(world);

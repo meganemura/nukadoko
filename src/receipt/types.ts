@@ -24,6 +24,15 @@
 // empty — unlike `observed`, "no reads happened" is the overwhelmingly
 // common case (most steps never call `resultOf` at all), so this follows
 // `target_version`'s "absence is the normal case" convention instead.
+//
+// `world` is added now (m2c-typed-world task spec, item 3): a compat step's
+// own World reads/writes, measured the same "always on" way `observed` is —
+// deduplicated, in access order, both arrays omitted together (`used`'s own
+// convention) when a step never touched `this` at all. Never present on a
+// typed step's receipt: a typed step has no World to read or write (its
+// `run(ctx, args)` never receives `this`), so its own tally is always empty
+// and this field is always omitted for it — no separate "kind" check is
+// needed to enforce that.
 
 import type { ObservedCounts } from "../context/observed.js";
 
@@ -77,6 +86,11 @@ interface ReceiptBase {
    * decisions 1-2). Present only when non-empty; deduplicated, in read
    * order. */
   used?: string[];
+  /** A compat step's own World reads/writes (m2c-typed-world task spec,
+   * item 3) — deduplicated, in access order. Present only when at least one
+   * of `reads`/`writes` is non-empty; absent for a typed step (no World),
+   * and absent for a compat step that never touched `this` at all. */
+  world?: { reads: string[]; writes: string[] };
   /** The environment's `version` probe result (docs/spec.md "Receipts":
    * optional, "(when probed)"). Present only when the environment configures
    * a probe *and* it resolved to a string within its timeout; omitted — not

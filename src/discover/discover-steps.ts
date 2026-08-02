@@ -3,16 +3,21 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { register } from "tsx/esm/api";
+import type { z } from "zod";
 import type { HookRegistration } from "../compat/hooks.js";
 import type {
   CompatKeyword,
   CompatParameterTypeRegistration,
   CompatStepFn,
 } from "../compat/registry.js";
-import type { World } from "../compat/world.js";
+import type { InstantiatedWorld } from "../compat/world.js";
 import type { StepContext } from "../context.js";
 import { isStep, type Step } from "../step/define-step.js";
-import { DuplicateCompatStepError, DuplicateStepError } from "./errors.js";
+import {
+  DuplicateCompatStepError,
+  DuplicateStepError,
+  DuplicateWorldDefinitionError,
+} from "./errors.js";
 
 // Responsibility: walk `featuresDir`, import every `.ts` file found, and
 // collect the vocabulary of typed steps by filename, plus (m2a-compat-
@@ -108,12 +113,13 @@ export interface DiscoveryResult {
   /** Constructs one pickle's own World — base `World`, or whatever this
    * run's step files last passed to `setWorldConstructor` (m2b-compat-
    * execution task spec, item 1) — with `ctx` attached as the runtime bridge
-   * `World.openPage()`/`openRequest()` read from. Bound to the *exact*
-   * module instance this discovery run's own scoped tsx import loaded
-   * src/compat/world.ts through (see that file's header for why identity
-   * matters here) — callers (src/run/run-scenario.ts) never import
-   * world.js directly themselves. */
-  readonly instantiateCompatWorld: (ctx: StepContext) => World;
+   * `World.openPage()`/`openRequest()` read from, already wrapped for
+   * measurement + this run's own `defineWorld` schemas (m2c-typed-world task
+   * spec, items 1-2). Bound to the *exact* module instance this discovery
+   * run's own scoped tsx import loaded src/compat/world.ts through (see that
+   * file's header for why identity matters here) — callers (src/run/run-
+   * scenario.ts) never import world.js directly themselves. */
+  readonly instantiateCompatWorld: (ctx: StepContext) => InstantiatedWorld;
   /** Every Before/After hook any step file registered during this run
    * (m2b-compat-execution task spec, item 5) — not attributed to a file
    * (see src/compat/hooks.ts's header), read once here after every file's
@@ -188,9 +194,26 @@ export async function discoverSteps(
       new URL("../compat/hooks.js", import.meta.url).href,
       import.meta.url,
     )) as typeof import("../compat/hooks.js");
+    // Same identity reasoning again, for `defineWorld` (m2c-typed-world task
+    // spec, item 2) — src/compat/define-world.ts's own registration buffer,
+    // loaded through this run's own scoped import so a step file's
+    // `defineWorld(...)` call via "nukadoko/compat" lands in the exact
+    // instance this function drains below.
+    const defineWorldModule = (await scoped.import(
+      new URL("../compat/define-world.js", import.meta.url).href,
+      import.meta.url,
+    )) as typeof import("../compat/define-world.js");
 
     const vocabulary = new Map<string, VocabularyEntry>();
     const compatParameterTypes: CompatParameterTypeEntry[] = [];
+    // At most one file's worth of `defineWorld` schemas ever wins — a second
+    // registration, anywhere, is always an error (m2c-typed-world task spec,
+    // item 2: "2 回目はエラー"), detected here rather than inside define-
+    // world.ts itself so both offending files can be named
+    // (DuplicateWorldDefinitionError), the same reasoning
+    // DuplicateCompatStepError already applies to a colliding compat step.
+    let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
+    let declaredWorldSchemasFilePath: string | undefined;
 
     for (const filePath of files) {
       const mod: { default?: unknown } = await scoped.import(
@@ -237,6 +260,17 @@ export async function discoverSteps(
       for (const registration of compatRegistry.drainCompatParameterTypes()) {
         compatParameterTypes.push({ ...registration, filePath });
       }
+
+      // Same per-file attribution timing as compat steps above: drained
+      // right after this file's own import, before the next file's import
+      // can add anything else.
+      for (const registration of defineWorldModule.drainWorldSchemaRegistrations()) {
+        if (declaredWorldSchemasFilePath !== undefined) {
+          throw new DuplicateWorldDefinitionError(declaredWorldSchemasFilePath, filePath);
+        }
+        declaredWorldSchemas = registration.schemas;
+        declaredWorldSchemasFilePath = filePath;
+      }
     }
 
     return {
@@ -246,7 +280,11 @@ export async function discoverSteps(
       // header, "並行 discovery の安全性"): a World constructor/hook isn't
       // attributed to any one file, unlike a compat step, so there is
       // nothing to drain per file — just this run's own final state.
-      instantiateCompatWorld: compatWorld.instantiateWorldForPickle,
+      // `declaredWorldSchemas` is curried in here (m2c-typed-world task
+      // spec, item 1) so `instantiateWorldForPickle` never needs to reach
+      // back into src/compat/define-world.ts's own buffer itself.
+      instantiateCompatWorld: (ctx: StepContext) =>
+        compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas),
       compatHooks: compatHooksModule.getRegisteredHooks(),
     };
   } finally {

@@ -41,3 +41,51 @@ export class UnsupportedTagExpressionError extends Error {
     this.expression = expression;
   }
 }
+
+/** `this.<reserved>` was reassigned at run time (m2c-typed-world task spec,
+ * item 1's reserved-key deny-list; proto-typed-world/findings.md Q5) —
+ * `attach`/`log`/`link`/`parameters` are, in cucumber-js itself, ordinary
+ * writable own data properties despite being typed `readonly` upstream, so
+ * nothing but this explicit guard would stop `this.attach = "oops"` from
+ * silently replacing the real function and only failing later, confusingly,
+ * inside whatever glue code next calls `this.attach(...)`. */
+export class ReservedWorldKeyWriteError extends Error {
+  readonly key: string;
+
+  constructor(key: string) {
+    super(`World.${key} is a reserved cucumber-js field and cannot be reassigned at run time`);
+    this.name = "ReservedWorldKeyWriteError";
+    this.key = key;
+  }
+}
+
+/** A `defineWorld` schema named one of the reserved keys (m2c-typed-world
+ * task spec, item 1) — registration-time, not run-time: this must be caught
+ * before the schema is ever installed, the same way it would make no sense
+ * to let a schema silently govern a field the harness itself already owns. */
+export class ReservedWorldKeyDeclaredError extends Error {
+  readonly key: string;
+
+  constructor(key: string) {
+    super(`defineWorld cannot declare "${key}": it is a reserved cucumber-js World field`);
+    this.name = "ReservedWorldKeyDeclaredError";
+    this.key = key;
+  }
+}
+
+/** A declared-key write failed its own `defineWorld` zod schema (m2c-typed-
+ * world task spec, item 2) — thrown from inside the accessor's own setter
+ * (src/compat/world-instrumentation.ts), so it becomes an ordinary step
+ * failure exactly like any other throw from a compat step's own glue
+ * function; the write is never recorded into `receipt.world.writes` (thrown
+ * before that record happens — proto-typed-world/findings.md Q1's bug,
+ * regularized into this module's own contract). */
+export class WorldWriteValidationError extends Error {
+  readonly key: string;
+
+  constructor(key: string, issues: string) {
+    super(`World.${key} failed its declared defineWorld schema: ${issues}`);
+    this.name = "WorldWriteValidationError";
+    this.key = key;
+  }
+}

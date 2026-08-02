@@ -29,3 +29,6 @@ export {
 } from "./world.js";
 export { Before, After, type HookFn, type HookOptions } from "./hooks.js";
 export { DataTable } from "./data-table.js";
+// m2c-typed-world task spec, item 2: World's own declaration surface —
+// "measurement is always on, declaration is opt-in" (typed-world-design.md).
+export { defineWorld, type InferWorldFields } from "./define-world.js";
