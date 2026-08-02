@@ -186,7 +186,7 @@ import { Given, When, Then } from "nukadoko/compat";
   サポートされる API はよく使われるサブセット(Given/When/Then、World、Before/After)で、必要に応じて拡張され、先回りしては拡張されません。
 - 登録の意味論: `Given` / `When` / `Then` は 1 つの登録の 3 つの名前です。
   キーワードは登録時には何も意味せず、実行時に scenario 内の位置が決めます(Cucumber とまったく同じです)。
-  pattern は文字列(素の cucumber-expressions。named capture はここでは要求されません — その規律は typed step のものです)または RegExp です。
+  pattern は文字列(素の cucumber-expressions。named capture はここでは要求されません(その規律は typed step のものです))または RegExp です。
   レガシーな glue は regex が多く、扉はそれを受け入れなければならないからです。
   discovery はファイルを import し、各登録をそれを行ったファイルに帰属させます。
   compat step の同一性はその pattern テキストで、`nuka steps` は kind 付きで列挙し、`nuka describe` は「持っていない契約」を明示し、`nuka do` は名指し実行を拒否します。
