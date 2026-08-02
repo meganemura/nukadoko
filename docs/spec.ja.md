@@ -426,8 +426,15 @@ nuka signoff create \
 - step の parameter は、その宣言と実際に観測されたものを並べて運びます: 計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
   宣言と計測が同じテーブルの中にあることこそ、nukadoko の主張のすべてをレポートそのものの中で目に見えるようにしたものです。
 - 失敗した step や test のメッセージには `[nukadoko.failure=<kind>]` という接頭辞が付き、その receipt が既に持っている同じ `error.kind` を名指しします。
-  Allure 2 には result ごとの category フィールドが無いため、emitter は `categories.json` も書き出します(`error.kind` ごとに 1 つの rule、全 9 個、すべての run で)。
-  メッセージの接頭辞と category の rule は、同じ分類を 2 つの視点から見たものです。
+  同じ `error.kind` は `nukadoko.failure` という result label としても書き出されます。
+  2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。
+- **Allure 2** には result ごとの category フィールドが無いため、emitter は `categories.json` も書き出します(`error.kind` ごとに 1 つの rule、全 9 個、すべての run で、メッセージの接頭辞を正規表現でマッチさせます)。
+  メッセージの接頭辞と category の rule は同じ分類を 2 つの視点から見たものであり、利用者側の設定は不要です。
+- **Allure 3** の `allure generate`/`allure report` は、結果ディレクトリの `categories.json` を一切読みません。
+  そこでの category は Allure 3 自身の config だけから決まり、result の label と照合され、`nukadoko.failure` はまさにそのような label です。
+  `examples/allure/allurerc.mjs` は `error.kind` ごとに 1 つ、9 個の label-matcher rule を同梱しています。
+  プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
+  それを置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。
 - Identity(`fullName`/`testCaseId`/`historyId`)は、公式の cucumberjs 用 Allure adapter と同じ方法で計算されます。
   そのため nukadoko に移行するチームは、既存の Allure history と retry tracking をそのまま保てます。
 - ad-hoc な `do` の receipt は作業記録であり、test result ではないため、ダッシュボードには現れません。
