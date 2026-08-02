@@ -5,6 +5,7 @@ import yargs from "yargs";
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
+import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
 import { runDo } from "./do.js";
 import { runInit } from "./init.js";
@@ -15,7 +16,7 @@ import { loadVocabulary, describeContract, formatVocabularyError, summarize } fr
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`, `session list`/`clear`, `init`, `scaffold`, `check`) to yargs and turns any
+// `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `accept`) to yargs and turns any
 // failure — yargs' own (bad flags, no command) or ours (config/discovery
 // errors, unknown step name) — into stderr output plus a non-zero exit
 // code, without ever calling `process.exit` itself. That is `cli.ts`'s job,
@@ -24,8 +25,9 @@ import type { WritableSink } from "./writable-sink.js";
 // list/clear logic lives in cli/session.ts; `init`/`scaffold`'s own
 // generation logic lives in cli/init.ts and cli/scaffold.ts; `check`'s own
 // analysis lives in cli/check.ts (thin wiring) and src/check/* (the actual
-// checks); this module only wires their argv shapes and reports their exit
-// codes.
+// checks); `accept`'s own run-selection and record-rendering logic lives in
+// cli/accept.ts and src/accept/* (m4b-accept task spec), the same split;
+// this module only wires their argv shapes and reports their exit codes.
 
 export type { WritableSink } from "./writable-sink.js";
 
@@ -75,6 +77,10 @@ interface ScaffoldArgs {
 
 interface CheckArgs {
   json?: boolean;
+}
+
+interface AcceptArgs {
+  feature: string;
 }
 
 export async function runCli(
@@ -339,6 +345,26 @@ export async function runCli(
     },
   };
 
+  const acceptCommand: CommandModule<Record<string, never>, AcceptArgs> = {
+    command: "accept <feature>",
+    describe: "freeze that feature's last green run as a committed acceptance record beside it",
+    builder: (y: Argv) =>
+      y.positional("feature", {
+        type: "string",
+        demandOption: true,
+        describe: "feature file path (no :line — only a whole-feature run can be accepted)",
+      }) as Argv<AcceptArgs>,
+    handler: async (args: Arguments<AcceptArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runAccept({
+        rootDir,
+        featureArg: args.feature,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const sessionCommand: CommandModule = {
     command: "session",
     describe: "list|clear sessions",
@@ -367,6 +393,7 @@ export async function runCli(
     .command(initCommand)
     .command(scaffoldCommand)
     .command(checkCommand)
+    .command(acceptCommand)
     .demandCommand(1)
     .strict()
     .help();
