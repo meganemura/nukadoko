@@ -5,6 +5,14 @@
     "rootDir": "src",
     "outDir": "dist",
     "declaration": true,
+    // Both maps point at `src/`, and `src/` ships (package.json `files`), so
+    // they resolve on a consumer's machine: a stack trace from `dist/` lands
+    // on the TypeScript that produced it, and Go to Definition from a `.d.ts`
+    // opens the real source rather than the generated declaration. nukadoko
+    // is a devDependency, so carrying its own source costs a consumer's
+    // bundle nothing — and this codebase puts its reasoning in comments that
+    // `.d.ts` throws away, which is worth reaching an agent reading
+    // node_modules.
     "declarationMap": true,
     "sourceMap": true
   },

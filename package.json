@@ -1,6 +1,6 @@
 {
   "name": "nukadoko",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "A living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.",
   "type": "module",
   "bin": {
@@ -22,7 +22,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "pretest": "npm run build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "gherkin",
@@ -40,7 +41,11 @@
   "homepage": "https://github.com/meganemura/nukadoko#readme",
   "author": "meganemura",
   "license": "MIT",
-  "files": [],
+  "files": [
+    "dist",
+    "skills",
+    "src"
+  ],
   "engines": {
     "node": ">=20"
   },
