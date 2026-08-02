@@ -24,14 +24,10 @@ identifiers on that line.
   7+ days old with no superseding security fix). Never loosen a pin.
 - Never run `npm publish` or any outward, irreversible operation (registry,
   visibility, deploys). Prepare the state and let the user execute.
-- The published `nukadoko@0.0.0` placeholder deliberately reveals nothing
-  about the project. Anything that would become publicly visible on npm
-  stays neutral until the first real release (note: `files: []` in
-  package.json is placeholder-era and must become `["dist"]` before that
-  release).
 - Commits are semantic units, in English, matching the existing message
   style; the user reviews direction, the session reviews code.
 - README.md/README.ja.md and docs/spec.md/docs/spec.ja.md are kept in sync
   (Japanese: one sentence per line; the English file is the source of
-  truth). Code comments explain why, not what; each module opens with its
+  truth).
+- Code comments explain why, not what; each module opens with its
   responsibility and boundaries.
