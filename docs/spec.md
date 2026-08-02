@@ -7,8 +7,8 @@ Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
 below) is implemented too — `nukadoko/compat`, typed World measurement, and
 a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
-real cucumber-js glue (below). Pre-0.1, and M3+ (Allure/messages emitters,
-sign-off) exist only as design.
+real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter is
+implemented, while the messages emitter and sign-off exist only as design.
 
 ## What nukadoko is
 
@@ -457,7 +457,8 @@ The execution infrastructure Cucumber never had:
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
-`.nukadoko`), `browser`, `secrets`, `parameterTypes`.
+`.nukadoko`), `browser`, `secrets`, `parameterTypes`, `allure` (only
+`resultsDir`, see "Allure emitter").
 
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
 type — `{ name, regexp, transformer? }`, e.g.
@@ -494,7 +495,8 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
   Playwright's own per-test `test-results/` convention one level up
 - `sessions/<env>/<name>.json` — storageState; live credentials in
   plaintext, created with restricted permissions
-- `allure-results/` — the emitter's output, regenerated freely
+- `allure-results/` — the emitter's output, appended to across runs and
+  safe to delete whenever a fresh Allure launch is wanted
 
 The durable artifacts live in the repository instead: feature files, typed
 steps, and sign-off records.
@@ -530,31 +532,68 @@ nuka signoff create \
 
 ## Allure emitter
 
-nukadoko's only presentation layer is the `allure-results` directory (Allure 2
-file format, readable by Allure 2 and 3):
+`nuka run` writes one Allure test result per scenario to the `allure-results/`
+directory (Allure 2 file format, readable by both Allure 2 and 3) —
+nukadoko's only presentation layer; nukadoko itself renders nothing.
 
-- A scenario run maps to one Allure test result: steps as steps, evidence
-  files as attachments, environment / target_version / session as labels and
-  parameters.
+- The output location defaults to `.nukadoko/allure-results/` (the state
+  directory's own `allure-results/`, above); `allure.resultsDir` in
+  `nukadoko.config.ts` moves it to any other root-relative path. There is no
+  `enabled` flag and no CLI flag — the emitter always runs, so zero
+  configuration already produces a full report. It is skipped only when a
+  `nuka run` invocation selects zero pickles (no `allure-results/` is
+  created at all in that case), the same reason BeforeAll/AfterAll are
+  skipped for it.
+- Writing is append-only: an existing `allure-results/` directory is never
+  cleared or replaced. Whether two `nuka run` invocations count as one
+  Allure launch or two is left to the caller; a user who wants a fresh
+  launch removes the directory themselves.
+- A scenario run maps to one Allure test result: each gherkin step becomes
+  an Allure step, and each Before/After hook becomes its own fixture
+  (Allure container).
+- Attachments: the scenario's own trace and screenshot, and per step, its
+  HTTP log and its validated result. Separately, whatever a step declared
+  about itself — an attachment, a link, a log line — is emitted too, always
+  under a name prefixed `declared:`; that prefix is the one place where
+  provenance (measured by nukadoko vs. self-reported by the step) survives
+  once everything is sitting in the same result file.
+- A step's parameters carry its declaration and what was actually observed
+  side by side: `mutates (declared)` next to the measured `http reads
+  (observed)` / `http writes (observed)` (and, for a compat step, `world
+  reads (observed)` / `world writes (observed)`) — declaration and
+  measurement, in the same table, is nukadoko's whole claim made visible in
+  the report itself.
+- A failed step or test's message is prefixed `[nukadoko.failure=<kind>]`,
+  naming the same `error.kind` its receipt already carries. Allure 2 has no
+  per-result category field, so the emitter also writes `categories.json`
+  (one rule per `error.kind`, all nine, every run) — the message prefix and
+  the category rule are two views of the same classification.
+- Identity (`fullName`/`testCaseId`/`historyId`) is computed the same way
+  the official cucumberjs Allure adapter computes it, so a team migrating
+  onto nukadoko keeps its existing Allure history and retry tracking intact.
 - Ad-hoc `do` receipts are working records, not test results, and do not
   appear on the dashboard — what an exploration proves is expressed by
   repairing or writing a scenario, and that scenario run is what Allure
   shows.
 - Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
-- Alongside Allure, `nuka run` will emit the cucumber messages protocol
-  (NDJSON, `@cucumber/messages` — already a dependency): every modern
-  cucumber formatter consumes messages, so the official HTML report, JUnit
-  XML for CI, and third-party consumers come for free. A migrating team's
-  report pipeline is a working asset, and the migration door must not
-  break it.
-- The two outputs differ in what fills them, not in format politics. A
-  classic cucumber run fills an Allure report only where glue authors
-  hand-attached evidence; nukadoko's harness measures everything anyway —
-  validated results, traces, HTTP logs, observed writes, environment and
-  version — and Allure's model (attachments, labels, parameters) has a
-  first-class place for all of it. The messages stream says what any
-  cucumber run can say; the Allure emitter is where nukadoko's
-  measurement surplus becomes visible, automatically.
+
+Not yet built: the cucumber messages protocol emitter (NDJSON,
+`@cucumber/messages` — already a dependency; every modern cucumber
+formatter consumes messages, so the official HTML report, JUnit XML for
+CI, and third-party consumers would come for free once it exists), a
+hook's own duration (record.json carries no per-hook timestamp today, so a
+hook's start and stop both collapse to the scenario's own boundary),
+BeforeAll/AfterAll (no run-level record exists for the emitter to map
+from), and link-template configuration (mapping a tag like `@issue:123` to
+a URL).
+
+The point is not format politics: a classic cucumber run fills an Allure
+report only where glue authors hand-attached evidence, while nukadoko's
+harness measures everything anyway — and Allure's own model (attachments,
+labels, parameters) already had a first-class place for all of it. The
+Allure emitter is where nukadoko's measurement surplus becomes visible,
+automatically, today; the messages emitter above will be the second,
+narrower output once it exists.
 
 ## Self-healing, audited
 

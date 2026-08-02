@@ -9,8 +9,9 @@ tool-measured execution records (receipts), and sign-offs. The design source
 of truth is `docs/spec.md` — read it before changing behavior. Status:
 pre-0.1; M1 (engine core) and M2 (compat) are implemented, both real-world
 gates have been run (typed-step drafting, and the compat audit reported
-under docs/spec.md "Compat steps"), and M3+ (reporting emitters, sign-off)
-are design-only.
+under docs/spec.md "Compat steps"). Of M3+, the Allure emitter is
+implemented (`docs/spec.md` "Allure emitter"); the cucumber-messages emitter
+and sign-off are still design-only.
 
 ## Naming rule
 
