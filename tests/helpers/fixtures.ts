@@ -45,6 +45,21 @@ export async function removeTempDir(dir: string): Promise<void> {
 }
 
 /**
+ * Copies a reader-facing project under `examples/<name>/` into a fresh temp
+ * directory, the same way `copyFixtureToTempDir` does for `tests/fixtures/*`
+ * — nested under `tempFixturesRoot` so `"nukadoko"` and `"zod"` still resolve
+ * (see that function's own comment) and so running `nuka run`/`nuka do`
+ * against it (examples-todo task spec: "CLI は temp コピーにのみ実行") never
+ * writes `.nukadoko/` state into the committed example directory.
+ */
+export async function copyExampleToTempDir(name: string): Promise<string> {
+  await mkdir(tempFixturesRoot, { recursive: true });
+  const dest = await mkdtemp(path.join(tempFixturesRoot, "example-"));
+  await cp(path.join(repoRoot, "examples", name), dest, { recursive: true });
+  return dest;
+}
+
+/**
  * A fresh, genuinely empty project directory — for `nuka init`, which
  * refuses to run at all against a directory that already has a
  * `nukadoko.config.ts` (m1-init-scaffold task spec, decision 1), so it can't
