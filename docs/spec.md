@@ -564,10 +564,24 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   measurement, in the same table, is nukadoko's whole claim made visible in
   the report itself.
 - A failed step or test's message is prefixed `[nukadoko.failure=<kind>]`,
-  naming the same `error.kind` its receipt already carries. Allure 2 has no
-  per-result category field, so the emitter also writes `categories.json`
-  (one rule per `error.kind`, all nine, every run) — the message prefix and
-  the category rule are two views of the same classification.
+  naming the same `error.kind` its receipt already carries; the same
+  `error.kind` is also written as a `nukadoko.failure` result label. The two
+  Allure generations turn that into a category by different paths, and they
+  need different things from a user.
+- **Allure 2** has no per-result category field, so the emitter also writes
+  `categories.json` (one rule per `error.kind`, all nine, every run,
+  matching the message prefix by regex) — the message prefix and the
+  category rule are two views of the same classification, and no user
+  configuration is needed.
+- **Allure 3**'s `allure generate`/`allure report` never read a results
+  directory's `categories.json` — categories there come only from Allure 3's
+  own config, matched against a result's labels, and `nukadoko.failure` is
+  exactly such a label. `examples/allure/allurerc.mjs` ships nine
+  label-matcher rules, one per `error.kind`; dropped at a project's root it
+  is picked up automatically (Allure 3 auto-detects
+  `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory,
+  no `--config` flag needed). Without it, every nukadoko failure lands in
+  Allure 3's one built-in "Product errors" category instead.
 - Identity (`fullName`/`testCaseId`/`historyId`) is computed the same way
   the official cucumberjs Allure adapter computes it, so a team migrating
   onto nukadoko keeps its existing Allure history and retry tracking intact.
