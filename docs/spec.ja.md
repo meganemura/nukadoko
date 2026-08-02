@@ -364,7 +364,7 @@ nukadoko の唯一の presentation 層は `allure-results` ディレクトリで
   探索が証明することは、scenario を修復するか新しく書くことで表現され、その scenario の実行こそが Allure に表示されるものです。
 - 表示、履歴、傾向、flakiness はすべて Allure の仕事です。
   nukadoko に web UI はありません。
-- Allure と並んで、`nuka run` は cucumber messages プロトコル(NDJSON、`@cucumber/messages` — 既に依存に入っています)を出力する予定です。
+- Allure と並んで、`nuka run` は cucumber messages プロトコル(NDJSON)を出力する予定です(`@cucumber/messages` は既に依存に入っています)。
   現代の cucumber の formatter はすべて messages を消費するため、公式の HTML レポート、CI 向けの JUnit XML、サードパーティの消費者が無料で付いてきます。
   移行するチームのレポート配管は「動いている資産」であり、移行の扉がそれを壊してはなりません。
   Allure が旗艦であり続けるのは、receipt と evidence のマッピングが標準語彙の運べる範囲より濃いからです。
