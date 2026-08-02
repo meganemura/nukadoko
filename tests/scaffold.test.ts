@@ -58,6 +58,7 @@ describe("nuka scaffold", () => {
     expect(content).toContain('from "nukadoko"');
     expect(content).toContain("TODO: describe send-invite");
     expect(content).not.toMatch(/pattern/);
+    expect(content).toContain(".describe(");
 
     const stepsStdout = createCaptureSink();
     const stepsExit = await runCli(["steps", "--json"], {
