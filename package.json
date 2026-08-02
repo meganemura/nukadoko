@@ -26,13 +26,19 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "gherkin",
     "cucumber",
+    "cucumber-js",
+    "gherkin",
     "bdd",
-    "acceptance-testing",
     "playwright",
-    "typed-step",
-    "agent"
+    "e2e-testing",
+    "acceptance-testing",
+    "test-automation",
+    "typescript",
+    "zod",
+    "ai-agents",
+    "agent-skills",
+    "allure"
   ],
   "repository": {
     "type": "git",

@@ -413,6 +413,13 @@ export async function runCli(
 
   const parser = yargs(argv)
     .scriptName("nuka")
+    // Pinned, not left to `LANG`: yargs translates its own chrome (usage
+    // headers, "Commands:", its built-in error wording) but every command
+    // description here is written in English, so an inherited locale
+    // produces a half-translated help screen. One language throughout beats
+    // a localized frame around untranslated content — and a user reporting
+    // an error message quotes the same string the maintainer reads.
+    .locale("en")
     .exitProcess(false)
     .fail((msg: string | null, err: Error | undefined) => {
       argsFailed = true;
