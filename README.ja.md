@@ -2,6 +2,12 @@
 
 > Gherkin のための生きたぬか床: 型付きの step、receipt、そして agent-first な CLI。
 
+**ぬか床**とは、きゅうりを漬物に変える米ぬかの発酵床のことです。
+ぬか床は生きており、毎日手入れをすれば熟成し、放っておけば死にます。
+nukadoko があなたの Gherkin について主張しているのはまさにこれです。
+feature ファイルとその背後にある型付き step は、書いて終わりのテスト資産ではなく生きた培養菌です。
+それを日々手入れするのが agent です。
+
 あなたの `.feature` ファイルは、AI 時代に最も価値が上がる資産です。
 Gherkin はすでに、実行可能な自然言語仕様として世界最大級のコーパスです。
 agent がそれを読み、実行し、修理する力は年々上がっていくため、このコーパスは長く生きるほど価値が上がります。
@@ -9,10 +15,6 @@ agent がそれを読み、実行し、修理する力は年々上がってい�
 目に見えないまま腐っていくグルーコードと、誰にも信用されない報告です。
 nukadoko が引き受けるのはその 2 つだけです。
 Gherkin 自身の構文、パターンマッチング、レビュー、ダッシュボードは、すでにそれをよく所有しているツールに委ねます。
-ぬか床とは、きゅうりを漬物に変える生きた床のことです。
-毎日手入れをすれば熟成し、放っておけば死にます。
-feature ファイルとその背後にある型付き step は、まさにその生きた培養菌です。
-それを日々手入れするのが agent です。
 
 この信頼の問題は、scenario の scripted な実行そのものには関係しません。
 そこではツール自身がすでに実行者であり、疑うべき相手がいないからです。
@@ -29,8 +31,8 @@ nukadoko がなくすのは、そもそも agent の説明を信頼する必要�
 ## Status
 
 **Pre-0.1。**
-M1(engine core)は実装済みです: `steps`、`describe`、`do`、`run`、`check`、`init`、`scaffold`、そして session、environment、secret。
-Compat(M2)とレポートの emitter(M3)は設計のみでまだ実装されていません。
+M1(engine core)と M2(compat の扉)は実装済みです: `steps`、`describe`、`do`、`run`、`check`、`init`、`scaffold`、session、environment、secret、そして `nukadoko/compat`。
+レポートの emitter(M3)は設計のみでまだ実装されていません。
 roadmap の全体は [Design](#design) を参照してください。
 
 ## Evaluate nukadoko against your project
@@ -131,16 +133,15 @@ export default defineStep({
 - `nuka do create-project --args '{"name":"acme"}'` は、この 1 step だけを実行して receipt を出力します。
   agent の探索ループが成り立つ最小単位で、他に何も用意する必要がありません。
 
-**M2(設計済み、未実装): compat という戻り口。**
-既存の Cucumber + Playwright スイートの移行経路として計画されているのは、import を 1 つ差し替えることです。
+**M2: compat という戻り口。**
+既存の Cucumber + Playwright スイートの移行経路は、import を 1 つ差し替えることです。
 `@cucumber/cucumber` の代わりに `nukadoko/compat` を使います。
 pattern の構文も World もそのまま動き続け、その裏で nukadoko のハーネスが receipt の計測を始めます。
 コードは変わらず、diff は 1 行です。
 step を `defineStep` に昇格させるかどうかは、そのあと step ごとの判断になります。
 戻り口は逆方向にも開いています。
 import を戻せば、ただの cucumber-js に戻ります。
-これはまだ存在しません。
-[docs/spec.md](docs/spec.md#compat-steps-the-migration-door) を参照してください。
+手順を追ったガイドは [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](examples/migration) を参照してください。
 
 **M3(設計済み、未実装): レポートが自動で満ちる。**
 従来の Cucumber の実行でレポートに映る evidence は、チームが自分で配線した分です(trace やスクリーンショットのためのフック boilerplate を、プロジェクトごとに書いて保守する形)。

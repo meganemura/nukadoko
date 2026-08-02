@@ -5,7 +5,8 @@
 > 原文は spec.md。相違があれば原文が正。
 
 Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`/`scaffold`、session、environment、secret)。
-Pre-0.1 で、実世界での検証ゲート(後述、実装ノート)はまだこれからであり、M2 以降(compat、Allure、sign-off)は設計としてのみ存在します。
+M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
+Pre-0.1 で、実世界での検証ゲート(後述、実装ノート)はまだこれからであり、M3 以降(Allure / messages の emitter、sign-off)は設計としてのみ存在します。
 
 ## nukadoko とは
 
@@ -217,6 +218,7 @@ import { Given, When, Then } from "nukadoko/compat";
   移行途中の「住まいが 2 つある」状態(support コードに登録された parameter type と config に住む parameter type、World のバッグと typed の result の併存)は、禁止するのではなく受け入れます。
   ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
   扉は両方向に開きます: import を元に戻せることは維持されます。
+- 既存の cucumber-js + Playwright スイート向けに、この扉の手順を追った解説が [docs/migration.ja.md](migration.ja.md) にあります。
 
 ## 実行
 
