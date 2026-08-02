@@ -87,6 +87,22 @@ export async function runCli(
 
   let exitCode = 0;
 
+  // yargs 18's `.strict()` reports an unknown flag/command by invoking
+  // `.fail()` below, but — known yargs behavior, not a bug we can configure
+  // away — it then runs the matched command's handler anyway (validation and
+  // dispatch are separate steps in yargs' internals; a custom `.fail()`
+  // callback that doesn't throw just falls through to dispatch). Every
+  // handler here overwrites the shared `exitCode` with its own result and
+  // may perform real side effects (writing a receipt, clearing a session),
+  // so letting it run would silence the failure and let an unparsed
+  // invocation take real action. `argsFailed` is set synchronously inside
+  // `.fail()`, which — because validation always runs before dispatch, see
+  // yargs' `handleValidationAndGetResult` — is guaranteed to be set before
+  // any handler below reads it. Each handler checks it first and returns
+  // immediately, before doing anything else, so a failed parse has zero
+  // side effects.
+  let argsFailed = false;
+
   const stepsCommand: CommandModule<Record<string, never>, StepsArgs> = {
     command: "steps",
     describe: "list the whole vocabulary, typed and compat: name, patterns, description, mutates",
@@ -97,6 +113,7 @@ export async function runCli(
         describe: "machine-readable output",
       }) as Argv<StepsArgs>,
     handler: async (args: Arguments<StepsArgs>) => {
+      if (argsFailed) return;
       try {
         const vocabulary = await loadVocabulary(rootDir);
         const summaries = [...vocabulary.values()].map(summarize);
@@ -127,6 +144,7 @@ export async function runCli(
         describe: "step name (as listed by `nuka steps`)",
       }) as Argv<DescribeArgs>,
     handler: async (args: Arguments<DescribeArgs>) => {
+      if (argsFailed) return;
       try {
         const vocabulary = await loadVocabulary(rootDir);
         const entry = vocabulary.get(args.name);
@@ -167,6 +185,7 @@ export async function runCli(
           describe: 'target a named environment (omit for the "default" environment)',
         }) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
+      if (argsFailed) return;
       exitCode = await runDo({
         rootDir,
         name: args.name,
@@ -198,6 +217,7 @@ export async function runCli(
           describe: 'target a named environment (omit for the "default" environment)',
         }) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
+      if (argsFailed) return;
       exitCode = await runRun({
         rootDir,
         featureArg: args.feature,
@@ -219,6 +239,7 @@ export async function runCli(
         describe: "machine-readable output",
       }) as Argv<SessionListArgs>,
     handler: async (args: Arguments<SessionListArgs>) => {
+      if (argsFailed) return;
       exitCode = await runSessionList({
         rootDir,
         json: args.json ?? false,
@@ -243,6 +264,7 @@ export async function runCli(
           describe: "environment to clear sessions from",
         }) as Argv<SessionClearArgs>,
     handler: async (args: Arguments<SessionClearArgs>) => {
+      if (argsFailed) return;
       exitCode = await runSessionClear({
         rootDir,
         name: args.name ?? null,
@@ -262,6 +284,7 @@ export async function runCli(
         describe: "baseURL to record in the generated config",
       }) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
+      if (argsFailed) return;
       exitCode = await runInit({
         rootDir,
         baseUrl: args.baseUrl ?? null,
@@ -281,6 +304,7 @@ export async function runCli(
         describe: "step name, kebab-case (becomes the step's file name)",
       }) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
+      if (argsFailed) return;
       exitCode = await runScaffold({
         rootDir,
         name: args.name,
@@ -301,6 +325,7 @@ export async function runCli(
         describe: "machine-readable output",
       }) as Argv<CheckArgs>,
     handler: async (args: Arguments<CheckArgs>) => {
+      if (argsFailed) return;
       exitCode = await runCheck({
         rootDir,
         json: args.json ?? false,
@@ -326,6 +351,7 @@ export async function runCli(
     .scriptName("nuka")
     .exitProcess(false)
     .fail((msg: string | null, err: Error | undefined) => {
+      argsFailed = true;
       exitCode = 1;
       stderr.write(`${err instanceof Error ? err.message : (msg ?? "unknown error")}\n`);
     })

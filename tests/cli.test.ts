@@ -160,6 +160,25 @@ describe("nuka do", () => {
     }
   });
 
+  it("an unknown flag fails setup: exit 1, stderr names it, no receipt written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+    const rootDir = await copyFixtureToTempDir("do-project");
+    try {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(
+        ["do", "echo", "--args", JSON.stringify({ value: "hi" }), "--unknown-flag", "x"],
+        { rootDir, stdout, stderr },
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout.text()).toBe("");
+      expect(stderr.text()).toContain("unknown-flag");
+      expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
   it("writes a failed receipt with exit 1 when args fail schema validation", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {

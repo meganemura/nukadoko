@@ -262,4 +262,18 @@ describe("nuka run", () => {
 
     expect(stderr.text()).toContain("tag");
   });
+
+  it("an unknown flag fails setup: exit 1, stderr names it, no record/receipt written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/passing.feature", "--unknown-flag", "x"],
+      { rootDir, stdout, stderr },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain("unknown-flag");
+    expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
+  });
 });

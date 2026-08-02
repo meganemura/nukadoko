@@ -302,6 +302,21 @@ describe("nuka session list/clear", () => {
     expect(existsSync(path.join(sessionsDir(rootDir), "alpha.json"))).toBe(false);
   });
 
+  it("an unknown flag fails setup: exit 1, stderr names it, the session is left untouched (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+    await writeFakeSession("alpha");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "clear", "alpha", "--unknown-flag"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("unknown-flag");
+    expect(existsSync(path.join(sessionsDir(rootDir), "alpha.json"))).toBe(true);
+  });
+
   it("exits 1 clearing a session that does not exist", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "clear", "no-such-session"], {
