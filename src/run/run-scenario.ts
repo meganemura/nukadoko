@@ -271,6 +271,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // from this same vocabulary (match-step.ts's buildStepBindings).
         continue;
       }
+      // Temporary asymmetry (m2a-compat-registry task spec, item 7):
+      // buildStepBindings only ever binds typed vocabulary entries in this
+      // slice (see that file's own comment), so `entry` here can only ever
+      // be the "typed" branch of the union `Vocabulary` now carries — this
+      // is a type narrowing, not new run-time behavior. Compat step
+      // execution is M2's slice B.
+      if (entry.kind !== "typed") {
+        continue;
+      }
 
       // Read-only policy, declared-mutates refusal (this task's spec, decision
       // 3): a "never began" outcome, alongside undefined/ambiguous above — no

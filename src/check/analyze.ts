@@ -21,7 +21,7 @@ import type { CheckIssue, CheckReport } from "./types.js";
 
 export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   const config = await loadConfig(rootDir);
-  const vocabulary = await discoverSteps(rootDir, config.featuresDir);
+  const { vocabulary, compatParameterTypes } = await discoverSteps(rootDir, config.featuresDir);
 
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -30,8 +30,9 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   errors.push(...configResult.errors);
   warnings.push(...configResult.warnings);
 
-  const bindingResult = checkBindings(vocabulary, config.parameterTypes);
+  const bindingResult = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   errors.push(...bindingResult.issues);
+  warnings.push(...bindingResult.warnings);
 
   const { features, parseErrors } = loadFeatures(rootDir, config.featuresDir);
   for (const parseError of parseErrors) {

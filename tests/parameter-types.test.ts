@@ -27,11 +27,13 @@ describe("config.parameterTypes: negation reaches a step's args as a real boolea
   it("matches `will return`/`will not return`, binds, and validates through the step's own zod schema", async () => {
     const rootDir = fixture("parameter-types-project");
     const config = await loadConfig(rootDir);
-    const vocabulary = await discoverSteps(rootDir, config.featuresDir);
+    const { vocabulary } = await discoverSteps(rootDir, config.featuresDir);
     const bindings = buildStepBindings(vocabulary, config.parameterTypes);
 
     const entry = vocabulary.get("thing-will-return");
     expect(entry).toBeDefined();
+    expect(entry?.kind).toBe("typed");
+    if (entry?.kind !== "typed") return;
 
     const negated = matchPickleStep("the job will not return", bindings);
     expect(negated.kind).toBe("matched");

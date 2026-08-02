@@ -6,11 +6,11 @@ import { createParameterTypeRegistry } from "../binding/registry.js";
 import { InvalidCaptureKeyError, UnnamedCaptureError, UnterminatedCaptureError } from "../binding/errors.js";
 import { asObjectShape, classifyPrimitive } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
-import type { Vocabulary } from "../discover/discover-steps.js";
+import type { CompatParameterTypeEntry, Vocabulary } from "../discover/discover-steps.js";
 import type { CheckIssue } from "./types.js";
 
 // Responsibility: this task's spec decisions 1+2 applied to the whole
-// vocabulary — for every pattern-bearing step, parse+strip each of its
+// vocabulary — for every pattern-bearing typed step, parse+strip each of its
 // patterns (src/binding/pattern.ts), build the matching CucumberExpression
 // (src/binding/expression.ts's underlying pieces), and check the result
 // against the step's `args` schema (src/binding/schema-shape.ts). Also the
@@ -20,16 +20,50 @@ import type { CheckIssue } from "./types.js";
 // *and* every pattern that built successfully — src/check/feature-check.ts
 // reuses the latter to match pickle steps, so this is the one place the
 // vocabulary's patterns are parsed for the whole `nuka check` run.
+//
+// m2a-compat-registry task spec, item 6 extends all of the above to compat
+// vocabulary entries: a compat pattern participates in undefined-step and
+// ambiguous-match detection exactly like a typed one (both live in the one
+// `patterns` array feature-check.ts consumes), and in duplicate-pattern
+// detection *across* kind — a compat string pattern is built as a plain
+// cucumber-expression with **no named-capture requirement** (the migration
+// door's promise: compat prose is unmodified cucumber-expressions syntax,
+// docs/spec.md "Compat steps"), so it is never run through
+// `stripCaptureNames`. A compat RegExp pattern needs no "building" at all —
+// it is matched as-is — and is compared for duplicates only against other
+// RegExp patterns (a distinct text namespace from cucumber-expression
+// source text). Neither compat variant is checked against an args schema
+// (compat has none) or folded into the alias-key-mismatch check (compat has
+// no aliases — one registration is one pattern is one vocabulary entry).
+// This module also lists every compat-origin `defineParameterType` call as
+// a warning (parameter-types-design.md's "gradual compat" section: "config
+// が typed 時代の家") and merges it into the *same* registry config-origin
+// entries use, so a name collision between the two sources raises the exact
+// same `parameter-type-invalid` issue a config/config collision already
+// does.
 
-export interface CheckedPattern {
-  readonly stepName: string;
-  readonly pattern: string;
-  readonly captures: readonly Capture[];
-  readonly expression: CucumberExpression;
-}
+export type CheckedPattern =
+  | {
+      readonly matcherKind: "expression";
+      readonly stepName: string;
+      readonly pattern: string;
+      readonly captures: readonly Capture[];
+      readonly expression: CucumberExpression;
+    }
+  | {
+      readonly matcherKind: "regexp";
+      readonly stepName: string;
+      readonly pattern: string;
+      /** Always `[]`: a compat RegExp pattern has no named-capture concept
+       * to bind a table/docstring key against (typed-only, docs/spec.md
+       * "Typed steps": "Gherkin tables get types for the first time"). */
+      readonly captures: readonly Capture[];
+      readonly regexp: RegExp;
+    };
 
 export interface BindingCheckResult {
   readonly issues: readonly CheckIssue[];
+  readonly warnings: readonly CheckIssue[];
   readonly patterns: readonly CheckedPattern[];
 }
 
@@ -70,24 +104,46 @@ function expressionErrorToIssue(error: unknown, stepName: string, pattern: strin
   return { code: "pattern-syntax-error", message: `${context}: ${message}`, step: stepName };
 }
 
+/** One `defineParameterType` call made from compat code (this task's spec,
+ * item 6, third bullet): visible so a reviewer can see the registration
+ * exists and where, and see the nudge toward `config.parameterTypes` — the
+ * "typed-era home" for it (parameter-types-design.md). A stable code so a
+ * script can filter these out or count them across a project. */
+function supportOriginParameterTypeWarning(entry: CompatParameterTypeEntry): CheckIssue {
+  return {
+    code: "parameter-type-support-origin",
+    message: `Custom parameter type "${entry.name}" is registered from compat ("support") code at ${entry.filePath}, not from config.parameterTypes — config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
+    file: entry.filePath,
+  };
+}
+
 export function checkBindings(
   vocabulary: Vocabulary,
   customTypes: readonly ParameterTypeConfig[] = [],
+  compatParameterTypes: readonly CompatParameterTypeEntry[] = [],
 ): BindingCheckResult {
-  // A name collision in config.parameterTypes (against a built-in type or
-  // another entry in the same list) is a config-authoring error, not
-  // something any individual pattern did wrong (this task's spec, decision
-  // 3) — reported once, here, as its own issue rather than once per pattern
-  // that would otherwise have used the registry. No pattern can be checked
-  // at all without a working registry, so `patterns` is empty in this case,
-  // same as any other early return below.
+  const warnings: CheckIssue[] = [];
+  for (const entry of compatParameterTypes) {
+    warnings.push(supportOriginParameterTypeWarning(entry));
+  }
+
+  // A name collision in config.parameterTypes (against a built-in type,
+  // another config entry, or now a compat-origin entry — parameter-types-
+  // design.md's "gradual compat" section, point 2: "名前衝突は既存エラー")
+  // is a config-authoring error, not something any individual pattern did
+  // wrong (this task's spec, decision 3) — reported once, here, as its own
+  // issue rather than once per pattern that would otherwise have used the
+  // registry. No pattern can be checked at all without a working registry,
+  // so `patterns` is empty in this case, same as any other early return
+  // below.
   let registry: ReturnType<typeof createParameterTypeRegistry>;
   try {
-    registry = createParameterTypeRegistry(customTypes);
+    registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);
   } catch (error) {
     if (error instanceof ParameterTypeCollisionError) {
       return {
         issues: [{ code: "parameter-type-invalid", message: error.message }],
+        warnings,
         patterns: [],
       };
     }
@@ -97,13 +153,22 @@ export function checkBindings(
   const issues: CheckIssue[] = [];
   const patterns: CheckedPattern[] = [];
   // strippedPattern -> every (stepName, pattern) that normalizes to it,
-  // across the *entire* vocabulary — duplicate detection is global, not
-  // per-step (this task's spec, item 4: "重複 pattern").
+  // across the *entire* vocabulary and *across kind* (this task's spec,
+  // item 6: "duplicate は kind をまたいで検出") — a typed step's stripped
+  // pattern and a compat string pattern share this one text namespace
+  // because both are, in the end, plain cucumber-expression source; a
+  // compat RegExp pattern has its own separate namespace below (regexpText
+  // Owners), since a regex source and a cucumber-expression's are not
+  // comparable text.
   const strippedTextOwners = new Map<string, { stepName: string; pattern: string }[]>();
+  const regexpTextOwners = new Map<string, { stepName: string; pattern: string }[]>();
 
   const entries = [...vocabulary.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   for (const entry of entries) {
+    if (entry.kind === "compat") {
+      continue;
+    }
     const stepName = entry.name;
     if (entry.step.patterns.length === 0) {
       continue;
@@ -149,7 +214,13 @@ export function checkBindings(
         issues.push(expressionErrorToIssue(error, stepName, pattern));
         continue;
       }
-      patterns.push({ stepName, pattern, captures: stripped.captures, expression });
+      patterns.push({
+        matcherKind: "expression",
+        stepName,
+        pattern,
+        captures: stripped.captures,
+        expression,
+      });
 
       if (!shape) {
         continue;
@@ -197,6 +268,50 @@ export function checkBindings(
     }
   }
 
+  // Compat entries: one pattern per entry, no aliases, no args schema — just
+  // build the matcher and register it for duplicate/undefined/ambiguous
+  // detection (this task's spec, item 6, first bullet).
+  for (const entry of entries) {
+    if (entry.kind !== "compat") {
+      continue;
+    }
+    const stepName = entry.name;
+    const pattern = entry.compat.patternSource;
+
+    if (typeof entry.compat.pattern === "string") {
+      // No stripCaptureNames here, on purpose — compat prose is unmodified
+      // cucumber-expressions syntax (`{string}`, `{int}`, a custom type
+      // name), never nukadoko's `{key:type}` naming convention (this task's
+      // spec, item 6: "compat の string pattern に named capture 構文は要求
+      // しない").
+      const owners = strippedTextOwners.get(entry.compat.pattern) ?? [];
+      owners.push({ stepName, pattern });
+      strippedTextOwners.set(entry.compat.pattern, owners);
+
+      let expression: CucumberExpression;
+      try {
+        expression = new CucumberExpression(entry.compat.pattern, registry);
+      } catch (error) {
+        issues.push(expressionErrorToIssue(error, stepName, pattern));
+        continue;
+      }
+      patterns.push({ matcherKind: "expression", stepName, pattern, captures: [], expression });
+    } else {
+      const regexpText = entry.compat.pattern.toString();
+      const owners = regexpTextOwners.get(regexpText) ?? [];
+      owners.push({ stepName, pattern });
+      regexpTextOwners.set(regexpText, owners);
+
+      patterns.push({
+        matcherKind: "regexp",
+        stepName,
+        pattern,
+        captures: [],
+        regexp: entry.compat.pattern,
+      });
+    }
+  }
+
   for (const [strippedPattern, owners] of strippedTextOwners) {
     if (owners.length > 1) {
       issues.push({
@@ -207,6 +322,16 @@ export function checkBindings(
       });
     }
   }
+  for (const [regexpText, owners] of regexpTextOwners) {
+    if (owners.length > 1) {
+      issues.push({
+        code: "duplicate-pattern",
+        message: `Multiple compat RegExp patterns are the same expression ${regexpText}: ${owners
+          .map((o) => `${o.stepName}`)
+          .join(", ")}`,
+      });
+    }
+  }
 
-  return { issues, patterns };
+  return { issues, warnings, patterns };
 }

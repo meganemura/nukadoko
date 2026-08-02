@@ -4,10 +4,10 @@ import { checkBindings } from "../src/check/binding-check.js";
 import { defineStep } from "../src/step/define-step.js";
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
 
-function vocab(entries: Record<string, VocabularyEntry["step"]>): Vocabulary {
+function vocab(entries: Record<string, Extract<VocabularyEntry, { kind: "typed" }>["step"]>): Vocabulary {
   const map = new Map<string, VocabularyEntry>();
   for (const [name, step] of Object.entries(entries)) {
-    map.set(name, { name, filePath: `features/steps/${name}.ts`, step });
+    map.set(name, { kind: "typed", name, filePath: `features/steps/${name}.ts`, step });
   }
   return map;
 }

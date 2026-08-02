@@ -43,6 +43,16 @@ export function buildStepBindings(
   const registry = createParameterTypeRegistry(customTypes);
   const bindings: StepBinding[] = [];
   for (const entry of vocabulary.values()) {
+    // Temporary asymmetry (m2a-compat-registry task spec, item 7): `nuka
+    // run`'s matching stays typed-only in this slice. Compat step execution
+    // — World lifecycle, receipt shape, mixed-kind matching — is M2's slice
+    // B; until it lands, a pickle line that only a compat pattern matches is
+    // still "undefined" here even though `nuka check` (src/check/binding-
+    // check.ts) already treats it as defined, since check considers compat
+    // patterns too. This gap closes in slice B, not here.
+    if (entry.kind !== "typed") {
+      continue;
+    }
     for (const pattern of entry.step.patterns) {
       let built: ReturnType<typeof buildExpression>;
       try {

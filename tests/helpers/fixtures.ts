@@ -97,7 +97,12 @@ export async function ensureNukadokoShim(): Promise<void> {
   await writeFile(
     path.join(nukadokoShimDir, "package.json"),
     `${JSON.stringify(
-      { name: "nukadoko", version: "0.0.0", type: "module", exports: { ".": "./index.js" } },
+      {
+        name: "nukadoko",
+        version: "0.0.0",
+        type: "module",
+        exports: { ".": "./index.js", "./compat": "./compat.js" },
+      },
       null,
       2,
     )}\n`,
@@ -106,6 +111,21 @@ export async function ensureNukadokoShim(): Promise<void> {
   const relative = path.relative(nukadokoShimDir, target).split(path.sep).join("/");
   const specifier = relative.startsWith(".") ? relative : `./${relative}`;
   await writeFile(path.join(nukadokoShimDir, "index.ts"), `export * from "${specifier}";\n`);
+
+  // "./compat" subpath (m2a-compat-registry task spec: extending this
+  // mechanism for it is explicitly permitted) — same re-export trick as the
+  // main entry above, pointed at src/compat/index.ts instead, so a test
+  // project can resolve `import { Given } from "nukadoko/compat"` the same
+  // way a real downstream package's own resolved "nukadoko" dependency will,
+  // via the real package.json's own `"./compat"` export (kept in sync by
+  // hand — see package.json).
+  const compatTarget = path.join(repoRoot, "src", "compat", "index.js");
+  const compatRelative = path.relative(nukadokoShimDir, compatTarget).split(path.sep).join("/");
+  const compatSpecifier = compatRelative.startsWith(".") ? compatRelative : `./${compatRelative}`;
+  await writeFile(
+    path.join(nukadokoShimDir, "compat.ts"),
+    `export * from "${compatSpecifier}";\n`,
+  );
 }
 
 /** A minimal in-memory sink satisfying cli/run-cli.ts's WritableSink. */

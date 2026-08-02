@@ -3,18 +3,27 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { register } from "tsx/esm/api";
+import type {
+  CompatKeyword,
+  CompatParameterTypeRegistration,
+  CompatStepFn,
+} from "../compat/registry.js";
 import { isStep, type Step } from "../step/define-step.js";
-import { DuplicateStepError } from "./errors.js";
+import { DuplicateCompatStepError, DuplicateStepError } from "./errors.js";
 
 // Responsibility: walk `featuresDir`, import every `.ts` file found, and
-// collect the vocabulary of typed steps by filename. Deliberately imports
-// modules to discover them (docs/spec.md "Implementation notes" accepts
-// this: listing the vocabulary requires running each file's top-level
-// code, same as executing it). A default export that isn't a branded Step
-// (e.g. a shared helper under `steps/lib/`) is not an error — it's just not
-// a step, and is skipped silently. Two files producing the same step name
-// is an error: step identity is the filename, and a silent last-write-wins
-// would hide a real naming collision.
+// collect the vocabulary of typed steps by filename, plus (m2a-compat-
+// registry task spec) every compat step and compat `defineParameterType`
+// call any of those files made along the way. Deliberately imports modules
+// to discover them (docs/spec.md "Implementation notes" accepts this:
+// listing the vocabulary requires running each file's top-level code, same
+// as executing it). A default export that isn't a branded Step (e.g. a
+// shared helper under `steps/lib/`) is not an error — it's just not a step,
+// and is skipped silently. Two files producing the same typed step name, or
+// two `Given`/`When`/`Then` calls anywhere resolving to the same compat
+// pattern source, are both errors: identity (a file name for typed, a
+// pattern source for compat — m2a-compat-registry task spec, decision 3)
+// must be unique, and a silent last-write-wins would hide a real collision.
 //
 // Single `register({ namespace })` per discovery run, not per-file
 // `tsImport()`: tsx's `tsImport()` convenience wrapper mints a fresh
@@ -31,14 +40,73 @@ import { DuplicateStepError } from "./errors.js";
 // and reusing the scoped `.import()` it returns for every file instead
 // puts every load on one shared module graph, so the same file always
 // yields the same object however it's reached.
+//
+// This same one-namespace-per-run property is what makes compat's
+// registration buffer (src/compat/registry.ts) safe to read here: this
+// function loads that module through the *same* scoped `.import()` used for
+// every step file (never a plain top-level `import`), so this run's own
+// instance of the buffer is the one, and only one, this run's own step
+// files reach too — via "nukadoko/compat" -> ./index.js -> ./registry.js,
+// resolving to the identical absolute file this function loads directly.
+// A concurrent discovery run gets its own namespace and therefore its own,
+// independent instance (tests/compat-discover.test.ts's concurrent test).
 
-export interface VocabularyEntry {
+export interface TypedVocabularyEntry {
+  readonly kind: "typed";
   readonly name: string;
   readonly filePath: string;
   readonly step: Step;
 }
 
+/** One `Given`/`When`/`Then` registration, as discovery attributes it to the
+ * file that made the call. `pattern` is kept in its original form (a string
+ * builds a plain cucumber-expression with no named-capture requirement — the
+ * migration door's promise — a RegExp is matched as-is); `patternSource` is
+ * the display/identity text derived from it. Execution (`fn`) is stored, not
+ * called — M2's slice B. */
+export interface CompatStepDefinition {
+  readonly keyword: CompatKeyword;
+  readonly pattern: string | RegExp;
+  readonly patternSource: string;
+  readonly fn: CompatStepFn;
+  readonly registrationOrder: number;
+}
+
+export interface CompatVocabularyEntry {
+  readonly kind: "compat";
+  /** `compat: <patternSource>` — a compat step has no file-derived name (one
+   * file can register many), so identity comes from the pattern itself
+   * (m2-design.md section 2). This is also this entry's key in `Vocabulary`. */
+  readonly name: string;
+  readonly filePath: string;
+  readonly compat: CompatStepDefinition;
+}
+
+/** Deliberately a union, not a looser shape: existing typed-only readers
+ * (src/run/match-step.ts, src/run/run-scenario.ts) must narrow on `kind`
+ * before touching `.step`, so a caller that isn't ready for compat entries
+ * fails to compile instead of crashing on a missing field at run time. */
+export type VocabularyEntry = TypedVocabularyEntry | CompatVocabularyEntry;
+
 export type Vocabulary = ReadonlyMap<string, VocabularyEntry>;
+
+/** A `defineParameterType` call made from compat ("support") code, plus the
+ * file it came from. src/check/binding-check.ts merges these into the same
+ * `ParameterTypeRegistry` as `config.parameterTypes` and warns that they
+ * exist (parameter-types-design.md's "gradual compat" section: "config が
+ * typed 時代の家"). */
+export interface CompatParameterTypeEntry extends CompatParameterTypeRegistration {
+  readonly filePath: string;
+}
+
+export interface DiscoveryResult {
+  readonly vocabulary: Vocabulary;
+  readonly compatParameterTypes: readonly CompatParameterTypeEntry[];
+}
+
+function compatPatternSource(pattern: string | RegExp): string {
+  return typeof pattern === "string" ? pattern : pattern.toString();
+}
 
 function walkTsFiles(dir: string): string[] {
   let entries;
@@ -66,7 +134,7 @@ function walkTsFiles(dir: string): string[] {
 export async function discoverSteps(
   rootDir: string,
   featuresDir: string,
-): Promise<Vocabulary> {
+): Promise<DiscoveryResult> {
   const featuresRoot = path.join(rootDir, featuresDir);
   const files = walkTsFiles(featuresRoot);
 
@@ -74,29 +142,74 @@ export async function discoverSteps(
   // this can run concurrently with other discovery runs, e.g. across test
   // files, and namespaces must not collide) — every file below is loaded
   // through this single registration's scoped `.import()`, and the
-  // registration is torn down in `finally` so a thrown DuplicateStepError
-  // or a broken step file's own throw never leaks it.
+  // registration is torn down in `finally` so a thrown DuplicateStepError/
+  // DuplicateCompatStepError or a broken step file's own throw never leaks
+  // it.
   const scoped = register({ namespace: randomUUID() });
   try {
+    // Loaded through `scoped` itself (not a plain top-level `import`) so
+    // this run's own compat registration buffer is the one, and only the
+    // one, tsx's namespace isolation gives it (see this file's own header,
+    // and src/compat/registry.ts's) — a plain top-level import would
+    // instead share one instance across every discovery run in this
+    // process, defeating the isolation tests/compat-discover.test.ts's
+    // concurrent test depends on.
+    const compatRegistry = (await scoped.import(
+      new URL("../compat/registry.js", import.meta.url).href,
+      import.meta.url,
+    )) as typeof import("../compat/registry.js");
+
     const vocabulary = new Map<string, VocabularyEntry>();
+    const compatParameterTypes: CompatParameterTypeEntry[] = [];
+
     for (const filePath of files) {
       const mod: { default?: unknown } = await scoped.import(
         pathToFileURL(filePath).href,
         import.meta.url,
       );
+
       const candidate = mod.default;
-      if (!isStep(candidate)) {
-        continue;
+      if (isStep(candidate)) {
+        const name = path.basename(filePath, ".ts");
+        const existing = vocabulary.get(name);
+        if (existing) {
+          throw new DuplicateStepError(name, existing.filePath, filePath);
+        }
+        vocabulary.set(name, { kind: "typed", name, filePath, step: candidate });
       }
 
-      const name = path.basename(filePath, ".ts");
-      const existing = vocabulary.get(name);
-      if (existing) {
-        throw new DuplicateStepError(name, existing.filePath, filePath);
+      // Attribute this file's own compat registrations (m2a-compat-registry
+      // task spec, decision 3): drained immediately after this file's own
+      // import completes, before the next file's import can add anything
+      // else, so whatever is in the buffer right here is exactly — and
+      // only — this file's own contribution.
+      for (const registration of compatRegistry.drainCompatSteps()) {
+        const patternSource = compatPatternSource(registration.pattern);
+        const compatName = `compat: ${patternSource}`;
+        const existingCompat = vocabulary.get(compatName);
+        if (existingCompat) {
+          throw new DuplicateCompatStepError(patternSource, existingCompat.filePath, filePath);
+        }
+        vocabulary.set(compatName, {
+          kind: "compat",
+          name: compatName,
+          filePath,
+          compat: {
+            keyword: registration.keyword,
+            pattern: registration.pattern,
+            patternSource,
+            fn: registration.fn,
+            registrationOrder: registration.registrationOrder,
+          },
+        });
       }
-      vocabulary.set(name, { name, filePath, step: candidate });
+
+      for (const registration of compatRegistry.drainCompatParameterTypes()) {
+        compatParameterTypes.push({ ...registration, filePath });
+      }
     }
-    return vocabulary;
+
+    return { vocabulary, compatParameterTypes };
   } finally {
     await scoped.unregister();
   }

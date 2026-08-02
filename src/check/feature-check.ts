@@ -15,12 +15,12 @@ import type { CheckIssue } from "./types.js";
 // this task's spec's per-feature check items: undefined steps (with a
 // scaffold hint, plus a near-miss escape hint — see findEscapeHint below),
 // ambiguous matches (2+ steps matching one pickle step), Then-position steps
-// that declare mutation, and a table/docstring's "exactly one unconsumed
-// required key" rule. Deliberately knows nothing about *why* a pattern
-// failed to build (that is binding-check's own issue already) — a pattern
-// missing from `patterns` (because it errored there) simply cannot match
-// anything here, which is the right behavior: this module must not report
-// the same root cause a second time under a different code.
+// whose kind can't be statically cleared, and a table/docstring's "exactly
+// one unconsumed required key" rule. Deliberately knows nothing about *why*
+// a pattern failed to build (that is binding-check's own issue already) — a
+// pattern missing from `patterns` (because it errored there) simply cannot
+// match anything here, which is the right behavior: this module must not
+// report the same root cause a second time under a different code.
 //
 // `then-mutates` is a *warning*, not an error (m2pre-observed task spec,
 // decision 5, superseding this module's earlier classification): a
@@ -29,6 +29,19 @@ import type { CheckIssue } from "./types.js";
 // occurrence's execution actually writes — only run-time observation can
 // (docs/spec.md "Keyword semantics"). Every other issue this module reports
 // stays an error.
+//
+// m2a-compat-registry task spec, item 6: a compat pattern participates in
+// undefined-step and ambiguous-match detection on equal footing with a typed
+// one (both live in the one `patterns` array binding-check.ts already built,
+// matched through `checkedPatternMatches` below regardless of whether the
+// candidate is cucumber-expression- or RegExp-based). Once a pickle step
+// resolves to exactly one compat entry, this module's two typed-only checks
+// — the mutates/Then tension and the table/docstring key rule — do not
+// apply (compat has no declared `mutates` and no args schema to check a
+// table/docstring against); Then-position compat instead gets its own soft
+// warning, since static check simply cannot know what a compat step's
+// execution will do (docs/spec.md "Compat steps": "run-time observation
+// applies to them unchanged").
 
 interface MatchResult {
   readonly stepNames: readonly string[];
@@ -36,6 +49,20 @@ interface MatchResult {
    * step matched — used for the table/docstring key check below, which
    * needs to know which capture keys that specific match consumed. */
   readonly matched: CheckedPattern | undefined;
+}
+
+/**
+ * Whether `candidate` matches `text`, regardless of which matcher kind it
+ * is. A fresh `RegExp` is constructed per call for the `"regexp"` case: a
+ * compat pattern with a `/g`/`/y` flag would otherwise carry `lastIndex`
+ * state across the many pickle-step texts this module tests it against in
+ * its loops, which `.test()` on the stored instance would silently corrupt.
+ */
+function checkedPatternMatches(candidate: CheckedPattern, text: string): boolean {
+  if (candidate.matcherKind === "regexp") {
+    return new RegExp(candidate.regexp.source, candidate.regexp.flags).test(text);
+  }
+  return candidate.expression.match(text) !== null;
 }
 
 // Not a general "reserved character" linter (docs/spec.md is explicit that
@@ -46,6 +73,8 @@ interface MatchResult {
 // when it turns a non-match into a match, names both the cause (unescaped
 // reserved syntax) and the fix in the same breath. Returns undefined (no
 // hint) rather than guessing when the escaped variant still doesn't match.
+// Compat RegExp candidates are skipped entirely — there is no cucumber-
+// expression source text to escape for one.
 function findEscapeHint(
   text: string,
   patterns: readonly CheckedPattern[],
@@ -63,6 +92,9 @@ function findEscapeHint(
     return undefined;
   }
   for (const candidate of patterns) {
+    if (candidate.matcherKind === "regexp") {
+      continue;
+    }
     const source = candidate.expression.source;
     const escaped = escapeReservedChars(source);
     if (escaped === source) {
@@ -87,7 +119,7 @@ function matchPickleStepText(text: string, patterns: readonly CheckedPattern[]):
     if (byStep.has(candidate.stepName)) {
       continue;
     }
-    if (candidate.expression.match(text) !== null) {
+    if (checkedPatternMatches(candidate, text)) {
       byStep.set(candidate.stepName, candidate);
     }
   }
@@ -159,18 +191,32 @@ export function checkFeatures(
           continue;
         }
 
-        if (step.type === PickleStepType.OUTCOME && entry.step.mutates) {
-          warnings.push({
-            code: "then-mutates",
-            message: `Step "${stepName}" is bound in Then position but declares mutates: true — declaration and position are in tension here; a per-occurrence execution's observed network writes settle it at run time (docs/spec.md "Keyword semantics")`,
-            file: feature.relativePath,
-            line,
-            step: stepName,
-          });
+        if (step.type === PickleStepType.OUTCOME) {
+          if (entry.kind === "typed" && entry.step.mutates) {
+            warnings.push({
+              code: "then-mutates",
+              message: `Step "${stepName}" is bound in Then position but declares mutates: true — declaration and position are in tension here; a per-occurrence execution's observed network writes settle it at run time (docs/spec.md "Keyword semantics")`,
+              file: feature.relativePath,
+              line,
+              step: stepName,
+            });
+          } else if (entry.kind === "compat") {
+            warnings.push({
+              code: "then-compat-step",
+              message: `Step "${stepName}" is a compat step bound in Then position — compat steps have no declared mutation to check statically (docs/spec.md "Compat steps"); run-time observation applies to them exactly as it does to typed steps (docs/spec.md "Keyword semantics")`,
+              file: feature.relativePath,
+              line,
+              step: stepName,
+            });
+          }
         }
 
         const attachment = step.argument;
-        if (matched && (attachment?.dataTable !== undefined || attachment?.docString !== undefined)) {
+        if (
+          entry.kind === "typed" &&
+          matched &&
+          (attachment?.dataTable !== undefined || attachment?.docString !== undefined)
+        ) {
           const shape = asObjectShape(entry.step.args);
           if (shape) {
             const consumed = new Set(matched.captures.map((c) => c.key));

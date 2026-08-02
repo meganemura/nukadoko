@@ -167,7 +167,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     let vocabulary;
     try {
-      vocabulary = await discoverSteps(rootDir, config.featuresDir);
+      // Compat-origin parameter types (m2a-compat-registry task spec) are
+      // irrelevant to `nuka do`, which only ever names one step by its
+      // vocabulary key.
+      ({ vocabulary } = await discoverSteps(rootDir, config.featuresDir));
     } catch (error) {
       stderr.write(`${formatVocabularyError(error)}\n`);
       return 1;
@@ -176,6 +179,18 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const entry = vocabulary.get(name);
     if (!entry) {
       stderr.write(`Unknown step: ${name}\n`);
+      return 1;
+    }
+
+    // m2a-compat-registry task spec, item 5: "nuka do compat step を名指し
+    // できない" — a compat step has no typed contract (no args/returns
+    // schema, no validated result), so there is nothing for `nuka do` to
+    // validate or run in isolation (docs/spec.md "What compat steps lack").
+    // This is a setup failure, not an execution one: no receipt is written.
+    if (entry.kind === "compat") {
+      stderr.write(
+        `Step "${name}" is a compat step and has no typed contract, so it cannot be run individually; promote it to defineStep to run it via \`nuka do\` (docs/spec.md "What compat steps lack")\n`,
+      );
       return 1;
     }
 

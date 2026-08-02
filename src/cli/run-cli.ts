@@ -122,9 +122,13 @@ export async function runCli(
         } else {
           for (const s of summaries) {
             const patterns = s.patterns.length > 0 ? s.patterns.join(" | ") : "(no pattern)";
-            stdout.write(
-              `${s.name}\t${patterns}\t${s.mutates ? "mutates" : "read-only"}\t${s.description}\n`,
-            );
+            // A compat entry has no declared mutates/description (this
+            // task's spec, item 5) — shown as "-", not blank, so the
+            // column stays present and visibly "unknown" rather than
+            // looking like an empty typed value.
+            const mutatesLabel = s.mutates === undefined ? "-" : s.mutates ? "mutates" : "read-only";
+            const descriptionLabel = s.description ?? "-";
+            stdout.write(`${s.name}\t${s.kind}\t${patterns}\t${mutatesLabel}\t${descriptionLabel}\n`);
           }
         }
       } catch (error) {

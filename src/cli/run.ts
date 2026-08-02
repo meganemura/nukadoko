@@ -107,7 +107,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   try {
     let vocabulary;
     try {
-      vocabulary = await discoverSteps(rootDir, config.featuresDir);
+      // Compat-origin parameter types (m2a-compat-registry task spec) are
+      // dropped here on purpose: `nuka run`'s matching stays typed-only in
+      // this slice (see src/run/match-step.ts's own comment on the
+      // temporary asymmetry) — compat step execution, and wiring compat's
+      // registry additions into it, is M2's slice B.
+      ({ vocabulary } = await discoverSteps(rootDir, config.featuresDir));
     } catch (error) {
       stderr.write(`${formatVocabularyError(error)}\n`);
       return 1;
