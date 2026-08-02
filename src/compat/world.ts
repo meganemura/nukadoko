@@ -1,6 +1,7 @@
 import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
 import type { StepContext } from "../context.js";
+import { extensionForMediaType, toAttachmentBuffer, type DeclaredCollector } from "./declared.js";
 import { WorldNotOpenedError } from "./errors.js";
 import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instrumentation.js";
 
@@ -25,25 +26,38 @@ import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instru
 //     resolves is a mistake this class refuses to paper over with
 //     `undefined` (WorldNotOpenedError names the fix instead).
 //
-// `attach`/`log`/`link` are *received, not dropped*: this slice has no
-// reader for them yet (that is M2's slice D, the allure runtime shim's
-// `declared` bucket), but silently discarding what glue code passes them
-// would make D's later behavior look like new behavior materializing out of
-// nowhere, rather than a bucket learning to read what was already being
-// held. `instantiateWorldForPickle` below is what actually builds these
-// three functions; this class only ever stores whatever it is handed.
+// `attach`/`log`/`link` route into this pickle's own declared collector
+// (m2d-allure-shim task spec, item 4) — the same object src/run/run-
+// scenario.ts creates and passes into `instantiateWorldForPickle` below as a
+// plain parameter (`declaredCollector`, captured directly in the closures
+// that build `attach`/`log`/`link`), never read back out through src/compat/
+// declared.ts's own module-level "active collector" pointer the way the
+// allure-js runtime shim itself does (src/compat/allure-runtime.ts). That
+// distinction matters here specifically: this file is loaded through
+// discovery's own scoped tsx import (see the module-identity note below),
+// which gives it its own separate instance of every module it transitively
+// imports, `declared.ts` included — so a plain top-level module-level
+// variable declared.ts exports would not be the *same* variable src/run/
+// run-scenario.ts's own (plain top-level) import writes to. A directly-
+// passed object reference has no such problem: calling a method on it always
+// reaches the exact closures `createDeclaredCollector()` built, regardless
+// of which module instance's import statement is holding the reference.
+// allure-runtime.ts has no such constraint (it's loaded once, via a plain
+// top-level import from src/cli/run.ts, same graph as run-scenario.ts), so
+// its own indirection through the active-collector pointer is safe.
 //
 // Module-identity note (same shape as src/compat/registry.ts's own header):
-// `runtimeByWorld` (the ctx bridge) and `heldByWorld` (the attach/log/link
-// buckets) are keyed by the constructed instance, in WeakMaps private to
-// *this* module — so whichever module instance a user's `class MyWorld
-// extends World` resolved "nukadoko/compat" to (src/discover/discover-
-// steps.ts's scoped tsx import during discovery) is the exact instance
-// whose `openPage()`/`get page()` methods close over the matching WeakMap.
-// src/discover/discover-steps.ts captures `instantiateWorldForPickle` itself
-// through that same scoped import, rather than a plain top-level one, for
-// exactly this reason — see that file's own header for the mechanism this
-// mirrors.
+// `runtimeByWorld` (the ctx bridge) is keyed by the constructed instance, in
+// a WeakMap private to *this* module — so whichever module instance a
+// user's `class MyWorld extends World` resolved "nukadoko/compat" to (src/
+// discover/discover-steps.ts's scoped tsx import during discovery) is the
+// exact instance whose `openPage()`/`get page()` methods close over the
+// matching WeakMap. src/discover/discover-steps.ts captures
+// `instantiateWorldForPickle` itself through that same scoped import, rather
+// than a plain top-level one, for exactly this reason — see that file's own
+// header for the mechanism this mirrors; `ctx` itself is threaded the same
+// directly-passed-parameter way `declaredCollector` now is, for the same
+// module-identity reason.
 
 export interface WorldConstructorParams {
   readonly attach: (data: unknown, mediaType?: string) => void;
@@ -57,15 +71,6 @@ export type WorldConstructor = new (params: WorldConstructorParams) => World;
 const runtimeByWorld = new WeakMap<World, StepContext>();
 const pageByWorld = new WeakMap<World, Page>();
 const requestByWorld = new WeakMap<World, APIRequestContext>();
-
-/** Held for M2's slice D (allure's `declared` bucket); unread by anything in
- * this slice — see this file's own header. */
-interface HeldDeclarations {
-  readonly attachments: { data: unknown; mediaType: string | undefined }[];
-  readonly logs: string[];
-  readonly links: { url: string; text: string | undefined }[];
-}
-const heldByWorld = new WeakMap<World, HeldDeclarations>();
 
 export class World {
   readonly attach: WorldConstructorParams["attach"];
@@ -176,28 +181,36 @@ export interface InstantiatedWorld {
  * never reads that module's buffer itself, so it does not care which of
  * this run's step files (if any) called `defineWorld`, only what the result
  * was.
+ * @param declaredCollector This pickle's own declared collector (src/compat/
+ * declared.ts, m2d-allure-shim task spec, item 4) — the same instance src/
+ * run/run-scenario.ts also points the allure-js runtime shim's "active
+ * collector" pointer at; passed directly here (not read back through that
+ * pointer) for the module-identity reason this file's own header explains.
  */
 export function instantiateWorldForPickle(
   ctx: StepContext,
   declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>>,
+  declaredCollector: DeclaredCollector,
 ): InstantiatedWorld {
   const Ctor = registeredConstructor ?? World;
-  const held: HeldDeclarations = { attachments: [], logs: [], links: [] };
   const params: WorldConstructorParams = {
     attach(data, mediaType) {
-      held.attachments.push({ data, mediaType });
+      declaredCollector.recordAttachment(
+        "attachment",
+        toAttachmentBuffer(data),
+        extensionForMediaType(mediaType ?? "text/plain"),
+      );
     },
     log(text) {
-      held.logs.push(text);
+      declaredCollector.recordLog(text);
     },
     link(url, text) {
-      held.links.push({ url, text });
+      declaredCollector.recordLinks([{ url, name: text }]);
     },
     parameters: {},
   };
   const instance = new Ctor(params);
   runtimeByWorld.set(instance, ctx);
-  heldByWorld.set(instance, held);
   const instrumentation = instrumentWorld(instance, declaredWorldSchemas);
   return { world: instance, instrumentation };
 }

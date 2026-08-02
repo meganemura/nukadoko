@@ -1,3 +1,4 @@
+import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -57,6 +58,14 @@ import type { WritableSink } from "./writable-sink.js";
 // `nuka do` — run-scenario.ts is where the actual refusal/backstop logic
 // lives, since it needs a per-step, per-position view this module doesn't
 // have.
+//
+// m2d-allure-shim task spec, item 1: `registerAllureRuntime()` is called
+// once, at the top of the execution phase below (never in setup — a setup
+// failure writes nothing, so there is no pickle for it to matter to yet),
+// and its restore callback runs in this phase's own `finally`, nested inside
+// the lock's own `finally`. Every pickle in this `for` loop shares that one
+// registered `TestRuntime`; src/run/run-scenario.ts is what repoints which
+// collector is "active" per pickle and per step/hook boundary.
 //
 // m2b-compat-execution task spec closes m2a-compat-registry's two temporary
 // asymmetries: `buildStepBindings` now receives `compatParameterTypes` too
@@ -191,53 +200,60 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const thisSessionFilePath =
       session !== null ? sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session) : null;
 
-    let allPassed = true;
-    for (const pickle of selected.pickles) {
-      let storageState: StorageState | null = null;
-      if (session !== null) {
-        try {
-          // Read fresh for every scenario (this task's spec, decision 8):
-          // an earlier scenario in this same run may have just saved a new
-          // storageState, and the file is the single source of truth for
-          // that hand-off. A failure here means this scenario's own
-          // execution has not begun yet, so it gets no record — the same
-          // "never began" guarantee a missing feature file gets in setup.
-          storageState = await readSessionFile(thisSessionFilePath!, session);
-        } catch (error) {
-          stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-          return 1;
+    // --- Execution phase proper: registered once for every pickle below
+    // (m2d-allure-shim task spec, item 1) — see this file's own header. ---
+    const restoreAllureRuntime = registerAllureRuntime();
+    try {
+      let allPassed = true;
+      for (const pickle of selected.pickles) {
+        let storageState: StorageState | null = null;
+        if (session !== null) {
+          try {
+            // Read fresh for every scenario (this task's spec, decision 8):
+            // an earlier scenario in this same run may have just saved a new
+            // storageState, and the file is the single source of truth for
+            // that hand-off. A failure here means this scenario's own
+            // execution has not begun yet, so it gets no record — the same
+            // "never began" guarantee a missing feature file gets in setup.
+            storageState = await readSessionFile(thisSessionFilePath!, session);
+          } catch (error) {
+            stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+            return 1;
+          }
+        }
+
+        const record = await runScenario({
+          rootDir,
+          config: runConfig,
+          pickle,
+          relativeFeaturePath: selected.relativePath,
+          vocabulary,
+          bindings,
+          environment: resolvedEnv.name,
+          policy: resolvedEnv.policy,
+          targetVersion,
+          session,
+          env: envVars,
+          secrets,
+          storageState,
+          sessionFilePath: thisSessionFilePath,
+          instantiateCompatWorld,
+          compatHooks,
+        });
+
+        // One JSON line per completed scenario record, streamed as it
+        // finishes (this task's spec, decision 7); everything else about
+        // this run goes to stderr, never stdout.
+        stdout.write(`${JSON.stringify(record)}\n`);
+        if (record.status !== "passed") {
+          allPassed = false;
         }
       }
 
-      const record = await runScenario({
-        rootDir,
-        config: runConfig,
-        pickle,
-        relativeFeaturePath: selected.relativePath,
-        vocabulary,
-        bindings,
-        environment: resolvedEnv.name,
-        policy: resolvedEnv.policy,
-        targetVersion,
-        session,
-        env: envVars,
-        secrets,
-        storageState,
-        sessionFilePath: thisSessionFilePath,
-        instantiateCompatWorld,
-        compatHooks,
-      });
-
-      // One JSON line per completed scenario record, streamed as it
-      // finishes (this task's spec, decision 7); everything else about this
-      // run goes to stderr, never stdout.
-      stdout.write(`${JSON.stringify(record)}\n`);
-      if (record.status !== "passed") {
-        allPassed = false;
-      }
+      return allPassed ? 0 : 1;
+    } finally {
+      restoreAllureRuntime();
     }
-
-    return allPassed ? 0 : 1;
   } finally {
     // Released regardless of which path above returned (this task's spec,
     // decision 8: "run 全体で1回取得・finally で解放").

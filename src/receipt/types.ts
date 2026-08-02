@@ -33,7 +33,23 @@
 // `run(ctx, args)` never receives `this`), so its own tally is always empty
 // and this field is always omitted for it — no separate "kind" check is
 // needed to enforce that.
+//
+// `declared` is added now (m2d-allure-shim task spec, decisions 3, 5): what
+// a step or its glue *reported about itself* through the allure-js runtime
+// shim (src/compat/allure-runtime.ts, src/compat/declared.ts) or a compat
+// World's own `this.attach`/`log`/`link` channel — kept in a field separate
+// from `evidence`/`observed` on purpose, since those are the harness's own
+// tool measurements and this is self-reported. Collected kind-independently
+// (a typed step that imports the allure-js facade directly gets this field
+// exactly the same way a compat step's glue does) and at collection time,
+// not after: once written to allure-results, a declared attachment and a
+// measured one are indistinguishable (verified in .claude-team/
+// m3-allure-research.md section 10.4) — this field is what keeps them apart
+// while there is still time to. Present only when at least one of its own
+// sub-fields is non-empty; the attachment *files* themselves are never
+// redacted (the same honest limit trace.zip/screenshots already have).
 
+import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ObservedCounts } from "../context/observed.js";
 
 export interface EvidenceMeta {
@@ -91,6 +107,12 @@ interface ReceiptBase {
    * of `reads`/`writes` is non-empty; absent for a typed step (no World),
    * and absent for a compat step that never touched `this` at all. */
   world?: { reads: string[]; writes: string[] };
+  /** Attachments/labels/links/parameters/logs this step (or its World
+   * channel) declared through the allure-js runtime shim (m2d-allure-shim
+   * task spec, decisions 3, 5) — see this file's own header for how this
+   * differs from `evidence`/`observed`. Present only when at least one of
+   * its own sub-fields is non-empty. */
+  declared?: DeclaredSnapshot;
   /** The environment's `version` probe result (docs/spec.md "Receipts":
    * optional, "(when probed)"). Present only when the environment configures
    * a probe *and* it resolved to a string within its timeout; omitted — not

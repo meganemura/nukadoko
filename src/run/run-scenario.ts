@@ -4,6 +4,11 @@ import path from "node:path";
 import { PickleStepType, type Pickle, type PickleStep } from "@cucumber/messages";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { DataTable } from "../compat/data-table.js";
+import {
+  createDeclaredCollector,
+  setActiveDeclaredCollector,
+  type DeclaredCollector,
+} from "../compat/declared.js";
 import type { HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
@@ -111,6 +116,18 @@ import { writeScenarioRecord } from "./write-record.js";
 // "フック内のネットワークは step 境界外", a documented v1 limit rather than a
 // bug: a hook's own network activity is neither measured on any step's
 // receipt nor visible in the scenario record at all).
+//
+// m2d-allure-shim task spec: this file also owns `declaredCollector` (src/
+// compat/declared.ts) — one per pickle, repointed as "the currently active
+// declared collector" right after `instantiateCompatWorld` runs, and reset
+// via its own `beginStep(dir)` at the same points `contextHandle.beginStep`/
+// `worldInstrumentation.beginStep` already are: once per step (redirected to
+// that step's own receipt dir) and once per *individual* Before/After hook
+// invocation (redirected to `scenarioDir`, read right after that hook
+// returns/throws) — kind-independent (a typed step's receipt gets this
+// exactly like a compat step's does, since both the registered allure-js
+// `TestRuntime` and a compat World's own attach/log/link read the same
+// active pointer).
 
 /** The declared-mutates read-only refusal message (this task's spec,
  * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
@@ -171,9 +188,14 @@ export interface RunScenarioOptions {
   /** Constructs this pickle's own World (src/discover/discover-steps.ts's
    * `DiscoveryResult.instantiateCompatWorld`, m2b-compat-execution task spec,
    * item 4), already wrapped for measurement + this run's own `defineWorld`
-   * schemas (m2c-typed-world task spec, items 1-2). Called exactly once per
-   * pickle. */
-  readonly instantiateCompatWorld: (ctx: StepContext) => InstantiatedWorld;
+   * schemas (m2c-typed-world task spec, items 1-2), with its `attach`/`log`/
+   * `link` wired to the given declared collector (m2d-allure-shim task spec,
+   * item 4). Called exactly once per pickle, with this function's own
+   * freshly created `declaredCollector`. */
+  readonly instantiateCompatWorld: (
+    ctx: StepContext,
+    declaredCollector: DeclaredCollector,
+  ) => InstantiatedWorld;
   /** Every registered Before/After hook (src/discover/discover-steps.ts's
    * `DiscoveryResult.compatHooks`) — already validated for tag-expression
    * support by the caller (cli/run.ts's setup phase); this file only
@@ -293,6 +315,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `this`), so the `world` field below is naturally omitted for one,
     // with no separate kind check needed.
     const worldReadsWrites = worldInstrumentation.snapshot();
+    // What this step (kind-independent) declared through the allure-js
+    // runtime shim or a compat World's own attach/log/link (m2d-allure-shim
+    // task spec, items 2-3) — `undefined` when nothing was ever recorded
+    // this step, omitted from the receipt the same way `used`/`world` are.
+    const declared = declaredCollector.snapshot();
     const demotionMessages: string[] = [];
     if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
       demotionMessages.push(thenObservedWritesMessage(outcomeStepName, observed.http_writes));
@@ -341,6 +368,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
               : {}),
+            ...(declared ? { declared } : {}),
           }
         : {
             receipt_id: begun.receiptId,
@@ -365,6 +393,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
               : {}),
+            ...(declared ? { declared } : {}),
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,
@@ -392,8 +421,22 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // items 1-3) — advanced (`beginStep()`) at the exact same points
   // `contextHandle.beginStep()` is called below, and read (`snapshot()`)
   // inside `finishExecutedStep` and this function's own backstop catch.
+  // m2d-allure-shim task spec, items 1-2: one collector for this whole
+  // pickle. Repointed as "the currently active declared collector" (read by
+  // the registered allure-js `TestRuntime`, src/compat/allure-runtime.ts) and
+  // passed directly into `instantiateCompatWorld` so this pickle's own
+  // `world.attach`/`log`/`link` write into the exact same instance (src/
+  // compat/world.ts's own header explains why the World channel gets the
+  // object passed directly rather than reading it back through the active
+  // pointer) — a facade call and a World-channel call in the same step/hook
+  // land in the same place either way. Its own `beginStep`/`snapshot` are
+  // called at each step/hook boundary below, independently of
+  // `contextHandle`/`worldInstrumentation`'s own boundary calls.
+  const declaredCollector = createDeclaredCollector();
+  setActiveDeclaredCollector(declaredCollector);
   const { world, instrumentation: worldInstrumentation } = instantiateCompatWorld(
     contextHandle.ctx,
+    declaredCollector,
   );
   const pickleTags = pickle.tags.map((tag) => tag.name);
   const beforeHooks = compatHooks.filter(
@@ -419,12 +462,28 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // already give hooks.
   worldInstrumentation.beginStep();
   for (const hook of beforeHooks) {
+    // m2d-allure-shim task spec, item 4: each hook gets its own declared
+    // boundary — reset right before it runs, read right after — so one
+    // hook's own facade/World-channel calls land on exactly that hook's own
+    // `hookRecords` entry, never smeared across its sibling Before hooks.
+    // Independent of `contextHandle`/`worldInstrumentation`'s own
+    // once-per-phase boundary above (observed/world stay a documented v1
+    // limit for hooks, unchanged by this task — see this file's own
+    // header).
+    declaredCollector.beginStep(scenarioDir);
     try {
       await hook.fn.call(world);
-      hookRecords.push({ type: "before", status: "ok" });
+      const declared = declaredCollector.snapshot();
+      hookRecords.push({ type: "before", status: "ok", ...(declared ? { declared } : {}) });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      hookRecords.push({ type: "before", status: "failed", error: { message } });
+      const declared = declaredCollector.snapshot();
+      hookRecords.push({
+        type: "before",
+        status: "failed",
+        error: { message },
+        ...(declared ? { declared } : {}),
+      });
       scenarioFailed = true;
       // Stop at the first Before failure (this task's spec, item 5: "Before
       // 失敗 = 全 step skip"): this scenario's setup already didn't
@@ -537,6 +596,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         await mkdir(receiptDir, { recursive: true });
         contextHandle.beginStep(receiptDir);
         worldInstrumentation.beginStep();
+        declaredCollector.beginStep(receiptDir);
         began = {
           receiptId,
           receiptDir,
@@ -609,6 +669,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         await mkdir(receiptDir, { recursive: true });
         contextHandle.beginStep(receiptDir);
         worldInstrumentation.beginStep();
+        declaredCollector.beginStep(receiptDir);
         began = {
           receiptId,
           receiptDir,
@@ -690,6 +751,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const observed = contextHandle.observedCounts();
         const usedReceiptIds = contextHandle.usedReceiptIds();
         const worldReadsWrites = worldInstrumentation.snapshot();
+        const declared = declaredCollector.snapshot();
         const receipt: Receipt = {
           receipt_id: began.receiptId,
           step: began.stepName,
@@ -713,6 +775,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
             ? { world: worldReadsWrites }
             : {}),
+          ...(declared ? { declared } : {}),
         };
         const redactedReceipt = redact(receipt, secrets) as Receipt;
         await writeReceipt(began.receiptDir, redactedReceipt);
@@ -735,12 +798,23 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   contextHandle.beginStep(scenarioDir);
   worldInstrumentation.beginStep();
   for (const hook of afterHooks) {
+    // Same per-hook declared boundary as the Before loop above (this task's
+    // spec, item 4) — reset right before, read right after, so one After
+    // hook's own declared data never bleeds into a sibling's.
+    declaredCollector.beginStep(scenarioDir);
     try {
       await hook.fn.call(world);
-      hookRecords.push({ type: "after", status: "ok" });
+      const declared = declaredCollector.snapshot();
+      hookRecords.push({ type: "after", status: "ok", ...(declared ? { declared } : {}) });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      hookRecords.push({ type: "after", status: "failed", error: { message } });
+      const declared = declaredCollector.snapshot();
+      hookRecords.push({
+        type: "after",
+        status: "failed",
+        error: { message },
+        ...(declared ? { declared } : {}),
+      });
       scenarioFailed = true;
     }
   }
@@ -789,5 +863,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const redactedRecord = redact(record, secrets) as ScenarioRecord;
   await writeScenarioRecord(scenarioDir, redactedRecord);
+  // This pickle is done — repoint "the currently active declared collector"
+  // to nothing, so a stray facade call between this pickle and the next
+  // (there shouldn't be one, but this mirrors `used`/`observed`'s own "never
+  // let a boundary bleed into unrelated code" discipline) can't silently
+  // land on an already-read collector instead of being dropped.
+  setActiveDeclaredCollector(undefined);
   return redactedRecord;
 }

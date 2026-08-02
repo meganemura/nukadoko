@@ -13,6 +13,15 @@
 // is recorded here instead, on the scenario record. Always present, even
 // when empty (no compat hooks matched this pickle's tags, or none are
 // registered at all) — same convention as `steps`.
+//
+// `ScenarioHookRecord.declared` is added now (m2d-allure-shim task spec,
+// item 4): a hook has no receipt to carry its own `declared` field on (see
+// receipt/types.ts's own header), so this record is where its own
+// attachments/labels/links/parameters/logs land instead — one collector
+// boundary per individual hook invocation, not per Before/After phase, so
+// one hook's own declared data never gets smeared across its sibling hooks.
+
+import type { DeclaredSnapshot } from "../compat/declared.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
@@ -38,6 +47,12 @@ export interface ScenarioHookRecord {
   readonly status: "ok" | "failed";
   /** Present only when `status` is `"failed"`. */
   readonly error?: { readonly message: string };
+  /** This hook's own declared attachments/labels/links/parameters/logs
+   * (m2d-allure-shim task spec, item 4) — same shape, same "collected at
+   * collection time, never after" reasoning as a step's own `declared`
+   * (src/receipt/types.ts). Present only when at least one of its own
+   * sub-fields is non-empty. */
+  readonly declared?: DeclaredSnapshot;
 }
 
 export interface ScenarioEvidence {

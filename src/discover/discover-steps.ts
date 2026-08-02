@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { register } from "tsx/esm/api";
 import type { z } from "zod";
+import type { DeclaredCollector } from "../compat/declared.js";
 import type { HookRegistration } from "../compat/hooks.js";
 import type {
   CompatKeyword,
@@ -115,11 +116,18 @@ export interface DiscoveryResult {
    * execution task spec, item 1) — with `ctx` attached as the runtime bridge
    * `World.openPage()`/`openRequest()` read from, already wrapped for
    * measurement + this run's own `defineWorld` schemas (m2c-typed-world task
-   * spec, items 1-2). Bound to the *exact* module instance this discovery
-   * run's own scoped tsx import loaded src/compat/world.ts through (see that
-   * file's header for why identity matters here) — callers (src/run/run-
-   * scenario.ts) never import world.js directly themselves. */
-  readonly instantiateCompatWorld: (ctx: StepContext) => InstantiatedWorld;
+   * spec, items 1-2), and its `attach`/`log`/`link` wired to the given
+   * `declaredCollector` (m2d-allure-shim task spec, item 4 — src/run/run-
+   * scenario.ts passes its own per-pickle collector here, directly, for the
+   * module-identity reason src/compat/world.ts's own header explains). Bound
+   * to the *exact* module instance this discovery run's own scoped tsx
+   * import loaded src/compat/world.ts through (see that file's header for
+   * why identity matters here) — callers (src/run/run-scenario.ts) never
+   * import world.js directly themselves. */
+  readonly instantiateCompatWorld: (
+    ctx: StepContext,
+    declaredCollector: DeclaredCollector,
+  ) => InstantiatedWorld;
   /** Every Before/After hook any step file registered during this run
    * (m2b-compat-execution task spec, item 5) — not attributed to a file
    * (see src/compat/hooks.ts's header), read once here after every file's
@@ -283,8 +291,8 @@ export async function discoverSteps(
       // `declaredWorldSchemas` is curried in here (m2c-typed-world task
       // spec, item 1) so `instantiateWorldForPickle` never needs to reach
       // back into src/compat/define-world.ts's own buffer itself.
-      instantiateCompatWorld: (ctx: StepContext) =>
-        compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas),
+      instantiateCompatWorld: (ctx: StepContext, declaredCollector: DeclaredCollector) =>
+        compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector),
       compatHooks: compatHooksModule.getRegisteredHooks(),
     };
   } finally {
