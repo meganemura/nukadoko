@@ -176,3 +176,34 @@ describe("configSchema: parameterTypes", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("configSchema: allure", () => {
+  it("leaves allure undefined when omitted (the <stateDir>/allure-results default is applied by the caller, not this schema)", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.allure).toBeUndefined();
+    }
+  });
+
+  it("accepts an explicit, root-relative resultsDir", () => {
+    const result = configSchema.safeParse({ allure: { resultsDir: "reports/allure-results" } });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.allure).toEqual({ resultsDir: "reports/allure-results" });
+    }
+  });
+
+  it("accepts allure with no fields at all", () => {
+    const result = configSchema.safeParse({ allure: {} });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.allure).toEqual({});
+    }
+  });
+
+  it("rejects an unknown key inside allure (there is no `enabled`)", () => {
+    const result = configSchema.safeParse({ allure: { enabled: false } });
+    expect(result.success).toBe(false);
+  });
+});

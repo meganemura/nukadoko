@@ -1,3 +1,4 @@
+import path from "node:path";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
@@ -9,6 +10,7 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
+import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import {
   doneCallbackMessage,
@@ -110,6 +112,25 @@ import type { WritableSink } from "./writable-sink.js";
 // `doneCallbackMessage`/`pendingOrSkippedMessage` are reused, unmodified,
 // from src/run/run-scenario.ts (see that file's own header) rather than
 // duplicated here.
+//
+// m3b-allure-emitter spec-b2 task spec, item 2: the Allure emitter is built
+// and `begin()`-ed once, right after `hasPickles` is known (same gate as
+// BeforeAll/AfterAll above, same reason — a run that selects nothing has
+// nothing for the emitter to have measured either, so it never creates
+// `allure-results/`). Both the construction and `begin()` are wrapped in one
+// try/catch here even though `emitScenario` already carries its own
+// (src/report/allure/emitter.ts): `createAllureEmitter` creates `resultsDir`
+// synchronously (src/report/allure/writer.ts's `createAtomicWriter`), a step
+// that can throw before any of the emitter's own internal safety net exists.
+// A failure here is a warning to stderr, never a run failure — measurement
+// must not break execution — and leaves `allureEmitter` `null`, so every
+// `emitScenario` call in the pickle loop below is skipped for the rest of
+// this run. Each scenario's own `emitScenario` call happens after this
+// loop's `stdout.write` of that scenario's record (this task's spec, item
+// 2): stdout's one-line-per-scenario contract must never be disturbed by an
+// emit failure, and it isn't, since `emitScenario` itself never throws.
+// `record.status`/the run's exit code/stdout's content are all otherwise
+// untouched by any of this.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -287,6 +308,35 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // spec: "pickle が 1 つも選択されていない場合は実行しない") — `hasPickles`
       // gates every step below, including AfterAll.
       const hasPickles = selected.pickles.length > 0;
+
+      // See this file's own header (m3b-allure-emitter spec-b2 task spec,
+      // item 2) for why this is gated on `hasPickles`, why construction and
+      // `begin()` are wrapped together, and why a failure here never fails
+      // the run.
+      let allureEmitter: AllureEmitter | null = null;
+      if (hasPickles) {
+        try {
+          const resultsDir = path.join(
+            rootDir,
+            config.allure?.resultsDir ?? path.join(config.stateDir, "allure-results"),
+          );
+          allureEmitter = createAllureEmitter({
+            resultsDir,
+            rootDir,
+            environment: resolvedEnv.name,
+            targetVersion,
+            secrets,
+            stderr,
+          });
+          allureEmitter.begin();
+        } catch (error) {
+          allureEmitter = null;
+          stderr.write(
+            `Warning: allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
+          );
+        }
+      }
+
       const beforeAllHooks = compatRunHooks.filter((hook) => hook.type === "beforeAll");
       // Same LIFO convention as src/run/run-scenario.ts's own After-hook
       // loop (that file's own comment: "teardown unwinds in the opposite
@@ -362,6 +412,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // finishes (this task's spec, decision 7); everything else about
           // this run goes to stderr, never stdout.
           stdout.write(`${JSON.stringify(record)}\n`);
+          // After the stdout line, always (m3b-allure-emitter spec-b2 task
+          // spec, item 2) — see this file's own header. `allureEmitter` is
+          // `null` when this run selected zero pickles or its own setup
+          // failed above; `emitScenario` itself never throws.
+          allureEmitter?.emitScenario({
+            record,
+            gherkinDocument: selected.gherkinDocument,
+            pickle,
+            relativeFeaturePath: selected.relativePath,
+          });
           if (record.status !== "passed") {
             allPassed = false;
           }

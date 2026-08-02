@@ -116,6 +116,14 @@ export const configSchema = z
       .object({ public: z.array(z.string()).default([]) })
       .strict()
       .default({ public: [] }),
+    /** `resultsDir` is root-relative; omitted, it defaults to
+     * `<stateDir>/allure-results` (docs/spec.md "The state directory") —
+     * that default is applied where `stateDir` is resolved (src/cli/run.ts),
+     * not here, since this schema alone doesn't know `stateDir`'s final
+     * value. No `enabled` key (m3b-allure-emitter spec-b2 task spec: the
+     * emitter is always on — zero configuration already gets a full report,
+     * so there is nothing to opt into). No CLI flag either. */
+    allure: z.object({ resultsDir: z.string().optional() }).strict().optional(),
   })
   .strict();
 
