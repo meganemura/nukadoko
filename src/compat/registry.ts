@@ -27,6 +27,16 @@
 // pattern and parameter-type-collision detection both happen downstream
 // (src/discover/discover-steps.ts, src/binding/registry.ts) where the full
 // vocabulary/config picture is available.
+//
+// `setDefaultTimeout`/`getDefaultTimeoutMs` (m22-compat-run-scope task spec,
+// item 1) live here rather than in a module of their own: they need the
+// exact same module-identity handoff to src/discover/discover-steps.ts's
+// scoped tsx import that this file's own step buffer already has (see
+// above), and discover-steps.ts already loads this module directly for that
+// buffer — reusing that same load is simpler than adding a second scoped
+// import just to reach one more value. Unlike `stepBuffer`, this is a single
+// overwritable value, not a per-file buffer: see `setDefaultTimeout`'s own
+// comment for why "last call wins" rather than "queued and drained".
 
 export type CompatKeyword = "Given" | "When" | "Then";
 export type CompatPattern = string | RegExp;
@@ -217,4 +227,34 @@ export function drainCompatParameterTypes(): CompatParameterTypeRegistration[] {
   const drained = parameterTypeBuffer;
   parameterTypeBuffer = [];
   return drained;
+}
+
+/**
+ * cucumber-js's own `setDefaultTimeout(ms)` (m22-compat-run-scope task spec,
+ * item 1) — the timeout a compat step or hook falls back to when it
+ * declares no `{ timeout }` of its own (src/run/run-scenario.ts applies the
+ * fallback for a scenario's own compat steps/Before/After, src/cli/run.ts
+ * for BeforeAll/AfterAll; this module only records the value, same split as
+ * this file's own per-registration `timeoutMs` fields). Last call wins
+ * (this task's spec: "複数回呼ばれたら最後の呼び出しが勝つ" — cucumber-js's own
+ * documented behavior, so no detection/warning is added for a second call).
+ * Deliberately *not* seeded with cucumber-js's own 5000ms default when never
+ * called at all: nukadoko's compat steps/hooks have always run unbounded
+ * absent their own `{ timeout }`, and introducing a 5-second ceiling here
+ * would make an existing suite's slow step start failing purely from
+ * switching to nukadoko — the exact regression the migration door forbids
+ * (docs/spec.md, migration-door rule). This choice is documented for
+ * readers in docs/migration.md (a later task; not this one).
+ */
+let defaultTimeoutMs: number | undefined;
+
+export function setDefaultTimeout(ms: number): void {
+  defaultTimeoutMs = ms;
+}
+
+/** Read once, at the end of a discovery run (src/discover/discover-
+ * steps.ts) — never reset mid-run, since (unlike `stepBuffer`) this is a
+ * single value with no per-file attribution to preserve. */
+export function getDefaultTimeoutMs(): number | undefined {
+  return defaultTimeoutMs;
 }

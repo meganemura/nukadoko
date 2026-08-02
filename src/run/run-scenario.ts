@@ -144,6 +144,19 @@ import { writeScenarioRecord } from "./write-record.js";
 // 4-5) — all four checks apply only to compat steps and hooks, never to a
 // typed step, whose fixed `run(ctx, args)` arity and zod-validated `returns`
 // make none of cucumber-js's own conventions here relevant to it.
+//
+// m22-compat-run-scope task spec, item 1: `defaultTimeoutMs` (this run's own
+// `setDefaultTimeout` value, or `undefined`) is threaded in from cli/run.ts
+// and falls back only where a compat step's/hook's *own* `{ timeout }` is
+// `undefined` (`?? defaultTimeoutMs` at each `runWithTimeout` call site
+// below) — an own declaration always wins, matching cucumber-js. `undefined
+// ?? undefined` stays `undefined`, so never calling `setDefaultTimeout`
+// leaves every compat step/hook exactly as unbounded as before this task.
+// `runWithTimeout`/`pendingOrSkippedMessage`/`doneCallbackMessage` are
+// exported (unchanged otherwise) so cli/run.ts's own BeforeAll/AfterAll
+// execution (this task's spec, item 2 — a run-scope hook, not a per-pickle
+// one, so it does not belong in this file) reuses the exact same
+// timeout-racing/message logic rather than a second, drifting copy of it.
 
 /** The declared-mutates read-only refusal message (this task's spec,
  * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
@@ -223,6 +236,13 @@ export interface RunScenarioOptions {
    * support by the caller (cli/run.ts's setup phase); this file only
    * filters by this pickle's own tags (this task's spec, item 5). */
   readonly compatHooks: readonly HookRegistration[];
+  /** This run's own `setDefaultTimeout` value (src/discover/discover-
+   * steps.ts's `DiscoveryResult.defaultTimeoutMs`), or `undefined` if it was
+   * never called (m22-compat-run-scope task spec, item 1) — applied as the
+   * fallback for a compat step's or Before/After hook's own `timeoutMs`
+   * wherever that is `undefined`; an own declaration always wins. Not
+   * applied to a typed step, which has no timeout mechanism at all. */
+  readonly defaultTimeoutMs: number | undefined;
 }
 
 /** The Then-position + observed-write failure message (this task's spec,
@@ -247,7 +267,10 @@ function ambiguousStepMessage(text: string, stepNames: readonly string[]): strin
 // return, so none of these three checks apply to one). ---
 
 /** Item 2's failure message: names which timeout fired (a step's own
- * `{ timeout }` vs a hook's), on what, and the configured value. */
+ * `{ timeout }` vs a hook's), on what, and the configured value. Not
+ * exported — only `runWithTimeout` below builds one, and that function
+ * itself is what cli/run.ts's own BeforeAll/AfterAll reuses (see this
+ * file's own header, m22-compat-run-scope task spec addendum). */
 function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number): string {
   return `${kind} "${name}" timed out after ${timeoutMs}ms (its own registered timeout)`;
 }
@@ -256,8 +279,11 @@ function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number):
  * as their own outcomes; nukadoko's receipt/record schema has no such status
  * (implementing it for real is explicitly out of this task's scope), so
  * rather than silently passing through as success, a step/hook that returns
- * one of these two strings is failed with a message a migrator can act on. */
-function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: string): string {
+ * one of these two strings is failed with a message a migrator can act on.
+ * Exported (m22-compat-run-scope task spec addendum) so cli/run.ts's own
+ * BeforeAll/AfterAll execution reports the exact same wording for the exact
+ * same fact, rather than a second copy of this message. */
+export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: string): string {
   return (
     `${kind} "${name}" returned ${JSON.stringify(value)}, which nukadoko does not interpret ` +
     `as pending/skipped (unlike cucumber-js) — see docs/migration.md`
@@ -270,8 +296,11 @@ function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: str
  * *before* calling the function at all — calling it would already be the
  * silent failure this closes (the callback never fires, the function
  * "succeeds" immediately having done none of its real work yet, and that
- * work keeps running unobserved after this step/hook is already recorded). */
-function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
+ * work keeps running unobserved after this step/hook is already recorded).
+ * Exported for the same reason as `pendingOrSkippedMessage` above (m22-
+ * compat-run-scope task spec addendum) — cli/run.ts's own BeforeAll/AfterAll
+ * arity check reuses this exact wording. */
+export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
   return (
     `${kind} "${name}" appears to expect a done() callback (it declares more parameters ` +
     `than nukadoko passes it) — nukadoko has no callback form; rewrite it to return a ` +
@@ -299,8 +328,16 @@ function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
  * The timer itself is always cleared, on every path, so a step/hook that
  * finishes in time never leaks a pending Node timer (this task's spec:
  * "タイマーは必ず解除する").
+ *
+ * Exported (m22-compat-run-scope task spec addendum) so cli/run.ts's own
+ * BeforeAll/AfterAll execution races against the exact same logic a
+ * scenario's own compat step/hook already does, rather than a second,
+ * potentially-drifting copy of it — a run-scope hook is still "a compat
+ * hook with a `{ timeout }`" as far as this function is concerned, it is
+ * only *where* it runs (once per `nuka run`, not once per pickle) that
+ * differs, and that difference lives entirely in the caller.
  */
-async function runWithTimeout<T>(
+export async function runWithTimeout<T>(
   run: () => Promise<T>,
   timeoutMs: number | undefined,
   kind: "Step" | "Hook",
@@ -360,6 +397,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     sessionFilePath,
     instantiateCompatWorld,
     compatHooks,
+    defaultTimeoutMs,
   } = options;
 
   const scenarioId = generateScenarioId();
@@ -606,7 +644,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
       const returnValue = await runWithTimeout(
         () => Promise.resolve(hook.fn.call(world, hookParameter)),
-        hook.timeoutMs,
+        hook.timeoutMs ?? defaultTimeoutMs,
         "Hook",
         "Before",
       );
@@ -860,10 +898,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // Item 2: `entry.compat.timeoutMs` is this step's own
             // `{ timeout }` (wired through discover-steps.ts's
             // `CompatStepDefinition.timeoutMs`) — `undefined` runs
-            // unbounded, same as before this task.
+            // unbounded, same as before this task. m22-compat-run-scope task
+            // spec, item 1: `?? defaultTimeoutMs` only ever takes effect when
+            // this step declared no `{ timeout }` of its own.
             const returnValue = await runWithTimeout(
               () => Promise.resolve(entry.compat.fn.apply(world, positionalArgs)),
-              entry.compat.timeoutMs,
+              entry.compat.timeoutMs ?? defaultTimeoutMs,
               "Step",
               outcome.stepName,
             );
@@ -988,7 +1028,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
       const returnValue = await runWithTimeout(
         () => Promise.resolve(hook.fn.call(world, hookParameter)),
-        hook.timeoutMs,
+        hook.timeoutMs ?? defaultTimeoutMs,
         "Hook",
         "After",
       );

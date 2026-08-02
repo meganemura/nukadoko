@@ -11,6 +11,7 @@ import type {
   CompatParameterTypeRegistration,
   CompatStepFn,
 } from "../compat/registry.js";
+import type { RunHookRegistration } from "../compat/run-hooks.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { StepContext } from "../context.js";
 import { isStep, type Step } from "../step/define-step.js";
@@ -140,6 +141,23 @@ export interface DiscoveryResult {
    * (see src/compat/hooks.ts's header), read once here after every file's
    * import has finished. */
   readonly compatHooks: readonly HookRegistration[];
+  /** Every BeforeAll/AfterAll hook any step file registered during this run
+   * (m22-compat-run-scope task spec, item 2) — same "not attributed to a
+   * file, read once at the end" contract as `compatHooks`, via
+   * src/compat/run-hooks.ts instead. src/cli/run.ts is what actually runs
+   * these (unlike `compatHooks`, which src/run/run-scenario.ts runs per
+   * pickle) — a run-scope hook has no pickle to be scoped to. */
+  readonly compatRunHooks: readonly RunHookRegistration[];
+  /** `setDefaultTimeout`'s final value for this run (m22-compat-run-scope
+   * task spec, item 1), or `undefined` if it was never called — read once
+   * here, after every file's import has finished, same timing as
+   * `compatHooks` (last call anywhere in this run wins; see
+   * src/compat/registry.ts's own header for why "last wins" rather than
+   * per-file attribution). `undefined` here must keep meaning "run
+   * unbounded" downstream (src/run/run-scenario.ts, src/cli/run.ts) — never
+   * defaulted to cucumber-js's own 5000ms (see `setDefaultTimeout`'s own
+   * comment for why). */
+  readonly defaultTimeoutMs: number | undefined;
 }
 
 function compatPatternSource(pattern: string | RegExp): string {
@@ -209,6 +227,14 @@ export async function discoverSteps(
       new URL("../compat/hooks.js", import.meta.url).href,
       import.meta.url,
     )) as typeof import("../compat/hooks.js");
+    // Same identity reasoning again, for BeforeAll/AfterAll (m22-compat-
+    // run-scope task spec, item 2): loaded through this run's own scoped
+    // import so a step file's `BeforeAll`/`AfterAll` call via
+    // "nukadoko/compat" lands in the exact instance drained below.
+    const compatRunHooksModule = (await scoped.import(
+      new URL("../compat/run-hooks.js", import.meta.url).href,
+      import.meta.url,
+    )) as typeof import("../compat/run-hooks.js");
     // Same identity reasoning again, for `defineWorld` (m2c-typed-world task
     // spec, item 2) — src/compat/define-world.ts's own registration buffer,
     // loaded through this run's own scoped import so a step file's
@@ -302,6 +328,11 @@ export async function discoverSteps(
       instantiateCompatWorld: (ctx: StepContext, declaredCollector: DeclaredCollector) =>
         compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector),
       compatHooks: compatHooksModule.getRegisteredHooks(),
+      compatRunHooks: compatRunHooksModule.getRegisteredRunHooks(),
+      // Read through `compatRegistry` — already loaded above for the step
+      // buffer, and `setDefaultTimeout`'s own buffer lives in that same
+      // module (see registry.ts's own header for why).
+      defaultTimeoutMs: compatRegistry.getDefaultTimeoutMs(),
     };
   } finally {
     await scoped.unregister();

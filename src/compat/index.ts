@@ -11,7 +11,11 @@
 // `Given`/`When`/`Then` (all the same registration function — see
 // registry.ts's own comment) and `defineParameterType`. Slice B (m2b-
 // compat-execution task spec) adds World/setWorldConstructor, Before/After,
-// and DataTable — execution, not just registration.
+// and DataTable — execution, not just registration. m22-compat-run-scope
+// task spec adds `setDefaultTimeout` and `BeforeAll`/`AfterAll` — the two
+// most common non-exported names real-world suites hit (compat-audit
+// synthesis), both landing in the same slice because their owning files
+// mostly overlap with each other's.
 //
 // Kept as a thin re-export of each surface's own module, not their buffers'
 // home: src/discover/discover-steps.ts needs to land on the *exact* module
@@ -20,7 +24,7 @@
 // via its own relative path — that only converges on the same instance as
 // this file's own imports if this file does nothing to any of their exports
 // beyond re-exporting them verbatim (no wrapping, no re-instantiation).
-export { Given, When, Then, defineParameterType } from "./registry.js";
+export { Given, When, Then, defineParameterType, setDefaultTimeout } from "./registry.js";
 export {
   World,
   setWorldConstructor,
@@ -28,6 +32,7 @@ export {
   type WorldConstructorParams,
 } from "./world.js";
 export { Before, After, type HookFn, type HookOptions } from "./hooks.js";
+export { BeforeAll, AfterAll, type RunHookFn, type RunHookOptions } from "./run-hooks.js";
 export { DataTable } from "./data-table.js";
 // m2c-typed-world task spec, item 2: World's own declaration surface —
 // "measurement is always on, declaration is opt-in" (typed-world-design.md).

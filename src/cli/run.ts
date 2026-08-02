@@ -10,7 +10,12 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
-import { runScenario } from "../run/run-scenario.js";
+import {
+  doneCallbackMessage,
+  pendingOrSkippedMessage,
+  runScenario,
+  runWithTimeout,
+} from "../run/run-scenario.js";
 import { selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -84,6 +89,27 @@ import type { WritableSink } from "./writable-sink.js";
 // invocation happens to select, so discovering it only when a matching
 // pickle came along would make the failure look scenario-dependent, which
 // it isn't.
+//
+// m22-compat-run-scope task spec, item 2: BeforeAll/AfterAll run here, not
+// in src/run/run-scenario.ts — they are a property of this whole `nuka run`
+// invocation, not of any one pickle, the same reason `registerAllureRuntime`
+// above is called once here rather than once per scenario. Placed
+// immediately around the pickle `for` loop below (after every setup-phase
+// failure path has already returned, so environment/session/discovery are
+// all settled by the time either one runs) and skipped entirely when
+// `selected.pickles` is empty (this task's spec: "pickle が 1 つも選択されて
+// いない場合は実行しない" — a run that executes nothing has nothing for a
+// BeforeAll/AfterAll to prepare or tear down, and running one anyway would
+// be a surprise side effect, e.g. standing up a server for a `nuka run` that
+// never touches it). `BeforeAll` failing skips the pickle loop entirely but
+// `AfterAll` is still attempted (mirrors src/run/run-scenario.ts's own
+// Before/After asymmetry, applied one level up); neither has a record
+// artifact of its own (none exists at the run level — this task's spec:
+// "発明しない") — both report through stderr + this function's own exit
+// code, the same channel setup failures above already use. `runWithTimeout`/
+// `doneCallbackMessage`/`pendingOrSkippedMessage` are reused, unmodified,
+// from src/run/run-scenario.ts (see that file's own header) rather than
+// duplicated here.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -137,9 +163,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     let compatParameterTypes;
     let instantiateCompatWorld;
     let compatHooks;
+    let compatRunHooks;
+    let defaultTimeoutMs;
     try {
-      ({ vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks } =
-        await discoverSteps(rootDir, config.featuresDir));
+      ({
+        vocabulary,
+        compatParameterTypes,
+        instantiateCompatWorld,
+        compatHooks,
+        compatRunHooks,
+        defaultTimeoutMs,
+      } = await discoverSteps(rootDir, config.featuresDir));
     } catch (error) {
       stderr.write(`${formatVocabularyError(error)}\n`);
       return 1;
@@ -206,54 +240,147 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const thisSessionFilePath =
       session !== null ? sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session) : null;
 
+    // m22-compat-run-scope task spec, item 2: runs one BeforeAll/AfterAll
+    // registration, in isolation — `label` is only ever "BeforeAll" or
+    // "AfterAll" here, but shares `doneCallbackMessage`/
+    // `pendingOrSkippedMessage`'s own `"Hook"` kind (their wording doesn't
+    // otherwise distinguish a scenario hook from a run-scope one). Every
+    // failure is reported to stderr right here — the one place both loops
+    // below need it — and reported back as a boolean rather than thrown, so
+    // each loop decides for itself whether a failure stops the rest
+    // (BeforeAll: yes: AfterAll: no — see this file's own header).
+    const runOneRunHook = async (
+      hook: (typeof compatRunHooks)[number],
+      label: "BeforeAll" | "AfterAll",
+    ): Promise<boolean> => {
+      try {
+        // Same arity-based done-callback signal as src/run/run-scenario.ts's
+        // own hooks, adjusted for a run-scope hook's own zero-argument call
+        // convention (src/compat/run-hooks.ts's `RunHookFn` header): *any*
+        // declared parameter, not just a second one, is the signal here.
+        if (hook.fn.length >= 1) {
+          throw new Error(doneCallbackMessage("Hook", label));
+        }
+        const returnValue = await runWithTimeout(
+          () => Promise.resolve(hook.fn.call(undefined)),
+          hook.timeoutMs ?? defaultTimeoutMs,
+          "Hook",
+          label,
+        );
+        if (returnValue === "pending" || returnValue === "skipped") {
+          throw new Error(pendingOrSkippedMessage("Hook", label, returnValue));
+        }
+        return true;
+      } catch (error) {
+        stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return false;
+      }
+    };
+
     // --- Execution phase proper: registered once for every pickle below
     // (m2d-allure-shim task spec, item 1) — see this file's own header. ---
     const restoreAllureRuntime = registerAllureRuntime();
     try {
       let allPassed = true;
-      for (const pickle of selected.pickles) {
-        let storageState: StorageState | null = null;
-        if (session !== null) {
-          try {
-            // Read fresh for every scenario (this task's spec, decision 8):
-            // an earlier scenario in this same run may have just saved a new
-            // storageState, and the file is the single source of truth for
-            // that hand-off. A failure here means this scenario's own
-            // execution has not begun yet, so it gets no record — the same
-            // "never began" guarantee a missing feature file gets in setup.
-            storageState = await readSessionFile(thisSessionFilePath!, session);
-          } catch (error) {
-            stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-            return 1;
+
+      // Skipped entirely for a run that selects zero pickles (this task's
+      // spec: "pickle が 1 つも選択されていない場合は実行しない") — `hasPickles`
+      // gates every step below, including AfterAll.
+      const hasPickles = selected.pickles.length > 0;
+      const beforeAllHooks = compatRunHooks.filter((hook) => hook.type === "beforeAll");
+      // Same LIFO convention as src/run/run-scenario.ts's own After-hook
+      // loop (that file's own comment: "teardown unwinds in the opposite
+      // order setup ran in") — registration order reversed, so the most
+      // recently registered AfterAll runs first.
+      const afterAllHooks = compatRunHooks
+        .filter((hook) => hook.type === "afterAll")
+        .slice()
+        .reverse();
+
+      let beforeAllFailed = false;
+      if (hasPickles) {
+        for (const hook of beforeAllHooks) {
+          const ok = await runOneRunHook(hook, "BeforeAll");
+          if (!ok) {
+            beforeAllFailed = true;
+            allPassed = false;
+            // Stop at the first BeforeAll failure (this task's spec: "最初
+            // の失敗で残りを中断" — same convention as scenario-level Before).
+            break;
           }
         }
+      }
 
-        const record = await runScenario({
-          rootDir,
-          config: runConfig,
-          pickle,
-          relativeFeaturePath: selected.relativePath,
-          gherkinDocument: selected.gherkinDocument,
-          vocabulary,
-          bindings,
-          environment: resolvedEnv.name,
-          policy: resolvedEnv.policy,
-          targetVersion,
-          session,
-          env: envVars,
-          secrets,
-          storageState,
-          sessionFilePath: thisSessionFilePath,
-          instantiateCompatWorld,
-          compatHooks,
-        });
+      if (hasPickles && !beforeAllFailed) {
+        for (const pickle of selected.pickles) {
+          let storageState: StorageState | null = null;
+          if (session !== null) {
+            try {
+              // Read fresh for every scenario (this task's spec, decision 8):
+              // an earlier scenario in this same run may have just saved a
+              // new storageState, and the file is the single source of truth
+              // for that hand-off. A failure here means this scenario's own
+              // execution has not begun yet, so it gets no record — the same
+              // "never began" guarantee a missing feature file gets in setup.
+              storageState = await readSessionFile(thisSessionFilePath!, session);
+            } catch (error) {
+              stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+              // Deliberately not `return 1` (which is what this path did
+              // before run-scope hooks existed): BeforeAll has already run by
+              // now, and AfterAll's whole contract is that teardown is
+              // attempted whenever setup was — returning straight out would
+              // leak whatever BeforeAll started. Break instead, let the
+              // AfterAll block below run, and let `allPassed` carry the same
+              // non-zero exit code out.
+              allPassed = false;
+              break;
+            }
+          }
 
-        // One JSON line per completed scenario record, streamed as it
-        // finishes (this task's spec, decision 7); everything else about
-        // this run goes to stderr, never stdout.
-        stdout.write(`${JSON.stringify(record)}\n`);
-        if (record.status !== "passed") {
-          allPassed = false;
+          const record = await runScenario({
+            rootDir,
+            config: runConfig,
+            pickle,
+            relativeFeaturePath: selected.relativePath,
+            gherkinDocument: selected.gherkinDocument,
+            vocabulary,
+            bindings,
+            environment: resolvedEnv.name,
+            policy: resolvedEnv.policy,
+            targetVersion,
+            session,
+            env: envVars,
+            secrets,
+            storageState,
+            sessionFilePath: thisSessionFilePath,
+            instantiateCompatWorld,
+            compatHooks,
+            defaultTimeoutMs,
+          });
+
+          // One JSON line per completed scenario record, streamed as it
+          // finishes (this task's spec, decision 7); everything else about
+          // this run goes to stderr, never stdout.
+          stdout.write(`${JSON.stringify(record)}\n`);
+          if (record.status !== "passed") {
+            allPassed = false;
+          }
+        }
+      }
+
+      // AfterAll is attempted whether or not BeforeAll failed, and whether
+      // or not any pickle actually passed (this task's spec: "AfterAll は
+      // それでも試行する") — the only thing that suppresses it is
+      // `!hasPickles`, already excluded above. Every registration is
+      // attempted regardless of an earlier one's own failure (unlike
+      // BeforeAll) — same "teardown always runs, in full" convention as
+      // src/run/run-scenario.ts's own After-hook loop.
+      if (hasPickles) {
+        for (const hook of afterAllHooks) {
+          const ok = await runOneRunHook(hook, "AfterAll");
+          if (!ok) {
+            allPassed = false;
+          }
         }
       }
 
