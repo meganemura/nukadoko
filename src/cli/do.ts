@@ -75,7 +75,6 @@ export interface RunDoOptions {
   rootDir: string;
   name: string;
   argsJson: string;
-  tag: string | null;
   /** Carries login state across `do` calls as Playwright storageState;
    * `null` means a clean start — no session file is read or written
    * (docs/spec.md "Sessions..."). */
@@ -90,7 +89,7 @@ export interface RunDoOptions {
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
-  const { rootDir, name, argsJson, tag, session, env, stdout, stderr } = options;
+  const { rootDir, name, argsJson, session, env, stdout, stderr } = options;
 
   // --- Setup phase: any failure here writes nothing. ---
   let parsedArgs: unknown;
@@ -333,7 +332,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             environment: resolvedEnv.name,
             target_version: targetVersion,
             session,
-            tag,
             scenario: null,
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
@@ -350,7 +348,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             environment: resolvedEnv.name,
             target_version: targetVersion,
             session,
-            tag,
             scenario: null,
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),

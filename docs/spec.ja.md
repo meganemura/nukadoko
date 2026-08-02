@@ -141,7 +141,10 @@ export default defineStep({
 ヘルパーは import として提供されます: `import { poll } from "nukadoko"` が非同期ジョブに対する submit-poll-fetch のループです。
 これは executor が所有するものを何も必要としないため、`ctx` には置かれません。
 `ctx.section` がまだ無いのは逆向きの同じ理由です: 今は何もしないはずのもので、何もしない API メンバーは検証されていない約束だからです。
-これは progress log の機能とともに戻ってきます。そのとき「実行の一区間に名前を付ける」はツールが記録する対象になります。
+これは progress log の機能とともに戻ってきます。
+そのとき「実行の一区間に名前を付ける」はツールが記録する対象になります。
+
+### キーワードの意味論
 
 Gherkin のキーワードは装飾であることをやめますが、それは宣言が信頼されるからではなく、ツールが計測するからです。
 実際の corpus がこの分割を強いたのは、同じ文が Action の位置と Outcome の位置の両方に正当に現れ、慣用的なスイートが `And` を使って `Then` の後に操作を連ね、任意のコマンドをラップする step には単一の正直な `mutates` の値がないからです。
@@ -193,7 +196,7 @@ import { Given, When, Then } from "nukadoko/compat";
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--tag <tag>]
+nuka run features/checkout.feature[:12] [--env <name>] [--session <name>]
 ```
 
 `@cucumber/gherkin` はファイルを pickle にコンパイルします(Background がマージされ、Scenario Outline が展開され、table が結び付いた、フラットで自己完結な scenario)。
@@ -216,13 +219,16 @@ feature のバックログが語彙の成長を駆動します。
 ### 単体 step(agent の経路)
 
 ```sh
-nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>] [--tag <tag>]
+nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
 ```
 
 1 つの型付き step を実行し、その receipt を stdout に出力します(ok なら exit 0、failed なら 1)。
 これが適応的なループです。
-agent はバリデーション済みの result を読み、次の呼び出しを決め、一連の呼び出しを `--tag` でグループ化します。
+agent はバリデーション済みの result を読み、次の呼び出しを決めます。
 agent が選べるのはどの step をどの args で呼ぶかだけで、何が記録されるかを選ぶことはできません。
+`do` には意図的にグループ化のラベルがありません。
+ad-hoc な一連の呼び出しは作業記録であり、evidence ではありません。
+証明する価値のあるものはすべて scenario として表現され、`nuka run` によって証明されます(Self-healing を参照)。
 
 ## Receipt
 
@@ -240,7 +246,6 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
-  "tag": "issue-123",
   "scenario": null,
   "started_at": "...",
   "finished_at": "...",
@@ -325,13 +330,14 @@ sign-off は「基準は満たされた」という、会話の中で蒸発し�
 ```sh
 nuka signoff create \
   --criteria 'A project can be created and looked up by id' \
-  (--receipts <id,...> | --tag <tag> | --scenario <feature:line>) \
+  (--receipts <id,...> | --scenario <feature:line>) \
   --reasoning 'create-project returned ok; get-project returned the same name'
 ```
 
 - 作成時の機械チェック: 引用されたすべての receipt が存在し、ok であり、1 つの environment と(probe された場合は)1 つの `target_version` を共有していること。
   scenario を引用する場合はさらに scenario record もチェックされ、すべての step が順番どおりに ok で実行されたことが確認されます。
-  引用された tag のもとで失敗した試みは記録として残り、目には見えても evidence として扱われることは決してありません。
+  scenario の引用が主たる形態です(レビューされ green で通った feature)。
+  個々の receipt id を明示することが、それ以外の ad-hoc な部分をカバーします。
 - reasoning(これらの事実がなぜその基準を証明するのか)は判断です。
   nukadoko はそれを評価せず、引用する事実から恒久的に切り離した上で、人間のレビューのために保存します。
 - plan のサブシステムはありません。
@@ -345,8 +351,8 @@ nuka signoff create \
 nukadoko の唯一の presentation 層は `allure-results` ディレクトリです(Allure 2 のファイル形式で、Allure 2 と 3 の両方で読めます):
 
 - scenario の実行は 1 つの Allure test result に対応します: step は step として、evidence ファイルは attachment として、environment / target_version / session は label と parameter としてです。
-- `--tag` でグループ化された `do` の一連の呼び出しは、その tag の名前を持つ 1 つの test result に対応します。
-  agent の session と CI のリプレイが、同じダッシュボードに着地します。
+- ad-hoc な `do` の receipt は作業記録であり、test result ではないため、ダッシュボードには現れません。
+  探索が証明することは、scenario を修復するか新しく書くことで表現され、その scenario の実行こそが Allure に表示されるものです。
 - 表示、履歴、傾向、flakiness はすべて Allure の仕事です。
   nukadoko に web UI はありません。
 
@@ -354,10 +360,13 @@ nukadoko の唯一の presentation 層は `allure-results` ディレクトリで
 
 スクリプト化された scenario が壊れたとき(アプリが変わり、pattern が現実にマッチしなくなったとき)、修復のループはこうなります:
 
-1. agent が同じ tag のもとで、`nuka do` を使って目標を適応的に再実行します。
-2. receipt は実際にうまくいったことを記録します。
-   それはスクリプト化された scenario から逸脱した手順です。
-3. スクリプトと receipt の差分は PR になります: 更新された型付き step や更新された feature ファイルであり、他の変更と同じようにレビューされます。
+1. agent は `nuka do` を使い、1 step ずつ各 receipt を読んで次の呼び出しを決めながら、目標を適応的に再実行します。
+2. receipt は実際にうまくいったこと(スクリプト化された scenario から逸脱した手順)を記録します。
+   それらは物語であり、証明ではありません。
+   agent は修復の物語として、それらを PR の中で引用してもよいです。
+3. PR は型付き step や feature ファイルを更新します。
+   その証明は、修復された scenario が green で通ること(scenario record とその receipt であり、他の変更と同じようにレビューされます)です。
+   証明は常に scenario を通り、ad-hoc な一連の呼び出しを通ることは決してありません。
 
 nukadoko の貢献は、すべての段階が記録を残すことです。
 執筆は agent のワークフロー(同梱の skill)であり、エンジンの魔法ではありません。
@@ -402,10 +411,10 @@ nuka skill path|install       install the agent-facing skill
 - **M1(engine core)**: `defineStep`、`do`、pickle に対する `run`、receipt、session/environment、`check`、`init`。
   secret のオンボーディングは再設計されました。
 - **M2(compat API)**: `nukadoko/compat`(Given/When/Then/World/hooks のサブセット)、cucumber-js + Playwright のスイート向け移行ガイド。
-- **M3(Allure emitter)**: scenario の実行と tag の一連の呼び出しのための allure-results。
+- **M3(Allure emitter)**: scenario の実行のための allure-results。
   drop-in なダッシュボードのストーリー。
 - **M4(sign-off)**: 記録、機械チェック、CI トリップワイヤのレシピ。
-- **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(裏付けられた `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
+- **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート
 

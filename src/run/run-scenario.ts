@@ -126,7 +126,6 @@ export interface RunScenarioOptions {
   readonly policy: "read-only" | undefined;
   readonly targetVersion: string | undefined;
   readonly session: string | null;
-  readonly tag: string | null;
   readonly env: Readonly<Record<string, string>>;
   readonly secrets: SecretSet;
   /** This scenario's starting storageState, already read from the session
@@ -167,7 +166,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     policy,
     targetVersion,
     session,
-    tag,
     env,
     secrets,
     storageState,
@@ -353,7 +351,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             environment,
             target_version: targetVersion,
             session,
-            tag,
             scenario: scenarioId,
             started_at: stepStartedAt.toISOString(),
             finished_at: stepFinishedAt.toISOString(),
@@ -375,7 +372,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             environment,
             target_version: targetVersion,
             session,
-            tag,
             scenario: scenarioId,
             started_at: stepStartedAt.toISOString(),
             finished_at: stepFinishedAt.toISOString(),
@@ -436,7 +432,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     environment,
     ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
     session,
-    tag,
     started_at: startedAt.toISOString(),
     finished_at: finishedAt.toISOString(),
     steps: stepRecords,

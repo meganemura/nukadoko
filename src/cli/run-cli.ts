@@ -46,14 +46,12 @@ interface DescribeArgs {
 interface DoArgs {
   name: string;
   args: string;
-  tag?: string;
   session?: string;
   env?: string;
 }
 
 interface RunArgs {
   feature: string;
-  tag?: string;
   session?: string;
   env?: string;
 }
@@ -160,10 +158,6 @@ export async function runCli(
           demandOption: true,
           describe: "step arguments as a JSON object",
         })
-        .option("tag", {
-          type: "string",
-          describe: "group this call under a tag",
-        })
         .option("session", {
           type: "string",
           describe: "carry login state across calls via a named session",
@@ -177,7 +171,6 @@ export async function runCli(
         rootDir,
         name: args.name,
         argsJson: args.args,
-        tag: args.tag ?? null,
         session: args.session ?? null,
         env: args.env ?? null,
         stdout,
@@ -196,10 +189,6 @@ export async function runCli(
           demandOption: true,
           describe: "feature file path, optionally with :line (e.g. features/checkout.feature:12)",
         })
-        .option("tag", {
-          type: "string",
-          describe: "group this run under a tag",
-        })
         .option("session", {
           type: "string",
           describe: "carry login state across calls via a named session",
@@ -212,7 +201,6 @@ export async function runCli(
       exitCode = await runRun({
         rootDir,
         featureArg: args.feature,
-        tag: args.tag ?? null,
         session: args.session ?? null,
         env: args.env ?? null,
         stdout,

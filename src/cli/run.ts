@@ -61,7 +61,6 @@ export interface RunRunOptions {
   rootDir: string;
   /** `<feature[:line]>`, e.g. "features/checkout.feature:12". */
   featureArg: string;
-  tag: string | null;
   session: string | null;
   env: string | null;
   stdout: WritableSink;
@@ -69,7 +68,7 @@ export interface RunRunOptions {
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, featureArg, tag, session, env, stdout, stderr } = options;
+  const { rootDir, featureArg, session, env, stdout, stderr } = options;
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;
@@ -178,7 +177,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         policy: resolvedEnv.policy,
         targetVersion,
         session,
-        tag,
         env: envVars,
         secrets,
         storageState,

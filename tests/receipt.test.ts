@@ -42,7 +42,6 @@ describe("writeReceipt", () => {
       status: "ok",
       environment: "default",
       session: null,
-      tag: null,
       scenario: null,
       started_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),

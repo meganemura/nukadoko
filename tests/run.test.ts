@@ -54,7 +54,6 @@ describe("nuka run", () => {
     expect(record.status).toBe("passed");
     expect(record.environment).toBe("default");
     expect(record.session).toBeNull();
-    expect(record.tag).toBeNull();
     expect(record.steps).toHaveLength(2);
     for (const step of record.steps) {
       expect(step.status).toBe("passed");
@@ -76,7 +75,6 @@ describe("nuka run", () => {
       expect(receipt.scenario).toBe(record.scenario_id);
       expect(receipt.environment).toBe("default");
       expect(receipt.session).toBeNull();
-      expect(receipt.tag).toBeNull();
       // A pure step makes no network calls at all (this task's spec,
       // decision 3): `observed` is still always present, at zero.
       expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 0 });
@@ -253,19 +251,15 @@ describe("nuka run", () => {
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
   });
 
-  it("threads --tag through to both the scenario record and each step's receipt", async () => {
+  it("--tag is gone: yargs reports it as an unknown argument (design decision 2026-08-02, --tag removed)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature", "--tag", "issue-42"], {
+    const stderr = createCaptureSink();
+    await runCli(["run", "features/passing.feature", "--tag", "issue-42"], {
       rootDir,
       stdout,
-      stderr: createCaptureSink(),
+      stderr,
     });
 
-    expect(exitCode).toBe(0);
-    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    expect(record.tag).toBe("issue-42");
-
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.tag).toBe("issue-42");
+    expect(stderr.text()).toContain("tag");
   });
 });

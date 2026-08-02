@@ -128,7 +128,6 @@ describe("nuka do", () => {
       expect(receipt.environment).toBe("default");
       expect(receipt.session).toBeNull();
       expect(receipt.scenario).toBeNull();
-      expect(receipt.tag).toBeNull();
       expect(receipt.evidence.dir).toBe(path.join(".nukadoko", "receipts", receipt.receipt_id));
       expect(receipt.evidence.screenshots).toEqual([]);
       expect(receipt.evidence.trace).toBeUndefined();
@@ -146,17 +145,16 @@ describe("nuka do", () => {
     }
   });
 
-  it("threads --tag through to the receipt, defaulting to null", async () => {
+  it("--tag is gone: yargs reports it as an unknown argument (design decision 2026-08-02, --tag removed)", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
-      const stdout = createCaptureSink();
-      const exitCode = await runCli(
+      const stderr = createCaptureSink();
+      await runCli(
         ["do", "echo", "--args", JSON.stringify({ value: "hi" }), "--tag", "issue-123"],
-        { rootDir, stdout, stderr: createCaptureSink() },
+        { rootDir, stdout: createCaptureSink(), stderr },
       );
 
-      expect(exitCode).toBe(0);
-      expect(JSON.parse(stdout.text()).tag).toBe("issue-123");
+      expect(stderr.text()).toContain("tag");
     } finally {
       await removeTempDir(rootDir);
     }

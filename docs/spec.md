@@ -258,7 +258,7 @@ import { Given, When, Then } from "nukadoko/compat";
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--tag <tag>]
+nuka run features/checkout.feature[:12] [--env <name>] [--session <name>]
 ```
 
 `@cucumber/gherkin` compiles the file into pickles — flat, self-contained
@@ -287,14 +287,16 @@ vocabulary growth.
 ### Single steps (the agent path)
 
 ```sh
-nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>] [--tag <tag>]
+nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
 ```
 
 Executes one typed step and prints its receipt to stdout (exit 0 on ok, 1 on
-failed). This is the adaptive loop: the agent reads the validated result,
-decides the next call, and groups a sequence under `--tag`. The agent can
-only choose which step to call with which args; it cannot choose what gets
-recorded.
+failed). This is the adaptive loop: the agent reads the validated result and
+decides the next call. The agent can only choose which step to call with
+which args; it cannot choose what gets recorded. There is deliberately no
+grouping label on `do`: ad-hoc sequences are working records, not evidence —
+anything worth attesting to is expressed as a scenario and proven by
+`nuka run` (see Self-healing).
 
 ## Receipts
 
@@ -313,7 +315,6 @@ shape whether the step ran inside a scenario or via `do`.
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
-  "tag": "issue-123",
   "scenario": null,
   "started_at": "...",
   "finished_at": "...",
@@ -413,15 +414,15 @@ conversation into a recorded, reviewable artifact:
 ```sh
 nuka signoff create \
   --criteria 'A project can be created and looked up by id' \
-  (--receipts <id,...> | --tag <tag> | --scenario <feature:line>) \
+  (--receipts <id,...> | --scenario <feature:line>) \
   --reasoning 'create-project returned ok; get-project returned the same name'
 ```
 
 - Machine checks at creation: every cited receipt exists, is ok, shares one
   environment and (when probed) one `target_version`. Citing a scenario
   additionally checks the scenario record: every step ran ok, in order.
-  Failed attempts under a cited tag are recorded as attempts, visible but
-  never treated as evidence.
+  The scenario citation is the primary form — a reviewed feature that ran
+  green; explicit receipt ids cover the ad-hoc rest.
 - The reasoning — why these facts prove those criteria — is judgment. nukadoko
   does not evaluate it; it preserves it for human review, permanently
   separated from the facts it cites.
@@ -442,8 +443,10 @@ file format, readable by Allure 2 and 3):
 - A scenario run maps to one Allure test result: steps as steps, evidence
   files as attachments, environment / target_version / session as labels and
   parameters.
-- A `do` sequence grouped by `--tag` maps to one test result named by the
-  tag — agent sessions and CI replays land in the same dashboard.
+- Ad-hoc `do` receipts are working records, not test results, and do not
+  appear on the dashboard — what an exploration proves is expressed by
+  repairing or writing a scenario, and that scenario run is what Allure
+  shows.
 - Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
 
 ## Self-healing, audited
@@ -451,11 +454,15 @@ file format, readable by Allure 2 and 3):
 When a scripted scenario breaks (the app changed, the pattern no longer
 matches reality), the repair loop is:
 
-1. An agent re-runs the goal adaptively via `nuka do`, under the same tag.
+1. An agent re-runs the goal adaptively via `nuka do`, one step at a time,
+   reading each receipt to decide the next call.
 2. The receipts record what actually worked — a sequence that deviates from
-   the scripted scenario.
-3. The diff between script and receipts becomes a PR: updated typed steps
-   and/or an updated feature file, reviewed like any other change.
+   the scripted scenario. They are the narrative, not the proof: the agent
+   may cite them in the PR as the story of the repair.
+3. The PR updates the typed steps and/or the feature file, and its proof is
+   the repaired scenario running green — a scenario record and its
+   receipts, reviewed like any other change. Attestation always flows
+   through the scenario, never through an ad-hoc sequence.
 
 nukadoko's contribution is that every stage leaves a record; the authoring is an
 agent workflow (bundled skill), not engine magic. Self-healing without an
@@ -499,11 +506,11 @@ nuka skill path|install       install the agent-facing skill
   sessions/environments, `check`, `init`. Secrets onboarding redesigned.
 - **M2 — compat API**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
-- **M3 — Allure emitter**: allure-results for scenario runs and tag
-  sequences; drop-in dashboard story.
+- **M3 — Allure emitter**: allure-results for scenario runs; drop-in
+  dashboard story.
 - **M4 — sign-off**: records, machine checks, CI tripwire recipe.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
-  scenario harvesting (generate feature files from attested `do` sequences),
+  scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
   in-place coexistence rather than migration.
 

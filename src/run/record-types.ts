@@ -48,7 +48,6 @@ export interface ScenarioRecord {
   readonly environment: string;
   readonly target_version?: string;
   readonly session: string | null;
-  readonly tag: string | null;
   readonly started_at: string;
   readonly finished_at: string;
   readonly steps: readonly ScenarioStepRecord[];

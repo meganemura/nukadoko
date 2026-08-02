@@ -60,7 +60,6 @@ interface ReceiptBase {
    * (docs/spec.md "Sessions...": no `--session` means a clean start, never
    * an implicit shared session). */
   session: string | null;
-  tag: string | null;
   /** The owning scenario's id for a `run`-originated receipt (`kind: "run"`);
    * always `null` for a `do`-originated one. */
   scenario: string | null;
