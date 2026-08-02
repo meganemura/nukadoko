@@ -8,8 +8,8 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off と skill はどちらも設計としてのみ存在します。
-`nuka skill` にはまだ実装がありません。
+Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)とそれが駆動する acceptance skill も実装済みです。
+M5 のうち migration skill だけがまだ設計のままです。
 
 ## nukadoko とは
 
@@ -434,7 +434,9 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
 3. feature を書きます。
    tag と `Feature:` の下の説明文が、チケットの id とレビュアーの言葉による基準を運びます。
    scenario は、その基準を語彙に翻訳したものです。
-4. 何かが実行される前に、`nuka check` を行います(未定義の step、pattern と schema の不一致、mutate する step に結び付いた Then)。
+4. 何かが実行される前に、`nuka check <feature>` を行います(未定義の step、pattern と schema の不一致、mutate する step に結び付いた Then)。
+   引数は実質必須です。
+   受け入れの feature は `featuresDir` の外にあり、引数なしの `nuka check` はそこを歩かないからです。
 5. commit します。
    run は、まだチェックアウトされているその commit で、クリーンな working tree に対して行われた場合にしか凍結できないため、dirty な working tree に対するデバッグ用の run はかまいません。
    ただそれらは accept できないだけです。
@@ -560,9 +562,11 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates
 nuka describe <step>          full contract, schemas as JSON Schema
 nuka scaffold <name>          typed step template that fails until implemented
-nuka check                    static checks: pattern/schema mismatches, Then
+nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
-                              feature, duplicate patterns, config coherence
+                              feature, duplicate patterns, config coherence;
+                              a feature argument checks that one file instead
+                              of featuresDir, for a feature living outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
@@ -596,10 +600,11 @@ nuka skill path|install       install the agent-facing skill
   skill は、それらを agent が指示なしに従えるワークフローに変えるものであり、そのどれもエンジンを変えません。
   2 つが計画されています。
   **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、そして green になるまで `run` して `accept` する)。
-  M4 が必要です。
+  これは出荷済みです。
   **migration skill** は compat の監査が計測したことを運びます(実際の cucumber-js のスイートが実際にぶつかる gap を、ドキュメントの順序ではなくつまずく順序で)。
-  必要なのは M2 だけなので、先に来ることができます。
-  このマイルストーンが実現するまで、上で言及された「同梱の skill」は存在しません。
+  必要なのは M2 だけですが、まだ存在しません。
+  どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。
+  それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート
