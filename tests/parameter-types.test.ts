@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { loadConfig } from "../src/config/load-config.js";
@@ -124,5 +126,64 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
     const withClause = records.find((r) => r.scenario === "list items with a location clause");
     expect(withoutClause).toBeDefined();
     expect(withClause).toBeDefined();
+  });
+});
+
+// fix-scenario-step-backstop task spec: a custom transformer's throw
+// propagates unchanged out of match-step.ts's matchPickleStep (that file's
+// own header comment, decision 5) — proving `nuka run` still writes the
+// scenario record instead of crashing needs its own fixture (a throwing
+// transformer would defeat the point of the other two describe blocks
+// above), following this file's own convention of running against a fresh
+// temp copy since `nuka run` writes real state under `.nukadoko/`.
+describe("config.parameterTypes: a transformer that throws must not crash the whole run", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("throwing-transformer-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("nuka run: the scenario record is still written, the exploding step is failed with receipt: null, and the rest is skipped", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/transformer-throws.feature"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    const lines = stdout
+      .text()
+      .split("\n")
+      .filter((line) => line.length > 0);
+    expect(lines).toHaveLength(1);
+    const record = JSON.parse(lines[0]!);
+
+    expect(record.status).toBe("failed");
+    expect(record.steps).toHaveLength(2);
+
+    const [first, second] = record.steps;
+    expect(first.status).toBe("failed");
+    expect(first.receipt).toBeNull();
+    expect(first.error.message).toBe("custom transformer exploded");
+
+    expect(second.status).toBe("skipped");
+    expect(second.receipt).toBeNull();
+    expect(second.error).toBeUndefined();
+
+    const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
+    expect(existsSync(recordPath)).toBe(true);
+
+    // No receipt was ever written for this scenario — the throw happened
+    // before this step's execution phase began (fix-scenario-step-backstop
+    // task spec, decision 1), the same "never began" boundary undefined/
+    // ambiguous/read-only-declared-refusal already draw.
+    const receiptsDir = path.join(rootDir, ".nukadoko", "receipts");
+    expect(existsSync(receiptsDir)).toBe(false);
   });
 });
