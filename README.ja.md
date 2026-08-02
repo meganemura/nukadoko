@@ -144,8 +144,9 @@ import を戻せば、ただの cucumber-js に戻ります。
 
 **M3(設計済み、未実装): レポートが自動で満ちる。**
 従来の Cucumber の実行でレポートに映る evidence は、チームが自分で配線した分です(trace やスクリーンショットのためのフック boilerplate を、プロジェクトごとに書いて保守する形)。
-計画されている Allure の emitter は、配線ゼロで全 receipt からレポートを満たします。
-さらに、従来の Cucumber がそもそも記録していないためにレポート側の努力では決して足せない事実を加えます: バリデーション済みの per-step result、宣言と観測を突き合わせた mutation、分類にそのまま使える構造化された失敗種別です。
+計画されている Allure の emitter は、配線ゼロで全 receipt からレポートを満たします: バリデーション済みの result、trace、HTTP log、observed な読み書き、environment と version です。
+そのうちの 1 つ(バリデーション済みの per-step result)は、レポート側のどんな努力でも足せません。
+従来の Cucumber は step の返り値を捨てているからです。
 あわせて cucumber-messages(NDJSON)の emitter も用意し、移行するチームの既存フォーマッタと CI のレポートをそのまま動かし続けます。
 どちらもまだ存在しません。
 [docs/spec.md](docs/spec.md#allure-emitter) を参照してください。

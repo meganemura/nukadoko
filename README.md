@@ -151,12 +151,12 @@ cucumber-js. This does not exist yet; see
 Cucumber run shows the evidence a team wired up itself — hook boilerplate
 for traces and screenshots, written and maintained per project. The
 planned Allure emitter fills the report from every receipt with zero
-wiring, and adds the facts no report-side effort can add because classic
-Cucumber never records them: the validated per-step result,
-declared-versus-observed mutation, and structured failure kinds ready for
-categorization. A cucumber-messages (NDJSON) emitter ships alongside it
-so a migrating team's existing formatters and CI reporting keep working.
-Neither exists
+wiring — validated result, trace, HTTP log, observed reads and writes,
+environment and version — and one of those no report-side effort could
+ever add, because classic Cucumber discards step return values: the
+validated per-step result. A cucumber-messages (NDJSON) emitter ships
+alongside it so a migrating team's existing formatters and CI reporting
+keep working. Neither exists
 yet; see [docs/spec.md](docs/spec.md#allure-emitter).
 
 ## Design
