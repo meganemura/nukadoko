@@ -238,6 +238,22 @@ import { Given, When, Then } from "nukadoko/compat";
   World classes extend nukadoko's base via `setWorldConstructor`. The supported
   API is the commonly used subset (Given/When/Then, World, Before/After);
   it grows on demand, not speculatively.
+- Registration semantics: `Given`/`When`/`Then` are three names for one
+  registration — a keyword means nothing at registration time; position in
+  the scenario decides at run time, exactly as in Cucumber. Patterns are
+  strings (plain cucumber-expressions — named captures are not required
+  here; that discipline belongs to typed steps) or RegExp, since legacy
+  glue is regex-heavy and the door must admit it. Discovery imports the
+  files and attributes each registration to the file that made it; a
+  compat step's identity is its pattern text, `nuka steps` lists it with
+  its kind, `nuka describe` shows the contract it doesn't have, and
+  `nuka do` refuses it by name — promoting to `defineStep` is what buys
+  single-step execution.
+- `defineParameterType` from compat code registers into the same single
+  registry as `config.parameterTypes` — moving a registration to config
+  changes nothing about what any pattern matches, which is what makes the
+  move safe to take early. `nuka check` lists support-origin registrations
+  as warnings: config is where they retire to.
 - Because the harness owns the browser and request objects, compat steps
   already get measured receipts — status, timing, trace, screenshots, HTTP
   log — with zero code change.

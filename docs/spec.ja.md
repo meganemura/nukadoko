@@ -184,6 +184,17 @@ import { Given, When, Then } from "nukadoko/compat";
   パターン構文は同じで、`page` / `request` を持つ World(`this`)は nukadoko の harness によって提供され、管理されます。
   カスタムの World クラスは `setWorldConstructor` を通じて nukadoko の基底クラスを拡張します。
   サポートされる API はよく使われるサブセット(Given/When/Then、World、Before/After)で、必要に応じて拡張され、先回りしては拡張されません。
+- 登録の意味論: `Given` / `When` / `Then` は 1 つの登録の 3 つの名前です。
+  キーワードは登録時には何も意味せず、実行時に scenario 内の位置が決めます(Cucumber とまったく同じです)。
+  pattern は文字列(素の cucumber-expressions。named capture はここでは要求されません — その規律は typed step のものです)または RegExp です。
+  レガシーな glue は regex が多く、扉はそれを受け入れなければならないからです。
+  discovery はファイルを import し、各登録をそれを行ったファイルに帰属させます。
+  compat step の同一性はその pattern テキストで、`nuka steps` は kind 付きで列挙し、`nuka describe` は「持っていない契約」を明示し、`nuka do` は名指し実行を拒否します。
+  単体実行が欲しくなったら、それが `defineStep` への昇格で手に入るものです。
+- compat コードからの `defineParameterType` は、`config.parameterTypes` と同一の単一レジストリに登録されます。
+  登録を config へ移してもどの pattern のマッチも変わらないことが、この移動を早く安全に行えるものにしています。
+  `nuka check` は support 由来の登録を警告として列挙します。
+  config が、それらの引退先です。
 - harness がブラウザと request のオブジェクトを所有しているため、compat の step もコードを一切変更せずに、計測済みの receipt(status、timing、trace、screenshots、HTTP log)をすでに得られます。
 - compat の step に欠けているのは、型付きの契約、receipt 内でバリデーションされた `result`、単体 step の CLI 実行、そして Then の強制です。
   よく使う step を `defineStep` に昇格させることが、1 step ずつ進めるアップグレードです。
