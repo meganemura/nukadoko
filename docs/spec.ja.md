@@ -209,6 +209,10 @@ import { Given, When, Then } from "nukadoko/compat";
   Before / After フックは、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、`Before("@tag", fn)`)のどれでも書け、cucumber 自身のフック引数を受け取ります。
   タグ絞り込みは `@tag` と `not @tag` のみで、それ以上の式は黙って誤マッチする代わりに大きな声で失敗します。
   フックは receipt ではなく scenario record の `hooks` 配列に現れ、フック中のネットワークはどの step の境界にも属しません。
+  `BeforeAll`/`AfterAll` は scenario ではなく run 全体を挟み込み(tags は取らず、World もなく、scenario が 1 つも選ばれなければ丸ごとスキップされます)、record は scenario の形をしたものであり、これらの hook はどの scenario にも属さないため、報告は exit code を通じて行われます。
+  `setDefaultTimeout` は、自分の timeout を宣言していないものすべてに既定値を与えます。
+  呼ばずにおけば、step は cucumber の 5 秒という上限を持ち込む代わりに無制限のままになります。
+  移行しただけの理由で、遅いスイートを失敗させてしまわないためです。
 - World は常に計測されます。
   すべての compat step の receipt は、その step が World のどのキーを読み書きしたかをアクセス順で記録します(`this.foo` が隠していたデータフローです)。
   計測面はバッグの own データプロパティです。
@@ -221,7 +225,8 @@ import { Given, When, Then } from "nukadoko/compat";
   よく使う step を `defineStep` に昇格させることが、1 step ずつ進めるアップグレードです。
 - 扉の幅は、主張ではなく計測されています。
   公開されている cucumber-js のスイート 8 本を、この扉に対して監査しました(glue はテキストとして読んだだけで、実行はしていません)。
-  どのスイートも import の差し替えだけでは通らず、それぞれが最初に何を必要としたかは [docs/migration.ja.md](migration.ja.md) に列挙されています。
+  当時はどのスイートも import の差し替えだけでは通りませんでしたが、そこで見つかった障害をふさいだことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
+  残りが何を必要とするかは [docs/migration.ja.md](migration.ja.md) に列挙されています。
   そこから導かれ、監査の発見が注ぎ込まれた規則はこうです: compat が対応しないものは、静かにではなく、import の時点か最初の実行で必ず失敗しなければなりません。
   移行するチームは、大きな声の失敗には対処できますが、静かな失敗は見えません。
   だから、黙って振る舞いを変えてしまう抜けは、機能が欠けていることが食ってきた時間よりも多くの信頼を食います。

@@ -40,20 +40,30 @@ import { Given, When, Then } from "nukadoko/compat";
 - `DataTable`(`raw()`/`rows()`/`hashes()`/`rowsHash()`/`transpose()`)。
   `table.hashes()` を呼ぶ step は書いたとおりにそのまま動き続けます(摩擦ゼロで、examples/migration 自身のスイートを移行する形で計測済みです)。
 - glue 内の `allure.*` 呼び出し(`attach`/`log`/`link`、ラベル、パラメータ)は、消えるのではなく receipt の `declared` フィールドに入ります。
+- `setDefaultTimeout(ms)` は、自分の timeout を宣言していない step や hook すべてにその既定値を埋め、cucumber-js と同じく最後に呼んだものが勝ちます。
+  一度も呼ばなければ、step は cucumber の 5 秒という既定値を採用する代わりに無制限のままになります。
+  スイートが移行しただけで、遅い step のせいで失敗し始めるべきではないからです。
+- `BeforeAll` / `AfterAll` は、run 全体を挟み込み、`{ timeout }` を渡せばそれも効きます。
+  実行されるのは scenario が 1 つ以上選ばれたときだけで、`tags` は取らず、World(`this`)も渡されません(`BeforeAll` が走る時点ではまだ何も存在しないからです)。
+  `BeforeAll` は最初の失敗で止まり、それ以降どの scenario も実行されません。
+  `AfterAll` はそれでも試みられ、兄弟のどれかが例外を投げていても登録はすべて実行され、teardown は登録順とは逆順にほどけます。
 
 ### 切り替えで引き継がれないもの
 
 公開されている cucumber-js のスイート 8 本を、この扉に対して監査しました。
 glue はテキストとして読むだけで、実行はしていません。
-**import の差し替えだけで通ったものは 1 つもありません**。
-そのため、差し替えの前に短い準備を見込んでおいてください。
+**その監査を行った時点では、import の差し替えだけで通ったものは 1 つもありませんでした。**
+そこで見つかった最も頻出の障害に対応したことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
+残る 6 本は、まだ短い準備を先に必要とします。
+(これは静的な主張として読んでください。実際その通りで、それらの glue にはもう、この扉が拒むものは何も残っていません。
+それらのスイートを実行したわけではありません。)
 以下はどれも、import の時点か最初の `nuka run` で、大きな声で失敗します。
 だからこの準備は、探し物ではなく順にこなせるリストです。
 
-- **`nukadoko/compat` がエクスポートしていない名前**: `BeforeAll`、`AfterAll`、`setDefaultTimeout`、`AfterStep`、`Status`、`setParallelCanAssign`、および `IWorldOptions` / `ITestCaseHookParameter` の型です。
-  8 本すべてのスイートが、このうち少なくとも 1 つを import していました。
+- **`nukadoko/compat` がエクスポートしていない名前**: `AfterStep`、`Status`、`setParallelCanAssign`、および `IWorldOptions` / `ITestCaseHookParameter` の型です。
   ES モジュールの named import はリンク時に解決されるため、サポートされていない名前が 1 つあるだけで、import 文全体(ひいてはそのファイル)が丸ごと落ちます。
   import を分割するか、その呼び出しを削ってください。
+  (`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。以下を参照してください。)
 - **CommonJS の glue**: nukadoko は ESM 専用なので、`require("nukadoko/compat")` は `ERR_PACKAGE_PATH_NOT_EXPORTED` で即座に失敗します。
   8 本のうち 2 本は、全体が CommonJS のスイートでした。
   この扉が受け入れるのは ES module の glue だけです。
@@ -104,3 +114,6 @@ import を `@cucumber/cucumber` に戻せば(`openPage()`/`openRequest()` が置
 - World の計測が見るのは World 自身の own データプロパティだけです。
   `#private` のフィールドは、構造上 `world.reads`/`world.writes` に現れません。
 - 宣言された attachment のファイル内容は redact されません(trace や screenshot がすでに抱えているのと同じ正直な限界です)。
+- `BeforeAll`/`AfterAll` の失敗は、stderr と exit code だけに報告されます。
+  record は scenario ごとに書かれますが、これらの hook はどの scenario にも属しません。
+  そのため、run レベルの hook 用の行き先はまだありません。
