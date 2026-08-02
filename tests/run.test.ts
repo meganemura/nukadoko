@@ -79,6 +79,15 @@ describe("nuka run", () => {
       // decision 3): `observed` is still always present, at zero.
       expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 0 });
     }
+
+    // m3a-receipt-kinds task spec, decision 3: a typed step's receipt
+    // carries its own declared `mutates` verbatim — `thing-exists` (Given
+    // position) declares `mutates: true`, `the-thing-exists` (Then
+    // position) declares `mutates: false`.
+    const firstReceipt = await readReceipt(rootDir, record.steps[0].receipt);
+    expect((firstReceipt as { mutates: unknown }).mutates).toBe(true);
+    const secondReceipt = await readReceipt(rootDir, record.steps[1].receipt);
+    expect((secondReceipt as { mutates: unknown }).mutates).toBe(false);
   });
 
   it("skips every step after one fails, recording each step's own status; exit 1", async () => {
@@ -107,6 +116,9 @@ describe("nuka run", () => {
     expect((failedReceipt as { error: { message: string } }).error.message).toBe(
       "operation failed on purpose",
     );
+    // m3a-receipt-kinds task spec: a typed step's own throw classifies as
+    // the catch-all "step_error".
+    expect((failedReceipt as { error: { kind: string } }).error.kind).toBe("step_error");
 
     expect(third.status).toBe("skipped");
     expect(third.receipt).toBeNull();
@@ -197,6 +209,11 @@ describe("nuka run", () => {
     const badReceipt = await readReceipt(rootDir, bad.steps[0].receipt);
     expect(badReceipt.status).toBe("failed");
     expect((badReceipt as { args: unknown }).args).toEqual({ a: "a" });
+    // m3a-receipt-kinds task spec: a pickle step that can't be bound into
+    // its typed step's `args` shape classifies as "binding_invalid",
+    // distinct from "args_invalid" (which only ever applies to a
+    // successfully-bound value that still fails its own zod schema).
+    expect((badReceipt as { error: { kind: string } }).error.kind).toBe("binding_invalid");
   });
 
   it(":line selects only the matching scenario in a two-scenario file", async () => {

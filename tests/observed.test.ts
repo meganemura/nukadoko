@@ -111,6 +111,17 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].error.message).toContain("bound in Then position");
     expect(record.steps[1].error.message).toContain("observed 1 network write");
 
+    // m3a-receipt-kinds task spec: a Then-position step measured writing
+    // classifies as "then_mutated", distinct from "read_only_violation"
+    // (the other measured demotion, keyed off environment policy instead).
+    const failedReceipt = JSON.parse(
+      await readFile(
+        path.join(rootDir, ".nukadoko", "receipts", record.steps[1].receipt, "receipt.json"),
+        "utf8",
+      ),
+    );
+    expect(failedReceipt.error.kind).toBe("then_mutated");
+
     expect(record.steps[2].status).toBe("skipped");
     expect(record.steps[2].receipt).toBeNull();
   });
@@ -129,6 +140,9 @@ describe("measured mutates: request-side observed counts", () => {
     expect(receipt.error.message).toContain("read-only-lie");
     expect(receipt.error.message).toContain("readonly");
     expect(receipt.error.message).toContain("read-only");
+    // m3a-receipt-kinds task spec: the measured read-only backstop
+    // classifies as "read_only_violation", distinct from "then_mutated".
+    expect(receipt.error.kind).toBe("read_only_violation");
   });
 
   // `nuka run` against a read-only environment (this task's spec, decision
@@ -188,5 +202,8 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    // m3a-receipt-kinds task spec: `nuka run`'s own measured read-only
+    // backstop classifies the same way cli/do.ts's does.
+    expect(receipt.error.kind).toBe("read_only_violation");
   });
 });

@@ -135,6 +135,11 @@ describe("nuka do", () => {
       // No network call was ever made (this task's spec, decision 3):
       // `observed` is still always present on the receipt, at zero.
       expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 0 });
+      // `echo` declares `mutates: false` explicitly (m3a-receipt-kinds task
+      // spec, decision 3): a typed step's receipt carries that declaration
+      // verbatim, never `null` (`null` is reserved for a compat step, which
+      // has no declaration at all).
+      expect(receipt.mutates).toBe(false);
 
       const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
       expect(existsSync(receiptPath)).toBe(true);
@@ -194,6 +199,9 @@ describe("nuka do", () => {
       expect(receipt.status).toBe("failed");
       expect(receipt.result).toBeUndefined();
       expect(receipt.error.message).toBeTruthy();
+      // m3a-receipt-kinds task spec: args validation failure classifies as
+      // "args_invalid", distinct from an ordinary step throw.
+      expect(receipt.error.kind).toBe("args_invalid");
       expect(existsSync(path.join(rootDir, receipt.evidence.dir, "receipt.json"))).toBe(true);
     } finally {
       await removeTempDir(rootDir);
@@ -214,6 +222,9 @@ describe("nuka do", () => {
       const receipt = JSON.parse(stdout.text());
       expect(receipt.status).toBe("failed");
       expect(receipt.error.message).toBe("boom");
+      // m3a-receipt-kinds task spec: an ordinary step throw is the
+      // catch-all "step_error", distinct from every contract-layer kind.
+      expect(receipt.error.kind).toBe("step_error");
     } finally {
       await removeTempDir(rootDir);
     }
@@ -233,6 +244,9 @@ describe("nuka do", () => {
       const receipt = JSON.parse(stdout.text());
       expect(receipt.status).toBe("failed");
       expect(receipt.error.message).toContain("returns");
+      // m3a-receipt-kinds task spec: a returns-schema failure classifies as
+      // "result_invalid", distinct from "args_invalid"/"step_error".
+      expect(receipt.error.kind).toBe("result_invalid");
     } finally {
       await removeTempDir(rootDir);
     }

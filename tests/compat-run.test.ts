@@ -88,6 +88,9 @@ describe("nuka run: compat step execution", () => {
     const firstReceipt = await readReceipt(rootDir, patterns.steps[0].receipt);
     expect(firstReceipt.result).toBeNull();
     expect(firstReceipt.args).toEqual(["acme"]);
+    // m3a-receipt-kinds task spec, decision 3: compat has no `mutates`
+    // declaration at all — `null`, never coerced to `false`.
+    expect(firstReceipt.mutates).toBeNull();
 
     // RegExp capture arrives as a plain string, unlike a typed step's
     // coerced `{int}`.
@@ -135,6 +138,11 @@ describe("nuka run: compat step execution", () => {
     expect((failedReceipt as { error: { message: string } }).error.message).toBe(
       "legacy failure on purpose",
     );
+    // m3a-receipt-kinds task spec: a compat step's own throw classifies as
+    // "step_error" the same way a typed step's does — `classifyCaughtError`
+    // only distinguishes `CompatTimeoutError`/`WorldWriteValidationError`
+    // from an ordinary throw, and an ordinary `Error` is neither.
+    expect((failedReceipt as { error: { kind: string } }).error.kind).toBe("step_error");
 
     expect(record.steps[1].status).toBe("skipped");
     expect(record.steps[1].receipt).toBeNull();
@@ -157,5 +165,9 @@ describe("nuka run: compat step execution", () => {
     const receipt = await readReceipt(rootDir, record.steps[0].receipt);
     expect(receipt.status).toBe("failed");
     expect((receipt as { observed: { http_writes: number } }).observed.http_writes).toBe(1);
+    // m3a-receipt-kinds task spec: the Then-position demotion classifies a
+    // compat step's receipt exactly like a typed step's (finishExecutedStep
+    // applies uniformly regardless of kind).
+    expect((receipt as { error: { kind: string } }).error.kind).toBe("then_mutated");
   });
 });

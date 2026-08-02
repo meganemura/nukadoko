@@ -20,8 +20,21 @@
 // attachments/labels/links/parameters/logs land instead — one collector
 // boundary per individual hook invocation, not per Before/After phase, so
 // one hook's own declared data never gets smeared across its sibling hooks.
+//
+// `ScenarioHookRecord.error.kind` is added now (m3a-receipt-kinds task spec,
+// decision 2): a hook has no receipt of its own to carry `error.kind` on
+// either (see receipt/types.ts's own header for the enum itself and why it
+// exists), so this is where a hook's own failure gets the same machine-
+// readable classification a step's receipt does — the M3 Allure emitter
+// maps a hook to a fixture the same way it maps a step to a test result.
+// Only four of the nine `ErrorKind` values are reachable here: a hook has no
+// args/returns/binding/World-position (Then/read-only) concept of its own —
+// only `timeout`, `unsupported` (done-callback arity, pending/skipped
+// return), `world_invalid` (a declared World key's write, since a hook runs
+// against the same World a compat step does), and `step_error`.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
+import type { ErrorKind } from "../receipt/types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
@@ -45,8 +58,9 @@ export interface ScenarioStepRecord {
 export interface ScenarioHookRecord {
   readonly type: "before" | "after";
   readonly status: "ok" | "failed";
-  /** Present only when `status` is `"failed"`. */
-  readonly error?: { readonly message: string };
+  /** Present only when `status` is `"failed"`. `kind` is the same closed
+   * enum a step's own `receipt.error.kind` uses (this file's own header). */
+  readonly error?: { readonly message: string; readonly kind: ErrorKind };
   /** This hook's own declared attachments/labels/links/parameters/logs
    * (m2d-allure-shim task spec, item 4) — same shape, same "collected at
    * collection time, never after" reasoning as a step's own `declared`

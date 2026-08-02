@@ -2,6 +2,20 @@
 // hooks) — as opposed to compat *registration* errors (duplicate pattern),
 // which live in src/discover/errors.ts alongside their typed-step
 // counterparts, since those are discovery-time concerns.
+//
+// `WORLD_WRITE_VALIDATION_ERROR_BRAND` (m3a-receipt-kinds task spec, decision
+// 1) exists because `instanceof WorldWriteValidationError` cannot be relied
+// on at that error's own usual catch site (src/run/run-scenario.ts): a
+// compat step's own defineWorld-declared write throws from inside src/
+// compat/world-instrumentation.ts, reached through src/compat/world.ts —
+// which discovery loads through its own scoped tsx import, a *different*
+// module instance of this exact file than the one run-scenario.ts's plain
+// top-level `import` resolves to (src/discover/discover-steps.ts's own
+// header). Same fix as src/step/brand.ts's own `STEP_BRAND`, verified the
+// same empirical way that file's header describes: `Symbol.for` reads from
+// the process-wide symbol registry, shared across module graphs in the same
+// process, so a plain own-property keyed on it survives a boundary a
+// class-identity check does not.
 
 /** `World.page`/`World.request` are synchronous getters on purpose (m2b-
  * compat-execution task spec, decision 1, lead-arbitrated two-tier design):
@@ -80,12 +94,51 @@ export class ReservedWorldKeyDeclaredError extends Error {
  * function; the write is never recorded into `receipt.world.writes` (thrown
  * before that record happens — proto-typed-world/findings.md Q1's bug,
  * regularized into this module's own contract). */
+const WORLD_WRITE_VALIDATION_ERROR_BRAND: unique symbol = Symbol.for(
+  "nukadoko.worldWriteValidationError",
+);
+
 export class WorldWriteValidationError extends Error {
   readonly key: string;
+  readonly [WORLD_WRITE_VALIDATION_ERROR_BRAND] = true;
 
   constructor(key: string, issues: string) {
     super(`World.${key} failed its declared defineWorld schema: ${issues}`);
     this.name = "WorldWriteValidationError";
     this.key = key;
+  }
+}
+
+/**
+ * True for any `WorldWriteValidationError`, from any module realm — the
+ * brand-based counterpart to `instanceof WorldWriteValidationError`, safe to
+ * call from a catch site that may not share this exact class (this file's
+ * own header explains why that happens). Deliberately not `error instanceof
+ * Error && error.name === "WorldWriteValidationError"`: `name` is settable
+ * by any code that happens to construct a plain `Error` and reassign it, so
+ * it is not a reliable brand on its own the way a `Symbol.for`-keyed
+ * own-property is.
+ */
+export function isWorldWriteValidationError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as Record<symbol, unknown>)[WORLD_WRITE_VALIDATION_ERROR_BRAND] === true
+  );
+}
+
+/** A compat step's or hook's own `{ timeout }` (or the run's own
+ * `setDefaultTimeout`) fired before `run()` settled (m21b-compat-execution
+ * task spec, item 2's `runWithTimeout`, src/run/run-scenario.ts). Its own
+ * class, not a plain `Error`, exists for one reason (m3a-receipt-kinds task
+ * spec, decisions 1, "投げる側で識別できる形にしてから分類すること"): the
+ * catch site that turns this into a receipt's/hook record's `error.kind`
+ * needs to tell a timeout apart from the step's/hook's own throw by type,
+ * never by matching `message`'s text — that text is for humans and this
+ * file's own `timeoutMessage` (run-scenario.ts) is free to keep changing it. */
+export class CompatTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CompatTimeoutError";
   }
 }

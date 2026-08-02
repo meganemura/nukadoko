@@ -12,7 +12,7 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
-import type { Receipt } from "../receipt/types.js";
+import type { ErrorKind, Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -265,11 +265,21 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     let status: "ok" | "failed";
     let result: unknown;
     let errorMessage = "";
+    // m3a-receipt-kinds task spec, decision 1: classified at each branch
+    // that already knows *why* the step failed, not by inspecting the
+    // message afterward. `nuka do` only ever runs a typed step (compat is
+    // refused in setup, above) — a typed step's `run(ctx, args)` never
+    // receives `this` and has no timeout mechanism, so its own throw is
+    // always `"step_error"` here, never `world_invalid`/`timeout` (those are
+    // only reachable from a compat step's/hook's own execution, src/run/
+    // run-scenario.ts).
+    let errorKind: ErrorKind | undefined;
 
     const argsResult = entry.step.args.safeParse(parsedArgs);
     if (!argsResult.success) {
       status = "failed";
       errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+      errorKind = "args_invalid";
     } else {
       try {
         const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
@@ -277,6 +287,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         if (!returnsResult.success) {
           status = "failed";
           errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+          errorKind = "result_invalid";
         } else {
           status = "ok";
           result = returnsResult.data;
@@ -284,6 +295,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       } catch (error) {
         status = "failed";
         errorMessage = error instanceof Error ? error.message : String(error);
+        errorKind = "step_error";
       }
     }
 
@@ -299,6 +311,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     if (status === "ok" && resolvedEnv.policy === "read-only" && observed.http_writes > 0) {
       status = "failed";
       errorMessage = `Step "${name}" observed ${observed.http_writes} network write${observed.http_writes === 1 ? "" : "s"} but environment "${resolvedEnv.name}" has policy "read-only"`;
+      errorKind = "read_only_violation";
     }
 
     const finishedAt = new Date();
@@ -352,13 +365,20 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             finished_at: finishedAt.toISOString(),
             evidence: { dir: relativeDir, ...evidence },
             observed,
+            mutates: entry.step.mutates,
           }
         : {
             receipt_id: receiptId,
             step: name,
             kind: "do",
             args: parsedArgs,
-            error: { message: errorMessage },
+            // `errorKind` is always set by this point: `status` only ever
+            // becomes `"failed"` alongside it, at each branch above (this
+            // task's spec, decision 1). The `?? "step_error"` fallback is a
+            // belt-and-braces default, matching this task's own "判定に迷っ
+            // たら step_error に倒す" principle — it should never actually
+            // be reached.
+            error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment: resolvedEnv.name,
             target_version: targetVersion,
@@ -366,6 +386,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             scenario: null,
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
+            mutates: entry.step.mutates,
             evidence: { dir: relativeDir, ...evidence },
             observed,
           };

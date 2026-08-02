@@ -48,9 +48,61 @@
 // while there is still time to. Present only when at least one of its own
 // sub-fields is non-empty; the attachment *files* themselves are never
 // redacted (the same honest limit trace.zip/screenshots already have).
+//
+// `error.kind` and `mutates` are added now (m3a-receipt-kinds task spec,
+// decisions 1, 3): M3's Allure interop needs a machine-readable failure
+// marker (Categories.json can't be generated from `error.message`, free
+// text meant for humans) and a way to check a step's declared `mutates`
+// against what it actually did without a second lookup. `ErrorKind` is a
+// closed enum on purpose — an open string would grow one value per step and
+// stop being usable as a classifier — and only the first six values name a
+// failure the contract layer itself can point at (the same "Tier A" claim
+// README makes); every other throw is `"step_error"`, the deliberate
+// catch-all a caller falls back to whenever it isn't sure (this task's spec:
+// "判定に迷ったら step_error に倒す" — misnaming a failure as a contract
+// failure is worse than not naming it at all). `mutates` mirrors a step's own
+// `defineStep` declaration (default `true`) so a receipt alone can be
+// checked against `observed` without a second lookup into the vocabulary;
+// `null` — not `false` — is a compat step's value, since compat has no
+// `mutates` declaration to report at all (`then-compat-step`'s own warning
+// exists for the same reason). Named `mutates`, not `declared`, because
+// `declared` already means something else on this exact interface (self-
+// reported allure-js data, directly above) — reusing it here would collide.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ObservedCounts } from "../context/observed.js";
+
+/** The closed set of machine-readable failure causes a receipt's `error` can
+ * carry (m3a-receipt-kinds task spec, decision 1) — see this file's own
+ * header for the classification principle. Each value's own home:
+ *
+ *   - `args_invalid` — args failed the step's own `args` schema.
+ *   - `result_invalid` — the returned value failed the step's own `returns`
+ *     schema.
+ *   - `binding_invalid` — a pickle step's text/table/docstring couldn't be
+ *     bound into a typed step's `args` shape at all (`nuka run` only; `nuka
+ *     do` has no pickle to bind from).
+ *   - `world_invalid` — a declared World key's write failed its own
+ *     `defineWorld` schema.
+ *   - `then_mutated` — a step bound in Then position was measured writing.
+ *   - `read_only_violation` — a step was measured writing under a
+ *     `policy: "read-only"` environment.
+ *   - `timeout` — a compat step's/hook's own `{ timeout }` (or the run's
+ *     `setDefaultTimeout`) fired before it settled.
+ *   - `unsupported` — a compat-only shape nukadoko doesn't implement: a
+ *     `done()`-callback arity, or a `"pending"`/`"skipped"` return value.
+ *   - `step_error` — anything else: the step's/hook's own code threw. Also
+ *     the default whenever classification is uncertain. */
+export type ErrorKind =
+  | "args_invalid"
+  | "result_invalid"
+  | "binding_invalid"
+  | "world_invalid"
+  | "then_mutated"
+  | "read_only_violation"
+  | "timeout"
+  | "unsupported"
+  | "step_error";
 
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
@@ -113,6 +165,15 @@ interface ReceiptBase {
    * differs from `evidence`/`observed`. Present only when at least one of
    * its own sub-fields is non-empty. */
   declared?: DeclaredSnapshot;
+  /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
+   * the counterpart to `observed` a receipt needs to let "declared vs
+   * observed" be checked from the receipt alone (this task's spec, decision
+   * 3). `null` for a compat step: compat has no `mutates` declaration to
+   * report (`then-compat-step` warns about exactly this gap), so `null` is a
+   * third value, never coerced to `false`. Present on both `ReceiptOk` and
+   * `ReceiptFailed` — the declared/observed comparison matters most for a
+   * run that actually finished. */
+  mutates: boolean | null;
   /** The environment's `version` probe result (docs/spec.md "Receipts":
    * optional, "(when probed)"). Present only when the environment configures
    * a probe *and* it resolved to a string within its timeout; omitted — not
@@ -131,7 +192,10 @@ export interface ReceiptOk extends ReceiptBase {
 
 export interface ReceiptFailed extends ReceiptBase {
   status: "failed";
-  error: { message: string };
+  /** `message` is unchanged — the human-readable text this receipt always
+   * had. `kind` is new (this task's spec, decision 1): a machine-readable
+   * classification alongside it, never a replacement for it. */
+  error: { message: string; kind: ErrorKind };
 }
 
 export type Receipt = ReceiptOk | ReceiptFailed;

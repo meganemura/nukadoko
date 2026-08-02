@@ -9,6 +9,12 @@ export { ConfigError } from "./config/errors.js";
 export type { StepContext } from "./context.js";
 export { poll, PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./context/poll.js";
-export type { EvidenceMeta, Receipt, ReceiptFailed, ReceiptOk } from "./receipt/types.js";
+export type {
+  ErrorKind,
+  EvidenceMeta,
+  Receipt,
+  ReceiptFailed,
+  ReceiptOk,
+} from "./receipt/types.js";
 export type { Step, StepDefinitionInput } from "./step/define-step.js";
 export { defineStep } from "./step/define-step.js";

@@ -14,6 +14,7 @@ import {
   setActiveDeclaredCollector,
   type DeclaredCollector,
 } from "../compat/declared.js";
+import { CompatTimeoutError, isWorldWriteValidationError } from "../compat/errors.js";
 import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
@@ -22,7 +23,7 @@ import type { StepContext } from "../context.js";
 import { createStepContext } from "../context/create-context.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
-import type { Receipt } from "../receipt/types.js";
+import type { ErrorKind, Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -350,13 +351,39 @@ export async function runWithTimeout<T>(
   inFlight.catch(() => {});
   let timer: ReturnType<typeof setTimeout>;
   const timedOut = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(timeoutMessage(kind, name, timeoutMs))), timeoutMs);
+    timer = setTimeout(
+      () => reject(new CompatTimeoutError(timeoutMessage(kind, name, timeoutMs))),
+      timeoutMs,
+    );
   });
   try {
     return await Promise.race([inFlight, timedOut]);
   } finally {
     clearTimeout(timer!);
   }
+}
+
+/** Classifies a compat step's/hook's own thrown value into the closed
+ * `error.kind` enum (m3a-receipt-kinds task spec, decisions 1-2) —
+ * identified by type, never by matching the thrown value's own message text
+ * (this task's spec: "文字列マッチでメッセージを判定するのは不可"). Only
+ * `CompatTimeoutError` (`runWithTimeout`, above, always constructed by this
+ * very module) and a `WorldWriteValidationError` (a declared World key's
+ * write, src/compat/world-instrumentation.ts — checked via
+ * `isWorldWriteValidationError`'s own brand, not `instanceof`, since that
+ * error is reached through discovery's own scoped tsx import and
+ * `instanceof` would silently miss it there; see that function's own header)
+ * are identifiable this way; anything else — including a non-`Error` thrown
+ * value — falls back to `"step_error"` (this task's spec: "判定に迷ったら
+ * step_error に倒す"). Not applied to a typed step's own throw: a typed
+ * step never touches a World or `runWithTimeout` (no `this`, no timeout
+ * mechanism — this file's own header), so that catch site hardcodes
+ * `"step_error"` directly rather than call through here for a case that can
+ * never actually occur. */
+function classifyCaughtError(error: unknown): ErrorKind {
+  if (error instanceof CompatTimeoutError) return "timeout";
+  if (isWorldWriteValidationError(error)) return "world_invalid";
+  return "step_error";
 }
 
 /** Builds this hook invocation's own `HookParameter` (this task's spec, item
@@ -453,12 +480,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     outcomeStepName: string,
     initialStatus: "ok" | "failed",
     initialErrorMessage: string,
+    // `undefined` exactly when `initialStatus` is `"ok"` — a real `ErrorKind`
+    // is required whenever the caller already knows this step failed for its
+    // own reason (args/binding/returns/its own throw), m3a-receipt-kinds
+    // task spec, decision 1.
+    initialErrorKind: ErrorKind | undefined,
     result: unknown,
     rawArgs: unknown,
     chainKey: Step | undefined,
+    // This step's own declared `mutates` (typed) or `null` (compat, which
+    // has no declaration at all) — this task's spec, decision 3.
+    mutates: boolean | null,
   ): Promise<void> {
     let status = initialStatus;
     let errorMessage = initialErrorMessage;
+    let errorKind = initialErrorKind;
 
     // Then-position measured enforcement (m2pre-observed task spec,
     // decision 4) and the read-only measured backstop (m2pre-resultof task
@@ -467,7 +503,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // failure and message rather than being overwritten by either of
     // these. Both key off the same `observed.http_writes` and can
     // therefore both apply to the same occurrence at once; when they do,
-    // `errorMessage` says both rather than picking one. Applied uniformly
+    // `errorMessage` says both rather than picking one, and `errorKind`
+    // takes `then_mutated`. A closed enum can only carry one value, and
+    // that is the one worth carrying: a mutating step bound in Then
+    // position is a defect in the vocabulary itself, true in every
+    // environment and fixable once, whereas a read-only violation
+    // describes where this particular run happened to point. The
+    // structural fault is the more actionable category for a report to
+    // file the failure under. Applied uniformly
     // regardless of kind (m2b-compat-execution task spec, item 6: "compat
     // step にも実行時の観測強制がそのまま適用される").
     const observed = contextHandle.observedCounts();
@@ -483,17 +526,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // this step, omitted from the receipt the same way `used`/`world` are.
     const declared = declaredCollector.snapshot();
     const demotionMessages: string[] = [];
+    let demotionKind: ErrorKind | undefined;
     if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
       demotionMessages.push(thenObservedWritesMessage(outcomeStepName, observed.http_writes));
+      demotionKind ??= "then_mutated";
     }
     if (status === "ok" && policy === "read-only" && observed.http_writes > 0) {
       demotionMessages.push(
         readOnlyObservedWritesMessage(outcomeStepName, environment, observed.http_writes),
       );
+      demotionKind ??= "read_only_violation";
     }
     if (demotionMessages.length > 0) {
       status = "failed";
       errorMessage = demotionMessages.join("; ");
+      errorKind = demotionKind;
     }
 
     // Only a step whose *final* status is "ok" ever becomes readable via
@@ -526,6 +573,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
             },
             observed,
+            mutates,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
@@ -537,7 +585,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step: outcomeStepName,
             kind: "run",
             args: rawArgs,
-            error: { message: errorMessage },
+            // `errorKind` is guaranteed set by this point: either the
+            // caller passed one in (status already "failed" on entry) or a
+            // demotion above just set both `status` and `errorKind`
+            // together. The `?? "step_error"` fallback is a belt-and-
+            // braces default only, matching this task's own "判定に迷った
+            // ら step_error に倒す" principle — it should never actually be
+            // reached.
+            error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment,
             target_version: targetVersion,
@@ -551,6 +606,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
             },
             observed,
+            mutates,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
@@ -636,30 +692,51 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Item 3: `HookParameter.result` is absent for a Before hook (cucumber-js
     // never sets it there either — a scenario's outcome isn't known yet).
     const hookParameter = buildHookParameter(gherkinDocument, pickle, scenarioId, undefined);
-    try {
+    // m3a-receipt-kinds task spec, decision 2: the arity check and the
+    // pending/skipped return are both classified `"unsupported"` directly,
+    // at the exact point each is detected — set on `hookStatus`/
+    // `hookErrorKind` rather than thrown, so they never need to be told
+    // apart from a hook's own throw (`timeout`/`world_invalid`/`step_error`,
+    // via `classifyCaughtError`) inside a shared catch block afterward. This
+    // mirrors the compat step branch's own arity/pending-skipped checks
+    // further down in this file, which already work the same non-throwing
+    // way.
+    let hookStatus: "ok" | "failed" = "ok";
+    let hookErrorMessage = "";
+    let hookErrorKind: ErrorKind = "step_error";
+    if (hook.fn.length >= 2) {
       // Item 5's arity check, before the call itself (see runWithTimeout's
       // own header for why calling it at all would already be the failure).
-      if (hook.fn.length >= 2) {
-        throw new Error(doneCallbackMessage("Hook", "Before"));
+      hookStatus = "failed";
+      hookErrorMessage = doneCallbackMessage("Hook", "Before");
+      hookErrorKind = "unsupported";
+    } else {
+      try {
+        const returnValue = await runWithTimeout(
+          () => Promise.resolve(hook.fn.call(world, hookParameter)),
+          hook.timeoutMs ?? defaultTimeoutMs,
+          "Hook",
+          "Before",
+        );
+        if (returnValue === "pending" || returnValue === "skipped") {
+          hookStatus = "failed";
+          hookErrorMessage = pendingOrSkippedMessage("Hook", "Before", returnValue);
+          hookErrorKind = "unsupported";
+        }
+      } catch (error) {
+        hookStatus = "failed";
+        hookErrorMessage = error instanceof Error ? error.message : String(error);
+        hookErrorKind = classifyCaughtError(error);
       }
-      const returnValue = await runWithTimeout(
-        () => Promise.resolve(hook.fn.call(world, hookParameter)),
-        hook.timeoutMs ?? defaultTimeoutMs,
-        "Hook",
-        "Before",
-      );
-      if (returnValue === "pending" || returnValue === "skipped") {
-        throw new Error(pendingOrSkippedMessage("Hook", "Before", returnValue));
-      }
-      const declared = declaredCollector.snapshot();
+    }
+    const declared = declaredCollector.snapshot();
+    if (hookStatus === "ok") {
       hookRecords.push({ type: "before", status: "ok", ...(declared ? { declared } : {}) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const declared = declaredCollector.snapshot();
+    } else {
       hookRecords.push({
         type: "before",
         status: "failed",
-        error: { message },
+        error: { message: hookErrorMessage, kind: hookErrorKind },
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;
@@ -707,6 +784,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       readonly relativeReceiptDir: string;
       readonly stepName: string;
       readonly startedAt: Date;
+      // This step's own declared `mutates` (typed) or `null` (compat) —
+      // carried on `began` so the general backstop catch below (which has
+      // no `entry` in scope of its own) can still put the right value on a
+      // receipt it has to write (this task's spec, decision 3).
+      readonly mutates: boolean | null;
       rawArgs: unknown;
     } | null = null;
 
@@ -781,6 +863,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           relativeReceiptDir,
           stepName: outcome.stepName,
           startedAt: new Date(),
+          mutates: entry.step.mutates,
           rawArgs: undefined,
         };
 
@@ -796,17 +879,20 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let status: "ok" | "failed";
         let result: unknown;
         let errorMessage = "";
+        let errorKind: ErrorKind | undefined;
         const rawArgs: unknown = bindResult.ok ? bindResult.value : bindResult.partialValue;
         began.rawArgs = rawArgs;
 
         if (!bindResult.ok) {
           status = "failed";
           errorMessage = bindResult.message;
+          errorKind = "binding_invalid";
         } else {
           const argsResult = entry.step.args.safeParse(bindResult.value);
           if (!argsResult.success) {
             status = "failed";
             errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+            errorKind = "args_invalid";
           } else {
             try {
               const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
@@ -814,13 +900,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               if (!returnsResult.success) {
                 status = "failed";
                 errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+                errorKind = "result_invalid";
               } else {
                 status = "ok";
                 result = returnsResult.data;
               }
             } catch (error) {
+              // Always "step_error", never routed through
+              // `classifyCaughtError` (this file's own header, m3a-receipt-
+              // kinds task spec): a typed step's `run(ctx, args)` never
+              // receives `this` and has no timeout mechanism, so neither a
+              // `WorldWriteValidationError` nor a `CompatTimeoutError` can
+              // ever reach this catch.
               status = "failed";
               errorMessage = error instanceof Error ? error.message : String(error);
+              errorKind = "step_error";
             }
           }
         }
@@ -832,9 +926,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           outcome.stepName,
           status,
           errorMessage,
+          errorKind,
           result,
           rawArgs,
           entry.step,
+          entry.step.mutates,
         );
       } else {
         // entry.kind === "compat" (m2b-compat-execution task spec, items
@@ -854,6 +950,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           relativeReceiptDir,
           stepName: outcome.stepName,
           startedAt: new Date(),
+          // Compat has no `mutates` declaration at all (this task's spec,
+          // decision 3) — `null`, never coerced to `false`.
+          mutates: null,
           rawArgs: undefined,
         };
 
@@ -884,6 +983,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const stepStartedAt = new Date();
         let status: "ok" | "failed" = "ok";
         let errorMessage = "";
+        let errorKind: ErrorKind | undefined;
         // Item 5's arity check, before the call itself: a compat step's
         // glue function declaring more parameters than `positionalArgs`
         // actually supplies is cucumber-js's own signal for a `done`
@@ -893,6 +993,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         if (entry.compat.fn.length > positionalArgs.length) {
           status = "failed";
           errorMessage = doneCallbackMessage("Step", outcome.stepName);
+          errorKind = "unsupported";
         } else {
           try {
             // Item 2: `entry.compat.timeoutMs` is this step's own
@@ -914,10 +1015,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             if (returnValue === "pending" || returnValue === "skipped") {
               status = "failed";
               errorMessage = pendingOrSkippedMessage("Step", outcome.stepName, returnValue);
+              errorKind = "unsupported";
             }
           } catch (error) {
+            // m3a-receipt-kinds task spec, decisions 1-2: identified by
+            // type (`CompatTimeoutError`/`WorldWriteValidationError`), never
+            // by matching `message` — see `classifyCaughtError`'s own header.
             status = "failed";
             errorMessage = error instanceof Error ? error.message : String(error);
+            errorKind = classifyCaughtError(error);
           }
         }
 
@@ -933,9 +1039,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           outcome.stepName,
           status,
           errorMessage,
+          errorKind,
           null,
           rawArgsList,
           undefined,
+          null,
         );
       }
     } catch (error) {
@@ -965,7 +1073,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           step: began.stepName,
           kind: "run",
           args: began.rawArgs,
-          error: { message },
+          // This is the true catch-all: whatever threw here was never
+          // turned into an `ErrorKind` by any of the classification points
+          // above, so this is the "判定に迷ったら step_error に倒す" case
+          // itself, not just its fallback (this task's spec, decision 1).
+          error: { message, kind: "step_error" },
           status: "failed",
           environment,
           target_version: targetVersion,
@@ -979,6 +1091,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
           },
           observed,
+          mutates: began.mutates,
           ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
             ? { world: worldReadsWrites }
@@ -1022,28 +1135,43 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       scenarioId,
       scenarioFailed ? "FAILED" : "PASSED",
     );
-    try {
-      if (hook.fn.length >= 2) {
-        throw new Error(doneCallbackMessage("Hook", "After"));
+    // Same non-throwing arity/pending-skipped classification as the Before
+    // loop above (this task's spec, decision 2) — see that loop's own
+    // comment for why.
+    let hookStatus: "ok" | "failed" = "ok";
+    let hookErrorMessage = "";
+    let hookErrorKind: ErrorKind = "step_error";
+    if (hook.fn.length >= 2) {
+      hookStatus = "failed";
+      hookErrorMessage = doneCallbackMessage("Hook", "After");
+      hookErrorKind = "unsupported";
+    } else {
+      try {
+        const returnValue = await runWithTimeout(
+          () => Promise.resolve(hook.fn.call(world, hookParameter)),
+          hook.timeoutMs ?? defaultTimeoutMs,
+          "Hook",
+          "After",
+        );
+        if (returnValue === "pending" || returnValue === "skipped") {
+          hookStatus = "failed";
+          hookErrorMessage = pendingOrSkippedMessage("Hook", "After", returnValue);
+          hookErrorKind = "unsupported";
+        }
+      } catch (error) {
+        hookStatus = "failed";
+        hookErrorMessage = error instanceof Error ? error.message : String(error);
+        hookErrorKind = classifyCaughtError(error);
       }
-      const returnValue = await runWithTimeout(
-        () => Promise.resolve(hook.fn.call(world, hookParameter)),
-        hook.timeoutMs ?? defaultTimeoutMs,
-        "Hook",
-        "After",
-      );
-      if (returnValue === "pending" || returnValue === "skipped") {
-        throw new Error(pendingOrSkippedMessage("Hook", "After", returnValue));
-      }
-      const declared = declaredCollector.snapshot();
+    }
+    const declared = declaredCollector.snapshot();
+    if (hookStatus === "ok") {
       hookRecords.push({ type: "after", status: "ok", ...(declared ? { declared } : {}) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const declared = declaredCollector.snapshot();
+    } else {
       hookRecords.push({
         type: "after",
         status: "failed",
-        error: { message },
+        error: { message: hookErrorMessage, kind: hookErrorKind },
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;

@@ -145,6 +145,11 @@ describe("nuka run: typed World measurement + declaration", () => {
     // The invalid write must never appear in world.writes (proto-typed-
     // world/findings.md Q1's bug, regularized).
     expect(invalidReceipt.world).toBeUndefined();
+    // m3a-receipt-kinds task spec: identified by type
+    // (`WorldWriteValidationError`), never by matching the message —
+    // distinct from "step_error" (an ordinary throw from a compat step's
+    // own glue).
+    expect((invalidReceipt as { error: { kind: string } }).error.kind).toBe("world_invalid");
   });
 
   it("reassigning a reserved key at run time fails the step with a clear runtime error", async () => {
@@ -161,6 +166,13 @@ describe("nuka run: typed World measurement + declaration", () => {
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("attach");
     expect(record.steps[0].error.message).toContain("reserved");
+    // m3a-receipt-kinds task spec: `ReservedWorldKeyWriteError` isn't one of
+    // the nine named kinds (only a declared-schema failure, thrown by
+    // `WorldWriteValidationError`, is "world_invalid") — this must stay
+    // "step_error", not be swept into "world_invalid" just because it's
+    // also a World-related throw.
+    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
+    expect((receipt as { error: { kind: string } }).error.kind).toBe("step_error");
   });
 });
 
