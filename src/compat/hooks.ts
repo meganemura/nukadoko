@@ -44,12 +44,17 @@ let hookCounter = 0;
 
 function registerHook(
   type: HookType,
-  optionsOrFn: HookOptions | HookFn,
+  optionsOrFn: HookOptions | HookFn | string,
   maybeFn: HookFn | undefined,
 ): void {
-  const isOptionsForm = typeof optionsOrFn !== "function";
-  const tags = isOptionsForm ? optionsOrFn.tags : undefined;
-  const fn = isOptionsForm ? maybeFn : optionsOrFn;
+  const isFnForm = typeof optionsOrFn === "function";
+  // cucumber-js accepts a bare tag-expression string in place of `{ tags }`
+  // (m2.1-a compat-audit synthesis: 10 real-world call sites, 2 repos, use
+  // exactly this shape) — folded into the same `tags` field as the options
+  // form so every downstream reader (tag-expression.ts, src/run/) sees one
+  // representation regardless of which shape the caller used.
+  const tags = isFnForm ? undefined : typeof optionsOrFn === "string" ? optionsOrFn : optionsOrFn.tags;
+  const fn = isFnForm ? optionsOrFn : maybeFn;
   const label = type === "before" ? "Before" : "After";
   if (fn === undefined) {
     throw new Error(`${label}({ tags }, fn) requires a function as its second argument`);
@@ -62,7 +67,11 @@ export function Before(fn: HookFn): void;
 /** `Before({ tags }, fn)`: runs only for a scenario matching `tags`
  * (src/compat/tag-expression.ts). */
 export function Before(options: HookOptions, fn: HookFn): void;
-export function Before(optionsOrFn: HookOptions | HookFn, fn?: HookFn): void {
+/** `Before("@tag", fn)` / `Before("not @tag", fn)`: cucumber-js's own bare
+ * tag-expression-string shorthand for `{ tags }` — same tag-expression
+ * handling as the options form (src/compat/tag-expression.ts). */
+export function Before(tags: string, fn: HookFn): void;
+export function Before(optionsOrFn: HookOptions | HookFn | string, fn?: HookFn): void {
   registerHook("before", optionsOrFn, fn);
 }
 
@@ -70,7 +79,10 @@ export function Before(optionsOrFn: HookOptions | HookFn, fn?: HookFn): void {
 export function After(fn: HookFn): void;
 /** `After({ tags }, fn)`: attempted only for a scenario matching `tags`. */
 export function After(options: HookOptions, fn: HookFn): void;
-export function After(optionsOrFn: HookOptions | HookFn, fn?: HookFn): void {
+/** `After("@tag", fn)` / `After("not @tag", fn)`: same bare-string shorthand
+ * as `Before`. */
+export function After(tags: string, fn: HookFn): void;
+export function After(optionsOrFn: HookOptions | HookFn | string, fn?: HookFn): void {
   registerHook("after", optionsOrFn, fn);
 }
 
