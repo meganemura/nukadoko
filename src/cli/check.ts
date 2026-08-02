@@ -11,10 +11,17 @@ import type { WritableSink } from "./writable-sink.js";
 // convention every other command already uses via formatVocabularyError.
 // Exit code is exactly "1 or more errors" (docs/spec.md "CLI summary":
 // warnings alone are exit 0).
+//
+// m5b-check-feature-arg task spec: `featureArg` is passed straight through
+// to `analyzeProject` unchanged (`null`/absent means "no argument", the
+// existing featuresDir-wide behavior). `CheckFeatureNotFoundError` needs no
+// special handling here — it is an `Error` like every other setup failure
+// this catch already turns into stderr + exit 1 via `formatVocabularyError`.
 
 export interface RunCheckOptions {
   rootDir: string;
   json: boolean;
+  featureArg?: string;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -41,11 +48,11 @@ function formatIssueLine(severity: "error" | "warning", issue: CheckIssue): stri
 }
 
 export async function runCheck(options: RunCheckOptions): Promise<number> {
-  const { rootDir, json, stdout, stderr } = options;
+  const { rootDir, json, featureArg, stdout, stderr } = options;
 
   let report;
   try {
-    report = await analyzeProject(rootDir);
+    report = await analyzeProject(rootDir, featureArg);
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;

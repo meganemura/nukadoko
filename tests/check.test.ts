@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
@@ -190,5 +191,95 @@ describe("nuka check", () => {
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("typo");
+  });
+});
+
+describe("nuka check [feature]", () => {
+  it("detects an undefined step in a feature outside featuresDir when given as an argument", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "acceptance/outside.feature", "--json"], {
+      rootDir: fixture("check-feature-arg-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const undefinedIssues = report.errors.filter((issue: { code: string }) => issue.code === "undefined-step");
+    expect(undefinedIssues).toHaveLength(1);
+    expect(undefinedIssues[0].message).toContain("this step is undefined outside featuresDir");
+    expect(exitCode).toBe(1);
+  });
+
+  it("accepts an absolute path the same way", async () => {
+    const stdout = createCaptureSink();
+    const rootDir = fixture("check-feature-arg-project");
+    const exitCode = await runCli(["check", path.join(rootDir, "acceptance/outside.feature"), "--json"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const undefinedIssues = report.errors.filter((issue: { code: string }) => issue.code === "undefined-step");
+    expect(undefinedIssues).toHaveLength(1);
+    expect(undefinedIssues[0].message).toContain("this step is undefined outside featuresDir");
+    expect(exitCode).toBe(1);
+  });
+
+  it("does not mix in featuresDir's own feature errors when a feature argument is given", async () => {
+    const stdout = createCaptureSink();
+    await runCli(["check", "acceptance/outside.feature", "--json"], {
+      rootDir: fixture("check-feature-arg-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const messages = [...report.errors, ...report.warnings].map((issue: { message: string }) => issue.message);
+    expect(messages.join("\n")).not.toContain("this step is undefined inside featuresDir");
+    expect(report.errors.every((issue: { file?: string }) => issue.file !== "features/inside.feature")).toBe(true);
+  });
+
+  it("still runs config and binding checks when a feature argument is given", async () => {
+    const stdout = createCaptureSink();
+    await runCli(["check", "acceptance/outside.feature", "--json"], {
+      rootDir: fixture("check-feature-arg-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const codes = report.errors.map((issue: { code: string }) => issue.code);
+    expect(codes).toContain("unknown-parameter-type");
+  });
+
+  it("no argument still checks every feature under featuresDir, unchanged", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-feature-arg-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const messages = [...report.errors].map((issue: { message: string }) => issue.message);
+    expect(messages.join("\n")).toContain("this step is undefined inside featuresDir");
+    expect(messages.join("\n")).not.toContain("this step is undefined outside featuresDir");
+    expect(exitCode).toBe(1);
+  });
+
+  it("a nonexistent feature path prints to stderr and exits 1, with no report", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "acceptance/does-not-exist.feature"], {
+      rootDir: fixture("check-feature-arg-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain("nuka check");
+    expect(stderr.text()).toContain("acceptance/does-not-exist.feature");
   });
 });

@@ -81,6 +81,7 @@ interface ScaffoldArgs {
 
 interface CheckArgs {
   json?: boolean;
+  feature?: string;
 }
 
 interface AcceptArgs {
@@ -333,20 +334,27 @@ export async function runCli(
   };
 
   const checkCommand: CommandModule<Record<string, never>, CheckArgs> = {
-    command: "check",
+    command: "check [feature]",
     describe:
       "static checks: pattern/schema mismatches, Then binding to mutating steps, undefined steps per feature, duplicate patterns, config coherence",
     builder: (y: Argv) =>
-      y.option("json", {
-        type: "boolean",
-        default: false,
-        describe: "machine-readable output",
-      }) as Argv<CheckArgs>,
+      y
+        .positional("feature", {
+          type: "string",
+          describe:
+            "check only this feature file instead of every feature under featuresDir (no :line)",
+        })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "machine-readable output",
+        }) as Argv<CheckArgs>,
     handler: async (args: Arguments<CheckArgs>) => {
       if (argsFailed) return;
       exitCode = await runCheck({
         rootDir,
         json: args.json ?? false,
+        featureArg: args.feature,
         stdout,
         stderr,
       });
