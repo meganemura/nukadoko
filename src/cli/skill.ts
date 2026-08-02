@@ -35,8 +35,13 @@ function packageRoot(): string {
   return path.resolve(here, "..", "..");
 }
 
-function acceptanceSkillDir(): string {
-  return path.join(packageRoot(), "skills", "acceptance");
+// Prints the directory holding *every* skill this package ships, not any one
+// of them: there are two (acceptance, migration) and a project takes
+// whichever it wants. No `<name>` argument until something needs one — `ls`
+// already answers "which skills are in there" without a second verb to
+// maintain.
+function skillsDir(): string {
+  return path.join(packageRoot(), "skills");
 }
 
 export interface RunSkillPathOptions {
@@ -46,7 +51,7 @@ export interface RunSkillPathOptions {
 
 export async function runSkillPath(options: RunSkillPathOptions): Promise<number> {
   const { stdout, stderr } = options;
-  const dir = acceptanceSkillDir();
+  const dir = skillsDir();
 
   if (!existsSync(dir)) {
     stderr.write(`nuka skill: skill source not found at ${dir} (a packaging bug, not a project issue)\n`);
