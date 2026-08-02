@@ -2,6 +2,12 @@
 
 > A living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
 
+A **nukadoko** (ぬか床) is the fermented rice-bran bed that turns
+cucumbers into pickles. It is alive: tended daily it matures, neglected
+it dies. That is the claim this tool makes about your Gherkin: feature
+files and the typed steps behind them are a living culture, not a
+write-once test asset — and tending them, daily, is what an agent is for.
+
 Your `.feature` files are the asset that appreciates in the AI era. Gherkin
 is already the largest corpus of executable natural-language specs there
 is, and every year agents get better at reading it, running it, and
@@ -9,10 +15,7 @@ repairing it — so that corpus is worth more, not less, the longer it lives.
 Two things hold it back: glue code that rots invisibly, and reports nobody
 can trust. nukadoko takes on exactly those two and leaves the rest —
 Gherkin's own syntax, pattern matching, review, the dashboard — to the
-tools that already own them well. A nukadoko is the living bed that turns
-cucumbers into pickles: tended daily it matures, neglected it dies. Feature
-files and the typed steps behind them are that living culture; tending
-them, daily, is what an agent is for.
+tools that already own them well.
 
 That trust question isn't about the scripted scenario run — there, the
 tool is already the executor, so there's nothing to distrust. It matters in
@@ -28,10 +31,11 @@ the agent describing them.
 
 ## Status
 
-**Pre-0.1.** M1 (engine core) is implemented: `steps`, `describe`, `do`,
-`run`, `check`, `init`, `scaffold`, plus sessions, environments, and
-secrets. Compat (M2) and the reporting emitters (M3) are designed but not
-built yet — see [Design](#design) for the full roadmap.
+**Pre-0.1.** M1 (engine core) and M2 (the compat door) are implemented:
+`steps`, `describe`, `do`, `run`, `check`, `init`, `scaffold`, sessions,
+environments, secrets, and `nukadoko/compat`. The reporting emitters (M3)
+are designed but not built yet — see [Design](#design) for the full
+roadmap.
 
 ## Evaluate nukadoko against your project
 
@@ -137,15 +141,16 @@ export default defineStep({
   alone and prints its receipt — the unit an agent's explore loop is built
   on, with nothing to stand up first.
 
-**M2 (designed, not implemented): a compat door.** The planned migration
-path for an existing Cucumber + Playwright suite is switching one import —
-`nukadoko/compat` in place of `@cucumber/cucumber` — keeping the same
-pattern syntax and World working while nukadoko's harness starts measuring
-receipts underneath it: unchanged code, one line of diff. Promoting a step
-to `defineStep` then becomes a per-step decision instead of a rewrite, and
-the door swings back — switching the import again returns to plain
-cucumber-js. This does not exist yet; see
-[docs/spec.md](docs/spec.md#compat-steps-the-migration-door).
+**M2: a compat door.** The migration path for an existing Cucumber +
+Playwright suite is switching one import — `nukadoko/compat` in place of
+`@cucumber/cucumber` — keeping the same pattern syntax and World working
+while nukadoko's harness starts measuring receipts underneath it: unchanged
+code, one line of diff. Promoting a step to `defineStep` is then a per-step
+decision instead of a rewrite, and the door swings back — switching the
+import again returns to plain cucumber-js. See
+[docs/migration.md](docs/migration.md) for the step-by-step guide, and
+[examples/migration](examples/migration) for a worked example running end
+to end.
 
 **M3 (designed, not implemented): reports fill themselves.** A classic
 Cucumber run shows the evidence a team wired up itself — hook boilerplate

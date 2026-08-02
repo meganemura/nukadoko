@@ -3,9 +3,11 @@
 > nukadoko — a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
 
 Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
-`check`/`init`/`scaffold`, sessions, environments, secrets. Pre-0.1: the
-real-world validation gate (below, Implementation notes) is still ahead,
-and M2+ (compat, Allure, sign-off) exist only as design.
+`check`/`init`/`scaffold`, sessions, environments, secrets. M2 (compat,
+below) is implemented too — `nukadoko/compat`, typed World measurement, and
+a migration guide. Pre-0.1: the real-world validation gate (below,
+Implementation notes) is still ahead, and M3+ (Allure/messages emitters,
+sign-off) exist only as design.
 
 ## What nukadoko is
 
@@ -291,6 +293,8 @@ import { Given, When, Then } from "nukadoko/compat";
   of hidden, and every individual migration move must be
   semantics-preserving so it can be taken early and safely. The door
   swings both ways: switching the import back must remain possible.
+- A step-by-step walkthrough of this door for an existing cucumber-js +
+  Playwright suite lives in [docs/migration.md](migration.md).
 
 ## Running
 

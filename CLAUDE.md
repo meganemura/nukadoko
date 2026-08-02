@@ -7,8 +7,9 @@ Project context for agent sessions working in this repository.
 nukadoko is an agent-first engine that runs Gherkin: typed step contracts,
 tool-measured execution records (receipts), and sign-offs. The design source
 of truth is `docs/spec.md` — read it before changing behavior. Status:
-pre-0.1; M1 (engine core) is implemented, the real-world validation gate
-(docs/spec.md, Implementation notes) is next, and M2+ are design-only.
+pre-0.1; M1 (engine core) and M2 (compat) are implemented, the real-world
+validation gate (docs/spec.md, Implementation notes) is still ahead, and
+M3+ (reporting emitters, sign-off) are design-only.
 
 ## Naming rule
 
@@ -26,8 +27,8 @@ identifiers on that line.
   visibility, deploys). Prepare the state and let the user execute.
 - Commits are semantic units, in English, matching the existing message
   style; the user reviews direction, the session reviews code.
-- README.md/README.ja.md and docs/spec.md/docs/spec.ja.md are kept in sync
-  (Japanese: one sentence per line; the English file is the source of
-  truth).
+- README.md/README.ja.md, docs/spec.md/docs/spec.ja.md, and
+  docs/migration.md/docs/migration.ja.md are kept in sync (Japanese: one
+  sentence per line; the English file is the source of truth).
 - Code comments explain why, not what; each module opens with its
   responsibility and boundaries.
