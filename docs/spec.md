@@ -8,8 +8,9 @@ below) is implemented too — `nukadoko/compat`, typed World measurement, and
 a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter and the
-messages emitter are both implemented, while sign-off and the skills exist
-only as design — `nuka skill` has no implementation yet.
+messages emitter are both implemented, and so are sign-off (`nuka accept`)
+and the acceptance skill it drives; of M5 only the migration skill is still
+design.
 
 ## What nukadoko is
 
@@ -573,8 +574,10 @@ What an agent does when a ticket's acceptance criteria are handed to it:
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
-4. `nuka check` — undefined steps, pattern/schema mismatches, a Then bound
-   to a mutating step — before anything runs.
+4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
+   Then bound to a mutating step — before anything runs. The argument is not
+   optional in spirit here: an acceptance feature living outside
+   `featuresDir` is exactly what a bare `nuka check` does not walk.
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
@@ -756,9 +759,11 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates
 nuka describe <step>          full contract, schemas as JSON Schema
 nuka scaffold <name>          typed step template that fails until implemented
-nuka check                    static checks: pattern/schema mismatches, Then
+nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
-                              feature, duplicate patterns, config coherence
+                              feature, duplicate patterns, config coherence;
+                              a feature argument checks that one file instead
+                              of featuresDir, for a feature living outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
@@ -796,12 +801,13 @@ nuka skill path|install       install the agent-facing skill
   the engine. Two are planned. The **acceptance skill** drives the
   acceptance loop end to end — criteria in, vocabulary read with `steps`
   and `describe`, missing operations scaffolded and implemented, the
-  scenario written, then `run` until green and `accept` (needs M4). The
-  **migration skill** carries what the compat audit measured: the gaps a
+  scenario written, then `run` until green and `accept` — this one ships.
+  The **migration skill** carries what the compat audit measured: the gaps a
   real cucumber-js suite actually hits, in the order they bite rather than
-  the order they are documented (needs only M2, so it can come first).
-  Until this milestone lands, "the bundled skill" referred to above does
-  not exist.
+  the order they are documented. It needs only M2 and does not exist yet.
+  Neither writes down a fact the CLI already answers — vocabulary,
+  contracts, refusal reasons — because a skill that copies those starts
+  lying the moment the command changes.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs

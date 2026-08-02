@@ -22,8 +22,8 @@ wrong throws off every step that follows.
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
-4. `nuka check` — undefined steps, pattern/schema mismatches, a Then bound
-   to a mutating step — before anything runs.
+4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
+   Then bound to a mutating step — before anything runs.
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
@@ -68,9 +68,14 @@ that judgment is what PR review of the feature is for.
 
 ## Before running
 
-`nuka check`. Undefined steps, pattern/schema mismatches, a Then bound to a
-mutating step — every static inconsistency it can catch, catch before
-anything executes.
+`nuka check <feature>`. Undefined steps, pattern/schema mismatches, a Then
+bound to a mutating step — every static inconsistency it can catch, catch
+before anything executes.
+
+Pass the feature path. A bare `nuka check` only walks `featuresDir`, and an
+acceptance feature is supposed to live outside it (see "What not to do"), so
+without the argument the one file you care about is the one that goes
+unchecked.
 
 ## Running and accepting
 
