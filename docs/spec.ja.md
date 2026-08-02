@@ -15,7 +15,10 @@ M5 のうち migration skill だけがまだ設計のままです。
 
 nukadoko は Gherkin を実行する agent-first のエンジンです。
 人間は耐久性のある成果物(feature ファイル、型付き step の定義、sign-off の記録)を書きレビューし、agent がそれらを実行します。
-実行系はすべて agent の試行錯誤ループのために最適化されており、あらゆる step が型付きの契約を持ち、あらゆる step が CLI から単独で実行でき、あらゆる実行が agent には偽造できない receipt を残します。
+実行系はすべて agent の試行錯誤ループのために最適化されており、あらゆる step が型付きの契約を持ち、あらゆる step が CLI から単独で実行でき、あらゆる実行が残す receipt は agent ではなくツールが書いたものです。
+agent には**偽造できない** receipt という意味ではありません。
+shell アクセスを持つ agent は、receipt を含めどんなファイルでも書けます。
+そうではなく、agent に頼んで作ってもらう必要が最初からなかった receipt だということです(詳しくは「Out of scope」を参照)。
 
 Agent-first は設計上の制約であり、スローガンではありません。
 agent は、介助なしにループ全体を完了できなければなりません。
@@ -564,9 +567,11 @@ nuka describe <step>          full contract, schemas as JSON Schema
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
-                              feature, duplicate patterns, config coherence;
-                              a feature argument checks that one file instead
-                              of featuresDir, for a feature living outside it
+                              feature, ambiguous steps (one line two patterns
+                              both match), duplicate patterns, config
+                              coherence; a feature argument checks that one
+                              file instead of featuresDir, for a feature
+                              living outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
