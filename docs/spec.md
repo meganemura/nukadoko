@@ -379,6 +379,7 @@ shape whether the step ran inside a scenario or via `do`.
   "args": { "name": "acme" },
   "result": { "id": "p_0001", "name": "acme" },
   "status": "ok",
+  "mutates": true,
   "observed": { "http_reads": 2, "http_writes": 1 },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
@@ -396,8 +397,21 @@ shape whether the step ran inside a scenario or via `do`.
 ```
 
 - `result` is the trust anchor: it passed the returns schema and the tool —
-  not the caller — produced it. On failure, `error: { message }` replaces it.
-  Compat steps record `result: null`.
+  not the caller — produced it. On failure, `error: { kind, message }`
+  replaces it. Compat steps record `result: null`.
+- `error.kind` is a closed set, beside the message a human reads:
+  `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
+  `then_mutated`, `read_only_violation`, `timeout`, `unsupported`,
+  `step_error`. Closed because a report has to classify against it — an
+  open one, extended per step, would classify nothing. The first six name
+  failures that exist only because there is a contract to violate, which
+  is the part a report built on a runner that discards return values
+  cannot fill in; a classifier that isn't sure says `step_error`, since
+  claiming a contract failure wrongly is worse than not claiming one. Hook
+  records in the scenario record carry the same field.
+- `mutates` is the step's own declaration (`null` for a compat step, which
+  has none to record — not `false`), sitting beside the `observed` counts
+  so declared and measured can be compared without a second artifact.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `ctx.request()`
   call logged to http.jsonl, the receipt itself as the primary record.
