@@ -287,6 +287,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   "args": { "name": "acme" },
   "result": { "id": "p_0001", "name": "acme" },
   "status": "ok",
+  "mutates": true,
   "observed": { "http_reads": 2, "http_writes": 1 },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
@@ -305,8 +306,14 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
 
 - `result` は信頼の錨です。
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
-  失敗時には `error: { message }` がそれに置き換わります。
+  失敗時には `error: { kind, message }` がそれに置き換わります。
   compat の step は `result: null` を記録します。
+- `error.kind` は閉じた集合で、人間が読むメッセージのほかに `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`then_mutated`、`read_only_violation`、`timeout`、`unsupported`、`step_error` の値を取ります。
+  閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
+  最初の 6 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
+  確信が持てない分類器が `step_error` を返すのは、契約違反を誤って主張するほうが、主張しないより悪いからです。
+  scenario record の中の hook record も同じフィールドを持ちます。
+- `mutates` は step 自身の宣言であり(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)、`observed` のカウントと並んで置かれることで、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`ctx.request()` の呼び出しはすべて http.jsonl に記録され、receipt 自体が一次記録になります。
 - `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`ctx.request()` と page の両方を通じたもの)。
