@@ -581,7 +581,7 @@ What an agent does when a ticket's acceptance criteria are handed to it:
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
-6. `nuka run` until green.
+6. `nuka run <feature>` until green.
 7. `nuka accept <feature>`, then commit the record it wrote.
 
 Steps 1-4 are where the work and the review are: new typed steps and the
@@ -768,7 +768,8 @@ nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
 nuka init [--base-url <url>]  set up a project; ends with a self-check
-nuka skill path|install       install the agent-facing skill
+nuka skill path               where the bundled skill lives, for a project
+                              that wants the copy matching this nukadoko
 ```
 
 ## Out of scope (honest limits)
@@ -795,10 +796,16 @@ nuka skill path|install       install the agent-facing skill
   allure-results emitter as the flagship dashboard.
 - **M4 — sign-off**: `nuka accept`, the commit and cleanliness checks it
   refuses on, and the frozen record written beside the feature.
-- **M5 — skills**: `nuka skill path|install`, and the skills it ships. The
+- **M5 — skills**: the skills nukadoko ships, and `nuka skill path`. The
   CLI is deliberately a set of small verbs; a skill is what turns them into
   a workflow an agent can follow without being told, and none of it changes
-  the engine. Two are planned. The **acceptance skill** drives the
+  the engine. Skills follow the Agent Skills specification, so `gh skill
+  install` and a Claude Code plugin marketplace both distribute them across
+  hosts; nukadoko does not copy files into any host's directory itself.
+  `nuka skill path` exists for the one thing neither of those can offer —
+  the skill that shipped with the installed nukadoko, at the version that
+  installed it, since a skill describes a CLI and drifts into fiction when
+  the two diverge. Two are planned. The **acceptance skill** drives the
   acceptance loop end to end — criteria in, vocabulary read with `steps`
   and `describe`, missing operations scaffolded and implemented, the
   scenario written, then `run` until green and `accept` — this one ships.

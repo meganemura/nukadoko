@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -9,13 +9,26 @@ import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot } from "
 
 const execFileAsync = promisify(execFile);
 
-// Responsibility: `nuka skill path`/`nuka skill install` (m5a-acceptance-
-// skill task spec). `path` never touches `rootDir` — its answer is a fact
-// about the package, not the project — so every `runCli` call below still
-// passes a `rootDir` (an empty temp dir) only because `runCli` itself
-// requires one; it is never read for `path`. `install`'s destination *is*
-// `rootDir`-relative (`.claude/skills/nukadoko-acceptance/`), so those
-// tests read it back from the same temp dir they installed into.
+// Responsibility: `nuka skill path`, and skills/acceptance/SKILL.md's own
+// compliance with the open Agent Skills specification
+// (https://agentskills.io/specification) that `gh skill install` and other
+// multi-host tooling read (m5e-skill-spec-compliance task spec). `install`
+// was removed — see src/cli/skill.ts's header for why — so this file only
+// exercises `path`, plus the frontmatter/body shape of the skill source
+// itself. That second half exists to catch the actual bug this task fixes:
+// `name: nukadoko-acceptance` didn't match its `skills/acceptance/`
+// directory, which a spec-compliant runtime refuses to load — the "name
+// matches parent directory" test below is a direct regression guard for
+// that.
+
+const skillDir = path.join(repoRoot, "skills", "acceptance");
+
+async function readFrontmatter(): Promise<string> {
+  const content = await readFile(path.join(skillDir, "SKILL.md"), "utf8");
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+  expect(frontmatterMatch).not.toBeNull();
+  return frontmatterMatch![1]!;
+}
 
 describe("nuka skill path", () => {
   it("prints the skill source directory, and it exists", async () => {
@@ -33,59 +46,54 @@ describe("nuka skill path", () => {
   });
 });
 
-describe("nuka skill install", () => {
-  it("writes .claude/skills/nukadoko-acceptance/SKILL.md under rootDir", async () => {
-    const rootDir = await createEmptyTempDir();
-    try {
-      const stdout = createCaptureSink();
-      const stderr = createCaptureSink();
-
-      const exitCode = await runCli(["skill", "install"], { rootDir, stdout, stderr });
-
-      expect(exitCode).toBe(0);
-      expect(stderr.text()).toBe("");
-      const installedPath = path.join(rootDir, ".claude", "skills", "nukadoko-acceptance", "SKILL.md");
-      expect(existsSync(installedPath)).toBe(true);
-      const content = await readFile(installedPath, "utf8");
-      expect(content).toContain("name: nukadoko-acceptance");
-    } finally {
-      await removeTempDir(rootDir);
-    }
-  });
-
-  it("refuses to overwrite an existing .claude/skills/nukadoko-acceptance/, leaving it untouched", async () => {
-    const rootDir = await createEmptyTempDir();
-    try {
-      const destDir = path.join(rootDir, ".claude", "skills", "nukadoko-acceptance");
-      await mkdir(destDir, { recursive: true });
-      await writeFile(path.join(destDir, "SKILL.md"), "# hand-edited, do not clobber\n");
-
-      const stdout = createCaptureSink();
-      const stderr = createCaptureSink();
-      const exitCode = await runCli(["skill", "install"], { rootDir, stdout, stderr });
-
-      expect(exitCode).toBe(1);
-      expect(stderr.text()).toContain("already exists");
-      expect(stderr.text()).toContain("nuka skill path");
-      const content = await readFile(path.join(destDir, "SKILL.md"), "utf8");
-      expect(content).toBe("# hand-edited, do not clobber\n");
-    } finally {
-      await removeTempDir(rootDir);
-    }
-  });
-});
-
-describe("acceptance skill source", () => {
+describe("acceptance skill source: Agent Skills specification compliance", () => {
   it("has frontmatter name and description", async () => {
-    const content = await readFile(
-      path.join(repoRoot, "skills", "acceptance", "SKILL.md"),
-      "utf8",
-    );
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
-    expect(frontmatterMatch).not.toBeNull();
-    const frontmatter = frontmatterMatch![1]!;
-    expect(frontmatter).toMatch(/^name:\s*nukadoko-acceptance\s*$/m);
+    const frontmatter = await readFrontmatter();
+    expect(frontmatter).toMatch(/^name:\s*\S.*$/m);
     expect(frontmatter).toMatch(/^description:\s*\S.*$/m);
+  });
+
+  it("has a name matching its parent directory (skills/acceptance/)", async () => {
+    const frontmatter = await readFrontmatter();
+    const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+    expect(nameMatch).not.toBeNull();
+    expect(nameMatch![1]!.trim()).toBe(path.basename(skillDir));
+  });
+
+  it("has a name of 1-64 lowercase alphanumeric/hyphen characters (no leading, trailing, or doubled hyphen)", async () => {
+    const frontmatter = await readFrontmatter();
+    const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+    expect(nameMatch).not.toBeNull();
+    const name = nameMatch![1]!.trim();
+    expect(name.length).toBeGreaterThanOrEqual(1);
+    expect(name.length).toBeLessThanOrEqual(64);
+    // This single regex rejects leading/trailing hyphens and doubled
+    // hyphens at once: each `-` must sit between two `[a-z0-9]+` groups.
+    expect(name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+  });
+
+  it("has a description between 1 and 1024 characters", async () => {
+    const frontmatter = await readFrontmatter();
+    const descriptionMatch = frontmatter.match(/^description:\s*(.+)$/m);
+    expect(descriptionMatch).not.toBeNull();
+    const description = descriptionMatch![1]!.trim();
+    expect(description.length).toBeGreaterThanOrEqual(1);
+    expect(description.length).toBeLessThanOrEqual(1024);
+  });
+
+  it("has a compatibility field of at most 500 characters, if present", async () => {
+    const frontmatter = await readFrontmatter();
+    const compatibilityMatch = frontmatter.match(/^compatibility:\s*(.+)$/m);
+    if (compatibilityMatch) {
+      expect(compatibilityMatch[1]!.trim().length).toBeLessThanOrEqual(500);
+    }
+  });
+
+  it("has a body under 500 lines", async () => {
+    const content = await readFile(path.join(skillDir, "SKILL.md"), "utf8");
+    const body = content.replace(/^---\n[\s\S]*?\n---\n/, "");
+    const lineCount = body.split("\n").length;
+    expect(lineCount).toBeLessThan(500);
   });
 });
 
@@ -111,23 +119,7 @@ describe("nuka skill (process)", () => {
       expect(tsxStderr).toBe("");
 
       expect(distStdout.trim()).toBe(tsxStdout.trim());
-      expect(distStdout.trim()).toBe(path.join(repoRoot, "skills", "acceptance"));
-    } finally {
-      await removeTempDir(rootDir);
-    }
-  });
-
-  it("installs the skill end to end when run against the built dist/cli.js", async () => {
-    const cliPath = path.join(repoRoot, "dist", "cli.js");
-    const rootDir = await createEmptyTempDir();
-    try {
-      const { stdout, stderr } = await execFileAsync(process.execPath, [cliPath, "skill", "install"], {
-        cwd: rootDir,
-      });
-      expect(stderr).toBe("");
-      expect(stdout.trim()).toBe(path.join(".claude", "skills", "nukadoko-acceptance"));
-      const installedPath = path.join(rootDir, ".claude", "skills", "nukadoko-acceptance", "SKILL.md");
-      expect(existsSync(installedPath)).toBe(true);
+      expect(distStdout.trim()).toBe(skillDir);
     } finally {
       await removeTempDir(rootDir);
     }

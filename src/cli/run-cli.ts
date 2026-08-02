@@ -12,15 +12,15 @@ import { runInit } from "./init.js";
 import { runRun } from "./run.js";
 import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
-import { runSkillInstall, runSkillPath } from "./skill.js";
+import { runSkillPath } from "./skill.js";
 import { loadVocabulary, describeContract, formatVocabularyError, summarize } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
 // `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `accept`,
-// `skill path`/`install`) to yargs and turns any failure — yargs' own (bad
-// flags, no command) or ours (config/discovery errors, unknown step name) —
-// into stderr output plus a non-zero exit code, without ever calling
+// `skill path`) to yargs and turns any failure — yargs' own (bad flags, no
+// command) or ours (config/discovery errors, unknown step name) — into
+// stderr output plus a non-zero exit code, without ever calling
 // `process.exit` itself. That is `cli.ts`'s job, so this function stays
 // callable directly from tests. `do`'s own setup/execution split and
 // receipt writing lives in cli/do.ts; `session`'s own list/clear logic
@@ -29,9 +29,10 @@ import type { WritableSink } from "./writable-sink.js";
 // cli/check.ts (thin wiring) and src/check/* (the actual checks); `accept`'s
 // own run-selection and record-rendering logic lives in cli/accept.ts and
 // src/accept/* (m4b-accept task spec), the same split; `skill`'s own path
-// resolution and install logic lives in cli/skill.ts (m5a-acceptance-skill
-// task spec), the same split; this module only wires their argv shapes and
-// reports their exit codes.
+// resolution logic lives in cli/skill.ts (m5a-acceptance-skill task spec,
+// `install` removed in m5e-skill-spec-compliance — see that file's header),
+// the same split; this module only wires their argv shapes and reports
+// their exit codes.
 
 export type { WritableSink } from "./writable-sink.js";
 
@@ -89,8 +90,6 @@ interface AcceptArgs {
 }
 
 type SkillPathArgs = Record<string, never>;
-
-type SkillInstallArgs = Record<string, never>;
 
 export async function runCli(
   argv: readonly string[],
@@ -390,23 +389,13 @@ export async function runCli(
     },
   };
 
-  const skillInstallCommand: CommandModule<Record<string, never>, SkillInstallArgs> = {
-    command: "install",
-    describe: "copy the acceptance skill into .claude/skills/nukadoko-acceptance/",
-    handler: async () => {
-      if (argsFailed) return;
-      exitCode = await runSkillInstall({ rootDir, stdout, stderr });
-    },
-  };
-
   const skillCommand: CommandModule = {
     command: "skill",
-    describe: "path|install the agent-facing acceptance skill",
-    builder: (y: Argv) =>
-      y.command(skillPathCommand).command(skillInstallCommand).demandCommand(1).strict(),
+    describe: "path the agent-facing acceptance skill's source directory",
+    builder: (y: Argv) => y.command(skillPathCommand).demandCommand(1).strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // one of `path`/`install`, same pattern as `sessionCommand` below.
+      // `path`, same pattern as `sessionCommand` below.
     },
   };
 

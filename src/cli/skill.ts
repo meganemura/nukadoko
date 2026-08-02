@@ -1,17 +1,23 @@
 import { existsSync } from "node:fs";
-import { cp, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: `nuka skill path`/`nuka skill install` (docs/spec.md "CLI
-// summary", M5 roadmap slice A). `path` is the primary verb: which agent
-// harness a user runs is theirs to choose, not nukadoko's, so the package
-// only ever commits to naming where its own skill sources live on disk.
-// `install` exists purely as a convenience default for the one harness this
-// project itself develops against (Claude Code's `.claude/skills/<name>/`
-// layout) — anyone using a different harness is expected to read the path
-// `path` prints and place it themselves.
+// Responsibility: `nuka skill path` (docs/spec.md "CLI summary", M5 roadmap
+// slice A). `path` is the only verb: printing where this package's own
+// skill sources live on disk is a fact about the installed nukadoko, not a
+// choice nukadoko should be making on a user's behalf.
+//
+// There used to be a `nuka skill install` here too, copying the skill into
+// Claude Code's `.claude/skills/<name>/` layout. It was removed: `gh skill
+// install` (GitHub CLI v2.90.0+) and Claude Code's own plugin marketplace
+// already do that job — across every host the open Agent Skills
+// specification targets, not just one — so a hand-rolled copier here was a
+// single-host degraded third path with nothing `path` didn't already offer.
+// `path` stays because it is the only route guaranteed to match the
+// nukadoko version actually installed via npm: `gh skill install` and the
+// plugin marketplace both fetch from wherever they're configured to, which
+// need not be this exact version.
 //
 // Skill sources ship under `skills/` at the package root, not under
 // `dist/`, and are resolved from *this file's own* `import.meta.url` rather
@@ -33,8 +39,6 @@ function acceptanceSkillDir(): string {
   return path.join(packageRoot(), "skills", "acceptance");
 }
 
-export const SKILL_NAME = "nukadoko-acceptance";
-
 export interface RunSkillPathOptions {
   stdout: WritableSink;
   stderr: WritableSink;
@@ -50,41 +54,5 @@ export async function runSkillPath(options: RunSkillPathOptions): Promise<number
   }
 
   stdout.write(`${dir}\n`);
-  return 0;
-}
-
-export interface RunSkillInstallOptions {
-  rootDir: string;
-  stdout: WritableSink;
-  stderr: WritableSink;
-}
-
-export async function runSkillInstall(options: RunSkillInstallOptions): Promise<number> {
-  const { rootDir, stdout, stderr } = options;
-  const sourceDir = acceptanceSkillDir();
-
-  if (!existsSync(sourceDir)) {
-    stderr.write(
-      `nuka skill: skill source not found at ${sourceDir} (a packaging bug, not a project issue)\n`,
-    );
-    return 1;
-  }
-
-  const destDir = path.join(rootDir, ".claude", "skills", SKILL_NAME);
-
-  // Refuse rather than overwrite: an existing directory here may hold a
-  // user's own edits to the skill, and nukadoko has no way to tell the two
-  // apart, so it never gets to decide that overwriting is safe.
-  if (existsSync(destDir)) {
-    stderr.write(
-      `nuka skill: ${path.relative(rootDir, destDir)} already exists — refusing to overwrite it. Remove it yourself first, or place the skill by hand from \`nuka skill path\`.\n`,
-    );
-    return 1;
-  }
-
-  await mkdir(path.dirname(destDir), { recursive: true });
-  await cp(sourceDir, destDir, { recursive: true });
-
-  stdout.write(`${path.relative(rootDir, destDir)}\n`);
   return 0;
 }
