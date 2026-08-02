@@ -30,7 +30,7 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   errors.push(...configResult.errors);
   warnings.push(...configResult.warnings);
 
-  const bindingResult = checkBindings(vocabulary);
+  const bindingResult = checkBindings(vocabulary, config.parameterTypes);
   errors.push(...bindingResult.issues);
 
   const { features, parseErrors } = loadFeatures(rootDir, config.featuresDir);
@@ -41,7 +41,7 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
       file: parseError.relativePath,
     });
   }
-  const featureResult = checkFeatures(features, vocabulary, bindingResult.patterns);
+  const featureResult = checkFeatures(features, vocabulary, bindingResult.patterns, config.parameterTypes);
   errors.push(...featureResult.errors);
   warnings.push(...featureResult.warnings);
 

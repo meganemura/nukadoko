@@ -77,7 +77,7 @@ describe("checkBindings", () => {
     expect(result.patterns).toEqual([]);
   });
 
-  it("flags an unknown parameter type, mentioning registration is not designed yet", () => {
+  it("flags an unknown (unregistered) parameter type name", () => {
     const step = defineStep({
       pattern: "a {value:frobnicate} thing",
       description: "d",
@@ -90,7 +90,7 @@ describe("checkBindings", () => {
     const result = checkBindings(vocab({ "frob-thing": step }));
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]?.code).toBe("unknown-parameter-type");
-    expect(result.issues[0]?.message).toContain("registration is not designed yet");
+    expect(result.issues[0]?.message).toContain("Undefined parameter type 'frobnicate'");
   });
 
   it("flags a captured key that isn't in the args schema", () => {
@@ -206,5 +206,40 @@ describe("checkBindings", () => {
     });
     const result = checkBindings(vocab({ "duplicate-a": stepA, "duplicate-b": stepB }));
     expect(result.issues).toEqual([expect.objectContaining({ code: "duplicate-pattern" })]);
+  });
+
+  it("reports a single parameter-type-invalid issue (not per-pattern) when a custom type collides with a built-in", () => {
+    const step = defineStep({
+      pattern: "a {value:string} thing",
+      description: "d",
+      args: z.object({ value: z.string() }),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const result = checkBindings(vocab({ "some-step": step }), [
+      { name: "int", regexp: /x/ },
+    ]);
+    expect(result.issues).toEqual([expect.objectContaining({ code: "parameter-type-invalid" })]);
+    expect(result.patterns).toEqual([]);
+  });
+
+  it("reports parameter-type-invalid for two config.parameterTypes entries sharing a name", () => {
+    const step = defineStep({
+      pattern: "a {value:string} thing",
+      description: "d",
+      args: z.object({ value: z.string() }),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const result = checkBindings(vocab({ "some-step": step }), [
+      { name: "custom-a", regexp: /x/ },
+      { name: "custom-a", regexp: /y/ },
+    ]);
+    expect(result.issues).toEqual([expect.objectContaining({ code: "parameter-type-invalid" })]);
+    expect(result.patterns).toEqual([]);
   });
 });

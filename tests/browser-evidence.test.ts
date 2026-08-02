@@ -32,6 +32,7 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     featuresDir: "features",
     stateDir: ".nukadoko",
     envFiles: [],
+    parameterTypes: [],
     secrets: { public: [] },
     ...overrides,
   };

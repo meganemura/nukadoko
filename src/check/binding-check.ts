@@ -1,9 +1,11 @@
 import { CucumberExpression } from "@cucumber/cucumber-expressions";
 import { UndefinedParameterTypeError } from "@cucumber/cucumber-expressions/dist/Errors.js";
 import { type Capture, stripCaptureNames } from "../binding/pattern.js";
+import { ParameterTypeCollisionError } from "../binding/parameter-type-errors.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { InvalidCaptureKeyError, UnnamedCaptureError, UnterminatedCaptureError } from "../binding/errors.js";
 import { asObjectShape, classifyPrimitive } from "../binding/schema-shape.js";
+import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { CheckIssue } from "./types.js";
 
@@ -61,14 +63,37 @@ function expressionErrorToIssue(error: unknown, stepName: string, pattern: strin
   if (error instanceof UndefinedParameterTypeError) {
     return {
       code: "unknown-parameter-type",
-      message: `${context}: ${message} (custom parameter type registration is not designed yet)`,
+      message: `${context}: ${message}`,
       step: stepName,
     };
   }
   return { code: "pattern-syntax-error", message: `${context}: ${message}`, step: stepName };
 }
 
-export function checkBindings(vocabulary: Vocabulary): BindingCheckResult {
+export function checkBindings(
+  vocabulary: Vocabulary,
+  customTypes: readonly ParameterTypeConfig[] = [],
+): BindingCheckResult {
+  // A name collision in config.parameterTypes (against a built-in type or
+  // another entry in the same list) is a config-authoring error, not
+  // something any individual pattern did wrong (this task's spec, decision
+  // 3) — reported once, here, as its own issue rather than once per pattern
+  // that would otherwise have used the registry. No pattern can be checked
+  // at all without a working registry, so `patterns` is empty in this case,
+  // same as any other early return below.
+  let registry: ReturnType<typeof createParameterTypeRegistry>;
+  try {
+    registry = createParameterTypeRegistry(customTypes);
+  } catch (error) {
+    if (error instanceof ParameterTypeCollisionError) {
+      return {
+        issues: [{ code: "parameter-type-invalid", message: error.message }],
+        patterns: [],
+      };
+    }
+    throw error;
+  }
+
   const issues: CheckIssue[] = [];
   const patterns: CheckedPattern[] = [];
   // strippedPattern -> every (stepName, pattern) that normalizes to it,
@@ -76,7 +101,6 @@ export function checkBindings(vocabulary: Vocabulary): BindingCheckResult {
   // per-step (this task's spec, item 4: "重複 pattern").
   const strippedTextOwners = new Map<string, { stepName: string; pattern: string }[]>();
 
-  const registry = createParameterTypeRegistry();
   const entries = [...vocabulary.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   for (const entry of entries) {

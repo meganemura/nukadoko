@@ -115,3 +115,64 @@ describe("configSchema: environments", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("configSchema: parameterTypes", () => {
+  it("defaults to an empty list when omitted", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.parameterTypes).toEqual([]);
+    }
+  });
+
+  it("accepts a well-formed entry with a RegExp and a transformer", () => {
+    const transformer = (s: string) => s === " not";
+    const result = configSchema.safeParse({
+      parameterTypes: [{ name: "negation", regexp: /( not)?/, transformer }],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.parameterTypes).toEqual([
+        { name: "negation", regexp: /( not)?/, transformer },
+      ]);
+    }
+  });
+
+  it("accepts a string regexp, and an entry with no transformer at all", () => {
+    const result = configSchema.safeParse({
+      parameterTypes: [{ name: "loud", regexp: "[A-Z]+" }],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.parameterTypes).toEqual([{ name: "loud", regexp: "[A-Z]+" }]);
+    }
+  });
+
+  it("rejects a name outside [a-zA-Z0-9_-]+", () => {
+    const result = configSchema.safeParse({
+      parameterTypes: [{ name: "not valid!", regexp: /x/ }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a regexp that is neither a RegExp nor a string", () => {
+    const result = configSchema.safeParse({
+      parameterTypes: [{ name: "oops", regexp: 42 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-function transformer", () => {
+    const result = configSchema.safeParse({
+      parameterTypes: [{ name: "oops", regexp: /x/, transformer: "not a function" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown key inside an entry", () => {
+    const result = configSchema.safeParse({
+      parameterTypes: [{ name: "oops", regexp: /x/, typo: true }],
+    });
+    expect(result.success).toBe(false);
+  });
+});

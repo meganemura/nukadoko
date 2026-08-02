@@ -7,7 +7,7 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
-import { buildStepBindings } from "../run/match-step.js";
+import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { runScenario } from "../run/run-scenario.js";
 import { selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -123,7 +123,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     // --- Execution phase: from here, every pickle that begins gets a
     // scenario record written, whatever happens inside it. ---
-    const bindings = buildStepBindings(vocabulary);
+    // Building bindings is the one exception: it happens once, before any
+    // pickle's own record exists, so a config.parameterTypes name collision
+    // here (src/binding/registry.ts's ParameterTypeCollisionError) is treated
+    // as a setup failure, not a scenario failure (m2pre-parameter-types task
+    // spec, decision 3) — no scenario record is ever written for it.
+    let bindings: readonly StepBinding[];
+    try {
+      bindings = buildStepBindings(vocabulary, config.parameterTypes);
+    } catch (error) {
+      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
 
     const probeResult = await probeVersion(resolvedEnv.version);
     let targetVersion: string | undefined;

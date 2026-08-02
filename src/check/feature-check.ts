@@ -3,6 +3,7 @@ import { PickleStepType } from "@cucumber/messages";
 import { escapeReservedChars } from "../binding/escape-hint.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
+import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FeatureFile } from "../feature/load-features.js";
 import type { CheckedPattern } from "./binding-check.js";
@@ -45,8 +46,22 @@ interface MatchResult {
 // when it turns a non-match into a match, names both the cause (unescaped
 // reserved syntax) and the fix in the same breath. Returns undefined (no
 // hint) rather than guessing when the escaped variant still doesn't match.
-function findEscapeHint(text: string, patterns: readonly CheckedPattern[]): CheckedPattern | undefined {
-  const registry = createParameterTypeRegistry();
+function findEscapeHint(
+  text: string,
+  patterns: readonly CheckedPattern[],
+  customTypes: readonly ParameterTypeConfig[],
+): CheckedPattern | undefined {
+  // A config.parameterTypes collision would already have been reported once
+  // by src/check/binding-check.ts as `parameter-type-invalid` — this second
+  // attempt to build a registry exists only for the escape-hint's own
+  // rebuild-with-escaping check, so a failure here is silently "no hint"
+  // rather than a second report of the same root cause.
+  let registry: ReturnType<typeof createParameterTypeRegistry>;
+  try {
+    registry = createParameterTypeRegistry(customTypes);
+  } catch {
+    return undefined;
+  }
   for (const candidate of patterns) {
     const source = candidate.expression.source;
     const escaped = escapeReservedChars(source);
@@ -92,6 +107,7 @@ export function checkFeatures(
   features: readonly FeatureFile[],
   vocabulary: Vocabulary,
   patterns: readonly CheckedPattern[],
+  customTypes: readonly ParameterTypeConfig[] = [],
 ): FeatureCheckResult {
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -110,7 +126,7 @@ export function checkFeatures(
             continue;
           }
           reportedUndefinedText.add(step.text);
-          const escapeHint = findEscapeHint(step.text, patterns);
+          const escapeHint = findEscapeHint(step.text, patterns, customTypes);
           const hintSuffix = escapeHint
             ? ` — hint: would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped — cucumber-expressions reads bare ( ) as optional text and / as alternation`
             : "";

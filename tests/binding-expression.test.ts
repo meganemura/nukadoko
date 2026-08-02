@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildExpression } from "../src/binding/expression.js";
 import { UnnamedCaptureError } from "../src/binding/errors.js";
+import { ParameterTypeCollisionError } from "../src/binding/parameter-type-errors.js";
 import { createParameterTypeRegistry } from "../src/binding/registry.js";
 
 describe("createParameterTypeRegistry", () => {
@@ -11,6 +12,52 @@ describe("createParameterTypeRegistry", () => {
     expect(registry.lookupByTypeName("float")).toBeDefined();
     expect(registry.lookupByTypeName("word")).toBeDefined();
     expect(registry.lookupByTypeName("some-custom-type")).toBeUndefined();
+  });
+
+  it("registers a custom parameterTypes entry, transformer and all", () => {
+    const registry = createParameterTypeRegistry([
+      { name: "negation", regexp: /( not)?/, transformer: (s: string) => s === " not" },
+    ]);
+    const parameterType = registry.lookupByTypeName("negation");
+    expect(parameterType).toBeDefined();
+    expect(parameterType?.transform(null, [" not"])).toBe(true);
+    expect(parameterType?.transform(null, [undefined as unknown as string])).toBe(false);
+  });
+
+  it("defaults an omitted transformer to the matched string as-is", () => {
+    const registry = createParameterTypeRegistry([{ name: "loud", regexp: "[A-Z]+" }]);
+    expect(registry.lookupByTypeName("loud")?.transform(null, ["YES"])).toBe("YES");
+  });
+
+  it("throws ParameterTypeCollisionError('built-in') for a name that collides with int/float/word/string", () => {
+    expect(() => createParameterTypeRegistry([{ name: "int", regexp: /x/ }])).toThrow(
+      ParameterTypeCollisionError,
+    );
+    let caught: unknown;
+    try {
+      createParameterTypeRegistry([{ name: "int", regexp: /x/ }]);
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as ParameterTypeCollisionError).reason).toBe("built-in");
+    expect((caught as ParameterTypeCollisionError).typeName).toBe("int");
+    expect((caught as ParameterTypeCollisionError).message).toContain(
+      "quietly change the meaning",
+    );
+  });
+
+  it("throws ParameterTypeCollisionError('duplicate') for two custom entries sharing a name", () => {
+    let caught: unknown;
+    try {
+      createParameterTypeRegistry([
+        { name: "negation", regexp: /a/ },
+        { name: "negation", regexp: /b/ },
+      ]);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ParameterTypeCollisionError);
+    expect((caught as ParameterTypeCollisionError).reason).toBe("duplicate");
   });
 });
 

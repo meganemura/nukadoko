@@ -5,6 +5,7 @@ import { buildExpression } from "../binding/expression.js";
 import { type Capture } from "../binding/pattern.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
+import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 
 // Responsibility: the run-time half of capture-binding-design.md's shared
@@ -28,8 +29,18 @@ export interface StepBinding {
   readonly expression: CucumberExpression;
 }
 
-export function buildStepBindings(vocabulary: Vocabulary): readonly StepBinding[] {
-  const registry = createParameterTypeRegistry();
+/**
+ * @throws {ParameterTypeCollisionError} `customTypes` (config.parameterTypes)
+ *   names a type that collides with a built-in type or another entry in the
+ *   same list (src/binding/registry.ts) — a config-authoring error, not a
+ *   per-pattern one, so it is not caught here; callers (src/cli/run.ts) treat
+ *   it as a setup failure, same as any other malformed config.
+ */
+export function buildStepBindings(
+  vocabulary: Vocabulary,
+  customTypes: readonly ParameterTypeConfig[] = [],
+): readonly StepBinding[] {
+  const registry = createParameterTypeRegistry(customTypes);
   const bindings: StepBinding[] = [];
   for (const entry of vocabulary.values()) {
     for (const pattern of entry.step.patterns) {
@@ -66,9 +77,20 @@ export type MatchOutcome =
  * only two *different* steps matching is (the same rule src/check/
  * feature-check.ts applies statically). Coercion happens here via
  * `Argument.getValue` (the parameter type's transformer, e.g. `{int}` ->
- * number); no custom parameter type can be registered yet
- * (src/binding/registry.ts), so every transformer in play today is
- * synchronous.
+ * number, or a `config.parameterTypes` entry's own transformer). Neither
+ * `getValue` nor this function ever `await`s the result, so a custom
+ * transformer must be synchronous — an async one would hand back an
+ * unresolved Promise as the captured value instead of the value it resolves
+ * to, which then fails the step's own args schema. If a transformer throws,
+ * that throw propagates unchanged, straight out of this function (this
+ * task's spec, decision 5: cucumber-expressions itself does no try/catch
+ * around a transformer call, and this module deliberately adds none of its
+ * own) — src/run/run-scenario.ts calls this function outside any try/catch
+ * of its own too, so today that surfaces as an uncaught exception failing
+ * the whole `nuka run` invocation, not a per-step failed receipt. `nuka
+ * check` never reaches this code path at all: src/check/feature-check.ts's
+ * own matching only calls `expression.match()`, never `Argument.getValue()`,
+ * so a transformer is only ever invoked at `nuka run` time.
  */
 export function matchPickleStep(text: string, bindings: readonly StepBinding[]): MatchOutcome {
   const byStep = new Map<string, { binding: StepBinding; args: readonly Argument[] }>();
