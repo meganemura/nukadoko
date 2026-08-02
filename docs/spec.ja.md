@@ -8,7 +8,8 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off だけが設計としてのみ存在します。
+Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off と skill はどちらも設計としてのみ存在します。
+`nuka skill` にはまだ実装がありません。
 
 ## nukadoko とは
 
@@ -334,7 +335,7 @@ Cucumber が持ったことのない実行インフラです:
   daemon はありません。
 - **Environment** はデプロイ先に名前を付けます。
   environment ごとの `baseURL`、`envFiles`、`policy: "read-only"`(mutate する step を拒否する)、そしてすべての receipt に `target_version` として記録される、任意の `version` プローブです。
-  sign-off は、引用された receipt が 1 つの environment と version を共有していることを機械的にチェックします。
+  sign-off は両方を凍結するので、記録はそれが green だったデプロイ先を名指しします。
 - **Secret**。
   分類するのは git です。
   git が追跡していない env file(ignore されているか untracked)は secret の源です。
@@ -386,26 +387,62 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 
 ## Sign-off
 
-sign-off は「基準は満たされた」という、会話の中で蒸発してしまう主張を、記録されレビュー可能な成果物に変えます:
+sign-off は、合意された scenario が、名指しされた 1 つの commit で green だったことを記録します。
+それは受け入れのために存在し(チケットの基準が一度満たされたことを確認する)、regression のためではありません。
+scenario はチケットの受け入れ基準から書かれ、green になるまで実行され、その後記録として保持されます。
+後で再実行することが目的ではなく、nukadoko の中で再実行するものは何もありません。
 
 ```sh
-nuka signoff create \
-  --criteria 'A project can be created and looked up by id' \
-  (--receipts <id,...> | --scenario <feature:line>) \
-  --reasoning 'create-project returned ok; get-project returned the same name'
+nuka run acceptance/PROJ-123.feature     # 必要なだけ何度でも実行する
+nuka accept acceptance/PROJ-123.feature  # 直近の green な run を凍結する
 ```
 
-- 作成時の機械チェック: 引用されたすべての receipt が存在し、ok であり、1 つの environment と(probe された場合は)1 つの `target_version` を共有していること。
-  scenario を引用する場合はさらに scenario record もチェックされ、すべての step が順番どおりに ok で実行されたことが確認されます。
-  scenario の引用が主たる形態です(レビューされ green で通った feature)。
-  個々の receipt id を明示することが、それ以外の ad-hoc な部分をカバーします。
-- reasoning(これらの事実がなぜその基準を証明するのか)は判断です。
-  nukadoko はそれを評価せず、引用する事実から恒久的に切り離した上で、人間のレビューのために保存します。
-- plan のサブシステムはありません。
-  「何がこれを証明するのか」という問いに答えるのは feature ファイルとそれが結び付く型付き step であり、両方とも git ネイティブなやり方(PR レビュー、CODEOWNERS、マージ)で承認されます。
+- `accept` は実行しません。
+  sign-off は明示的な行為であり、green な run の副作用ではありません(「通るまで accept し続ける」は意味のあるループではありません)。
+  それはその feature の直近の green な run を取り、それを凍結します。
+  run は feature のパスで識別され、id では識別されません(run id は `nuka run` の出力を読む機械のためにあり、人間が入力するものではありません)。
+- working tree が完全にクリーンで(untracked file を含む)、かつ凍結しようとしている run が現在の HEAD で行われたのでなければ拒否します。
+  記録の主張はまるごと「この scenario は commit X で green だった」というものです。
+  discovery が読み込んだはずの untracked な step ファイルや、run と sign-off の間に行われたコミットは、その主張を偽にします。
+  scenario record はこれをチェック可能にするために 1 つのフィールドを増やします(run が始まったときに working tree がどの commit にあったか)。
+- red な run は何も生みません。
+  verdict のフィールドも失敗の記録もありません(通らなかった scenario は直されて再実行され、残す価値があるのは結果であって、試行そのものではありません)。
+- 記録は、それが由来する feature の隣に `<feature-basename>.<date>-<sha>.md` という名前で書かれます。
+  nukadoko はディレクトリを選びません(受け入れの作業をどこに置くかはプロジェクトの決定です)。
+  これらを regression suite から外したいプロジェクトは feature を `featuresDir` の外に置き、記録もそこに追従します。
+- それは feature の全文、scenario record、そして evidence を取り除いた各 step の receipt を運びます(trace とスクリーンショットは `.nukadoko/` に留まり、それらが必要になったときの居場所は CI の artifact です)。
+  コピーはツールが作り、人間が書き写すことは決してありません(書き写しは、計測を主張へと格下げしてしまいます)。
+- Gherkin にすでにその場所があるので、記録の中にはチケットへのリンクは何もありません。
+  tag と `Feature:` の下の自由な説明文が、チケットの id、その URL、そしてレビュアー自身の言葉による受け入れ基準を運びます。
+  feature を凍結すればそのすべてが凍結されます。
+  nukadoko はチケットという概念を持たず、必要ともしません。
+- plan のサブシステムも reasoning のフィールドもありません。
+  「何がこれを証明するのか」という問いに答えるのは feature ファイルとそれが結び付く型付き step であり、scenario が本当にその基準を表しているという判断は、その翻訳が起きる場所、つまりその feature の PR レビューという git ネイティブなやり方で下されます。
   sign-off は、合意されたチェックが実際に実行されたことの記録です。
-- sign-off の記録は、コミットされることを意図した小さな構造化ファイルです(デフォルトは `docs/acceptance/`)。
-  検証がどう進化したかは git の履歴が運び、CI のトリップワイヤ(「docs/acceptance 配下に変更がなければプロダクトの PR を失敗させる」)が記録する習慣を生かし続けます。
+
+sign-off は常に過去形でしか語らず、それが requirements traceability matrix のように腐っていくのを防ぎます。
+matrix はシステムの今の姿を記述すると主張するため、システムが動いた瞬間にずれていきます。
+「commit X で green だった」は永遠に真であり続けます。
+記録があえて主張しないのは、ソフトウェアが今日もその振る舞いを保っているということです。
+
+### 受け入れループ
+
+チケットの受け入れ基準を渡されたとき、agent が行うことです。
+
+1. 語彙を読みます(`nuka steps --json`、そして関連しそうなものの契約については `nuka describe <step>`)。
+2. 操作が欠けているときは `nuka scaffold <name>` し、それを実装し、receipt が正しく見えるまで `nuka do` で単体で動かします。
+3. feature を書きます。
+   tag と `Feature:` の下の説明文が、チケットの id とレビュアーの言葉による基準を運びます。
+   scenario は、その基準を語彙に翻訳したものです。
+4. 何かが実行される前に、`nuka check` を行います(未定義の step、pattern と schema の不一致、mutate する step に結び付いた Then)。
+5. commit します。
+   run は、まだチェックアウトされているその commit で、クリーンな working tree に対して行われた場合にしか凍結できないため、dirty な working tree に対するデバッグ用の run はかまいません。
+   ただそれらは accept できないだけです。
+6. green になるまで `nuka run` します。
+7. `nuka accept <feature>` し、それが書いた記録を commit します。
+
+手順 1-4 が作業とレビューの場所です(新しい型付き step と feature 自体は通常の PR の題材であり、基準から scenario への翻訳こそがレビュアーがチェックするための判断です)。
+手順 5-7 は機械的であり、ツールは静かに誤って進むのではなく拒否します。
 
 ## Allure emitter
 
@@ -526,7 +563,8 @@ nuka scaffold <name>          typed step template that fails until implemented
 nuka check                    static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, duplicate patterns, config coherence
-nuka signoff create|list|show verification records
+nuka accept <feature>         freeze that feature's last green run as a
+                              committed acceptance record beside it
 nuka session list|clear
 nuka init [--base-url <url>]  set up a project; ends with a self-check
 nuka skill path|install       install the agent-facing skill
@@ -538,8 +576,8 @@ nuka skill path|install       install the agent-facing skill
   ツールが保証するのは入出力の形と、実行された事実だけです。
 - nukadoko は、shell アクセスを持つ agent が `.env` を直接読むことを止められません。
   nukadoko がなくすのは、secret が agent の context を通過する構造的な必要性です。
-- sign-off は証明ではありません。
-  それは判断についての、耐久性がありレビュー可能な記録です。
+- sign-off は、ソフトウェアが正しいことの証明ではありません。
+  それは、合意された scenario が名指しされた 1 つの commit で green だったことを記録するものであり、今日について何も語りません。
 - テストの並列実行、sharding、retry、CI レポーティングはありません。
   nukadoko 自身による outbound のネットワーク I/O もありません。
   HTML のレンダリングもありません。
@@ -552,7 +590,16 @@ nuka skill path|install       install the agent-facing skill
 - **M2(compat API)**: `nukadoko/compat`(Given/When/Then/World/hooks のサブセット)、cucumber-js + Playwright のスイート向け移行ガイド。
 - **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)エミッタ(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results エミッタ。
   drop-in なダッシュボードのストーリー。
-- **M4(sign-off)**: 記録、機械チェック、CI トリップワイヤのレシピ。
+- **M4(sign-off)**: `nuka accept`、それが拒否の根拠にする commit と working tree のクリーンさのチェック、そして feature の隣に書かれる凍結された記録です。
+- **M5(skills)**: `nuka skill path|install` と、それが同梱する skill です。
+  CLI は意図的に小さな動詞の集まりです。
+  skill は、それらを agent が指示なしに従えるワークフローに変えるものであり、そのどれもエンジンを変えません。
+  2 つが計画されています。
+  **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、そして green になるまで `run` して `accept` する)。
+  M4 が必要です。
+  **migration skill** は compat の監査が計測したことを運びます(実際の cucumber-js のスイートが実際にぶつかる gap を、ドキュメントの順序ではなくつまずく順序で)。
+  必要なのは M2 だけなので、先に来ることができます。
+  このマイルストーンが実現するまで、上で言及された「同梱の skill」は存在しません。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート
