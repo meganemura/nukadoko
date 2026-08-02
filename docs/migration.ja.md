@@ -34,13 +34,34 @@ import { Given, When, Then } from "nukadoko/compat";
 その import より下は、変更せずにそのまま動き続けます:
 
 - string と RegExp の pattern は、cucumber-js が一致させるのとまったく同じように一致します(named capture は要求されません。その規律は typed step のものです)。
-- `World`(`this`)、単一の `@tag` または `not @tag` でフィルタされる `Before`/`After` フック、カスタムの `setWorldConstructor` サブクラス。
+- `Given(pattern, fn)` と `Given(pattern, { timeout }, fn)` のどちらの登録形も受け付け、その `timeout` は尊重されます。
+- `World`(`this`)、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、裸の文字列の `Before("@tag", fn)`)で書ける、単一の `@tag` または `not @tag` でフィルタされる `Before`/`After` フック、カスタムの `setWorldConstructor` サブクラス。
+  フックは cucumber 自身のフック引数を受け取るので、`Before(function ({ pickle }) {...})` は書いたとおりに動きます。
 - `DataTable`(`raw()`/`rows()`/`hashes()`/`rowsHash()`/`transpose()`)。
   `table.hashes()` を呼ぶ step は書いたとおりにそのまま動き続けます(摩擦ゼロで、examples/migration 自身のスイートを移行する形で計測済みです)。
 - glue 内の `allure.*` 呼び出し(`attach`/`log`/`link`、ラベル、パラメータ)は、消えるのではなく receipt の `declared` フィールドに入ります。
 
-静かに誤動作する代わりに大きな声で失敗するものもあります: `BeforeAll`、`AfterAll`、`setDefaultTimeout` は `nukadoko/compat` から一切 export されておらず、これらを import すると欠けている export の名前を挙げた即座のエラーになります。
-単一の `@tag`/`not @tag` を超える hook のタグ式(`and`/`or`/括弧)も、`nuka run` した瞬間に同じように失敗します。
+### 切り替えで引き継がれないもの
+
+公開されている cucumber-js のスイート 8 本を、この扉に対して監査しました。
+glue はテキストとして読むだけで、実行はしていません。
+**import の差し替えだけで通ったものは 1 つもありません**。
+そのため、差し替えの前に短い準備を見込んでおいてください。
+以下はどれも、import の時点か最初の `nuka run` で、大きな声で失敗します。
+だからこの準備は、探し物ではなく順にこなせるリストです。
+
+- **`nukadoko/compat` がエクスポートしていない名前**: `BeforeAll`、`AfterAll`、`setDefaultTimeout`、`AfterStep`、`Status`、`setParallelCanAssign`、および `IWorldOptions` / `ITestCaseHookParameter` の型です。
+  8 本すべてのスイートが、このうち少なくとも 1 つを import していました。
+  ES モジュールの named import はリンク時に解決されるため、サポートされていない名前が 1 つあるだけで、import 文全体(ひいてはそのファイル)が丸ごと落ちます。
+  import を分割するか、その呼び出しを削ってください。
+- **CommonJS の glue**: nukadoko は ESM 専用なので、`require("nukadoko/compat")` は `ERR_PACKAGE_PATH_NOT_EXPORTED` で即座に失敗します。
+  8 本のうち 2 本は、全体が CommonJS のスイートでした。
+  この扉が受け入れるのは ES module の glue だけです。
+- **深い subpath の import**(`import DataTable from "@cucumber/cucumber/lib/models/data_table"` など)には、ここでは対応するものがありません。
+  代わりに `nukadoko/compat` から `DataTable` を import してください。
+- **単一の `@tag` / `not @tag` を超える hook のタグ式**(`and`、`or`、括弧)は、`nuka run` した瞬間に失敗します。
+- step や hook から **`"pending"` または `"skipped"` を返すこと**、および **done コールバックの glue**(`function (arg, done) {...}`)は、それぞれ代わりに何を書くべきかを示すメッセージ付きで失敗します。
+  cucumber-js はこの両方に意味を持たせていますが、nukadoko は持たせておらず、step を通過させる代わりにそう伝えます。
 
 `nuka run features/your.feature` でスイートを実行します。
 あらゆる step が receipt を得るようになり、それ以外に何かを変える必要はありません。

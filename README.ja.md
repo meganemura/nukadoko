@@ -136,12 +136,15 @@ export default defineStep({
 **M2: compat という戻り口。**
 既存の Cucumber + Playwright スイートの移行経路は、import を 1 つ差し替えることです。
 `@cucumber/cucumber` の代わりに `nukadoko/compat` を使います。
-pattern の構文も World もそのまま動き続け、その裏で nukadoko のハーネスが receipt の計測を始めます。
-コードは変わらず、diff は 1 行です。
+pattern の構文も、hooks も、World もそのまま動き続け、その裏で nukadoko のハーネスが receipt の計測を始めます。
+他に何がどれだけ変わるかは、推測ではなく実測しました。
+公開されている cucumber-js のスイート 8 本のうち、import の差し替えだけで通ったものはゼロでした。
+どのスイートも先に、短い機械的な準備が必要でした(`nukadoko/compat` がエクスポートしていない import がいくつかある、CommonJS のスイートではモジュール形式の変更が要る、など)。
+そうした障害はどれも、スイートの振る舞いを静かに変えるのではなく、import の時点か最初の実行でうるさく失敗します。
 step を `defineStep` に昇格させるかどうかは、そのあと step ごとの判断になります。
 戻り口は逆方向にも開いています。
 import を戻せば、ただの cucumber-js に戻ります。
-手順を追ったガイドは [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](examples/migration) を参照してください。
+手順を追ったガイド(監査結果も収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](examples/migration) を参照してください。
 
 **M3(設計済み、未実装): レポートが自動で満ちる。**
 従来の Cucumber の実行でレポートに映る evidence は、チームが自分で配線した分です(trace やスクリーンショットのためのフック boilerplate を、プロジェクトごとに書いて保守する形)。

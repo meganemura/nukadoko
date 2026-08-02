@@ -6,7 +6,9 @@
 
 Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`/`scaffold`、session、environment、secret)。
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
-Pre-0.1 で、実世界での検証ゲート(後述、実装ノート)はまだこれからであり、M3 以降(Allure / messages の emitter、sign-off)は設計としてのみ存在します。
+実世界での検証ゲートは、いまや両方とも実行済みです。
+typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
+Pre-0.1 で、M3 以降(Allure / messages の emitter、sign-off)は設計としてのみ存在します。
 
 ## nukadoko とは
 
@@ -189,6 +191,8 @@ import { Given, When, Then } from "nukadoko/compat";
   キーワードは登録時には何も意味せず、実行時に scenario 内の位置が決めます(Cucumber とまったく同じです)。
   pattern は文字列(素の cucumber-expressions。named capture はここでは要求されません(その規律は typed step のものです))または RegExp です。
   レガシーな glue は regex が多く、扉はそれを受け入れなければならないからです。
+  cucumber-js の両方の呼び出し形、`Given(pattern, fn)` と `Given(pattern, { timeout }, fn)` にそのまま対応し、`timeout` は尊重されます。
+  認識できないオプションキーは、消えてなくなるのではなく登録時に例外を投げます。
   discovery はファイルを import し、各登録をそれを行ったファイルに帰属させます。
   compat step の同一性はその pattern テキストで、`nuka steps` は kind 付きで列挙し、`nuka describe` は「持っていない契約」を明示し、`nuka do` は名指し実行を拒否します。
   単体実行が欲しくなったら、それが `defineStep` への昇格で手に入るものです。
@@ -202,7 +206,8 @@ import { Given, When, Then } from "nukadoko/compat";
   table は依存ゼロの薄い `DataTable`(raw / rows / hashes / rowsHash / transpose)として届きます。
   `table.hashes()` を呼ぶ glue が import の差し替えで壊れてはならないからです。
   docstring は素の string のままです。
-  Before / After フックのタグ絞り込みは `@tag` と `not @tag` のみで、それ以上の式は黙って誤マッチする代わりに大きな声で失敗します。
+  Before / After フックは、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、`Before("@tag", fn)`)のどれでも書け、cucumber 自身のフック引数を受け取ります。
+  タグ絞り込みは `@tag` と `not @tag` のみで、それ以上の式は黙って誤マッチする代わりに大きな声で失敗します。
   フックは receipt ではなく scenario record の `hooks` 配列に現れ、フック中のネットワークはどの step の境界にも属しません。
 - World は常に計測されます。
   すべての compat step の receipt は、その step が World のどのキーを読み書きしたかをアクセス順で記録します(`this.foo` が隠していたデータフローです)。
@@ -214,6 +219,12 @@ import { Given, When, Then } from "nukadoko/compat";
 - harness がブラウザと request のオブジェクトを所有しているため、compat の step もコードを一切変更せずに、計測済みの receipt(status、timing、trace、screenshots、HTTP log)をすでに得られます。
 - compat の step に欠けているのは、型付きの契約、receipt 内でバリデーションされた `result`、単体 step の CLI 実行、そして Then の強制です。
   よく使う step を `defineStep` に昇格させることが、1 step ずつ進めるアップグレードです。
+- 扉の幅は、主張ではなく計測されています。
+  公開されている cucumber-js のスイート 8 本を、この扉に対して監査しました(glue はテキストとして読んだだけで、実行はしていません)。
+  どのスイートも import の差し替えだけでは通らず、それぞれが最初に何を必要としたかは [docs/migration.ja.md](migration.ja.md) に列挙されています。
+  そこから導かれ、監査の発見が注ぎ込まれた規則はこうです: compat が対応しないものは、静かにではなく、import の時点か最初の実行で必ず失敗しなければなりません。
+  移行するチームは、大きな声の失敗には対処できますが、静かな失敗は見えません。
+  だから、黙って振る舞いを変えてしまう抜けは、機能が欠けていることが食ってきた時間よりも多くの信頼を食います。
 - この節と、移行に触れる今後のすべての設計に適用される恒久的な設計規則: 今日動いている compat の資産は、チームが nukadoko を採用したことや、他のどこかを typed 側へ動かしたことを理由に、動かなくなってはなりません。
   移行途中の「住まいが 2 つある」状態(support コードに登録された parameter type と config に住む parameter type、World のバッグと typed の result の併存)は、禁止するのではなく受け入れます。
   ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
@@ -475,3 +486,5 @@ nuka skill path|install       install the agent-facing skill
   型付き step の名前はファイル名から、id と session の名前は state directory から補完されるため、語彙の量にかかわらず TAB は高速なままです。
 - 最初の実世界での検証ゲート(M2 が詳細に設計される前)。
   約 10 個の実際の feature ファイルを結び付け、AI が下書きした型付き step をレビューすることが、手で glue を書くことより実際に優れているかを測ります。
+  公開されている 7 プロジェクトの 11 個の feature ファイルに対して実行し、答えは 7 プロジェクト中 6 つで yes でした。
+  第二のゲートは typed の方ではなく compat の扉を測るもので、上の Compat step の節で報告しています。
