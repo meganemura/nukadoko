@@ -97,8 +97,9 @@ export default defineStep({
   そして pattern は、それが書かれた対象の pickle のテキストに無症状のまま一切マッチしなくなります(検証で 2 つの独立した corpus がこれを踏みました)。
 - optional group の中にパラメータを入れることはできません。
   これは cucumber-expressions から継承した制約です。
-  末尾の場所句だけが違う複数の変種は、そのため 1 つの step + optional パラメータにまとめられず、変種ごとに別の step 定義が必要になります。
-  この step 数の増加は意図した設計上のトレードオフであり、nukadoko が埋めるべき欠落ではありません。
+  ただしこの制約が縛るのは group の構文であって、パラメータ自身ではありません。
+  自分の regexp が optional なカスタム parameter type(`( from '…')?` か空にマッチする `{dir:from-dir}` など)は合法で、「末尾の場所句だけが違う同じ step」を 1 つの定義に畳む正規の方法です(args 側のキーは `.optional()` にします)。
+  カスタム型を使わない場合は、変種ごとに別の step 定義が必要になります。
 - エイリアスは、args のレベルで真に交換可能な文(キー集合も `run()` の挙動も、どちらの言い回しにマッチしても同じ)のためのものです。
   `run()` がどちらの変種にマッチしたかを知る必要がある場合(挙動が言い回しそのもので分岐する場合)は、キー集合が偶然一致していても、変種ごとに別の step にします。
   1 つのエイリアスにまとめてしまうと、その分岐がレビュアーから見えなくなります。
@@ -300,7 +301,15 @@ Cucumber が持ったことのない実行インフラです:
   state directory は機密性の高いものです。
   `nuka check` は各 env file の分類と secret のキー名を報告します(値は決して報告しません)。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`。
+
+`parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
+たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。
+登録が config に住むのは、config が既に実行可能な TypeScript だからです(version probe が関数である理由と同じです)。
+nukadoko には登録を置くための support ファイルという形式がありません。
+名前は組み込み型と衝突してはなりません。
+`{int}` の意味をプロジェクトごとに再定義できてしまうと、それを使うすべての pattern の意味が静かに変わってしまうからです。
+transformer は型強制であり、契約であり続けるのは args のスキーマです。
 
 environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", version?: () => string | Promise<string> }` です。
 その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。

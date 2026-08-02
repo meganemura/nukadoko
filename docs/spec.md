@@ -115,11 +115,13 @@ export default defineStep({
   registers — and the pattern then silently never matches the pickle text
   it was written for (hit independently in two corpora during validation).
 - A parameter cannot appear inside an optional group — an inherited
-  cucumber-expressions constraint. A step whose variants differ only by a
-  trailing location clause therefore cannot collapse into one step with an
-  optional parameter; each variant needs its own step definition. The
-  extra step count is an accepted design trade-off, not a gap nukadoko is
-  expected to close.
+  cucumber-expressions constraint. The constraint binds the group syntax,
+  not the parameter itself: a custom parameter type whose own regexp is
+  optional (a `{dir:from-dir}` matching `( from '…')?` or nothing) is
+  legal, and is the intended way to fold "the same step with a trailing
+  location clause" into one definition — pair it with an `.optional()`
+  args key. Without a custom type, each variant needs its own step
+  definition.
 - Aliases are for prose that is genuinely interchangeable at the args
   level: same keys, same `run()` behavior no matter which phrasing
   matched. If `run()` needs to know which variant matched — behavior forks
@@ -375,7 +377,18 @@ The execution infrastructure Cucumber never had:
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
-`.nukadoko`), `browser`, `secrets`.
+`.nukadoko`), `browser`, `secrets`, `parameterTypes`.
+
+A `parameterTypes` entry registers a custom cucumber-expressions parameter
+type — `{ name, regexp, transformer? }`, e.g.
+`{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }`
+lets a pattern bind `will{negated:negation} return` to a plain
+`z.boolean()` args key. Registration lives in config because config is
+already executable TypeScript (the same reason the version probe is a
+function); nukadoko has no support-file format to put it in. Names must
+not collide with the built-in types — redefining what `{int}` means per
+project would quietly change the meaning of every pattern that uses it.
+The transformer is coercion; the args schema remains the contract.
 
 An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
 version?: () => string | Promise<string> }`. Its `baseURL` overrides the
