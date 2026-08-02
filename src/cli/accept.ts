@@ -65,6 +65,31 @@ function localDateStamp(iso: string): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Frontmatter wants `ran_at`/`accepted_at` to read the same day as the
+// filename's `localDateStamp` (spec "確定判断") — a UTC `toISOString()`
+// can land on the previous/next local day and make one run look like two.
+// Node has no built-in local-offset ISO formatter, so this is hand-rolled:
+// `getTimezoneOffset()` returns minutes *west* of UTC (positive west), the
+// opposite sign of the offset we print, hence the negation below.
+function localIsoWithOffset(iso: string): string {
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  const ms = String(d.getMilliseconds()).padStart(3, "0");
+
+  const offsetMinutes = -d.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMinutes);
+  const offsetHours = String(Math.floor(absOffset / 60)).padStart(2, "0");
+  const offsetMins = String(absOffset % 60).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}.${ms}${sign}${offsetHours}:${offsetMins}`;
+}
+
 export async function runAccept(options: RunAcceptOptions): Promise<number> {
   const { rootDir, featureArg, stdout, stderr } = options;
   const featurePath = normalizeFeaturePath(rootDir, featureArg);
@@ -186,8 +211,8 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
       featureName: parsed.gherkinDocument.feature?.name,
       commit: runGit.commit,
       runId: anyRecord.run_id,
-      ranAt: startedAt.toISOString(),
-      acceptedAt: new Date().toISOString(),
+      ranAt: localIsoWithOffset(startedAt.toISOString()),
+      acceptedAt: localIsoWithOffset(new Date().toISOString()),
       environment: anyRecord.environment,
       targetVersion: anyRecord.target_version,
       scenarios,

@@ -116,6 +116,48 @@ describe("nuka accept: a green run", () => {
     expect(blocks[0]!.args).toEqual({ name: "Ada" });
   });
 
+  it("writes ran_at/accepted_at as local-offset ISO strings whose date matches the filename (m4c-record-timestamps)", async () => {
+    // No `TZ` fixture here on purpose (m4c-record-timestamps spec,
+    // "テスト"): rewriting `TZ` mid-process doesn't reliably change what
+    // Node's Date/Intl internals already cached, so the only assertions
+    // that mean the same thing on every machine/CI are format-shape and
+    // cross-consistency with the filename, not a specific offset value.
+    await initGitRepo(rootDir);
+
+    const runExit = await runCli(["run", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(0);
+
+    const stdout = createCaptureSink();
+    const acceptExit = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    expect(acceptExit).toBe(0);
+
+    const relativePath = stdout.text().trim();
+    const filenameDate = path.basename(relativePath).match(/\d{4}-\d{2}-\d{2}/)?.[0];
+    expect(filenameDate).toBeDefined();
+
+    const content = await readFile(path.join(rootDir, relativePath), "utf8");
+    const frontmatter = frontmatterText(content);
+    const localIsoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/;
+
+    const ranAt = /ran_at: (\S+)/.exec(frontmatter)?.[1];
+    const acceptedAt = /accepted_at: (\S+)/.exec(frontmatter)?.[1];
+    expect(ranAt).toMatch(localIsoPattern);
+    expect(acceptedAt).toMatch(localIsoPattern);
+
+    // The invariant the whole task exists for: the filename's date and
+    // `ran_at`'s date describe the same run, so they must be the same day
+    // regardless of which timezone the machine running the test is in.
+    expect(ranAt!.slice(0, 10)).toBe(filenameDate);
+  });
+
   it("writes every scenario when a feature with multiple scenarios is all passed", async () => {
     await initGitRepo(rootDir);
 
