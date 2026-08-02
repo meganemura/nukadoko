@@ -6,7 +6,7 @@ nukadoko is an agent-first engine that runs your Gherkin. Feature files stay the
 
 Migrating from Cucumber + Playwright starts with switching one import. nukadoko installs a single command: `nuka`.
 
-**Status: design phase.** Nothing runs yet. The full design lives in [docs/spec.md](docs/spec.md).
+**Status: pre-0.1.** The M1 engine core is implemented — `steps`, `describe`, `do`, `run`, `check`, `init`, `scaffold`, plus sessions, environments, and secrets. The full design lives in [docs/spec.md](docs/spec.md).
 
 ## License
 
