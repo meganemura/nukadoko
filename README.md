@@ -31,11 +31,11 @@ the agent describing them.
 
 ## Status
 
-**Pre-0.1.** M1 (engine core) and M2 (the compat door) are implemented:
-`steps`, `describe`, `do`, `run`, `check`, `init`, `scaffold`, sessions,
-environments, secrets, and `nukadoko/compat`. The reporting emitters (M3)
-are designed but not built yet — see [Design](#design) for the full
-roadmap.
+**Pre-0.1.** M1 (engine core), M2 (the compat door), and M3 (the reporting
+emitters) are implemented: `steps`, `describe`, `do`, `run`, `check`,
+`init`, `scaffold`, sessions, environments, secrets, `nukadoko/compat`,
+the Allure emitter, and the cucumber-messages emitter. What's left is M4
+(sign-off) — see [Design](#design) for the full roadmap.
 
 ## Evaluate nukadoko against your project
 
@@ -159,17 +159,18 @@ switching the import again returns to plain cucumber-js. See
 audit's findings included, and [examples/migration](examples/migration) for
 a worked example running end to end.
 
-**M3 (designed, not implemented): reports fill themselves.** A classic
-Cucumber run shows the evidence a team wired up itself — hook boilerplate
-for traces and screenshots, written and maintained per project. The
-planned Allure emitter fills the report from every receipt with zero
-wiring — validated result, trace, HTTP log, observed reads and writes,
-environment and version — and one of those no report-side effort could
-ever add, because classic Cucumber discards step return values: the
-validated per-step result. A cucumber-messages (NDJSON) emitter ships
-alongside it so a migrating team's existing formatters and CI reporting
-keep working. Neither exists
-yet; see [docs/spec.md](docs/spec.md#allure-emitter).
+**M3: reports fill themselves.** A classic Cucumber run shows the evidence
+a team wired up itself — hook boilerplate for traces and screenshots,
+written and maintained per project. The Allure emitter fills the report
+from every receipt with zero wiring — validated result, trace, HTTP log,
+observed reads and writes, environment and version — and one of those no
+report-side effort could ever add, because classic Cucumber discards step
+return values: the validated per-step result. A cucumber-messages
+(NDJSON) emitter ships alongside it so a migrating team's existing
+formatters and JUnit-based CI keep working — confirmed by running our own
+stream through `@cucumber/junit-xml-formatter`, not just asserted. See
+[docs/spec.md](docs/spec.md#allure-emitter) and
+[Messages emitter](docs/spec.md#messages-emitter).
 
 ## Design
 

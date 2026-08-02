@@ -7,8 +7,8 @@ Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
 below) is implemented too — `nukadoko/compat`, typed World measurement, and
 a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
-real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter is
-implemented, while the messages emitter and sign-off exist only as design.
+real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter and the
+messages emitter are both implemented, while sign-off exists only as design.
 
 ## What nukadoko is
 
@@ -458,7 +458,8 @@ Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
 `.nukadoko`), `browser`, `secrets`, `parameterTypes`, `allure` (only
-`resultsDir`, see "Allure emitter").
+`resultsDir`, see "Allure emitter"), `messages` (only `output`, see
+"Messages emitter").
 
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
 type — `{ name, regexp, transformer? }`, e.g.
@@ -497,6 +498,8 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
   plaintext, created with restricted permissions
 - `allure-results/` — the emitter's output, appended to across runs and
   safe to delete whenever a fresh Allure launch is wanted
+- `messages.ndjson` — the messages emitter's output, one stream per run;
+  truncated at the start of every `nuka run` (see "Messages emitter")
 
 The durable artifacts live in the repository instead: feature files, typed
 steps, and sign-off records.
@@ -591,23 +594,83 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   shows.
 - Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
 
-Not yet built: the cucumber messages protocol emitter (NDJSON,
-`@cucumber/messages` — already a dependency; every modern cucumber
-formatter consumes messages, so the official HTML report, JUnit XML for
-CI, and third-party consumers would come for free once it exists), a
-hook's own duration (record.json carries no per-hook timestamp today, so a
-hook's start and stop both collapse to the scenario's own boundary),
-BeforeAll/AfterAll (no run-level record exists for the emitter to map
-from), and link-template configuration (mapping a tag like `@issue:123` to
-a URL).
+Not yet built: a hook's own duration (record.json carries no per-hook
+timestamp today, so a hook's start and stop both collapse to the
+scenario's own boundary), BeforeAll/AfterAll (no run-level record exists
+for the emitter to map from), and link-template configuration (mapping a
+tag like `@issue:123` to a URL).
 
 The point is not format politics: a classic cucumber run fills an Allure
 report only where glue authors hand-attached evidence, while nukadoko's
 harness measures everything anyway — and Allure's own model (attachments,
 labels, parameters) already had a first-class place for all of it. The
 Allure emitter is where nukadoko's measurement surplus becomes visible,
-automatically, today; the messages emitter above will be the second,
-narrower output once it exists.
+automatically, today; the messages emitter below is the second, narrower
+output, and its job is compat fidelity rather than measurement surplus.
+
+## Messages emitter
+
+`nuka run` writes one cucumber messages stream — NDJSON, one envelope per
+line, via `@cucumber/messages` — per invocation, defaulting to
+`.nukadoko/messages.ndjson`; `messages.output` in `nukadoko.config.ts`
+moves it to any other root-relative path. There is no `enabled` flag and
+no CLI flag, the same as Allure — the emitter always runs, and it is
+skipped only when a `nuka run` invocation selects zero pickles.
+
+- One run is one stream is one file: `begin` truncates the output rather
+  than appending, because appending would leave two `testRunStarted`
+  envelopes in one file — no longer a single well-formed stream to read
+  back. `nuka run` runs one feature per invocation, so running a second
+  feature afterward overwrites the first stream — the intended consequence
+  of "one file, truncated," not an oversight.
+- This emitter's role is the Allure emitter's inverse. Allure is where
+  nukadoko's measurement surplus becomes visible; this one is compat
+  fidelity, full stop — its only job is that a migrated suite's existing
+  formatters and JUnit-based CI keep reading a nukadoko-produced run the
+  way they read a classic cucumber-js one.
+- Receipt internals stay out of the stream entirely — no validated result,
+  no `mutates`, no `observed` counts, no `error.kind`. `TestStepResult` and
+  `TestStepFinished` are closed schemas (`additionalProperties: false`)
+  with no field for any of them, and there is no smuggling them in through
+  a marker the way Allure's own `[nukadoko.failure=<kind>]` label does.
+- Attachments are limited to what a step declared about itself: `declared`
+  attachments and log lines, the latter riding cucumber-js's own
+  `text/x.cucumber.log+plain` media type (the one `this.log()` produces).
+  Trace, screenshots, the HTTP log, and the validated result stay
+  Allure-only — that measurement surplus already has a home, and
+  base64-embedding a trace here would bloat the stream for no consumer
+  that wants it.
+- `testRunFinished.success` always matches the run's own exit code.
+  BeforeAll/AfterAll have no place to write into this stream (no
+  run-scope record exists for the emitter to draw from), so a run whose
+  run-scope hook failed shows up only here, never inside any one
+  scenario.
+- Confirmed against a real consumer, not just self-consistent by
+  construction: piping our own `messages.ndjson` through
+  `@cucumber/junit-xml-formatter@0.14.0` (which drives `@cucumber/query`
+  over the envelope stream) throws nothing, and every id it needs to
+  resolve — pickle to testCase to testStepFinished, `pickleStepId` back to
+  the gherkin step — does resolve. A failed scenario's `<failure>` carries
+  the step's own error message, `<system-out>` carries a per-step
+  passed/failed/skipped trace, and `<testsuite tests="...">` matches the
+  real scenario count; `<failure>` itself gets no `type` or `message`
+  attribute, because `TestStepResult.exception` is never set (below).
+  Only the junit-xml path has been run this way — an official HTML report
+  or a third-party formatter has not been exercised against this stream,
+  so what's confirmed is that this is a well-formed cucumber messages
+  stream a real consumer reads without error, not that every existing
+  formatter renders it.
+
+Honest limits, named rather than hidden: hooks collapse to one generic
+Before and one generic After, since a scenario record has no record of
+which individual registration ran; a hook's own duration is always zero,
+the same limit the Allure emitter carries; `declared` labels, links, and
+parameters have no slot in the protocol's closed schema and are dropped;
+no `stepDefinition` envelope is emitted, because the record keeps no
+location for a step's own definition and emitting one anyway would be a
+fabricated fact; and `TestStepResult.exception` is never set, since the
+protocol requires `Exception.type` and a receipt only ever carries a
+message — the reason a failed step's JUnit `<failure>` is body-only.
 
 ## Self-healing, audited
 
