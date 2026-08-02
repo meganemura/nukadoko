@@ -8,7 +8,7 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降(Allure / messages の emitter、sign-off)は設計としてのみ存在します。
+Pre-0.1 で、M3 以降のうち Allure emitter は実装済みであり、messages emitter と sign-off は設計としてのみ存在します。
 
 ## nukadoko とは
 
@@ -352,7 +352,7 @@ Cucumber が持ったことのない実行インフラです:
   state directory は機密性の高いものです。
   `nuka check` は各 env file の分類と secret のキー名を報告します(値は決して報告しません)。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)。
 
 `parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
 たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。
@@ -379,7 +379,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 - `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json` と、scenario スコープの evidence(trace.zip、最終スクリーンショット))。
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
 - `sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
-- `allure-results/`(emitter の出力、自由に再生成される)
+- `allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)
 
 耐久性のある成果物はその代わりにリポジトリの中に置かれます: feature ファイル、型付き step、sign-off の記録です。
 
@@ -408,21 +408,39 @@ nuka signoff create \
 
 ## Allure emitter
 
-nukadoko の唯一の presentation 層は `allure-results` ディレクトリです(Allure 2 のファイル形式で、Allure 2 と 3 の両方で読めます):
+`nuka run` は scenario ごとに 1 つの Allure test result を `allure-results/` ディレクトリに書き込みます(Allure 2 のファイル形式で、Allure 2 と 3 の両方で読めます)。
+これが nukadoko の唯一の presentation 層であり、nukadoko 自身は何もレンダリングしません。
 
-- scenario の実行は 1 つの Allure test result に対応します: step は step として、evidence ファイルは attachment として、environment / target_version / session は label と parameter としてです。
+- 出力先はデフォルトで `.nukadoko/allure-results/` です(上で述べた state directory 自身の `allure-results/` です)。
+  `nukadoko.config.ts` の `allure.resultsDir` で、root からの相対パスであれば他の任意の場所に移せます。
+  `enabled` フラグも CLI フラグもありません。
+  emitter は常に実行されるため、設定ゼロのままで既に完全なレポートが生成されます。
+  唯一スキップされるのは `nuka run` の呼び出しが 0 件の pickle を選んだときで(その場合 `allure-results/` はまったく作られません)、これは BeforeAll/AfterAll がスキップされるのと同じ理由です。
+- 書き込みは追記のみです: 既存の `allure-results/` ディレクトリがクリアされたり置き換えられたりすることは決してありません。
+  2 回の `nuka run` の呼び出しを 1 つの Allure launch とみなすか 2 つとみなすかは呼び出し側に委ねられています。
+  新しい launch が欲しいユーザーは、自分でそのディレクトリを削除します。
+- scenario の実行は 1 つの Allure test result に対応します: 各 gherkin の step は 1 つの Allure step になり、各 Before/After フックはそれぞれ独立した fixture(Allure container)になります。
+- Attachment: scenario 自身の trace とスクリーンショット、そして step ごとにその HTTP ログとバリデーション済みの result です。
+  それとは別に、step が自分自身について宣言したもの(attachment、link、ログの一行)も出力され、常に `declared:` を接頭辞に付けた名前の下に置かれます。
+  すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
+- step の parameter は、その宣言と実際に観測されたものを並べて運びます: 計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
+  宣言と計測が同じテーブルの中にあることこそ、nukadoko の主張のすべてをレポートそのものの中で目に見えるようにしたものです。
+- 失敗した step や test のメッセージには `[nukadoko.failure=<kind>]` という接頭辞が付き、その receipt が既に持っている同じ `error.kind` を名指しします。
+  Allure 2 には result ごとの category フィールドが無いため、emitter は `categories.json` も書き出します(`error.kind` ごとに 1 つの rule、全 9 個、すべての run で)。
+  メッセージの接頭辞と category の rule は、同じ分類を 2 つの視点から見たものです。
+- Identity(`fullName`/`testCaseId`/`historyId`)は、公式の cucumberjs 用 Allure adapter と同じ方法で計算されます。
+  そのため nukadoko に移行するチームは、既存の Allure history と retry tracking をそのまま保てます。
 - ad-hoc な `do` の receipt は作業記録であり、test result ではないため、ダッシュボードには現れません。
   探索が証明することは、scenario を修復するか新しく書くことで表現され、その scenario の実行こそが Allure に表示されるものです。
 - 表示、履歴、傾向、flakiness はすべて Allure の仕事です。
   nukadoko に web UI はありません。
-- Allure と並んで、`nuka run` は cucumber messages プロトコル(NDJSON)を出力する予定です(`@cucumber/messages` は既に依存に入っています)。
-  現代の cucumber の formatter はすべて messages を消費するため、公式の HTML レポート、CI 向けの JUnit XML、サードパーティの消費者が無料で付いてきます。
-  移行するチームのレポート配管は「動いている資産」であり、移行の扉がそれを壊してはなりません。
-- 2 つの出力の違いは、フォーマットの派閥ではなく「そこを満たすものが何か」です。
-  従来の cucumber の実行が Allure レポートを満たすのは、glue の作者が手で evidence を添付した箇所だけです。
-  nukadoko の harness はどのみちすべてを計測しています(validated result、trace、HTTP ログ、観測された書き込み、environment と version)。
-  そして Allure のモデル(attachment、label、parameter)には、その全部の一級の置き場所があります。
-  messages のストリームは「どの cucumber の実行でも言えること」を言い、Allure エミッタは nukadoko の計測の余剰が自動で見えるようになる場所です。
+
+まだ実装されていないもの: cucumber messages プロトコルの emitter(NDJSON。`@cucumber/messages` は既に依存に入っています。現代の cucumber の formatter はすべて messages を消費するため、これが存在すれば公式の HTML レポート、CI 向けの JUnit XML、サードパーティの消費者が無料で付いてくるはずです)、フック自身の duration(record.json は今のところ hook ごとの timestamp を持たないため、フックの開始と終了はどちらも scenario 自身の境界に潰れます)、BeforeAll/AfterAll(emitter がそこから map できる run レベルの record が存在しません)、そして link-template の設定(`@issue:123` のような tag を URL に対応付けるもの)です。
+
+要点はフォーマットの派閥争いではありません: 従来の cucumber の実行が Allure レポートを満たすのは、glue の作者が手で evidence を添付した箇所だけです。
+一方で nukadoko の harness はどのみちすべてを計測しており、Allure 自身のモデル(attachment、label、parameter)には、その全部の一級の置き場所が既にありました。
+Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日既に見えるようになる場所です。
+上に書いた messages emitter は、それが実現すれば 2 つ目のより狭い出力になります。
 
 ## Self-healing(監査付き)
 
