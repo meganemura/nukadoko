@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { poll, PollTimeoutError } from "../src/index.js";
 
+interface Job {
+  id: string;
+}
+
 describe("poll", () => {
+  it("resolves to T (not T | undefined) for fn: () => Promise<T | undefined>, usable without a cast", async () => {
+    const fetchJob = async (): Promise<Job | undefined> => ({ id: "job-1" });
+    const job = await poll(fetchJob, { interval: 5, timeout: 50 });
+    expectTypeOf(job).toEqualTypeOf<Job>();
+    expect(job.id).toBe("job-1");
+  });
+
   it("returns the value once fn stops returning undefined", async () => {
     let calls = 0;
     const value = await poll(

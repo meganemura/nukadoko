@@ -9,7 +9,7 @@ export interface PollOptions {
   timeout?: number;
   /** Delay between poll attempts, in milliseconds. */
   interval?: number;
-  /** Human-readable label surfaced in the run's progress log. */
+  /** Human-readable label included in the `PollTimeoutError` message. */
   description?: string;
 }
 
@@ -33,7 +33,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function poll<T>(fn: () => Promise<T>, options: PollOptions = {}): Promise<T> {
+export async function poll<T>(
+  fn: () => Promise<T | undefined>,
+  options: PollOptions = {},
+): Promise<T> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const interval = options.interval ?? DEFAULT_INTERVAL_MS;
   const startedAt = Date.now();
