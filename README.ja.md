@@ -220,10 +220,16 @@ emitter は、配線ゼロであらゆる receipt からレポートを満たし
 nukadoko が書くのは結果であって HTML ではないため、それを描画するのは Allure 3 の CLI です(`npm i -g allure`、または以下のように `npx allure`)。
 
 ```sh
-npx allure watch .nukadoko/allure-results     # live, re-renders as a run writes
-npx allure generate .nukadoko/allure-results --output allure-report
-npx allure open allure-report                 # serve one already generated
+R=.nukadoko/allure-results
+npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a run writes
+npx allure generate $R --output .nukadoko/allure-report
+npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
+
+どれにも `--output` を渡してください。
+Allure はこれを省くとカレントディレクトリの `allure-report/` を既定にし、`watch` もそこへ書き込みます。
+つまり既定のままでは、レポートを見ただけで、追跡もされず ignore もされていない生成物がリポジトリのルートに残ります。
+`.nukadoko/` の下へ出せば、`nuka init` がすでに gitignore に入れた場所に収まります。
 
 反復しながら書いている間に使うのは `watch` です。
 片方の端末で走らせたまま、もう片方で `nuka run` すると、scenario が着地するたびにレポートが更新されます。

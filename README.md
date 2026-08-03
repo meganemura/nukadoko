@@ -236,10 +236,17 @@ Since nukadoko writes results and never HTML, rendering them is Allure 3's
 CLI (`npm i -g allure`, or `npx allure` as below):
 
 ```sh
-npx allure watch .nukadoko/allure-results     # live, re-renders as a run writes
-npx allure generate .nukadoko/allure-results --output allure-report
-npx allure open allure-report                 # serve one already generated
+R=.nukadoko/allure-results
+npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a run writes
+npx allure generate $R --output .nukadoko/allure-report
+npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
+
+Pass `--output` on every one of them. Allure defaults it to `allure-report/`
+in the current directory, and `watch` writes there too — so the default
+leaves a generated report sitting in your repository root, untracked and
+un-ignored, from nothing more than looking at a report. Sending it under
+`.nukadoko/` puts it where `nuka init` already added a gitignore entry.
 
 `watch` is the one to reach for while iterating: leave it running in one
 terminal, `nuka run` in another, and the report updates as each scenario
