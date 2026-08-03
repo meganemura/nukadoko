@@ -108,7 +108,7 @@ compat の扉は丸ごとスキップしてください。
 | The failure | What nukadoko does about it |
 |---|---|
 | 重複する step(どれが一致したか分からない) | `nuka check` は、何かが実行される前に、同じテキストが 2 回登録されている **duplicate patterns** と、feature の 1 行に異なる 2 つの pattern がどちらも一致し得る **ambiguous steps** を報告します |
-| `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、次の step はそれを、目に見える import であり監査できる receipt のエントリでもある `ctx.resultOf` 経由で読みます |
+| `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、後続の step はそのうち 1 つのキーを名前で読むために `from` を宣言します。この依存関係は diff 上で見える import として現れ、読んだ事実は読み手側 step の receipt に記録され、束縛の順序が壊れていれば `nuka check` が実行前に検出します(参照: [Chaining steps](docs/spec.md#chaining-steps)) |
 | `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が観測したネットワークの読み書き、evidence、environment、target version を記録した receipt を書きます |
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
 | 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも receipt に記録されます。 |

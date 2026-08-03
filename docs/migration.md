@@ -175,8 +175,15 @@ Two independent, incremental moves, safe to take alone, in either order:
 ## Stage 2 — promote steps
 
 Promote a producer before its consumer: turn the step that used to stash
-data onto `this` into a `defineStep`, then have the reader pull that result
-through `ctx.resultOf(producerModule)` instead of reading `this`. A promoted
+data onto `this` into a `defineStep` with a `returns` schema, then have the
+reader declare `from: { key: [producerStep, "resultKey"] }` for the key it
+used to read off `this` (see docs/spec.md "Chaining steps"). That covers
+what most existing writes to `this` turn out to be: one named value read by
+one named key. When the read is not that — the value needs reshaping, which
+producer to read is decided at run time, or the whole result is wanted, not
+one key of it — keep the argument optional and fall back to
+`ctx.resultOf(producerModule)` inside `run`, the same read `this` used to
+answer, only now against a validated result rather than a bag. A promoted
 step gains a typed contract, a validated `result`, and single-step
 execution via `nuka do` — none of which a compat step has.
 
@@ -208,8 +215,9 @@ execution via `nuka do` — none of which a compat step has.
   first; the suppressed findings reappear as real `undefined-step` errors
   once the file imports cleanly.
 - Receipts tell the same story at run time: `world` (compat steps only) and
-  `declared` shrink as more of the suite promotes to typed steps and
-  `ctx.resultOf`.
+  `declared` shrink as more of the suite promotes to typed steps whose
+  consumers read from them via `from` (or `ctx.resultOf` where a key name
+  cannot say what is needed).
 
 ## The way back
 

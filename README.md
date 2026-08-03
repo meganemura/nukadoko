@@ -110,7 +110,7 @@ first — the compat sections below are for suites that already exist.
 | The failure | What nukadoko does about it |
 |---|---|
 | Duplicate steps — which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
-| `this.foo` — an untyped bag | A step returns a value against a `returns` schema; the next step reads it through `ctx.resultOf`, which is an import you can see and a receipt entry you can audit |
+| `this.foo` — an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name — a dependency that shows up as an import in the diff, a read that lands on the receiving step's receipt, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
 | A report that only says `passed` | Every execution writes a receipt: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
 | A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives — a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the receipt for review |

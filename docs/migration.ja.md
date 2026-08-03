@@ -122,7 +122,11 @@ glue はテキストとして読むだけで、実行はしていません。
 
 ## Stage 2: step を昇格させる
 
-consumer より先に producer を昇格させます: `this` にデータを溜め込んでいた step を `defineStep` にし、読み手は `this` を読む代わりに `ctx.resultOf(producerModule)` を通じてその結果を取得するようにします。
+consumer より先に producer を昇格させます: `this` にデータを溜め込んでいた step を、`returns` スキーマを持つ `defineStep` にします。
+読み手は、`this` から読んでいたキーについて `from: { key: [producerStep, "resultKey"] }` を宣言します(参照: docs/spec.ja.md の「step の連鎖」)。
+これが、既存の `this` への書き込みのほとんどが実は表していたものをカバーします: 1 つの名前付きキーで読める 1 つの名前付きの値です。
+読み方がそれに当てはまらない場合 — 値の変形が要る、どの producer から読むかが実行時にしか決まらない、あるいは 1 つのキーではなく result 全体が欲しい場合 — は、引数を optional のままにし、`run` の中で `ctx.resultOf(producerModule)` にフォールバックします。
+これは `this` がかつて答えていたのと同じ読みであり、違いはいまや検証済みの result に対して行われる点だけです。
 昇格した step は、型付きの契約、検証済みの `result`、`nuka do` による単体実行を得ます(そのどれも compat の step にはありません)。
 
 ## ダッシュボードは `nuka check`
@@ -143,7 +147,7 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   1 つの壊れたファイル自身の step が語彙から消えることは、それ以外の方法だと無関係な undefined step の山にしか見えません。
   まず import の失敗を直してください。
   抑え込まれていた findings は、そのファイルが問題なく import できるようになった時点で、本物の `undefined-step` エラーとして再び現れます。
-- receipt は実行時に同じ話を語ります: スイートがより多く typed step と `ctx.resultOf` に昇格するにつれて、`world`(compat の step のみ)と `declared` が縮んでいきます。
+- receipt は実行時に同じ話を語ります: スイートがより多く typed step に昇格し、その読み手が `from` 経由でそれを読むようになるにつれて(キー名で表せない読みは `ctx.resultOf`)、`world`(compat の step のみ)と `declared` が縮んでいきます。
 
 ## 戻り道
 

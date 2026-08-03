@@ -70,19 +70,22 @@ one is:
 |---|---|---|
 | Input | pattern capture only, unchecked | validated against an `args` schema, each field carrying a `.describe()` |
 | Output | discarded — the receipt's `result` is `null` | validated against a `returns` schema and stored in the receipt |
-| Dependencies | side effects on the World, invisible in the function signature | pulled through `ctx.resultOf`, named in an import, recorded as `used` in the receipt |
+| Dependencies | side effects on the World, invisible in the function signature | declared with `from`, named in an import, checked by `nuka check` before anything runs, and recorded as `used` in the receipt |
 | Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the receipt's `observed` counts |
-| Running alone | not possible — the World is empty outside a scenario | `nuka do <step>` runs it directly, receipt printed to stdout — but a dependency read via `ctx.resultOf` finds nothing, since no step ran before it |
+| Running alone | not possible — the World is empty outside a scenario | `nuka do <step>` runs it directly, receipt printed to stdout — a `from` key comes from `--args` like any other, or from `--use <receipt-id>` for one drawn from an earlier execution; a `ctx.resultOf` call inside `run` still finds nothing, since there is no scenario for it to walk |
 
 That last row is a separate fact from the "Dependencies" row above it, not a
 consequence of it: a compat step can't run alone because what it needs lives
 on a World nothing populated yet, and the World isn't part of its signature —
 there's nothing to inspect to know what to set up first. A typed step's
-dependencies are named in an import, so before running one you can see what
-it needs — but seeing it declared isn't the same as having it satisfied. Run
-one alone with `nuka do` and no step ran before it, so there's nothing for a
-dependency read through `ctx.resultOf` to find: declared and visible, yes;
-actually met, no.
+dependencies are named as `from` entries, visible in an import, so a
+`nuka do` call can supply them by hand: `--args` for an ordinary key, or
+`--use <receipt-id>` for one drawn from an earlier execution's result — the
+upstream step's own name never has to appear on the command line, because
+the cited receipt already carries it. What still finds nothing outside a
+scenario is a dependency read through `ctx.resultOf` from inside `run`: that
+call has no chain to walk when there was no scenario to build one,
+`--use` or not.
 
 Promote the steps you run most often first, one at a time — not the whole
 suite in one pass. How to rewrite any given piece of glue is a judgment
@@ -128,8 +131,10 @@ export default defineStep({
 What changed:
 
 - `this.projectId` is gone; the id comes back through `returns` instead. A
-  later step reads it via `ctx.resultOf(createProjectModule)`, and that
-  read is what shows up in its own receipt.
+  later step declares `from: { projectId: [createProjectStep, "id"] }` to
+  read it by key — `nuka check` verifies the binding order before anything
+  runs, and the read shows up in that later step's own receipt (`ctx.resultOf`
+  stays available for the rarer read a key name can't express).
 - The argument is a named capture bound to a schema key
   (`{name:string}` → `args.name`), so the pattern alone shows which text
   becomes which field.

@@ -78,6 +78,49 @@ step verifying "an error is shown" needs its `returns` field for that
 message described, or the link between the criterion and what was actually
 observed is lost.
 
+## Chaining a value from an earlier step
+
+When a step needs a value an earlier step produced, reach for `from` first:
+`from: { key: [otherStep, "resultKey"] }` declares it, and the value is
+filled in before the step runs — the argument stays required, and the
+scenario reads as what actually chains to what. Only fall back to
+`ctx.resultOf` inside `run` for a read `from` cannot express: the value
+needs reshaping on the way, which upstream step to read is decided at run
+time, or the whole result is wanted rather than one key of it.
+
+Declaring `from` is not just documentation: `nuka check` reads it and
+verifies the producing step actually appears earlier in the same scenario,
+before anything runs. Once a scenario is written, run `nuka check <feature>`
+before the first `nuka run` — see "Before running" — so a broken binding
+order is caught without spending a browser session on it.
+
+## Helper or step?
+
+Because a chained value can only come from a step, `from` pushes an
+operation toward "one step, one responsibility" — and that can leave a
+scenario with a line that exists only to move a value from one step to the
+next, never to record anything the feature's reader cares about (say,
+`And the project's billing page is fetched`). A feature file is written for
+someone who is not necessarily an engineer; a line like that is a cost to
+that reader, not information.
+
+Judge each operation on one axis: does it mean something to the person
+reading the scenario, not to the code moving data between steps?
+
+- Yes — make it a step. The acceptance record gains a receipt for it.
+- No — do not make it a step. Write an ordinary function under
+  `features/steps/lib/` and call it from the step that needs the value.
+  What is given up is that helper's own receipt; the HTTP it performs is
+  still counted in the calling step's `observed`, and `ctx.section` can
+  still mark how far execution got while running it.
+
+Nothing upstream ever runs on nukadoko's own initiative. If a step's `from`
+key names a producer that never appears in the scenario, that is a
+`nuka check` / `nuka run` error to fix in the feature file — never
+something nukadoko inserts quietly to make the run succeed. A feature that
+doesn't name everything that ran stops being the record this whole loop
+exists to leave.
+
 ## Writing the feature
 
 Everything you were able to learn about the ticket goes into the feature
