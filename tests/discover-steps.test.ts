@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { discoverSteps, type VocabularyEntry } from "../src/discover/discover-steps.js";
 import { DuplicateStepError } from "../src/discover/errors.js";
@@ -81,5 +82,56 @@ describe("discoverSteps", () => {
 
     expect(capturedViaRelativeImport).toBeDefined();
     expect(capturedViaRelativeImport).toBe(asTyped(vocabulary.get("producer")).step);
+  });
+});
+
+// m21a-compat-gap-detect task spec: `{ tolerateImportFailures: true }` lets
+// discovery survive a broken glue file instead of rejecting the whole call
+// — the mode `nuka check` (src/check/analyze.ts) uses so one broken file
+// doesn't take down the entire report the way it still does for
+// `run`/`do`/`steps`/`init`.
+describe("discoverSteps: tolerant mode (m21a-compat-gap-detect)", () => {
+  it("collects a broken file's import failure and still discovers a sibling healthy file", async () => {
+    const { vocabulary, importFailures } = await discoverSteps(
+      fixture("discover-import-failure-project"),
+      "features",
+      { tolerateImportFailures: true },
+    );
+
+    expect(importFailures).toHaveLength(1);
+    expect(importFailures[0]?.filePath).toBe(path.join("features", "steps", "broken.ts"));
+    expect(importFailures[0]?.message).toContain("require is not defined");
+
+    expect([...vocabulary.keys()]).toEqual(["healthy"]);
+  });
+
+  it("default mode (no options) still rejects on the first broken file, unchanged", async () => {
+    await expect(
+      discoverSteps(fixture("discover-import-failure-project"), "features"),
+    ).rejects.toThrow(/require is not defined/);
+  });
+
+  it("does not let a file that dies partway through its own evaluation leak its registration into the next file (decision 3)", async () => {
+    const { vocabulary, importFailures } = await discoverSteps(
+      fixture("discover-partial-eval-failure-project"),
+      "features",
+      { tolerateImportFailures: true },
+    );
+
+    expect(importFailures).toHaveLength(1);
+    expect(importFailures[0]?.message).toContain("boom");
+
+    // The registration a-partial-eval-failure.ts made before it threw must
+    // be discarded entirely, not attributed to b-next-file.ts.
+    expect(vocabulary.has("compat: registered before the failure")).toBe(false);
+    expect(vocabulary.has("compat: registered by the next file")).toBe(true);
+  });
+
+  it("still throws DuplicateStepError in tolerant mode (decision 2: duplicates are not import failures)", async () => {
+    await expect(
+      discoverSteps(fixture("duplicate-steps-project"), "features", {
+        tolerateImportFailures: true,
+      }),
+    ).rejects.toBeInstanceOf(DuplicateStepError);
   });
 });

@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { UnsupportedTagExpressionError } from "../compat/errors.js";
+import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { loadFeatures, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
@@ -11,15 +13,33 @@ import type { CheckIssue, CheckReport } from "./types.js";
 // Responsibility: the one function `nuka check` runs — load the project the
 // same way `nuka steps`/`nuka do` already do (loadConfig, discoverSteps),
 // then run every check category and merge their issues into the single
-// `{ errors, warnings }` report docs/spec.md's "CLI summary" describes. A
-// project's config failing to load, or discovery throwing (duplicate step
-// name, a broken step file), is *not* one of this report's issues — it is
+// `{ errors, warnings }` report docs/spec.md's "CLI summary" describes.
+//
+// A project's config failing to load, or discovery finding a duplicate step
+// name/pattern/`defineWorld`, is *not* one of this report's issues — it is
 // the same fundamental failure `nuka steps`/`nuka do` already report via
-// ConfigError/DuplicateStepError, so it propagates unchanged and
+// ConfigError/DuplicateStepError/DuplicateCompatStepError/
+// DuplicateWorldDefinitionError, so it propagates unchanged and
 // src/cli/check.ts handles it exactly like every other command does
-// (stderr + exit 1, no report). A malformed `.feature` file, in contrast, is
-// this report's problem (`feature-parse-error`): one broken file must not
-// stop every other feature's issues from being reported.
+// (stderr + exit 1, no report): both are cross-project authoring mistakes a
+// migrating suite is not expected to be mid-fixing the way it is expected to
+// have some glue files still broken.
+//
+// A broken step file's own import failure, by contrast, *is* one of this
+// report's issues as of m21a-compat-gap-detect (a change from this module's
+// earlier behavior, where it fell into the same fundamental-failure bucket
+// as the paragraph above): `discoverSteps` is called with
+// `{ tolerateImportFailures: true }` below, so one broken glue file no
+// longer takes down the entire report the way a config load failure still
+// does. The reason for the split: a migrating suite's *normal* state is
+// "some glue files are still broken" (docs/spec.md's compat/migration
+// story), so treating every broken file as a hard stop would make `nuka
+// check` useless as a migration dashboard for exactly the projects that need
+// it most — nothing about *this* file's own report is unreliable just
+// because some other file failed to import. A malformed `.feature` file
+// keeps its own pre-existing category (`feature-parse-error`) for the same
+// reason: one broken file must not stop every other feature's issues from
+// being reported.
 //
 // m5b-check-feature-arg task spec: `featureArg`, when given, *replaces*
 // which feature(s) get checked — the `featuresDir` walk above is skipped
@@ -79,10 +99,53 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
 
 export async function analyzeProject(rootDir: string, featureArg?: string): Promise<CheckReport> {
   const config = await loadConfig(rootDir);
-  const { vocabulary, compatParameterTypes } = await discoverSteps(rootDir, config.featuresDir);
+  // Tolerant mode (this task's spec, decision 1) — a broken step file
+  // becomes a report entry (`importFailures`, handled below) instead of
+  // rejecting this whole call the way `run`/`do`/`steps`/`init` still do via
+  // their own plain `discoverSteps(rootDir, config.featuresDir)` calls.
+  const { vocabulary, compatParameterTypes, compatHooks, importFailures } = await discoverSteps(
+    rootDir,
+    config.featuresDir,
+    { tolerateImportFailures: true },
+  );
 
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
+
+  // Node's own error message, unmodified (this task's spec, decision 4) —
+  // see this file's own header for why a broken glue file is a report entry
+  // here rather than the fundamental failure it still is for `run`/`do`/
+  // `steps`/`init`.
+  for (const failure of importFailures) {
+    errors.push({
+      code: "step-file-import-failed",
+      message: failure.message,
+      file: failure.filePath,
+    });
+  }
+
+  // The same tag-expression validation `nuka run` runs before executing any
+  // pickle (src/cli/run.ts, near its own `validateTagExpression` call) —
+  // reused here via the one shared function rather than copied, but run
+  // every hook through it instead of stopping at the first violation
+  // (this task's spec, decision 5): a report lists every finding, where
+  // `run`'s own try/catch existing early-exit behavior is untouched. No
+  // `file`: a hook isn't attributed to the file that registered it
+  // (src/discover/discover-steps.ts's own header explains why), and adding
+  // that attribution is out of this task's scope.
+  for (const hook of compatHooks) {
+    if (hook.tags === undefined) {
+      continue;
+    }
+    try {
+      validateTagExpression(hook.tags);
+    } catch (error) {
+      if (!(error instanceof UnsupportedTagExpressionError)) {
+        throw error;
+      }
+      errors.push({ code: "unsupported-hook-tag-expression", message: error.message });
+    }
+  }
 
   const configResult = checkConfig(rootDir, config);
   errors.push(...configResult.errors);
@@ -102,8 +165,34 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     });
   }
   const featureResult = checkFeatures(features, vocabulary, bindingResult.patterns, config.parameterTypes);
-  errors.push(...featureResult.errors);
   warnings.push(...featureResult.warnings);
+
+  // A broken glue file's own missing steps otherwise resurface here as a
+  // flood of `undefined-step` errors (this task's spec, decision 6 — an
+  // empirical 1-broken-file-to-20-undefined-step ratio: m21-compat-gap
+  // findings.md, Q5) — noise that buries the one real cause (the import
+  // failure already reported above) and misleadingly reads as "write this
+  // step", when the step may well already exist in the file that failed to
+  // import. Suppressed only when there is at least one import failure to
+  // blame it on, and only `undefined-step` itself: every other feature-check
+  // issue is a property of a step that *did* match something, so it isn't
+  // contaminated by a vocabulary that's missing entries.
+  if (importFailures.length > 0) {
+    const suppressedCount = featureResult.errors.filter((issue) => issue.code === "undefined-step").length;
+    for (const issue of featureResult.errors) {
+      if (issue.code !== "undefined-step") {
+        errors.push(issue);
+      }
+    }
+    if (suppressedCount > 0) {
+      warnings.push({
+        code: "undefined-step-check-suppressed",
+        message: `Suppressed ${suppressedCount} undefined-step ${suppressedCount === 1 ? "issue" : "issues"} because ${importFailures.length} step ${importFailures.length === 1 ? "file" : "files"} could not be read — undefined-step judgment is on hold until the unreadable glue is fixed`,
+      });
+    }
+  } else {
+    errors.push(...featureResult.errors);
+  }
 
   return { errors, warnings };
 }

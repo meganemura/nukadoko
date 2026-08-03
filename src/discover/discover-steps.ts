@@ -157,6 +157,15 @@ export interface DiscoveryResult {
    * defaulted to cucumber-js's own 5000ms (see `setDefaultTimeout`'s own
    * comment for why). */
   readonly defaultTimeoutMs: number | undefined;
+  /** One entry per file whose `scoped.import()` threw, tolerant mode only
+   * (m21a-compat-gap-detect task spec, decision 1) — always `[]` in the
+   * default (non-tolerant) mode, since that mode rejects on the first such
+   * file instead of collecting them. `filePath` is rootDir-relative, matching
+   * every other `CheckIssue.file` this run's caller (src/check/analyze.ts)
+   * already produces (src/feature/load-features.ts's `relativePath`,
+   * src/check/feature-check.ts's `file`). `message` is the importing error's
+   * own `.message`, unmodified — see the `catch` below for why. */
+  readonly importFailures: readonly { filePath: string; message: string }[];
 }
 
 function compatPatternSource(pattern: string | RegExp): string {
@@ -186,10 +195,28 @@ function walkTsFiles(dir: string): string[] {
   return files;
 }
 
+export interface DiscoverStepsOptions {
+  /** Default `false`: `discoverSteps` rejects on the first file whose import
+   * fails, the same as before this option existed — `run`/`do`/`steps`/
+   * `init` all stay fail-fast on purpose (m21a-compat-gap-detect task spec:
+   * continuing past a broken glue file is dangerous for anything that's
+   * about to *execute*). `true` is `nuka check`'s own mode (src/check/
+   * analyze.ts): a broken file is collected into `importFailures` instead,
+   * so the rest of the project can still be discovered and reported on — a
+   * migrating suite's normal state is "some glue files are still broken",
+   * and a report tool that refuses to run at all in that state isn't useful
+   * as a migration dashboard. One discovery function, one behavior flag —
+   * not a second copy of the loop — keeps this a single source of truth
+   * (the migration-door rule: one mechanism, not a fork). */
+  readonly tolerateImportFailures?: boolean;
+}
+
 export async function discoverSteps(
   rootDir: string,
   featuresDir: string,
+  options: DiscoverStepsOptions = {},
 ): Promise<DiscoveryResult> {
+  const { tolerateImportFailures = false } = options;
   const featuresRoot = path.join(rootDir, featuresDir);
   const files = walkTsFiles(featuresRoot);
 
@@ -254,12 +281,58 @@ export async function discoverSteps(
     // DuplicateCompatStepError already applies to a colliding compat step.
     let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
     let declaredWorldSchemasFilePath: string | undefined;
+    const importFailures: { filePath: string; message: string }[] = [];
 
     for (const filePath of files) {
-      const mod: { default?: unknown } = await scoped.import(
-        pathToFileURL(filePath).href,
-        import.meta.url,
-      );
+      // Scope note (m21-compat-gap findings, Q3's "重大な訂正"): this only
+      // catches a file whose import itself throws. A name imported but used
+      // only as a type annotation, or imported and never referenced at all,
+      // is elided from the compiled output by esbuild/tsx and so never
+      // actually gets imported at run time — that file imports cleanly here
+      // even if the name it asked for doesn't exist on the compat surface.
+      // That is not a detection gap this loop is failing to close: a glue
+      // file esbuild elides the import from runs exactly as written, so
+      // there is nothing broken to report.
+      //
+      // Only the import call itself is inside this try (m21a-compat-gap-
+      // detect task spec, decision 2) — `isStep`, the drains below, and the
+      // duplicate checks they can throw all stay outside it, so they only
+      // ever run once this file's own import has actually succeeded. Putting
+      // them inside the same try would let a DuplicateStepError/
+      // DuplicateCompatStepError/DuplicateWorldDefinitionError — a cross-file
+      // authoring mistake, not an import failure — get caught here and
+      // misreported as this file's own import failing.
+      let mod: { default?: unknown };
+      try {
+        mod = await scoped.import(pathToFileURL(filePath).href, import.meta.url);
+      } catch (error) {
+        if (!tolerateImportFailures) {
+          throw error;
+        }
+        // A file that dies partway through its own evaluation (CommonJS
+        // `require()` inside an ESM file throws mid-evaluation, not at ESM's
+        // earlier link phase — m21-compat-gap findings, Q2) may already have
+        // called `Given`/`Before`/`defineWorld` before it threw, leaving
+        // those calls sitting in the shared buffers below. Draining and
+        // discarding them here, rather than leaving them for the *next*
+        // file's own drain, is what keeps this loop's per-file attribution
+        // (the comment above, and m2a-compat-registry task spec decision 3)
+        // from misattributing a dead file's partial registrations to
+        // whichever healthy file happens to import next.
+        compatRegistry.drainCompatSteps();
+        compatRegistry.drainCompatParameterTypes();
+        defineWorldModule.drainWorldSchemaRegistrations();
+        importFailures.push({
+          filePath: path.relative(rootDir, filePath),
+          // Passed through verbatim, not re-classified into a nukadoko code
+          // (this task's spec, decision 4): Node's own message already names
+          // the missing export/subpath/package, and reparsing it here would
+          // only add a brittle dependency on Node's exact wording while
+          // losing information.
+          message: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
 
       const candidate = mod.default;
       if (isStep(candidate)) {
@@ -332,6 +405,7 @@ export async function discoverSteps(
       // buffer, and `setDefaultTimeout`'s own buffer lives in that same
       // module (see registry.ts's own header for why).
       defaultTimeoutMs: compatRegistry.getDefaultTimeoutMs(),
+      importFailures,
     };
   } finally {
     await scoped.unregister();
