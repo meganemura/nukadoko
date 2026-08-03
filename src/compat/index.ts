@@ -30,8 +30,16 @@ export {
   setWorldConstructor,
   type WorldConstructor,
   type WorldConstructorParams,
+  type IWorldOptions,
 } from "./world.js";
-export { Before, After, type HookFn, type HookOptions } from "./hooks.js";
+export {
+  Before,
+  After,
+  type HookFn,
+  type HookOptions,
+  type HookParameter,
+  type ITestCaseHookParameter,
+} from "./hooks.js";
 export { BeforeAll, AfterAll, type RunHookFn, type RunHookOptions } from "./run-hooks.js";
 export { DataTable } from "./data-table.js";
 // m2c-typed-world task spec, item 2: World's own declaration surface —

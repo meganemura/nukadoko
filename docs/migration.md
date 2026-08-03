@@ -91,14 +91,16 @@ is a list you can work through, not a hunt.
   was skipped, the same failure surfaces on the first `nuka run` that tries
   to import the file. (`BeforeAll`, `AfterAll` and `setDefaultTimeout` were
   on this list when the audit ran and are now supported; see below.)
-- **The same kind of name, used only as a type** — `IWorldOptions`,
-  `ITestCaseHookParameter` are the audit's own examples — is a different
-  case, not a smaller version of the one above: esbuild elides a type-only
-  import from the compiled output, so nothing by that name is actually
-  imported at run time. Neither `nuka check` nor `nuka run` sees anything
-  wrong, because the glue that ships is exactly what runs; only `tsc`
-  complains, and that is `tsc`'s job, not nukadoko's. This is not a
-  detection gap — there is nothing left at run time to detect.
+- **The same kind of name, used only as a type** is a different case, not a
+  smaller version of the one above: esbuild elides a type-only import from
+  the compiled output, so nothing by that name is actually imported at run
+  time. Neither `nuka check` nor `nuka run` sees anything wrong, because the
+  glue that ships is exactly what runs; only `tsc` complains, and that is
+  `tsc`'s job, not nukadoko's. This is not a detection gap — there is
+  nothing left at run time to detect. (`IWorldOptions` and
+  `ITestCaseHookParameter`, the audit's own examples of this category, are
+  now exported — aliases for `WorldConstructorParams`/`HookParameter` — and
+  typecheck the same as any other compat name.)
 - **CommonJS glue**: nukadoko is ESM-only, so `require("nukadoko/compat")`
   fails outright with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Two of the eight
   suites are CommonJS throughout. The door admits ES module glue only.

@@ -66,6 +66,27 @@ export interface WorldConstructorParams {
   readonly parameters: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * `WorldConstructorParams` under cucumber-js's own name (t5-compat-types
+ * task spec; m2.1-a compat-audit synthesis: `IWorldOptions` appears in 2/2
+ * real-world repos' glue as a bare type import, e.g. `import { type
+ * IWorldOptions } from "nukadoko/compat"`). Until now that import failed
+ * `tsc` while `nuka run`/`nuka check` stayed silent — a type-only import
+ * gets stripped by esbuild before either ever sees it — so this alias closes
+ * a gap only the caller's own typechecker could see.
+ *
+ * Deliberately **not** generic, unlike cucumber-js's own
+ * `IWorldOptions<ParametersType>`: `parameters` here is always
+ * `Readonly<Record<string, unknown>>` (see `WorldConstructorParams` above)
+ * regardless of what a caller writes as a type argument, and this project's
+ * `World` isn't itself generic — accepting a type parameter and ignoring it
+ * would make `IWorldOptions<Foo>` typecheck while silently not doing what it
+ * looks like it does. Glue written that way gets a real `tsc` error instead;
+ * that's intentional (docs/spec.md, migration-door rule: something
+ * unsupported should fail loudly, not pass quietly).
+ */
+export type IWorldOptions = WorldConstructorParams;
+
 export type WorldConstructor = new (params: WorldConstructorParams) => World;
 
 const runtimeByWorld = new WeakMap<World, StepContext>();

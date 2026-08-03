@@ -55,6 +55,15 @@ export interface HookParameter {
   readonly willBeRetried: false;
 }
 
+/** `HookParameter` under cucumber-js's own name (t5-compat-types task spec;
+ * m2.1-a compat-audit synthesis: `ITestCaseHookParameter` appears in 2/2
+ * real-world repos as a bare type import) — the same `tsc`-only gap
+ * `IWorldOptions` closed for world.ts, for the same reason (see that alias's
+ * own doc comment). `HookParameter` above already documents that it was
+ * built to match this exact shape, so this alias adds a name, not a new
+ * definition. */
+export type ITestCaseHookParameter = HookParameter;
+
 /** `this: any`, not `this: World` (same reasoning as src/compat/registry.ts's
  * `CompatStepFn`): a hook is called against whichever World subclass
  * `setWorldConstructor` registered, and a real hook function typically
