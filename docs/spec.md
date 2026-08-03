@@ -250,6 +250,48 @@ API and missed where the naming actually needed to land: the receipt was
 already the destination, and a step's own execution never needed a live
 log to say which stage it reached — only somewhere to write it down.
 
+Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
+binds into a scenario raises a question the step never faced standalone: how
+does a value an earlier step produced reach this one? Two answers that look
+obvious both give something up. Dropping the argument in favor of reading
+everything through `ctx.resultOf` loses `nuka do`'s single-step execution —
+there is nothing left to pass on the command line — and running standalone
+is exactly what makes the vocabulary useful to an agent in the first place,
+so that loss is real, not incidental. Folding the whole setup into one
+composite step avoids touching the existing steps, but flattens the Given
+line: whatever the composite step actually does behind that one sentence
+stops being visible to a reviewer reading the feature file.
+
+The way to keep both: make the argument optional, and fall back to the
+prior step's result inside `run`.
+
+```ts
+async run(ctx, args) {
+  const projectId = args.projectId ?? ctx.resultOf(createProject)?.id;
+  if (projectId === undefined) {
+    throw new Error("projectId: pass it, or run the create-project step first");
+  }
+  // ...
+}
+```
+
+Called with the argument, the step still runs standalone under `nuka do`.
+Left out, it reads its input from whichever step produced it earlier in the
+same scenario. If the fallback is also empty, the step throws its own
+error saying so — pass the argument, or run the prior step first — rather
+than failing on a schema mismatch that doesn't say why.
+
+This depends on one rule the step author has to hold, because nothing
+checks it: a schema key with no capture in the pattern **must be declared
+optional**. Left required, args validation fails on every Gherkin-driven run
+of that step — a captureless key can only ever arrive through the fallback,
+never through a match. `nuka check` does not catch this: it checks a
+pattern's captures against the schema's keys (an unknown capture is an
+error), never the reverse — a schema key with no matching capture is never
+flagged. Keeping a captureless
+key optional is discipline the step author owns, not something `check`
+enforces.
+
 ### Keyword semantics
 
 Gherkin keywords carry a real fact because `mutates` is a **declaration
