@@ -297,6 +297,15 @@ what a declaration settles is layered:
   turns out wrong is still visible there — falsifiable after the fact.
   Accepting a falsifiable declaration is not measurement giving up; it is
   where the tool's authority over this particular fact actually ends.
+- Falsifiable does not mean checked: nukadoko never runs that reconciliation
+  itself, even though `mutates` and `observed` already sit on the same
+  receipt so an operator can compare them without a second artifact. No
+  `nuka run` or `nuka check` output claims a mismatch between the two.
+  Automating that claim would mean trusting the same HTTP-method proxy as
+  settled fact — a GraphQL call, an RPC-over-POST call, or a vendor API that
+  reads over POST would each read as a false positive, every time — which is
+  the same reason run-time enforcement was dropped, above, applied here to
+  reporting instead of execution.
 - Compat (untyped) steps have no `mutates` to declare at all (see "What
   compat steps lack") — `nuka check`'s `then-compat-step` warning flags
   one bound in Then position as that coverage gap instead of a mutation
