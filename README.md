@@ -51,7 +51,7 @@ Allure.
 **Pre-0.1, and this is version 0.0.2.** The public API can change without a
 major bump until 0.1.
 
-Implemented and covered by 528 tests: typed steps, receipts, sessions,
+Implemented and covered by tests: typed steps, receipts, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), and two agent skills. Not implemented:
 compat gap detection in `nuka check`, an AI-assisted glue converter, and

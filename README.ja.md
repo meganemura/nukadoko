@@ -45,7 +45,7 @@ agent によるある実行の報告は、その実行の記録そのものに�
 **Pre-0.1 で、これはバージョン 0.0.2 です。**
 0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
 
-528 個のテストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
 未実装なのは、`nuka check` における compat のギャップ検出、AI 支援によるグルーの変換、scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
