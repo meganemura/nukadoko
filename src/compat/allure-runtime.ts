@@ -18,8 +18,7 @@ import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtensi
 // v1 message mapping (this task's spec, decision 3) — the exhaustive list of
 // what this class actually reads out of the stream; everything else is
 // silently dropped (`default:` below), a documented v1 scope decision, not
-// an oversight (see this slice's own task report for the full ignored-kind
-// list):
+// an oversight (the full ignored-kind list is below):
 //   - `metadata` -> declared.labels / .links / .parameters (this message's
 //     own `description`/`descriptionHtml`/`testCaseId`/`historyId`/
 //     `displayName` fields are dropped: no receipt field exists for them

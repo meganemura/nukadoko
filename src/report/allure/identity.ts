@@ -5,9 +5,8 @@ import path from "node:path";
 // (m3b-allure-emitter task spec, decision 5) small enough to isolate on
 // their own — resolving the host project's own package.json `name` (or
 // `null` when there isn't one), and assembling the `fullName` string the
-// official cucumberjs Allure adapter's own convention uses (research notes
-// section 3), so a team migrating in keeps its existing Allure
-// history/retry links intact.
+// official cucumberjs Allure adapter's own convention uses, so a team
+// migrating in keeps its existing Allure history/retry links intact.
 //
 // Deliberately does NOT compute `testCaseId` (the md5 of a *template*-name
 // variant of this same fullName): that needs allure-js-commons' own

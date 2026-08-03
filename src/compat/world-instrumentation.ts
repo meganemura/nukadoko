@@ -12,7 +12,7 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 // `getOwnPropertyDescriptor` at all): that is a named boundary, not a bug
 // (findings' own conclusion).
 //
-// Proxy is deliberately not used here (findings Q3): wrapping `target` in a
+// Proxy is deliberately not used here: wrapping `target` in a
 // `new Proxy(target, {...})` and handing the proxy out as `this` breaks any
 // method that touches a `#private` field with `TypeError: Cannot read
 // private member ... from an object whose class did not declare it`,
@@ -47,7 +47,7 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 // tally is zeroed again before the first real step ever gets its snapshot,
 // so a hook's own World access is never attributed to any step's receipt.
 //
-// Reserved keys (findings Q5, from `@cucumber/cucumber`'s own published
+// Reserved keys (verified against `@cucumber/cucumber`'s own published
 // world.d.ts/world.js): `attach`/`log`/`link`/`parameters` are, at run time,
 // ordinary own writable data properties despite being typed `readonly`
 // upstream — indistinguishable from a user's own bag field by descriptor
@@ -57,7 +57,9 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 // time check), and reassigning one is a run-time error here — silently
 // letting `this.attach = "oops"` through would leave every later
 // `this.attach(...)` call throwing deep inside cucumber-style glue instead
-// of at the point of the actual mistake (findings Q5's own reproduction).
+// of at the point of the actual mistake — reproduced directly: assigning
+// `this.attach = "oops"` silently succeeds, and only the next
+// `this.attach(...)` call is what throws.
 
 export const RESERVED_WORLD_KEYS: ReadonlySet<string> = new Set([
   "attach",
@@ -90,8 +92,7 @@ export interface WorldInstrumentationHandle {
  * installed accessor — the only shape this module ever measures or wraps.
  * Instance-own descriptor inspection, not `typeof Reflect.get(...)`: the
  * latter runs a getter and inspects its *return value*, which cannot tell a
- * data property holding a function apart from an actual method (findings
- * Q2's own empirical correction). */
+ * data property holding a function apart from an actual method. */
 function isOwnPlainDataKey(target: object, key: string): boolean {
   const desc = Object.getOwnPropertyDescriptor(target, key);
   if (desc === undefined) return false;
@@ -161,8 +162,10 @@ export function instrumentWorld<T extends object>(
           const result = schema.safeParse(value);
           if (!result.success) {
             // Thrown *before* `recordWrite` — an invalid write must never
-            // appear in `receipt.world.writes` (findings Q1's bug,
-            // regularized into this module's own contract).
+            // appear in `receipt.world.writes`. (An early prototype pushed
+            // to the writes list before running `safeParse`, so a write
+            // that failed validation still showed up there; this ordering
+            // is the fix.)
             throw new WorldWriteValidationError(key, formatValidationIssues(result.error.issues));
           }
           value = result.data;
