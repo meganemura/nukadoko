@@ -211,6 +211,16 @@ every future "does this belong on ctx?" question.
   module — typed by that step's own schema, reviewable in the diff. A
   feature line like "that listing is closed" is implementable exactly to
   the extent its referent produced a validated result.
+- `ctx.section(label: string): void` — marks that execution has reached a
+  named stage; synchronous, no return value, no matching "end" call. Every
+  call is appended, in call order, to the receipt's `sections` (see
+  "Receipts"); a step that never calls it gets no `sections` key at all,
+  the same convention `used` follows. It is a bare marker rather than a
+  function that wraps a block (`ctx.section(label, fn)`) on purpose: a
+  wrapping form would have to decide what nesting, an early `return`, and
+  an `await` crossing its boundary mean, and none of that is required to
+  answer the question it exists for — where execution stopped, not how
+  the block that stopped is shaped.
 
 `page()` and `request()` hand back Playwright's own `Page` and
 `APIRequestContext` rather than types of nukadoko's own. That is a choice
@@ -218,11 +228,16 @@ with a cost, and it is stated as one (see "Out of scope").
 
 Helpers live as imports: `import { poll } from "nukadoko"` gives the
 submit-poll-fetch loop for asynchronous jobs — it needs nothing the
-executor owns, so it is not on `ctx`. There is no `ctx.section` yet for
-the inverse reason: it would do nothing today, and an API member that
-does nothing is an unvalidated promise. It returns with the progress-log
-feature, where naming a stretch of a run becomes something the tool
-records.
+executor owns, so it is not on `ctx`. `ctx.section` looks like it could be
+one too, but it isn't: it writes into a collector the executor owns and
+resets at each step boundary, the same lifetime `observed` and `used`
+already have, so it belongs on `ctx` by this section's own rule. An
+earlier version of this boundary rule withheld `ctx.section` entirely, on
+the grounds that it would do nothing until a progress-log feature
+recorded named stretches of a run live. That reasoning held for a no-op
+API and missed where the naming actually needed to land: the receipt was
+already the destination, and a step's own execution never needed a live
+log to say which stage it reached — only somewhere to write it down.
 
 ### Keyword semantics
 
@@ -495,6 +510,21 @@ shape whether the step ran inside a scenario or via `do`.
   tool-provided, so the reads are measurable. The dependency is thus
   visible twice: statically as an import, at run time as provenance in the
   receipt chain.
+- `sections` (present only when non-empty) lists the labels `ctx.section`
+  was called with, in call order. Not deduplicated, unlike `used`: a label
+  entered twice — a loop, a retry — was entered twice, and the array
+  should read that way, where `used` names a receipt id once because an id
+  is an identity worth citing once, not a point in a sequence. It carries
+  no timing: the question is where execution stopped, not where it was
+  slow, and `string[]` can widen to a richer shape later without a
+  breaking change, while building that shape now would ship parts nobody
+  asked for. A failed step's `sections` still holds whichever labels it
+  reached before the failure, and that array's last element already
+  answers "which stage was it in" — there is no separate `error.section`
+  field putting the same fact in a second place. Only a typed step's `ctx`
+  has `section`; a compat step has no counterpart on `this`, so `sections`
+  is simply omitted for one, the same way `used` is omitted for a typed
+  step that never calls `ctx.resultOf`.
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
