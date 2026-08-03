@@ -188,6 +188,10 @@ every future "does this belong on ctx?" question.
   feature line like "that listing is closed" is implementable exactly to
   the extent its referent produced a validated result.
 
+`page()` and `request()` hand back Playwright's own `Page` and
+`APIRequestContext` rather than types of nukadoko's own. That is a choice
+with a cost, and it is stated as one (see "Out of scope").
+
 Helpers live as imports: `import { poll } from "nukadoko"` gives the
 submit-poll-fetch loop for asynchronous jobs — it needs nothing the
 executor owns, so it is not on `ctx`. There is no `ctx.section` yet for
@@ -785,6 +789,18 @@ nuka skill path               where the bundled skill lives, for a project
   context.
 - A sign-off is not a proof that the software is correct. It records that an
   agreed scenario was green at one named commit, and says nothing about today.
+- **Not driver-agnostic, deliberately.** `ctx.page()` and `ctx.request()`
+  return Playwright's own `Page` and `APIRequestContext`, and the compat
+  door hands migrating glue the same objects it already used. Wrapping them
+  behind an interface of nukadoko's own would cost every capability the
+  wrapper didn't think to expose, and would replace a vocabulary users
+  already know with one only this tool speaks — the opposite of writing
+  through the official SDK. The exchange is that swapping in another driver
+  later breaks the public API and the compat door together. That is
+  accepted, not overlooked: rewriting step bodies from one driver's API to
+  another is work an agent does well, while paying for portability up front
+  would slow every change that isn't a driver swap. Revisit when the
+  probability of that swap is measured to have risen, not before.
 - No test parallelism, sharding, retries, or CI reporting. No outbound
   network I/O by nukadoko itself. No HTML rendering — that is Allure's job.
 

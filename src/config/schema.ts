@@ -106,6 +106,13 @@ export const configSchema = z
     // types" as its own no-op default, so this mirrors that rather than
     // making every call site handle `undefined` separately.
     parameterTypes: z.array(parameterTypeConfigSchema).default([]),
+    /** Deliberately unvalidated: `headless` is the only field read today
+     * (src/context/create-context.ts duck-types it), and pinning a schema
+     * around one field would fix a surface before the rest of it has a use
+     * to be measured against. Whenever the shape is designed it takes
+     * Playwright's own option names directly — coupling to Playwright is an
+     * accepted design choice (docs/spec.md "Out of scope"), so there is no
+     * driver-name level here to keep a door open for. */
     browser: z.unknown().optional(),
     /** Individual secret-source keys to demote to plain (never redacted).
      * Default `{ public: [] }`: nothing is public unless named. There is no
