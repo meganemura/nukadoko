@@ -31,8 +31,8 @@ export class FeatureParseFailedError extends Error {
 }
 
 /** Thrown when `:line` was given explicitly but no pickle in the file has a
- * gherkin `location.line` matching it (this task's spec, decision 1: "一致
- * ゼロはセットアップ失敗"). */
+ * gherkin `location.line` matching it (this task's spec, decision 1: zero
+ * matches is a setup failure). */
 export class NoMatchingScenarioError extends Error {
   readonly relativePath: string;
   readonly line: number;

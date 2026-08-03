@@ -10,7 +10,8 @@ import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "
 // kept out of cli/session.ts so it's unit-testable without going through
 // yargs (same split as cli/do.ts vs cli/run-cli.ts). `listSessions` walks
 // every environment's subdirectory (m1-environments task spec, decision 7:
-// "list は全環境のサブディレクトリを走査して列挙"); `clearSession`/
+// list enumerates by scanning every environment's subdirectory);
+// `clearSession`/
 // `clearAllSessions` are scoped to one environment at a time — there is no
 // all-environments clear, on purpose (accidental-deletion risk with no real
 // use case). A session's existence is defined by its .json file; a .lock
@@ -103,7 +104,7 @@ export async function clearSession(
 /**
  * Deletes every session (and lock) file under one environment. All-or-
  * nothing: if even one lock is live, nothing is deleted (this task's spec:
- * "部分削除はしない") and `SessionLockConflictError` is thrown naming that
+ * no partial deletion) and `SessionLockConflictError` is thrown naming that
  * session. A lock file with no matching session file still counts — it
  * represents a `do` run that is (or claims to be) in progress. Scoped to
  * `environment` only: clearing every environment at once is deliberately not

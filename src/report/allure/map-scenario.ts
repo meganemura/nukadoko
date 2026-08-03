@@ -14,8 +14,9 @@ import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module
-// (m3b-allure-emitter task spec, decision 2's own words: "map-scenario.ts
-// を純関数に保つのが構成の要") — `(record, receipts, gherkin document,
+// (m3b-allure-emitter task spec, decision 2's own words: keeping
+// map-scenario.ts a pure function is central to the whole design) —
+// `(record, receipts, gherkin document,
 // pickle, posixPath) -> flat description of what to attach where`. No
 // `allure-js-commons` import (not even a type-only one) and no `node:fs`:
 // every input here is already resolved by a caller (emitter.ts reads
@@ -132,7 +133,7 @@ export interface MapScenarioInput {
   readonly record: ScenarioRecord;
   /** Already-read receipts, keyed by receipt id — `null` for an id whose
    * receipt.json couldn't be read/parsed (this task's spec, decision 12:
-   * "読めない receipt は null として扱って写像を続ける"). A step whose own
+   * treat an unreadable receipt as null and keep mapping). A step whose own
    * `record.steps[].receipt` isn't a key here at all is treated the same as
    * one mapped to `null`. */
   readonly receipts: ReadonlyMap<string, Receipt | null>;
@@ -148,8 +149,8 @@ export interface MapScenarioInput {
 // --- ErrorKind -> Allure status (m3b-allure-emitter task spec, decision 3)
 // ---
 //
-// > failed = 被テストシステムが契約に反した。broken = 契約層が判定に到達
-// > できなかった。
+// > failed = the system under test violated the contract. broken = the
+// > contract layer failed to reach a verdict.
 //
 // Only `step_error` (the step's own code threw) and `result_invalid` (the
 // return value itself violated the step's own schema) are the tested
@@ -423,8 +424,9 @@ function resolveStepOutcome(step: ScenarioStepRecord, receipts: ReadonlyMap<stri
   // rather than a status of its own) or its receipt.json exists but
   // couldn't be read. Neither carries a `kind` to classify with, so this
   // falls back to the record's own coarse status literally (this task's
-  // spec, decision 12: "その step は record 由来の status だけで出す")
-  // rather than guessing at a kind that was never actually recorded.
+  // spec, decision 12: report that step using only the status the record
+  // itself carries) rather than guessing at a kind that was never actually
+  // recorded.
   return { status: "failed", message: step.error?.message };
 }
 
@@ -618,8 +620,8 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
 // isn't: `resolveStepOutcome`'s own unmarked fallback (`step.error?.message`)
 // already flows into `entry.step.message`/`entry.hook.message` regardless of
 // whether a kind was resolved, so this function only has to forward
-// whichever of the two is already there (M3-C spec item 1: "メッセージが
-// あるならそれを載せる").
+// whichever of the two is already there (M3-C spec item 1: if there is a
+// message, include it).
 
 interface FirstFailure {
   readonly kind?: ErrorKind;

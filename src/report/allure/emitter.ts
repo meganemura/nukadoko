@@ -35,8 +35,8 @@ import { createAtomicWriter } from "./writer.js";
 // every before-hook collapses to the scenario's own `started_at` and every
 // after-hook to its `finished_at`, both zero-width — a hook's own duration
 // is not observable through this mapping today. Widening record.json to
-// carry it is a decision for outside this task (this task's spec: "スキーマ
-// の変更をしない方針を優先").
+// carry it is a decision for outside this task (this task's spec: leaving
+// the schema unchanged takes priority).
 //
 // AllureEmitterOptions carries no `stateDir` of its own (this task's spec,
 // decision 12 pins its exact shape): `readReceiptsForRecord`
@@ -236,8 +236,8 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           ...(mapped.test.message !== undefined ? { statusDetails: { message: mapped.test.message } } : {}),
         };
         // Mutates `partialTest.labels` in place, appending suite labels only
-        // when none are already present (this task's spec, decision 6: "返
-        // ってきた実際の label をテストで固定する").
+        // when none are already present (this task's spec, decision 6: pin
+        // the test to whichever labels actually come back).
         ensureSuiteLabels(partialTest, [mapped.test.featureName]);
 
         const testUuid = runtime.startTest(partialTest, [scopeUuid]);

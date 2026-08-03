@@ -16,7 +16,7 @@ import path from "node:path";
 // hook, before each step) — the same "one object, mutable boundary" shape
 // src/context/create-context.ts's own `httpLogDir` already uses. That one
 // object reaches its two writers two different ways, both landing on the
-// identical instance (this task's spec, item 2's "kind 非依存" requirement):
+// identical instance (this task's spec, item 2's kind-independence requirement):
 // world.ts gets it passed directly, as a plain constructor parameter
 // (`instantiateWorldForPickle`'s own `declaredCollector` argument) — a
 // directly-passed object reference has no module-identity concerns, unlike
@@ -57,7 +57,7 @@ export interface DeclaredParameter {
 
 /** The receipt's own `declared` shape (src/receipt/types.ts) — every field
  * omitted when empty, the whole object omitted when every field is (this
- * task's spec, decision 5: "全部空なら省略"). */
+ * task's spec, decision 5: omit the whole object when every field is empty). */
 export interface DeclaredSnapshot {
   attachments?: string[];
   labels?: DeclaredLabel[];
@@ -78,7 +78,7 @@ export interface DeclaredCollector {
   /** Writes `content` under the current boundary's directory as `baseName`
    * (sanitized) + `extension` (already normalized, may be `""`), appending
    * `-2`, `-3`, ... on a name collision within the same boundary (this
-   * task's spec, decision 3: "名前衝突は連番"), then records the resulting
+   * task's spec, decision 3: a name collision gets a sequence number), then records the resulting
    * file name into this boundary's `attachments` tally. A no-op before the
    * first `beginStep()` ever runs (defensive; every real caller runs inside
    * a step or hook, which src/run/run-scenario.ts always begins first). */

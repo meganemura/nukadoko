@@ -14,7 +14,7 @@ import type { CheckIssue } from "./types.js";
 // patterns (src/binding/pattern.ts), build the matching CucumberExpression
 // (src/binding/expression.ts's underlying pieces), and check the result
 // against the step's `args` schema (src/binding/schema-shape.ts). Also the
-// two "語彙検査" items that only make sense read across the whole
+// two vocabulary-check items that only make sense read across the whole
 // vocabulary at once: alias patterns binding different key sets, and two
 // patterns normalizing to the same text. Returns both the check issues
 // *and* every pattern that built successfully — src/check/feature-check.ts
@@ -36,7 +36,7 @@ import type { CheckIssue } from "./types.js";
 // (compat has none) or folded into the alias-key-mismatch check (compat has
 // no aliases — one registration is one pattern is one vocabulary entry).
 // This module also lists every compat-origin `defineParameterType` call as
-// a warning ("config が typed 時代の家") and merges it into the *same*
+// a warning (config is the typed-era home for this) and merges it into the *same*
 // registry config-origin entries use, so a name collision between the two
 // sources raises the exact same `parameter-type-invalid` issue a
 // config/config collision already does.
@@ -127,8 +127,8 @@ export function checkBindings(
   }
 
   // A name collision in config.parameterTypes (against a built-in type,
-  // another config entry, or now a compat-origin entry — "名前衝突は既存エ
-  // ラー") is a config-authoring error, not something any individual
+  // another config entry, or now a compat-origin entry — this reuses the
+  // existing collision error) is a config-authoring error, not something any individual
   // pattern did wrong (this task's spec, decision 3) — reported once, here,
   // as its own issue rather than once per pattern that would otherwise have
   // used the registry. No pattern can be checked at all without a working
@@ -152,7 +152,7 @@ export function checkBindings(
   const patterns: CheckedPattern[] = [];
   // strippedPattern -> every (stepName, pattern) that normalizes to it,
   // across the *entire* vocabulary and *across kind* (this task's spec,
-  // item 6: "duplicate は kind をまたいで検出") — a typed step's stripped
+  // item 6: duplicate detection spans kind) — a typed step's stripped
   // pattern and a compat string pattern share this one text namespace
   // because both are, in the end, plain cucumber-expression source; a
   // compat RegExp pattern has its own separate namespace below (regexpText
@@ -280,8 +280,8 @@ export function checkBindings(
       // No stripCaptureNames here, on purpose — compat prose is unmodified
       // cucumber-expressions syntax (`{string}`, `{int}`, a custom type
       // name), never nukadoko's `{key:type}` naming convention (this task's
-      // spec, item 6: "compat の string pattern に named capture 構文は要求
-      // しない").
+      // spec, item 6: a compat string pattern is not required to use
+      // named-capture syntax).
       const owners = strippedTextOwners.get(entry.compat.pattern) ?? [];
       owners.push({ stepName, pattern });
       strippedTextOwners.set(entry.compat.pattern, owners);

@@ -28,8 +28,8 @@ import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtensi
 //     LIFO on this instance's own stack (nesting is unlikely in practice via
 //     `logStep`, but `step(name, fn)` can nest, and this still pairs
 //     correctly either way); the future progress-log feature is the
-//     intended place these get to keep their own shape ("progress log 実装時
-//     に昇格" — this task's spec, decision 3).
+//     intended place these get to keep their own shape (promoted there once
+//     that feature is implemented — this task's spec, decision 3).
 //   - `attachment_content` -> a file under the active collector's current
 //     boundary directory, plus a `declared.attachments` entry.
 // Ignored entirely (not mapped to anything): `step_metadata` (StepContext's
@@ -97,8 +97,8 @@ export class NukadokoAllureTestRuntime extends MessageTestRuntime {
         // `contentTypeForFileName` can only resolve to
         // `application/octet-stream` (verified against the real Allure
         // report, M3-C spec item 2). Reusing the same table here rather than
-        // adding a second one is deliberate (this task's spec: "新しい表を作
-        // らない").
+        // adding a second one is deliberate (this task's spec: don't create
+        // a new table).
         const extension = normalizeFileExtension(fileExtension) || extensionForMediaType(contentType);
         collector.recordAttachment(name, Buffer.from(content, encoding), extension);
         break;
@@ -118,8 +118,8 @@ const ALLURE_TEST_RUNTIME_KEY = "allureTestRuntime";
  * `nuka run`'s execution phase (src/cli/run.ts). Returns a best-effort
  * restore callback: captures whatever was at
  * `globalThis["allureTestRuntime"]` beforehand (nothing, in every case this
- * repo's own test suite exercises) and puts it back when called — "解除" is
- * a direct `globalThis` write, not an official unregister API, because
+ * repo's own test suite exercises) and puts it back when called — this
+ * "undo" is a direct `globalThis` write, not an official unregister API, because
  * allure-js-commons does not publish one — `setGlobalTestRuntime` and
  * `getGlobalTestRuntime` are its whole public surface. The key name itself
  * is the one documented fact this relies on staying stable

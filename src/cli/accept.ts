@@ -19,7 +19,7 @@ import type { WritableSink } from "./writable-sink.js";
 // `<stateDir>/scenarios/*`) and, if every one of the spec's seven refusal
 // conditions is clear, writes one markdown file beside the feature.
 //
-// The seven refusal conditions (spec "拒否条件") are checked in the order
+// The seven refusal conditions (docs/spec.md's own "refusal conditions" list) are checked in the order
 // listed there, each one a `return 1` before anything is written: (1) the
 // feature itself doesn't exist or doesn't parse, (2) there is no git
 // repository (or no commit yet) to name, (3) the *current* working tree is
@@ -32,9 +32,9 @@ import type { WritableSink } from "./writable-sink.js";
 // questions ("is it safe to accept right now" vs "was the run itself
 // trustworthy") that only happen to share a probe function
 // (src/run/probe-git.ts, reused rather than re-implemented per the spec's
-// own "触るな" list).
+// own list of things this task must not touch).
 //
-// Feature-path normalization (spec decision "対象 run の特定" item 1) is
+// Feature-path normalization (spec decision on identifying the target run, item 1) is
 // applied to *both* sides of the comparison, not just the argument. A
 // record's own `feature` is the literal string its `nuka run` invocation was
 // given — src/run/select-pickles.ts's `parseFeatureTarget` strips a trailing
@@ -66,7 +66,7 @@ function localDateStamp(iso: string): string {
 }
 
 // Frontmatter wants `ran_at`/`accepted_at` to read the same day as the
-// filename's `localDateStamp` (spec "確定判断") — a UTC `toISOString()`
+// filename's `localDateStamp` (spec's own settled-decisions section) — a UTC `toISOString()`
 // can land on the previous/next local day and make one run look like two.
 // Node has no built-in local-offset ISO formatter, so this is hand-rolled:
 // `getTimezoneOffset()` returns minutes *west* of UTC (positive west), the

@@ -2,8 +2,8 @@ import type { Receipt } from "../receipt/types.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 
 // Responsibility: render the acceptance record's markdown text (m4b-accept
-// task spec, "記録ファイル" — the exact shape is that section's own
-// worked example, reproduced here field for field). Pure string building
+// task spec's own "record file" section — the exact shape is that section's
+// own worked example, reproduced here field for field). Pure string building
 // only: every value this module needs (feature source, parsed feature name,
 // the winning run's scenarios, each step's own receipt) is handed in
 // already resolved — cli/accept.ts owns picking the run, checking git, and
@@ -22,7 +22,7 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // misread as a number, and quoting it costs nothing.
 //
 // `evidence` is stripped from every receipt before it is embedded (spec:
-// "receipt から evidence キーを取り除いてから書く"): trace.zip and
+// strip the `evidence` key from the receipt before writing it): trace.zip and
 // screenshots stay under `.nukadoko/`, never copied into a file meant to be
 // committed. Nothing else about a receipt is touched — this module does not
 // redact a second time (redaction already happened once, when the receipt
@@ -46,7 +46,7 @@ function yamlScalar(value: string): string {
  * the record itself and every receipt its steps reference, already read
  * from disk and already keyed by receipt id (src/report/receipts.ts's own
  * `readReceiptsForRecord` — reused, not reimplemented, per this task's
- * spec's own "触るな" list extending in spirit to "don't duplicate an
+ * spec's own "don't touch" list extending in spirit to "don't duplicate an
  * existing reader either"). */
 export interface AcceptedScenario {
   readonly record: ScenarioRecord;
@@ -57,8 +57,8 @@ export interface RenderAcceptanceRecordOptions {
   /** Project-root-relative, same form as `ScenarioRecord.feature`. */
   readonly featurePath: string;
   /** The feature file's own raw text, read once by cli/accept.ts — copied
-   * verbatim (spec: "feature の全文はツールがコピーする。人が書き写す余地を
-   * 作らない"). */
+   * verbatim (spec: the tool copies the feature's full text itself, leaving
+   * no room for a human to transcribe it by hand). */
   readonly featureSource: string;
   /** The parsed `Feature:` line's own name; falls back to the file's base
    * name only if gherkin somehow parsed a document with no `Feature:` name
@@ -113,8 +113,8 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
   lines.push(`accepted_at: ${options.acceptedAt}`);
   lines.push(`environment: ${yamlScalar(options.environment)}`);
   // Omitted entirely, not written as `null`, when the accepted run never
-  // recorded one (spec: "target_version は record に無ければ frontmatter
-  // からも省く").
+  // recorded one (spec: when target_version is absent from the record, omit
+  // it from the frontmatter too).
   if (options.targetVersion !== undefined) {
     lines.push(`target_version: ${JSON.stringify(options.targetVersion)}`);
   }

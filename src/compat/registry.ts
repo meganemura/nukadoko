@@ -11,9 +11,10 @@
 // resolutions produce the identical absolute file URL, and tsx's per-
 // discovery-run namespace (register({ namespace }) in discover-steps.ts)
 // caches a module by that resolved URL — so the two paths converge on one
-// shared buffer for the whole discovery run ("compat モジュールインスタンスと
-// バッファも discovery ごとに独立", a module-identity consequence already
-// relied on for typed steps — see discover-steps.ts's own header).
+// shared buffer for the whole discovery run (the compat module instance and
+// its buffer are independent per discovery run too, a module-identity
+// consequence already relied on for typed steps — see discover-steps.ts's
+// own header).
 // tests/compat-discover.test.ts's concurrent-discovery test is what
 // pins this down empirically: two `discoverSteps()` calls each get their own
 // tsx namespace and therefore their own instance of this module, so
@@ -102,8 +103,8 @@ let registrationCounter = 0;
 
 /** `value` is a plain options object — not a function (the 2-argument form),
  * and not `null`/an array/a string either, none of which this registration
- * API accepts as an options object (this task's spec, decision 2: "options
- * が object でない場合も throw"). */
+ * API accepts as an options object (this task's spec, decision 2: throw
+ * even when options is not an object). */
 function isStepOptionsObject(value: CompatStepOptions | CompatStepFn): value is CompatStepOptions {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -234,8 +235,8 @@ export function drainCompatParameterTypes(): CompatParameterTypeRegistration[] {
  * fallback for a scenario's own compat steps/Before/After, src/cli/run.ts
  * for BeforeAll/AfterAll; this module only records the value, same split as
  * this file's own per-registration `timeoutMs` fields). Last call wins
- * (this task's spec: "複数回呼ばれたら最後の呼び出しが勝つ" — cucumber-js's own
- * documented behavior, so no detection/warning is added for a second call).
+ * (this task's spec: the last call wins when called more than once —
+ * cucumber-js's own documented behavior, so no detection/warning is added for a second call).
  * Deliberately *not* seeded with cucumber-js's own 5000ms default when never
  * called at all: nukadoko's compat steps/hooks have always run unbounded
  * absent their own `{ timeout }`, and introducing a 5-second ceiling here

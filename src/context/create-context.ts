@@ -262,7 +262,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         return undefined;
       }
       // Recorded only on an actual read (m2pre-resultof task spec, decision
-      // 2: "空なら省略" — a call that returned `undefined` leaves no trace).
+      // 2: omit when empty — a call that returned `undefined` leaves no trace).
       used.record(entry.receiptId);
       return entry.result as z.infer<S["returns"]>;
     },

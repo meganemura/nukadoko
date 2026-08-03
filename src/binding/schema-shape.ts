@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
-// Responsibility: the "確実な不一致だけ" static reading of a step's `args`
-// zod schema this task's spec asks for (decision 2) — unwrap the
+// Responsibility: the "only flag a definite mismatch" static reading of a
+// step's `args` zod schema this task's spec asks for (decision 2) — unwrap the
 // optional/default wrappers a schema author commonly puts around a key,
 // then answer three narrow questions: is this schema even a `z.object`
 // (pattern-bound steps must be), what does a given key's declared type
@@ -31,8 +31,8 @@ function unwrapOptionalDefault(schema: z.ZodTypeAny): z.ZodTypeAny {
 
 /**
  * `undefined` unless `schema` (after unwrapping optional/default) is a
- * `z.object`, in which case its `.shape` — per this task's spec, "キー検査は
- * zod 4 の `.shape` で行う".
+ * `z.object`, in which case its `.shape` — per this task's spec, key
+ * inspection goes through zod 4's `.shape`.
  */
 export function asObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> | undefined {
   const unwrapped = unwrapOptionalDefault(schema);

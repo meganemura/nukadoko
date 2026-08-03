@@ -169,8 +169,8 @@ export interface InstantiatedWorld {
  * instance for measurement + optional declared-key validation (m2c-typed-
  * world task spec, items 1-2; a throwaway prototype measured this
  * own-data-defineProperty mechanism), applied right here, before any hook or
- * step ever sees this instance ("instantiateWorldForPickle が生成直後の
- * World に適用" — this task's spec, item 1). Called exactly once per
+ * step ever sees this instance (this task's spec, item 1:
+ * instantiateWorldForPickle applies it right after construction). Called exactly once per
  * pickle (m2b-compat-execution task spec, item 4: "1 pickle = 1 World = 1
  * ctx") by src/run/run-scenario.ts, through the reference
  * src/discover/discover-steps.ts captured via its own scoped tsx import —

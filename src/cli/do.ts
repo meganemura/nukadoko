@@ -183,8 +183,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
-    // m2a-compat-registry task spec, item 5: "nuka do compat step を名指し
-    // できない" — a compat step has no typed contract (no args/returns
+    // m2a-compat-registry task spec, item 5: `nuka do` cannot name a compat
+    // step by name — a compat step has no typed contract (no args/returns
     // schema, no validated result), so there is nothing for `nuka do` to
     // validate or run in isolation (docs/spec.md "What compat steps lack").
     // This is a setup failure, not an execution one: no receipt is written.
@@ -375,9 +375,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             // `errorKind` is always set by this point: `status` only ever
             // becomes `"failed"` alongside it, at each branch above (this
             // task's spec, decision 1). The `?? "step_error"` fallback is a
-            // belt-and-braces default, matching this task's own "判定に迷っ
-            // たら step_error に倒す" principle — it should never actually
-            // be reached.
+            // belt-and-braces default, matching this task's own principle of
+            // falling back to `step_error` whenever the classification is
+            // ambiguous — it should never actually be reached.
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment: resolvedEnv.name,
@@ -406,8 +406,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return status === "ok" ? 0 : 1;
   } finally {
     // Released regardless of which path above returned — setup failure,
-    // execution failure, or success (this task's spec, decision 4: "実行
-    // 終了時に必ず解放").
+    // execution failure, or success (this task's spec, decision 4: always
+    // released when execution ends).
     if (lockPath !== null) {
       await releaseLock(lockPath);
     }

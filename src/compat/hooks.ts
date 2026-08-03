@@ -107,8 +107,8 @@ const hookBuffer: HookRegistration[] = [];
 let hookCounter = 0;
 
 /** Same "is this a plain options object" guard as src/compat/registry.ts's
- * `isStepOptionsObject` (m21b-compat-execution task spec, item 1: "実装方針
- * も揃える") — not a function, and not `null`/an array either, neither of
+ * `isStepOptionsObject` (m21b-compat-execution task spec, item 1: align the
+ * implementation approach too) — not a function, and not `null`/an array either, neither of
  * which this registration API accepts as an options object. */
 function isHookOptionsObject(value: HookOptions | HookFn | string): value is HookOptions {
   return typeof value === "object" && value !== null && !Array.isArray(value);

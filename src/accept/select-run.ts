@@ -3,8 +3,9 @@ import path from "node:path";
 import type { ScenarioRecord } from "../run/record-types.js";
 
 // Responsibility: pick the one `nuka run` invocation `nuka accept <feature>`
-// is allowed to freeze (m4b-accept task spec, "対象 run の特定"/"拒否条件"
-// items 1, 4). Reads every `record.json` under `<stateDir>/scenarios/*`
+// is allowed to freeze (m4b-accept task spec's own "identifying the target
+// run"/"rejection conditions" sections, items 1, 4). Reads every
+// `record.json` under `<stateDir>/scenarios/*`
 // (there is no index of them anywhere else), keeps only the ones naming this
 // feature, groups by `run_id` (one `nuka run` invocation's worth), and
 // answers "which group, if any, may be accepted" — never *how* to report a
@@ -13,8 +14,9 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // (the commit/clean checks are cli/accept.ts's own job too, reusing
 // src/run/probe-git.ts — this module has no opinion on git at all).
 //
-// "Feature全体がカバーされ、かつ全部 passed" (spec decision 4) is checked per
-// group, independently: a group's own `line` set must equal the feature's
+// "the whole feature is covered, and every one of them passed" (spec
+// decision 4) is checked per group, independently: a group's own `line`
+// set must equal the feature's
 // pickle-line set *exactly* (not merely a superset — a partial run's lines
 // are always a subset, never a superset, but "exactly equal" is the literal
 // rule and is what a superset-tolerant `⊇` check would wrongly relax), and
@@ -28,8 +30,9 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // no promise about since two runs starting in the same millisecond is not a
 // case worth designing for.
 //
-// The three-way "no" (spec rejection item 4: "「1 つも run が無い」と「run
-// はあるが赤かった」と「部分実行だけがある」は利用者にとって別の状況") is
+// The three-way "no" (spec rejection item 4: "no run has ever existed", "a
+// run exists but was red", and "only partial runs exist" are different
+// situations from the user's point of view) is
 // resolved by tracking, alongside the winning group search, whether *any*
 // group ever had full line coverage regardless of its own pass/fail: if one
 // did, every full-coverage group must have failed (else it would have won),
@@ -90,8 +93,8 @@ export type SelectRunResult =
  * (this module never reads `record.feature` itself — cli/accept.ts owns the
  * path-normalization that comparison needs, this file's own header).
  * `featureLines` is that feature's own pickle `location.line` set, from
- * parsing the feature file fresh (spec decision 4: "feature を既存の loader
- * でパースして pickle を列挙し").
+ * parsing the feature file fresh (spec decision 4: parse the feature with
+ * the existing loader and enumerate its pickles).
  */
 export function selectAcceptableRun(
   featureRecords: readonly ScenarioRecord[],

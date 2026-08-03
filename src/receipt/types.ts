@@ -69,8 +69,9 @@
 // failure the contract layer itself can point at (the same "Tier A" claim
 // README makes); every other throw is `"step_error"`, the deliberate
 // catch-all a caller falls back to whenever it isn't sure (this task's spec:
-// "判定に迷ったら step_error に倒す" — misnaming a failure as a contract
-// failure is worse than not naming it at all). `mutates` mirrors a step's own
+// default to step_error whenever classification is uncertain — misnaming a
+// failure as a contract failure is worse than not naming it at all).
+// `mutates` mirrors a step's own
 // `defineStep` declaration (default `true`) so a receipt alone can be
 // checked against `observed` without a second lookup into the vocabulary;
 // `null` — not `false` — is a compat step's value, since compat has no

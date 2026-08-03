@@ -107,16 +107,17 @@ import type { WritableSink } from "./writable-sink.js";
 // immediately around the pickle `for` loop below (after every setup-phase
 // failure path has already returned, so environment/session/discovery are
 // all settled by the time either one runs) and skipped entirely when
-// `selected.pickles` is empty (this task's spec: "pickle が 1 つも選択されて
-// いない場合は実行しない" — a run that executes nothing has nothing for a
-// BeforeAll/AfterAll to prepare or tear down, and running one anyway would
-// be a surprise side effect, e.g. standing up a server for a `nuka run` that
-// never touches it). `BeforeAll` failing skips the pickle loop entirely but
-// `AfterAll` is still attempted (mirrors src/run/run-scenario.ts's own
-// Before/After asymmetry, applied one level up); neither has a record
-// artifact of its own (none exists at the run level — this task's spec:
-// "発明しない") — both report through stderr + this function's own exit
-// code, the same channel setup failures above already use. `runWithTimeout`/
+// `selected.pickles` is empty (this task's spec: a run that selects no
+// pickle must not run BeforeAll/AfterAll at all — a run that executes
+// nothing has nothing for a BeforeAll/AfterAll to prepare or tear down, and
+// running one anyway would be a surprise side effect, e.g. standing up a
+// server for a `nuka run` that never touches it). `BeforeAll` failing skips
+// the pickle loop entirely but `AfterAll` is still attempted (mirrors
+// src/run/run-scenario.ts's own Before/After asymmetry, applied one level
+// up); neither has a record artifact of its own (none exists at the run
+// level — this task's spec says not to invent one) — both report through
+// stderr + this function's own exit code, the same channel setup failures
+// above already use. `runWithTimeout`/
 // `doneCallbackMessage`/`pendingOrSkippedMessage` are reused, unmodified,
 // from src/run/run-scenario.ts (see that file's own header) rather than
 // duplicated here.
@@ -338,8 +339,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       let allPassed = true;
 
       // Skipped entirely for a run that selects zero pickles (this task's
-      // spec: "pickle が 1 つも選択されていない場合は実行しない") — `hasPickles`
-      // gates every step below, including AfterAll.
+      // spec: no pickle selected means BeforeAll/AfterAll never run) —
+      // `hasPickles` gates every step below, including AfterAll.
       const hasPickles = selected.pickles.length > 0;
 
       // See this file's own header (m3b-allure-emitter spec-b2 task spec,
@@ -411,8 +412,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           if (!ok) {
             beforeAllFailed = true;
             allPassed = false;
-            // Stop at the first BeforeAll failure (this task's spec: "最初
-            // の失敗で残りを中断" — same convention as scenario-level Before).
+            // Stop at the first BeforeAll failure (this task's spec: stop
+            // the rest of the run at the first failure — same convention
+            // as scenario-level Before).
             break;
           }
         }
@@ -489,8 +491,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
 
       // AfterAll is attempted whether or not BeforeAll failed, and whether
-      // or not any pickle actually passed (this task's spec: "AfterAll は
-      // それでも試行する") — the only thing that suppresses it is
+      // or not any pickle actually passed (this task's spec: AfterAll is
+      // attempted regardless) — the only thing that suppresses it is
       // `!hasPickles`, already excluded above. Every registration is
       // attempted regardless of an earlier one's own failure (unlike
       // BeforeAll) — same "teardown always runs, in full" convention as
@@ -516,7 +518,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
   } finally {
     // Released regardless of which path above returned (this task's spec,
-    // decision 8: "run 全体で1回取得・finally で解放").
+    // decision 8: acquired once for the whole run, released in `finally`).
     if (lockPath !== null) {
       await releaseLock(lockPath);
     }

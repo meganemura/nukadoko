@@ -40,7 +40,7 @@ export class DuplicateCompatStepError extends Error {
 }
 
 /** `defineWorld` was called more than once in a single discovery run (m2c-
- * typed-world task spec, item 2: "2 回目はエラー") — whether both calls are
+ * typed-world task spec, item 2: a second call is an error) — whether both calls are
  * in one file (`firstFilePath === duplicateFilePath`) or two, since
  * src/compat/define-world.ts's own buffer only ever holds registrations,
  * never rejects one itself (the same reason src/compat/registry.ts's

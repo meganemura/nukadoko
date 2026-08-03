@@ -8,8 +8,8 @@
 // run` pickle step; `nuka do`'s single execution-wide boundary never resets
 // it).
 //
-// Deduplicated and in read order (this task's spec, decision 2: "重複排除・
-// 読んだ順") — a step that reads the same earlier step's result more than
+// Deduplicated and in read order (this task's spec, decision 2: dedupe, then
+// order by first read) — a step that reads the same earlier step's result more than
 // once must not cite that receipt id twice in `used`.
 
 export interface UsedCollector {

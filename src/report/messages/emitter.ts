@@ -28,7 +28,8 @@ import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 // division src/report/allure/emitter.ts already draws against its own
 // map-scenario.ts sibling.
 //
-// Why this emitter exists at all (this task's spec, "この emitter の役割"):
+// Why this emitter exists at all (this task's spec's own "this emitter's
+// role" section):
 // unlike the Allure emitter (nukadoko's own measurement surface), this one
 // is compat-fidelity only — a migrated team's existing formatter/JUnit
 // CI/HTML report keeps working. receipt internals (validated result,
@@ -130,12 +131,13 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
   }
 
   // A declared file attachment's bytes are read and base64-encoded here
-  // (this task's spec, decision 9: "テキストでも常に BASE64…どちらでも無
-  // 損失なので分岐を作らない") — a `"built"` plan (a declared log line) is
+  // (this task's spec, decision 9: always BASE64-encode, even for text,
+  // since either encoding is equally lossless, so no branch is worth
+  // adding) — a `"built"` plan (a declared log line) is
   // already a complete `Attachment`, map-scenario.ts's own job, not this
   // one's. A file that can't be read is dropped with a warning; the
-  // scenario's own stream continues (this task's spec, decision 9: "その添
-  // 付だけ落として警告").
+  // scenario's own stream continues (this task's spec, decision 9: drop
+  // just that one attachment and warn).
   function writeAttachment(plan: MessagesAttachmentPlan): void {
     if (plan.kind === "built") {
       appendEnvelope({ attachment: plan.attachment });
@@ -170,8 +172,9 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
         appendEnvelope({ meta: buildMeta() });
 
         // `source.uri` is made identical to `pickle.uri`/`gherkinDocument.
-        // uri` by construction (this task's spec, decision 4: "consumer は
-        // この uri で 3 者を join する") — `gherkinDocument.uri` first
+        // uri` by construction (this task's spec, decision 4: a consumer
+        // joins the three of them together via this one uri) —
+        // `gherkinDocument.uri` first
         // (@cucumber/gherkin's own `Parser.parse` never sets it in this
         // repo's usage today, so this is a forward-compatible first
         // choice), falling back to the posix'd relative feature path
@@ -184,8 +187,9 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
           appendEnvelope({ source: { uri, data, mediaType: SourceMediaType.TEXT_X_CUCUMBER_GHERKIN_PLAIN } });
         } catch (error) {
           // Feature source unreadable: drop only the `source` envelope, not
-          // the rest of `begin()` (this task's spec, decision 4: "読めなけ
-          // れば警告して source envelope だけ落とす。他は続行").
+          // the rest of `begin()` (this task's spec, decision 4: if it
+          // can't be read, warn and drop only the source envelope —
+          // everything else continues).
           warn(`could not read feature source for messages: ${errorMessage(error)}`);
         }
 

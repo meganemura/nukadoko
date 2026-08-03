@@ -8,8 +8,8 @@
 // Unlike used.ts, this is not deduplicated: `used` names a receipt id (an
 // identity, worth citing once), while a section label is a point in a
 // sequence — a step that re-enters the same label twice (a loop, a retry)
-// did so twice, and the receipt should say so. "呼ばれた順に並べた配列",
-// not a set (this task's spec, decision 2).
+// did so twice, and the receipt should say so: an array ordered by call
+// order, not a set (this task's spec, decision 2).
 
 export interface SectionsCollector {
   /** Appends `label` to the call-order log. Never throws, never returns —

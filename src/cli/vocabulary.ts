@@ -24,7 +24,7 @@ export async function loadVocabulary(rootDir: string): Promise<Vocabulary> {
 
 /**
  * `nuka steps`' one row per vocabulary entry. `kind` is always present
- * (this task's spec, item 5: "kind を表示"); `description`/`mutates` are
+ * (this task's spec, item 5: `kind` is always shown); `description`/`mutates` are
  * present only for a typed entry — a compat entry has neither (no
  * declaration exists to show), and are omitted entirely from `--json`
  * output rather than serialized as `null` (optional fields simply aren't

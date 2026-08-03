@@ -5,8 +5,8 @@
 // scoped tsx import (see hooks.ts's own header for why that identity
 // matters); kept as its own module rather than folded into hooks.ts because
 // cucumber-js's own BeforeAll/AfterAll differ from Before/After in every
-// dimension that module's types encode: no `tags` (this task's spec: "run
-// 全体のフックにタグは意味を持たない" — there is no per-scenario pickle for a
+// dimension that module's types encode: no `tags` (this task's spec: a tag
+// has no meaning for a run-scope hook — there is no per-scenario pickle for a
 // tag expression to match against), no `HookParameter` argument (cucumber-js
 // itself calls a run-scope hook with zero arguments — there is no
 // pickle/gherkinDocument/testCaseStartedId for one run to hand it), and
@@ -19,7 +19,7 @@ export type RunHookType = "beforeAll" | "afterAll";
 
 /**
  * `this: any`, and never actually bound to anything at call time (this
- * task's spec: "`this` に World を束縛しない" — at BeforeAll time no pickle has
+ * task's spec: `this` is never bound to a World — at BeforeAll time no pickle has
  * been selected for execution yet and no World has been constructed for one
  * either; a World is created per pickle, src/run/run-scenario.ts, strictly
  * after BeforeAll would have already run). `...args: any[]` exists purely so
@@ -101,7 +101,7 @@ function registerRunHook(
 
 /** `BeforeAll(fn)`: runs once, before the first pickle in this `nuka run`
  * invocation — but only when at least one pickle was actually selected for
- * execution (src/cli/run.ts: "pickle が 1 つも選択されていない場合は実行しない"). */
+ * execution (src/cli/run.ts: BeforeAll/AfterAll never run when zero pickles were selected). */
 export function BeforeAll(fn: RunHookFn): void;
 /** `BeforeAll({ timeout }, fn)`: same per-hook timeout override as `Before`. */
 export function BeforeAll(options: RunHookOptions, fn: RunHookFn): void;
@@ -111,7 +111,7 @@ export function BeforeAll(optionsOrFn: RunHookOptions | RunHookFn, fn?: RunHookF
 
 /** `AfterAll(fn)`: attempted once, after the last pickle, regardless of how
  * the run went — including when `BeforeAll` itself failed (src/cli/run.ts:
- * "BeforeAll が失敗したら...AfterAll はそれでも試行する"). */
+ * AfterAll is still attempted even when BeforeAll failed). */
 export function AfterAll(fn: RunHookFn): void;
 /** `AfterAll({ timeout }, fn)`: same per-hook timeout override as `After`. */
 export function AfterAll(options: RunHookOptions, fn: RunHookFn): void;

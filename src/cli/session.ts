@@ -41,8 +41,8 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
       stdout.write(`${session.name}\t${session.updated_at}\n`);
     }
   }
-  // Empty is a valid, if unhelpful, answer (this task's spec: "0 件でも
-  // exit 0") — never an error.
+  // Empty is a valid, if unhelpful, answer (this task's spec: exit 0
+  // even with zero results) — never an error.
   return 0;
 }
 

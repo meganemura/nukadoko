@@ -12,8 +12,8 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 // CucumberExpression (or, for a compat RegExp pattern, nothing to build at
 // all) for every pattern in the vocabulary directly from src/binding/* (not
 // src/check/binding-check.ts, which mixes in check-only issue reporting;
-// this task's spec, decision 1: "run が同じ層
-// でマッチ + 束縛を行う前提で、check 専用の知識を混ぜない"), match one pickle
+// this task's spec, decision 1: run matches and binds at the same layer
+// check does, without mixing in check-only knowledge), match one pickle
 // step's text against them, and zip the matched values onto the step's named
 // capture keys plus the one table/docstring key they left unconsumed
 // ("final argument" rule, enforced here at run time exactly as `nuka check`
@@ -134,8 +134,9 @@ export type MatchOutcome =
  * Matches `text` against every binding, one candidate per distinct step name
  * — two patterns/aliases of the *same* step both matching is not ambiguous,
  * only two *different* steps (typed or compat alike — this task's spec,
- * item 2: "kind またぎ ambiguous は check と同じ意味論で run エラー扱い")
- * matching is (the same rule src/check/feature-check.ts applies statically).
+ * item 2: a match across kinds is ambiguous, a run-time error with the same
+ * semantics check already gives it) matching is (the same rule
+ * src/check/feature-check.ts applies statically).
  * Coercion happens here via `Argument.getValue` (the parameter type's
  * transformer, e.g. `{int}` -> number, or a `config.parameterTypes`/compat
  * `defineParameterType` entry's own transformer). Neither `getValue` nor this

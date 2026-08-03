@@ -39,8 +39,8 @@ export class WorldNotOpenedError extends Error {
 /** A Before/After hook's own `{ tags }` option used something other than a
  * single `@tag` or its negation `not @tag` (src/compat/tag-expression.ts) —
  * v1's deliberately small subset of Cucumber's tag expression grammar
- * (m2b-compat-execution task spec, item 5: "それ以外の式はセットアップエラーで
- * 「未対応」を明言"). Named "unsupported", not "invalid": the expression may
+ * (m2b-compat-execution task spec, item 5: any other expression is a setup
+ * error that states plainly it's unsupported). Named "unsupported", not "invalid": the expression may
  * well be valid Cucumber tag expression syntax elsewhere (`and`/`or`/
  * parentheses) — nukadoko just doesn't implement it yet, and a silent
  * partial match would be worse than refusing outright. */
@@ -131,7 +131,7 @@ export function isWorldWriteValidationError(error: unknown): boolean {
  * `setDefaultTimeout`) fired before `run()` settled (m21b-compat-execution
  * task spec, item 2's `runWithTimeout`, src/run/run-scenario.ts). Its own
  * class, not a plain `Error`, exists for one reason (m3a-receipt-kinds task
- * spec, decisions 1, "投げる側で識別できる形にしてから分類すること"): the
+ * spec, decisions 1: make it identifiable at the point it's thrown, before classification): the
  * catch site that turns this into a receipt's/hook record's `error.kind`
  * needs to tell a timeout apart from the step's/hook's own throw by type,
  * never by matching `message`'s text — that text is for humans and this

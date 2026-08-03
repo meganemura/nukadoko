@@ -21,8 +21,9 @@ import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord, ScenarioSt
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module (this
-// task's spec, decision 1: "map-scenario.ts — 純関数。scenario 1 本ぶんの
-// envelope 材料を組み立てる。ファイル I/O をしない") — `(record, receipts,
+// task's spec, decision 1: map-scenario.ts is a pure function that
+// assembles one scenario's worth of envelope material and never touches
+// the filesystem) — `(record, receipts,
 // pickle, newId, hookIds) -> cucumber-messages envelope material for one
 // scenario`. No `node:fs` anywhere in this file: every input is already
 // resolved by the caller (src/report/messages/emitter.ts reads receipt.json
@@ -52,9 +53,10 @@ import { contentTypeForFileName } from "../media-type.js";
 
 /** A declared file attachment still needs its bytes read and base64-encoded
  * (I/O — emitter.ts's job); a declared log line is already a complete
- * `Attachment` body (no file to read, this task's spec, decision 9's own
- * "常に BASE64…どちらでも無損失" reasoning doesn't apply to it since IDENTITY
- * is pinned for logs specifically) and so is built here in full. Keeping
+ * `Attachment` body (no file to read, so this task's spec, decision 9's own
+ * always-BASE64-since-either-encoding-is-lossless reasoning doesn't apply
+ * to it — IDENTITY is pinned for logs specifically) and so is built here in
+ * full. Keeping
  * both cases in one discriminated union (rather than two parallel lists)
  * preserves declared.attachments-then-declared.logs order as a single
  * ordered sequence for the emitter to walk. */
@@ -137,8 +139,8 @@ function statusForHook(status: "ok" | "failed"): TestStepResultStatus {
   return status === "ok" ? TestStepResultStatus.PASSED : TestStepResultStatus.FAILED;
 }
 
-// Duration never negative (this task's spec, decision 8: "duration が負に
-// なるときは 0 に丸める") — a receiptless step pinned to the previous step's
+// Duration never negative (this task's spec, decision 8: round to 0 when
+// duration would otherwise go negative) — a receiptless step pinned to the previous step's
 // own stop is always zero-width by construction, but a real receipt's own
 // started_at/finished_at pair is operator-authored input this module has no
 // way to fully trust.
@@ -158,7 +160,7 @@ export interface MappedTestStep {
   readonly testStepStarted: TestStepStarted;
   readonly testStepFinished: TestStepFinished;
   /** Emitted between `testStepStarted` and `testStepFinished` (this task's
-   * spec, decision 9 — "cucumber の runner がそうしている"). */
+   * spec, decision 9 — that's what cucumber's own runner does). */
   readonly attachments: readonly MessagesAttachmentPlan[];
 }
 
@@ -182,8 +184,8 @@ function mapPickleSteps(
     } else {
       // Same zero-width-pinned-to-previous-stop rule as
       // src/report/allure/map-scenario.ts:483-496 (this task's spec,
-      // decision 8: "2 つの emitter が同じ record から違う時間軸を見せるの
-      // は事故").
+      // decision 8: it would be a bug for the two emitters to show
+      // different timelines built from the same record).
       startMs = previousStopMs;
       stopMs = previousStopMs;
     }
@@ -258,7 +260,7 @@ function mapHookSteps(
 
 /** A `Hook` envelope this scenario is the first to need, alongside which of
  * the two run-wide slots (`hookIds.before`/`hookIds.after`) it fills (this
- * task's spec, decision 6: "遅延生成"). */
+ * task's spec, decision 6: created lazily, on first need). */
 export interface NewHookEnvelope {
   readonly type: "before" | "after";
   readonly hook: Hook;

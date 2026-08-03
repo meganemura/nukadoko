@@ -43,8 +43,8 @@ function copyAtomic(filePath: string, sourcePath: string): void {
 
 /** Builds a `Writer` rooted at `resultsDir`, creating it (and any missing
  * parents) up front. Existing files under `resultsDir` are never touched —
- * only added to (this task's spec, decision 10: "既存の allure-results を
- * 消さない"). */
+ * only added to (this task's spec, decision 10: never delete an existing
+ * allure-results directory). */
 export function createAtomicWriter(resultsDir: string): Writer {
   mkdirSync(resultsDir, { recursive: true });
 

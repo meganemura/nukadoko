@@ -110,7 +110,7 @@ export type Vocabulary = ReadonlyMap<string, VocabularyEntry>;
 /** A `defineParameterType` call made from compat ("support") code, plus the
  * file it came from. src/check/binding-check.ts merges these into the same
  * `ParameterTypeRegistry` as `config.parameterTypes` and warns that they
- * exist ("config が typed 時代の家"). `filePath` is rootDir-relative, same as
+ * exist (config is the typed-era home for this). `filePath` is rootDir-relative, same as
  * `importFailures[].filePath` below — src/check/binding-check.ts puts this
  * straight into a `CheckIssue.file`, and every other `CheckIssue.file` this
  * run's caller (src/check/analyze.ts) produces is already relative
@@ -280,7 +280,7 @@ export async function discoverSteps(
     const compatParameterTypes: CompatParameterTypeEntry[] = [];
     // At most one file's worth of `defineWorld` schemas ever wins — a second
     // registration, anywhere, is always an error (m2c-typed-world task spec,
-    // item 2: "2 回目はエラー"), detected here rather than inside define-
+    // item 2: a second call is an error), detected here rather than inside define-
     // world.ts itself so both offending files can be named
     // (DuplicateWorldDefinitionError), the same reasoning
     // DuplicateCompatStepError already applies to a colliding compat step.
@@ -289,7 +289,7 @@ export async function discoverSteps(
     const importFailures: { filePath: string; message: string }[] = [];
 
     for (const filePath of files) {
-      // Scope note (m21-compat-gap findings, Q3's "重大な訂正"): this only
+      // Scope note (m21-compat-gap findings, Q3's significant correction): this only
       // catches a file whose import itself throws. A name imported but used
       // only as a type annotation, or imported and never referenced at all,
       // is elided from the compiled output by esbuild/tsx and so never
@@ -399,7 +399,7 @@ export async function discoverSteps(
       vocabulary,
       compatParameterTypes,
       // Read once, after every file's import has finished (this file's own
-      // header, "並行 discovery の安全性"): a World constructor/hook isn't
+      // header, on concurrent-discovery safety): a World constructor/hook isn't
       // attributed to any one file, unlike a compat step, so there is
       // nothing to drain per file — just this run's own final state.
       // `declaredWorldSchemas` is curried in here (m2c-typed-world task

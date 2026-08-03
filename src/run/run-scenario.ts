@@ -32,7 +32,7 @@ import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
 
 // Responsibility: execute one pickle end to end (this task's spec, item 1's
-// "シナリオ実行器") — the scenario-level counterpart to cli/do.ts's execution
+// own name for this: a scenario executor) — the scenario-level counterpart to cli/do.ts's execution
 // phase. One `ctx` is created for the whole pickle and shared by every step
 // (docs/spec.md "Running": "Steps in one pickle share one context"); a
 // step's own failure/undefined/ambiguous stops matching or running any
@@ -89,7 +89,8 @@ import { writeScenarioRecord } from "./write-record.js";
 // step's own receipt (`used`). Only a *typed* step's chain key ever exists
 // (compat has no Step object, and no validated result to offer — see below),
 // so this chain is exclusively typed-to-typed provenance, unchanged by this
-// slice's compat additions ("interop の データの橋は v1 では作らない").
+// slice's compat additions (v1 builds no data bridge between compat and
+// typed interop).
 //
 // Object identity survives a step file importing another step file
 // (m2pre-module-identity task spec): src/discover/discover-steps.ts loads
@@ -116,9 +117,9 @@ import { writeScenarioRecord } from "./write-record.js";
 // returned). Before/After hooks run against that same World, outside any
 // step's own receipt boundary — `contextHandle.beginStep(scenarioDir)`
 // before each hook phase redirects http.jsonl logging and the `observed`
-// tally away from any step's own receipt dir (this task's spec, item 5:
-// "フック内のネットワークは step 境界外", a documented v1 limit rather than a
-// bug: a hook's own network activity is neither measured on any step's
+// tally away from any step's own receipt dir (this task's spec, item 5: a
+// hook's own network activity stays outside any step boundary, a documented
+// v1 limit rather than a bug: it is neither measured on any step's
 // receipt nor visible in the scenario record at all).
 //
 // m2d-allure-shim task spec: this file also owns `declaredCollector` (src/
@@ -190,7 +191,7 @@ export interface RunScenarioOptions {
    * features.ts's `parseFeatureSource`, m21b-compat-execution task spec,
    * item 3) — every Before/After hook's `HookParameter.gherkinDocument`
    * below is this exact object, never a partial/reconstructed stand-in
-   * (this task's spec: "部分的なオブジェクトを渡してお茶を濁さないこと"). */
+   * (this task's spec: no cutting corners with a partial stand-in object). */
   readonly gherkinDocument: GherkinDocument;
   readonly vocabulary: Vocabulary;
   readonly bindings: readonly StepBinding[];
@@ -327,8 +328,8 @@ export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string
  * per-step timeout must never cause.
  *
  * The timer itself is always cleared, on every path, so a step/hook that
- * finishes in time never leaks a pending Node timer (this task's spec:
- * "タイマーは必ず解除する").
+ * finishes in time never leaks a pending Node timer (this task's spec: the
+ * timer must always be cleared).
  *
  * Exported (m22-compat-run-scope task spec addendum) so cli/run.ts's own
  * BeforeAll/AfterAll execution races against the exact same logic a
@@ -366,7 +367,8 @@ export async function runWithTimeout<T>(
 /** Classifies a compat step's/hook's own thrown value into the closed
  * `error.kind` enum (m3a-receipt-kinds task spec, decisions 1-2) —
  * identified by type, never by matching the thrown value's own message text
- * (this task's spec: "文字列マッチでメッセージを判定するのは不可"). Only
+ * (this task's spec: judging by a string match on the message is not
+ * allowed). Only
  * `CompatTimeoutError` (`runWithTimeout`, above, always constructed by this
  * very module) and a `WorldWriteValidationError` (a declared World key's
  * write, src/compat/world-instrumentation.ts — checked via
@@ -374,8 +376,8 @@ export async function runWithTimeout<T>(
  * error is reached through discovery's own scoped tsx import and
  * `instanceof` would silently miss it there; see that function's own header)
  * are identifiable this way; anything else — including a non-`Error` thrown
- * value — falls back to `"step_error"` (this task's spec: "判定に迷ったら
- * step_error に倒す"). Not applied to a typed step's own throw: a typed
+ * value — falls back to `"step_error"` (this task's spec: default to
+ * step_error whenever classification is uncertain). Not applied to a typed step's own throw: a typed
  * step never touches a World or `runWithTimeout` (no `this`, no timeout
  * mechanism — this file's own header), so that catch site hardcodes
  * `"step_error"` directly rather than call through here for a case that can
@@ -464,7 +466,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * 2's asymmetry-closing and item 3's compat receipt shape): records this
    * step in `chain` when `chainKey` is given and the final status is `"ok"`
    * (typed only — `undefined` for a compat step, this task's spec, item 4:
-   * "World は compat 同士"), then builds, redacts, and writes the receipt
+   * a World is shared compat-to-compat only), then builds, redacts, and writes the receipt
    * and this step's own scenario-record entry. `observed.http_writes` (every
    * network path this ctx opens tallies into whichever kind of step opened
    * it, typed or compat alike) is recorded on every receipt below regardless
@@ -575,8 +577,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // function no longer demotes an "ok" status to "failed" itself
             // (t2-trust-declaration task spec). The `?? "step_error"`
             // fallback is a belt-and-braces default only, matching this
-            // task's own "判定に迷ったら step_error に倒す" principle — it
-            // should never actually be reached.
+            // task's own principle of defaulting to step_error whenever
+            // classification is uncertain — it should never actually be reached.
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment,
@@ -654,7 +656,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     .reverse();
 
   // Hooks get their own boundary, never a step's own receipt dir (this
-  // task's spec, item 5: "フック内のネットワークは step 境界外") — redirected
+  // task's spec, item 5: a hook's own network stays outside any step
+  // boundary) — redirected
   // to the scenario dir itself, the same place `httpLogDir` already starts
   // out pointed at before any step's own `beginStep()` call ever runs.
   contextHandle.beginStep(scenarioDir);
@@ -726,8 +729,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;
-      // Stop at the first Before failure (this task's spec, item 5: "Before
-      // 失敗 = 全 step skip"): this scenario's setup already didn't
+      // Stop at the first Before failure (this task's spec, item 5: a Before
+      // failure skips every step): this scenario's setup already didn't
       // complete, so there is nothing left for a later Before hook to
       // prepare into.
       break;
@@ -1067,7 +1070,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           args: began.rawArgs,
           // This is the true catch-all: whatever threw here was never
           // turned into an `ErrorKind` by any of the classification points
-          // above, so this is the "判定に迷ったら step_error に倒す" case
+          // above, so this is the default-to-step_error-when-uncertain case
           // itself, not just its fallback (this task's spec, decision 1).
           error: { message, kind: "step_error" },
           status: "failed",

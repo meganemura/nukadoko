@@ -22,9 +22,9 @@ import path from "node:path";
 
 /** `null` when `<rootDir>/package.json` doesn't exist, isn't readable,
  * isn't valid JSON, or has no string `name` — every one of those collapses
- * to "no project name" the same way (this task's spec, decision 5: "読めな
- * い/無い → null"), since a caller building `fullName` treats all of them
- * identically. */
+ * to "no project name" the same way (this task's spec, decision 5:
+ * unreadable or absent both collapse to null), since a caller building
+ * `fullName` treats all of them identically. */
 export function resolveProjectName(rootDir: string): string | null {
   try {
     const raw = readFileSync(path.join(rootDir, "package.json"), "utf8");

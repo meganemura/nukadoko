@@ -108,7 +108,7 @@ function configTemplate(baseUrl: string | null, featuresDir: string | null): str
  * Appends `<stateDir>/` to `<rootDir>/.gitignore`, creating the file if it
  * doesn't exist. Returns whether the file was actually written — `false`
  * when the entry was already present, so the caller knows not to report a
- * path that didn't change (this task's spec: "既に行があれば足さない").
+ * path that didn't change (this task's spec: don't add the line when it's already present).
  */
 async function ensureGitignoreEntry(rootDir: string, stateDir: string): Promise<boolean> {
   const gitignorePath = path.join(rootDir, ".gitignore");
