@@ -8,8 +8,8 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)とそれが駆動する acceptance skill も実装済みです。
-M5 のうち migration skill だけがまだ設計のままです。
+Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)とそれが駆動する acceptance skill、そして M5 の両方の skill も実装済みです。
+`nuka check` における compat gap 検出が、M1-M5 の中でまだ実装されていない唯一の部分です。
 
 ## nukadoko とは
 
@@ -145,6 +145,9 @@ export default defineStep({
   これは scenario 経路のデータチャネルであり、意図的に World ではありません。
   そこには何も書き込めず、読み取れるのは `returns` のスキーマを通過した結果だけで、依存関係は他の step モジュールへの目に見える `import` になります(その step 自身のスキーマによって型付けられ、diff の中でレビューできます)。
   「その listing は閉じている」のような feature の一文は、その参照先がバリデーション済みの結果を生成した範囲でのみ実装できます。
+
+`page()` と `request()` は、nukadoko 自身の型ではなく Playwright 自身の `Page` と `APIRequestContext` をそのまま返します。
+これは代償を伴う選択であり、その代償ごと「Out of scope」に明記してあります。
 
 ヘルパーは import として提供されます: `import { poll } from "nukadoko"` が非同期ジョブに対する submit-poll-fetch のループです。
 これは executor が所有するものを何も必要としないため、`ctx` には置かれません。
@@ -588,6 +591,14 @@ nuka skill path               where the bundled skill lives, for a project
   nukadoko がなくすのは、secret が agent の context を通過する構造的な必要性です。
 - sign-off は、ソフトウェアが正しいことの証明ではありません。
   それは、合意された scenario が名指しされた 1 つの commit で green だったことを記録するものであり、今日について何も語りません。
+- **意図的に driver-agnostic ではない。** `ctx.page()` と `ctx.request()` は Playwright 自身の `Page` と `APIRequestContext` を返し、compat の扉は移行中の glue に、それがすでに使っていたのと同じオブジェクトを渡します。
+  それらを nukadoko 自身のインターフェースの背後にラップすれば、そのラッパーが公開し忘れたあらゆる能力を犠牲にし、ユーザーがすでに知っている語彙を、このツールだけが話す語彙に置き換えることになります。
+  それは公式の SDK を通して書くことの正反対です。
+  引き換えに、別の driver へ後から差し替えるときは public API と compat の扉が同時に壊れます。
+  これは見落としではなく、承知のうえで受け入れています。
+  step の本体をある driver の API から別の API へ書き換えることは、agent が得意とする作業です。
+  portability のために先にコストを払うことは、driver の差し替えでないあらゆる変更を遅くしてしまいます。
+  見直すのは、その差し替えの確率が上昇したと計測されたときであり、それより前ではありません。
 - テストの並列実行、sharding、retry、CI レポーティングはありません。
   nukadoko 自身による outbound のネットワーク I/O もありません。
   HTML のレンダリングもありません。
@@ -608,18 +619,17 @@ nuka skill path               where the bundled skill lives, for a project
   nukadoko 自身はどのホストのディレクトリにもファイルをコピーしません。
   `nuka skill path` が残るのは、その 2 つには出せないものを答えるためです(インストール済みの nukadoko と同じバージョンの skill の在り処)。
   skill は CLI を説明したものなので、両者のバージョンがずれると記述が虚構になります。
-  2 つが計画されています。
+  2 つとも出荷済みです。
   **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、そして green になるまで `run` して `accept` する)。
-  これは出荷済みです。
   **migration skill** は compat の監査が計測したことを運びます(実際の cucumber-js のスイートが実際にぶつかる gap を、ドキュメントの順序ではなくつまずく順序で)。
-  必要なのは M2 だけですが、まだ存在しません。
+  その最初の段階は `nuka check` がそれらの gap を報告することに依存しており、そこがまだ実装されていない部分です。
   どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。
   それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート
 
-- 予定されているランタイム依存: `@cucumber/gherkin`、`@cucumber/cucumber-expressions`、`playwright`、`zod`、`tsx`(実行時の TS インポート)、CLI フレームワークは TBD。
+- ランタイム依存: `@cucumber/gherkin`、`@cucumber/cucumber-expressions`、`@cucumber/messages`、`allure-js-commons`、`playwright`、`zod`、`tsx`(実行時の TS インポート)、`yargs`(CLI)。
   Node は 20 以上。
 - 形式やプロトコルに公式の SDK があるときは、nukadoko は形式を再実装せず、その SDK を通して書きます(allure-results は allure-js-commons の reporter 機構を、cucumber messages は `@cucumber/messages` を通して)。
   nukadoko 自身はその上の薄い写像層に留まります。
