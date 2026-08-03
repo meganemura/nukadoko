@@ -3,6 +3,19 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // Vitest sizes its worker pool from the core count, which is the wrong
+    // measure for this suite: three files launch a real chromium
+    // (browser-evidence, session-browser, run-browser) and one spawns the
+    // CLI as a subprocess (skill), so the cost of a worker here is a
+    // browser and its renderer processes, not a thread. Left unbounded on a
+    // 10-core machine, those files land on separate workers simultaneously
+    // and contend for CPU with everything else already running — which is
+    // what made real navigations stall for tens of seconds and read as
+    // hangs. Capping the pool costs a few seconds of wall clock and removes
+    // the contention rather than widening a timeout to tolerate it.
+    poolOptions: {
+      forks: { maxForks: 4 },
+    },
     // Vitest's own 5s default is not a realistic budget for this suite:
     // several files launch a real chromium (browser-evidence, session-
     // browser, run-browser) and one spawns the CLI as a subprocess (skill),
