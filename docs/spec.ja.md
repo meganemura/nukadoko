@@ -123,6 +123,14 @@ export default defineStep({
   予約されたキー名はありません。
 - `mutates`(デフォルトは `true`)は、その step が触れる範囲のどこかで状態を変更するかどうかを表します。
   読み取り専用の step は `mutates: false` を宣言します。
+- `rationale` は任意で、デフォルト値を持ちません。
+  省略すると `Step.rationale` は `undefined` になり、`pattern` と同じ慣習です。
+  `description` とは別の問いに答えます。
+  `description` はその step が何をするかで、`nuka steps` が一覧するのはこの情報であり、agent はそれを見てどの step を呼ぶか選びます。
+  `rationale` はなぜこう実装したのか、何を試して何を捨てたのかで、agent が「この step を書き換えてよいか」を決める前に必要とする情報です。
+  `nuka steps` の一覧には決して現れず、表示するのは `nuka describe` だけです。
+  receipt にも現れません。
+  receipt は 1 回の実行を記録するものであり、rationale はその step のどの receipt でも同一になる契約の属性であって、実行が生み出したものではないからです。
 - `run` の本体は、渡された context の上で自由に書ける TypeScript です。
   合成とは、別の step モジュールをインポートし、同じ ctx でその `run` を呼び出すことです。
   共有ヘルパーは通常のモジュール(例: `features/steps/lib/`)に置きます。
@@ -139,6 +147,15 @@ export default defineStep({
 - `await ctx.request()`(設定された baseURL と session の cookie を持つ Playwright の APIRequestContext)
 - `ctx.env`(設定された envFiles から得られる環境変数、読み取り専用)。
   これは便利機能ではなく、決定論(プロセス環境は決してマージされない)と secrets の赤塗り(redact できるのは nukadoko 自身がロードした値だけ)が強制される場所です。
+- `ctx.requireEnv(name)` は `ctx.env[name]` と同じ値を返しますが、必須の変数を読む step がそれぞれ自前で書く羽目になっていた存在チェックを肩代わりします。
+  `undefined` を返すことは決してなく、代わりに投げることで常に `string` を返します。
+  空文字列も欠落として扱われます。
+  envFile の `KEY=` という行は「キーが省略された」ではなく `""` にパースされ、その変数を必須と宣言した step にとってはどちらの場合も等しく壊れているからです。
+  エラーはキー名だけを名指しし、値は決して含みません。
+  欠落した値には示すべき値がなく、値を一切運ばない形は後になって redaction の抜け穴にもなり得ません。
+  そしてどの envFile を直せばよいかは言えません。
+  `ctx` が見るのは常にマージ済みの結果だけで、`config.envFiles` のリストを見ることは決してないからです。
+  すべてのキーを一度に欲しい稀な step のために `ctx.env` は残ります。
 - `ctx.baseURL`(設定された baseURL。自分で URL を組み立てる、まれな場合のためのものです。よくある経路には上記のとおり配線済みです)
 - `ctx.resultOf(stepModule)` は、現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
   `nuka do` の下では、あるいはその step がまだ成功していない場合は `undefined` になります。
@@ -572,7 +589,8 @@ nuka run <feature[:line]>     execute scenarios; receipts + allure-results
 nuka do <step> --args '<json>' execute one typed step; receipt to stdout
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates
-nuka describe <step>          full contract, schemas as JSON Schema
+nuka describe <step>          full contract, schemas as JSON Schema, plus
+                              rationale when the step declared one
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
@@ -584,7 +602,8 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
-nuka init [--base-url <url>]  set up a project; ends with a self-check
+nuka init [--base-url <url>] [--features-dir <dir>]
+                              set up a project; ends with a self-check
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 ```
