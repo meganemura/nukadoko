@@ -152,6 +152,17 @@ export default defineStep({
   reserved key name exists.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
+- `rationale` is optional with no default — omitted, `Step.rationale` is
+  `undefined`, the same convention as `pattern`. It answers a different
+  question than `description`: `description` is what the step does, the
+  information `nuka steps` lists so an agent can pick which step to call;
+  `rationale` is why it is implemented this way and what was tried and
+  rejected, the information an agent needs before deciding it may rewrite
+  the step. It never appears in `nuka steps`' listing — only
+  `nuka describe` shows it — and never in a receipt: a receipt records one
+  execution, and rationale is a property of the contract that would be
+  identical in every receipt for the step, not something that execution
+  produced.
 - The `run` body is free TypeScript on the provided context. Composition is
   importing another step module and calling its `run` with the same ctx.
   Shared helpers live in ordinary modules (e.g. `features/steps/lib/`).
@@ -176,6 +187,17 @@ every future "does this belong on ctx?" question.
   (read-only). Not a convenience: it is where determinism (the process
   environment is never merged) and secrets redaction (only values nukadoko
   itself loaded are redactable) are enforced.
+- `ctx.requireEnv(name)` — the same value as `ctx.env[name]`, minus the
+  presence check every step reading a required variable ended up writing
+  for itself; it returns `string`, never `undefined`, by throwing instead
+  of returning one. Empty string counts as missing too: an envFile's
+  `KEY=` line parses to `""`, not to "key omitted", and a step that
+  declared a variable required is exactly as broken either way. The error
+  names the key only, never a value — there is no value to show for a
+  missing one, and a shape that never carries values cannot become a
+  redaction gap later — and it cannot say which envFile to fix, because
+  `ctx` only ever sees the merged result, never `config.envFiles`'s list.
+  `ctx.env` stays for the rare step that wants every key at once.
 - `ctx.baseURL` — the configured baseURL, for the occasional URL assembled
   by hand; the common paths get it wired in above.
 - `ctx.resultOf(stepModule)` — the validated result of that step's most
@@ -780,7 +802,8 @@ nuka run <feature[:line]>     execute scenarios; receipts + allure-results
 nuka do <step> --args '<json>' execute one typed step; receipt to stdout
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates
-nuka describe <step>          full contract, schemas as JSON Schema
+nuka describe <step>          full contract, schemas as JSON Schema, plus
+                              rationale when the step declared one
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
@@ -792,7 +815,8 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
-nuka init [--base-url <url>]  set up a project; ends with a self-check
+nuka init [--base-url <url>] [--features-dir <dir>]
+                              set up a project; ends with a self-check
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 ```
