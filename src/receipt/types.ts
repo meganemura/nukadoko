@@ -59,6 +59,19 @@
 // sub-fields is non-empty; the attachment *files* themselves are never
 // redacted (the same honest limit trace.zip/screenshots already have).
 //
+// `required_env` is added now (env-reads-and-mutates-doc task spec, item A):
+// the env var names `ctx.requireEnv` was actually called with during this
+// execution — measured, the same way `used` is, since `requireEnv` is the
+// one call site the library controls; a step that reads `ctx.env[name]`
+// directly leaves no trace here (no `ctx.env` Proxy exists to catch that
+// path, deliberately — same spec, scope). Deduplicated, in read order, and
+// recorded even for a call that went on to throw `MissingEnvError`, so a
+// run that failed for a missing key still shows what it asked for. Names
+// only, never values — a value can be a secret. Optional and omitted when
+// empty, `used`'s own convention (most steps never call `requireEnv` at
+// all). Always empty, hence always omitted, for a compat step: compat's
+// `this` has no counterpart to `requireEnv` (same spec, scope).
+//
 // `error.kind` and `mutates` are added now (m3a-receipt-kinds task spec,
 // decisions 1, 3): M3's Allure interop needs a machine-readable failure
 // marker (Categories.json can't be generated from `error.message`, free
@@ -160,6 +173,13 @@ interface ReceiptBase {
    * decisions 1-2). Present only when non-empty; deduplicated, in read
    * order. */
   used?: string[];
+  /** Env var names `ctx.requireEnv` was actually called with during this
+   * execution (docs/spec.md "Receipts"; env-reads-and-mutates-doc task spec,
+   * item A). Present only when non-empty; deduplicated, in read order.
+   * Recorded even for a call that throws `MissingEnvError` — measured, not
+   * declared, and reading `ctx.env[name]` directly instead leaves no trace
+   * here. */
+  required_env?: string[];
   /** Labels `ctx.section` was called with during this execution, in call
    * order (t3-sections task spec, decisions 1-3). Present only when
    * non-empty; a failed step's array still carries whichever labels it

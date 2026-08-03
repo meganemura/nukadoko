@@ -526,6 +526,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `beginStep` calls `observed`/`used` already are, so a step never
     // inherits an earlier step's labels in this shared-`ctx` pickle.
     const sectionLabels = contextHandle.sectionsSnapshot();
+    // Env var names `ctx.requireEnv` was called with since the current step
+    // boundary began, including a call that went on to throw
+    // `MissingEnvError` (env-reads-and-mutates-doc task spec, item A) —
+    // reset at the same `beginStep` call `observed`/`used`/`sections`
+    // already are, so a step never inherits an earlier step's required
+    // names in this shared-`ctx` pickle. Always empty for a compat step (no
+    // `requireEnv` counterpart on `this`), so `required_env` is naturally
+    // omitted for one below, the same way `sections` already is.
+    const requiredEnv = contextHandle.envReadsSnapshot();
     // World reads/writes tallied since the current step boundary began (m2c-
     // typed-world task spec, item 3) — always empty for a typed step (no
     // `this`), so the `world` field below is naturally omitted for one,
@@ -570,6 +579,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             mutates,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+            ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
               : {}),
@@ -604,6 +614,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             mutates,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+            ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
               : {}),
@@ -1182,6 +1193,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // sections task spec, decision 4) — whatever labels this step
         // reached before the uncaught throw still belong on its receipt.
         const sectionLabels = contextHandle.sectionsSnapshot();
+        // Same backstop-only read again, for `required_env` (env-reads-and-
+        // mutates-doc task spec, item A) — whatever names this step
+        // required before the uncaught throw still belong on its receipt.
+        const requiredEnv = contextHandle.envReadsSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
         const receipt: Receipt = {
@@ -1210,6 +1225,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           mutates: began.mutates,
           ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
           ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+          ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
             ? { world: worldReadsWrites }
             : {}),

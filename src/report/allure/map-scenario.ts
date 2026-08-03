@@ -510,6 +510,9 @@ function mapSteps(
       if (receipt.used && receipt.used.length > 0) {
         parameters.push({ name: "used receipts", value: receipt.used.join(", ") });
       }
+      if (receipt.required_env && receipt.required_env.length > 0) {
+        parameters.push({ name: "required env", value: receipt.required_env.join(", ") });
+      }
 
       if (receipt.status === "ok" && receipt.result !== null) {
         attachments.push({

@@ -8,6 +8,7 @@ import type { SecretSet } from "../secrets/types.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
+import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
@@ -88,6 +89,16 @@ import { createUsedCollector } from "./used.js";
 // applied to provenance instead of network calls. `usedReceiptIds()` (the
 // handle's read side) and `beginStep`'s reset mirror `observedCounts()`/its
 // own reset exactly, for the same reason: one step boundary, two tallies.
+//
+// `requireEnv` records the name it was given on the `envReads` collector
+// below *before* throwing `MissingEnvError` (env-reads-and-mutates-doc task
+// spec, item A) — a step whose execution failed for a missing key still
+// gets a receipt showing what it asked for, which matters most exactly
+// when a step fails this way. Only `requireEnv` writes to this collector:
+// a step that reads `ctx.env[name]` directly never passes through any call
+// this module owns, so that read leaves no trace here, on purpose (same
+// spec, scope: no `ctx.env` Proxy). Same lifetime and reset rule as
+// `used`/`sections` — one collector per ctx, zeroed by `beginStep`.
 
 export interface EvidenceResult {
   trace?: string;
@@ -130,16 +141,23 @@ export interface StepContextHandle {
    * decisions 1-2). Never exposed on `ctx` — same rule as
    * `observedCounts()`/`usedReceiptIds()`. */
   sectionsSnapshot(): string[];
+  /** Executor-only: the names `ctx.requireEnv` was called with since the
+   * current step boundary began, deduplicated, in read order — recorded
+   * even for a call that went on to throw `MissingEnvError` (env-reads-and-
+   * mutates-doc task spec, item A). Never exposed on `ctx` — same rule as
+   * `observedCounts()`/`usedReceiptIds()`/`sectionsSnapshot()`. */
+  envReadsSnapshot(): string[];
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
-   * tally, the `used` log, and the `sections` log to empty. `nuka run`'s
-   * executor calls this once per step, right before running it, so a
-   * pickle's shared ctx still logs and tallies each step's own network
-   * calls, provenance reads, and section labels under that step's own
-   * receipt dir (m1-run task spec, decision 5; m2pre-observed task spec,
-   * decision 2; t3-sections task spec, decision 4). Never exposed on
-   * `ctx` — same executor-only rule as `dispose`. */
+   * tally, the `used` log, the `sections` log, and the `required_env` log to
+   * empty. `nuka run`'s executor calls this once per step, right before
+   * running it, so a pickle's shared ctx still logs and tallies each step's
+   * own network calls, provenance reads, section labels, and required env
+   * names under that step's own receipt dir (m1-run task spec, decision 5;
+   * m2pre-observed task spec, decision 2; t3-sections task spec, decision 4;
+   * env-reads-and-mutates-doc task spec, item A). Never exposed on `ctx` —
+   * same executor-only rule as `dispose`. */
   beginStep(dir: string): void;
 }
 
@@ -197,6 +215,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // Same lifetime rule again, for `ctx.section`'s call log (t3-sections
   // task spec, decision 4).
   const sections = createSectionsCollector();
+  // Same lifetime rule again, for `ctx.requireEnv`'s name log (env-reads-
+  // and-mutates-doc task spec, item A).
+  const envReads = createEnvReadsCollector();
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -204,6 +225,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const ctx: StepContext = {
     env,
     requireEnv(name: string): string {
+      // Recorded first, before the presence check below can throw (env-
+      // reads-and-mutates-doc task spec, item A): a run that fails for a
+      // missing key still gets a receipt showing what it asked for, and
+      // this is the one call site the library controls, so a name recorded
+      // here is a real measurement, not a claim. Name only, never the
+      // value — a value can be a secret.
+      envReads.record(name);
       const value = env[name];
       // Empty string is "not set", same reasoning as MissingEnvError's own
       // doc comment: an envFile's `KEY=` line parses to `""`, not "omitted",
@@ -346,12 +374,25 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return sections.snapshot();
   }
 
+  function envReadsSnapshot(): string[] {
+    return envReads.snapshot();
+  }
+
   function beginStep(dir: string): void {
     httpLogDir = dir;
     observed.reset();
     used.reset();
     sections.reset();
+    envReads.reset();
   }
 
-  return { ctx, dispose, observedCounts, usedReceiptIds, sectionsSnapshot, beginStep };
+  return {
+    ctx,
+    dispose,
+    observedCounts,
+    usedReceiptIds,
+    sectionsSnapshot,
+    envReadsSnapshot,
+    beginStep,
+  };
 }

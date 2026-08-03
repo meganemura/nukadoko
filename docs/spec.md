@@ -204,7 +204,11 @@ every future "does this belong on ctx?" question.
   missing one, and a shape that never carries values cannot become a
   redaction gap later — and it cannot say which envFile to fix, because
   `ctx` only ever sees the merged result, never `config.envFiles`'s list.
-  `ctx.env` stays for the rare step that wants every key at once.
+  `ctx.env` stays for the rare step that wants every key at once. Every name
+  `requireEnv` is called with — whether that call finds a value or throws —
+  is recorded on the receipt's `required_env` (see "Receipts"), in read
+  order, deduplicated. Reading the same value straight off `ctx.env` leaves
+  no trace: that path is a plain object, and the library never sees it.
 - `ctx.baseURL` — the configured baseURL, for the occasional URL assembled
   by hand; the common paths get it wired in above. `undefined` when
   `config.baseURL` is unset — legitimate for an absolute-URL-only suite,
@@ -551,6 +555,16 @@ shape whether the step ran inside a scenario or via `do`.
   has `section`; a compat step has no counterpart on `this`, so `sections`
   is simply omitted for one, the same way `used` is omitted for a typed
   step that never calls `ctx.resultOf`.
+- `required_env` (present only when non-empty) lists the names
+  `ctx.requireEnv` was called with during this execution, deduplicated, in
+  the order first read — the same measured-not-declared shape `used` and
+  `sections` already have, since `requireEnv` is the one call site the
+  library controls. Recorded before a missing key throws, so a
+  `MissingEnvError` failure's receipt still shows what the step asked for.
+  Only names are recorded, never values — a value can be a secret. A step
+  that reads `ctx.env[name]` directly leaves no trace here: this field
+  counts only what passed through `requireEnv`, never a plain object read
+  the library never sees.
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 

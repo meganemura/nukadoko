@@ -312,6 +312,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // concept here to special-case, so this is read the same way
     // `observed` is, right above.
     const sections = contextHandle.sectionsSnapshot();
+    // Recorded even on a `MissingEnvError` failure (that throw happens
+    // inside `entry.step.run`, above, well before this read) — same
+    // "read the tally after execution, whatever its outcome" shape as
+    // `observed`/`sections` (env-reads-and-mutates-doc task spec, item A).
+    const requiredEnv = contextHandle.envReadsSnapshot();
 
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
@@ -366,6 +371,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             observed,
             mutates: entry.step.mutates,
             ...(sections.length > 0 ? { sections } : {}),
+            ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           }
         : {
             receipt_id: receiptId,
@@ -390,6 +396,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             evidence: { dir: relativeDir, ...evidence },
             observed,
             ...(sections.length > 0 ? { sections } : {}),
+            ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           };
 
     // Redacted once, as one object — args/result/error.message and every
