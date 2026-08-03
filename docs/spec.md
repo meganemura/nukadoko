@@ -228,9 +228,19 @@ layered:
 - Read-only environments refuse declared-mutating steps before execution
   and additionally fail any execution that observes writes — a false
   `mutates: false` cannot slip through the policy.
-- Honest limits: observation sees network writes only. Purely client-side
-  state and a server that mutates on GET are invisible to it; the
-  declaration and PR review still carry those.
+- Honest limits: observation sees network writes only, and it sees them
+  through HTTP method — non-GET/HEAD counts as a write — which is a proxy
+  for write semantics, not the semantics itself. Purely client-side state
+  and a server that mutates on GET are invisible to it in one direction;
+  in the other, a step calling a semantically pure read implemented over
+  POST (GraphQL, RPC-over-POST, most vendors' query endpoints) still
+  records a write even though it truthfully declares `mutates: false` —
+  every non-GET/HEAD call counts as one regardless of what it actually
+  did. That step cannot sit in Then position, because the measurement
+  overrides the declaration, and cannot run in a `policy: "read-only"`
+  environment, whatever it declared. The declaration and PR review carry
+  all of these cases; the proxy is a property of counting by HTTP method,
+  not a gap this document is quiet about.
 - Compat (untyped) steps cannot be checked statically; run-time
   observation applies to them unchanged.
 
@@ -425,8 +435,11 @@ shape whether the step ran inside a scenario or via `do`.
   call logged to http.jsonl, the receipt itself as the primary record.
 - `observed` counts the network calls the tool itself saw the execution
   make, through `ctx.request()` and the page alike; non-GET/HEAD counts as
-  a write. It is what run-time keyword enforcement and read-only
-  environments act on — measured, never declared (see Keyword semantics).
+  a write — HTTP method as a proxy for write semantics, not semantics
+  itself, so a POST-based read counts against a step that never wrote
+  anything (see Keyword semantics' Honest limits). It is what run-time
+  keyword enforcement and read-only environments act on — measured, never
+  declared.
 - `used` (present only when non-empty) lists the receipt ids whose results
   this execution actually read through `ctx.resultOf` — the accessor is
   tool-provided, so the reads are measurable. The dependency is thus
@@ -497,8 +510,8 @@ never the run.
 Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 `init`); none of it is meant to be committed:
 
-- `receipts/<id>/` — one directory per receipt: the receipt JSON, its
-  evidence files (trace.zip, screenshots, http.jsonl), and the progress log
+- `receipts/<id>/` — one directory per receipt: the receipt JSON and its
+  evidence files (trace.zip, screenshots, http.jsonl)
 - `scenarios/<id>/` — one directory per scenario run: `record.json` plus
   the scenario-scoped evidence (trace.zip, final screenshot) — mirroring
   Playwright's own per-test `test-results/` convention one level up
@@ -627,7 +640,11 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   (observed)` / `http writes (observed)` (and, for a compat step, `world
   reads (observed)` / `world writes (observed)`) — declaration and
   measurement, in the same table, is nukadoko's whole claim made visible in
-  the report itself.
+  the report itself. The observed side is an HTTP-method proxy, not a
+  semantic judgment (see Keyword semantics' Honest limits): a row can show
+  a truthful `mutates (declared): false` next to a nonzero `http writes
+  (observed)` when the step called a POST-based read, and that is the
+  proxy showing through the table, not either number lying.
 - A failed step or test's message is prefixed `[nukadoko.failure=<kind>]`,
   naming the same `error.kind` its receipt already carries; the same
   `error.kind` is also written as a `nukadoko.failure` result label. The two

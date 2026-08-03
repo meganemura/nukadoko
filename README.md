@@ -327,10 +327,15 @@ access to a document you need, say so rather than assuming.
   guarantees the shape of inputs and outputs and the fact of execution —
   a typed contract makes an empty assertion easier to spot in review, but
   nothing rejects one automatically.
-- **Mutation observation sees network writes only.** A Then-position step
-  that writes over HTTP fails on the measurement. Purely client-side state,
-  or a server that mutates on a GET, is invisible to it — the `mutates`
-  declaration and review carry those cases.
+- **Mutation observation sees network writes only, through HTTP method as a
+  proxy.** A Then-position step that writes over HTTP fails on the
+  measurement. Purely client-side state, or a server that mutates on a GET,
+  is invisible to it; a step calling a semantically pure read implemented
+  over POST (GraphQL, RPC-over-POST, many vendors' query endpoints) trips
+  the same measurement the other way, even when it truthfully declares
+  `mutates: false` — see
+  [Honest limits](docs/spec.md#keyword-semantics) for what that costs a
+  step. The `mutates` declaration and review carry all of these cases.
 - **CommonJS suites cannot use `nukadoko/compat`** without a module-format
   change first (above).
 - No test parallelism, sharding, retries, or CI reporting. No HTML
