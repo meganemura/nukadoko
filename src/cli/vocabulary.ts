@@ -14,7 +14,11 @@ import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors
 // `discoverSteps` also returns compat-origin parameter type registrations
 // (m2a-compat-registry task spec) — irrelevant to `steps`/`describe`, which
 // only ever list/describe the step vocabulary itself, so this module drops
-// that half of the result.
+// that half of the result. `formatVocabulary` below is `nuka steps`' non-JSON
+// rendering, also kept here as a pure function (steps-human-output task
+// spec) — `run-cli.ts`'s handler passes a `WritableSink`, which can't answer
+// "how wide is the terminal", so the width this function wraps to is
+// resolved by the caller and passed in as a plain number.
 
 export async function loadVocabulary(rootDir: string): Promise<Vocabulary> {
   const config = await loadConfig(rootDir);
@@ -53,6 +57,74 @@ export function summarize(entry: VocabularyEntry): StepSummary {
     description: entry.step.description,
     mutates: entry.step.mutates,
   };
+}
+
+/**
+ * `nuka steps`' non-JSON rendering: one block per entry, blank-line
+ * separated, no trailing blank line (steps-human-output task spec). A
+ * one-line-per-step tab-separated table was the previous shape, but real
+ * vocabularies run 120-145 characters a line — unreadable once an 80-column
+ * terminal soft-wraps it with no indentation to say where a row starts.
+ * `--json` is the machine-readable path (docs/spec.md "CLI summary"); this
+ * function only has to read well in a terminal, so it wraps to `width`
+ * instead.
+ */
+export function formatVocabulary(summaries: readonly StepSummary[], width: number): string {
+  if (summaries.length === 0) return "";
+  return `${summaries.map((s) => formatVocabularyEntry(s, width)).join("\n\n")}\n`;
+}
+
+// Continuation-line indent (4) is one deeper than a pattern/description
+// line's own indent (2) so a reader can tell "this line is still part of the
+// item above" from "this is a new item's pattern/description line" without
+// re-reading the content.
+const ENTRY_INDENT = 2;
+const CONTINUATION_INDENT = 4;
+
+function formatVocabularyEntry(s: StepSummary, width: number): string {
+  if (s.kind === "compat") {
+    // No pattern line for compat: `name` already *is* `compat: <patternSource>`
+    // (see `summarize` above), so printing the pattern too would repeat the
+    // same string twice. No mutates label either — a compat step has no
+    // declaration to read one from.
+    return `${s.name}  compat`;
+  }
+  const mutatesLabel = s.mutates ? "mutates" : "read-only";
+  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}`];
+  const patterns = s.patterns.length > 0 ? s.patterns : ["(no pattern)"];
+  for (const pattern of patterns) {
+    lines.push(...wrapIndented(pattern, width));
+  }
+  if (s.description !== undefined) {
+    lines.push(...wrapIndented(s.description, width));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Wraps `text` at space boundaries only — a pattern is a cucumber-expression
+ * or regex and a description is free-form prose, and splitting either mid-
+ * word would make it uncopyable as the literal thing it names. A single word
+ * wider than `width` is left on its own line unsplit for the same reason
+ * (this task's spec: the terminal's own wrapping is the fallback, not this
+ * function's job to improve on).
+ */
+function wrapIndented(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+  let indent = ENTRY_INDENT;
+  for (const word of text.split(" ")) {
+    const candidate = current === "" ? `${" ".repeat(indent)}${word}` : `${current} ${word}`;
+    if (current !== "" && candidate.length > width) {
+      lines.push(current);
+      indent = CONTINUATION_INDENT;
+      current = `${" ".repeat(indent)}${word}`;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== "") lines.push(current);
+  return lines;
 }
 
 // Not `ReturnType<typeof z.toJSONSchema>`: that function is overloaded (a

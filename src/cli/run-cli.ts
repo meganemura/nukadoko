@@ -14,7 +14,13 @@ import { runRun } from "./run.js";
 import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
 import { runSkillPath } from "./skill.js";
-import { loadVocabulary, describeContract, formatVocabularyError, summarize } from "./vocabulary.js";
+import {
+  describeContract,
+  formatVocabulary,
+  formatVocabularyError,
+  loadVocabulary,
+  summarize,
+} from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
@@ -154,16 +160,12 @@ export async function runCli(
         if (args.json) {
           stdout.write(`${JSON.stringify(summaries, null, 2)}\n`);
         } else {
-          for (const s of summaries) {
-            const patterns = s.patterns.length > 0 ? s.patterns.join(" | ") : "(no pattern)";
-            // A compat entry has no declared mutates/description (this
-            // task's spec, item 5) — shown as "-", not blank, so the
-            // column stays present and visibly "unknown" rather than
-            // looking like an empty typed value.
-            const mutatesLabel = s.mutates === undefined ? "-" : s.mutates ? "mutates" : "read-only";
-            const descriptionLabel = s.description ?? "-";
-            stdout.write(`${s.name}\t${s.kind}\t${patterns}\t${mutatesLabel}\t${descriptionLabel}\n`);
-          }
+          // `stdout` here is the injected `WritableSink` (real process
+          // stdout by default, a capture sink in tests), which has no
+          // notion of terminal width; `process.stdout.columns` is read
+          // directly instead, falling back to 80 for a non-TTY or a test run
+          // (steps-human-output task spec).
+          stdout.write(formatVocabulary(summaries, process.stdout.columns ?? 80));
         }
       } catch (error) {
         exitCode = 1;

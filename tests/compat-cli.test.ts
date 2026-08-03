@@ -35,7 +35,7 @@ describe("nuka steps: compat entries", () => {
     );
   });
 
-  it("human-readable output shows the kind column and \"-\" for mutates/description", async () => {
+  it("human-readable output is one heading-only block per compat entry, no pattern line", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["steps"], {
       rootDir: fixture("compat-project"),
@@ -44,16 +44,14 @@ describe("nuka steps: compat entries", () => {
     });
 
     expect(exitCode).toBe(0);
-    const lines = stdout
-      .text()
-      .split("\n")
-      .filter((line) => line.length > 0);
-    expect(lines).toHaveLength(3);
-    for (const line of lines) {
-      const fields = line.split("\t");
-      expect(fields[1]).toBe("compat");
-      expect(fields[3]).toBe("-"); // mutates column
-      expect(fields[4]).toBe("-"); // description column
+    // Blocks are blank-line separated (steps-human-output task spec); a
+    // compat entry is heading-only, so each block here is exactly one line.
+    const blocks = stdout.text().replace(/\n$/, "").split("\n\n");
+    expect(blocks).toHaveLength(3);
+    for (const block of blocks) {
+      expect(block).not.toContain("\n");
+      expect(block.endsWith("  compat")).toBe(true);
+      expect(block.startsWith("compat: ")).toBe(true);
     }
   });
 });

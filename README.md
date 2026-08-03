@@ -43,8 +43,8 @@ agents and then justified for humans; they are the same properties either
 way, and a suite that an agent can drive turns out to be a suite a person
 can debug.
 
-Everything prefers machine-readable output. Human prettiness is delegated to
-Allure.
+Everything has a machine-readable form (`--json`). Rich human reporting is
+delegated to Allure.
 
 ## Status
 

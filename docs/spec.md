@@ -31,8 +31,8 @@ complete the whole loop unassisted: discover the vocabulary
 Schema), execute one step (`nuka do`, receipt on stdout, meaningful exit
 code), read the validated result, and decide the next call. When the
 vocabulary lacks an operation, the agent scaffolds and implements a new step
-and a human reviews the PR. Every interface prefers machine-readable output;
-human prettiness is delegated to Allure.
+and a human reviews the PR. Every interface has a machine-readable form
+(`--json`); rich human reporting is delegated to Allure.
 
 A nukadoko is the fermented rice-bran bed that turns cucumbers into pickles.
 It is alive: tended daily it matures, neglected it dies. That is the claim
@@ -914,6 +914,8 @@ nuka init [--base-url <url>] [--features-dir <dir>]
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 ```
+
+Text output (no `--json`) is formatted for a human reading a terminal; `--json` is the machine-readable contract.
 
 ## Out of scope (honest limits)
 

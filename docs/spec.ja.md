@@ -24,7 +24,7 @@ Agent-first は設計上の制約であり、スローガンではありませ�
 agent は、介助なしにループ全体を完了できなければなりません。
 語彙を発見し(`nuka steps --json`)、契約を読み(`nuka describe`、スキーマは JSON Schema として)、1 つの step を実行し(`nuka do`、receipt は stdout に、意味のある exit code とともに)、バリデーション済みの結果を読み、次の呼び出しを決めます。
 語彙に操作が欠けているときは、agent が新しい step を scaffold して実装し、人間がその PR をレビューします。
-あらゆるインターフェースは機械可読な出力を優先し、人間にとっての見やすさは Allure に委ねられます。
+あらゆるインターフェースは機械可読な形(`--json`)を必ず持ち、リッチな人間向けレポートは Allure に委ねられます。
 
 ぬか床とは、きゅうりを漬物に変える米ぬかの発酵床のことです。
 ぬか床は生きており、毎日手入れをすれば熟成し、放っておけば死にます。
@@ -667,6 +667,9 @@ nuka init [--base-url <url>] [--features-dir <dir>]
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 ```
+
+テキスト出力(`--json` なし)は、端末で読む人間向けに整形されます。
+`--json` が機械可読な契約です。
 
 ## Out of scope(正直な限界)
 
