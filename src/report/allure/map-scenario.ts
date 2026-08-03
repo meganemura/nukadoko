@@ -125,8 +125,12 @@ export interface MappedTest {
    * — when no kind resolved — plain) message, `undefined` when nothing
    * failed (M3-C spec item 1). emitter.ts sets this as `partialTest.
    * statusDetails.message`, the field Allure 2's own categories matching
-   * (`extractErrorMatchingData`) reads at the test level — see this task's
-   * own report for the Allure-3-config alternative this doesn't attempt. */
+   * (`extractErrorMatchingData`) reads at the test level — Allure 2 has no
+   * other per-result category field, so the marker has to land here. Allure
+   * 3 never reads this field at all: it categorizes the same failure by
+   * matching a project-supplied config against the `nukadoko.failure`
+   * label, which `labels` below carries out of this same `firstFailure`
+   * search (docs/spec.md, "Allure emitter"). */
   readonly message?: string;
 }
 
