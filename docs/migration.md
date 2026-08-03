@@ -221,9 +221,38 @@ execution via `nuka do` — none of which a compat step has.
 
 ## The way back
 
-None of this is one-way. Switch the imports back to `@cucumber/cucumber`
-(and restore whatever Playwright bootstrapping `openPage()`/`openRequest()`
-replaced), and the suite is a plain cucumber-js suite again.
+The import switch is reversible, and that is a standing design rule rather
+than a happy accident. Switch back to `@cucumber/cucumber` — restoring
+whatever Playwright bootstrapping `openPage()`/`openRequest()` replaced —
+and everything still sitting on compat is a plain cucumber-js suite again.
+
+A step promoted to `defineStep` is a different matter, and nothing above
+should be read as covering it. `defineStep` is nukadoko's own API: there is
+no import to switch back. What that actually costs is worth being specific
+about, because it is narrower than "locked in" suggests.
+
+What a promoted step gives up on the way out is everything built on its
+schemas: the `args`/`returns` validation, the receipt's `result`, `from`
+and the binding-order check that reads it, and the contract checks
+`nuka check` performs.
+
+What it keeps is the body. `run` is written against Playwright's own `Page`
+and `APIRequestContext` — nukadoko deliberately does not wrap them (see
+docs/spec.md "Out of scope") — so the code doing the actual work moves as
+it stands into a cucumber-js step, with `ctx.page()`/`ctx.request()`
+replaced by whatever the World hands out. The rest is mechanical: drop the
+named captures from the pattern (`{name:string}` → `{string}`), write what
+`returns` returned onto `this` again, and read what `from` declared off
+`this` again.
+
+nukadoko ships no tool for that conversion, and this is stated as a limit
+rather than as an argument against promoting. The import's reversibility
+exists to make the first step cost one edit, not to make the typed side
+optional: compat is where a suite arrives, and every reason to run it on
+this tool at all — a validated `result`, a contract `nuka check` can hold a
+feature against, `from`, a sign-off that attests to more than "it ran" —
+lives on the other side of the promotion. Promote the steps whose contracts
+you want, which over time should be most of the ones that matter.
 
 ## Known limits
 

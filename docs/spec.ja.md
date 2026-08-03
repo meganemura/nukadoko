@@ -885,6 +885,10 @@ nuka skill path               where the bundled skill lives, for a project
   nukadoko がなくすのは、secret が agent の context を通過する構造的な必要性です。
 - sign-off は、ソフトウェアが正しいことの証明ではありません。
   それは、合意された scenario が名指しされた 1 つの commit で green だったことを記録するものであり、今日について何も語りません。
+- **step を `defineStep` に昇格させることは一方通行です。** compat の扉が約束するのは compat の資産についてだけです: import を元に戻せば、ただの cucumber-js スイートが残ります。
+  `defineStep` には、切り替えて戻す import がありません。
+  昇格させた step の body は移ります — `run` は Playwright 自身のオブジェクトに対して書かれており、それは下で述べているのと同じ選択によるものです — けれどもそのスキーマ、receipt の `result`、`from` とそれを読む束縛順序のチェック、そしてそれらの上に組まれたあらゆる契約チェックは移らず、ここには元に戻す手段は何もありません。
+  埋めるべき欠落としてではなく、限界として述べます: 変換は step ごとの機械的な作業であり、import の可逆性があるのは採用の最初の一歩を安くするためであって、型付き側を選択制にするためではありません。
 - **意図的に driver-agnostic ではない。** `ctx.page()` と `ctx.request()` は Playwright 自身の `Page` と `APIRequestContext` を返し、compat の扉は移行中の glue に、それがすでに使っていたのと同じオブジェクトを渡します。
   それらを nukadoko 自身のインターフェースの背後にラップすれば、そのラッパーが公開し忘れたあらゆる能力を犠牲にし、ユーザーがすでに知っている語彙を、このツールだけが話す語彙に置き換えることになります。
   それは公式の SDK を通して書くことの正反対です。

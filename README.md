@@ -176,7 +176,7 @@ export default defineStep({
   alone and prints its receipt — the unit an agent's explore loop is built
   on, with nothing to stand up first.
 
-## The compat door, and the way back
+## The compat door
 
 The migration path for an existing Cucumber + Playwright suite is switching
 one import — `nukadoko/compat` in place of `@cucumber/cucumber` — keeping
@@ -185,16 +185,23 @@ starts measuring receipts underneath them. Promoting a step to `defineStep`
 is then a per-step decision rather than a rewrite, and a suite that is half
 promoted keeps passing.
 
-**Switching the import back returns a plain cucumber-js suite.** That is a
-standing design rule, not a happy accident: compat assets must survive both
-the switch and a partial migration, so leaving is always one edit away.
-This is the answer to the fair question of whether to bet an existing suite
-on a pre-0.1 tool from one maintainer.
+The door is where a suite comes in, not where it settles. A compat step
+does gain evidence and the `observed` counts, which is more than it had —
+but its return value is discarded, the receipt records `result: null`, and
+everything downstream of a validated result stays out of reach: no contract
+for `nuka check` to hold a feature against, no `from` to declare a
+dependency with, and a sign-off attesting that steps ran rather than that
+stated contracts held. Those are the reasons to promote, and promoting is
+what the door is for.
 
-That exit belongs to suites that arrive through compat. A suite written
-straight in `defineStep`, with no `@cucumber/cucumber` import ever in the
-picture, has nothing to switch back to — starting from nothing carries the
-pre-0.1 risk more directly than migrating an existing suite does.
+Switching the import back returns a plain cucumber-js suite. That is a
+standing design rule — compat assets must survive both the switch and a
+partial migration — and its job is to make trying nukadoko cost one edit
+instead of a commitment. It is not a property to build a strategy around.
+A step promoted to `defineStep` has no import to switch back: its body
+still moves, since `run` is written against Playwright's own objects, but
+its schemas and everything built on them do not, and nothing here converts
+one back (docs/migration.md "The way back" covers doing it by hand).
 
 How much else has to change was measured rather than assumed. Against eight
 public cucumber-js suites, **none went through on the import alone** when

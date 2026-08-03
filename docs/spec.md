@@ -1194,6 +1194,16 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   context.
 - A sign-off is not a proof that the software is correct. It records that an
   agreed scenario was green at one named commit, and says nothing about today.
+- **Promoting a step to `defineStep` is one-way.** The migration door's
+  promise covers compat assets: switching the import back leaves a plain
+  cucumber-js suite. `defineStep` has no import to switch back to. A
+  promoted step's body still moves — it is written against Playwright's own
+  objects, by the same choice stated below — but its schemas, its receipt's
+  `result`, `from` and the binding-order check reading it, and every
+  contract check built on those do not, and nothing here converts one back.
+  Stated as a limit rather than a gap to close: the conversion is per-step
+  and mechanical, and the import's reversibility exists to make adoption's
+  first step cheap, not to make the typed side optional.
 - **Not driver-agnostic, deliberately.** `ctx.page()` and `ctx.request()`
   return Playwright's own `Page` and `APIRequestContext`, and the compat
   door hands migrating glue the same objects it already used. Wrapping them

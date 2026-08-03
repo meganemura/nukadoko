@@ -151,8 +151,24 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
 
 ## 戻り道
 
-これらはどれも一方通行ではありません。
-import を `@cucumber/cucumber` に戻せば(`openPage()`/`openRequest()` が置き換えた Playwright の bootstrapping も元に戻せば)、スイートは再びただの cucumber-js スイートになります。
+import の切り替えは可逆であり、それは偶然の産物ではなく変わらない設計上の規則です。
+`@cucumber/cucumber` に戻せば — `openPage()`/`openRequest()` が置き換えた Playwright の bootstrapping も元に戻せば — compat の上にまだ乗っているものはすべて、再びただの cucumber-js スイートになります。
+
+`defineStep` に昇格させた step は話が別であり、ここまでの内容はそれをカバーしているとは読まないでください。
+`defineStep` は nukadoko 自身の API です: 切り替えて戻す import がありません。
+それが実際に何を犠牲にするのかは具体的に述べる価値があります。
+「ロックインされる」という言葉が示唆するより、範囲は狭いからです。
+
+昇格させた step が出口で手放すのは、そのスキーマの上に組まれたものすべてです: `args`/`returns` のバリデーション、receipt の `result`、`from` とそれを読む束縛順序のチェック、そして `nuka check` が行う契約チェックです。
+
+手元に残るのは body です。
+`run` は Playwright 自身の `Page` と `APIRequestContext` に対して書かれており — nukadoko は意図的にそれらをラップしません(docs/spec.ja.md の「Out of scope(正直な限界)」を参照)— 実際に作業を行うコードは、`ctx.page()`/`ctx.request()` を World が渡すものに置き換えるだけで、そのまま cucumber-js の step へと移ります。
+残りは機械的な作業です: pattern から named capture を落とし(`{name:string}` → `{string}`)、`returns` が返していたものをもう一度 `this` に書き、`from` が宣言していたものをもう一度 `this` から読みます。
+
+nukadoko はその変換のためのツールを同梱しておらず、これは昇格に反対する論拠としてではなく、限界として述べています。
+import の可逆性が存在するのは最初の一歩を編集 1 つ分のコストにするためであって、型付き側を選択制にするためではありません: compat はスイートが到着する場所であり、このツールをそもそも走らせる理由のすべて — バリデーション済みの `result`、`nuka check` が feature を突き合わせられる契約、`from`、「実行された」以上のことを証言する sign-off — は、昇格の向こう側にあります。
+契約を持たせたい step を昇格させてください。
+時間が経てば、それが重要な step の大半になっているはずです。
 
 ## 既知の限界
 
