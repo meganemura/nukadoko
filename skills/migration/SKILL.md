@@ -2,6 +2,7 @@
 name: migration
 description: Use when moving an existing cucumber-js suite (typically driving Playwright) onto nukadoko — switching glue imports to `nukadoko/compat` so the suite runs unchanged, then promoting individual steps to typed `defineStep`s at your own pace.
 compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka check, nuka run, nuka steps, nuka describe, nuka do).
+license: MIT
 ---
 
 # Migrating a cucumber-js suite to nukadoko

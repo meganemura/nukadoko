@@ -2,6 +2,7 @@
 name: acceptance
 description: Use when handed a ticket or story's acceptance criteria and asked to turn them into a Gherkin scenario, run it, and leave a sign-off record of that run.
 compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka steps, nuka scaffold, nuka do, nuka check, nuka run, nuka accept).
+license: MIT
 ---
 
 # nukadoko acceptance loop
