@@ -88,7 +88,7 @@ describe("ctx.resultOf", () => {
 
     const closedReceipt = await readReceipt(rootDir, closedReceiptId);
     expect(closedReceipt.result).toEqual({ closed: true, name: "first-widget" });
-    expect(closedReceipt.used).toEqual([createReceiptId]);
+    expect(closedReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-listing" }]);
   });
 
   it("the same step run twice in one scenario: resultOf returns the most recent result", async () => {
@@ -108,7 +108,7 @@ describe("ctx.resultOf", () => {
     const closedReceipt = await readReceipt(rootDir, record.steps[2].receipt as string);
 
     expect(closedReceipt.result).toEqual({ closed: true, name: "second" });
-    expect(closedReceipt.used).toEqual([secondCreateReceiptId]);
+    expect(closedReceipt.used).toEqual([{ receipt: secondCreateReceiptId, step: "create-listing" }]);
   });
 
   it("resultOf never crosses a scenario boundary, and a failed run is never chained", async () => {

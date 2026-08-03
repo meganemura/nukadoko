@@ -89,7 +89,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     const createReceiptId = record.steps[0].receipt as string;
     const resultOfReceipt = await readReceipt(rootDir, record.steps[1].receipt);
     expect(resultOfReceipt.result).toEqual({ ok: true });
-    expect(resultOfReceipt.used).toEqual([createReceiptId]);
+    expect(resultOfReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-thing" }]);
 
     // The compat step's own receipt: openRequest() + a GET is measured
     // (observed), same as a typed step's ctx.request() would be.

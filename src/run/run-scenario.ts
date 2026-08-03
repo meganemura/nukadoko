@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { type GherkinDocument, type Pickle, type PickleStep } from "@cucumber/messages";
+import type { z } from "zod";
 import { formatValidationIssues } from "../binding/format-issues.js";
+import type { CheckedPattern } from "../check/binding-check.js";
+import { checkFromOrder } from "../check/from-order.js";
 import { DataTable } from "../compat/data-table.js";
 import {
   createDeclaredCollector,
@@ -85,7 +88,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // function, so it cannot leak between
 // pickles; a step's own reader is wired into createStepContext's `resultOf`
 // option as a plain closure over this map, and every value-returning read is
-// reflected back afterward via `contextHandle.usedReceiptIds()` onto that
+// reflected back afterward via `contextHandle.usedSnapshot()` onto that
 // step's own receipt (`used`). Only a *typed* step's chain key ever exists
 // (compat has no Step object, and no validated result to offer — see below),
 // so this chain is exclusively typed-to-typed provenance, unchanged by this
@@ -181,11 +184,16 @@ function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): 
 }
 
 /** One pickle's own result chain: which Step object most recently finished
- * with `status: "ok"`, and what its validated result plus receipt id were
- * (this task's spec, decision 1). */
+ * with `status: "ok"`, and what its validated result, receipt id, and own
+ * step name were (this task's spec, decision 1). `stepName` (m6a-from-core
+ * task spec, item 5) is carried alongside `receiptId` so a `used` entry
+ * built from this chain — whether through `ctx.resultOf` or a `from`
+ * injection — can cite the step name docs/spec.md "Receipts" asks for
+ * without a second vocabulary lookup. */
 interface ChainEntry {
   readonly result: unknown;
   readonly receiptId: string;
+  readonly stepName: string;
 }
 
 export interface RunScenarioOptions {
@@ -203,6 +211,14 @@ export interface RunScenarioOptions {
   readonly gherkinDocument: GherkinDocument;
   readonly vocabulary: Vocabulary;
   readonly bindings: readonly StepBinding[];
+  /** The same `CheckedPattern[]` `nuka check` builds via
+   * src/check/binding-check.ts's `checkBindings` (cli/run.ts's own setup
+   * phase calls it once for the whole run, not once per pickle) — this
+   * pickle's own from-order guard (below) resolves each of its steps' bound
+   * names through these, the exact seam `src/check/from-order.ts`'s own
+   * header explains (m6b-from-check task spec, item 3: `nuka check` and
+   * `nuka run` share one judgment, never two). */
+  readonly patterns: readonly CheckedPattern[];
   /** This `nuka run` invocation's own id (m4a-run-provenance task spec,
    * decision 1) — generated once by the caller (cli/run.ts), before any
    * pickle runs, and copied verbatim onto every scenario record this
@@ -268,6 +284,91 @@ function undefinedStepMessage(text: string): string {
 
 function ambiguousStepMessage(text: string, stepNames: readonly string[]): string {
   return `"${text}" matches more than one step: ${[...stepNames].sort().join(", ")}`;
+}
+
+// --- m6a-from-core task spec, item 4: `from` injection (scenario path
+// only — `nuka do` has no chain, docs/spec.md "Chaining steps": "Under
+// `nuka do` there is no scenario and therefore no chain"). ---
+
+/**
+ * Fills `value`'s still-unfilled args keys from `step`'s own `from`
+ * declaration, using this pickle's own chain (this task's spec, item 4):
+ * capture always wins (a key `bindStepArgs` already put something in —
+ * including from a table/docstring — is left untouched, `value[key] !==
+ * undefined`), and a key whose upstream hasn't yet produced a successful
+ * result *in this scenario* is left unfilled too — nukadoko never runs the
+ * upstream step for you (docs/spec.md "Chaining steps": "One thing `from`
+ * deliberately does not do: run the upstream step for you"), so a missing
+ * dependency is a feature-file mistake to fix, not one this function papers
+ * over.
+ *
+ * Mutates `value` in place (the same object `began.rawArgs` already points
+ * at, this task's spec: the receipt's own `args` should show what the step
+ * actually ran with, injected keys included — otherwise a reader could never
+ * tell an injected value apart from one that was simply never validated).
+ * Every key it *does* fill is reported to `recordUsed` (this task's spec,
+ * item 5) — the same collector `ctx.resultOf` itself writes into, so a step
+ * that is both injected into and separately calls `ctx.resultOf` still ends
+ * up with one deduplicated `used` list. Every key it *cannot* fill is
+ * returned (key -> the upstream step's own name, or a description of the
+ * problem if that upstream was never itself named by `vocabulary` — see
+ * `stepNameOf`'s own comment above) so the caller can name it if args
+ * validation goes on to fail because of it (this task's spec, item 4: "the
+ * message should be better than the hand-written era" — name which key,
+ * from which step).
+ */
+function injectFrom(
+  value: Record<string, unknown>,
+  step: Step,
+  chain: ReadonlyMap<Step, ChainEntry>,
+  stepNameOf: ReadonlyMap<Step, string>,
+  recordUsed: (receiptId: string, stepName: string) => void,
+): Map<string, string> {
+  const stillMissing = new Map<string, string>();
+  for (const [key, entry] of Object.entries(step.from)) {
+    if (value[key] !== undefined) {
+      // Capture (or a table/docstring) already filled this key — `from`
+      // only ever supplies a key the pattern itself left unfilled (this
+      // task's spec, item 4, bullet 1; docs/spec.md "Chaining steps": "A
+      // pattern capture still wins").
+      continue;
+    }
+    const [upstream, upstreamKey] = entry;
+    const chainEntry = chain.get(upstream);
+    if (chainEntry === undefined) {
+      stillMissing.set(key, stepNameOf.get(upstream) ?? "a step discovery never registered");
+      continue;
+    }
+    value[key] = (chainEntry.result as Record<string, unknown>)[upstreamKey];
+    recordUsed(chainEntry.receiptId, chainEntry.stepName);
+  }
+  return stillMissing;
+}
+
+/**
+ * Names which still-missing `from` key(s) actually caused `issues` (this
+ * task's spec, item 4) — not every key `injectFrom` couldn't fill is
+ * necessarily why args validation failed (an unfilled *optional* key is not
+ * a zod issue at all), so this only speaks up for a key zod itself flagged.
+ * `""` when there is nothing to add, so callers can simply append this to
+ * the existing message unconditionally.
+ */
+function fromInjectionHint(
+  issues: readonly z.core.$ZodIssue[],
+  stillMissing: ReadonlyMap<string, string>,
+): string {
+  if (stillMissing.size === 0) {
+    return "";
+  }
+  const issueKeys = new Set(issues.map((issue) => String(issue.path[0])));
+  const named = [...stillMissing.entries()].filter(([key]) => issueKeys.has(key));
+  if (named.length === 0) {
+    return "";
+  }
+  const parts = named.map(
+    ([key, stepName]) => `"${key}" should come from step "${stepName}" (must run earlier in this scenario)`,
+  );
+  return ` (${parts.join("; ")})`;
 }
 
 // --- m21b-compat-execution task spec, items 2, 4, 5: compat step/hook
@@ -424,6 +525,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     gherkinDocument,
     vocabulary,
     bindings,
+    patterns,
     runId,
     git,
     environment,
@@ -446,6 +548,74 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const startedAt = new Date();
 
+  // m6b-from-check task spec, item 2: the pre-execution guard docs/spec.md
+  // "Chaining steps" promises ("`nuka run`, before it executes that
+  // scenario") — the exact judgment `nuka check` makes (src/check/from-
+  // order.ts's own header), asked here before anything else in this pickle
+  // happens. Deliberately placed before `chain`/`stepNameOf`/
+  // `contextHandle`/the World are ever created, not merely before the
+  // per-step loop below: a violation found anywhere in this pickle fails the
+  // *whole* scenario without executing any of its steps, including ones
+  // textually before the offending line (this task's spec: "実行せずに失敗
+  // させる") — so no step's own `run` ever gets a chance to call
+  // `ctx.page()`, and this scenario's own browser session is never opened.
+  // Every other pickle in this `nuka run` invocation is untouched (cli/
+  // run.ts's own pickle loop calls this function once per pickle,
+  // independently).
+  const orderIssues = checkFromOrder(pickle, vocabulary, patterns);
+  if (orderIssues.length > 0) {
+    // Mirrors the existing undefined-step shape (docs/spec.md "an execution
+    // that never began must not be citable"): every pickle step still gets
+    // its own `steps` entry, `receipt: null` throughout since nothing ever
+    // began, and the scenario itself is `status: "failed"` like any other
+    // failed scenario — cli/run.ts's own exit-code logic
+    // (`record.status !== "passed"`) needs no change to reach the same
+    // outcome for this new failure cause. The offending step(s) carry the
+    // violation's own message(s) (joined, when one line has more than one
+    // violated key); every other step — both before and after, since none
+    // of them ran either — is `"skipped"`, the same status a step already
+    // gets when an earlier one in its own pickle failed.
+    const issuesByStepIndex = new Map<number, string[]>();
+    for (const issue of orderIssues) {
+      const messages = issuesByStepIndex.get(issue.stepIndex) ?? [];
+      messages.push(issue.message);
+      issuesByStepIndex.set(issue.stepIndex, messages);
+    }
+    const stepRecords: ScenarioStepRecord[] = pickle.steps.map((pickleStep, index) => {
+      const messages = issuesByStepIndex.get(index);
+      if (messages === undefined) {
+        return { text: pickleStep.text, status: "skipped", receipt: null };
+      }
+      return {
+        text: pickleStep.text,
+        status: "failed",
+        receipt: null,
+        error: { message: messages.join("; ") },
+      };
+    });
+    const finishedAt = new Date();
+    const record: ScenarioRecord = {
+      scenario_id: scenarioId,
+      run_id: runId,
+      feature: relativeFeaturePath,
+      scenario: pickle.name,
+      line: pickle.location?.line ?? 0,
+      status: "failed",
+      environment,
+      ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
+      session,
+      started_at: startedAt.toISOString(),
+      finished_at: finishedAt.toISOString(),
+      steps: stepRecords,
+      hooks: [],
+      ...(git !== undefined ? { git } : {}),
+      evidence: { dir: relativeScenarioDir, screenshots: [] },
+    };
+    const redactedRecord = redact(record, secrets) as ScenarioRecord;
+    await writeScenarioRecord(scenarioDir, redactedRecord);
+    return redactedRecord;
+  }
+
   // This scenario's own result chain (this task's spec, decision 1) — kept
   // here, not inside create-context.ts, so it never outlives this one
   // pickle's execution. `readChain` is the plain closure createStepContext
@@ -456,6 +626,23 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     return chain.get(step);
   }
 
+  // Every typed step's own Step object, keyed by its vocabulary name (m6a-
+  // from-core task spec, items 4, 6) — built once per pickle from the same
+  // `vocabulary` every pickle in this `nuka run` invocation shares. Doubles
+  // as the "is this Step object one discovery actually registered" predicate
+  // `ctx.resultOf`'s unregistered-Step throw needs (item 6: `stepNameOf.has`
+  // answers exactly that question — a Step this map doesn't have a name for
+  // is, by construction, not `===` anything discovery put in the vocabulary)
+  // and as the name lookup a `from` injection's own "still missing" error
+  // message uses (item 4) to name which upstream step a key should have come
+  // from, whether or not that step has run yet in this scenario.
+  const stepNameOf = new Map<Step, string>();
+  for (const entry of vocabulary.values()) {
+    if (entry.kind === "typed") {
+      stepNameOf.set(entry.step, entry.name);
+    }
+  }
+
   const contextHandle = createStepContext({
     config,
     evidenceDir: scenarioDir,
@@ -463,6 +650,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     secrets,
     storageState: storageState ?? undefined,
     resultOf: readChain,
+    isRegisteredStep: (step) => stepNameOf.has(step),
   });
 
   const stepRecords: ScenarioStepRecord[] = [];
@@ -520,7 +708,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // check`'s static Then-position warning, neither of which this function
     // touches.
     const observed = contextHandle.observedCounts();
-    const usedReceiptIds = contextHandle.usedReceiptIds();
+    const usedEntries = contextHandle.usedSnapshot();
     // Labels `ctx.section` was called with since the current step boundary
     // began (t3-sections task spec, decisions 1-2, 4) — reset at the same
     // `beginStep` calls `observed`/`used` already are, so a step never
@@ -549,7 +737,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Only a step whose *final* status is "ok" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
     if (status === "ok" && chainKey !== undefined) {
-      chain.set(chainKey, { result, receiptId: begun.receiptId });
+      chain.set(chainKey, { result, receiptId: begun.receiptId, stepName: outcomeStepName });
     }
 
     const stepFinishedAt = new Date();
@@ -577,7 +765,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
-            ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+            ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
@@ -612,7 +800,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
-            ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+            ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
@@ -1009,10 +1197,26 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           errorMessage = bindResult.message;
           errorKind = "binding_invalid";
         } else {
+          // `from` injection (this task's spec, item 4) — after binding, so
+          // capture already won every key it could; before args validation,
+          // so an injected key is validated exactly like a captured one and
+          // a required key `from` couldn't fill still fails args validation
+          // normally (the "last line of defense" this task's spec names —
+          // m6b's own pre-execution guard is what turns this into a fatal
+          // check *before* the browser session even starts).
+          const stillMissingFrom = injectFrom(
+            bindResult.value,
+            entry.step,
+            chain,
+            stepNameOf,
+            contextHandle.recordUsed,
+          );
           const argsResult = entry.step.args.safeParse(bindResult.value);
           if (!argsResult.success) {
             status = "failed";
-            errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+            errorMessage =
+              `args validation failed: ${formatValidationIssues(argsResult.error.issues)}` +
+              fromInjectionHint(argsResult.error.issues, stillMissingFrom);
             errorKind = "args_invalid";
           } else {
             try {
@@ -1188,7 +1392,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const stepFinishedAt = new Date();
         const httpLogExists = existsSync(path.join(began.receiptDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
-        const usedReceiptIds = contextHandle.usedReceiptIds();
+        const usedEntries = contextHandle.usedSnapshot();
         // Same backstop-only read as `observed`/`used` just above (t3-
         // sections task spec, decision 4) — whatever labels this step
         // reached before the uncaught throw still belong on its receipt.
@@ -1223,7 +1427,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           },
           observed,
           mutates: began.mutates,
-          ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+          ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
           ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
           ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0

@@ -7,6 +7,7 @@ import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FeatureFile } from "../feature/load-features.js";
 import type { CheckedPattern } from "./binding-check.js";
+import { checkFromOrder } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 
 // Responsibility: match every pickle step (from src/feature/load-features.ts)
@@ -42,8 +43,16 @@ import type { CheckIssue } from "./types.js";
 // warning, since compat has no declaration to trust here at all — a static
 // coverage gap, not a run-time finding (docs/spec.md "Compat steps",
 // "Keyword semantics").
+//
+// m6b-from-check task spec: `matchPickleStepText`/`MatchResult` are exported
+// so `./from-order.ts`'s own scenario-order check can resolve a pickle
+// step's own bound name exactly the way undefined-step/ambiguous-step
+// detection already does, rather than re-parsing `patterns` a second time —
+// `checkFromOrder` is called once per pickle below, right alongside this
+// module's own per-pickle findings, so `nuka check`'s report always carries
+// both.
 
-interface MatchResult {
+export interface MatchResult {
   readonly stepNames: readonly string[];
   /** The (first) pattern of the single step that matched, when exactly one
    * step matched — used for the table/docstring key check below, which
@@ -113,7 +122,7 @@ function findEscapeHint(
   return undefined;
 }
 
-function matchPickleStepText(text: string, patterns: readonly CheckedPattern[]): MatchResult {
+export function matchPickleStepText(text: string, patterns: readonly CheckedPattern[]): MatchResult {
   const byStep = new Map<string, CheckedPattern>();
   for (const candidate of patterns) {
     if (byStep.has(candidate.stepName)) {
@@ -238,6 +247,20 @@ export function checkFeatures(
             }
           }
         }
+      }
+
+      // m6b-from-check task spec, item 1: one call per pickle, after this
+      // pickle's own per-step findings above — a scenario-order violation is
+      // a property of the whole pickle (which upstream is bound where),
+      // never of one line in isolation the way the checks above are.
+      for (const issue of checkFromOrder(pickle, vocabulary, patterns)) {
+        errors.push({
+          code: "from-order-violation",
+          message: issue.message,
+          file: feature.relativePath,
+          line,
+          step: issue.stepName,
+        });
       }
     }
   }

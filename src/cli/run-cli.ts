@@ -15,6 +15,7 @@ import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
 import { runSkillPath } from "./skill.js";
 import {
+  buildStepNames,
   describeContract,
   formatVocabulary,
   formatVocabularyError,
@@ -72,6 +73,10 @@ interface DoArgs {
   args: string;
   session?: string;
   env?: string;
+  /** `--use <receipt-id>` (repeatable, m6c-do-use task spec) — yargs'
+   * `array: true` collects every occurrence into this list, in the order
+   * given, rather than only keeping the last one. */
+  use?: string[];
 }
 
 interface RunArgs {
@@ -156,7 +161,8 @@ export async function runCli(
       if (argsFailed) return;
       try {
         const vocabulary = await loadVocabulary(rootDir);
-        const summaries = [...vocabulary.values()].map(summarize);
+        const stepNames = buildStepNames(vocabulary);
+        const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames));
         if (args.json) {
           stdout.write(`${JSON.stringify(summaries, null, 2)}\n`);
         } else {
@@ -193,7 +199,7 @@ export async function runCli(
           stderr.write(`Unknown step: ${args.name}\n`);
           return;
         }
-        stdout.write(`${JSON.stringify(describeContract(entry), null, 2)}\n`);
+        stdout.write(`${JSON.stringify(describeContract(entry, buildStepNames(vocabulary)), null, 2)}\n`);
       } catch (error) {
         exitCode = 1;
         stderr.write(`${formatVocabularyError(error)}\n`);
@@ -223,6 +229,12 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe: 'target a named environment (omit for the "default" environment)',
+        })
+        .option("use", {
+          type: "string",
+          array: true,
+          describe:
+            "receipt id whose result fills this step's `from` keys (repeatable; --args still wins for a key it also sets)",
         }) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       if (argsFailed) return;
@@ -232,6 +244,7 @@ export async function runCli(
         argsJson: args.args,
         session: args.session ?? null,
         env: args.env ?? null,
+        use: args.use ?? [],
         stdout,
         stderr,
       });

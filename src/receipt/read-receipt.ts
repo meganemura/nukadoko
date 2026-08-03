@@ -19,10 +19,13 @@ import type { Receipt } from "./types.js";
 // Takes the receipt's own directory directly (mirrors `writeReceipt
 // (evidenceDir, receipt)`'s own parameter shape) rather than a receipt id —
 // the id-to-directory convention (`<stateDir>/receipts/<id>`) belongs to
-// src/run/run-scenario.ts (which this task does not touch), and the caller
-// here (emitter.ts) already has to derive that path itself from the
-// scenario record it is reading; growing this module's own contract to
-// duplicate that convention isn't worth it for a one-line `path.join`.
+// src/run/run-scenario.ts, and the caller here (emitter.ts) already has to
+// derive that path itself from the scenario record it is reading; growing
+// this module's own contract to duplicate that convention isn't worth it for
+// a one-line `path.join`. `readReceiptById` below is the one exception
+// (m6c-do-use task spec): `nuka do --use` has no record to derive a
+// directory from, only a bare id typed on the command line, so it is worth
+// this module knowing the convention for that one caller.
 //
 // A missing or unparseable receipt.json is not this module's failure to
 // surface: the emitter's own mapping treats a `null` result as "fall back
@@ -40,4 +43,30 @@ export function readReceipt(receiptDir: string): Receipt | null {
   } catch {
     return null;
   }
+}
+
+// `nuka do --use <receipt-id>` (m6c-do-use task spec) is the one caller that
+// hands this module a receipt id typed on the command line rather than one
+// this tool already wrote down and is reading back (`readReceiptsForRecord`,
+// src/report/receipts.ts, only ever cites ids its own scenario record
+// carries) — so, unlike every other reader here, the id itself is untrusted
+// input. A real id is only ever `[a-z0-9-]+` (receipt-id.ts's own
+// `generateId`); rejecting anything else up front, before it is ever joined
+// into a path, is what keeps `--use ../../etc/passwd` from resolving outside
+// `<stateDir>/receipts/` at all — same reasoning as session/name.ts's own
+// `VALID_SESSION_NAME`. A rejected id collapses into the same `null` a
+// merely-absent one already produces: `--use`'s own caller reports both as
+// "no such receipt" (m6c-do-use task spec's error list draws no distinction
+// either), so a malformed id gets no signal about which failure mode it hit.
+const VALID_RECEIPT_ID = /^[a-z0-9-]+$/;
+
+/** `readReceipt` plus the id -> directory convention every writer here
+ * already shares (`<stateDir>/receipts/<id>`, e.g. src/cli/do.ts's own
+ * `relativeDir`) — a second `readReceipt(path.join(...))` call site would
+ * otherwise have to know that convention itself. */
+export function readReceiptById(rootDir: string, stateDir: string, receiptId: string): Receipt | null {
+  if (!VALID_RECEIPT_ID.test(receiptId)) {
+    return null;
+  }
+  return readReceipt(path.join(rootDir, stateDir, "receipts", receiptId));
 }

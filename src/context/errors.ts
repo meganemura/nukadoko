@@ -32,3 +32,38 @@ export class MissingEnvError extends Error {
     this.key = key;
   }
 }
+
+/** Thrown by `ctx.resultOf(step)` (docs/spec.md "Context API"/"Chaining
+ * steps") when `step` is a `Step` object discovery never registered — m6a-
+ * from-core task spec, item 6. Unlike `from` (whose own unregistered-Step
+ * mistake is caught statically, before any step runs — src/step/
+ * validate-from.ts), `resultOf` names its upstream only at the call site
+ * inside `run()`, so this is the one place that mistake can be caught at
+ * all: docs/spec.md "Chaining steps" put it plainly — "an unregistered
+ * `Step` is an error where it is found ... `resultOf` can only be caught at
+ * the call, where it throws". A registered step that simply hasn't run yet
+ * in this scenario is a different, non-error state (`ctx.resultOf` returns
+ * `undefined` for that, never throws) — this error exists only for a `Step`
+ * object that isn't `===` anything discovery ever put in the vocabulary at
+ * all, which is almost always the sign of a step file reached through a
+ * second `await import()` of the same file (a distinct module instance with
+ * its own, different `Step` object — see src/discover/discover-steps.ts's
+ * own header for why discovery goes out of its way to prevent this for its
+ * own loads, and tests/resultof.test.ts for the empirical proof that a step
+ * file's ordinary relative import does not hit this). The message names
+ * that possibility rather than the step itself: unlike `MissingEnvError`,
+ * there is no key to single out — a `Step` carries no name of its own (only
+ * discovery's vocabulary key does), so the actionable fact here is "how a
+ * mismatched instance like this usually happens", not "which one". */
+export class UnregisteredStepError extends Error {
+  constructor() {
+    super(
+      "ctx.resultOf() was called with a Step object discovery never registered. " +
+        "This almost always means the Step was reached through a different `await import()` " +
+        "than the one discovery used, producing a distinct module instance whose export is not " +
+        '`===` the one in the vocabulary (docs/spec.md "Chaining steps"). Import the step module ' +
+        "the same way its own file does (a plain relative import), rather than a fresh dynamic import.",
+    );
+    this.name = "UnregisteredStepError";
+  }
+}

@@ -9,11 +9,11 @@ import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
 import { createEnvReadsCollector } from "./env-reads.js";
-import { MissingEnvError } from "./errors.js";
+import { MissingEnvError, UnregisteredStepError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
 import { createSectionsCollector } from "./sections.js";
-import { createUsedCollector } from "./used.js";
+import { createUsedCollector, type UsedEntry } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution hands
 // to a step's `run(ctx, args)` — env, baseURL (also wired into the browser
@@ -84,11 +84,34 @@ import { createUsedCollector } from "./used.js";
 // `nuka do`'s always-`undefined` reader), passed in here as `options.resultOf`
 // and never computed by this module. What this module owns is the *wrapper*:
 // `ctx.resultOf` calls that lookup and, only when it actually returns a
-// value, records the receipt id on the `used` collector below — the same
+// value, records the receipt id (and the step name that receipt records —
+// m6a-from-core task spec, item 5) on the `used` collector below — the same
 // "step cannot see or reset its own observation" trust rule as `observed`,
-// applied to provenance instead of network calls. `usedReceiptIds()` (the
+// applied to provenance instead of network calls. `usedSnapshot()` (the
 // handle's read side) and `beginStep`'s reset mirror `observedCounts()`/its
 // own reset exactly, for the same reason: one step boundary, two tallies.
+//
+// `isRegisteredStep` (m6a-from-core task spec, item 6): before even
+// attempting the lookup above, `ctx.resultOf` now checks that `step` is one
+// discovery actually registered — the executor's own knowledge again (built
+// from whichever vocabulary it already has: run-scenario.ts's per-pickle
+// `vocabulary` option, or `nuka do`'s own single lookup), passed in here the
+// same way `resultOf`'s reader is, and defaulting to "everything is
+// registered" so a caller that doesn't care about this contract (most of
+// this file's own tests) doesn't have to say so. A `Step` this predicate
+// rejects throws `UnregisteredStepError` (src/context/errors.ts) rather than
+// silently returning `undefined` forever — the mistake docs/spec.md
+// "Chaining steps" describes: a step file reached through a second, separate
+// `await import()` produces a distinct object that can never match anything
+// in the vocabulary. `recordUsed` (the handle's own executor-only write side,
+// below) exists for the *other* way a receipt becomes provenance: a `from`
+// injection (run-scenario.ts) reads the exact same per-pickle chain
+// `resultOf`'s own reader does, but from outside any step's `run()` — before
+// it is even called — so it cannot go through the `ctx.resultOf` wrapper at
+// all; `recordUsed` lets it write into the very same `used` collector
+// instead of needing a second one, which is what keeps a step that is both
+// injected into *and* itself calls `ctx.resultOf` for a different upstream
+// down to one deduplicated list rather than two.
 //
 // `requireEnv` records the name it was given on the `envReads` collector
 // below *before* throwing `MissingEnvError` (env-reads-and-mutates-doc task
@@ -131,21 +154,30 @@ export interface StepContextHandle {
    * else as writes, through `ctx.request()` and the page alike (m2pre-
    * observed task spec, decisions 1-2). Never exposed on `ctx`. */
   observedCounts(): ObservedCounts;
-  /** Executor-only: the receipt ids `ctx.resultOf` actually read a value from
-   * since the current step boundary began, deduplicated, in read order
-   * (m2pre-resultof task spec, decision 2). Never exposed on `ctx` — same
-   * rule as `observedCounts()`. */
-  usedReceiptIds(): string[];
+  /** Executor-only: every receipt this execution actually read a value from
+   * since the current step boundary began — through `ctx.resultOf` or a
+   * `from` injection alike (m2pre-resultof task spec, decision 2; m6a-from-
+   * core task spec, item 5) — deduplicated by receipt id, in read order.
+   * Never exposed on `ctx` — same rule as `observedCounts()`. */
+  usedSnapshot(): UsedEntry[];
+  /** Executor-only: records one provenance read the same `used` collector
+   * `ctx.resultOf`'s own wrapper writes into, for a read that happens
+   * *outside* `ctx.resultOf` entirely — a `from` injection (m6a-from-core
+   * task spec, items 4-5), which fills an args key before the step's `run()`
+   * is ever called, so there is no `ctx.resultOf` call for it to ride along
+   * with. Never exposed on `ctx`; only the executor (run-scenario.ts) calls
+   * this, immediately after actually reading the value it names. */
+  recordUsed(receiptId: string, stepName: string): void;
   /** Executor-only: the labels `ctx.section` was called with since the
    * current step boundary began, in call order (t3-sections task spec,
    * decisions 1-2). Never exposed on `ctx` — same rule as
-   * `observedCounts()`/`usedReceiptIds()`. */
+   * `observedCounts()`/`usedSnapshot()`. */
   sectionsSnapshot(): string[];
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError` (env-reads-and-
    * mutates-doc task spec, item A). Never exposed on `ctx` — same rule as
-   * `observedCounts()`/`usedReceiptIds()`/`sectionsSnapshot()`. */
+   * `observedCounts()`/`usedSnapshot()`/`sectionsSnapshot()`. */
   envReadsSnapshot(): string[];
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
@@ -188,8 +220,23 @@ export interface CreateStepContextOptions {
    * matching `nuka do`'s contract (docs/spec.md "Context API": "undefined
    * under `nuka do`") without every caller that doesn't care about chaining
    * having to say so. `nuka run`'s executor (run-scenario.ts) passes one
-   * backed by the current pickle's own chain instead. */
-  resultOf?: (step: Step) => { result: unknown; receiptId: string } | undefined;
+   * backed by the current pickle's own chain instead. `stepName` (m6a-from-
+   * core task spec, item 5) is the step name that receipt itself records —
+   * carried alongside `receiptId` so `used` can cite it without a second
+   * lookup, per docs/spec.md "Receipts": each `used` entry is
+   * `{ "receipt": ..., "step": ... }`. */
+  resultOf?: (step: Step) => { result: unknown; receiptId: string; stepName: string } | undefined;
+  /** Whether `step` is one discovery actually registered (m6a-from-core task
+   * spec, item 6) — checked by `ctx.resultOf` before even attempting the
+   * `resultOf` lookup above; a `Step` this rejects throws
+   * `UnregisteredStepError` instead of the lookup running at all. Defaults to
+   * "everything is registered" (`() => true`), matching this option's own
+   * `resultOf` default of "nothing is ever readable": a caller that doesn't
+   * wire this in gets today's old, permissive behavior rather than a
+   * surprise new throw. `nuka run`'s executor (run-scenario.ts) and `nuka
+   * do`'s (cli/do.ts) both build this from the same vocabulary they already
+   * discovered. */
+  isRegisteredStep?: (step: Step) => boolean;
 }
 
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
@@ -200,6 +247,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     secrets = [],
     storageState,
     resultOf: readResultOf = () => undefined,
+    isRegisteredStep = () => true,
   } = options;
   // Mutable, unlike browser evidence's fixed `evidenceDir`: `beginStep`
   // (below) is the only way this ever changes, and `do` never calls it, so
@@ -292,13 +340,22 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       return requestContext;
     },
     resultOf<S extends Step>(step: S) {
+      // Checked before the lookup even runs (m6a-from-core task spec, item
+      // 6): a Step object discovery never registered has nothing legitimate
+      // to look up at all, and silently returning `undefined` for it (the
+      // pre-this-task behavior) is indistinguishable from "registered, just
+      // hasn't run yet" — exactly the mistake this throw exists to surface
+      // instead (see UnregisteredStepError's own doc comment).
+      if (!isRegisteredStep(step)) {
+        throw new UnregisteredStepError();
+      }
       const entry = readResultOf(step);
       if (entry === undefined) {
         return undefined;
       }
       // Recorded only on an actual read (m2pre-resultof task spec, decision
       // 2: omit when empty — a call that returned `undefined` leaves no trace).
-      used.record(entry.receiptId);
+      used.record(entry.receiptId, entry.stepName);
       return entry.result as z.infer<S["returns"]>;
     },
     section(label: string): void {
@@ -377,8 +434,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return observed.snapshot();
   }
 
-  function usedReceiptIds(): string[] {
+  function usedSnapshot(): UsedEntry[] {
     return used.snapshot();
+  }
+
+  function recordUsed(receiptId: string, stepName: string): void {
+    used.record(receiptId, stepName);
   }
 
   function sectionsSnapshot(): string[] {
@@ -401,7 +462,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     ctx,
     dispose,
     observedCounts,
-    usedReceiptIds,
+    usedSnapshot,
+    recordUsed,
     sectionsSnapshot,
     envReadsSnapshot,
     beginStep,

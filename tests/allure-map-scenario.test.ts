@@ -359,7 +359,7 @@ describe("mapScenario: step parameters", () => {
       mutates: false,
       observed: { http_reads: 2, http_writes: 1 },
       world: { reads: ["a", "b"], writes: ["c"] },
-      used: ["rcpt-0"],
+      used: [{ receipt: "rcpt-0", step: "create-cart" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
     const record = baseRecord({ steps: [step] });

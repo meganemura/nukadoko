@@ -19,11 +19,23 @@
 // "zero calls happened" (`{ http_reads: 0, http_writes: 0 }`).
 //
 // `used` is added now (m2pre-resultof task spec, decision 4): measured
-// provenance, the receipt ids `ctx.resultOf` actually read a value from
-// during this execution (docs/spec.md "Receipts"). Optional and omitted when
+// provenance, the receipts `ctx.resultOf` actually read a value from during
+// this execution (docs/spec.md "Receipts"). Optional and omitted when
 // empty — unlike `observed`, "no reads happened" is the overwhelmingly
 // common case (most steps never call `resultOf` at all), so this follows
 // `target_version`'s "absence is the normal case" convention instead.
+//
+// `used`'s own entry shape widens from a bare receipt id string to
+// `{ receipt, step }` now (m6a-from-core task spec, item 5): a `from`
+// injection (docs/spec.md "Chaining steps") is a second way this array gets
+// populated, alongside `ctx.resultOf`, and docs/spec.md "Receipts" always
+// described the richer shape — "Each entry is `{ "receipt": "rcpt-…", "step":
+// "create-project" }`" — that this field is only now catching up to. `step`
+// is redundant with the cited receipt (resolving it costs one more file
+// read), which is exactly why it is written down anyway: a receipt legible
+// on its own, without being resolved against another local working file, is
+// worth the duplication. Breaking change, no back-compat shim — 0.1 hasn't
+// shipped.
 //
 // `sections` is added now (t3-sections task spec, decisions 1-3): the labels
 // `ctx.section` was called with during this execution, in call order — how
@@ -95,6 +107,7 @@
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ObservedCounts } from "../context/observed.js";
+import type { UsedEntry } from "../context/used.js";
 
 /** The closed set of machine-readable failure causes a receipt's `error` can
  * carry (m3a-receipt-kinds task spec, decision 1) — see this file's own
@@ -168,11 +181,12 @@ interface ReceiptBase {
    * enforcement and read-only environments act on (docs/spec.md "Keyword
    * semantics", "Receipts"; this task's spec, decisions 1-4). */
   observed: ObservedCounts;
-  /** Receipt ids whose validated results this execution actually read
-   * through `ctx.resultOf` (docs/spec.md "Receipts"; this task's spec,
-   * decisions 1-2). Present only when non-empty; deduplicated, in read
-   * order. */
-  used?: string[];
+  /** The earlier executions whose validated results this execution actually
+   * read from — through a `from` injection or a `ctx.resultOf` call alike
+   * (docs/spec.md "Receipts"; m2pre-resultof task spec, decisions 1-2;
+   * m6a-from-core task spec, item 5). Present only when non-empty;
+   * deduplicated by receipt id, in read order. */
+  used?: UsedEntry[];
   /** Env var names `ctx.requireEnv` was actually called with during this
    * execution (docs/spec.md "Receipts"; env-reads-and-mutates-doc task spec,
    * item A). Present only when non-empty; deduplicated, in read order.

@@ -12,6 +12,7 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
+import { readReceiptById } from "../receipt/read-receipt.js";
 import type { ErrorKind, Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -21,6 +22,9 @@ import { acquireLock, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
+import type { Step } from "../step/define-step.js";
+import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
+import { resolveUse, type ResolveUseSuccess } from "./resolve-use.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -30,11 +34,14 @@ import type { WritableSink } from "./writable-sink.js";
 //
 //   1. Setup — malformed --args JSON, an unknown step name, a config/
 //      discovery error, an unknown `--env` name, a mutating step against a
-//      `policy: "read-only"` environment, or an invalid `--session` name, a
-//      lock held by another live process, or a malformed session file. None
-//      of these write a receipt: the run never started, so there is nothing
-//      to attest to (a receipt for an execution that never began would let a
-//      nonexistent run be cited later as if it had happened).
+//      `policy: "read-only"` environment, an invalid `--session` name, a
+//      lock held by another live process, a malformed session file, or a bad
+//      `--use <receipt-id>` (unknown id, a non-`"ok"` receipt, a receipt
+//      whose step names none of this step's `from` entries, or a missing
+//      result key — m6c-do-use task spec). None of these write a receipt:
+//      the run never started, so there is nothing to attest to (a receipt
+//      for an execution that never began would let a nonexistent run be
+//      cited later as if it had happened).
 //   2. Execution — from here a receipt is always written, whatever
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
@@ -44,7 +51,12 @@ import type { WritableSink } from "./writable-sink.js";
 //      is trusted (t2-trust-declaration task spec) — an otherwise-"ok" run
 //      that observed a network write in a read-only environment is no
 //      longer demoted for it; `receipt.observed` still records what
-//      happened, it just doesn't decide `status` any more.
+//      happened, it just doesn't decide `status` any more. `--use`'s own
+//      values, already resolved and validated in setup above, are actually
+//      applied here — merged into `parsedArgs` (`--args` still wins for a
+//      key it already set) and recorded into `used` through the same
+//      collector `ctx.resultOf` writes into (m6a-from-core task spec, item
+//      5) — because that collector only exists once `contextHandle` does.
 //
 // `--env` is resolved (environment/resolve-environment.ts) right after
 // config loads and before anything session-related, because session paths
@@ -85,12 +97,19 @@ export interface RunDoOptions {
    * require a matching `environments` entry (this task's spec, decision 2).
    */
   env: string | null;
+  /** `--use <receipt-id>` (repeatable), in the order given (m6c-do-use task
+   * spec; docs/spec.md "Single steps (the agent path)"): each fills whichever
+   * of this step's own `from` keys that receipt's step is named by. Empty
+   * when `--use` was never given — the common case, and unrelated to `from`
+   * being empty too (a step can have `from` entries and simply be run with
+   * every key passed through `--args` instead, same as under a scenario). */
+  use: readonly string[];
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
-  const { rootDir, name, argsJson, session, env, stdout, stderr } = options;
+  const { rootDir, name, argsJson, session, env, use, stdout, stderr } = options;
 
   // --- Setup phase: any failure here writes nothing. ---
   let parsedArgs: unknown;
@@ -195,6 +214,55 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
+    // Built once, from this same vocabulary — the "Step object -> the name
+    // discovery registered it under" map both `isRegisteredStep` just below
+    // and `--use`'s own step-name match (m6c-do-use task spec) need, so this
+    // walks `vocabulary` once rather than twice for the two questions.
+    const stepNameOf = new Map<Step, string>(
+      [...vocabulary.entries()].flatMap(([stepName, vocabularyEntry]) =>
+        vocabularyEntry.kind === "typed" ? [[vocabularyEntry.step, stepName] as const] : [],
+      ),
+    );
+    // The "is this Step object one discovery actually registered" predicate
+    // both `from`'s own structural check just below and `ctx.resultOf`'s
+    // unregistered-Step throw (wired into createStepContext further down)
+    // need (m6a-from-core task spec, items 3, 6).
+    const isRegisteredStep = registeredStepPredicate(stepNameOf.keys());
+
+    // `from`'s own structural validation (m6a-from-core task spec, item 3;
+    // docs/spec.md "Chaining steps": "run/do refuse to execute the step at
+    // all") — an unregistered upstream, an args/returns key `from` names
+    // that doesn't actually exist, or an upstream that isn't even a Step.
+    // Fatal like ConfigError/DuplicateStepError above: this step's execution
+    // never began, so no receipt is written for it.
+    const fromIssues = validateStepFrom(name, entry.step, isRegisteredStep);
+    if (fromIssues.length > 0) {
+      stderr.write(`${formatFromIssues(fromIssues)}\n`);
+      return 1;
+    }
+
+    // `--use <receipt-id>` (m6c-do-use task spec; docs/spec.md "Single steps
+    // (the agent path)") — resolved fully here, in setup: an unknown id, a
+    // non-`"ok"` receipt, a receipt whose step names none of this step's
+    // `from` entries, or a missing result key are each a setup failure, the
+    // same family as the `from` structural check just above. Only
+    // validated/read here, not yet applied — applying it (and recording it
+    // into `used`) has to wait for the execution phase below, where
+    // `contextHandle`'s own collector (m6a-from-core task spec, item 5)
+    // actually exists; this loop just fails fast before anything is written
+    // if any `--use` value is bad.
+    const resolvedUses: ResolveUseSuccess[] = [];
+    for (const receiptId of use) {
+      const resolved = resolveUse(receiptId, entry.step, stepNameOf, (id) =>
+        readReceiptById(rootDir, config.stateDir, id),
+      );
+      if (!resolved.ok) {
+        stderr.write(`${resolved.message}\n`);
+        return 1;
+      }
+      resolvedUses.push(resolved);
+    }
+
     // Read-only refusal is a setup failure, not an execution failure (this
     // task's spec, decision 4): the step never runs, so nothing was
     // executed, so no receipt is written — writing one would let a run that
@@ -265,8 +333,43 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // out explicitly here so this file's own contract with `ctx.resultOf`
       // is visible in the diff, not just inherited silently.
       resultOf: () => undefined,
+      // Wired in even though `resultOf` above never returns a value under
+      // `do` (m6a-from-core task spec, item 6): the unregistered-Step throw
+      // is about `step` itself, not about whether a lookup would have
+      // succeeded, so it must fire here exactly as it does under `nuka run`.
+      isRegisteredStep,
     });
     const startedAt = new Date();
+
+    // `--use`'s actual effect (m6c-do-use task spec) — applied here, not in
+    // setup, so `recordUsed` rides `contextHandle`'s own collector (it didn't
+    // exist yet in setup); mirrors run-scenario.ts's own `injectFrom`, called
+    // after that file's equivalent step-start timestamp for the same reason.
+    // `--args` still wins for a key it already set (this task's spec, item
+    // 5) — `parsedArgs` is only ever a plain object here for any key a
+    // resolved `--use` could touch, because the `from` structural check
+    // above already required `entry.step.args` to be an object schema for
+    // every one of that step's own `from` keys.
+    if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
+      const argsObject = parsedArgs as Record<string, unknown>;
+      for (const resolved of resolvedUses) {
+        let filledAnyKey = false;
+        for (const [key, value] of Object.entries(resolved.filled)) {
+          if (!(key in argsObject)) {
+            argsObject[key] = value;
+            filledAnyKey = true;
+          }
+        }
+        // Only a receipt actually drawn from lands in `used` (docs/spec.md
+        // "Single steps (the agent path)": "the receipt ids actually drawn
+        // from land in this execution's own `used`") — one whose every
+        // matching key was already overridden by `--args` contributed
+        // nothing to this run, so it is not cited.
+        if (filledAnyKey) {
+          contextHandle.recordUsed(resolved.used.receipt, resolved.used.step);
+        }
+      }
+    }
 
     let status: "ok" | "failed";
     let result: unknown;
@@ -322,6 +425,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // "read the tally after execution, whatever its outcome" shape as
     // `observed`/`sections` (env-reads-and-mutates-doc task spec, item A).
     const requiredEnv = contextHandle.envReadsSnapshot();
+    // Every receipt `--use` actually drew a value from, in the order given
+    // (m6c-do-use task spec, item 6) — the same collector `ctx.resultOf`
+    // itself would write into, read the same "after execution" way
+    // `observed`/`sections`/`requiredEnv` are, right above. Under `do`,
+    // `ctx.resultOf` never returns a value (`resultOf: () => undefined`
+    // above), so `--use` is the only thing that can ever populate this here.
+    const used = contextHandle.usedSnapshot();
 
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
@@ -375,6 +485,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             evidence: { dir: relativeDir, ...evidence },
             observed,
             mutates: entry.step.mutates,
+            ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           }
@@ -400,6 +511,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             mutates: entry.step.mutates,
             evidence: { dir: relativeDir, ...evidence },
             observed,
+            ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           };

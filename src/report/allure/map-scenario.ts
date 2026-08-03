@@ -508,7 +508,11 @@ function mapSteps(
         parameters.push({ name: "world writes (observed)", value: receipt.world.writes.join(", ") });
       }
       if (receipt.used && receipt.used.length > 0) {
-        parameters.push({ name: "used receipts", value: receipt.used.join(", ") });
+        // `used`'s own entries widened to `{ receipt, step }` (m6a-from-core
+        // task spec, item 5); this parameter's own rendering is unchanged —
+        // still just the receipt ids, comma-joined — so this line only
+        // updates the read to match the new shape.
+        parameters.push({ name: "used receipts", value: receipt.used.map((entry) => entry.receipt).join(", ") });
       }
       if (receipt.required_env && receipt.required_env.length > 0) {
         parameters.push({ name: "required env", value: receipt.required_env.join(", ") });

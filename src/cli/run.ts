@@ -1,4 +1,6 @@
 import path from "node:path";
+import { checkBindings } from "../check/binding-check.js";
+import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
@@ -29,6 +31,7 @@ import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
+import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -162,6 +165,23 @@ import type { WritableSink } from "./writable-sink.js";
 // invocation, running a second feature afterward overwrites the first run's
 // stream rather than appending to it — a deliberate consequence of "one
 // file, truncated on begin", not a bug.
+//
+// m6b-from-check task spec, item 2's own leftover: `from`'s structural
+// validation (src/step/validate-from.ts's `validateStepFrom`, m6a-from-core
+// task spec) is now wired in here too, not just `nuka do` — a setup-phase
+// fatal (stderr + exit 1, no scenario ever written), run once for this whole
+// invocation right after `bindings` builds, never once per pickle (this
+// check is scenario-independent, see that file's own header). Scoped to the
+// step names this run's own selected pickles actually resolve to
+// (`usedStepNames` below, via the same `checkBindings`/`matchPickleStepText`
+// seam src/check/from-order.ts's own guard reuses) rather than the whole
+// vocabulary: a broken `from` on a step this invocation never binds to is
+// not this invocation's problem to refuse over, the same "only the step
+// you're about to run" scope cli/do.ts's own wiring already has — `nuka
+// check` is where a project-wide finding like that belongs instead. The
+// scenario-order guard itself (docs/spec.md "Chaining steps") is a second,
+// separate check, run once *per pickle* inside src/run/run-scenario.ts —
+// see that file's own header for why it has to live there instead of here.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -266,6 +286,43 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       bindings = buildStepBindings(vocabulary, config.parameterTypes, compatParameterTypes);
     } catch (error) {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+
+    // The same check-time patterns `nuka check` builds (this file's own
+    // header, m6b-from-check task spec) — a broken pattern here simply
+    // doesn't appear in `patterns` (`checkBindings`'s own issues/warnings are
+    // check's report to make, not this setup phase's to fail over; a pattern
+    // that fails to build can't match anything either way, so it surfaces as
+    // "undefined" exactly like it already does). Built once, shared by
+    // `usedStepNames` below and by every pickle's own from-order guard
+    // (src/run/run-scenario.ts's `RunScenarioOptions.patterns`).
+    const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
+
+    // Which typed step names this run's own selected pickles actually
+    // resolve to (this file's own header) — undefined/ambiguous lines
+    // resolve to nothing here, same as everywhere else this resolution is
+    // done; they are none of this guard's business either.
+    const usedStepNames = new Set<string>();
+    for (const pickle of selected.pickles) {
+      for (const step of pickle.steps) {
+        const { stepNames } = matchPickleStepText(step.text, patterns);
+        if (stepNames.length === 1) {
+          usedStepNames.add(stepNames[0]!);
+        }
+      }
+    }
+
+    const isRegisteredStep = registeredStepPredicate(
+      [...vocabulary.values()].flatMap((entry) => (entry.kind === "typed" ? [entry.step] : [])),
+    );
+    const fromIssues = [...vocabulary.values()].flatMap((entry) =>
+      entry.kind === "typed" && usedStepNames.has(entry.name)
+        ? validateStepFrom(entry.name, entry.step, isRegisteredStep)
+        : [],
+    );
+    if (fromIssues.length > 0) {
+      stderr.write(`${formatFromIssues(fromIssues)}\n`);
       return 1;
     }
 
@@ -459,6 +516,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             gherkinDocument: selected.gherkinDocument,
             vocabulary,
             bindings,
+            patterns,
             runId,
             git,
             environment: resolvedEnv.name,

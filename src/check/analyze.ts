@@ -5,6 +5,7 @@ import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { loadFeatures, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
+import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
 import { checkFeatures } from "./feature-check.js";
@@ -154,6 +155,39 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   const bindingResult = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   errors.push(...bindingResult.issues);
   warnings.push(...bindingResult.warnings);
+
+  // `from`'s own structural validation (src/step/validate-from.ts's
+  // `validateStepFrom`, m6a-from-core) — docs/spec.md "Chaining steps"
+  // promises "`nuka check` reports it" for the same findings `run`/`do`
+  // already refuse to execute over (src/cli/run.ts, src/cli/do.ts); this is
+  // that promise's other half, missing until now (m6f-check-structural-from).
+  // `isRegisteredStep` is built once, from the whole vocabulary, and
+  // `validateStepFrom` is called once per typed step — not once per pickle
+  // that happens to use it (unlike `checkFromOrder` below) — because a
+  // structural finding here is a property of the step's own declaration: it
+  // holds or fails identically everywhere the step is used, so reporting it
+  // once per occurrence would just be the same message repeated per feature.
+  const isRegisteredStep = registeredStepPredicate(
+    [...vocabulary.values()].flatMap((entry) => (entry.kind === "typed" ? [entry.step] : [])),
+  );
+  for (const entry of vocabulary.values()) {
+    if (entry.kind !== "typed") {
+      continue; // Compat steps have no `from` at all (no typed contract).
+    }
+    for (const issue of validateStepFrom(entry.name, entry.step, isRegisteredStep)) {
+      errors.push({
+        code: "from-structural-violation",
+        message: issue.message,
+        // rootDir-relative, matching every other CheckIssue.file this report
+        // produces (src/discover/discover-steps.ts's own header, on
+        // CompatParameterTypeEntry.filePath) — unlike that field,
+        // TypedVocabularyEntry.filePath is stored absolute, so it needs the
+        // same relativizing importFailures/compatParameterTypes already get.
+        file: path.relative(rootDir, entry.filePath),
+        step: issue.step,
+      });
+    }
+  }
 
   const { features, parseErrors } =
     featureArg === undefined ? loadFeatures(rootDir, config.featuresDir) : loadSingleFeature(rootDir, featureArg);

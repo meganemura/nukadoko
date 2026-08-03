@@ -7,6 +7,7 @@ import {
   type VocabularyEntry,
 } from "../discover/discover-steps.js";
 import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
+import type { Step, StepFromMap } from "../step/define-step.js";
 
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
 // load the project's config, then discover its vocabulary. Kept out of
@@ -19,11 +20,91 @@ import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors
 // spec) — `run-cli.ts`'s handler passes a `WritableSink`, which can't answer
 // "how wide is the terminal", so the width this function wraps to is
 // resolved by the caller and passed in as a plain number.
-
+//
 export async function loadVocabulary(rootDir: string): Promise<Vocabulary> {
   const config = await loadConfig(rootDir);
   const { vocabulary } = await discoverSteps(rootDir, config.featuresDir);
   return vocabulary;
+}
+
+// `StepNames` (m6a-from-core task spec, item 7): a step's own `from` field
+// (src/step/define-step.ts's `StepFromMap`) names its upstream by the `Step`
+// object itself, never by name — the same identity-over-name choice
+// `ctx.resultOf` makes, and for the same reason (docs/spec.md "Chaining
+// steps"). Rendering `from` for `nuka steps --json`/`nuka describe` still
+// has to show a *name* ("projectId" ← "create-project.id"), which only
+// exists at discovery time. `summarize`/`describeContract` below take one
+// `VocabularyEntry` at a time, never the whole `Vocabulary`, so neither can
+// resolve an upstream Step's name from its own argument alone — hence this
+// second, required parameter, built once per command by `buildStepNames`
+// below and threaded through. A previous version of this module kept that
+// lookup in a module-level `WeakMap`, populated as a `loadVocabulary` side
+// effect: that made a caller's *order* (load, then summarize) load-bearing
+// in a way neither type signature said, and left "(unregistered step)"
+// ambiguous between "really never discovered" and "just called before that
+// side effect ran" (m6d-vocabulary-name-lookup task spec). Passing the
+// lookup as an argument makes forgetting it a compile error instead.
+export type StepNames = ReadonlyMap<Step, string>;
+
+/** Builds the {@link StepNames} lookup `summarize`/`describeContract` need,
+ * from the same `Vocabulary` `loadVocabulary` already returned — one entry
+ * per typed step (a compat entry has no `Step` object to key by). */
+export function buildStepNames(vocabulary: Vocabulary): StepNames {
+  const names = new Map<Step, string>();
+  for (const entry of vocabulary.values()) {
+    if (entry.kind === "typed") {
+      names.set(entry.step, entry.name);
+    }
+  }
+  return names;
+}
+
+/** `"(unregistered step)"` when `stepNames` has no name for `step` — with
+ * `stepNames` passed in by the caller (rather than populated as a side
+ * effect this function reads later), this can now only mean one thing:
+ * `from` names a Step the `Vocabulary` `stepNames` was built from never
+ * discovered (docs/spec.md "Chaining steps"' own unregistered-Step
+ * mistake). */
+function upstreamStepName(step: Step, stepNames: StepNames): string {
+  return stepNames.get(step) ?? "(unregistered step)";
+}
+
+/** `nuka steps --json`'s own rendering of a step's `from` (this task's spec,
+ * item 7) — one machine-shaped entry per key, `undefined` (hence omitted,
+ * `rationale`'s own convention) when the step declares no `from` at all. */
+function fromSummary(
+  from: StepFromMap,
+  stepNames: StepNames,
+): Record<string, { step: string; key: string }> | undefined {
+  const entries = Object.entries(from);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const result: Record<string, { step: string; key: string }> = {};
+  for (const [key, [upstream, upstreamKey]] of entries) {
+    result[key] = { step: upstreamStepName(upstream, stepNames), key: upstreamKey };
+  }
+  return result;
+}
+
+/** `nuka describe`'s own rendering of a step's `from` (this task's spec,
+ * item 7) — one human-readable "step.key" string per key, the same "arrow"
+ * shape docs/spec.md "Chaining steps" itself uses in prose
+ * ("`projectId` ← `createProject.id`"), deliberately different from
+ * `fromSummary`'s more structured shape above: `nuka describe` is the one
+ * command meant for a person to read directly, `nuka steps --json` the one
+ * meant for a program to parse. `undefined` (hence omitted) under the same
+ * condition as `fromSummary`. */
+function fromHumanReadable(from: StepFromMap, stepNames: StepNames): Record<string, string> | undefined {
+  const entries = Object.entries(from);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const result: Record<string, string> = {};
+  for (const [key, [upstream, upstreamKey]] of entries) {
+    result[key] = `${upstreamStepName(upstream, stepNames)}.${upstreamKey}`;
+  }
+  return result;
 }
 
 /**
@@ -40,9 +121,18 @@ export interface StepSummary {
   readonly patterns: readonly string[];
   readonly description?: string;
   readonly mutates?: boolean;
+  /** Where each declared args key not left to a pattern capture comes from
+   * (m6a-from-core task spec, item 7) — key → `{ step, key }`, the upstream
+   * step's own name and the `returns` key read from it. Absent for a compat
+   * entry (no declaration exists) and omitted entirely, like `mutates`,
+   * rather than serialized as `{}`, when a typed step declares no `from` at
+   * all. Deliberately absent from `formatVocabulary`'s text rendering below
+   * — `nuka steps` (non-JSON) stays one line per step, an existing decision
+   * this task does not revisit. */
+  readonly from?: Record<string, { step: string; key: string }>;
 }
 
-export function summarize(entry: VocabularyEntry): StepSummary {
+export function summarize(entry: VocabularyEntry, stepNames: StepNames): StepSummary {
   if (entry.kind === "compat") {
     return {
       name: entry.name,
@@ -56,6 +146,7 @@ export function summarize(entry: VocabularyEntry): StepSummary {
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
+    from: fromSummary(entry.step.from, stepNames),
   };
 }
 
@@ -147,6 +238,12 @@ export interface TypedStepContract {
    * convention as `used` on a receipt). Deliberately absent from
    * `StepSummary`/`summarize` below — `nuka steps` stays one line per step. */
   readonly rationale?: string;
+  /** Human-readable rendering of `from` (m6a-from-core task spec, item 7) —
+   * `fromHumanReadable`'s own doc comment explains the "step.key" shape and
+   * why it differs from `StepSummary.from`'s more structured one. Omitted,
+   * not `{}`, when the step declares no `from` at all — same convention as
+   * `rationale` just above. */
+  readonly from?: Record<string, string>;
   readonly args: JsonSchema;
   readonly returns: JsonSchema;
 }
@@ -167,7 +264,7 @@ export interface CompatStepContract {
 
 export type StepContract = TypedStepContract | CompatStepContract;
 
-export function describeContract(entry: VocabularyEntry): StepContract {
+export function describeContract(entry: VocabularyEntry, stepNames: StepNames): StepContract {
   if (entry.kind === "compat") {
     return {
       kind: "compat",
@@ -187,6 +284,7 @@ export function describeContract(entry: VocabularyEntry): StepContract {
     // an `undefined`-valued key on its own, so a step with none simply has
     // no "rationale" key in the output (t2-rationale task spec, item 3).
     rationale: entry.step.rationale,
+    from: fromHumanReadable(entry.step.from, stepNames),
     args: z.toJSONSchema(entry.step.args),
     returns: z.toJSONSchema(entry.step.returns),
   };

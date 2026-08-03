@@ -155,7 +155,7 @@ describe("examples/migration", () => {
     expect(createReceipt.world).toBeUndefined();
 
     const resultOfReceipt = await readReceipt(rootDir, resultOfStep.receipt);
-    expect(resultOfReceipt.used).toEqual([createStep.receipt]);
+    expect(resultOfReceipt.used).toEqual([{ receipt: createStep.receipt, step: createReceipt.step }]);
     expect(resultOfReceipt.result).toEqual({ id: (createReceipt.result as { id: string }).id });
     expect(resultOfReceipt.world).toBeUndefined();
   });
