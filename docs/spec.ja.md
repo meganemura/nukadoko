@@ -9,7 +9,7 @@ M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、�
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
 Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)と M5 の両方の skill も実装済みです。
-`nuka check` における compat gap 検出が、M1-M5 の中でまだ実装されていない唯一の部分です。
+`nuka check` における compat gap 検出(migration skill 自身の前提条件)も実装済みで(「Compat steps」と docs/migration.ja.md の「ダッシュボードは `nuka check`」を参照)、M1-M5 を締めくくります。
 
 ## nukadoko とは
 
@@ -162,15 +162,25 @@ export default defineStep({
   これは scenario 経路のデータチャネルであり、意図的に World ではありません。
   そこには何も書き込めず、読み取れるのは `returns` のスキーマを通過した結果だけで、依存関係は他の step モジュールへの目に見える `import` になります(その step 自身のスキーマによって型付けられ、diff の中でレビューできます)。
   「その listing は閉じている」のような feature の一文は、その参照先がバリデーション済みの結果を生成した範囲でのみ実装できます。
+- `ctx.section(label: string): void` は、実行がその名前の段階に到達したことを記録します。
+  同期的で、返り値はなく、対になる「終了」呼び出しもありません。
+  呼び出しはすべて、呼ばれた順で receipt の `sections`(「Receipt」を参照)に追加され、一度も呼ばない step には `sections` キー自体が現れません。
+  これは `used` と同じ慣習です。
+  区間を囲む形の関数(`ctx.section(label, fn)`)ではなく裸のマーカーにしてあるのは意図的です。
+  区間を囲む形にすると、入れ子や早期 `return`、その境界をまたぐ `await` が何を意味するかをすべて決めなければならなくなりますが、それはこの API が答えようとする問い(実行がどこで止まったか。止まったブロックがどんな形をしているかではなく)には要りません。
 
 `page()` と `request()` は、nukadoko 自身の型ではなく Playwright 自身の `Page` と `APIRequestContext` をそのまま返します。
 これは代償を伴う選択であり、その代償ごと「Out of scope」に明記してあります。
 
 ヘルパーは import として提供されます: `import { poll } from "nukadoko"` が非同期ジョブに対する submit-poll-fetch のループです。
 これは executor が所有するものを何も必要としないため、`ctx` には置かれません。
-`ctx.section` がまだ無いのは逆向きの同じ理由です: 今は何もしないはずのもので、何もしない API メンバーは検証されていない約束だからです。
-これは progress log の機能とともに戻ってきます。
-そのとき「実行の一区間に名前を付ける」はツールが記録する対象になります。
+`ctx.section` も一見そちら側に見えますが、そうではありません。
+`ctx.section` が書き込むのは executor が所有し step の境界ごとにリセットするコレクタであり、`observed` や `used` がすでに持っているのと同じ寿命なので、この節自身の規則によって `ctx` に属します。
+この境界の規則には以前のバージョンがあり、そこでは `ctx.section` を丸ごと保留していました。
+progress log の機能が実行中の一区間に名前を付けて記録するようになるまでは、それは何もしないはずだという理由からです。
+その理屈は「何もしない API を作らない」という点では正しかったものの、名前を付ける先が実際にはどこに必要だったのかを見誤っていました。
+receipt こそがすでにその行き先であり、step 自身の実行がどの段階に達したかを言うのに、生きた log は一度も必要なかったのです。
+必要だったのは、それをどこかに書き留めることだけでした。
 
 ### キーワードの意味論
 
@@ -211,7 +221,7 @@ step ごとの boolean は出現ごとの事実を運べないため、宣言が
   `nuka check` の `then-compat-step` 警告は、Then の位置に結び付けられた compat step を、mutation の緊張ではなくこのカバレッジの欠落として指摘します。
   実行時の観測はどの step とも同じようにその回数を記録しますが、何もゲートしません。
 
-## Compat step(移行の扉)
+## Compat steps(移行の扉)
 
 既存の Cucumber + Playwright のテストスイートにとっての導入経路は、import を 1 つ差し替えることです:
 
@@ -267,6 +277,13 @@ import { Given, When, Then } from "nukadoko/compat";
   そこから導かれ、監査の発見が注ぎ込まれた規則はこうです: compat が対応しないものは、静かにではなく、import の時点か最初の実行で必ず失敗しなければなりません。
   移行するチームは、大きな声の失敗には対処できますが、静かな失敗は見えません。
   だから、黙って振る舞いを変えてしまう抜けは、機能が欠けていることが食ってきた時間よりも多くの信頼を食います。
+- 大きな声の失敗は、静的な検査ですでに言えることと、step を実際に実行して初めて分かることに分かれ、`nuka check` が報告するのはちょうど前半です。
+  **`nuka check` が言えること**: import が例外を投げる step ファイル(`nukadoko/compat` が export していない名前を値として使っている、ESM glue の中の CommonJS `require`、深い subpath の import)は `step-file-import-failed` エラーになり、単一の `@tag` / `not @tag` を超える hook のタグ式は `unsupported-hook-tag-expression` エラーになります。
+  どちらも、何かが実行される前に、そのファイルのテキストだけから分かります。
+  **`nuka run` で初めて見つかること**: step や hook が `"pending"` / `"skipped"` を返すこと、そして done コールバックの glue は、その step が実際に実行されたときに何をするかの性質であり、ファイルの import のされ方の性質ではないため、その step 自身の実行より前には何も指摘できません。
+  **どちらでもない(gap ではない)こと**: 型注釈にしか使われていない、あるいは import はされたが一度も参照されない名前は、nukadoko がそのファイルを import するより前に esbuild によってコンパイル済み出力から取り除かれるため、その import は実行時には実際には一度も起きません。
+  glue は書かれたとおりに実行され、`IWorldOptions` / `ITestCaseHookParameter`(未サポートですが、監査が読んだすべてのスイートで型としてしか使われていませんでした)がまさに監査自身の例です。
+  `tsc` はそれでも文句を言うかもしれませんが、`nuka` には文句を言う対象がそもそも残っていません。
 - この節と、移行に触れる今後のすべての設計に適用される恒久的な設計規則: 今日動いている compat の資産は、チームが nukadoko を採用したことや、他のどこかを typed 側へ動かしたことを理由に、動かなくなってはなりません。
   移行途中の「住まいが 2 つある」状態(support コードに登録された parameter type と config に住む parameter type、World のバッグと typed の result の併存)は、禁止するのではなく受け入れます。
   ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
@@ -360,6 +377,15 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
 - `used`(空でないときだけ現れます)は、この実行が `ctx.resultOf` を通じて実際に読んだ result の receipt id の一覧です。
   アクセサはツールが提供しているので、読み取りは計測可能です。
   依存関係はこうして二重に可視になります: 静的には import として、実行時には receipt 連鎖の provenance としてです。
+- `sections`(空でないときだけ現れます)は、`ctx.section` が呼ばれたラベルを、呼ばれた順に並べたものです。
+  `used` と違って重複は除きません。
+  ループやリトライで 2 回入ったラベルは 2 回入ったのであり、配列はそのとおりに読めるべきです。
+  一方 `used` が receipt id を 1 回しか名指ししないのは、id が一連の中の一点ではなく、1 回引用する価値のある identity だからです。
+  タイミングは一切運びません。
+  問いは「どこで遅かったか」ではなく「どこで実行が止まったか」だからで、`string[]` は破壊的変更なしに後でより豊かな形へ広げられますが、いま先にその形を作ってしまうと、誰も求めていない部分まで出荷することになります。
+  失敗した step の `sections` も、失敗するまでに到達したラベルをそのまま保持しており、その配列の最後の要素がすでに「どの段階にいたか」に答えているため、同じ事実の置き場所をもう 1 つ作る `error.section` フィールドは別途ありません。
+  `section` を持つのは typed step の `ctx` だけで、compat step には `this` 上に対応するものがないため、`sections` は単に省略されます。
+  これは typed step が一度も `ctx.resultOf` を呼ばなかったときに `used` が省略されるのと同じです。
 - receipt は state directory(`.nukadoko/`、gitignore 対象)の下に置かれます。
   それらはローカルな作業記録であり、耐久性のある成果物は sign-off です。
 
@@ -608,9 +634,12 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, config
-                              coherence; a feature argument checks that one
-                              file instead of featuresDir, for a feature
-                              living outside it
+                              coherence, unreadable step files (reported,
+                              not fatal — the rest of the project is still
+                              checked), unsupported hook tag expressions;
+                              a feature argument checks that one file
+                              instead of featuresDir, for a feature living
+                              outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
@@ -658,7 +687,7 @@ nuka skill path               where the bundled skill lives, for a project
   2 つとも出荷済みです。
   **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、そして green になるまで `run` して `accept` する)。
   **migration skill** は compat の監査が計測したことを運びます(実際の cucumber-js のスイートが実際にぶつかる gap を、ドキュメントの順序ではなくつまずく順序で)。
-  その最初の段階は `nuka check` がそれらの gap を報告することに依存しており、そこがまだ実装されていない部分です。
+  その最初の段階は `nuka check` がそれらの gap を報告することに依存しており、`nuka check` は今それを行っています(「Compat steps」を参照)。
   どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。
   それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
@@ -678,4 +707,4 @@ nuka skill path               where the bundled skill lives, for a project
 - 最初の実世界での検証ゲート(M2 が詳細に設計される前)。
   約 10 個の実際の feature ファイルを結び付け、AI が下書きした型付き step をレビューすることが、手で glue を書くことより実際に優れているかを測ります。
   公開されている 7 プロジェクトの 11 個の feature ファイルに対して実行し、答えは 7 プロジェクト中 6 つで yes でした。
-  第二のゲートは typed の方ではなく compat の扉を測るもので、上の Compat step の節で報告しています。
+  第二のゲートは typed の方ではなく compat の扉を測るもので、上の Compat steps の節で報告しています。

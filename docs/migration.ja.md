@@ -57,20 +57,33 @@ glue はテキストとして読むだけで、実行はしていません。
 残る 6 本は、まだ短い準備を先に必要とします。
 (これは静的な主張として読んでください。実際その通りで、それらの glue にはもう、この扉が拒むものは何も残っていません。
 それらのスイートを実行したわけではありません。)
-以下はどれも、import の時点か最初の `nuka run` で、大きな声で失敗します。
-だからこの準備は、探し物ではなく順にこなせるリストです。
+以下はどれも大きな声で失敗しますが、そのタイミングは一様ではありません。
+その一部は何かを実行するより前に `nuka check` がすでに名指しし、その一部はその step に達した最初の `nuka run` で初めて表に出ます。
+どちらなのかは以下の各項が言うので、この準備は探し物ではなく順にこなせるリストです。
 
-- **`nukadoko/compat` がエクスポートしていない名前**: `AfterStep`、`Status`、`setParallelCanAssign`、および `IWorldOptions` / `ITestCaseHookParameter` の型です。
-  ES モジュールの named import はリンク時に解決されるため、サポートされていない名前が 1 つあるだけで、import 文全体(ひいてはそのファイル)が丸ごと落ちます。
+- **`nukadoko/compat` がエクスポートしていない名前を値として使う**: `AfterStep`、`Status`、`setParallelCanAssign` です。
+  ES モジュールの named import はリンク時に解決されるため、これらのどれか 1 つを import して使うだけで import 文全体、ひいてはそのファイルが丸ごと落ちます。
   import を分割するか、その呼び出しを削ってください。
+  何かが実行されるより前に捕まります: `nuka check` は、そのファイルを Node 自身のエラーメッセージ付きの `step-file-import-failed` として報告し、`check` を省略していた場合は同じ失敗がそのファイルを import しようとする最初の `nuka run` で表に出ます。
   (`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。以下を参照してください。)
+- **同じ種類の名前でも、型としてしか使っていない場合**(`IWorldOptions`、`ITestCaseHookParameter` が監査自身の例です)は別のケースであり、上のケースを小さくしたものではありません。
+  esbuild が型だけの import をコンパイル済み出力から取り除くため、その名前は実行時には実際には一度も import されません。
+  出荷される glue がそのまま実行されるものなので、`nuka check` も `nuka run` も何も問題を見つけません。
+  文句を言うのは `tsc` だけで、それは `tsc` の仕事であり nukadoko の仕事ではありません。
+  これは検出漏れではなく境界です。
+  実行時にはもう検出すべきものが何も残っていません。
 - **CommonJS の glue**: nukadoko は ESM 専用なので、`require("nukadoko/compat")` は `ERR_PACKAGE_PATH_NOT_EXPORTED` で即座に失敗します。
   8 本のうち 2 本は、全体が CommonJS のスイートでした。
   この扉が受け入れるのは ES module の glue だけです。
+  何かが実行されるより前に、上の値としての import のケースと同じ経路で捕まります: `nuka check` の `step-file-import-failed`、または `check` を省略していた場合は最初の `nuka run` です。
 - **深い subpath の import**(`import DataTable from "@cucumber/cucumber/lib/models/data_table"` など)には、ここでは対応するものがありません。
   代わりに `nukadoko/compat` から `DataTable` を import してください。
-- **単一の `@tag` / `not @tag` を超える hook のタグ式**(`and`、`or`、括弧)は、`nuka run` した瞬間に失敗します。
+  同じ経路で捕まります: `nuka check` の `step-file-import-failed`、または `check` を省略していた場合は最初の `nuka run` です。
+- **単一の `@tag` / `not @tag` を超える hook のタグ式**(`and`、`or`、括弧)。
+  `nuka check` は違反しているすべての hook を前もって報告し(`unsupported-hook-tag-expression`)、`nuka run` も同じ規則を強制しますが、run は一覧ではなく終了するものなので、最初に当たった 1 つで止まります。
 - step や hook から **`"pending"` または `"skipped"` を返すこと**、および **done コールバックの glue**(`function (arg, done) {...}`)は、それぞれ代わりに何を書くべきかを示すメッセージ付きで失敗します。
+  どちらも `nuka check` からは見えません。
+  どちらもその step が実際に実行されたときに何をするかの性質であり、そのファイルの import のされ方の性質ではないため、その step 自身の実行より前には何もその不備を名指しできず、その step に達した最初の `nuka run` で初めて表に出ます。
   cucumber-js はこの両方に意味を持たせていますが、nukadoko は持たせておらず、step を通過させる代わりにそう伝えます。
 
 `nuka run features/your.feature` でスイートを実行します。
@@ -104,6 +117,15 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   そのためこの警告が示しているのは、その位置に静的な手掛かりが何もないという事実であり、ツールが何かを捕まえたわけではありません。
   `defineStep` に昇格させることが、チェックできる宣言を得る方法です。
 - `parameter-type-support-origin` は、support 側の `defineParameterType` すべてに対して警告し、上記の config への移動を指し示します。
+- `step-file-import-failed` は、import が例外を投げた step ファイルにエラーを出します。
+  未サポートの名前を値として使っている、CommonJS の `require`、深い subpath の import(上の「切り替えで引き継がれないもの」の最初の 3 つの gap です)のいずれかで、Node 自身のエラーメッセージとファイルパスを運びます。
+  プロジェクトの残りはそれと並行して引き続き discovery され報告されます。
+  移行中のスイートの通常の状態は一部の glue がまだ壊れていることであり、ダッシュボードを空白にする理由にはなりません。
+- `unsupported-hook-tag-expression` は、単一の `@tag` / `not @tag` を超えるタグ式を持つすべての hook にエラーを出し、`nuka run` が止まる最初の 1 つだけではありません。
+- `undefined-step-check-suppressed` は、上の import の失敗が本来引き起こすはずの `undefined-step` エラーを抑え込んでいるときに警告します。
+  1 つの壊れたファイル自身の step が語彙から消えることは、それ以外の方法だと無関係な undefined step の山にしか見えません。
+  まず import の失敗を直してください。
+  抑え込まれていた findings は、そのファイルが問題なく import できるようになった時点で、本物の `undefined-step` エラーとして再び現れます。
 - receipt は実行時に同じ話を語ります: スイートがより多く typed step と `ctx.resultOf` に昇格するにつれて、`world`(compat の step のみ)と `declared` が縮んでいきます。
 
 ## 戻り道

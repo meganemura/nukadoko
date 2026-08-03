@@ -46,7 +46,7 @@ agent によるある実行の報告は、その実行の記録そのものに�
 0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
 
 テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
-未実装なのは、`nuka check` における compat のギャップ検出、AI 支援によるグルーの変換、scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
+未実装なのは、AI 支援によるグルーの変換と scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
 以下で数字を伴う主張はすべて計測済みです。
@@ -62,6 +62,22 @@ npx nuka steps         # the vocabulary, empty until you add a step
 
 nukadoko は devDependency です。
 `dist/` と並べて TypeScript のソースそのものも同梱しているため、stack trace は実際のコードを指し、`node_modules` を読む agent は型だけでなく「なぜそう動くか」まで見えます。
+
+**まだ `package.json` がありませんか(Rails、Django など Node 以外のリポジトリ)。**
+先に作成してください。
+`npm init -y` は避けてください。
+既存の `README.md` の最初の行を `description` に、ディレクトリ名を `name` にコピーしてしまうため、最小限を手で書くほうが確実です:
+
+```json
+{ "private": true, "type": "module" }
+```
+
+`"type": "module"` は省略できません。
+nukadoko は ESM 専用であり、これがないとあらゆる `nuka` コマンドが `No "exports" main defined in .../node_modules/nukadoko/package.json` で失敗します。
+このメッセージは `type` については何も言わず、nukadoko 側で改善することもできません。
+Node が諦める時点では、CLI がまだ読み込まれていないからです。
+`.nukadoko/` を自分で gitignore する必要はありません。
+`nuka init` がそれを書き込みます。
 
 **移行ではなく、まっさらな状態から始めますか。**
 compat の扉は丸ごとスキップしてください。
