@@ -169,14 +169,14 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
 
   // A broken glue file's own missing steps otherwise resurface here as a
   // flood of `undefined-step` errors (this task's spec, decision 6 — an
-  // empirical 1-broken-file-to-20-undefined-step ratio: m21-compat-gap
-  // findings.md, Q5) — noise that buries the one real cause (the import
-  // failure already reported above) and misleadingly reads as "write this
-  // step", when the step may well already exist in the file that failed to
-  // import. Suppressed only when there is at least one import failure to
-  // blame it on, and only `undefined-step` itself: every other feature-check
-  // issue is a property of a step that *did* match something, so it isn't
-  // contaminated by a vocabulary that's missing entries.
+  // empirical 1-broken-file-to-20-undefined-step ratio) — noise that
+  // buries the one real cause (the import failure already reported above)
+  // and misleadingly reads as "write this step", when the step may well
+  // already exist in the file that failed to import. Suppressed only when
+  // there is at least one import failure to blame it on, and only
+  // `undefined-step` itself: every other feature-check issue is a property
+  // of a step that *did* match something, so it isn't contaminated by a
+  // vocabulary that's missing entries.
   if (importFailures.length > 0) {
     const suppressedCount = featureResult.errors.filter((issue) => issue.code === "undefined-step").length;
     for (const issue of featureResult.errors) {

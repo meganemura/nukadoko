@@ -4,13 +4,11 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 
 // Responsibility: the wrap mechanism behind "measurement is always on,
 // declaration is opt-in" for a compat World instance (m2c-typed-world task
-// spec, whose prototype findings are the empirical record this file's every
-// decision traces back to). The measured surface is the
+// spec — a throwaway prototype measured this). The measured surface is the
 // instance's own DATA properties only — a class's methods/getters (own or
 // inherited) are left completely alone, and a `#private` field is invisible
 // to this module by construction (it never appears in `Object.keys`/
-// `getOwnPropertyDescriptor` at all): that is a named boundary, not a bug
-// (findings' own conclusion).
+// `getOwnPropertyDescriptor` at all): that is a named boundary, not a bug.
 //
 // Proxy is deliberately not used here: wrapping `target` in a
 // `new Proxy(target, {...})` and handing the proxy out as `this` breaks any
@@ -24,17 +22,17 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 // language — and `#private` access from any method keeps working exactly as
 // if this module didn't exist.
 //
-// Seeding (findings' "hole 2"): a `defineWorld`-declared key that doesn't
-// exist yet on the instance (e.g. `z.object({...}).optional()`, legitimately
-// absent until first write) must still get its accessor at wrap time, or its
-// first write silently skips validation. `reconcile()` below seeds
+// Seeding: a `defineWorld`-declared key that doesn't exist yet on the
+// instance (e.g. `z.object({...}).optional()`, legitimately absent until
+// first write) must still get its accessor at wrap time, or its first write
+// silently skips validation. `reconcile()` below seeds
 // `Object.keys(target) ∪ Object.keys(declaredSchemas)` every time it runs,
 // not just once, so this holds both at wrap time and after every later call.
 //
-// Reconcile / one-step-behind limit (findings' "hole 1", partial fix): a key
-// that first appears as a plain own property *after* wrap (an undeclared
-// bag field a step assigns for the first time) has no accessor yet, so that
-// first write is not measured. `reconcile()` is meant to be called at every
+// Reconcile / one-step-behind limit (partial fix): a key that first appears
+// as a plain own property *after* wrap (an undeclared bag field a step
+// assigns for the first time) has no accessor yet, so that first write is
+// not measured. `reconcile()` is meant to be called at every
 // step boundary (the same points src/run/run-scenario.ts calls
 // `contextHandle.beginStep()` — before Before hooks, before each step,
 // before After hooks); a key created by step N's own body only starts being
@@ -202,9 +200,10 @@ export function instrumentWorld<T extends object>(
     }
   }
 
-  // Initial seed: own keys at wrap time ∪ declared keys (findings' hole-2
-  // fix) — run through the exact same function `beginStep()` calls later,
-  // so "wrap" and "reconcile" are one mechanism, not two.
+  // Initial seed: own keys at wrap time ∪ declared keys (closes the gap the
+  // Seeding paragraph above describes — see this file's own header) — run
+  // through the exact same function `beginStep()` calls later, so "wrap"
+  // and "reconcile" are one mechanism, not two.
   reconcile();
 
   return {

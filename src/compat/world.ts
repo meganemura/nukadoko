@@ -5,12 +5,11 @@ import { extensionForMediaType, toAttachmentBuffer, type DeclaredCollector } fro
 import { WorldNotOpenedError } from "./errors.js";
 import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instrumentation.js";
 
-// Responsibility: cucumber-js's own World shape (proto-typed-world findings,
-// question 5 — a single-argument constructor receiving `{ attach, log,
-// link, parameters }`, all four just own writable data properties at run
-// time despite being typed readonly upstream) plus the harness's own
-// two-tier page/request access (m2b-compat-execution task spec, decision 1,
-// lead-arbitrated):
+// Responsibility: cucumber-js's own World shape (a single-argument
+// constructor receiving `{ attach, log, link, parameters }`, all four just
+// own writable data properties at run time despite being typed readonly
+// upstream) plus the harness's own two-tier page/request access
+// (m2b-compat-execution task spec, decision 1, lead-arbitrated):
 //
 //   - Glue that launches its own Playwright is left alone entirely — it
 //     isn't reachable through this class at all, and nukadoko never
@@ -68,7 +67,7 @@ export interface WorldConstructorParams {
 
 /**
  * `WorldConstructorParams` under cucumber-js's own name (t5-compat-types
- * task spec; m2.1-a compat-audit synthesis: `IWorldOptions` appears in 2/2
+ * task spec; the compat audit found `IWorldOptions` appears in 2/2
  * real-world repos' glue as a bare type import, e.g. `import { type
  * IWorldOptions } from "nukadoko/compat"`). Until now that import failed
  * `tsc` while `nuka run`/`nuka check` stayed silent — a type-only import

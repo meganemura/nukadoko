@@ -64,9 +64,9 @@ export interface CompatStepRegistration {
    * actually honoring a per-step timeout is m2b-compat-execution's job
    * (src/run/). Kept rather than silently dropped so a step whose author
    * wrote `{ timeout }` to bound a slow call doesn't quietly start running
-   * unbounded — the exact "silent behavior change" this task's audit (m2.1-a
-   * compat-audit synthesis, item 2) closes at the registration boundary;
-   * slice B still owns whether it's ever actually applied. */
+   * unbounded — the exact "silent behavior change" the compat audit closes
+   * at the registration boundary; slice B still owns whether it's ever
+   * actually applied. */
   readonly timeoutMs?: number;
   readonly registrationOrder: number;
 }
@@ -74,11 +74,10 @@ export interface CompatStepRegistration {
 /**
  * Options object accepted by the 3-argument step registration form —
  * `Given(pattern, options, fn)` (cucumber-js's own commonly used shape;
- * 194 real-world call sites across 3 repos per the m2.1-a compat-audit
- * synthesis, item 2). `timeout` is the only key this task's spec recognizes;
- * every other key throws at registration time rather than being silently
- * dropped (the audit's other closed case: an unrecognized option must not
- * quietly disappear).
+ * 194 real-world call sites across 3 repos per the compat audit). `timeout`
+ * is the only key this task's spec recognizes; every other key throws at
+ * registration time rather than being silently dropped (the audit's other
+ * closed case: an unrecognized option must not quietly disappear).
  */
 export interface CompatStepOptions {
   readonly timeout?: number;

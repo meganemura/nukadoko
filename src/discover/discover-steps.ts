@@ -289,15 +289,14 @@ export async function discoverSteps(
     const importFailures: { filePath: string; message: string }[] = [];
 
     for (const filePath of files) {
-      // Scope note (m21-compat-gap findings, Q3's significant correction): this only
-      // catches a file whose import itself throws. A name imported but used
-      // only as a type annotation, or imported and never referenced at all,
-      // is elided from the compiled output by esbuild/tsx and so never
-      // actually gets imported at run time — that file imports cleanly here
-      // even if the name it asked for doesn't exist on the compat surface.
-      // That is not a detection gap this loop is failing to close: a glue
-      // file esbuild elides the import from runs exactly as written, so
-      // there is nothing broken to report.
+      // Scope note: this only catches a file whose import itself throws. A
+      // name imported but used only as a type annotation, or imported and
+      // never referenced at all, is elided from the compiled output by
+      // esbuild/tsx and so never actually gets imported at run time — that
+      // file imports cleanly here even if the name it asked for doesn't
+      // exist on the compat surface. That is not a detection gap this loop
+      // is failing to close: a glue file esbuild elides the import from
+      // runs exactly as written, so there is nothing broken to report.
       //
       // Only the import call itself is inside this try (m21a-compat-gap-
       // detect task spec, decision 2) — `isStep`, the drains below, and the
@@ -316,9 +315,9 @@ export async function discoverSteps(
         }
         // A file that dies partway through its own evaluation (CommonJS
         // `require()` inside an ESM file throws mid-evaluation, not at ESM's
-        // earlier link phase — m21-compat-gap findings, Q2) may already have
-        // called `Given`/`Before`/`defineWorld` before it threw, leaving
-        // those calls sitting in the shared buffers below. Draining and
+        // earlier link phase) may already have called
+        // `Given`/`Before`/`defineWorld` before it threw, leaving those
+        // calls sitting in the shared buffers below. Draining and
         // discarding them here, rather than leaving them for the *next*
         // file's own drain, is what keeps this loop's per-file attribution
         // (the comment above, and m2a-compat-registry task spec decision 3)

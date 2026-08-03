@@ -13,8 +13,8 @@
 // compat-execution task spec) adds World/setWorldConstructor, Before/After,
 // and DataTable — execution, not just registration. m22-compat-run-scope
 // task spec adds `setDefaultTimeout` and `BeforeAll`/`AfterAll` — the two
-// most common non-exported names real-world suites hit (compat-audit
-// synthesis), both landing in the same slice because their owning files
+// most common non-exported names that the compat audit found real-world
+// suites hit, both landing in the same slice because their owning files
 // mostly overlap with each other's.
 //
 // Kept as a thin re-export of each surface's own module, not their buffers'

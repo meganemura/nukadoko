@@ -41,8 +41,8 @@ export type HookType = "before" | "after" | "after_step";
  * task spec, item 3) — the argument every Before/After hook now receives as
  * its first parameter. Real-world glue destructures this directly (e.g.
  * `Before(function ({ pickle }) {...})`, 10 call sites across 4 repos per
- * the m2.1-a compat-audit synthesis); previously nukadoko called every hook
- * with zero arguments, so that destructuring crashed outright, and a plain
+ * the compat audit); previously nukadoko called every hook with zero
+ * arguments, so that destructuring crashed outright, and a plain
  * `this.scenario?.gherkinDocument?...`-style read (never crashing) silently
  * always took the same branch.
  */
@@ -78,7 +78,7 @@ export interface HookParameter {
 }
 
 /** `HookParameter` under cucumber-js's own name (t5-compat-types task spec;
- * m2.1-a compat-audit synthesis: `ITestCaseHookParameter` appears in 2/2
+ * the compat audit found `ITestCaseHookParameter` appears in 2/2
  * real-world repos as a bare type import) — the same `tsc`-only gap
  * `IWorldOptions` closed for world.ts, for the same reason (see that alias's
  * own doc comment). `HookParameter` above already documents that it was
@@ -158,7 +158,7 @@ function registerHook(
   }
 
   // cucumber-js accepts a bare tag-expression string in place of `{ tags }`
-  // (m2.1-a compat-audit synthesis: 10 real-world call sites, 2 repos, use
+  // (the compat audit found 10 real-world call sites, 2 repos, use
   // exactly this shape) — folded into the same `tags` field as the options
   // form so every downstream reader (tag-expression.ts, src/run/) sees one
   // representation regardless of which shape the caller used.
