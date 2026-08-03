@@ -3,9 +3,9 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Reaches two sections, then throws before ever reaching a third — proves a
 // failed step's receipt still carries the sections it reached before
-// failing (t3-sections task spec, "確定判断" item 2; test bullet 3, the
-// requirement's own reason for existing: "落ちた step の receipt にも、そこ
-// まで通った段階が載る").
+// failing (t3-sections task spec, confirmed-decisions item 2; test bullet 3,
+// the requirement's own reason for existing: a failed step's receipt still
+// lists the stages it passed through).
 export default defineStep({
   pattern: "a step falls in the middle of a section",
   description: "Calls ctx.section twice, then throws",

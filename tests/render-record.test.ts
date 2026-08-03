@@ -248,8 +248,8 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
 
     const markdown = renderAcceptanceRecord(optionsFor([scenarioA, scenarioB]));
 
-    // One roll-up section, not one per scenario (task spec: "scenario ごと
-    // に散らさない").
+    // One roll-up section, not one per scenario (task spec: not scattered
+    // one per scenario).
     expect(markdown.split("## Declared vs observed")).toHaveLength(2);
     const section = declaredVsObservedSection(markdown);
     expect(section).toContain('- "step one" (scenario "scenario A"): declared mutates: false, observed 1 write');

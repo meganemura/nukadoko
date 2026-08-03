@@ -1,8 +1,8 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
 // A well-formed project, on purpose: `nuka check` must report zero errors
-// and zero warnings against it (m1-check task spec, scope item 2, "クリーン
-// なプロジェクトで exit 0・エラーゼロ"). Its one feature file also exercises
+// and zero warnings against it (m1-check task spec, scope item 2: a clean
+// project exits 0 with zero errors). Its one feature file also exercises
 // Background merging and Scenario Outline expansion — check delegates that
 // expansion to @cucumber/gherkin entirely (docs/spec.md "nukadoko
 // deliberately owns as little as possible"); this fixture is not a test of

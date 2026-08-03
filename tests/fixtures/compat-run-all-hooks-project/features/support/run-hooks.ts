@@ -17,17 +17,17 @@ function record(label: string): void {
 }
 
 // Runs once, before either scenario in ../two-scenarios.feature (m22-
-// compat-run-scope task spec, item 2: "run 全体で1回").
+// compat-run-scope task spec, item 2: runs once for the whole run).
 BeforeAll(function () {
   record("beforeAll");
 });
 
 // Two AfterAll registrations, on purpose: proves both "every registration
 // is attempted regardless of an earlier one's own failure" (this task's
-// spec: "全て試行し") and the LIFO order src/cli/run.ts's own header commits
-// to (matching src/run/run-scenario.ts's own After-hook loop) — registered
-// first, so it must run *second* (afterAll-B, registered after it, unwinds
-// first).
+// spec calls for attempting every registration) and the LIFO order
+// src/cli/run.ts's own header commits to (matching src/run/run-scenario.ts's
+// own After-hook loop) — registered first, so it must run *second*
+// (afterAll-B, registered after it, unwinds first).
 AfterAll(function () {
   record("afterAll-A");
 });

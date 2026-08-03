@@ -11,7 +11,7 @@ Before(function (this: CustomWorld) {
 });
 
 // Only for a scenario tagged @tagged (m2b-compat-execution task spec, item
-// 5: "tagged Before がタグ無し scenario で走らない").
+// 5: a tagged Before does not run for an untagged scenario).
 Before({ tags: "@tagged" }, function (this: CustomWorld) {
   this.visits += 100;
 });
@@ -22,14 +22,16 @@ Before({ tags: "not @excluded" }, function (this: CustomWorld) {
   this.visits += 10;
 });
 
-// Only for the scenario tagged @before-fails (this task's spec, item 5:
-// "Before 失敗で全 skip + record.hooks に failed").
+// Only for the scenario tagged @before-fails (this task's spec, item 5: a
+// Before failure skips everything else and records failed in
+// record.hooks).
 Before({ tags: "@before-fails" }, function () {
   throw new Error("before hook exploded");
 });
 
 // Runs for every scenario, regardless of whether a Before hook or a step
-// failed (this task's spec, item 5: "After が失敗時も走る").
+// failed (this task's spec, item 5: After runs even when something else
+// failed).
 After(function (this: CustomWorld) {
   this.visits += 1000;
 });

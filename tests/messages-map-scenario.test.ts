@@ -191,7 +191,8 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
 
     // Detectable both by count (one hook-derived test step alongside the
     // one pickle-step test step) and by which step it names (this task's
-    // spec, "テスト": "件数だけでなく、どの step の後かも"検出できる形で).
+    // spec, test criterion: detectable not just by count, but in a form
+    // that shows which step it follows).
     expect(mapped.steps).toHaveLength(2);
     const afterStepTestStep = mapped.steps.find((s) => s.testStep.hookId !== undefined)!;
     expect(afterStepTestStep.testStep.hookId).toBe(newHook.hook.id);

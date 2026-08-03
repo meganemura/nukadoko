@@ -2,8 +2,8 @@ import { Then } from "../../nukadoko-compat-shim.js";
 import type { CustomWorld } from "../support/world.js";
 
 // Proves a Before hook's own state on the World is visible to a later step
-// (m2b-compat-execution task spec, item 5: "Before で World に仕込んだ状態を
-// step が読む").
+// (m2b-compat-execution task spec, item 5: state a Before hook sets on the
+// World is read by a later step).
 Then("the world visit count is {int}", function (this: CustomWorld, expected: number) {
   if (this.visits !== expected) {
     throw new Error(`expected visits to be ${expected}, got ${this.visits}`);

@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 
 // Responsibility: m2c-typed-world task spec's own coverage — the compat
 // World's "measurement is always on, declaration is opt-in" mechanism
-// (typed-world-design.md's "機構" section; proto-typed-world/findings.md's
+// (typed-world-design.md's own section on the mechanism; proto-typed-world/findings.md's
 // verified own-data-defineProperty variant, `wrapDefinePropertySeeded`).
 //
 //   - Measurement: a compat step's own reads/writes of an ordinary bag

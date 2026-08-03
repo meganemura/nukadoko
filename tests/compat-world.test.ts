@@ -61,7 +61,7 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(excluded.hooks.filter((h: { type: string }) => h.type === "before")).toHaveLength(1);
 
     // Every scenario in this feature also gets the untagged After hook
-    // (this task's spec, item 5: "After は... 実行を試みる").
+    // (this task's spec, item 5: After always attempts to run).
     for (const record of [untagged, tagged, excluded]) {
       expect(record.hooks.filter((h: { type: string }) => h.type === "after")).toEqual([
         { type: "after", status: "ok" },

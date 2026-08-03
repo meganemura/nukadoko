@@ -8,9 +8,9 @@ import createListing from "./create-listing.js";
 // "Context API"). This file existing and working at all *is* this task's
 // empirical proof that a step file's relative import of another step file
 // resolves to the exact same Step object discovery's own `tsImport` call
-// produced (this task's spec, decision 1's "テストで実証すること") — if
-// identity didn't survive that boundary, every test below relying on a
-// non-null `resultOf` return would fail.
+// produced (this task's spec, decision 1 calls for proving this with a
+// test) — if identity didn't survive that boundary, every test below
+// relying on a non-null `resultOf` return would fail.
 //
 // No `args` are needed to say *which* listing: the whole point of the chain
 // is that "that listing" resolves through the import, not through a name the

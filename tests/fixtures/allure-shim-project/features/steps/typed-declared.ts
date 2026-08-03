@@ -2,7 +2,7 @@ import { label } from "allure-js-commons";
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Proves item 2's "kind 非依存" claim directly: a *typed* step importing the
+// Proves item 2's kind-independence claim directly: a *typed* step importing the
 // allure-js facade on its own, with no World in sight, still gets this
 // step's own `declared` on its receipt — the same mechanism a compat step's
 // glue uses, not a special case for compat.

@@ -30,7 +30,8 @@ Given("a legacy step that outlives its own timeout", { timeout: 20 }, async func
 // whatever else in the same `nuka run` invocation also calls `setTimeout`).
 // Finishes in ~1ms, nowhere near it — proves the race timer set up to
 // enforce that timeout is cleared right away on success, not left pending
-// for the full 12345ms (this task's spec: "タイマーは必ず解除する").
+// for the full 12345ms (this task's spec: the timer must always be
+// cleared).
 Given("a legacy step that finishes well within its own timeout", { timeout: 12_345 }, async function () {
   await sleep(1);
 });

@@ -15,7 +15,8 @@ Then("the visit count is {int}", function (this: CustomWorld, expected: number) 
 });
 
 // Does nothing to the World at all — the receipt's own `world` field must
-// be omitted entirely (m2c-typed-world task spec, item 3: "両方空なら省略").
+// be omitted entirely (m2c-typed-world task spec, item 3: when both halves
+// are empty, the field is omitted).
 Then("a step that never touches the World runs", function (this: CustomWorld) {
   void this;
 });

@@ -49,9 +49,9 @@ describe("BeforeAll/AfterAll registration", () => {
     expect(second).toBeGreaterThan(first);
   });
 
-  // This task's spec, item 2: "tags は受けない" — unlike src/compat/hooks.ts's
-  // `HookOptions`, `tags` is not a recognized key here at all, so it throws
-  // the same way any other unrecognized key would.
+  // This task's spec, item 2: BeforeAll/AfterAll do not accept tags — unlike
+  // src/compat/hooks.ts's `HookOptions`, `tags` is not a recognized key here
+  // at all, so it throws the same way any other unrecognized key would.
   it('an options object with "tags" throws, naming it as unsupported', () => {
     expect(() => BeforeAll({ tags: "@smoke" } as never, () => {})).toThrow(/tags/);
   });

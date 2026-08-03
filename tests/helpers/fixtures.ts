@@ -51,8 +51,9 @@ export async function removeTempDir(dir: string): Promise<void> {
  * directory, the same way `copyFixtureToTempDir` does for `tests/fixtures/*`
  * — nested under `tempFixturesRoot` so `"nukadoko"` and `"zod"` still resolve
  * (see that function's own comment) and so running `nuka run`/`nuka do`
- * against it (examples-todo task spec: "CLI は temp コピーにのみ実行") never
- * writes `.nukadoko/` state into the committed example directory.
+ * against it (examples-todo task spec: the CLI runs only against a temp
+ * copy) never writes `.nukadoko/` state into the committed example
+ * directory.
  */
 export async function copyExampleToTempDir(name: string): Promise<string> {
   await mkdir(tempFixturesRoot, { recursive: true });
@@ -87,12 +88,13 @@ const nukadokoShimDir = path.join(tempFixturesRoot, "node_modules", "nukadoko");
  *
  * `nuka init`/`nuka scaffold` generate real-user-facing artifacts that
  * import from `"nukadoko"` (the published package name), not from a
- * fixture-relative shim path (m1-init-scaffold task spec: "生成物そのものは
- * 実利用者向けの形にする") — but the published package doesn't exist yet in
- * this repo's own `node_modules`. This is the same stand-in
- * `tests/fixtures/*\/nukadoko-shim.ts` provides for hand-written fixtures,
- * just packaged as a real `node_modules` entry so the bare specifier itself
- * — which generated files use, unlike fixtures — resolves.
+ * fixture-relative shim path (m1-init-scaffold task spec: the generated
+ * output itself should look like what a real user gets) — but the
+ * published package doesn't exist yet in this repo's own `node_modules`.
+ * This is the same stand-in `tests/fixtures/*\/nukadoko-shim.ts` provides
+ * for hand-written fixtures, just packaged as a real `node_modules` entry
+ * so the bare specifier itself — which generated files use, unlike
+ * fixtures — resolves.
  */
 export async function ensureNukadokoShim(): Promise<void> {
   await mkdir(nukadokoShimDir, { recursive: true });
@@ -134,15 +136,16 @@ const execFileAsync = promisify(execFile);
 
 /**
  * `git init`s `dir` (already containing whatever files a test wants
- * committed) and commits everything in it in one commit — the "一時ディレク
- * トリで git init する手立て" src/run/probe-git.ts's own tests need (m4a-run-
- * provenance task spec). `dir`'s own `.git` is what git actually resolves,
- * closest-ancestor-wins, regardless of `dir` sitting inside this repo's own
- * working tree (e.g. under `tempFixturesRoot` above) — a nested repo never
- * needs its ancestor's `.git` consulted at all. The identity is configured
- * `--local` (this call's own `cwd`), never `--global`: a test must not read
- * or write the machine's real git config. Returns the resulting commit's
- * full 40-character sha, for a test to assert `git.commit` against.
+ * committed) and commits everything in it in one commit — the means of
+ * running `git init` in a temp directory that src/run/probe-git.ts's own
+ * tests need (m4a-run-provenance task spec). `dir`'s own `.git` is what git
+ * actually resolves, closest-ancestor-wins, regardless of `dir` sitting
+ * inside this repo's own working tree (e.g. under `tempFixturesRoot` above)
+ * — a nested repo never needs its ancestor's `.git` consulted at all. The
+ * identity is configured `--local` (this call's own `cwd`), never
+ * `--global`: a test must not read or write the machine's real git config.
+ * Returns the resulting commit's full 40-character sha, for a test to
+ * assert `git.commit` against.
  */
 export async function initGitRepo(dir: string): Promise<string> {
   const git = (args: string[]) => execFileAsync("git", args, { cwd: dir, encoding: "utf8" });

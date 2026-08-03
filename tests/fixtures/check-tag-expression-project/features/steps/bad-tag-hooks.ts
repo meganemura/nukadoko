@@ -4,9 +4,9 @@ import { After, Before, Given } from "../../nukadoko-compat-shim.js";
 // expression.ts) — "and"/"or"/parentheses are Cucumber tag expression
 // grammar this slice deliberately does not implement (m2b-compat-execution
 // task spec, item 5). Two separate hooks violate it here, on purpose
-// (m21a-compat-gap-detect task spec, decision 5: "全hookを回して全件出す"),
-// so tests/check.test.ts can assert `nuka check` reports both instead of
-// stopping at the first.
+// (m21a-compat-gap-detect task spec, decision 5: walk every hook and report
+// every one), so tests/check.test.ts can assert `nuka check` reports both
+// instead of stopping at the first.
 Before({ tags: "@a and @b" }, function () {
   // Never reached: this is a setup-time validation failure.
 });

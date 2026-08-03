@@ -58,7 +58,7 @@ describe("nuka run: AfterStep hook execution", () => {
     }
   });
 
-  it('does not run after a step this scenario skipped ("skipped step は実行されておらず、後が存在しない")', async () => {
+  it("does not run after a step this scenario skipped, since a skipped step never executes and so leaves nothing for an AfterStep to follow", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/afterstep.feature:7"], {
       rootDir,

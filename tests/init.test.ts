@@ -99,7 +99,8 @@ describe("nuka init", () => {
     // A typed step placed under the non-default featuresDir is what proves
     // the self-check (and later `nuka steps`/`nuka do`) actually discover
     // from `config.featuresDir` rather than the schema's own default
-    // ("features") — this task's spec: "self-check がそのディレクトリを見る".
+    // ("features") — this task's spec: the self-check looks at that
+    // directory.
     await writeFile(
       path.join(rootDir, "e2e", "steps", "ping.ts"),
       [

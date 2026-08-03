@@ -210,7 +210,7 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
     expect(stderr.text()).toContain('Hook "BeforeAll" timed out after 20ms');
 
     // Zero scenario records: BeforeAll's failure means the scenario never
-    // began (this task's spec: "scenario を 1 つも実行せず").
+    // began (this task's spec: not a single scenario runs).
     expect(stdout.text()).toBe("");
 
     const log = (globalThis as Record<string, unknown>).__nukadokoRunAllHooksTimeoutLog as string[];

@@ -12,7 +12,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // (src/receipt/types.ts, src/run/record-types.ts):
 //
 //   - compat glue calling the allure-js facade directly (the door's own
-//     "本流" — no import switch, `import ... from "allure-js-commons"`
+//     main path — no import switch, `import ... from "allure-js-commons"`
 //     unmodified);
 //   - the World channel (`this.attach`/`log`/`link`, held-but-unread since
 //     m2b-compat-execution) now wired to the same collector;
@@ -65,8 +65,8 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
       // declares a contentType but no fileExtension — src/compat/allure-
       // runtime.ts now falls back to declared.ts's own
       // `extensionForMediaType` for exactly this case (M3-C spec item 2;
-      // render-check.md section 4's "declared 添付の content-type が宣言と
-      // 食い違う" finding).
+      // render-check.md section 4's finding about a declared attachment
+      // whose content-type has no matching declared file extension).
       attachments: ["evidence.txt"],
       labels: [{ name: "owner", value: "team-nukadoko" }],
       links: [{ url: "https://example.com/ticket/1", name: "ticket" }],

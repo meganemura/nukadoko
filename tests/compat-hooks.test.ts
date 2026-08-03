@@ -66,9 +66,9 @@ describe("Before/After hook registration", () => {
   });
 
   // m21b-compat-execution task spec, item 1: `HookOptions.timeout` (14
-  // real-world call sites, 3 repos, previously silently dropped — the same
-  // "実装方針を揃える" gate src/compat/registry.ts's own `CompatStepOptions`
-  // already has for steps).
+  // real-world call sites, 3 repos, previously silently dropped — hooks are
+  // held to the same shape src/compat/registry.ts's own `CompatStepOptions`
+  // already gives steps, rather than diverging from it).
 
   it("Before({ timeout }, fn) keeps timeoutMs, tags undefined", () => {
     const fn = () => {};
@@ -111,9 +111,9 @@ describe("Before/After hook registration", () => {
   });
 });
 
-// t7-compat-status-afterstep task spec, item 2-1: "登録の形は After と同じ
-// 3 通り" — the same three call shapes, tested the same way Before/After's
-// own registration tests above are.
+// t7-compat-status-afterstep task spec, item 2-1: AfterStep registration
+// takes the same three call shapes as After, tested the same way
+// Before/After's own registration tests above are.
 describe("AfterStep hook registration", () => {
   it("AfterStep(fn) registers with type after_step, tags undefined", () => {
     const fn = () => {};

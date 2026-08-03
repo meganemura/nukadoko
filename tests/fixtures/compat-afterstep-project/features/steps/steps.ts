@@ -1,8 +1,8 @@
 import { AfterStep, Status, When } from "../../nukadoko-compat-shim.js";
 
 // Two trivial passing steps (t7-compat-status-afterstep task spec) — used by
-// "two passing steps" to prove AfterStep runs exactly once per executed step
-// (tests: "走った回数が実行された step の数と一致する").
+// "two passing steps" to prove AfterStep runs exactly once per executed
+// step: the number of times it ran must equal the number of steps executed.
 When("a no-op legacy step runs", function () {});
 When("a second no-op legacy step runs", function () {});
 

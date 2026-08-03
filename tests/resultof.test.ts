@@ -16,9 +16,10 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 //
 // tests/fixtures/resultof-project/features/steps/listing-is-closed.ts's own
 // relative import of create-listing.ts is this suite's empirical proof of
-// decision 1's module-identity claim ("同一性は Step オブジェクトの参照で判定
-// ... 語彙の discovery と step ファイル同士の import は同じ tsImport モジュー
-// ルグラフに載るので一致するはず — これはテストで実証すること"). The two
+// decision 1's module-identity claim (identity is judged by the Step
+// object's own reference equality ... vocabulary discovery and imports
+// between step files land on the same tsImport module graph, so they
+// should coincide — this is what a test must prove). The two
 // tests below now pass because `src/discover/discover-steps.ts`
 // (m2pre-module-identity task spec) calls tsx's `register({ namespace })`
 // exactly once per discovery run and reuses the scoped `.import()` it

@@ -16,8 +16,8 @@ const worldSchemas = {
 // function typed `this: CustomWorld` below — no interface written by hand.
 export class CustomWorld extends defineWorld(worldSchemas) {
   // An ordinary (undeclared) bag field — measured like any other own data
-  // property, never zod-validated (this task's spec, item 1: "宣言はオプ
-  // ション").
+  // property, never zod-validated (this task's spec, item 1: declaring a
+  // schema is optional).
   visits = 0;
 
   // proto-typed-world/findings.md's central claim: a `#private` field stays

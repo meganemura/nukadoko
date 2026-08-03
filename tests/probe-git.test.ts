@@ -56,8 +56,8 @@ describe("probeGitState", () => {
   it("returns undefined for a git-init'd repo with no commit yet, since no commit sha exists to report", async () => {
     // `git status --porcelain=v2 --branch` on a repo like this prints
     // `# branch.oid (initial)` — no sha, so probeGitState must not surface
-    // any `git` field at all (m4a-probe-cost task spec: "commit が無ければ
-    // 「commit X で green だった」という主張自体が立たない").
+    // any `git` field at all (m4a-probe-cost task spec: without a commit,
+    // the claim "it was green at commit X" has nothing to stand on).
     await execFileAsync("git", ["-C", dir, "init", "-q"]);
     await writeFile(path.join(dir, "a.txt"), "a");
 

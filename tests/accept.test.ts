@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka accept` end to end (m4b-accept task spec, "テスト")
-// against accept-project — a pure-step fixture (no browser, no HTTP server,
+// Responsibility: `nuka accept` end to end (m4b-accept task spec's own
+// testing note) against accept-project — a pure-step fixture (no browser, no HTTP server,
 // same reasoning as tests/fixtures/run-project) whose only job is producing
 // green/red/partial runs for `nuka accept` to react to. The fixture's own
 // `.gitignore` (`.nukadoko/`, `features/*.md`) is not incidental: without
@@ -123,8 +123,8 @@ describe("nuka accept: a green run", () => {
   });
 
   it("writes ran_at/accepted_at as local-offset ISO strings whose date matches the filename (m4c-record-timestamps)", async () => {
-    // No `TZ` fixture here on purpose (m4c-record-timestamps spec,
-    // "テスト"): rewriting `TZ` mid-process doesn't reliably change what
+    // No `TZ` fixture here on purpose (m4c-record-timestamps spec's own
+    // testing note): rewriting `TZ` mid-process doesn't reliably change what
     // Node's Date/Intl internals already cached, so the only assertions
     // that mean the same thing on every machine/CI are format-shape and
     // cross-consistency with the filename, not a specific offset value.
