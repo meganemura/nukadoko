@@ -60,13 +60,17 @@ one is:
 | Output | discarded — the receipt's `result` is `null` | validated against a `returns` schema and stored in the receipt |
 | Dependencies | side effects on the World, invisible in the function signature | pulled through `ctx.resultOf`, named in an import, recorded as `used` in the receipt |
 | Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is declared and checked against what the run actually `observed`, so a mutation there fails |
-| Running alone | not possible — the World is empty outside a scenario | `nuka do <step>` runs it by itself, receipt printed to stdout |
+| Running alone | not possible — the World is empty outside a scenario | `nuka do <step>` runs it directly, receipt printed to stdout — but a dependency read via `ctx.resultOf` finds nothing, since no step ran before it |
 
-That last row follows from the "Dependencies" row, not from a missing
-feature: a compat step can't run alone because what it needs lives on a
-World nothing populated yet, and the World isn't part of its signature —
+That last row is a separate fact from the "Dependencies" row above it, not a
+consequence of it: a compat step can't run alone because what it needs lives
+on a World nothing populated yet, and the World isn't part of its signature —
 there's nothing to inspect to know what to set up first. A typed step's
-dependencies are declared, so `nuka do` has what it needs to run one.
+dependencies are named in an import, so before running one you can see what
+it needs — but seeing it declared isn't the same as having it satisfied. Run
+one alone with `nuka do` and no step ran before it, so there's nothing for a
+dependency read through `ctx.resultOf` to find: declared and visible, yes;
+actually met, no.
 
 Promote the steps you run most often first, one at a time — not the whole
 suite in one pass. How to rewrite any given piece of glue is a judgment
