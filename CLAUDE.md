@@ -42,11 +42,16 @@ change against before writing it.
   feature, never something the engine inserts quietly to make a run
   succeed — a feature that doesn't account for what ran stops being the
   record this tool exists to keep.
-- **A failure a static check can reach belongs to the static check.** If a
-  run can only end one way, say so before it starts rather than after
-  minutes of browser time. But only when it can *only* end that way: a
-  check that guesses is worse than no check, because false positives teach
-  people to ignore the true ones. When in doubt, stay silent.
+- **A failure a static check can reach belongs to the static check — and
+  widening that reach is a goal in itself.** E2E execution costs a browser
+  and minutes, so how much of a scenario can be judged wrong *without
+  running it* is roughly how fast anyone iterates on it; for an agent,
+  whose loop is cheap commands, it is directly how fast it can correct its
+  own work. After any failed run, ask whether `nuka check` could have
+  caught it first, and treat a yes as work worth doing. But only claim
+  what can *only* end one way: a check that guesses is worse than no check,
+  because false positives teach people to ignore the true ones. When in
+  doubt, stay silent.
 - **Nothing breaks silently.** A mistake either fails loudly or is
   reported. A reference that resolves to nothing must not keep returning
   `undefined` forever with no way to trace it.

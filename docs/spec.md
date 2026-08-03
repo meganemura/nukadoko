@@ -34,6 +34,22 @@ vocabulary lacks an operation, the agent scaffolds and implements a new step
 and a human reviews the PR. Every interface has a machine-readable form
 (`--json`); rich human reporting is delegated to Allure.
 
+One consequence of that constraint deserves stating on its own, because it
+directs where this tool grows. End-to-end execution is expensive in a way
+unit tests are not: a browser, a real target, minutes. So how much of a
+scenario can be judged wrong **without running it** is, in practice, how
+fast anyone iterates on it — and for an agent, whose loop is made of cheap
+commands, it is directly how fast it can correct its own work. Every
+declaration this spec asks for is partly paid for that way: `pattern` and
+`args` let `check` reject a line before a browser opens, `mutates` lets it
+question a Then, `from` lets it reject a scenario whose steps are in an
+order that could only fail. Widening what `nuka check` can settle is
+therefore a first-class goal here, not a convenience — and the standing
+question after any failed run is whether a check could have caught it
+first. The limit is honesty, not ambition: `check` only claims what can
+*only* end one way, since a check that guesses trains people to ignore the
+ones that don't.
+
 A nukadoko is the fermented rice-bran bed that turns cucumbers into pickles.
 It is alive: tended daily it matures, neglected it dies. That is the claim
 this tool makes about step definitions — they are a living culture, not a
@@ -145,7 +161,14 @@ export default defineStep({
   before execution, returns after). A validation failure is a failed run; no
   result is stored. Captures are coerced by the parameter type (`{int}` →
   number, custom types by their transformer), then the schema is the
-  contract; the mapping is statically checkable (`nuka check`).
+  contract; the mapping is statically checkable (`nuka check`) in both
+  directions. A capture with no schema key is an error. So is a **required**
+  schema key that nothing on a given line could fill — no capture, no
+  table/docstring, no `from` — because that line can only ever fail args
+  validation. The second direction went unchecked for a while, on the
+  reasoning that a key might be filled some way the tool could not see;
+  `from` closed that gap by making the remaining way visible, so what is
+  left is genuinely unfillable rather than merely unexplained.
 - A data table or docstring attached to the step binds to the one required
   args key the named captures left unconsumed (tables as `string[][]`,
   docstrings as `string`), validated by the schema like everything else —
@@ -1212,8 +1235,10 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, a required
-                              `from` key whose producer is absent or bound
-                              later in the scenario, a `from` naming a step
+                              args key nothing on that line could fill, a
+                              required `from` key whose producer is absent,
+                              bound later in the scenario, or ambiguous
+                              between two producers, a `from` naming a step
                               discovery never registered, config
                               coherence, unreadable step files (reported,
                               not fatal — the rest of the project is still
