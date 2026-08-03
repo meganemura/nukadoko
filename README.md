@@ -72,6 +72,17 @@ nukadoko is a devDependency: it ships its own TypeScript source alongside
 `dist/`, so stack traces land on real code and an agent reading
 `node_modules` can see why a thing works, not just its type.
 
+**Upgrading before 0.1: use `npm install -D nukadoko@latest`.** npm writes
+`^0.0.x` on install, and a caret pins the patch for `0.0.x` versions — so
+`npm update` will never move you off whichever version you first installed,
+silently, while this package is still moving fast.
+
+**Secrets need no manifest.** Point `envFiles` at the env files you already
+have and git classifies them: one git doesn't track is a secret source —
+every value it defines is redacted from logs and receipts — and a tracked
+one is plain configuration, left alone. Nothing to declare, nothing to
+hand-copy into a second file.
+
 **No `package.json` yet (Rails, Django, and other non-Node repos)?** Create
 one first. Skip `npm init -y` — it copies your existing `README.md`'s first
 line into `description` and the directory name into `name`, so it's more

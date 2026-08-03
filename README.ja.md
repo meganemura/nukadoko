@@ -63,6 +63,16 @@ npx nuka steps         # the vocabulary, empty until you add a step
 nukadoko は devDependency です。
 `dist/` と並べて TypeScript のソースそのものも同梱しているため、stack trace は実際のコードを指し、`node_modules` を読む agent は型だけでなく「なぜそう動くか」まで見えます。
 
+**0.1 より前の更新には `npm install -D nukadoko@latest` を使ってください。**
+インストール時に npm が書くのは `^0.0.x` であり、`0.0.x` のバージョンではキャレットは patch を固定します。
+つまり、このパッケージがまだ速く動いている間、`npm update` は最初に入れたバージョンから決して動かしてくれません(何も言わずに)。
+
+**secret に manifest は要りません。**
+すでにある env file を `envFiles` に指定すれば、分類は git が行います。
+git が追跡していないファイルは secret source であり、そこで定義された値はログと receipt から伏せられます。
+追跡されているファイルは平文の設定として、そのまま扱われます。
+宣言することも、別のファイルへ手で写すこともありません。
+
 **まだ `package.json` がありませんか(Rails、Django など Node 以外のリポジトリ)。**
 先に作成してください。
 `npm init -y` は避けてください。
