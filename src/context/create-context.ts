@@ -8,6 +8,7 @@ import type { SecretSet } from "../secrets/types.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
+import { MissingEnvError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
 import { createUsedCollector } from "./used.js";
@@ -187,6 +188,17 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   const ctx: StepContext = {
     env,
+    requireEnv(name: string): string {
+      const value = env[name];
+      // Empty string is "not set", same reasoning as MissingEnvError's own
+      // doc comment: an envFile's `KEY=` line parses to `""`, not "omitted",
+      // so treating `""` as present here would defeat the whole point of a
+      // presence check.
+      if (value === undefined || value === "") {
+        throw new MissingEnvError(name);
+      }
+      return value;
+    },
     baseURL: config.baseURL,
     async page(): Promise<Page> {
       if (!browserHandle) {

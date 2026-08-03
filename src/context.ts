@@ -31,6 +31,17 @@ export interface StepContext {
   request(): Promise<APIRequestContext>;
   /** Environment variables from the configured envFiles (read-only). */
   readonly env: Readonly<Record<string, string | undefined>>;
+  /** Reads a required env var: same source as `ctx.env[name]`, minus the
+   * presence check every step calling `ctx.env[name]` ended up writing for
+   * itself (t2-require-env task spec — real migrations kept re-deriving the
+   * same `need()` helper, with a different error message each time). Throws
+   * `MissingEnvError` (src/context/errors.ts) when `name` is unset *or* set
+   * to the empty string — an envFile's `KEY=` line sets no value, so an
+   * empty string is treated as "not set", not as a deliberately-chosen empty
+   * value (see `MissingEnvError`'s own doc comment for why). Returns
+   * `string`, never `undefined`: the whole point is not needing an
+   * `if (!value) throw` at every call site. */
+  requireEnv(name: string): string;
   /** The configured baseURL. `undefined` when the config doesn't set one;
    * `request()` is what raises the "which key to set" error, not this type. */
   readonly baseURL: string | undefined;

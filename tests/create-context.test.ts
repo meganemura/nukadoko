@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
+import { MissingEnvError } from "../src/context/errors.js";
 
 function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
   return {
@@ -124,5 +125,66 @@ describe("createStepContext / ctx.request()", () => {
     });
 
     await expect(ctx.request()).rejects.toThrow(/baseURL/);
+  });
+});
+
+describe("createStepContext / ctx.requireEnv()", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-evidence-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it("returns the value when the key is set", () => {
+    const { ctx } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: { API_TOKEN: "secret-value" },
+    });
+
+    expect(ctx.requireEnv("API_TOKEN")).toBe("secret-value");
+  });
+
+  it("throws MissingEnvError naming the key when the key is unset", () => {
+    const { ctx } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: {},
+    });
+
+    expect(() => ctx.requireEnv("API_TOKEN")).toThrow(MissingEnvError);
+    try {
+      ctx.requireEnv("API_TOKEN");
+      throw new Error("expected requireEnv to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(MissingEnvError);
+      expect((error as MissingEnvError).key).toBe("API_TOKEN");
+      expect((error as MissingEnvError).message).toContain("API_TOKEN");
+    }
+  });
+
+  it("throws MissingEnvError when the key is set to the empty string", () => {
+    const { ctx } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: { API_TOKEN: "" },
+    });
+
+    expect(() => ctx.requireEnv("API_TOKEN")).toThrow(MissingEnvError);
+  });
+
+  it("leaves ctx.env readable as before (regression)", () => {
+    const { ctx } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: { API_TOKEN: "secret-value" },
+    });
+
+    expect(ctx.env.API_TOKEN).toBe("secret-value");
+    expect(ctx.env.MISSING_KEY).toBeUndefined();
   });
 });

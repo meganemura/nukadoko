@@ -7,6 +7,7 @@ export type { NukadokoConfig, NukadokoConfigInput } from "./config/schema.js";
 export { defineConfig } from "./config/define-config.js";
 export { ConfigError } from "./config/errors.js";
 export type { StepContext } from "./context.js";
+export { MissingEnvError } from "./context/errors.js";
 export { poll, PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./context/poll.js";
 export type {
