@@ -382,7 +382,7 @@ export async function runCli(
 
   const skillPathCommand: CommandModule<Record<string, never>, SkillPathArgs> = {
     command: "path",
-    describe: "print the acceptance skill's own source directory, one absolute path",
+    describe: "print the directory holding this package's own skills, one absolute path",
     handler: async () => {
       if (argsFailed) return;
       exitCode = await runSkillPath({ stdout, stderr });
@@ -391,7 +391,7 @@ export async function runCli(
 
   const skillCommand: CommandModule = {
     command: "skill",
-    describe: "path the agent-facing acceptance skill's source directory",
+    describe: "path the agent-facing skills' source directory",
     builder: (y: Argv) => y.command(skillPathCommand).demandCommand(1).strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
