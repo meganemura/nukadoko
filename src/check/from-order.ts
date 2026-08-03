@@ -162,8 +162,13 @@ function fromOrderAmbiguousMessage(stepName: string, key: string, names: readonl
  * such keys (in which case binding itself fails for an unrelated reason,
  * src/run/match-step.ts's own `bindStepArgs`; nothing here needs to say so a
  * second time).
+ *
+ * Exported (m7b-unfillable-key task spec) so ./unfillable-key.ts's own check
+ * asks this exact same question rather than growing a third copy of "exactly
+ * one unconsumed required key" alongside this function and
+ * src/check/feature-check.ts's own inline one.
  */
-function attachmentFilledKey(
+export function attachmentFilledKey(
   pickleStep: PickleStep,
   consumedByCapture: ReadonlySet<string>,
   argsShape: ReturnType<typeof asObjectShape>,

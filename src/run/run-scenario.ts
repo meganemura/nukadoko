@@ -6,6 +6,7 @@ import type { z } from "zod";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import type { CheckedPattern } from "../check/binding-check.js";
 import { checkFromOrder } from "../check/from-order.js";
+import { checkUnfillableKeys } from "../check/unfillable-key.js";
 import { DataTable } from "../compat/data-table.js";
 import {
   createDeclaredCollector,
@@ -591,8 +592,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // Every other pickle in this `nuka run` invocation is untouched (cli/
   // run.ts's own pickle loop calls this function once per pickle,
   // independently).
+  //
+  // m7b-unfillable-key task spec, item 2: `checkUnfillableKeys` (src/check/
+  // unfillable-key.ts) joins `checkFromOrder` at this exact guard — same
+  // judgment `nuka check` makes, same "never began" shape, one shared list of
+  // per-step messages below rather than a second guard block.
   const orderIssues = checkFromOrder(pickle, vocabulary, patterns);
-  if (orderIssues.length > 0) {
+  const unfillableKeyIssues = checkUnfillableKeys(pickle, vocabulary, patterns);
+  if (orderIssues.length > 0 || unfillableKeyIssues.length > 0) {
     // Mirrors the existing undefined-step shape (docs/spec.md "an execution
     // that never began must not be citable"): every pickle step still gets
     // its own `steps` entry, `receipt: null` throughout since nothing ever
@@ -601,11 +608,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // (`record.status !== "passed"`) needs no change to reach the same
     // outcome for this new failure cause. The offending step(s) carry the
     // violation's own message(s) (joined, when one line has more than one
-    // violated key); every other step — both before and after, since none
-    // of them ran either — is `"skipped"`, the same status a step already
-    // gets when an earlier one in its own pickle failed.
+    // violated key, from either check); every other step — both before and
+    // after, since none of them ran either — is `"skipped"`, the same status
+    // a step already gets when an earlier one in its own pickle failed.
     const issuesByStepIndex = new Map<number, string[]>();
-    for (const issue of orderIssues) {
+    for (const issue of [...orderIssues, ...unfillableKeyIssues]) {
       const messages = issuesByStepIndex.get(issue.stepIndex) ?? [];
       messages.push(issue.message);
       issuesByStepIndex.set(issue.stepIndex, messages);

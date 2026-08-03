@@ -9,6 +9,7 @@ import type { FeatureFile } from "../feature/load-features.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { checkFromOrder } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
+import { checkUnfillableKeys } from "./unfillable-key.js";
 
 // Responsibility: match every pickle step (from src/feature/load-features.ts)
 // against the vocabulary's patterns (already built once by
@@ -51,6 +52,13 @@ import type { CheckIssue } from "./types.js";
 // `checkFromOrder` is called once per pickle below, right alongside this
 // module's own per-pickle findings, so `nuka check`'s report always carries
 // both.
+//
+// m7b-unfillable-key task spec: `checkUnfillableKeys` (./unfillable-key.ts)
+// is called the same way, right alongside `checkFromOrder` — a required args
+// key that no capture, table/docstring, or `from` declaration could ever
+// fill on a given line is a static certainty (docs/spec.md "Typed steps"),
+// reported as its own `unfillable-required-key` error rather than left for a
+// browser run to discover as `args_invalid`.
 
 export interface MatchResult {
   readonly stepNames: readonly string[];
@@ -256,6 +264,21 @@ export function checkFeatures(
       for (const issue of checkFromOrder(pickle, vocabulary, patterns)) {
         errors.push({
           code: "from-order-violation",
+          message: issue.message,
+          file: feature.relativePath,
+          line,
+          step: issue.stepName,
+        });
+      }
+
+      // m7b-unfillable-key task spec, item 1: same "once per pickle,
+      // alongside this module's own per-step findings" shape as
+      // `checkFromOrder` just above — a property of one line's own resolved
+      // step + matched capture set, never something feature-check.ts needs
+      // to re-derive itself.
+      for (const issue of checkUnfillableKeys(pickle, vocabulary, patterns)) {
+        errors.push({
+          code: "unfillable-required-key",
           message: issue.message,
           file: feature.relativePath,
           line,
