@@ -9,8 +9,8 @@ a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter and the
 messages emitter are both implemented, and so are sign-off (`nuka accept`)
-and the acceptance skill it drives; of M5 only the migration skill is still
-design.
+and both of M5's skills. Compat gap detection in `nuka check` is the one
+piece of M1-M5 still unimplemented.
 
 ## What nukadoko is
 
@@ -809,13 +809,14 @@ nuka skill path               where the bundled skill lives, for a project
   `nuka skill path` exists for the one thing neither of those can offer —
   the skill that shipped with the installed nukadoko, at the version that
   installed it, since a skill describes a CLI and drifts into fiction when
-  the two diverge. Two are planned. The **acceptance skill** drives the
-  acceptance loop end to end — criteria in, vocabulary read with `steps`
-  and `describe`, missing operations scaffolded and implemented, the
-  scenario written, then `run` until green and `accept` — this one ships.
-  The **migration skill** carries what the compat audit measured: the gaps a
-  real cucumber-js suite actually hits, in the order they bite rather than
-  the order they are documented. It needs only M2 and does not exist yet.
+  the two diverge. Two ship. The **acceptance skill** drives the acceptance
+  loop end to end — criteria in, vocabulary read with `steps` and
+  `describe`, missing operations scaffolded and implemented, the scenario
+  written, then `run` until green and `accept`. The **migration skill**
+  carries what the compat audit measured: the gaps a real cucumber-js suite
+  actually hits, in the order they bite rather than the order they are
+  documented. Its first stage leans on `nuka check` reporting those gaps,
+  which is the part still unimplemented.
   Neither writes down a fact the CLI already answers — vocabulary,
   contracts, refusal reasons — because a skill that copies those starts
   lying the moment the command changes.
@@ -826,9 +827,10 @@ nuka skill path               where the bundled skill lives, for a project
 
 ## Implementation notes
 
-- Planned runtime dependencies: `@cucumber/gherkin`,
-  `@cucumber/cucumber-expressions`, `playwright`, `zod`, `tsx` (runtime TS
-  import), CLI framework TBD. Node >= 20.
+- Runtime dependencies: `@cucumber/gherkin`,
+  `@cucumber/cucumber-expressions`, `@cucumber/messages`,
+  `allure-js-commons`, `playwright`, `zod`, `tsx` (runtime TS import),
+  `yargs` (CLI). Node >= 20.
 - When a format or protocol has an official SDK, nukadoko writes through it
   rather than reimplementing the format — allure-results through
   allure-js-commons' reporter machinery, cucumber messages through
