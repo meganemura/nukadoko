@@ -11,15 +11,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Outlives its own 20ms timeout — always fails, promptly, at ~20ms, never
-// at 5000ms (tests/compat-execution.test.ts asserts the elapsed wall time to
-// prove this; the gap to 5000ms is deliberately wide — m4a-probe-cost task
-// spec, decision 2: raised from an original 2000ms so the passing assertion
-// itself can use a threshold far below both numbers without going flaky
-// under parallel-worker load — so that ordinary process/discovery overhead
-// can never make the assertion flaky).
+// Outlives its own 20ms timeout — always fails, promptly, at ~20ms, never at
+// 30000ms. tests/compat-execution.test.ts proves that by asserting the
+// elapsed wall time, so the gap between these two numbers is exactly the
+// room that assertion's own threshold has to sit in. Lengthening this sleep
+// costs nothing — the timeout cuts it short either way, so the test does not
+// get slower — which is why the number has been raised whenever the gap
+// proved too narrow: 2000ms originally, then 5000ms (m4a-probe-cost task
+// spec, decision 2), and now 30000ms, after a full-suite run under parallel
+// load measured 3332ms against a 3000ms threshold.
 Given("a legacy step that outlives its own timeout", { timeout: 20 }, async function () {
-  await sleep(5000);
+  await sleep(30_000);
 });
 
 // 12345ms is a distinctive, otherwise-unlikely-to-collide timeout value

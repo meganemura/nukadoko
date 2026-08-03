@@ -45,16 +45,15 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const elapsedMs = Date.now() - startedAt;
 
       expect(exitCode).toBe(1);
-      // The glue's own sleep is 5000ms (m4a-probe-cost task spec, decision
-      // 2: raised from an original 2000ms precisely so this bound could stay
-      // generous without chasing 5000ms too); a run that actually waited for
-      // it would take at least that long. The 3000ms bound leaves generous
-      // headroom over ordinary CLI/discovery overhead — even under the
-      // parallel-worker contention a full `vitest run` puts on process
-      // startup — while still being far short of 5000ms, so this proves the
-      // 20ms timeout — not the glue's own duration — is what this scenario
-      // waited on.
-      expect(elapsedMs).toBeLessThan(3000);
+      // The glue's own sleep is 30000ms; a run that actually waited for it
+      // would take at least that long. This bound only has to be far below
+      // that and far above ordinary CLI/discovery overhead, so what it
+      // proves is that the 20ms timeout — not the glue's own duration — is
+      // what this scenario waited on. The bound was 3000ms against a 5000ms
+      // sleep until a full `vitest run` measured 3332ms here under parallel
+      // load: the fix is a wider gap, not a threshold creeping toward the
+      // sleep it is supposed to be distinguishable from.
+      expect(elapsedMs).toBeLessThan(10_000);
 
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("failed");
@@ -158,9 +157,10 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(exitCode).toBe(1);
       // No timeout is configured on this step at all — a run that actually
       // called it and waited on `done()` (never invoked with the right
-      // signature) would hang indefinitely; this must not take anywhere
-      // near that long.
-      expect(elapsedMs).toBeLessThan(2000);
+      // signature) would hang indefinitely. The comparison here is against
+      // "forever", so the bound can be loose enough to survive parallel-
+      // worker load without weakening what it proves.
+      expect(elapsedMs).toBeLessThan(10_000);
 
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.steps[0].status).toBe("failed");
