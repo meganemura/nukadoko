@@ -472,21 +472,40 @@ Cucumber が持ったことのない実行インフラです:
   environment ごとの `baseURL`、`envFiles`、`policy: "read-only"`(mutate する step を拒否する)、そしてすべての receipt に `target_version` として記録される、任意の `version` プローブです。
   sign-off は両方を凍結するので、記録はそれが green だったデプロイ先を名指しします。
 - **Secret**。
-  分類するのは git です。
-  git が追跡していない env file(ignore されているか untracked)は secret の源です。
+  git が分類するのは「出自」です。
+  git が追跡していない env file(ignore されているか untracked。この 2 つは区別されません)は secret の源です。
   そこで定義される値はすべて secret であり、宣言は不要です。
   追跡されている env file はただの設定です(コミットされた値は secret ではなく、nukadoko もそうではないふりをしません)。
   git リポジトリの外では、すべての envFile が secret の源として扱われます。
-  個々のキーは config で降格できます(`secrets: { public: [...] }`)。
-  マニフェストファイルはなく、昇格もありません。
-  secret の値は、receipt が出力されるあらゆる場所(receipt.json、`do` の stdout コピー、http.jsonl)で `{{secret.NAME}}` として redact されます。
+  ただし出自と「扱い」は別の問いです。
+  `secrets.public` は個々の secret 源のキーを降格し、二度と redact しません。
+  `secrets.redact` はその逆で、追跡済みファイルの個々のキーを名指しし、それでも redact します。
+  `redact` は git 自身の出自判定に異を唱えるものではなく、あるキーが secret 源ファイルに含まれるのと同じ意味で「secret である」という主張でもありません。
+  それは、リポジトリがすでにその値を持っているからといって、新しい面(ターミナル、CI ログ、誰かが貼り付けるバグ報告、エージェント自身の会話ログ)にその値を広げないでください、という指示です。
+  どちらの出自も同じ token、`{{secret.NAME}}` を共有します。
+  2 つ目の `{{redacted.NAME}}` マーカーはなく、receipt を読む側は redact の形を 1 種類だけ覚えればよいということです。
+  同じキーを `public` と `redact` の両方に名指しすることはできません。
+  それは config エラーです。
+  2 つのリストは、1 つのキーについて正反対の指示を与えるからです。
+  secret の値は、出自にかかわらず、receipt が出力されるあらゆる場所(receipt.json、`do` の stdout コピー、http.jsonl)で `{{secret.NAME}}` として redact されます。
   これは書き込み時に executor によって適用され、step の `run` から制御することは決してできません。
   正直な限界もあります。
-  4 文字未満の値は決して redact されず、redact できるのは nukadoko 自身が読み込んだ値だけです。
+  4 文字未満の値は決して redact されません(この下限は `redact` で名指しされた値にも、他の secret とまったく同じように適用されます)。
+  redact できるのは nukadoko 自身が読み込んだ値だけです。
   step の result の中で新たに生まれた token は捕まりません。
+  そして `secrets.redact` に名指しされていない追跡済みの値は、それらの面のすべてに平文のまま届きます。
+  エージェント自身の会話ログも含めてです。
+  その会話ログは、`.gitignore` の追跡/未追跡という線が引かれた時代にはまだ存在しておらず、「すでにリポジトリにある」がその会話ログについての判断だったことは一度もありません。
   Trace とスクリーンショットは redact されません。
   state directory は機密性の高いものです。
-  `nuka check` は各 env file の分類と secret のキー名を報告します(値は決して報告しません)。
+  `nuka check` は各 env file の分類と secret のキー名を報告し(値は決して報告しません)、さらに 3 つの warning を出します。
+  1 つ目は、`secrets.public`/`secrets.redact` が、設定されたどの envFile にも定義されていないキーを名指ししている場合です。
+  2 つ目は、`secrets.redact` が、値が短すぎて実際には redact されないキーを名指ししている場合です。
+  3 つ目は、追跡済みの env file についてだけ、キーの「名前」が secret を保持しているように見える(`SECRET`、`PASSWORD`、`TOKEN`、`CREDENTIAL`、または `KEY` で終わる)のに `secrets.redact` に名指しされていない場合です。
+  最後のこの検査は名前パターンによるヒューリスティクスであり、使い道はただ 1 つ、warning を出すかどうかを決めることだけです。
+  それが redact を決めることは決してありません。
+  名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
+  それを決めるのは git の追跡/未追跡の分類と `secrets.redact` だけです。
 
 Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
 

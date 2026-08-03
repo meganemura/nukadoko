@@ -634,21 +634,48 @@ The execution infrastructure Cucumber never had:
   `envFiles`, `policy: "read-only"` (refuses mutating steps), and an optional
   `version` probe recorded on every receipt as `target_version`. A sign-off
   freezes both, so a record names the deployment it was green against.
-- **Secrets**: git is the classifier. An env file git does not track —
-  ignored or untracked — is a secret source: every value it defines is a
-  secret, no declaration needed. Tracked env files are plain configuration
-  (a committed value is not a secret, and nukadoko will not pretend
-  otherwise). Outside a git repository every envFile is treated as a secret
-  source. Individual keys can be demoted in config
-  (`secrets: { public: [...] }`); there is no manifest file and no
-  promotion. Secret values are redacted (`{{secret.NAME}}`) wherever a
-  receipt is emitted — receipt.json, `do`'s stdout copy, http.jsonl —
-  applied by the executor at write time, never controllable from a step's
-  `run`. Honest limits: values shorter than 4 characters are never
-  redacted, and only values nukadoko itself loaded are redactable — a fresh
-  token inside a step's result is not caught. Traces and screenshots are
-  not redacted; the state directory is sensitive. `nuka check` reports each
-  env file's classification and secret-key names (never values).
+- **Secrets**: git is the classifier for *origin* — an env file git does
+  not track (ignored or untracked, never distinguished) is a secret
+  source: every value it defines is a secret, no declaration needed.
+  Tracked env files are plain configuration (a committed value is not a
+  secret, and nukadoko will not pretend otherwise). Outside a git
+  repository every envFile is treated as a secret source. Origin and
+  *handling* are two different questions, though: `secrets.public`
+  demotes an individual secret-source key to plain, never redacted;
+  `secrets.redact` does the opposite, naming an individual tracked-file
+  key to redact anyway. `redact` does not dispute git's own origin
+  classification, and it is not a claim that a key "is a secret" the way
+  membership in a secret-source file is — it is an instruction not to let
+  that key's value spread to a *new* surface (a terminal, a CI log, a bug
+  report someone pastes, an agent's own conversation transcript) just
+  because the repository already has it. Both origins share one token,
+  `{{secret.NAME}}` — there is no second `{{redacted.NAME}}` marker, so a
+  receipt reader only ever has to recognize one redaction shape. The same
+  key cannot be named in both `public` and `redact`: that is a config
+  error, since the two lists give opposite instructions for one key.
+  Secret values, from either origin, are redacted wherever a receipt is
+  emitted — receipt.json, `do`'s stdout copy, http.jsonl — applied by the
+  executor at write time, never controllable from a step's `run`. Honest
+  limits: values shorter than 4 characters are never redacted (this floor
+  applies to a `redact`-named value exactly as it does to any other
+  secret), only values nukadoko itself loaded are redactable — a fresh
+  token inside a step's result is not caught — and a tracked value not
+  named in `secrets.redact` still reaches every one of those surfaces in
+  plaintext, including an agent's own conversation log: that log did not
+  exist when `.gitignore`'s tracked/untracked line was drawn, so "already
+  in the repository" was never a judgment about it. Traces and
+  screenshots are not redacted; the state directory is sensitive. `nuka
+  check` reports each env file's classification and secret-key names
+  (never values), plus three warnings: `secrets.public`/`secrets.redact`
+  naming a key no configured envFile defines, `secrets.redact` naming a
+  key whose value is too short to ever actually be redacted, and — for a
+  tracked env file only — a key whose *name* looks like it holds a secret
+  (`SECRET`, `PASSWORD`, `TOKEN`, `CREDENTIAL`, or a `KEY` suffix) but
+  isn't named in `secrets.redact`. That last check is a name-pattern
+  heuristic, and it is used for exactly one thing: deciding whether to
+  print the warning. It never decides redaction — a name "looking like" a
+  secret does not add it to what gets redacted; only git's tracked/
+  untracked classification and `secrets.redact` do that.
 
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,

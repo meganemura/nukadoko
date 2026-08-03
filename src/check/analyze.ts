@@ -147,7 +147,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     }
   }
 
-  const configResult = checkConfig(rootDir, config);
+  const configResult = await checkConfig(rootDir, config);
   errors.push(...configResult.errors);
   warnings.push(...configResult.warnings);
 

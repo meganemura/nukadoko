@@ -287,7 +287,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const envFiles = resolvedEnv.envFiles;
     const envVars = loadEnvFiles(rootDir, envFiles);
     const classification = await classifyEnvFiles(rootDir, envFiles);
-    const secrets = buildSecretSet(rootDir, classification.secretSource, config.secrets.public);
+    const secrets = buildSecretSet(rootDir, {
+      secretSourceFiles: classification.secretSource,
+      trackedFiles: classification.tracked,
+      publicKeys: config.secrets.public,
+      redactKeys: config.secrets.redact,
+    });
 
     // Only `baseURL` is overridden from the resolved environment, same as
     // cli/do.ts: every other config field has no per-environment counterpart.

@@ -199,15 +199,48 @@ export const configSchema = z
         }
       })
       .optional(),
-    /** Individual secret-source keys to demote to plain (never redacted).
-     * Default `{ public: [] }`: nothing is public unless named. There is no
-     * promotion counterpart — a tracked file's value is definitionally not a
-     * secret (docs/spec.md "Secrets"), so making one a secret would need a
-     * different mechanism than this one, out of scope here. */
+    /** `public` and `redact` answer two different questions about the same
+     * key, not opposite claims about the same fact (secrets-redact-and-
+     * warning task spec, decision A1): git's tracked/untracked state is
+     * still the only thing that decides *origin* — whether a value is
+     * already reachable by anyone with repo access — and neither field
+     * disputes that. What they control is *handling*: `public` demotes an
+     * individual secret-source key to plain, never redacted (unchanged from
+     * before this field existed). `redact` does the opposite direction: it
+     * names an individual tracked-file key whose value should still be kept
+     * out of new output surfaces (terminal, CI logs, an agent's own
+     * conversation transcript) even though the repository itself already
+     * has it — a handling instruction, not a claim that the key "is a
+     * secret" the way an untracked key's membership in a SecretSet is. Both
+     * origins share the same `{{secret.NAME}}` token (no separate
+     * `{{redacted.NAME}}`): a receipt reader only ever needs to recognize
+     * one redaction shape. `MIN_REDACTABLE_LENGTH` (src/secrets/types.ts)
+     * still applies to a `redact`-named key exactly as it does to any other
+     * secret (src/secrets/build-secret-set.ts) — src/check/config-check.ts's
+     * `secrets-redact-key-too-short` warning exists so that limit doesn't
+     * silently defeat an explicit `redact` entry. The same key cannot be
+     * named in both lists (the refine below): that would be two opposite
+     * instructions for one key, and picking a winner would just as often
+     * contradict whichever one the author actually meant. Default
+     * `{ public: [], redact: [] }`: nothing demoted or promoted unless
+     * named. */
     secrets: z
-      .object({ public: z.array(z.string()).default([]) })
+      .object({
+        public: z.array(z.string()).default([]),
+        redact: z.array(z.string()).default([]),
+      })
       .strict()
-      .default({ public: [] }),
+      .superRefine((value, ctx) => {
+        const redactSet = new Set(value.redact);
+        for (const key of value.public) {
+          if (redactSet.has(key)) {
+            ctx.addIssue(
+              `secrets.public and secrets.redact both name "${key}" — that is two opposite instructions (demote vs. promote) for the same key; remove it from one of the two lists.`,
+            );
+          }
+        }
+      })
+      .default({ public: [], redact: [] }),
     /** `resultsDir` is root-relative; omitted, it defaults to
      * `<stateDir>/allure-results` (docs/spec.md "The state directory") —
      * that default is applied where `stateDir` is resolved (src/cli/run.ts),

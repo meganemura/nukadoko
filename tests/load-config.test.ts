@@ -44,7 +44,7 @@ describe("configSchema", () => {
     if (result.success) {
       expect(result.data.featuresDir).toBe("features");
       expect(result.data.stateDir).toBe(".nukadoko");
-      expect(result.data.secrets).toEqual({ public: [] });
+      expect(result.data.secrets).toEqual({ public: [], redact: [] });
     }
   });
 
@@ -52,13 +52,44 @@ describe("configSchema", () => {
     const result = configSchema.safeParse({ secrets: { public: ["API_TOKEN"] } });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.secrets).toEqual({ public: ["API_TOKEN"] });
+      expect(result.data.secrets).toEqual({ public: ["API_TOKEN"], redact: [] });
     }
   });
 
   it("rejects an unknown key inside secrets", () => {
     const result = configSchema.safeParse({ secrets: { publick: ["oops"] } });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts an explicit secrets.redact list", () => {
+    const result = configSchema.safeParse({ secrets: { redact: ["API_SECRET_KEY"] } });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.secrets).toEqual({ public: [], redact: ["API_SECRET_KEY"] });
+    }
+  });
+
+  it("rejects the same key named in both secrets.public and secrets.redact", () => {
+    const result = configSchema.safeParse({
+      secrets: { public: ["SHARED_KEY"], redact: ["SHARED_KEY"] },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = JSON.stringify(result.error.issues);
+      expect(message).toContain("SHARED_KEY");
+      expect(message).toContain("secrets.public");
+      expect(message).toContain("secrets.redact");
+    }
+  });
+
+  it("accepts distinct keys in secrets.public and secrets.redact", () => {
+    const result = configSchema.safeParse({
+      secrets: { public: ["PUBLIC_ONE"], redact: ["REDACT_ONE"] },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.secrets).toEqual({ public: ["PUBLIC_ONE"], redact: ["REDACT_ONE"] });
+    }
   });
 });
 
