@@ -3,6 +3,8 @@
 > Cucumber + Playwright スイートのための、型付き step の契約とツールが計測する receipt。
 > 導入するには import を 1 つ切り替えるだけ、離脱するにはそれを戻すだけです。
 
+> 原文は README.md。相違があれば原文が正。
+
 cucumber-js のスイートを保守しているなら、その失敗モードはご存じのはずです。
 どの step が一致したのか誰にも分からなくなるまで重複していく step 定義、直前の step が置いていったものを何でも保持する `this`、実際に何を送受信したかを記録しないまま `passed` とだけ言う報告です。
 nukadoko が引き受けるのはまさにそれらであり、Gherkin 自身の構文、パターンマッチング、レビュー、ダッシュボードは、すでにそれをよく所有しているツールに委ねます。
@@ -21,12 +23,29 @@ Feature: Projects
 nukadoko は同じそのファイルを実行します。
 変わるのはその裏にあるコードだけです。
 
+## Agent-first is a design constraint, not a slogan
+
+agent は、介助なしにループ全体を完了できなければなりません。
+語彙を発見し(`nuka steps --json`)、契約を読み(`nuka describe`、スキーマは JSON Schema として)、1 つの step を実行し(`nuka do`、receipt は stdout に、意味のある exit code とともに)、バリデーション済みの result を読み、次の呼び出しを決めます。
+語彙に操作が欠けているときは、agent が新しい step を scaffold して実装し、人間がその PR をレビューします。
+
+その制約こそが、この設計の大部分を生み出しました。
+step は単独で実行可能でなければならず、そのため依存関係は World ではなくシグネチャに現れなければなりません。
+だからこそ `this.foo` は、データフローを隠す場所ではなくなるのです。
+result は次の呼び出しから読めなければならず、そのため捨てられるのではなくバリデーションされなければなりません。
+agent によるある実行の報告は、その実行の記録そのものにはなり得ないため、ツールが receipt を書きます。
+これらはどれも、agent のために作られ、その後で人間向けに正当化された、というものではありません。
+どちらの立場から見ても同じ性質であり、agent が動かせるスイートは、結局のところ人がデバッグできるスイートでもあるのです。
+
+すべてが機械可読な出力を優先します。
+人間にとっての見やすさは Allure に委ねられます。
+
 ## Status
 
-**Pre-0.1 で、これはバージョン 0.0.1 です**(最初に公開されたバージョンです)。
+**Pre-0.1 で、これはバージョン 0.0.2 です。**
 0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
 
-523 個のテストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
+528 個のテストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
 未実装なのは、`nuka check` における compat のギャップ検出、AI 支援によるグルーの変換、scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
@@ -43,6 +62,12 @@ npx nuka steps         # the vocabulary, empty until you add a step
 
 nukadoko は devDependency です。
 `dist/` と並べて TypeScript のソースそのものも同梱しているため、stack trace は実際のコードを指し、`node_modules` を読む agent は型だけでなく「なぜそう動くか」まで見えます。
+
+**移行ではなく、まっさらな状態から始めますか。**
+compat の扉は丸ごとスキップしてください。
+`defineStep` を直接書き(参照: [Before / after](#before--after))、`acceptance` skill にチケットの受け入れ基準をコミットされた記録まで運ばせてください。
+型付きのパスのどこにも、cucumber-js のスイートが先にあったという前提はありません。
+以下の compat の節は、すでに存在しているスイートのためのものです。
 
 ## What it fixes
 
@@ -115,7 +140,7 @@ step を `defineStep` に昇格させるかどうかは、そこから先は書�
 **import を戻せば、ただの cucumber-js スイートに戻ります。**
 これは偶然の産物ではなく、変わらない設計上の規則です。
 compat の資産は、切り替えにも部分的な移行にも耐えなければならず、だから離脱はつねに編集 1 つ分の距離にあります。
-これが、既存のスイートを 1 人のメンテナーによる 0.0.1 のツールに賭けてよいかという、正当な問いへの答えです。
+これが、既存のスイートを 1 人のメンテナーによる pre-0.1 のツールに賭けてよいかという、正当な問いへの答えです。
 
 他に何がどれだけ変わるかは、推測ではなく実測しました。
 公開されている cucumber-js のスイート 8 本のうち、監査を行った時点で **import だけで通ったものはゼロでした**。
@@ -144,6 +169,35 @@ emitter は、配線ゼロであらゆる receipt からレポートを満たし
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 [Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
 
+## Self-healing, with the deviation on the record
+
+スクリプト化された scenario が壊れるのは、アプリが変わったからであり、テストが間違っていたからではありません。
+nukadoko が作られているのは、この修復のループのためです。
+
+1. agent は `nuka do` を使い、1 step ずつ各 receipt を読んで次の呼び出しを決めながら、目標を適応的に再実行します。
+   壊れた scenario をそのまま再生しているのではなく、いま何が通用するのかを見つけ出しているのです。
+2. それらの receipt は、実際にうまくいった手順を記録します。
+   それは定義上、スクリプト化されたものから逸脱しています。
+   receipt は修復の物語であり、証明ではありません。
+   agent は PR の中で、それらをまさにその物語として引用します。
+3. PR は型付き step または feature ファイルを更新し、その証明となるのは修復された scenario が green で通ることです。
+   すなわち scenario の記録とその receipt であり、他のどんな変更とも同じようにレビューされます。
+
+要点は手順 2 です。
+**監査証跡のない self-healing は、スイートが気づかないうちに何もテストしなくなる仕組みそのものです。**
+アプリがいま実際に何をしていようと、それに合わせて静かに書き換えられた scenario は、そのまま通り続けます。
+そして、かつてそれが確認していたはずのものが失われたことに、誰も気づけません。
+ここでは逸脱が、レビュアーが読む記録であり、証明は常に scenario を通り、ad-hoc な一連の呼び出しを通ることは決してありません。
+
+nukadoko の貢献は、すべての段階が記録を残すことです。
+執筆は agent のワークフロー(この下で扱う、同梱の skill)であり、エンジンの魔法ではありません。
+詳しくは [Self-healing, audited](docs/spec.ja.md#self-healing監査付き) を参照してください。
+
+このループが**捕まえられない**のは、スイートが空洞化するもう一つの経路です。
+scenario 自体はそのままに、その `Then` が静かに弱くなっていくというものです。
+receipt が記録するのは実行が何をしたかであって、assertion がいまも何かを意味しているかどうかではありません。
+その部分はレビューに委ねられたままであり、[What this does not do](#what-this-does-not-do) がそのことをはっきり述べています。
+
 ## Skills for coding agents
 
 nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
@@ -158,6 +212,13 @@ nuka skill path                              # the copy matching your installed 
 
 どちらの skill も、CLI が答えられる内容を書き写しません(語彙、契約、拒否の理由はすべて `nuka steps`、`nuka describe`、stderr から得られます)。
 それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
+
+skill が代わりに運ぶのは、放っておくと agent が自分では思いつかない規律です。
+すなわち、修復を 3 回失敗したらそこで止め、さらに推測を重ねる代わりに状況を報告すること。
+契約で `mutates` を宣言している step を最初に実行する前には、一度だけ確認を取ること。
+書かれた記録を手で編集しないこと、そしてよりきれいな記録を作るために既存の記録を削除しないこと。
+そうしなければ、green な実行を最適化する agent は、green への最も安い経路を見つけてしまいます。
+そしてその最も安い経路は、たいてい弱い assertion です。
 
 ## When do you reach for which command
 
@@ -226,6 +287,10 @@ access to a document you need, say so rather than assuming.
   ある step がその description の主張どおりに正直に動くかどうかは、PR レビューに委ねられます。
   ツールが保証するのは入出力の形と実行された事実だけです。
   型付きの契約は、空の assertion をレビューで見つけやすくしますが、それを自動的に拒むものは何もありません。
+- **mutation の観測が見ているのは network の書き込みだけです。**
+  HTTP 経由で書き込みを行う、Then の位置にある step は、この計測によって失敗します。
+  純粋にクライアント側だけの状態や、GET で mutate してしまうサーバーは、これでは見えません。
+  それらのケースは `mutates` の宣言とレビューが引き受けます。
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - テストの並列実行、シャーディング、リトライ、CI レポーティングはありません。
   HTML のレンダリングもありません(それは Allure の仕事です)。
@@ -241,7 +306,9 @@ nukadoko はその 2 つのコストを置き換え、scenario とそれを読�
 
 ## Design
 
-設計の全体、すなわち課題設定、型付き step、キーワードの意味論、receipt、session/environment/secret、sign-off、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)(原文は [docs/spec.md](docs/spec.md))。
+設計の全体、すなわち課題設定、型付き step、キーワードの意味論、receipt、session/environment/secret、sign-off、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
+
+English: [README.md](README.md) / [docs/spec.md](docs/spec.md)
 
 ## License
 
