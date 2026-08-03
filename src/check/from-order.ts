@@ -1,7 +1,7 @@
 import type { Pickle, PickleStep } from "@cucumber/messages";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
-import { isStep, type Step } from "../step/define-step.js";
+import { fromCandidates, isStep, type Step } from "../step/define-step.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { matchPickleStepText } from "./feature-check.js";
 
@@ -59,34 +59,99 @@ import { matchPickleStepText } from "./feature-check.js";
 // mirrors src/check/feature-check.ts's own inline copy of that same
 // "exactly one unconsumed required key" rule exactly, rather than
 // approximating it.
+//
+// A key naming several candidate producers (m7a-from-alternatives task spec,
+// item 3; docs/spec.md "Chaining steps": "A key may name more than one
+// possible producer") counts how many of its *named* candidates
+// (`fromCandidates`, skipping any that isn't even a valid registered `Step`
+// — validate-from.ts's own structural finding, not re-derived here) are
+// bound earlier than this line: exactly one is the only silent outcome for a
+// required key, zero is the pre-existing "missing"/"later" error, and two or
+// more is a new error that fires whether the key is required or optional —
+// docs/spec.md's own reasoning: a schema can say a value may be absent, but
+// no schema asks for "either of these two, and the feature file cannot tell
+// you which." This is deliberately a *count*, never a rule that picks a
+// winner among several bound candidates (this task's spec: "優先順位を作ら
+// ない" — declaration order, most-recent, first-found are all rejected on
+// purpose); two-or-more bound early is always reported, never resolved.
 
 export interface FromOrderIssue {
   /** 0-based index into `pickle.steps` — the consuming line. */
   readonly stepIndex: number;
   readonly stepName: string;
   readonly key: string;
-  readonly upstreamStepName: string;
-  /** "missing": the upstream never resolves to exactly one step anywhere in
-   * this pickle. "later": it does, but never before `stepIndex`. Two
-   * distinct causes, one issue code (m6b-from-check task spec: "code は分
-   * けなくてよい") — the message is what tells them apart. */
-  readonly reason: "missing" | "later";
+  /** The candidate producer step name(s) this issue is about — one name for
+   * the "zero bound" case (unchanged from before m7a-from-alternatives; a
+   * key with several candidates still gets one name per candidate,
+   * enumerated in `message`), two or more for the new "two-or-more bound"
+   * conflict this task adds. */
+  readonly upstreamStepNames: readonly string[];
+  /** "missing": none of this key's candidates ever resolves to exactly one
+   * step anywhere in this pickle. "later": at least one does, but never
+   * before `stepIndex`. "ambiguous": two or more candidates are
+   * simultaneously bound before `stepIndex` (m7a-from-alternatives task
+   * spec, item 3) — an error independent of required/optional, unlike the
+   * other two. Three distinct causes, one issue code (m6b-from-check task
+   * spec: "code は分けなくてよい", extended by this task rather than
+   * introducing a second code) — the message is what tells them apart. */
+  readonly reason: "missing" | "later" | "ambiguous";
   readonly message: string;
 }
 
-function fromOrderMessage(
-  stepName: string,
-  key: string,
-  upstreamStepName: string,
-  reason: "missing" | "later",
-): string {
-  const detail =
-    reason === "missing"
-      ? `"${upstreamStepName}" is never bound anywhere in this scenario`
-      : `"${upstreamStepName}" is bound in this scenario, but only at or after this line, never before it`;
+/** One candidate's own order status against the consuming line — computed
+ * once per named candidate and shared by both the "zero bound" and
+ * "two-or-more bound" message builders below, so the two never derive
+ * slightly different facts about the same candidate. */
+interface CandidateStatus {
+  readonly name: string;
+  readonly boundBefore: boolean;
+  readonly boundAnywhere: boolean;
+}
+
+/** The "zero of this key's candidates bound earlier" message — required
+ * key, and no candidate is ready. For a single-candidate key this is byte-
+ * for-byte what m6b-from-check always produced (this task's spec:
+ * backward compatible, no rewording an existing, working message); a key
+ * with several candidates instead enumerates every candidate's own status,
+ * since there is no one candidate left to single out. */
+function fromOrderMissingMessage(stepName: string, key: string, candidates: readonly CandidateStatus[]): string {
+  if (candidates.length === 1) {
+    const [only] = candidates;
+    const detail = only!.boundAnywhere
+      ? `"${only!.name}" is bound in this scenario, but only at or after this line, never before it`
+      : `"${only!.name}" is never bound anywhere in this scenario`;
+    return (
+      `Step "${stepName}"'s from.${key} needs step "${only!.name}" to have already run earlier ` +
+      `in this scenario, but ${detail} — this line would fail args validation with certainty`
+    );
+  }
+  const names = candidates.map((c) => `"${c.name}"`).join(", ");
+  const detail = candidates
+    .map((c) =>
+      c.boundAnywhere
+        ? `"${c.name}" is bound only at or after this line, never before it`
+        : `"${c.name}" is never bound anywhere in this scenario`,
+    )
+    .join("; ");
   return (
-    `Step "${stepName}"'s from.${key} needs step "${upstreamStepName}" to have already run earlier ` +
-    `in this scenario, but ${detail} — this line would fail args validation with certainty`
+    `Step "${stepName}"'s from.${key} needs exactly one of its candidate producers (${names}) to have ` +
+    `already run earlier in this scenario, but none has — ${detail} — this line would fail args ` +
+    `validation with certainty`
+  );
+}
+
+/** The "two or more of this key's candidates bound earlier" message —
+ * new in m7a-from-alternatives, since a single-candidate key can never reach
+ * this state (docs/spec.md "Chaining steps": listing candidates says they
+ * are mutually exclusive, so two being simultaneously ready is exactly the
+ * ambiguity a schema cannot express and the feature file must resolve, not
+ * this tool). */
+function fromOrderAmbiguousMessage(stepName: string, key: string, names: readonly string[]): string {
+  const quoted = names.map((n) => `"${n}"`).join(", ");
+  return (
+    `Step "${stepName}"'s from.${key} has more than one of its candidate producers bound earlier in ` +
+    `this scenario (${quoted}) — from's candidates are mutually exclusive by design (docs/spec.md ` +
+    `"Chaining steps"), so the feature file, not the tool, must make exactly one of them win`
   );
 }
 
@@ -153,7 +218,7 @@ export function checkFromOrder(
     const consumedByCapture = new Set(matched?.captures.map((capture) => capture.key) ?? []);
     const attachmentFillsKey = attachmentFilledKey(pickleStep, consumedByCapture, argsShape);
 
-    for (const [key, entryTuple] of fromEntries) {
+    for (const [key, entryValue] of fromEntries) {
       if (consumedByCapture.has(key) || key === attachmentFillsKey) {
         continue; // A pattern capture or the table/docstring already wins this key.
       }
@@ -165,42 +230,68 @@ export function checkFromOrder(
         // (`validateStepFrom`), not this module's to re-derive.
         continue;
       }
-      if (!isRequiredField(fieldSchema)) {
-        continue; // Optional: silent by design (m6b-from-check task spec).
-      }
+      // Required/optional decides *whether* zero-bound is an error below
+      // (m6b-from-check task spec, unchanged); it does not gate the
+      // two-or-more-bound check (m7a-from-alternatives task spec, item 3:
+      // "required / optional によらず error").
+      const required = isRequiredField(fieldSchema);
 
-      const [upstream] = entryTuple;
-      const upstreamStepName = isStep(upstream) ? stepNameOf.get(upstream) : undefined;
-      if (upstreamStepName === undefined) {
-        // Not a valid, registered Step — m6a-from-core's `validateStepFrom`
-        // already covers this; there is no name here to check an order
-        // against.
-        continue;
-      }
-
-      let boundBefore = false;
-      let boundAnywhere = false;
-      for (let otherIndex = 0; otherIndex < resolvedNames.length; otherIndex += 1) {
-        if (resolvedNames[otherIndex] === upstreamStepName) {
-          boundAnywhere = true;
-          if (otherIndex < stepIndex) {
-            boundBefore = true;
-            break;
+      // Every *named* candidate — `fromCandidates` normalizes the single- and
+      // multi-candidate shapes uniformly, and a candidate whose upstream
+      // isn't even a valid, registered `Step` is left out of the count
+      // entirely (that structural fact is validate-from.ts's own finding,
+      // not re-derived here — same as before m7a-from-alternatives, just
+      // now per candidate instead of per key).
+      const named: CandidateStatus[] = [];
+      for (const [upstream] of fromCandidates(entryValue)) {
+        const name = isStep(upstream) ? stepNameOf.get(upstream) : undefined;
+        if (name === undefined) {
+          continue;
+        }
+        let boundBefore = false;
+        let boundAnywhere = false;
+        for (let otherIndex = 0; otherIndex < resolvedNames.length; otherIndex += 1) {
+          if (resolvedNames[otherIndex] === name) {
+            boundAnywhere = true;
+            if (otherIndex < stepIndex) {
+              boundBefore = true;
+              break;
+            }
           }
         }
+        named.push({ name, boundBefore, boundAnywhere });
       }
-      if (boundBefore) {
-        continue;
+      if (named.length === 0) {
+        continue; // No candidate has a name to check an order against.
       }
 
-      const reason: "missing" | "later" = boundAnywhere ? "later" : "missing";
+      const boundBefore = named.filter((candidate) => candidate.boundBefore);
+      if (boundBefore.length === 1) {
+        continue; // Exactly one candidate ready — the one silent outcome.
+      }
+      if (boundBefore.length >= 2) {
+        const names = boundBefore.map((candidate) => candidate.name);
+        issues.push({
+          stepIndex,
+          stepName,
+          key,
+          upstreamStepNames: names,
+          reason: "ambiguous",
+          message: fromOrderAmbiguousMessage(stepName, key, names),
+        });
+        continue;
+      }
+      // boundBefore.length === 0 from here.
+      if (!required) {
+        continue; // Optional, none bound: silent by design (m6b-from-check task spec).
+      }
       issues.push({
         stepIndex,
         stepName,
         key,
-        upstreamStepName,
-        reason,
-        message: fromOrderMessage(stepName, key, upstreamStepName, reason),
+        upstreamStepNames: named.map((candidate) => candidate.name),
+        reason: named.every((candidate) => !candidate.boundAnywhere) ? "missing" : "later",
+        message: fromOrderMissingMessage(stepName, key, named),
       });
     }
   });

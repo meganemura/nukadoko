@@ -32,7 +32,8 @@ just produces a scenario that proves the wrong thing.
    those criteria translated into the vocabulary.
 4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
    Then bound to a mutating step, a chained key whose producing step is
-   missing or bound too late — before anything runs.
+   missing, bound too late, or ambiguous between two of them — before
+   anything runs.
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
@@ -97,6 +98,15 @@ scenario reads as what actually chains to what. Only fall back to
 `ctx.resultOf` inside `run` for a read `from` cannot express: the value
 needs reshaping on the way, which upstream step to read is decided at run
 time, or the whole result is wanted rather than one key of it.
+
+A value that can arrive two ways — created in one scenario, imported in
+another — lists both, and the consuming step stays one step:
+`from: { key: [[stepA, "id"], [stepB, "projectId"]] }`. There is no
+priority between them and no rule to memorize: exactly one of the listed
+producers has to be bound earlier in that scenario, so a scenario
+containing both is an error rather than a coin flip. If a scenario
+genuinely exercises both producers, they are not alternatives at all —
+give each its own args key and let the step read both.
 
 Declaring `from` is not just documentation: `nuka check` reads it and
 verifies the producing step actually appears earlier in the same scenario,
@@ -176,10 +186,10 @@ that judgment is what PR review of the feature is for.
 
 `nuka check <feature>`. Undefined steps, pattern/schema mismatches, a Then
 bound to a mutating step, a step whose `from` key has no producing step
-earlier in that scenario — every static inconsistency it can catch, catch
-before anything executes. The last one is the one that otherwise costs a
-whole browser session to discover, since the scenario looks correct until
-the consuming step actually runs.
+earlier in that scenario or has two of them competing — every static
+inconsistency it can catch, catch before anything executes. Those last
+ones otherwise cost a whole browser session to discover, since the
+scenario looks correct until the consuming step actually runs.
 
 Pass the feature path. A bare `nuka check` only walks `featuresDir`, and an
 acceptance feature is supposed to live outside it (see "What not to do"), so

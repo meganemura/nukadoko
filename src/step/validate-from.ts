@@ -1,5 +1,5 @@
 import { asObjectShape } from "../binding/schema-shape.js";
-import { isStep, type Step } from "./define-step.js";
+import { fromCandidates, isStep, type Step } from "./define-step.js";
 
 // Responsibility: the runtime half of `from`'s three checks (m6a-from-core
 // task spec, item 3; docs/spec.md "Chaining steps") — whether the upstream a
@@ -14,6 +14,16 @@ import { isStep, type Step } from "./define-step.js";
 // guard). This one is structural and scenario-independent: it holds or fails
 // the same way for every occurrence of the step, in every scenario, so it is
 // checked once, not per scenario.
+//
+// A key naming several candidate producers (m7a-from-alternatives task spec,
+// item 6; docs/spec.md "Chaining steps": "A key may name more than one
+// possible producer") is checked one candidate at a time via
+// `fromCandidates` — each candidate gets its own `isStep`/registered/
+// returns-key check, so a `FromIssue` always names one specific broken
+// candidate rather than a key with several candidates bundled into one
+// vague message. This module still says nothing about *order* — whether
+// exactly one of a key's candidates is ever bound earlier in a given
+// scenario is src/check/from-order.ts's job, not this one's.
 //
 // A pure function returning issues, not throwing and not printing anything
 // (this task's spec, item 3): `nuka do`'s own fatal wiring (src/cli/do.ts)
@@ -55,6 +65,12 @@ export function registeredStepPredicate(steps: Iterable<Step>): (candidate: Step
  * item 3's four bullets): upstream is a `Step` at all, upstream is
  * registered, upstream's `returns` is an object schema with the named key,
  * and this step's own `args` is an object schema with the `from` key itself.
+ * The first three run once per candidate (m7a-from-alternatives task spec,
+ * item 6) — a key with several candidates gets one issue per broken
+ * candidate, naming it individually, rather than one issue that can't say
+ * which of several candidates was the problem. The fourth (this step's own
+ * `args` shape) doesn't depend on which candidate is being looked at, so it
+ * runs once per key instead of being repeated identically per candidate.
  * Returns every issue found; `[]` when `step.from` is empty or every entry
  * checks out. `isRegistered` is `registeredStepPredicate`'s own return value
  * — passed in, not built here, so a caller validating many steps against the
@@ -69,40 +85,6 @@ export function validateStepFrom(
   const argsShape = asObjectShape(step.args);
 
   for (const [key, entry] of Object.entries(step.from)) {
-    const [upstream, upstreamKey] = entry;
-
-    if (!isStep(upstream)) {
-      issues.push({
-        step: stepName,
-        key,
-        message: `from.${key} names something that is not a Step`,
-      });
-    } else if (!isRegistered(upstream)) {
-      issues.push({
-        step: stepName,
-        key,
-        message:
-          `from.${key} names a Step discovery never registered — most likely it was reached ` +
-          `through a different \`await import()\` than the one discovery used, producing a ` +
-          `distinct module instance (docs/spec.md "Chaining steps")`,
-      });
-    } else {
-      const returnsShape = asObjectShape(upstream.returns);
-      if (returnsShape === undefined) {
-        issues.push({
-          step: stepName,
-          key,
-          message: `from.${key}'s upstream step's returns is not an object schema, so key "${upstreamKey}" cannot be read from it`,
-        });
-      } else if (!(upstreamKey in returnsShape)) {
-        issues.push({
-          step: stepName,
-          key,
-          message: `from.${key} names key "${upstreamKey}", which is not one of the upstream step's returns keys`,
-        });
-      }
-    }
-
     if (argsShape === undefined) {
       issues.push({
         step: stepName,
@@ -115,6 +97,40 @@ export function validateStepFrom(
         key,
         message: `from declares key "${key}", which is not one of this step's own args keys`,
       });
+    }
+
+    for (const [upstream, upstreamKey] of fromCandidates(entry)) {
+      if (!isStep(upstream)) {
+        issues.push({
+          step: stepName,
+          key,
+          message: `from.${key} names something that is not a Step`,
+        });
+      } else if (!isRegistered(upstream)) {
+        issues.push({
+          step: stepName,
+          key,
+          message:
+            `from.${key} names a Step discovery never registered — most likely it was reached ` +
+            `through a different \`await import()\` than the one discovery used, producing a ` +
+            `distinct module instance (docs/spec.md "Chaining steps")`,
+        });
+      } else {
+        const returnsShape = asObjectShape(upstream.returns);
+        if (returnsShape === undefined) {
+          issues.push({
+            step: stepName,
+            key,
+            message: `from.${key}'s upstream step's returns is not an object schema, so key "${upstreamKey}" cannot be read from it`,
+          });
+        } else if (!(upstreamKey in returnsShape)) {
+          issues.push({
+            step: stepName,
+            key,
+            message: `from.${key} names key "${upstreamKey}", which is not one of the upstream step's returns keys`,
+          });
+        }
+      }
     }
   }
 

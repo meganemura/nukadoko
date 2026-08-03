@@ -157,9 +157,10 @@ export default defineStep({
   "`projectId` is the `id` of whatever `createProject` returned earlier in
   this scenario". The executor fills the key in before args validation, so
   the key stays required and the schema keeps saying what the step actually
-  demands. A key name, never a transform — see "Chaining steps" for why
-  that limit is the point, and for what to do when a key name is not
-  enough.
+  demands. A key name, never a transform, and a key may list several
+  mutually exclusive producers — see "Chaining steps" for why that limit is
+  the point, for how alternatives are resolved, and for what to do when a
+  key name is not enough.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
 - `rationale` is optional with no default — omitted, `Step.rationale` is
@@ -307,6 +308,49 @@ chain. Injection happens before args validation, which is the point: the
 key stays **required**, and `args` goes on describing what the step
 demands instead of describing how one of its callers happens to supply it.
 
+A key may name more than one possible producer. Some values are reachable
+two ways — a project a scenario creates, or one it imports — and the
+consumer should not have to become two steps to say so:
+
+```ts
+from: { projectId: [[createProject, "id"], [importProject, "projectId"]] }
+```
+
+What this deliberately does not introduce is a priority. There is no
+first-one-wins, no declaration order to remember, no most-recent rule
+reaching across different steps. The check below instead requires that
+**exactly one** of the listed producers is bound earlier in the scenario:
+none is the same error one missing producer already is, and two or more is
+an error as well. A scenario whose answer would depend on a rule its own
+reader cannot see is one this tool declines to run — which is what makes
+this safe to add. The question "which of these supplies the value" gets a
+per-occurrence answer from the feature file, not a default from the step.
+
+That is also why this is not settled the way repeats of a *single*
+producer are. `Given a project is created` twice, then a consumer, reads
+as the latest one, and that holds up: both occurrences carry the same
+contract, so the later result supersedes the earlier and the question is
+only freshness. Two *different* producers ask which contract the value
+came from. Freshness has a defensible default; provenance does not.
+
+Listing producers as alternatives says they are mutually exclusive — one
+of these will have run, not both. A scenario that genuinely exercises both
+(two paths to the same record, checked against each other) is not that
+shape at all, and does not need to be written as one: give each producer
+its own key.
+
+```ts
+from: {
+  createdId:  [createProject, "id"],
+  importedId: [importProject, "id"],
+}
+```
+
+Both are bound, both are read, nothing competes. If a value can arrive
+from two producers *in the same scenario* and only one key is waiting for
+it, the consumer's own shape is what is wrong — it is asking for one thing
+where the scenario has two.
+
 Why a key name and not a selector function. A name is data: it survives
 into `nuka steps --json` and `nuka describe` as "`projectId` ← `createProject.id`",
 which is what lets an agent assemble an order it was never told, and it is
@@ -322,14 +366,18 @@ run`, before it executes that scenario, so forgetting to check is not
 punished with a browser session — asks whether each declared key is
 captured by that line; if it is not, whether the upstream step appears
 earlier in the same pickle (Background included, since a pickle carries
-its Background steps). A **required** key with neither is an error: that
-run would fail args validation with certainty, so saying so early invents
-no false positive. An **optional** key with neither is silent — the schema
-already said the value may be absent, and warning about a contract being
-honored would be noise in the one place noise is fatal. This closes the
-case that motivated `from`: a scenario that binds the consumer before the
-producer used to be indistinguishable from a correct one until minutes of
-real browser time had been spent.
+its Background steps). A **required** key with no producer bound
+earlier is an error: that run would fail args validation with certainty,
+so saying so early invents no false positive. An **optional** key with
+none is silent — the schema already said the value may be absent, and
+warning about a contract being honored would be noise in the one place
+noise is fatal. Two or more of a key's listed producers bound earlier is
+an error whether the key is required or optional: a schema gets to say
+"this value may be absent", but no schema asked for "either of these two,
+and the feature file cannot tell you which". This closes the case that
+motivated `from`: a scenario that binds the consumer before the producer
+used to be indistinguishable from a correct one until minutes of real
+browser time had been spent.
 
 `from` and `ctx.resultOf` both identify the upstream step by the `Step`
 object itself, never by name, so a step reached through `await import()`
@@ -343,9 +391,8 @@ step that has not run yet still returns `undefined`; that is a state, not
 a mistake.
 
 What `from` cannot express stays with `ctx.resultOf`: a value that needs
-reshaping on the way, a read whose necessity is decided at run time, a key
-that could come from either of two upstream steps, or a whole result used
-as one. Reach for `resultOf` for those, and keep the argument optional
+reshaping on the way, a read whose necessity is decided at run time, or a
+whole result used as one. Reach for `resultOf` for those, and keep the argument optional
 with a fallback inside `run` if the step must also run standalone — the
 older shape, now the exception rather than the house style.
 

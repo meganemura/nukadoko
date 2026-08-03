@@ -29,6 +29,21 @@ import { STEP_BRAND } from "./brand.js";
 // what actually enforces all three for every case the type layer can't, and
 // is the one line of defense against a step author lying to the type checker
 // with an `as` cast.
+//
+// A key may instead list several mutually exclusive producers (m7a-from-
+// alternatives task spec, item 1; docs/spec.md "Chaining steps": "A key may
+// name more than one possible producer"): `{ projectId: [[createProject,
+// "id"], [importProject, "projectId"]] }`. Discriminated from the single-
+// candidate form by the tuple's own first element — a `Step` means "this is
+// one candidate", an array means "this is the list" — never by a wrapper
+// type, so the single form written before this task keeps compiling and
+// keeps meaning exactly what it meant (backward compatible on purpose: no
+// existing `from: { key: [step, "key"] }` needs rewriting). The three checks
+// above apply per candidate; there is deliberately no fourth check that
+// picks a "best" or "first" candidate — which one actually supplies the
+// value at run time is a per-scenario fact `src/check/from-order.ts` and
+// `src/run/run-scenario.ts` judge, never this file (docs/spec.md "Chaining
+// steps": "What this deliberately does not introduce is a priority").
 
 /** A zod object schema's own key→schema shape; `{}` when `T` isn't one. This
  * task's spec, item 2's own scope note: `from`'s three checks only make
@@ -56,26 +71,72 @@ type KeysAssignableTo<Shape, V> = {
 }[keyof Shape];
 
 /**
- * Validates one `from` entry (`TFrom[K]`, the literal tuple TypeScript sees
- * at this exact key in the object literal a `defineStep` caller wrote)
- * against args key `K`'s own declared type. Self-referential on purpose —
- * `S` (the upstream `Step`) and its own `returns` shape are inferred fresh
- * per key, so two different `from` entries in the same step can each name a
- * different upstream step without their types interfering (this task's spec,
- * item 2). An entry that fails any of the three checks collapses to `never`,
- * which the literal tuple the caller actually wrote is never assignable to —
- * surfacing as a compile error at that key, plain rather than maximally
- * friendly; a readable message for each of these three cases is what
- * src/step/validate-from.ts's runtime check gives instead.
+ * Validates one candidate producer tuple (`[Step, string]`) against args key
+ * `K`'s own declared value type — the same three-bullet check `from` has
+ * always applied to its single-candidate form, factored out so it can run
+ * once per candidate when a key lists several (m7a-from-alternatives task
+ * spec, item 1). Self-referential on purpose — `S` (the upstream `Step`) and
+ * its own `returns` shape are inferred fresh per candidate, so two different
+ * candidates (whether on the same key or different keys) can each name a
+ * different upstream step without their types interfering. Collapses to
+ * `never` on failure, exactly like `ValidatedFromEntry` used to do directly.
+ */
+type ValidatedCandidate<Candidate, ArgsValueType> = Candidate extends readonly [
+  infer S extends Step,
+  infer UpstreamKey,
+]
+  ? S extends Step<z.ZodTypeAny, infer TReturns extends z.ZodTypeAny>
+    ? UpstreamKey extends KeysAssignableTo<ObjectShapeOf<TReturns>, ArgsValueType>
+      ? Candidate
+      : never
+    : never
+  : never;
+
+/**
+ * `true` only when every candidate tuple in `Candidates` (a tuple of
+ * tuples — the multi-candidate array TypeScript infers for `[[stepA, "k1"],
+ * [stepB, "k2"]]`) individually validates against `ArgsValueType`
+ * (`ValidatedCandidate` above). Recursive rather than a mapped-type-then-
+ * compare pass, so one invalid candidate anywhere in the list fails the
+ * whole entry directly — no candidate is allowed to "cover for" another
+ * (m7a-from-alternatives task spec: the "no priority" rule has a type-level
+ * corollary too — every listed candidate must independently type-check;
+ * there is no "the first one that does wins"). Tuples this short (a `from`
+ * key naming more than a handful of alternatives would already be a design
+ * smell) never approach TypeScript's recursion limit.
+ */
+type AllCandidatesValid<Candidates extends readonly unknown[], ArgsValueType> = Candidates extends readonly [
+  infer Head,
+  ...infer Tail,
+]
+  ? ValidatedCandidate<Head, ArgsValueType> extends never
+    ? false
+    : AllCandidatesValid<Tail, ArgsValueType>
+  : true;
+
+/**
+ * Validates one `from` entry (`TFrom[K]`, the literal TypeScript sees at
+ * this exact key in the object literal a `defineStep` caller wrote) against
+ * args key `K`'s own declared type — either the pre-m7a single-candidate
+ * tuple, or an array of candidates (m7a-from-alternatives task spec, item 1).
+ * Discriminated the same way the runtime does (this file's own header, and
+ * src/step/define-step.ts's `fromCandidates`): the tuple's first element
+ * being a `Step` (never an array — a `Step` is a plain object) means "this
+ * is one candidate"; an array means "this is the list". An entry that fails
+ * validation collapses to `never`, which the literal the caller actually
+ * wrote is never assignable to — surfacing as a compile error at that key,
+ * plain rather than maximally friendly; a readable message for each
+ * candidate's own failure is what src/step/validate-from.ts's runtime check
+ * gives instead.
  */
 type ValidatedFromEntry<TFrom, K extends keyof TFrom, ArgsShape> = K extends keyof ArgsShape
-  ? TFrom[K] extends readonly [infer S extends Step, infer UpstreamKey]
-    ? S extends Step<z.ZodTypeAny, infer TReturns extends z.ZodTypeAny>
-      ? UpstreamKey extends KeysAssignableTo<ObjectShapeOf<TReturns>, z.infer<ArgsShape[K]>>
+  ? TFrom[K] extends readonly [infer S extends Step, unknown]
+    ? ValidatedCandidate<TFrom[K], z.infer<ArgsShape[K]>>
+    : TFrom[K] extends readonly (readonly [Step, unknown])[]
+      ? AllCandidatesValid<TFrom[K], z.infer<ArgsShape[K]>> extends true
         ? TFrom[K]
         : never
       : never
-    : never
   : never;
 
 /** The constraint `defineStep`'s own `TFrom` type parameter is checked
@@ -87,16 +148,48 @@ export type FromMap<TFrom, TArgs extends z.ZodTypeAny> = {
   [K in keyof TFrom]: ValidatedFromEntry<TFrom, K, ObjectShapeOf<TArgs>>;
 };
 
+/** One candidate producer for a `from` key: the upstream `Step` and which of
+ * its `returns` keys to read. Exported so every module reading `Step.from`
+ * shares this one tuple shape (`readonly [Step, string]`) instead of each
+ * re-declaring it — src/step/validate-from.ts, src/check/from-order.ts,
+ * src/run/run-scenario.ts's `injectFrom`, src/cli/resolve-use.ts, and
+ * src/cli/vocabulary.ts's rendering. */
+export type FromCandidate = readonly [step: Step, key: string];
+
 /** The runtime shape every `Step.from` actually has, regardless of which
  * `TFrom` a particular `defineStep` call validated against — deliberately
  * looser than `FromMap` above (that type only exists to validate the
  * literal a step author wrote; nothing downstream of `defineStep` needs to
  * know the specific upstream `Step`/key types of each entry, only that each
- * is *some* upstream `Step` paired with *some* key name). Consumers
- * (src/run/run-scenario.ts's injection, src/step/validate-from.ts's runtime
- * check, src/cli/vocabulary.ts's `nuka steps --json`/`nuka describe`) all
- * read this shape. */
-export type StepFromMap = Readonly<Record<string, readonly [step: Step, key: string]>>;
+ * is *some* upstream `Step` paired with *some* key name). A key's own value
+ * is either one candidate (the pre-m7a shape, kept so an existing `from: {
+ * key: [step, "key"] }` declaration never needs rewriting) or an array of
+ * them (m7a-from-alternatives task spec, item 1: mutually exclusive
+ * producers, docs/spec.md "Chaining steps") — `fromCandidates` below is how
+ * every consumer reads either shape uniformly instead of re-deriving which
+ * one a given entry is. Consumers (src/run/run-scenario.ts's injection,
+ * src/step/validate-from.ts's runtime check, src/check/from-order.ts,
+ * src/cli/resolve-use.ts, src/cli/vocabulary.ts's `nuka steps --json`/`nuka
+ * describe`) all read this shape. */
+export type StepFromMap = Readonly<Record<string, FromCandidate | readonly FromCandidate[]>>;
+
+/**
+ * Normalizes one `Step.from` entry to its full candidate list (m7a-from-
+ * alternatives task spec, item 1: "内部表現は正規化して構わない") — a single
+ * `[Step, string]` tuple becomes a one-element array; an already-multi
+ * `readonly [Step, string][]` passes through unchanged. The discriminator is
+ * the entry's own first element: a `Step` (always a plain object, never an
+ * array — `isStep`'s own brand check below) means "this is one candidate
+ * tuple itself"; an array means "this is already the candidate list"
+ * (docs/spec.md "Chaining steps": "A key may name more than one possible
+ * producer", and this task's spec, item 1: "タプルの第 1 要素が Step か配列
+ * かで判別できる"). Every reader of `Step.from` calls this once per key
+ * instead of re-deriving the discriminator itself, so "single vs multi"
+ * stays decided in exactly one place.
+ */
+export function fromCandidates(entry: FromCandidate | readonly FromCandidate[]): readonly FromCandidate[] {
+  return Array.isArray(entry[0]) ? (entry as readonly FromCandidate[]) : [entry as FromCandidate];
+}
 
 export interface StepDefinitionInput<
   TArgs extends z.ZodTypeAny = z.ZodTypeAny,

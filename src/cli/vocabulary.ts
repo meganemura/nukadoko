@@ -7,7 +7,7 @@ import {
   type VocabularyEntry,
 } from "../discover/discover-steps.js";
 import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
-import type { Step, StepFromMap } from "../step/define-step.js";
+import { fromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
 // load the project's config, then discover its vocabulary. Kept out of
@@ -69,20 +69,45 @@ function upstreamStepName(step: Step, stepNames: StepNames): string {
   return stepNames.get(step) ?? "(unregistered step)";
 }
 
+/** One candidate producer, rendered for `nuka steps --json` — `fromSummary`
+ * below emits one of these directly for a single-candidate key (unchanged
+ * shape, m6a-from-core) or an array of them for a multi-candidate key (m7a-
+ * from-alternatives task spec, item 5): the array-vs-object distinction
+ * itself is how a reader tells a key with one candidate from a key with
+ * several, without a separate count field. */
+interface FromCandidateSummary {
+  readonly step: string;
+  readonly key: string;
+}
+
 /** `nuka steps --json`'s own rendering of a step's `from` (this task's spec,
- * item 7) — one machine-shaped entry per key, `undefined` (hence omitted,
- * `rationale`'s own convention) when the step declares no `from` at all. */
+ * item 7; multi-candidate shape added by m7a-from-alternatives task spec,
+ * item 5) — one entry per key, `undefined` (hence omitted, `rationale`'s own
+ * convention) when the step declares no `from` at all. A key with exactly
+ * one candidate keeps the pre-m7a `{ step, key }` object shape untouched
+ * (existing output for existing steps does not change); a key with more than
+ * one is an array of that same shape, `[{ step, key }, ...]` — deliberately
+ * not always-an-array, so a consumer written against the single-candidate
+ * shape before this task keeps working, and a reader can tell "one
+ * candidate" from "several" by checking `Array.isArray` (or simply
+ * `.length`) without a separate field either way. */
 function fromSummary(
   from: StepFromMap,
   stepNames: StepNames,
-): Record<string, { step: string; key: string }> | undefined {
+): Record<string, FromCandidateSummary | readonly FromCandidateSummary[]> | undefined {
   const entries = Object.entries(from);
   if (entries.length === 0) {
     return undefined;
   }
-  const result: Record<string, { step: string; key: string }> = {};
-  for (const [key, [upstream, upstreamKey]] of entries) {
-    result[key] = { step: upstreamStepName(upstream, stepNames), key: upstreamKey };
+  const result: Record<string, FromCandidateSummary | readonly FromCandidateSummary[]> = {};
+  for (const [key, entry] of entries) {
+    const candidates = fromCandidates(entry).map(
+      ([upstream, upstreamKey]): FromCandidateSummary => ({
+        step: upstreamStepName(upstream, stepNames),
+        key: upstreamKey,
+      }),
+    );
+    result[key] = candidates.length === 1 ? candidates[0]! : candidates;
   }
   return result;
 }
@@ -94,15 +119,21 @@ function fromSummary(
  * `fromSummary`'s more structured shape above: `nuka describe` is the one
  * command meant for a person to read directly, `nuka steps --json` the one
  * meant for a program to parse. `undefined` (hence omitted) under the same
- * condition as `fromSummary`. */
+ * condition as `fromSummary`. A key with more than one candidate (m7a-from-
+ * alternatives task spec, item 5) reads as "either of A or B" — spelled out
+ * so a person skimming `nuka describe` sees the "exactly one of these, never
+ * both" relationship the JSON form only implies through array length. */
 function fromHumanReadable(from: StepFromMap, stepNames: StepNames): Record<string, string> | undefined {
   const entries = Object.entries(from);
   if (entries.length === 0) {
     return undefined;
   }
   const result: Record<string, string> = {};
-  for (const [key, [upstream, upstreamKey]] of entries) {
-    result[key] = `${upstreamStepName(upstream, stepNames)}.${upstreamKey}`;
+  for (const [key, entry] of entries) {
+    const candidates = fromCandidates(entry).map(
+      ([upstream, upstreamKey]) => `${upstreamStepName(upstream, stepNames)}.${upstreamKey}`,
+    );
+    result[key] = candidates.length === 1 ? candidates[0]! : `either of ${candidates.join(" or ")}`;
   }
   return result;
 }
@@ -123,13 +154,15 @@ export interface StepSummary {
   readonly mutates?: boolean;
   /** Where each declared args key not left to a pattern capture comes from
    * (m6a-from-core task spec, item 7) — key → `{ step, key }`, the upstream
-   * step's own name and the `returns` key read from it. Absent for a compat
-   * entry (no declaration exists) and omitted entirely, like `mutates`,
-   * rather than serialized as `{}`, when a typed step declares no `from` at
-   * all. Deliberately absent from `formatVocabulary`'s text rendering below
-   * — `nuka steps` (non-JSON) stays one line per step, an existing decision
-   * this task does not revisit. */
-  readonly from?: Record<string, { step: string; key: string }>;
+   * step's own name and the `returns` key read from it, or (m7a-from-
+   * alternatives task spec, item 5) an array of that same shape when the key
+   * lists more than one mutually exclusive candidate producer. Absent for a
+   * compat entry (no declaration exists) and omitted entirely, like
+   * `mutates`, rather than serialized as `{}`, when a typed step declares no
+   * `from` at all. Deliberately absent from `formatVocabulary`'s text
+   * rendering below — `nuka steps` (non-JSON) stays one line per step, an
+   * existing decision this task does not revisit. */
+  readonly from?: Record<string, { step: string; key: string } | ReadonlyArray<{ step: string; key: string }>>;
 }
 
 export function summarize(entry: VocabularyEntry, stepNames: StepNames): StepSummary {

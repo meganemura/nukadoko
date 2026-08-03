@@ -1,6 +1,6 @@
 import type { UsedEntry } from "../context/used.js";
 import type { Receipt } from "../receipt/types.js";
-import type { Step } from "../step/define-step.js";
+import { fromCandidates, type Step } from "../step/define-step.js";
 
 // Responsibility: `nuka do --use <receipt-id>`'s own lookup (m6c-do-use task
 // spec; docs/spec.md "Single steps (the agent path)", the `--use` paragraph)
@@ -18,6 +18,17 @@ import type { Step } from "../step/define-step.js";
 // the same "Step object -> the vocabulary name discovery registered it
 // under" map `nuka do`'s own `isRegisteredStep` predicate is built from
 // (one vocabulary walk, not two).
+//
+// A key naming several candidate producers (m7a-from-alternatives task spec,
+// item 4) matches this receipt against every one of them via
+// `fromCandidates`, exactly the way a single-candidate key already did — one
+// receipt can therefore still fill a key whose `from` lists several
+// candidates, as long as its own step is one of them. What this module does
+// *not* do is notice when two different `--use` values end up filling the
+// same key from two *different* candidates — that cross-call comparison
+// needs every `--use` value's own result side by side, which only this
+// function's caller (src/cli/do.ts) has; that is where m7a-from-
+// alternatives' own conflict check lives instead.
 
 export interface ResolveUseError {
   readonly ok: false;
@@ -74,9 +85,18 @@ export function resolveUse(
   // Entries (plural on purpose — docs/spec.md's own wording): a single
   // upstream step can be named by more than one of this step's `from` keys
   // (this task's spec, item 3), and one matching receipt fills all of them.
-  const matches = Object.entries(step.from).filter(
-    ([, [upstream]]) => stepNameOf.get(upstream) === receipt.step,
-  );
+  // Each key's own candidates (m7a-from-alternatives task spec, item 4) are
+  // checked individually via `fromCandidates`, so a key whose `from` lists
+  // several producers still matches as long as one of them is this receipt's
+  // own step.
+  const matches: Array<readonly [key: string, upstreamKey: string]> = [];
+  for (const [key, entry] of Object.entries(step.from)) {
+    for (const [upstream, upstreamKey] of fromCandidates(entry)) {
+      if (stepNameOf.get(upstream) === receipt.step) {
+        matches.push([key, upstreamKey]);
+      }
+    }
+  }
   if (matches.length === 0) {
     return {
       ok: false,
@@ -86,7 +106,7 @@ export function resolveUse(
 
   const result = receipt.result;
   const filled: Record<string, unknown> = {};
-  for (const [key, [, upstreamKey]] of matches) {
+  for (const [key, upstreamKey] of matches) {
     if (!isRecord(result) || !(upstreamKey in result)) {
       return {
         ok: false,

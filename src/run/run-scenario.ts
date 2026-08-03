@@ -27,7 +27,7 @@ import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
-import type { Step } from "../step/define-step.js";
+import { fromCandidates, type Step } from "../step/define-step.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
@@ -302,6 +302,19 @@ function ambiguousStepMessage(text: string, stepNames: readonly string[]): strin
  * dependency is a feature-file mistake to fix, not one this function papers
  * over.
  *
+ * A key naming several candidate producers (m7a-from-alternatives task spec,
+ * item 2) looks for whichever *one* of them has a chain entry — the pre-
+ * execution guard (`checkFromOrder`, called before this pickle's steps ever
+ * run) already required exactly one candidate to be bound earlier, so this
+ * function itself never *chooses* among candidates; it only ever finds zero
+ * (upstream hasn't produced a result yet — the pre-existing case, generalized
+ * to "none of the candidates has") or one. Finding two or more here would
+ * mean that guard was bypassed or has a bug — not a case to resolve with a
+ * rule (this task's spec, item 2: "到達不能なはずの状態に出会ったら、規則で
+ * 解決せず失敗させること" — no first-found, no most-recent-across-different-
+ * steps; fail loudly instead of inventing the priority docs/spec.md says
+ * `from` deliberately does not have).
+ *
  * Mutates `value` in place (the same object `began.rawArgs` already points
  * at, this task's spec: the receipt's own `args` should show what the step
  * actually ran with, injected keys included — otherwise a reader could never
@@ -310,12 +323,12 @@ function ambiguousStepMessage(text: string, stepNames: readonly string[]): strin
  * item 5) — the same collector `ctx.resultOf` itself writes into, so a step
  * that is both injected into and separately calls `ctx.resultOf` still ends
  * up with one deduplicated `used` list. Every key it *cannot* fill is
- * returned (key -> the upstream step's own name, or a description of the
- * problem if that upstream was never itself named by `vocabulary` — see
- * `stepNameOf`'s own comment above) so the caller can name it if args
- * validation goes on to fail because of it (this task's spec, item 4: "the
- * message should be better than the hand-written era" — name which key,
- * from which step).
+ * returned (key -> the still-unfilled key's candidate step name(s), joined
+ * when there is more than one, or a description of the problem if a
+ * candidate was never itself named by `vocabulary` — see `stepNameOf`'s own
+ * comment above) so the caller can name it if args validation goes on to
+ * fail because of it (this task's spec, item 4: "the message should be
+ * better than the hand-written era" — name which key, from which step).
  */
 function injectFrom(
   value: Record<string, unknown>,
@@ -333,12 +346,28 @@ function injectFrom(
       // pattern capture still wins").
       continue;
     }
-    const [upstream, upstreamKey] = entry;
-    const chainEntry = chain.get(upstream);
-    if (chainEntry === undefined) {
-      stillMissing.set(key, stepNameOf.get(upstream) ?? "a step discovery never registered");
+    const candidates = fromCandidates(entry);
+    const present = candidates.flatMap(([upstream, upstreamKey]) => {
+      const chainEntry = chain.get(upstream);
+      return chainEntry === undefined ? [] : [{ upstream, upstreamKey, chainEntry }];
+    });
+
+    if (present.length === 0) {
+      const names = candidates.map(([upstream]) => stepNameOf.get(upstream) ?? "a step discovery never registered");
+      stillMissing.set(key, names.join(" or "));
       continue;
     }
+    if (present.length > 1) {
+      // Unreachable in any scenario `checkFromOrder` has already passed —
+      // see this function's own doc comment.
+      throw new Error(
+        `internal: from.${key} has more than one candidate producer's result available at once — ` +
+          `nuka check's/nuka run's own from-order guard should have refused this scenario before ` +
+          `execution began (docs/spec.md "Chaining steps")`,
+      );
+    }
+
+    const { upstreamKey, chainEntry } = present[0]!;
     value[key] = (chainEntry.result as Record<string, unknown>)[upstreamKey];
     recordUsed(chainEntry.receiptId, chainEntry.stepName);
   }

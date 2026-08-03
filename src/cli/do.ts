@@ -35,13 +35,17 @@ import type { WritableSink } from "./writable-sink.js";
 //   1. Setup — malformed --args JSON, an unknown step name, a config/
 //      discovery error, an unknown `--env` name, a mutating step against a
 //      `policy: "read-only"` environment, an invalid `--session` name, a
-//      lock held by another live process, a malformed session file, or a bad
+//      lock held by another live process, a malformed session file, a bad
 //      `--use <receipt-id>` (unknown id, a non-`"ok"` receipt, a receipt
 //      whose step names none of this step's `from` entries, or a missing
-//      result key — m6c-do-use task spec). None of these write a receipt:
-//      the run never started, so there is nothing to attest to (a receipt
-//      for an execution that never began would let a nonexistent run be
-//      cited later as if it had happened).
+//      result key — m6c-do-use task spec), or two `--use` values filling the
+//      same `from` key from two different candidate producers (m7a-from-
+//      alternatives task spec, item 4 — the one ambiguity a scenario's own
+//      from-order guard would refuse that `nuka do` has no such guard to
+//      catch by itself). None of these write a receipt: the run never
+//      started, so there is nothing to attest to (a receipt for an execution
+//      that never began would let a nonexistent run be cited later as if it
+//      had happened).
 //   2. Execution — from here a receipt is always written, whatever
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
@@ -261,6 +265,38 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         return 1;
       }
       resolvedUses.push(resolved);
+    }
+
+    // m7a-from-alternatives task spec, item 4's second bullet: a key naming
+    // several candidate producers can be filled by two different `--use`
+    // values that each matched a *different* one of those candidates — the
+    // same ambiguity a scenario's own from-order guard (src/check/from-
+    // order.ts) refuses, but `nuka do` never runs that check (it has no
+    // scenario, no pickle, nothing for `checkFromOrder` to walk), so this is
+    // the only place left to catch it. Every key filled by more than one
+    // `resolvedUses` entry must trace back to the *same* producer step
+    // (`resolved.used.step`, already the receipt's own step name — every key
+    // one `resolveUse` call fills comes from that one receipt, so it is also
+    // that fill's own candidate producer); two different producers for one
+    // key is refused here, before anything is written. Two different
+    // receipts of the *same* producer filling the same key is a different,
+    // pre-existing case (this task's spec: unrelated, unchanged) — the
+    // application loop below already resolves it by taking the first one, as
+    // it always has.
+    const producerByKey = new Map<string, string>();
+    for (const resolved of resolvedUses) {
+      for (const key of Object.keys(resolved.filled)) {
+        const existingProducer = producerByKey.get(key);
+        if (existingProducer !== undefined && existingProducer !== resolved.used.step) {
+          stderr.write(
+            `--use: key "${key}" is filled by both step "${existingProducer}" and step ` +
+              `"${resolved.used.step}" — these are different candidate producers for the same ` +
+              `\`from\` key, and \`nuka do\` cannot tell which one should win\n`,
+          );
+          return 1;
+        }
+        producerByKey.set(key, resolved.used.step);
+      }
     }
 
     // Read-only refusal is a setup failure, not an execution failure (this

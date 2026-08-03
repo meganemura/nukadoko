@@ -28,10 +28,20 @@ change without a major bump until 0.1.
   contract being honored is noise. A key name, never a selector function:
   a name survives into `nuka steps --json` and `nuka describe` as
   "`projectId` ← `createProject.id`", which is what lets an agent assemble
-  an order nobody told it, and what `check` reads. `ctx.resultOf` is
-  unchanged and stays for the reads a key name cannot express — a value
-  needing reshaping, a read decided at run time, a key that could come from
-  either of two steps, a whole result used as one.
+  an order nobody told it, and what `check` reads.
+  A key may list several mutually exclusive producers —
+  `[[createProject, "id"], [importProject, "projectId"]]` — for a value
+  reachable two ways, so the consumer stays one step instead of splitting
+  into two. No priority comes with them: no declaration order, no
+  most-recent rule reaching across different steps. The check requires that
+  exactly one listed producer is bound earlier in the scenario, and two or
+  more is an error whether the key is required or optional — a schema gets
+  to say a value may be absent, but none asked for "either of these, and
+  the feature file cannot tell you which". A scenario that genuinely
+  exercises both producers is not describing alternatives at all and gives
+  each its own key. `ctx.resultOf` is unchanged and stays for the reads a
+  key name cannot express — a value needing reshaping, a read decided at
+  run time, a whole result used as one.
 - **`nuka do <step> --use <receipt-id>`** (repeatable) supplies a `from` key
   from an earlier execution's result, so a chain assembled by hand across
   several `do` calls no longer means hand-writing JSON from the previous
