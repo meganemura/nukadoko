@@ -173,8 +173,9 @@ CommonJS suite needs a module-format change before anything else. Two of
 the eight audited suites were CommonJS throughout.
 
 See [docs/migration.md](docs/migration.md) for the step-by-step guide with
-the audit's findings, and [examples/migration](examples/migration) for a
-worked example running end to end.
+the audit's findings, and
+[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration)
+for a worked example running end to end.
 
 ## Reports fill themselves
 

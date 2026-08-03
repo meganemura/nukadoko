@@ -5,7 +5,8 @@ feature files and step definitions living under `features/` (cucumber-js's
 own layout convention, and nukadoko's default too). No rewrite: the goal is
 to run the suite, unchanged, on nukadoko's harness, then promote pieces at
 your own pace. For a full worked example of every stage below, with real
-captured command output, see [examples/migration](../examples/migration/README.md).
+captured command output, see
+[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration).
 
 ## Stage 0 — install and point nukadoko at your suite
 

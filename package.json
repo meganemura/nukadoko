@@ -50,6 +50,7 @@
   "files": [
     "CHANGELOG.md",
     "dist",
+    "docs",
     "skills",
     "src"
   ],
