@@ -110,7 +110,12 @@ export type Vocabulary = ReadonlyMap<string, VocabularyEntry>;
 /** A `defineParameterType` call made from compat ("support") code, plus the
  * file it came from. src/check/binding-check.ts merges these into the same
  * `ParameterTypeRegistry` as `config.parameterTypes` and warns that they
- * exist ("config が typed 時代の家"). */
+ * exist ("config が typed 時代の家"). `filePath` is rootDir-relative, same as
+ * `importFailures[].filePath` below — src/check/binding-check.ts puts this
+ * straight into a `CheckIssue.file`, and every other `CheckIssue.file` this
+ * run's caller (src/check/analyze.ts) produces is already relative
+ * (src/feature/load-features.ts's `relativePath`, src/check/feature-
+ * check.ts's `file`), so this was the one field that disagreed. */
 export interface CompatParameterTypeEntry extends CompatParameterTypeRegistration {
   readonly filePath: string;
 }
@@ -372,7 +377,10 @@ export async function discoverSteps(
       }
 
       for (const registration of compatRegistry.drainCompatParameterTypes()) {
-        compatParameterTypes.push({ ...registration, filePath });
+        // Relative, not the loop's own absolute `filePath` — see this
+        // interface's own comment above for why it must match
+        // `importFailures[].filePath`.
+        compatParameterTypes.push({ ...registration, filePath: path.relative(rootDir, filePath) });
       }
 
       // Same per-file attribution timing as compat steps above: drained

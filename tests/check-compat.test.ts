@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
@@ -88,6 +89,25 @@ describe("nuka check: compat integration", () => {
     expect(supportOrigin).toBeDefined();
     expect(supportOrigin.message).toContain("shout-compat");
     expect(supportOrigin.message).toContain("config.parameterTypes");
+  });
+
+  it("parameter-type-support-origin's file, and the path embedded in its message, are rootDir-relative like every other issue's file", async () => {
+    const stdout = createCaptureSink();
+    await runCli(["check", "--json"], {
+      rootDir: fixture("check-compat-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const supportOrigin = report.warnings.find(
+      (issue: { code: string }) => issue.code === "parameter-type-support-origin",
+    );
+    expect(supportOrigin).toBeDefined();
+    const expectedRelativePath = path.join("features", "steps", "compat-glue.ts");
+    expect(supportOrigin.file).toBe(expectedRelativePath);
+    expect(path.isAbsolute(supportOrigin.file)).toBe(false);
+    expect(supportOrigin.message).toContain(expectedRelativePath);
   });
 
   it("reuses the existing parameter-type-invalid error when a compat-origin type collides with a built-in", async () => {
