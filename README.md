@@ -54,8 +54,8 @@ major bump until 0.1.
 Implemented and covered by tests: typed steps, receipts, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), and two agent skills. Not implemented:
-compat gap detection in `nuka check`, an AI-assisted glue converter, and
-scenario harvesting — see the [roadmap](docs/spec.md#roadmap).
+an AI-assisted glue converter and scenario harvesting — see the
+[roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
 carries a number was measured; where something was only reasoned about,

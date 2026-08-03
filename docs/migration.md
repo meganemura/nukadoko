@@ -77,28 +77,51 @@ it found has since brought two of the eight to where nothing in their glue
 is rejected any more; the other six still need a short pass first. (Read as
 a static claim, which is what it is: their glue no longer contains anything
 this door turns away. Nobody ran those suites.) Everything below fails
-loudly — at the import, or on the first `nuka run` — so the pass is a list
-you can work through, not a hunt.
+loudly, but not all at the same moment: some of it `nuka check` already
+names before you run anything, some of it only surfaces on the first
+`nuka run` that reaches the step — each item below says which, so the pass
+is a list you can work through, not a hunt.
 
-- **Names `nukadoko/compat` does not export**: `AfterStep`, `Status`,
-  `setParallelCanAssign`, and the `IWorldOptions` /
-  `ITestCaseHookParameter` types. An ES module's named import is resolved
-  at link time, so a single unsupported name takes its whole import
-  statement — and with it the file — down; split the import or drop the
-  call. (`BeforeAll`, `AfterAll` and `setDefaultTimeout` were on this list
-  when the audit ran and are now supported; see below.)
+- **Names `nukadoko/compat` does not export, used as a value**: `AfterStep`,
+  `Status`, `setParallelCanAssign`. An ES module's named import is resolved
+  at link time, so importing one of these and using it takes the whole
+  import statement — and with it the file — down; split the import or drop
+  the call. Caught before anything runs: `nuka check` reports the file as
+  `step-file-import-failed`, carrying Node's own error message; if `check`
+  was skipped, the same failure surfaces on the first `nuka run` that tries
+  to import the file. (`BeforeAll`, `AfterAll` and `setDefaultTimeout` were
+  on this list when the audit ran and are now supported; see below.)
+- **The same kind of name, used only as a type** — `IWorldOptions`,
+  `ITestCaseHookParameter` are the audit's own examples — is a different
+  case, not a smaller version of the one above: esbuild elides a type-only
+  import from the compiled output, so nothing by that name is actually
+  imported at run time. Neither `nuka check` nor `nuka run` sees anything
+  wrong, because the glue that ships is exactly what runs; only `tsc`
+  complains, and that is `tsc`'s job, not nukadoko's. This is not a
+  detection gap — there is nothing left at run time to detect.
 - **CommonJS glue**: nukadoko is ESM-only, so `require("nukadoko/compat")`
   fails outright with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Two of the eight
   suites are CommonJS throughout. The door admits ES module glue only.
+  Caught before anything runs, the same way as the value-import case above:
+  `nuka check`'s `step-file-import-failed`, or the first `nuka run` if
+  `check` was skipped.
 - **Deep subpath imports** such as
   `import DataTable from "@cucumber/cucumber/lib/models/data_table"` have no
-  equivalent here; import `DataTable` from `nukadoko/compat` instead.
+  equivalent here; import `DataTable` from `nukadoko/compat` instead. Caught
+  the same way: `nuka check`'s `step-file-import-failed`, or the first
+  `nuka run` if `check` was skipped.
 - **A hook's tag expression beyond a single `@tag` / `not @tag`** (`and`,
-  `or`, parentheses) fails the moment you `nuka run`.
+  `or`, parentheses). `nuka check` reports every violating hook up front
+  (`unsupported-hook-tag-expression`); `nuka run` enforces the same rule but
+  stops at the first one it hits, since a run exits rather than lists.
 - **Returning `"pending"` or `"skipped"`** from a step or hook, and
   **done-callback glue** (`function (arg, done) {...}`), each fail with a
-  message naming what to write instead. cucumber-js gives both of these
-  meaning; nukadoko does not, and says so rather than passing the step.
+  message naming what to write instead. Neither is visible to `nuka check`:
+  both are properties of what a step does when it actually runs, not of how
+  its file imports, so nothing before that step's own execution can name
+  the fault — they only surface on the first `nuka run` that reaches the
+  step. cucumber-js gives both of these meaning; nukadoko does not, and
+  says so rather than passing the step.
 
 Run the suite with `nuka run features/your.feature`. Every step gets a
 receipt; nothing else has to change for that to start happening.
@@ -146,6 +169,22 @@ execution via `nuka do` — none of which a compat step has.
   Promoting it to `defineStep` is how it gains a declaration to check.
 - `parameter-type-support-origin` warns on every support-side
   `defineParameterType`, pointing at the config move above.
+- `step-file-import-failed` errors on a step file whose import threw — an
+  unsupported name used as a value, a CommonJS `require`, or a deep subpath
+  import (the first three gaps in "What the switch does not carry" above) —
+  carrying Node's own error message and the file path. The rest of the
+  project is still discovered and reported alongside it: a migrating
+  suite's normal state is some glue still broken, not a reason for the
+  dashboard to go blank.
+- `unsupported-hook-tag-expression` errors on every hook whose tag
+  expression goes beyond a single `@tag` / `not @tag`, not just the first
+  one `nuka run` would stop at.
+- `undefined-step-check-suppressed` warns when an import failure above is
+  holding back the `undefined-step` errors it would otherwise cause — one
+  broken file's own steps going missing from the vocabulary can otherwise
+  read as a pile of unrelated undefined steps. Fix the import failure
+  first; the suppressed findings reappear as real `undefined-step` errors
+  once the file imports cleanly.
 - Receipts tell the same story at run time: `world` (compat steps only) and
   `declared` shrink as more of the suite promotes to typed steps and
   `ctx.resultOf`.

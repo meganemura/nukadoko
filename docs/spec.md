@@ -9,8 +9,10 @@ a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter and the
 messages emitter are both implemented, and so are sign-off (`nuka accept`)
-and both of M5's skills. Compat gap detection in `nuka check` is the one
-piece of M1-M5 still unimplemented.
+and both of M5's skills. Compat gap detection in `nuka check` — the
+migration skill's own prerequisite — is implemented too (see "Compat steps"
+and docs/migration.md's "The dashboard is `nuka check`"), closing out
+M1-M5.
 
 ## What nukadoko is
 
@@ -357,6 +359,25 @@ import { Given, When, Then } from "nukadoko/compat";
   migrating team can act on a loud failure and cannot see a silent one, so
   a gap that changes behavior without saying so costs more trust than the
   missing feature ever cost time.
+- Loud failure splits into what a static pass can already say and what only
+  running a step reveals, and `nuka check` reports exactly the first half.
+  **`nuka check` can say it**: a step file whose import throws — a name
+  `nukadoko/compat` doesn't export, used as a value; a CommonJS `require` in
+  ESM glue; a deep subpath import — becomes a `step-file-import-failed`
+  error, and a hook's tag expression beyond a single `@tag` / `not @tag`
+  becomes `unsupported-hook-tag-expression`; both are known from the file's
+  own text, before anything executes. **Only `nuka run` finds it**: a step
+  or hook returning `"pending"` / `"skipped"`, and done-callback glue —
+  these are properties of what happens when that step actually runs, not of
+  how its file imports, so nothing before the step's own execution can name
+  the fault. **Neither is a gap**: a name imported but used only as a type
+  annotation, or imported and never referenced, is elided from the compiled
+  output by esbuild before nukadoko ever imports the file, so that import
+  never actually happens at run time — the glue runs exactly as written,
+  and `IWorldOptions` / `ITestCaseHookParameter` (unsupported, but
+  type-only in every suite the audit read) are the audit's own example.
+  `tsc` may still complain; `nuka` never sees anything to complain about,
+  because there is nothing left to fail on.
 - Standing design rule, for this section and every future design that
   touches migration: a compat asset that works today must not stop working
   because the team adopted nukadoko or moved some other piece toward the
@@ -818,9 +839,12 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, config
-                              coherence; a feature argument checks that one
-                              file instead of featuresDir, for a feature
-                              living outside it
+                              coherence, unreadable step files (reported,
+                              not fatal — the rest of the project is still
+                              checked), unsupported hook tag expressions;
+                              a feature argument checks that one file
+                              instead of featuresDir, for a feature living
+                              outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka session list|clear
@@ -882,7 +906,7 @@ nuka skill path               where the bundled skill lives, for a project
   carries what the compat audit measured: the gaps a real cucumber-js suite
   actually hits, in the order they bite rather than the order they are
   documented. Its first stage leans on `nuka check` reporting those gaps,
-  which is the part still unimplemented.
+  which `nuka check` now does (see "Compat steps").
   Neither writes down a fact the CLI already answers — vocabulary,
   contracts, refusal reasons — because a skill that copies those starts
   lying the moment the command changes.
