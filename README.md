@@ -1,18 +1,60 @@
 # nukadoko
 
-> Typed step contracts and tool-measured receipts for Cucumber + Playwright
-> suites — switch one import to adopt it, switch it back to leave.
+> Implementations are generated now. What checks them cannot be. Typed step
+> contracts and tool-measured receipts between natural-language acceptance
+> criteria and what actually ran.
 
-If you maintain a cucumber-js suite, you know the failure modes: step
-definitions that duplicate until no one knows which one matched, a `this`
-that holds whatever the last step put there, and a report that says
-`passed` without recording what was actually sent or received. nukadoko
-takes on exactly those, and leaves Gherkin's syntax, pattern matching,
-review, and the dashboard to the tools that already own them.
+nukadoko runs Gherkin scenarios under typed step contracts and writes a
+receipt for every execution — a record the tool measured rather than the
+agent reported. The criteria stay in the language the people who set them
+use; everything between those sentences and the system under test is typed,
+checked before it runs, and reviewable in a diff.
 
-Gherkin is the plain-language format Cucumber runs — `Given` / `When` /
-`Then` scenarios in `.feature` files, with the code behind each line
-("glue") written separately:
+## Why this exists now
+
+Code is increasingly written the way this sentence was: someone describes
+what they want, and a model produces something plausible. That works, and
+it changes what "verified" has to mean. When the implementation is
+generated probabilistically, calling it correct requires something that was
+fixed *before* it was generated and does not move — otherwise the thing
+being checked and the thing doing the checking are drawn from the same
+distribution.
+
+Acceptance criteria are already that fixed thing, and they are already
+written in natural language, by the people who decide what the software is
+for. What has been missing is a way to hold them to their word: a layer
+where a sentence someone wrote maps onto an execution that either happened
+or did not, with the mapping pinned down hard enough that it cannot quietly
+drift into agreeing with whatever got built.
+
+That is what this is. Every step is a typed contract — schemas validated at
+the boundary, dependencies declared and checked before anything runs — and
+every execution leaves a record the tool wrote rather than the agent. The
+natural-language side stays soft, because that is where people think. The
+mapping underneath it is deliberately rigid, because that is the only part
+that can carry a guarantee.
+
+Gherkin is not what this protects. It is what this is built on: a format
+for stating acceptance criteria in natural language already exists,
+together with its parser, its tooling, and a generation of people who can
+read one without being taught. Reinventing that vocabulary to make the same
+point would have been vanity. There is no nostalgia for Cucumber here — the
+parts of it that could not carry a guarantee, namely untyped glue, a report
+that only says `passed`, and keywords that mean nothing at run time, are
+exactly the parts this replaces.
+
+If a team concludes it does not need the natural-language layer at all —
+that whoever decides what to build and whoever writes the checks are the
+same people — then Playwright Test directly is a reasonable decision, and
+this tool does not argue against it. The case here starts where those two
+are different, and gets stronger the more of the implementation is written
+by something that cannot be asked why it wrote that.
+
+## What a scenario looks like
+
+Gherkin states acceptance criteria as executable scenarios — `Given` /
+`When` / `Then` lines in a `.feature` file, with the code behind each line
+written separately:
 
 ```gherkin
 Feature: Projects
@@ -22,7 +64,8 @@ Feature: Projects
     Then the project list includes "acme"
 ```
 
-nukadoko runs those same files. What changes is the code behind them.
+nukadoko runs those files unchanged. What it replaces is what sits behind
+each line.
 
 ## Agent-first is a design constraint, not a slogan
 
@@ -42,6 +85,13 @@ record of it, so the tool writes the receipt. None of these were built for
 agents and then justified for humans; they are the same properties either
 way, and a suite that an agent can drive turns out to be a suite a person
 can debug.
+
+It also directs where this grows. End-to-end execution costs a browser and
+minutes, so how much of a scenario can be judged wrong *without running it*
+is how fast anyone iterates — and for an agent, whose loop is made of cheap
+commands, it is directly how fast it can correct its own work. Every
+declaration here is partly paid for that way, and the standing question
+after a failed run is whether `nuka check` could have caught it first.
 
 Everything has a machine-readable form (`--json`). Rich human reporting is
 delegated to Allure.
@@ -99,32 +149,12 @@ which nukadoko cannot improve on, since the CLI hasn't loaded yet when Node
 gives up. You don't need to gitignore `.nukadoko/` yourself — `nuka init`
 writes that.
 
-**Starting from nothing rather than migrating?** Skip the compat door
-entirely. Write `defineStep`s directly (see [Before / after](#before--after))
-and let the `acceptance` skill carry a ticket's criteria through to a
-committed record. Nothing in the typed path assumes a cucumber-js suite came
-first — the compat sections below are for suites that already exist.
-
-## What it fixes
-
-| The failure | What nukadoko does about it |
-|---|---|
-| Duplicate steps — which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
-| `this.foo` — an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name — a dependency that shows up as an import in the diff, a read that lands on the receiving step's receipt, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
-| A report that only says `passed` | Every execution writes a receipt: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
-| Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
-| A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives — a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the receipt for review |
-
-The last one is worth being precise about, because the tool used to fail on
-the count instead of the promise, and that overclaimed. Write detection
-runs on HTTP method, a proxy that breaks for GraphQL, RPC-over-POST, and
-any vendor query API that implements a pure read over POST — a truthful
-`mutates: false` step calling one of those would still get counted as a
-write, for reasons no general HTTP-layer rule can tell apart from a real
-one. So nukadoko trusts the declaration instead: it still counts every
-non-GET call an execution actually made, through its own request context
-and page, but that count now sits on the receipt as a record, not a
-verdict.
+**Already maintaining a cucumber-js suite?** There is a door for that: one
+import switch lets an existing suite run under this harness, so promoting
+steps becomes a per-step decision rather than a rewrite. See
+[The compat door](#the-compat-door) below. Nothing in the typed path
+assumes a cucumber-js suite came first — starting from nothing, ignore it
+and write `defineStep`s directly.
 
 ## Before / after
 
@@ -176,50 +206,30 @@ export default defineStep({
   alone and prints its receipt — the unit an agent's explore loop is built
   on, with nothing to stand up first.
 
-## The compat door
+## What it fixes
 
-The migration path for an existing Cucumber + Playwright suite is switching
-one import — `nukadoko/compat` in place of `@cucumber/cucumber` — keeping
-the same pattern syntax, hooks, and World working while nukadoko's harness
-starts measuring receipts underneath them. Promoting a step to `defineStep`
-is then a per-step decision rather than a rewrite, and a suite that is half
-promoted keeps passing.
+Each row is a place where the mapping between a sentence and an execution
+used to go soft. They are stated against cucumber-js because that is where
+they are most familiar, not because it is the only layer that has them.
 
-The door is where a suite comes in, not where it settles. A compat step
-does gain evidence and the `observed` counts, which is more than it had —
-but its return value is discarded, the receipt records `result: null`, and
-everything downstream of a validated result stays out of reach: no contract
-for `nuka check` to hold a feature against, no `from` to declare a
-dependency with, and a sign-off attesting that steps ran rather than that
-stated contracts held. Those are the reasons to promote, and promoting is
-what the door is for.
+| The failure | What nukadoko does about it |
+|---|---|
+| Duplicate steps — which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
+| `this.foo` — an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name — a dependency that shows up as an import in the diff, a read that lands on the receiving step's receipt, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
+| A report that only says `passed` | Every execution writes a receipt: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
+| Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
+| A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives — a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the receipt for review |
 
-Switching the import back returns a plain cucumber-js suite. That is a
-standing design rule — compat assets must survive both the switch and a
-partial migration — and its job is to make trying nukadoko cost one edit
-instead of a commitment. It is not a property to build a strategy around.
-A step promoted to `defineStep` has no import to switch back: its body
-still moves, since `run` is written against Playwright's own objects, but
-its schemas and everything built on them do not, and nothing here converts
-one back (docs/migration.md "The way back" covers doing it by hand).
-
-How much else has to change was measured rather than assumed. Against eight
-public cucumber-js suites, **none went through on the import alone** when
-the audit ran; closing the blockers it found has since brought two of the
-eight to where nothing in their glue is rejected. The other six still need
-a short mechanical pass first, and every blocker fails loudly at the import
-or the first run rather than quietly changing what the suite does.
-
-One blocker deserves naming up front, because it is a go/no-go rather than
-a pass: **a CommonJS suite cannot use the door at all.**
-`require("nukadoko/compat")` fails outright — nukadoko is ESM-only — so a
-CommonJS suite needs a module-format change before anything else. Two of
-the eight audited suites were CommonJS throughout.
-
-See [docs/migration.md](docs/migration.md) for the step-by-step guide with
-the audit's findings, and
-[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration)
-for a worked example running end to end.
+The last one is worth being precise about, because the tool used to fail on
+the count instead of the promise, and that overclaimed. Write detection
+runs on HTTP method, a proxy that breaks for GraphQL, RPC-over-POST, and
+any vendor query API that implements a pure read over POST — a truthful
+`mutates: false` step calling one of those would still get counted as a
+write, for reasons no general HTTP-layer rule can tell apart from a real
+one. So nukadoko trusts the declaration instead: it still counts every
+non-GET call an execution actually made, through its own request context
+and page, but that count now sits on the receipt as a record, not a
+verdict.
 
 ## Reports fill themselves
 
@@ -344,6 +354,54 @@ assertion.
 `check` is the cheap static gate; `run` leaves the receipt trail; `accept`
 freezes one green run as a committed record beside its feature.
 
+## The compat door
+
+None of the above assumes an existing suite. This section is for the case
+where there is one.
+
+The migration path for an existing Cucumber + Playwright suite is switching
+one import — `nukadoko/compat` in place of `@cucumber/cucumber` — keeping
+the same pattern syntax, hooks, and World working while nukadoko's harness
+starts measuring receipts underneath them. Promoting a step to `defineStep`
+is then a per-step decision rather than a rewrite, and a suite that is half
+promoted keeps passing.
+
+The door is where a suite comes in, not where it settles. A compat step
+does gain evidence and the `observed` counts, which is more than it had —
+but its return value is discarded, the receipt records `result: null`, and
+everything downstream of a validated result stays out of reach: no contract
+for `nuka check` to hold a feature against, no `from` to declare a
+dependency with, and a sign-off attesting that steps ran rather than that
+stated contracts held. Those are the reasons to promote, and promoting is
+what the door is for.
+
+Switching the import back returns a plain cucumber-js suite. That is a
+standing design rule — compat assets must survive both the switch and a
+partial migration — and its job is to make trying nukadoko cost one edit
+instead of a commitment. It is not a property to build a strategy around.
+A step promoted to `defineStep` has no import to switch back: its body
+still moves, since `run` is written against Playwright's own objects, but
+its schemas and everything built on them do not, and nothing here converts
+one back (docs/migration.md "The way back" covers doing it by hand).
+
+How much else has to change was measured rather than assumed. Against eight
+public cucumber-js suites, **none went through on the import alone** when
+the audit ran; closing the blockers it found has since brought two of the
+eight to where nothing in their glue is rejected. The other six still need
+a short mechanical pass first, and every blocker fails loudly at the import
+or the first run rather than quietly changing what the suite does.
+
+One blocker deserves naming up front, because it is a go/no-go rather than
+a pass: **a CommonJS suite cannot use the door at all.**
+`require("nukadoko/compat")` fails outright — nukadoko is ESM-only — so a
+CommonJS suite needs a module-format change before anything else. Two of
+the eight audited suites were CommonJS throughout.
+
+See [docs/migration.md](docs/migration.md) for the step-by-step guide with
+the audit's findings, and
+[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration)
+for a worked example running end to end.
+
 ## Try it against your own suite first
 
 You don't have to migrate anything to find out whether this fits. Point an
@@ -414,19 +472,6 @@ access to a document you need, say so rather than assuming.
   change first (above).
 - No test parallelism, sharding, retries, or CI reporting. No HTML
   rendering — that is Allure's job.
-
-## Why not just drop Cucumber?
-
-That is a fair question, and nukadoko is not an answer to it. If a team
-concludes the Gherkin layer isn't earning its keep, moving to Playwright
-Test directly is a reasonable decision and this tool doesn't argue against
-it.
-
-nukadoko is for teams who want to keep Gherkin — usually because
-non-engineers read and review the `.feature` files, and that review is the
-point — but are paying for it in glue that rots and reports that can't be
-trusted. It replaces those two costs while leaving the scenarios, and who
-reads them, untouched.
 
 ## Design
 

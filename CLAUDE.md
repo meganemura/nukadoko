@@ -6,7 +6,30 @@ Project context for agent sessions working in this repository.
 
 nukadoko is an agent-first engine that runs Gherkin: typed step contracts,
 tool-measured execution records (receipts), and sign-offs. The design source
-of truth is `docs/spec.md` — read it before changing behavior. Status:
+of truth is `docs/spec.md` — read it before changing behavior.
+
+**What it is for.** Implementations are increasingly generated: someone
+describes what they want and a model produces something plausible. Calling
+that correct requires something fixed *before* it was generated and not
+moving — otherwise the thing being checked and the thing doing the checking
+are drawn from the same distribution. Acceptance criteria are already that
+fixed thing, and are already written in natural language by the people who
+decide what the software is for. nukadoko is the layer between those
+sentences and an execution that either happened or did not, with the mapping
+pinned down hard enough that it cannot quietly drift into agreeing with
+whatever got built. The natural-language side stays soft, because that is
+where people think; the mapping underneath is deliberately rigid, because
+that is the only part that can carry a guarantee.
+
+Gherkin is not what this protects — it is what this is built on, because the
+format, its parser, and a generation of people who can read one already
+exist. **This is not a tool for keeping an existing Cucumber suite alive.**
+The compat door exists to let a suite in, not to be where it settles.
+Writing as though the reader is a cucumber-js maintainer is a drift that has
+happened before; the reader to write for is someone who needs generated work
+checked against something that does not move.
+
+Status:
 pre-0.1; M1 (engine core) and M2 (compat) are implemented, both real-world
 gates have been run (typed-step drafting, and the compat audit reported
 under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
