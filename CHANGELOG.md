@@ -8,6 +8,51 @@ change without a major bump until 0.1.
 
 ### Added
 
+- **`from` on `defineStep`, and the binding-order check it buys.** Passing a
+  value from one step to the next had exactly one shape: declare the args key
+  optional, and fall back to `ctx.resultOf` inside `run`. That worked, and
+  cost three things — boilerplate per dependency, an `args` schema that
+  called a key optional when the step actually required it, and a dependency
+  no tool could read, so a scenario binding the consumer before the producer
+  was indistinguishable from a correct one until minutes of real browser time
+  had been spent on it. `from: { projectId: [createProject, "id"] }` states
+  the same fact as data: this args key is the `id` of whatever that step
+  returned earlier in this scenario. A pattern capture still wins, the value
+  is filled in before args validation — so the key stays *required* and the
+  schema goes back to describing what the step demands — and `nuka check`,
+  plus `nuka run` before it executes a scenario, verifies the producer
+  actually appears earlier in the same pickle, Background included. A
+  required key with neither capture nor producer is an error, since that run
+  could only fail args validation anyway; an optional one is silent, because
+  the schema already said the value may be absent and warning about a
+  contract being honored is noise. A key name, never a selector function:
+  a name survives into `nuka steps --json` and `nuka describe` as
+  "`projectId` ← `createProject.id`", which is what lets an agent assemble
+  an order nobody told it, and what `check` reads. `ctx.resultOf` is
+  unchanged and stays for the reads a key name cannot express — a value
+  needing reshaping, a read decided at run time, a key that could come from
+  either of two steps, a whole result used as one.
+- **`nuka do <step> --use <receipt-id>`** (repeatable) supplies a `from` key
+  from an earlier execution's result, so a chain assembled by hand across
+  several `do` calls no longer means hand-writing JSON from the previous
+  receipt. The upstream step's name is not written on the command line
+  because the receipt already carries it: nukadoko reads which step that
+  receipt records, finds the `from` entries pointing at it, and takes the
+  named keys out of its stored `result`. `--args` still wins for the same
+  key. A receipt whose step no `from` entry names, or whose execution
+  failed, is an error rather than a silent no-op — a failed step never
+  produced a validated result to read.
+- **A `Step` that discovery never registered is now an error rather than a
+  permanent `undefined`.** Both `from` and `ctx.resultOf` identify the
+  upstream by the `Step` object's own identity, so a step reached through
+  `await import()` resolves to a different instance than the one discovery
+  registered and matches nothing. That used to be silent: `resultOf` simply
+  returned `undefined` forever, with no failure to trace back to the import.
+  `from` names its upstream statically, so `nuka check` reports it and
+  `run`/`do` refuse to execute the step at all; `resultOf` can only be
+  caught at the call, where it now throws and names the dynamic-import
+  mistake. A registered step that has not run yet still returns `undefined`
+  — that is a state, not a mistake.
 - **`required_env` on every receipt.** `ctx.requireEnv()` is the one call
   site the library controls on the way to a required environment variable,
   so the names passed through it are recorded as a measurement rather than
@@ -50,6 +95,20 @@ change without a major bump until 0.1.
 
 ### Changed
 
+- **A receipt's `used` names the step beside each receipt it cites.** It was
+  a bare list of receipt ids, which made an acceptance record unreadable
+  without resolving every id against other files — files that are local
+  working records under `.nukadoko/`, while a sign-off is meant to outlive
+  them. Each entry is now `{ "receipt": "rcpt-…", "step": "create-project" }`.
+  The step name is redundant with the cited receipt on purpose: a record
+  that has to be joined against something else to be read is a worse record
+  than one that is legible alone. Deduplication by receipt id and first-read
+  ordering are unchanged, as is omitting the key entirely when nothing was
+  read. `used` also now covers every way a value can be drawn from an
+  earlier execution — a `from` injection and a `nuka do --use` receipt, not
+  only a `ctx.resultOf` call. **This is a breaking change** for anything
+  reading `used` out of a receipt or out of the Allure report's "used
+  receipts" parameter.
 - **`nuka steps`' text output is formatted for a terminal.** It was one
   tab-separated line per step, which real vocabularies push to 120-145
   characters; an 80-column terminal soft-wraps that with no indentation, so
