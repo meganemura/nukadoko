@@ -142,6 +142,10 @@ step を `defineStep` に昇格させるかどうかは、そこから先は書�
 compat の資産は、切り替えにも部分的な移行にも耐えなければならず、だから離脱はつねに編集 1 つ分の距離にあります。
 これが、既存のスイートを 1 人のメンテナーによる pre-0.1 のツールに賭けてよいかという、正当な問いへの答えです。
 
+その出口は、compat を通って入ってきたスイートのものです。
+`defineStep` で直接書かれ、`@cucumber/cucumber` の import が一度も登場しないスイートには、切り替えて戻る先が何もありません。
+何もないところから始めることは、既存のスイートを移行するときよりも、pre-0.1 のリスクを直接的に引き受けることになります。
+
 他に何がどれだけ変わるかは、推測ではなく実測しました。
 公開されている cucumber-js のスイート 8 本のうち、監査を行った時点で **import だけで通ったものはゼロでした**。
 監査が見つけた障害をふさいだことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
@@ -154,7 +158,7 @@ compat の資産は、切り替えにも部分的な移行にも耐えなけれ�
 つまり CommonJS のスイートには、他の何より先にモジュール形式の変更が必要です。
 監査した 8 本のうち 2 本は、全体が CommonJS でした。
 
-手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](examples/migration) を参照してください。
+手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
 ## Reports fill themselves
 
@@ -287,10 +291,12 @@ access to a document you need, say so rather than assuming.
   ある step がその description の主張どおりに正直に動くかどうかは、PR レビューに委ねられます。
   ツールが保証するのは入出力の形と実行された事実だけです。
   型付きの契約は、空の assertion をレビューで見つけやすくしますが、それを自動的に拒むものは何もありません。
-- **mutation の観測が見ているのは network の書き込みだけです。**
+- **mutation の観測が見ているのは network の書き込みだけで、それを HTTP メソッドというプロキシ越しに見ています。**
   HTTP 経由で書き込みを行う、Then の位置にある step は、この計測によって失敗します。
   純粋にクライアント側だけの状態や、GET で mutate してしまうサーバーは、これでは見えません。
-  それらのケースは `mutates` の宣言とレビューが引き受けます。
+  一方で、意味的には純粋な読み取りを POST 上に実装している step(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)は、`mutates: false` を正直に宣言していても同じ計測を逆向きに踏み抜きます。
+  それが step にとって何を意味するかは [正直な限界](docs/spec.ja.md#キーワードの意味論) を参照してください。
+  `mutates` の宣言とレビューが、これらすべてのケースを引き受けます。
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - テストの並列実行、シャーディング、リトライ、CI レポーティングはありません。
   HTML のレンダリングもありません(それは Allure の仕事です)。

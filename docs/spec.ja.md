@@ -175,9 +175,13 @@ step ごとの boolean は出現ごとの事実を運べないため、強制は
 - 読み取り専用の environment は、宣言上 mutate する step を実行前に拒否し、さらに書き込みを観測したあらゆる実行を失敗させます。
   誤った `mutates: false` の宣言が、このポリシーをすり抜けることはできません。
 - 正直な限界があります。
-  観測が見るのはネットワークの書き込みだけです。
-  純粋にクライアント側だけの状態や、GET で mutate するサーバーはそこからは見えません。
-  それらは宣言と PR レビューが引き続き担います。
+  観測が見るのはネットワークの書き込みだけであり、それを HTTP メソッド越しに見ています(GET/HEAD 以外を書き込みとして数えます)。
+  これは書き込みの意味論そのものではなく、そのためのプロキシです。
+  純粋にクライアント側だけの状態や、GET で mutate するサーバーは、一方向としてそこからは見えません。
+  もう一方では、意味的には純粋な読み取りを POST 上に実装している step(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)が、`mutates: false` を正直に宣言していても書き込みとして記録されます。
+  実際に何をしたかにかかわらず、GET/HEAD 以外の呼び出しはすべて 1 件として数えられるからです。
+  計測が宣言を上書きするため、その step は Then の位置に置くことができず、宣言がどうであれ `policy: "read-only"` の environment でも実行できません。
+  宣言と PR レビューはこれらすべてのケースを引き続き担いますが、このプロキシは HTTP メソッドで数えることの性質であり、本ドキュメントが黙っている抜け穴ではありません。
 - Compat(型のない)step は静的にチェックできません。
   実行時の観測は変わらず適用されます。
 
@@ -324,8 +328,8 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`ctx.request()` の呼び出しはすべて http.jsonl に記録され、receipt 自体が一次記録になります。
 - `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`ctx.request()` と page の両方を通じたもの)。
-  GET/HEAD 以外はすべて書き込みとして数えられます。
-  これは実行時のキーワード強制と読み取り専用の environment が作用する対象であり、常に計測されたものであって宣言されたものでは決してありません(キーワードの意味論を参照)。
+  GET/HEAD 以外はすべて書き込みとして数えられます(書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります。キーワードの意味論の「正直な限界」を参照してください)。
+  これは実行時のキーワード強制と読み取り専用の environment が作用する対象であり、常に計測されたものであって宣言されたものでは決してありません。
 - `used`(空でないときだけ現れます)は、この実行が `ctx.resultOf` を通じて実際に読んだ result の receipt id の一覧です。
   アクセサはツールが提供しているので、読み取りは計測可能です。
   依存関係はこうして二重に可視になります: 静的には import として、実行時には receipt 連鎖の provenance としてです。
@@ -382,7 +386,7 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 
 nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置かれ(`init` によって gitignore されます)、そのどれもコミットされることを意図していません:
 
-- `receipts/<id>/`(receipt ごとに 1 つのディレクトリ: receipt の JSON、その evidence ファイル(trace.zip、screenshots、http.jsonl)、progress log)
+- `receipts/<id>/`(receipt ごとに 1 つのディレクトリ: receipt の JSON とその evidence ファイル(trace.zip、screenshots、http.jsonl))
 - `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json` と、scenario スコープの evidence(trace.zip、最終スクリーンショット))。
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
 - `sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
@@ -471,6 +475,8 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
 - step の parameter は、その宣言と実際に観測されたものを並べて運びます: 計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
   宣言と計測が同じテーブルの中にあることこそ、nukadoko の主張のすべてをレポートそのものの中で目に見えるようにしたものです。
+  observed 側は意味論上の判定ではなく HTTP メソッドによるプロキシです(キーワードの意味論の「正直な限界」を参照してください)。
+  step が POST ベースの読み取りを呼んでいた場合、正直な `mutates (declared): false` の隣にゼロでない `http writes (observed)` が並ぶことがありますが、それはこのプロキシがテーブルに透けて見えているだけであり、どちらの数値も嘘をついているわけではありません。
 - 失敗した step や test のメッセージには `[nukadoko.failure=<kind>]` という接頭辞が付き、その receipt が既に持っている同じ `error.kind` を名指しします。
   同じ `error.kind` は `nukadoko.failure` という result label としても書き出されます。
   2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。

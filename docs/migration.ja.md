@@ -4,7 +4,7 @@
 
 既存の cucumber-js スイートを Playwright に対して実行しているチーム向けで、feature ファイルと step の定義は `features/` 配下にあります(cucumber-js 自身のレイアウト規約であり、nukadoko のデフォルトでもあります)。
 書き換えは不要です: 目標は、スイートを変更せずに nukadoko の harness 上で実行し、その後は自分のペースで一部ずつ昇格させることです。
-以下の各段階の実際に取得したコマンド出力を伴う完全な実例については、[examples/migration](../examples/migration/README.md) を参照してください。
+以下の各段階の実際に取得したコマンド出力を伴う完全な実例については、[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
 ## Stage 0: nukadoko をインストールしてスイートに向ける
 
