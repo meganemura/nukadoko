@@ -4,8 +4,8 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 
 // Responsibility: the wrap mechanism behind "measurement is always on,
 // declaration is opt-in" for a compat World instance (m2c-typed-world task
-// spec; .claude-team/proto-typed-world/findings.md is the empirical record
-// this file's every decision traces back to). The measured surface is the
+// spec, whose prototype findings are the empirical record this file's every
+// decision traces back to). The measured surface is the
 // instance's own DATA properties only — a class's methods/getters (own or
 // inherited) are left completely alone, and a `#private` field is invisible
 // to this module by construction (it never appears in `Object.keys`/

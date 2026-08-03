@@ -43,9 +43,8 @@
 // (a typed step that imports the allure-js facade directly gets this field
 // exactly the same way a compat step's glue does) and at collection time,
 // not after: once written to allure-results, a declared attachment and a
-// measured one are indistinguishable (verified in .claude-team/
-// m3-allure-research.md section 10.4) — this field is what keeps them apart
-// while there is still time to. Present only when at least one of its own
+// measured one are indistinguishable in allure-results itself — this field
+// is what keeps them apart while there is still time to. Present only when at least one of its own
 // sub-fields is non-empty; the attachment *files* themselves are never
 // redacted (the same honest limit trace.zip/screenshots already have).
 //

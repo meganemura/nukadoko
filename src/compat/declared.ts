@@ -31,10 +31,9 @@ import path from "node:path";
 // module graph as run-scenario.ts), so that pointer is safe for it even
 // though it would not have been for world.ts.
 //
-// Concurrency note (allure-runtime-compat-design.md's own hedge, verified in
-// .claude-team/m3-allure-research.md section 10.2): the active pointer is a
-// genuine `globalThis`-adjacent singleton — two `runRun()` calls active at
-// once in the *same process* would clobber each other's active collector.
+// Concurrency note: the active pointer is a genuine `globalThis`-adjacent
+// singleton — two `runRun()` calls active at once in the *same process*
+// would clobber each other's active collector.
 // vitest's default worker-per-file isolation keeps this repo's own test
 // suite safe;
 // an in-process concurrent `nuka run` would need a different mechanism (e.g.

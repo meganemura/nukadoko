@@ -3,7 +3,7 @@ import { MessageTestRuntime, setGlobalTestRuntime } from "allure-js-commons/sdk/
 import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtension } from "./declared.js";
 
 // Responsibility: the interception point itself (m2d-allure-shim task spec,
-// item 1; verified in .claude-team/m3-allure-research.md section 10.2) — a
+// item 1; verified against allure-js-commons' own runtime surface) — a
 // `MessageTestRuntime` subclass that turns every allure-js facade call
 // (label/link/parameter/attachment/step/logStep — whichever module instance
 // of "allure-js-commons" a step file's own import resolved to; the
@@ -119,9 +119,8 @@ const ALLURE_TEST_RUNTIME_KEY = "allureTestRuntime";
  * `globalThis["allureTestRuntime"]` beforehand (nothing, in every case this
  * repo's own test suite exercises) and puts it back when called — "解除" is
  * a direct `globalThis` write, not an official unregister API, because
- * allure-js-commons does not publish one (verified: .claude-team/
- * m3-allure-research.md section 10.2 lists `setGlobalTestRuntime`/
- * `getGlobalTestRuntime` as the whole public surface). The key name itself
+ * allure-js-commons does not publish one — `setGlobalTestRuntime` and
+ * `getGlobalTestRuntime` are its whole public surface. The key name itself
  * is the one documented fact this relies on staying stable
  * (`ALLURE_TEST_RUNTIME_KEY` in allure-js-commons' own sdk/runtime/
  * runtime.ts) — an official adapter (e.g. allure-cucumberjs) never needs to

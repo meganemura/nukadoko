@@ -154,9 +154,9 @@ export interface CreateStepContextOptions {
 
 function isBrowserHeadless(config: NukadokoConfig): boolean {
   // `config.browser` is intentionally loosely typed in config/schema.ts —
-  // its concrete shape isn't designed yet (see HANDOFF's open items). Duck-
-  // typing the one field this slice needs is preferable to blocking on that
-  // design or widening the schema ourselves.
+  // its concrete shape isn't designed yet. Duck-typing the one field this
+  // slice needs is preferable to blocking on that design or widening the
+  // schema ourselves.
   const browser = config.browser as { headless?: boolean } | undefined;
   return browser?.headless ?? true;
 }
