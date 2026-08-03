@@ -159,6 +159,11 @@ the switch and a partial migration, so leaving is always one edit away.
 This is the answer to the fair question of whether to bet an existing suite
 on a pre-0.1 tool from one maintainer.
 
+That exit belongs to suites that arrive through compat. A suite written
+straight in `defineStep`, with no `@cucumber/cucumber` import ever in the
+picture, has nothing to switch back to — starting from nothing carries the
+pre-0.1 risk more directly than migrating an existing suite does.
+
 How much else has to change was measured rather than assumed. Against eight
 public cucumber-js suites, **none went through on the import alone** when
 the audit ran; closing the blockers it found has since brought two of the
