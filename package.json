@@ -48,6 +48,7 @@
   "author": "meganemura",
   "license": "MIT",
   "files": [
+    "CHANGELOG.md",
     "dist",
     "skills",
     "src"
