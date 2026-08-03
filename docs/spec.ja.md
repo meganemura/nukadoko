@@ -26,6 +26,13 @@ agent は、介助なしにループ全体を完了できなければなりま�
 語彙に操作が欠けているときは、agent が新しい step を scaffold して実装し、人間がその PR をレビューします。
 あらゆるインターフェースは機械可読な形(`--json`)を必ず持ち、リッチな人間向けレポートは Allure に委ねられます。
 
+この制約からくる帰結の一つは、このツールがどこへ育つかを左右するため、それ単独で述べておく価値があります。
+E2E 実行は、unit test にはない形で高くつきます: ブラウザ、実物のターゲット、分単位の時間です。
+だから、シナリオのどれだけを**実行せずに**誤りだと判定できるかが、実質的には誰にとってもそのシナリオへの反復の速さであり、そして安価なコマンドの積み重ねでループが回る agent にとっては、それはそのまま自らの作業を正す速さに直結します。
+この仕様が求める宣言はどれも、その代価の一部をこの形で払っています: `pattern` と `args` は `check` がブラウザを開く前に行を拒否することを可能にし、`mutates` は Then を疑うことを可能にし、`from` は、その順序では失敗するしかない step の並びを持つ scenario を拒否することを可能にします。
+したがって `nuka check` が判定できる範囲を広げることは、ここでは便宜ではなく一級の目標であり、失敗した run のたびに常に問われるのは、check がそれをあらかじめ捕まえられたはずかどうかです。
+その限界を決めるのは野心ではなく誠実さであり、`check` は結末が一つしかありえないことだけを主張します、推測で判定する check は、そうでない check まで読み飛ばすよう人を慣らしてしまうからです。
+
 ぬか床とは、きゅうりを漬物に変える米ぬかの発酵床のことです。
 ぬか床は生きており、毎日手入れをすれば熟成し、放っておけば死にます。
 nukadoko が step 定義について主張しているのはまさにこれで(step 定義は書いて終わりのテスト資産ではなく生きた培養菌である)、それを日々手入れするのが agent です。
@@ -115,7 +122,11 @@ export default defineStep({
 - `args` / `returns` は zod のスキーマで、実行境界でバリデーションされます(args は実行前、returns は実行後)。
   バリデーションの失敗は失敗した実行として扱われ、result は保存されません。
   キャプチャは parameter type によって型強制され(`{int}` → number、カスタム型はそれぞれの transformer による)、そのあとスキーマが契約になります。
-  この対応関係は静的にチェックできます(`nuka check`)。
+  この対応関係は双方向に静的にチェックできます(`nuka check`)。
+  スキーマのキーを持たないキャプチャはエラーです。
+  ある行の何によっても埋まりようのない **required** なスキーマキーも同様にエラーです — キャプチャも table/docstring も `from` もない — その行は args のバリデーションに失敗する以外にありえないからです。
+  この逆方向は、キーが何かツールに見えない方法で埋まっているかもしれないという理屈のもと、しばらく未チェックのままでした。
+  `from` が残る方法を可視化することでその隙間を埋めたため、残っているのは単に説明されていないだけでなく、正真正銘埋まりようのないものです。
 - step に付いた data table や docstring は、名前付きキャプチャが消費せずに残した唯一の必須 args キーに結び付きます(table は `string[][]` として、docstring は `string` として)。
   他のものと同様にスキーマでバリデーションされます。
   Gherkin の table が初めて型を持つことになります。
@@ -873,6 +884,44 @@ nukadoko の貢献は、すべての段階が記録を残すことです。
 監査証跡のない self-healing は、テストスイートが気づかないうちに何もテストしなくなる仕組みそのものです。
 逸脱の記録こそが要点です。
 
+## Tending(手入れ)
+
+`nuka check` が答える問いは一つだけです: このプロジェクトは今すぐ run できるか。
+プロジェクトは毎回それを通過していながら、それでも腐っていることがあります。
+sign-off は、自分が凍結したコードを言い表さなくなることがあります。
+宣言は、何にも行使されないまま何年も放置されることがあります。
+契約は、それを選ばなければならない agent にとって読めないものになっていることがあります。
+そのどれも run を止めはしませんが、そのどれもが放置されるほど高くつきます — これがこのツールの名前の由来になっている失敗のパターンです。
+ぬか床は毎日手入れをすれば熟成し、放っておけば死にます。
+
+`nuka tend` が答えるのはもう一つの問いです: この語彙と、それが生み出してきた記録は、いまも健全か。
+
+これが `check` への警告の追加ではなく別のコマンドである理由は、この 2 つが異なる瞬間に読まれ、異なる意味を持つからです。
+`check` はあらゆる run の前に、CI の中で、agent のループの中で実行され、それが出力する行はどれもプロジェクトと green な run との間に立ちはだかるものです — だからこそ、そこでの所見は立ち止まる価値があるものでなければなりません。
+`tend` の所見はそうではありません: ここにあるものはどれも今日直さなければならないものではなく、もしそれらが毎回の `check` に現れたなら、本当に直すべきだった行までみんなが読み飛ばすことを覚えてしまうでしょう。
+チェックが読む価値のあるものだという主張を中心に据えたツールにとって、ノイズは見た目だけの問題ではありません。
+
+`tend` が見るもの、そしてそれぞれがなぜスタイルの問題ではなく腐敗なのか:
+
+- **もはや自分が凍結したコードと一致しない sign-off。** 記録は、自分が受け入れた feature のソースと、その run のすべての receipt を運びます。
+  凍結された `result` がその step の現在の `returns` スキーマをもはや通らない場合、あるいは凍結された feature のソースがそれを取った元のファイルともはや一致しない場合、あるいはそれが引用する step が語彙から消えている場合、その記録はディスク上に残ったまま、もはや裏付けられない主張をし続けていることになります。
+  これはここでの所見の中で唯一、注記ではなくエラーになるものです: 自分が述べている内容を静かに言い表さなくなった sign-off は、sign-off が無い状態よりも悪いです、なぜならそれはまだ数に入れられ続けているからです。
+- **何にも行使されない `from` 宣言。** その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされており、宣言された生産者が何かを供給することは一度もありません。
+  それはただの事実として報告されるのであって — その宣言は `nuka do --use` を通じてなお到達可能です — 削除すべきだという断定としてではありません。
+- **どの feature からも束ねられていない pattern を持つ step。** CLI 専用のつもりの step は pattern を一切持つべきではなく、pattern を持っているなら、それは自分が占めていない scenario 上の場所を主張していることになります。
+- **`.describe()` を持たないスキーマフィールド。** これは agent にまっすぐ狙いを定めた `tend` の所見です: agent がフィールドの意味を知る手段は `nuka describe` であり、description のないフィールドは、名前がすでに伝えていた以上のことを何も agent に伝えません。
+  step ファイルを読む人間なら周囲のコードを見られますが、2 つの step のどちらかを選ぶ agent にはそれができません。
+- **`rationale` を持たない step。** `description` はその step が何をするかを述べており、それはその step を呼ぶには十分です。
+  `rationale` はなぜこのように作られているのか、何が却下されたのかを述べており、それは agent がその step を書き換えてよいと決める前に必要とする情報です。
+  それが欠けていれば、あらゆる書き換えは根拠を欠いたまま行われます。
+- **どの pattern からも使われていない設定済みの parameter type。** 使われていない設定であり、他のものと同様に報告されます。
+
+所見は、他のすべてと同じく `--json` に対応します。
+sign-off の所見は非ゼロの exit code で終了し、定期実行されるジョブがそれに反応できるようにする一方、残りの所見はそうしません、プロジェクトはそれらを抱えたままでいることが許されているからです。
+
+`tend` は報告するだけで、修復はしません。
+直すということは、description を書くこと、step を削除すること、feature を再び accept することを意味します — どれも背後に書き手がいる判断であり、これは `accept` が dirty な working tree を勝手に直さずに拒否するのと同じ理由です。
+
 ## CLI summary
 
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
@@ -893,8 +942,10 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, a required
-                              `from` key whose producer is absent or bound
-                              later in the scenario, a `from` naming a step
+                              args key nothing on that line could fill, a
+                              required `from` key whose producer is absent,
+                              bound later in the scenario, or ambiguous
+                              between two producers, a `from` naming a step
                               discovery never registered, config
                               coherence, unreadable step files (reported,
                               not fatal — the rest of the project is still
@@ -904,6 +955,13 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
+nuka tend [--json]            what is rotting rather than what is broken:
+                              a sign-off that no longer matches the code it
+                              froze (the one finding that exits non-zero),
+                              a `from` nothing exercises, a patterned step
+                              no feature binds, a schema field with no
+                              `.describe()`, a step with no `rationale`, a
+                              configured parameter type no pattern uses
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
@@ -961,6 +1019,8 @@ nuka skill path               where the bundled skill lives, for a project
   それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
 - **M6(chained arguments)**: `from`、`nuka check` と `nuka run` が共有する scenario 順序チェック、`do` の `--use`、そして引用する receipt の隣に step 名を記す `used` のエントリです。
   step の入力がどこから来るかは、`run` の本体の中の散文であることをやめ、ツールが読む宣言になります(「step の連鎖」を参照)。
+- **M7(tending)**: `nuka tend`、壊れることではなく腐ることについての所見です(「Tending(手入れ)」を参照)。
+  意図的に `nuka check` には含めていません: `check` はあらゆる run の前に読まれるものであり、立ち止まる価値があり続けなければならないからです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート
