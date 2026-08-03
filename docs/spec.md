@@ -406,11 +406,12 @@ import { Given, When, Then } from "nukadoko/compat";
   the fault. **Neither is a gap**: a name imported but used only as a type
   annotation, or imported and never referenced, is elided from the compiled
   output by esbuild before nukadoko ever imports the file, so that import
-  never actually happens at run time — the glue runs exactly as written,
-  and `IWorldOptions` / `ITestCaseHookParameter` (unsupported, but
-  type-only in every suite the audit read) are the audit's own example.
-  `tsc` may still complain; `nuka` never sees anything to complain about,
-  because there is nothing left to fail on.
+  never actually happens at run time — the glue runs exactly as written.
+  `tsc` still resolves the name against what compat exports, so a missing
+  one is a compile error rather than a run-time one. That is exactly why
+  the two names the audit found in this category, `IWorldOptions` and
+  `ITestCaseHookParameter`, were worth exporting even though `nuka` never
+  saw them fail: what they cost was the user's typecheck, not their run.
 - Standing design rule, for this section and every future design that
   touches migration: a compat asset that works today must not stop working
   because the team adopted nukadoko or moved some other piece toward the
