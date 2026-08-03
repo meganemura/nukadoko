@@ -14,6 +14,7 @@ import { runRun } from "./run.js";
 import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
 import { runSkillPath } from "./skill.js";
+import { runTend } from "./tend.js";
 import {
   buildStepNames,
   describeContract,
@@ -25,16 +26,19 @@ import {
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `accept`,
-// `skill path`) to yargs and turns any failure — yargs' own (bad flags, no
-// command) or ours (config/discovery errors, unknown step name) — into
-// stderr output plus a non-zero exit code, without ever calling
+// `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `tend`,
+// `accept`, `skill path`) to yargs and turns any failure — yargs' own (bad
+// flags, no command) or ours (config/discovery errors, unknown step name) —
+// into stderr output plus a non-zero exit code, without ever calling
 // `process.exit` itself. That is `cli.ts`'s job, so this function stays
 // callable directly from tests. `do`'s own setup/execution split and
 // receipt writing lives in cli/do.ts; `session`'s own list/clear logic
 // lives in cli/session.ts; `init`/`scaffold`'s own generation logic lives
 // in cli/init.ts and cli/scaffold.ts; `check`'s own analysis lives in
-// cli/check.ts (thin wiring) and src/check/* (the actual checks); `accept`'s
+// cli/check.ts (thin wiring) and src/check/* (the actual checks); `tend`'s
+// own analysis lives in cli/tend.ts (thin wiring) and src/tend/* (the
+// actual findings) — the same split, one command answering "can this run",
+// the other "is this still healthy" (docs/spec.md "Tending"); `accept`'s
 // own run-selection and record-rendering logic lives in cli/accept.ts and
 // src/accept/* (m4b-accept task spec), the same split; `skill`'s own path
 // resolution logic lives in cli/skill.ts (m5a-acceptance-skill task spec,
@@ -106,6 +110,10 @@ interface ScaffoldArgs {
 interface CheckArgs {
   json?: boolean;
   feature?: string;
+}
+
+interface TendArgs {
+  json?: boolean;
 }
 
 interface AcceptArgs {
@@ -401,6 +409,26 @@ export async function runCli(
     },
   };
 
+  const tendCommand: CommandModule<Record<string, never>, TendArgs> = {
+    command: "tend",
+    describe: "what is rotting rather than what is broken: unused declarations, undescribed fields, missing rationale",
+    builder: (y: Argv) =>
+      y.option("json", {
+        type: "boolean",
+        default: false,
+        describe: "machine-readable output",
+      }) as Argv<TendArgs>,
+    handler: async (args: Arguments<TendArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runTend({
+        rootDir,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const acceptCommand: CommandModule<Record<string, never>, AcceptArgs> = {
     command: "accept <feature>",
     describe: "freeze that feature's last green run as a committed acceptance record beside it",
@@ -476,6 +504,7 @@ export async function runCli(
     .command(initCommand)
     .command(scaffoldCommand)
     .command(checkCommand)
+    .command(tendCommand)
     .command(acceptCommand)
     .command(skillCommand)
     .demandCommand(1)
