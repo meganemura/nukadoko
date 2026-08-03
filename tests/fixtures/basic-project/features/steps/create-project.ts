@@ -5,6 +5,7 @@ import { formatId } from "./lib/format-id.js";
 export default defineStep({
   pattern: "a project {string} exists",
   description: "Create a project and return its id",
+  rationale: "Fixture-only note: exercises describe's rationale field.",
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
   mutates: true,

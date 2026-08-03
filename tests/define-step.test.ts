@@ -80,6 +80,31 @@ describe("defineStep", () => {
     expect(step.patterns).toEqual([]);
   });
 
+  it("carries an explicit rationale onto Step.rationale", () => {
+    const step = defineStep({
+      description: "does a thing",
+      rationale: "chose X over Y because Y rejects malformed input",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    expect(step.rationale).toBe("chose X over Y because Y rejects malformed input");
+  });
+
+  it("leaves rationale undefined when omitted (no default)", () => {
+    const step = defineStep({
+      description: "no explicit rationale",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    expect(step.rationale).toBeUndefined();
+  });
+
   it("does not consider an arbitrary object a step", () => {
     expect(isStep({ pattern: "not a step" })).toBe(false);
     expect(isStep(undefined)).toBe(false);

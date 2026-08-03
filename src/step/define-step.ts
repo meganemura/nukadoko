@@ -15,11 +15,19 @@ export interface StepDefinitionInput<
   pattern?: string;
   /** Aliases for `pattern`. Either or both may be given; omit both for CLI-only vocabulary. */
   patterns?: string[];
+  /** What this step does — the information an agent uses to pick which step
+   * to call. Shown in `nuka steps`' one-line-per-step listing. */
   description: string;
   args: TArgs;
   returns: TReturns;
   /** Whether the step changes state anywhere it touches. Defaults to `true`. */
   mutates?: boolean;
+  /** Why this is implemented this way, and what was tried and rejected — the
+   * information an agent uses to judge whether it may rewrite this step.
+   * Not shown in `nuka steps` (t2-rationale task spec, item 3: that listing
+   * stays one-line-per-step); shown in `nuka describe`. No default — omit it
+   * and `Step.rationale` is `undefined`, same as omitting `pattern`. */
+  rationale?: string;
   run(
     ctx: StepContext,
     args: z.infer<TArgs>,
@@ -35,6 +43,7 @@ export interface Step<
   readonly args: TArgs;
   readonly returns: TReturns;
   readonly mutates: boolean;
+  readonly rationale: string | undefined;
   readonly run: (
     ctx: StepContext,
     args: z.infer<TArgs>,
@@ -63,6 +72,7 @@ export function defineStep<
     args: definition.args,
     returns: definition.returns,
     mutates: definition.mutates ?? true,
+    rationale: definition.rationale,
     run: definition.run,
     [STEP_BRAND]: true,
   };

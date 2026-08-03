@@ -46,6 +46,22 @@ describe("nuka steps", () => {
     expect(summaries).toHaveLength(3);
   });
 
+  it("never includes rationale, even for a step that declares one", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["steps", "--json"], {
+      rootDir: fixture("basic-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    const summaries = JSON.parse(stdout.text());
+    for (const summary of summaries) {
+      expect(summary).not.toHaveProperty("rationale");
+    }
+  });
+
   it("propagates a ConfigError as exit 1 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -88,6 +104,34 @@ describe("nuka describe", () => {
       },
       required: expect.arrayContaining(["id", "name"]),
     });
+  });
+
+  it("includes rationale for a step that declares one", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["describe", "create-project"], {
+      rootDir: fixture("basic-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    const contract = JSON.parse(stdout.text());
+    expect(contract.rationale).toBe("Fixture-only note: exercises describe's rationale field.");
+  });
+
+  it("omits rationale entirely (no empty field) for a step that declares none", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["describe", "list-projects"], {
+      rootDir: fixture("basic-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    const contract = JSON.parse(stdout.text());
+    expect(contract).not.toHaveProperty("rationale");
   });
 
   it("exits 1 with a stderr message for an unknown step name", async () => {

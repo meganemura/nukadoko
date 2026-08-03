@@ -69,6 +69,12 @@ export interface TypedStepContract {
   readonly patterns: readonly string[];
   readonly description: string;
   readonly mutates: boolean;
+  /** Why this step is implemented this way, and what was rejected
+   * (`defineStep`'s own `rationale`) — present only when the step declared
+   * one (t2-rationale task spec, item 3: omitted, not an empty string, same
+   * convention as `used` on a receipt). Deliberately absent from
+   * `StepSummary`/`summarize` below — `nuka steps` stays one line per step. */
+  readonly rationale?: string;
   readonly args: JsonSchema;
   readonly returns: JsonSchema;
 }
@@ -105,6 +111,10 @@ export function describeContract(entry: VocabularyEntry): StepContract {
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
+    // `rationale` is `string | undefined` on `Step`; `JSON.stringify` drops
+    // an `undefined`-valued key on its own, so a step with none simply has
+    // no "rationale" key in the output (t2-rationale task spec, item 3).
+    rationale: entry.step.rationale,
     args: z.toJSONSchema(entry.step.args),
     returns: z.toJSONSchema(entry.step.returns),
   };
