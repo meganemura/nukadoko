@@ -652,22 +652,36 @@ The execution infrastructure Cucumber never had:
 
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
-Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
-`.nukadoko`), `browser`, `secrets`, `parameterTypes`, `allure` (only
-`resultsDir`, see "Allure emitter"), `messages` (only `output`, see
-"Messages emitter").
+Cucumber-style), `baseURL`, `envFiles`, `environments`,
+`stateDir` (default `.nukadoko`), `browser`, `browserContext`,
+`requestContext`, `secrets`, `parameterTypes`, `allure` (only `resultsDir`,
+see "Allure emitter"), `messages` (only `output`, see "Messages emitter").
 
 `browser` takes Playwright's own `LaunchOptions` type directly (chromium is
 the only browser type; `newContext`'s options like `viewport` are a
-different Playwright type and are not accepted here — v1 is launch-only).
-zod does not re-validate its shape beyond "is this an object": the type
-comes from `defineConfig`, so `tsc` catches a typo the same way it catches
-one anywhere else in `nukadoko.config.ts`; re-enumerating Playwright's
-options in zod would need updating every time Playwright adds one, and a
-config author would be blocked from a real option until that catch-up
-landed. Only `headless` is read today, passed straight to
-`chromium.launch`; omitted, Playwright's own default (`headless: true`)
-applies.
+different Playwright type and are not accepted through this key — see
+`browserContext`/`requestContext` below). zod does not re-validate its shape
+beyond "is this an object": the type comes from `defineConfig`, so `tsc`
+catches a typo the same way it catches one anywhere else in
+`nukadoko.config.ts`; re-enumerating Playwright's options in zod would need
+updating every time Playwright adds one, and a config author would be
+blocked from a real option until that catch-up landed. Only `headless` is
+read today, passed straight to `chromium.launch`; omitted, Playwright's own
+default (`headless: true`) applies.
+
+`browserContext` and `requestContext` are `newContext`'s counterpart to
+`browser`'s `launch`: `browser.newContext()` (used by `ctx.page()`) and
+`playwrightRequest.newContext()` (used by `ctx.request()`) are two separate
+Playwright calls with two separate option types, so each gets its own
+config key rather than one shared key, the same "defer to Playwright's own
+type" policy `browser` follows. This is what makes an option like
+`ignoreHTTPSErrors` reachable at all — for a self-signed-certificate local
+target, neither `ctx.page()` nor `ctx.request()` previously had a way to
+set it. Both keys reject `baseURL` and `storageState` with an error naming
+the reason, rather than silently dropping them: `config.baseURL` is meant
+to be the one source of a project's base URL, and nukadoko's own session
+mechanism sets `storageState`, so accepting either again here would let
+config quietly disagree with itself about which value is real.
 
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
 type — `{ name, regexp, transformer? }`, e.g.

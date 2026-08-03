@@ -4,6 +4,7 @@ import {
   chromium,
   type Browser,
   type BrowserContext,
+  type BrowserContextOptions,
   type LaunchOptions,
   type Page,
 } from "playwright";
@@ -40,6 +41,13 @@ export interface LaunchBrowserOptions {
    * so Playwright's own default (`headless: true`) applies exactly as it
    * would without nukadoko in between. */
   browser?: LaunchOptions;
+  /** `config.browserContext` (config/schema.ts), passed straight through to
+   * `browser.newContext` (context-options task spec). `storageState` and
+   * `baseURL` below are spread in *after* this, not before: schema.ts
+   * already rejects a `browserContext` that sets either key, so the two
+   * never actually collide, but keeping nukadoko's own values last is a
+   * cheap second line of defense against that invariant ever slipping. */
+  browserContext?: BrowserContextOptions;
   /** Where trace.zip and screenshot(s) are written. Must already exist. */
   evidenceDir: string;
   /** Restores a `--session`'s prior storageState, when one was loaded;
@@ -82,6 +90,7 @@ export async function launchBrowserWithTracing(
 ): Promise<BrowserEvidenceHandle> {
   const browser: Browser = await chromium.launch(options.browser);
   const context: BrowserContext = await browser.newContext({
+    ...(options.browserContext ?? {}),
     ...(options.storageState ? { storageState: options.storageState } : {}),
     ...(options.baseURL ? { baseURL: options.baseURL } : {}),
   });

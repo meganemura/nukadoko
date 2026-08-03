@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
 
@@ -209,6 +209,84 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
       expect(userAgent).not.toContain("HeadlessChrome");
 
       await dispose("ok");
+    },
+  );
+});
+
+// Responsibility: proves config.browserContext (context-options task spec)
+// actually reaches browser.newContext() rather than only passing schema
+// validation — measured by spying on the newContext method of the real
+// Browser instance chromium.launch() returns, and reading the arguments it
+// was actually called with. There is no simple, environment-independent
+// behavioral signal for an option like ignoreHTTPSErrors the way headless
+// has (User-Agent), so this measures the pass-through directly instead.
+describe("createStepContext / ctx.page(): config.browserContext reaches newContext", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-context-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    "passes browserContext straight through, alongside config.baseURL",
+    async () => {
+      const originalLaunch = chromium.launch.bind(chromium);
+      let newContextSpy: ReturnType<typeof vi.spyOn> | undefined;
+      const launchSpy = vi.spyOn(chromium, "launch").mockImplementation(async (options) => {
+        const browser = await originalLaunch(options);
+        newContextSpy = vi.spyOn(browser, "newContext");
+        return browser;
+      });
+
+      const { ctx, dispose } = createStepContext({
+        config: baseConfig({
+          baseURL: "http://127.0.0.1:1",
+          browserContext: { ignoreHTTPSErrors: true },
+        }),
+        evidenceDir,
+        env: {},
+      });
+
+      await ctx.page();
+
+      expect(newContextSpy).toBeDefined();
+      expect(newContextSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ ignoreHTTPSErrors: true, baseURL: "http://127.0.0.1:1" }),
+      );
+
+      await dispose("ok");
+      launchSpy.mockRestore();
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "passes no extra options to newContext when browserContext is unset (regression)",
+    async () => {
+      const originalLaunch = chromium.launch.bind(chromium);
+      let newContextSpy: ReturnType<typeof vi.spyOn> | undefined;
+      const launchSpy = vi.spyOn(chromium, "launch").mockImplementation(async (options) => {
+        const browser = await originalLaunch(options);
+        newContextSpy = vi.spyOn(browser, "newContext");
+        return browser;
+      });
+
+      const { ctx, dispose } = createStepContext({
+        config: baseConfig({ baseURL: "http://127.0.0.1:1" }),
+        evidenceDir,
+        env: {},
+      });
+
+      await ctx.page();
+
+      expect(newContextSpy).toBeDefined();
+      expect(newContextSpy).toHaveBeenCalledWith({ baseURL: "http://127.0.0.1:1" });
+
+      await dispose("ok");
+      launchSpy.mockRestore();
     },
   );
 });

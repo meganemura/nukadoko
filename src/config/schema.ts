@@ -1,9 +1,10 @@
-import type { LaunchOptions } from "playwright";
+import type { APIRequest, BrowserContextOptions, LaunchOptions } from "playwright";
 import { z } from "zod";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
 // export, per docs/spec.md's config section (featuresDir, baseURL, envFiles,
-// environments, stateDir, browser, secrets, parameterTypes). `.strict()` is
+// environments, stateDir, browser, browserContext, requestContext, secrets,
+// parameterTypes). `.strict()` is
 // what makes an unknown key an error instead of a silent no-op. `environments`
 // is now typed exactly (m1-environments task spec, decision 1): baseURL/
 // envFiles per environment layer on top of the top-level values (resolution
@@ -95,6 +96,15 @@ const parameterTypeConfigSchema = z
  * default here beyond the list itself, see `configSchema` below). */
 export type ParameterTypeConfig = z.infer<typeof parameterTypeConfigSchema>;
 
+/** `APIRequest.newContext`'s options (`requestContext` below) have no named
+ * export from Playwright the way `BrowserContextOptions` does
+ * (`browserContext` below) — `APIRequest.newContext`'s argument is declared
+ * inline. Referencing it through `Parameters<>` rather than redefining it
+ * here keeps the same "use Playwright's own type as-is" policy `browser` and
+ * `browserContext` both follow (see their doc comments): only the name is
+ * missing upstream, not the type itself. */
+type RequestContextOptions = NonNullable<Parameters<APIRequest["newContext"]>[0]>;
+
 export const configSchema = z
   .object({
     featuresDir: z.string().default("features"),
@@ -121,12 +131,74 @@ export const configSchema = z
      * would be told a real Playwright option is a typo — the opposite of
      * what `.strict()` on this schema is for. Chromium is the only browser
      * type (no key here selects firefox/webkit — out of scope until there
-     * is demand), and this is launch-only: `newContext`'s options
-     * (`viewport`, `locale`, `timezoneId`, ...) are a different Playwright
-     * type and are not accepted here. */
+     * is demand). This key is launch-only: `newContext`'s options
+     * (`viewport`, `locale`, `timezoneId`, `ignoreHTTPSErrors`, ...) are a
+     * different Playwright type from `LaunchOptions` and are not accepted
+     * here — they go through `browserContext` and `requestContext` below
+     * instead, since `browser.newContext()` and
+     * `playwrightRequest.newContext()` are two separate Playwright calls
+     * with two separate option types. */
     browser: z.custom<LaunchOptions>(
       (value) => typeof value === "object" && value !== null,
     ).optional(),
+    /** Playwright's own `BrowserContextOptions` type, taken as-is (same
+     * "defer to Playwright's type, don't re-describe it" policy as
+     * `browser` above) — passed straight to `browser.newContext()` in
+     * src/context/browser-evidence.ts. This is a separate key from
+     * `requestContext` below rather than one shared key, because
+     * `browser.newContext()` (`ctx.page()`) and
+     * `playwrightRequest.newContext()` (`ctx.request()`) are two different
+     * Playwright calls with two different option types — even an option
+     * name both accept, like `ignoreHTTPSErrors`, is not the same type on
+     * both sides, so one key would need a hand-written union or
+     * intersection type instead of deferring to Playwright, the same
+     * problem `browser`'s doc comment above already argues against.
+     * `baseURL` and `storageState` are rejected below even though
+     * `BrowserContextOptions` allows them: `config.baseURL` is meant to be
+     * the only place a project states its base URL, and nukadoko's session
+     * mechanism is what owns `storageState` (src/context/create-context.ts)
+     * — accepting either here would let a config value silently disagree
+     * with, or overwrite, the one nukadoko already injects. Rejecting them
+     * outright (rather than silently dropping them) is deliberate: a
+     * dropped option would leave a config author with something written
+     * that quietly does nothing. */
+    browserContext: z
+      .custom<BrowserContextOptions>((value) => typeof value === "object" && value !== null)
+      .superRefine((value, ctx) => {
+        if (value.baseURL !== undefined) {
+          ctx.addIssue(
+            "browserContext.baseURL is not accepted: config.baseURL is the only source for baseURL; setting it again here would give config two disagreeing answers for the same question.",
+          );
+        }
+        if (value.storageState !== undefined) {
+          ctx.addIssue(
+            "browserContext.storageState is not accepted: nukadoko's session mechanism sets storageState itself; setting it here would silently override (and could break) a restored session.",
+          );
+        }
+      })
+      .optional(),
+    /** The `ctx.request()` side of the same newContext-options gap
+     * `browserContext` closes for `ctx.page()` above — passed straight to
+     * `playwrightRequest.newContext()` in src/context/create-context.ts.
+     * `RequestContextOptions` (defined above `configSchema`) is how this
+     * keeps deferring to Playwright's own type despite Playwright not
+     * exporting a name for it — see that type's own doc comment. Same
+     * reserved-key rejection, and the same reasons, as `browserContext`. */
+    requestContext: z
+      .custom<RequestContextOptions>((value) => typeof value === "object" && value !== null)
+      .superRefine((value, ctx) => {
+        if (value.baseURL !== undefined) {
+          ctx.addIssue(
+            "requestContext.baseURL is not accepted: config.baseURL is the only source for baseURL; setting it again here would give config two disagreeing answers for the same question.",
+          );
+        }
+        if (value.storageState !== undefined) {
+          ctx.addIssue(
+            "requestContext.storageState is not accepted: nukadoko's session mechanism sets storageState itself; setting it here would silently override (and could break) a restored session.",
+          );
+        }
+      })
+      .optional(),
     /** Individual secret-source keys to demote to plain (never redacted).
      * Default `{ public: [] }`: nothing is public unless named. There is no
      * promotion counterpart — a tracked file's value is definitionally not a

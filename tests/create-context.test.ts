@@ -3,7 +3,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { request as playwrightRequest } from "playwright";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { MissingEnvError } from "../src/context/errors.js";
@@ -127,6 +128,61 @@ describe("createStepContext / ctx.request()", () => {
     const request = await ctx.request();
     const ok = await request.get(`${baseURL}/ok`);
     expect(ok.status()).toBe(200);
+
+    await dispose("ok");
+  });
+});
+
+// Responsibility: proves config.requestContext (context-options task spec)
+// actually reaches playwrightRequest.newContext() rather than only passing
+// schema validation — measured by spying on the real, shared `playwright`
+// module's `request.newContext`, the same singleton create-context.ts calls,
+// and reading the arguments it was actually invoked with, rather than
+// inferring pass-through from a behavior difference (this option has no
+// simple, environment-independent behavioral signal the way headless does).
+describe("createStepContext / ctx.request(): config.requestContext reaches newContext", () => {
+  let evidenceDir: string;
+  let newContextSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-evidence-"));
+    newContextSpy = vi.spyOn(playwrightRequest, "newContext");
+  });
+
+  afterEach(async () => {
+    newContextSpy.mockRestore();
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it("passes requestContext straight through, alongside config.baseURL", async () => {
+    const { ctx, dispose } = createStepContext({
+      config: baseConfig({
+        baseURL: "http://127.0.0.1:1",
+        requestContext: { ignoreHTTPSErrors: true },
+      }),
+      evidenceDir,
+      env: {},
+    });
+
+    await ctx.request();
+
+    expect(newContextSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ ignoreHTTPSErrors: true, baseURL: "http://127.0.0.1:1" }),
+    );
+
+    await dispose("ok");
+  });
+
+  it("passes no extra options to newContext when requestContext is unset (regression)", async () => {
+    const { ctx, dispose } = createStepContext({
+      config: baseConfig({ baseURL: "http://127.0.0.1:1" }),
+      evidenceDir,
+      env: {},
+    });
+
+    await ctx.request();
+
+    expect(newContextSpy).toHaveBeenCalledWith({ baseURL: "http://127.0.0.1:1" });
 
     await dispose("ok");
   });

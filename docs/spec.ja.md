@@ -488,14 +488,23 @@ Cucumber が持ったことのない実行インフラです:
   state directory は機密性の高いものです。
   `nuka check` は各 env file の分類と secret のキー名を報告します(値は決して報告しません)。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
 
-`browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります(browser の種類は chromium だけで、`newContext` の `viewport` のようなオプションは別の Playwright の型であり、ここでは受け付けません。v1 は launch のみです)。
+`browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります(browser の種類は chromium だけです)。
+`newContext` の `viewport` のようなオプションは別の Playwright の型であり、この `browser` キーでは受け付けません(下記の `browserContext`/`requestContext` を参照)。
 zod は「これがオブジェクトかどうか」以上には形を再検証しません。
 型は `defineConfig` から来るため、`tsc` は `nukadoko.config.ts` の他の場所と同じやり方で typo を捕まえます。
 Playwright のオプションを zod で列挙し直すと、Playwright が 1 つ追加するたびに追随が必要になり、その追随が追いつくまでのあいだ、config を書く人は本当は使える Playwright のオプションを使えなくなってしまいます。
 今日読まれているのは `headless` だけで、そのまま `chromium.launch` に渡されます。
 省略した場合は Playwright 自身の既定値(`headless: true`)が適用されます。
+
+`browserContext` と `requestContext` は、`browser` の `launch` に対応する `newContext` 側のキーです。
+`browser.newContext()`(`ctx.page()` が使います)と `playwrightRequest.newContext()`(`ctx.request()` が使います)は別々の Playwright 呼び出しであり、オプションの型も別々なので、1 つの共有キーではなくそれぞれに専用のキーを用意しています。
+これは `browser` が従っているのと同じ「Playwright 自身の型に委ねる」方針です。
+これにより `ignoreHTTPSErrors` のようなオプションに初めて手が届くようになります。
+自己署名証明書を使うローカルの接続先では、`ctx.page()` にも `ctx.request()` にもそれを設定する手段がこれまでありませんでした。
+どちらのキーも `baseURL` と `storageState` は理由を述べたエラーで拒否し、黙って無視することはしません。
+`config.baseURL` はプロジェクトの base URL の唯一の出所であるべきであり、`storageState` は nukadoko 自身の session 機構が設定するものなので、ここでも受け付けてしまうと config が自分自身と静かに食い違う値を持つことになるからです。
 
 `parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
 たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。

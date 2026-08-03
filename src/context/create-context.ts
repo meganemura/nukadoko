@@ -247,6 +247,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       if (!browserHandle) {
         browserHandle = await launchBrowserWithTracing({
           browser: config.browser,
+          // `config.browserContext` (context-options task spec) — schema.ts
+          // already rejects a `browserContext` that sets `baseURL`/
+          // `storageState`, so the two args below can never collide with
+          // it; browser-evidence.ts still spreads them in last anyway.
+          browserContext: config.browserContext,
           evidenceDir,
           storageState,
           observed,
@@ -267,7 +272,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // Playwright's own `newContext`/fetch call fails on that URL; this
         // module does not duplicate Playwright's URL-resolution rules to
         // pre-empt that with its own error.
+        //
+        // `config.requestContext` (context-options task spec) is spread in
+        // first, `baseURL`/`storageState` after: schema.ts already rejects
+        // a `requestContext` that sets either key, so this ordering never
+        // actually resolves a real collision, only guards the invariant.
         const raw = await playwrightRequest.newContext({
+          ...(config.requestContext ?? {}),
           ...(config.baseURL ? { baseURL: config.baseURL } : {}),
           ...(storageState ? { storageState } : {}),
         });

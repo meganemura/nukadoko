@@ -202,6 +202,110 @@ describe("configSchema: browser", () => {
   });
 });
 
+describe("configSchema: browserContext", () => {
+  it("leaves browserContext undefined when omitted", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.browserContext).toBeUndefined();
+    }
+  });
+
+  it("accepts a BrowserContextOptions object, unmodified", () => {
+    const result = configSchema.safeParse({
+      browserContext: { ignoreHTTPSErrors: true, viewport: { width: 800, height: 600 } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.browserContext).toEqual({
+        ignoreHTTPSErrors: true,
+        viewport: { width: 800, height: 600 },
+      });
+    }
+  });
+
+  it("rejects a non-object value", () => {
+    expect(configSchema.safeParse({ browserContext: "oops" }).success).toBe(false);
+    expect(configSchema.safeParse({ browserContext: null }).success).toBe(false);
+  });
+
+  it("rejects browserContext.baseURL, with a message stating config.baseURL is the only source", () => {
+    const result = configSchema.safeParse({
+      browserContext: { baseURL: "http://example.invalid" },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = JSON.stringify(result.error.issues);
+      expect(message).toContain("browserContext.baseURL");
+      expect(message).toContain("config.baseURL is the only source");
+    }
+  });
+
+  it("rejects browserContext.storageState, with a message stating the session mechanism owns it", () => {
+    const result = configSchema.safeParse({
+      browserContext: { storageState: { cookies: [], origins: [] } },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = JSON.stringify(result.error.issues);
+      expect(message).toContain("browserContext.storageState");
+      expect(message).toContain("session mechanism");
+    }
+  });
+});
+
+describe("configSchema: requestContext", () => {
+  it("leaves requestContext undefined when omitted", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestContext).toBeUndefined();
+    }
+  });
+
+  it("accepts an APIRequest.newContext options object, unmodified", () => {
+    const result = configSchema.safeParse({
+      requestContext: { ignoreHTTPSErrors: true, extraHTTPHeaders: { "x-test": "1" } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestContext).toEqual({
+        ignoreHTTPSErrors: true,
+        extraHTTPHeaders: { "x-test": "1" },
+      });
+    }
+  });
+
+  it("rejects a non-object value", () => {
+    expect(configSchema.safeParse({ requestContext: "oops" }).success).toBe(false);
+    expect(configSchema.safeParse({ requestContext: null }).success).toBe(false);
+  });
+
+  it("rejects requestContext.baseURL, with a message stating config.baseURL is the only source", () => {
+    const result = configSchema.safeParse({
+      requestContext: { baseURL: "http://example.invalid" },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = JSON.stringify(result.error.issues);
+      expect(message).toContain("requestContext.baseURL");
+      expect(message).toContain("config.baseURL is the only source");
+    }
+  });
+
+  it("rejects requestContext.storageState, with a message stating the session mechanism owns it", () => {
+    const result = configSchema.safeParse({
+      requestContext: { storageState: { cookies: [], origins: [] } },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = JSON.stringify(result.error.issues);
+      expect(message).toContain("requestContext.storageState");
+      expect(message).toContain("session mechanism");
+    }
+  });
+});
+
 describe("configSchema: allure", () => {
   it("leaves allure undefined when omitted (the <stateDir>/allure-results default is applied by the caller, not this schema)", () => {
     const result = configSchema.safeParse({});
