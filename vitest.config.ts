@@ -12,6 +12,14 @@ export default defineConfig({
     // appear under full-suite parallel load, always in a different file,
     // and always pass on their own. That is contention, not a hang, and 5s
     // is what makes contention look like a hang.
-    testTimeout: 20_000,
+    //
+    // The specific number matters, and 20s was the wrong one: Playwright's
+    // own default navigation timeout is 30s, so a `page.goto` stuck under
+    // load was being cut off by vitest at 20s — before Playwright could
+    // raise the error that says which navigation hung and why. Whatever
+    // this is set to has to sit above Playwright's own timeouts, or the
+    // suite reports "Test timed out" where it could have reported the
+    // actual failure.
+    testTimeout: 60_000,
   },
 });
