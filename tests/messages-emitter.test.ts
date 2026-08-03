@@ -7,6 +7,7 @@ import { parseFeatureSource } from "../src/feature/load-features.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../src/report/messages/emitter.js";
 import type { Receipt } from "../src/receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import { readOwnVersion } from "../src/version.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: integration tests (this task's spec, test item 2) —
@@ -179,6 +180,12 @@ describe("createMessagesEmitter", () => {
       for (const pickle of pickleEnvelopes) {
         expect(pickle.uri).toBe(source.uri);
       }
+    });
+
+    it("sets meta.implementation to nukadoko's own name and package.json version (own-version task spec)", () => {
+      const meta = envelopes.find((e) => e.meta)!.meta!;
+      expect(meta.implementation.name).toBe("nukadoko");
+      expect(meta.implementation.version).toBe(readOwnVersion());
     });
 
     it("gives source.data the feature file's own original text", () => {

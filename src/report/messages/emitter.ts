@@ -13,6 +13,7 @@ import {
 } from "@cucumber/messages";
 import type { WritableSink } from "../../cli/writable-sink.js";
 import type { ScenarioRecord } from "../../run/record-types.js";
+import { readOwnVersion } from "../../version.js";
 import { readReceiptsForRecord } from "../receipts.js";
 import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 
@@ -94,11 +95,19 @@ function toPosixPath(relativePath: string): string {
 function buildMeta(): Meta {
   return {
     protocolVersion,
-    // No `version` on `implementation` (this task's spec, decision 5): this
-    // repo has no mechanism today to read its own package.json version at
-    // runtime, and `Product.version` is optional specifically so an unknown
-    // one can be omitted rather than guessed.
-    implementation: { name: "nukadoko" },
+    // `version` on `implementation` (own-version task spec): read via
+    // src/version.ts's readOwnVersion(), which throws if nukadoko's own
+    // package.json can't be found or has no string `version` — a packaging
+    // bug, not something to guess a fallback for here. Deliberately not
+    // caught locally: buildMeta() is only ever called from begin() (below),
+    // which already wraps its whole body in try/catch (this file's own
+    // header, "Failure isolation") and treats any failure there — this one
+    // included — as "messages begin failed", latching `enabled` false for
+    // the rest of the run. `Product.version` staying optional in the
+    // cucumber-messages schema is unrelated to that failure path; it exists
+    // for implementations that never had a version to report, not as a
+    // shrug for one that failed to read its own.
+    implementation: { name: "nukadoko", version: readOwnVersion() },
     runtime: { name: "node", version: process.versions.node },
     os: { name: process.platform },
     cpu: { name: process.arch },

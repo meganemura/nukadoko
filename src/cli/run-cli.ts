@@ -5,6 +5,7 @@ import yargs from "yargs";
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
+import { readOwnVersion } from "../version.js";
 import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
 import { runDo } from "./do.js";
@@ -33,6 +34,16 @@ import type { WritableSink } from "./writable-sink.js";
 // `install` removed in m5e-skill-spec-compliance — see that file's header),
 // the same split; this module only wires their argv shapes and reports
 // their exit codes.
+//
+// `--version` (own-version task spec) reads nukadoko's own package.json via
+// src/version.ts's readOwnVersion() and is fed to yargs' `.version()`
+// explicitly, below — yargs was never told a version before, so it fell
+// back to its own default resolution, which walks up from `process.cwd()`
+// and prints whichever project happens to be running the CLI, not
+// nukadoko's own. If reading nukadoko's own version fails, that is a
+// packaging bug (see readOwnVersion()'s own doc comment): the whole
+// invocation fails fast, before yargs even parses `argv`, rather than
+// falling through to a wrong or guessed version string.
 
 export type { WritableSink } from "./writable-sink.js";
 
@@ -98,6 +109,14 @@ export async function runCli(
   const rootDir = options.rootDir ?? process.cwd();
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
+
+  let ownVersion: string;
+  try {
+    ownVersion = readOwnVersion();
+  } catch (error) {
+    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
 
   let exitCode = 0;
 
@@ -420,6 +439,7 @@ export async function runCli(
     // a localized frame around untranslated content — and a user reporting
     // an error message quotes the same string the maintainer reads.
     .locale("en")
+    .version(ownVersion)
     .exitProcess(false)
     .fail((msg: string | null, err: Error | undefined) => {
       argsFailed = true;
