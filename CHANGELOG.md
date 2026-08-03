@@ -4,6 +4,24 @@ Notable changes to nukadoko. Versions follow [Semantic Versioning](https://semve
 with one caveat stated in the README: this is pre-0.1, so the public API can
 change without a major bump until 0.1.
 
+## 0.0.2 — 2026-08-03
+
+### Fixed
+
+- `nuka --version` printed the version of whichever project was running the
+  CLI rather than nukadoko's own. yargs was never told a version, so its
+  default resolution walked up from the current working directory: a
+  consumer whose package.json said `9.9.9` got `9.9.9`, and one with no
+  version field got `unknown`. It now reads this package's own
+  package.json, resolved from the module's own location.
+
+### Added
+
+- The cucumber-messages `meta` envelope carries `implementation.version`.
+  It was omitted in 0.0.1 only because nothing here could read the
+  package's own version at runtime, which is the same gap the fix above
+  closed.
+
 ## 0.0.1 — 2026-08-03
 
 First published version. Covered by 523 tests.
