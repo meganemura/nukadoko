@@ -48,8 +48,7 @@ Allure.
 
 ## Status
 
-**Pre-0.1, and this is version 0.0.3.** The public API can change without a
-major bump until 0.1.
+**Pre-0.1.** The public API can change without a major bump until 0.1.
 
 Implemented and covered by tests: typed steps, receipts, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages

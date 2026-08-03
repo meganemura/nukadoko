@@ -42,7 +42,7 @@ agent によるある実行の報告は、その実行の記録そのものに�
 
 ## Status
 
-**Pre-0.1 で、これはバージョン 0.0.3 です。**
+**Pre-0.1 です。**
 0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
 
 テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
