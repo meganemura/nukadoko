@@ -48,7 +48,7 @@ Allure.
 
 ## Status
 
-**Pre-0.1, and this is version 0.0.2.** The public API can change without a
+**Pre-0.1, and this is version 0.0.3.** The public API can change without a
 major bump until 0.1.
 
 Implemented and covered by tests: typed steps, receipts, sessions,
