@@ -73,6 +73,22 @@ nukadoko is a devDependency: it ships its own TypeScript source alongside
 `dist/`, so stack traces land on real code and an agent reading
 `node_modules` can see why a thing works, not just its type.
 
+**No `package.json` yet (Rails, Django, and other non-Node repos)?** Create
+one first. Skip `npm init -y` — it copies your existing `README.md`'s first
+line into `description` and the directory name into `name`, so it's more
+reliable to write the minimum by hand:
+
+```json
+{ "private": true, "type": "module" }
+```
+
+`"type": "module"` is required, not optional: nukadoko is ESM-only, and
+without it every `nuka` command fails with `No "exports" main defined in
+.../node_modules/nukadoko/package.json` — which never mentions `type`, and
+which nukadoko cannot improve on, since the CLI hasn't loaded yet when Node
+gives up. You don't need to gitignore `.nukadoko/` yourself — `nuka init`
+writes that.
+
 **Starting from nothing rather than migrating?** Skip the compat door
 entirely. Write `defineStep`s directly (see [Before / after](#before--after))
 and let the `acceptance` skill carry a ticket's criteria through to a
