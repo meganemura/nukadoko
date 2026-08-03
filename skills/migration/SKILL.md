@@ -1,35 +1,47 @@
 ---
 name: migration
-description: Use when moving an existing cucumber-js suite (typically driving Playwright) onto nukadoko — switching glue imports to `nukadoko/compat` so the suite runs unchanged, then promoting individual steps to typed `defineStep`s at your own pace.
+description: Use when moving an existing test suite onto nukadoko, whether from cucumber-js (typically driving Playwright) or from another DSL already shaped as typed steps. Covers the two-stage discipline that keeps every failure traceable to one change, the `nukadoko/compat` door, and promoting steps to typed `defineStep`s at your own pace.
 compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka check, nuka run, nuka steps, nuka describe, nuka do).
 license: MIT
 ---
 
-# Migrating a cucumber-js suite to nukadoko
+# Migrating to nukadoko
 
 ## What this is for
 
-An existing cucumber-js suite — feature files plus glue, usually driving
-Playwright — moving onto nukadoko. This is not a rewrite: the suite keeps
-running while it moves, one piece at a time.
+An existing suite moving onto nukadoko, one piece at a time — not a rewrite.
+Where it starts differs:
 
-The move happens in two stages. Do not do both at once; the rest of this
-skill explains why and walks through each stage in order.
+- **A cucumber-js suite** — feature files plus glue, usually driving
+  Playwright.
+- **A suite already shaped as typed steps** — its own DSL, not cucumber's,
+  but close enough to nukadoko's `defineStep` that the move is mostly
+  translation.
+
+Either way, the move happens in stages, never all at once; the rest of this
+skill explains why, then walks through each starting point in turn.
 
 ## Two stages, never at once
 
-- **Stage 1** — switch the import so the suite runs on nukadoko exactly as
-  it is, with no other change.
-- **Stage 2** — give individual steps typed contracts, one at a time.
+Change one thing, then the next — never both at once. If a step breaks after
+two changes land together, there is no way to tell which one broke it: the
+causes are tangled in a single failure. Splitting the work into stages keeps
+every failure traceable to exactly one change. That is the whole point — the
+stages themselves are secondary to it.
 
-Doing both together is the one thing to avoid. If a step breaks with both
-changes made at once, there is no way to tell whether the import switch
-broke it or the added typing did — the two causes are now tangled in one
-failure. Keeping them apart keeps every failure traceable to a single
-change. That is the whole reason for two stages; the stages themselves are
-secondary to it.
+If the stages below don't fit where you're starting from, derive your own
+two stages from this. What has to hold is the traceability, not these
+particular stage names.
 
-## Stage 1 — make it run
+Two applications follow: a cucumber-js suite splits into "switch the import"
+and "add typing" (below); a suite already shaped as typed steps splits
+differently, described further down.
+
+## Coming from a cucumber-js suite
+
+This is the case the two stages above are named after.
+
+### Stage 1 — make it run
 
 Change the one import each glue file uses:
 
@@ -49,7 +61,7 @@ first `nuka run` — the failure names what broke, and that is what to act
 on. A list written here would go stale the moment compat's coverage grows;
 the CLI's own output never does.
 
-## Stage 2 — give it contracts
+### Stage 2 — give it contracts
 
 Once the suite runs, some steps are worth typing. This is what changes when
 one is:
@@ -77,7 +89,7 @@ suite in one pass. How to rewrite any given piece of glue is a judgment
 call for the moment you're making it; nukadoko doesn't prescribe one
 recipe, and this skill won't either.
 
-## What a promoted step looks like
+### What a promoted step looks like
 
 One example. Before, compat glue:
 
@@ -133,6 +145,23 @@ This is the only worked example here. It's not a catalog of every gap
 between compat and typed — if another pattern comes up often enough to
 deserve one, that's a separate addition, not something to improvise from
 this single case.
+
+## Coming from a typed-step-shaped DSL
+
+If there are no feature files and no cucumber glue, the compat door in
+Stage 1 above is not relevant — skip straight past it.
+
+What makes that possible is that `pattern` is optional on `defineStep`: a
+step can be defined with no pattern at all and still be a complete piece of
+CLI-only vocabulary, runnable with `nuka do` and inspectable with
+`nuka describe`. That's a different pair of stages produced by the same
+principle above: move each step to a typed `defineStep` first, and bundle
+it into a Gherkin `pattern` later, whenever a feature file makes it worth
+doing.
+
+If the source DSL already carries something like a `description`, `args`,
+`returns`, `mutates`, and a `run` function, the translation to `defineStep`
+is direct — each has a `defineStep` counterpart to receive it.
 
 ## What not to do
 
