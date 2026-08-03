@@ -152,8 +152,8 @@ nukadoko は [Agent Skills specification](https://agentskills.io/specification) 
 - **migration** は cucumber-js のスイートを 2 段階で移行させ、どの違いがレシピではなく要点なのかを説明します。
 
 ```sh
-gh skill install meganemura/nukadoko     # any Agent Skills host
-nuka skill path                          # the copy matching your installed version
+gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
+nuka skill path                              # the copy matching your installed version
 ```
 
 どちらの skill も、CLI が答えられる内容を書き写しません(語彙、契約、拒否の理由はすべて `nuka steps`、`nuka describe`、stderr から得られます)。

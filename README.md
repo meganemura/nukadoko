@@ -240,8 +240,8 @@ Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
   explains which differences are the point rather than listing recipes.
 
 ```sh
-gh skill install meganemura/nukadoko     # any Agent Skills host
-nuka skill path                          # the copy matching your installed version
+gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
+nuka skill path                              # the copy matching your installed version
 ```
 
 Neither skill writes down what the CLI can answer — vocabulary, contracts,
