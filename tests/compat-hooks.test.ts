@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { After, Before, getRegisteredHooks } from "../src/compat/hooks.js";
+import { After, AfterStep, Before, getRegisteredHooks } from "../src/compat/hooks.js";
 
 // Responsibility: unit coverage for src/compat/hooks.ts's registration shapes
 // (m2.1a-compat-registration task spec, decision 1) — in particular the bare
@@ -108,5 +108,44 @@ describe("Before/After hook registration", () => {
 
   it("a non-object options argument (null) throws", () => {
     expect(() => Before(null as never, () => {})).toThrow();
+  });
+});
+
+// t7-compat-status-afterstep task spec, item 2-1: "登録の形は After と同じ
+// 3 通り" — the same three call shapes, tested the same way Before/After's
+// own registration tests above are.
+describe("AfterStep hook registration", () => {
+  it("AfterStep(fn) registers with type after_step, tags undefined", () => {
+    const fn = () => {};
+    AfterStep(fn);
+    expect(lastHook()).toMatchObject({ type: "after_step", tags: undefined, fn });
+  });
+
+  it("AfterStep({ tags }, fn) registers with the given tags", () => {
+    const fn = () => {};
+    AfterStep({ tags: "@smoke" }, fn);
+    expect(lastHook()).toMatchObject({ type: "after_step", tags: "@smoke", fn });
+  });
+
+  it('AfterStep("@tag", fn) registers the same as AfterStep({ tags: "@tag" }, fn)', () => {
+    const fn = () => {};
+    AfterStep("@smoke", fn);
+    expect(lastHook()).toMatchObject({ type: "after_step", tags: "@smoke", fn });
+  });
+
+  it('AfterStep("not @tag", fn) registers the same as AfterStep({ tags: "not @tag" }, fn)', () => {
+    const fn = () => {};
+    AfterStep("not @slow", fn);
+    expect(lastHook()).toMatchObject({ type: "after_step", tags: "not @slow", fn });
+  });
+
+  it("AfterStep({ timeout }, fn) keeps timeoutMs the same way Before/After do", () => {
+    const fn = () => {};
+    AfterStep({ timeout: 3000 }, fn);
+    expect(lastHook()).toMatchObject({ type: "after_step", tags: undefined, timeoutMs: 3000, fn });
+  });
+
+  it("an unknown options key throws for AfterStep too", () => {
+    expect(() => AfterStep({ retries: 3 } as never, () => {})).toThrow(/retries/);
   });
 });

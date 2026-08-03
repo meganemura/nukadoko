@@ -120,7 +120,11 @@ function buildMeta(): Meta {
 export function createMessagesEmitter(options: MessagesEmitterOptions): MessagesEmitter {
   const newId = IdGenerator.uuid();
   let enabled = false;
-  let hookIds: { before?: string; after?: string } = {};
+  // `afterStep` added (t7-afterstep-consumers task spec, item 1) — keyed by
+  // `step_index`, mirroring `before`/`after` but one id per index rather
+  // than one for the whole run (map-scenario.ts's own `MapScenarioInput.
+  // hookIds` header explains why).
+  let hookIds: { before?: string; after?: string; afterStep?: Record<number, string> } = {};
 
   function warn(message: string): void {
     options.stderr.write(`warning: ${message}\n`);
@@ -216,9 +220,13 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
         const receipts = readReceiptsForRecord(options.rootDir, input.record);
         const mapped = mapScenario({ record: input.record, receipts, pickle: input.pickle, newId, hookIds });
 
-        for (const { type, hook } of mapped.newHooks) {
-          appendEnvelope({ hook });
-          hookIds = { ...hookIds, [type]: hook.id };
+        for (const entry of mapped.newHooks) {
+          appendEnvelope({ hook: entry.hook });
+          if (entry.type === "after_step") {
+            hookIds = { ...hookIds, afterStep: { ...hookIds.afterStep, [entry.stepIndex]: entry.hook.id } };
+          } else {
+            hookIds = { ...hookIds, [entry.type]: entry.hook.id };
+          }
         }
 
         appendEnvelope({ testCase: mapped.testCase });

@@ -128,9 +128,32 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
   return lines;
 }
 
+// A non-exhaustive ternary (`hook.type === "before" ? ... : ...`) is what
+// let `"after_step"` silently render as "After hook" in the first place
+// (t7-afterstep-consumers task spec, item 2's own bug report) — `switch` +
+// a `never`-typed default is the fix: if `ScenarioHookRecord["type"]` ever
+// grows a fourth value, this stops compiling instead of quietly mislabeling
+// it the way the ternary did. `step_index` is folded into the label itself,
+// not left to the JSON body below to explain, since a JSON body's own key
+// order is not something a reader scanning headings should have to open to
+// find "which step".
+function hookLabel(hook: ScenarioRecord["hooks"][number]): string {
+  switch (hook.type) {
+    case "before":
+      return "Before hook";
+    case "after":
+      return "After hook";
+    case "after_step":
+      return `AfterStep hook (step ${hook.step_index})`;
+    default: {
+      const exhaustive: never = hook.type;
+      throw new Error(`nuka accept: unhandled hook type ${String(exhaustive)}`);
+    }
+  }
+}
+
 function renderHook(hook: ScenarioRecord["hooks"][number]): string[] {
-  const label = hook.type === "before" ? "Before hook" : "After hook";
-  return ["", `#### ${label}`, "", "```json", JSON.stringify(hook, null, 2), "```"];
+  return ["", `#### ${hookLabel(hook)}`, "", "```json", JSON.stringify(hook, null, 2), "```"];
 }
 
 function renderStep(scenarioId: string, step: ScenarioRecord["steps"][number], receipts: ReadonlyMap<string, Receipt | null>): string[] {

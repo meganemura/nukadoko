@@ -51,6 +51,14 @@ Everything below that import keeps working, unchanged:
   `not @tag`; custom `setWorldConstructor` subclasses. A hook receives
   cucumber's hook parameter, so `Before(function ({ pickle }) {...})` works
   as written.
+- `AfterStep`, registered the same three ways as `Before`/`After`. It runs
+  once per step that actually executed in the scenario, not once for the
+  whole scenario the way `Before`/`After` do: a step this scenario skipped
+  because an earlier one already failed never began, so `AfterStep` doesn't
+  run for it either — there is no "after" for a step that never started.
+- `Status`, cucumber-js's own `TestStepResultStatus` enum, re-exported under
+  the same name — `result.status === Status.FAILED` inside a `Before` /
+  `After` / `AfterStep` hook now imports and compares correctly.
 - `DataTable` — `raw()`/`rows()`/`hashes()`/`rowsHash()`/`transpose()` — a
   step calling `table.hashes()` keeps working exactly as written (zero
   friction, measured migrating examples/migration's own suite).
@@ -82,15 +90,27 @@ names before you run anything, some of it only surfaces on the first
 `nuka run` that reaches the step — each item below says which, so the pass
 is a list you can work through, not a hunt.
 
-- **Names `nukadoko/compat` does not export, used as a value**: `AfterStep`,
-  `Status`, `setParallelCanAssign`. An ES module's named import is resolved
-  at link time, so importing one of these and using it takes the whole
-  import statement — and with it the file — down; split the import or drop
-  the call. Caught before anything runs: `nuka check` reports the file as
-  `step-file-import-failed`, carrying Node's own error message; if `check`
-  was skipped, the same failure surfaces on the first `nuka run` that tries
-  to import the file. (`BeforeAll`, `AfterAll` and `setDefaultTimeout` were
-  on this list when the audit ran and are now supported; see below.)
+- **`setParallelCanAssign`, used as a value**: `nukadoko/compat` does not
+  export it. An ES module's named import is resolved at link time, so
+  importing it and calling it takes the whole import statement — and with
+  it the file — down; split the import or drop the call. Caught before
+  anything runs: `nuka check` reports the file as `step-file-import-failed`,
+  carrying Node's own error message; if `check` was skipped, the same
+  failure surfaces on the first `nuka run` that tries to import the file.
+  This is the one name on this list that stays unsupported by decision, not
+  because support just hasn't caught up yet: nukadoko has no parallel
+  execution, and none is on the roadmap, so there is nothing for a
+  work-assignment callback to actually control. Accepting the call as a
+  no-op would be worse than refusing it — it would import cleanly, run, and
+  leave a suite believing its parallel-assignment rule was in effect while
+  nothing enforced it, exactly the quiet failure this door exists to refuse
+  (docs/spec.md "Compat steps (the migration door)"). Failing at the import
+  instead keeps that promise, the same way every other name on this list
+  fails. If nukadoko ever gains parallel execution, `setParallelCanAssign`
+  gets reconsidered against whatever that execution actually needs to
+  control; nothing here promises when, or that it happens at all.
+  (`AfterStep`, `Status`, `BeforeAll`, `AfterAll` and `setDefaultTimeout`
+  were on this list when the audit ran and are now supported; see above.)
 - **The same kind of name, used only as a type** is a different case, not a
   smaller version of the one above: esbuild elides a type-only import from
   the compiled output, so nothing by that name is actually imported at run

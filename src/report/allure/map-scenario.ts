@@ -87,6 +87,13 @@ export interface MappedStep {
   readonly childSteps: MappedChildStep[];
 }
 
+/** `type` stays the closed `"before" | "after"` pair unchanged (t7-compat-
+ * status-afterstep task spec, item 2-6) even though `record.hooks[].type`
+ * itself now also has `"after_step"` — allure-js-commons' own `FixtureType`
+ * is that exact same closed union (no third kind exists to map onto), and
+ * this task's spec is explicit that the Allure side gets no new concept: an
+ * `"after_step"` record hook still becomes an `"after"` fixture, just named
+ * so its own step is readable from the report (`mapHooks`, below). */
 export interface MappedHook {
   readonly type: "before" | "after";
   readonly name: string;
@@ -581,14 +588,24 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
     const outcome = resolveHookOutcome(hook);
     // record.json never carries a hook's own start/stop (documented limit,
     // restated on emitter.ts): every before-hook collapses to the
-    // scenario's own `started_at`, every after-hook to its `finished_at`,
-    // both zero-width.
+    // scenario's own `started_at`, every after-hook — `"after"` and
+    // `"after_step"` alike (t7-compat-status-afterstep task spec) — to its
+    // `finished_at`, both zero-width.
     const timestampMs = hook.type === "before" ? scenarioStartMs : scenarioStopMs;
     const declared = mapDeclared(hook.declared, record.evidence.dir);
+    // `"after_step"` folds onto Allure's own `"after"` fixture type (this
+    // task's spec, item 2-6 — see `MappedHook.type`'s own comment for why);
+    // the step it ran after is named into the fixture instead, since that is
+    // the only place left for that fact to live without a new Allure-side
+    // concept. `hook.step_index` is guaranteed present exactly when
+    // `hook.type === "after_step"` (record-types.ts's own contract).
+    const fixtureType: "before" | "after" = hook.type === "before" ? "before" : "after";
+    const name =
+      hook.type === "before" ? "Before" : hook.type === "after" ? "After" : `AfterStep[${hook.step_index}]`;
     return {
       hook: {
-        type: hook.type,
-        name: hook.type === "before" ? "Before" : "After",
+        type: fixtureType,
+        name,
         status: outcome.status,
         message: outcome.message,
         startMs: timestampMs,

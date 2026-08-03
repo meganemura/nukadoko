@@ -17,10 +17,24 @@
 // called — enforcing the timeout and actually building a `HookParameter` at
 // call time are src/run/run-scenario.ts's job, same split as
 // src/compat/registry.ts's own `CompatStepOptions.timeout`/`timeoutMs`).
+//
+// t7-compat-status-afterstep task spec: `AfterStep` is added — the compat
+// audit that drove this task counted it once, in one real-world repo, but an
+// ESM named import that misses one name drops the whole `import { ... }`
+// statement's file, so even one occurrence is a full file's worth of real
+// damage. Registration form is deliberately identical to `Before`/`After`
+// (same three call shapes, same tag-expression subset, same `registerHook`)
+// — this task's spec is explicit that `AfterStep` invents no new registration
+// vocabulary of its own.
 
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 
-export type HookType = "before" | "after";
+/** `"after_step"` added (t7-compat-status-afterstep task spec) — `AfterStep`
+ * below, alongside the pre-existing `Before`/`After`. Registration is
+ * identical for all three (`registerHook`, this file); only *execution*
+ * (src/run/run-scenario.ts) treats `"after_step"` differently, since it
+ * runs once per executed pickle step rather than once per scenario. */
+export type HookType = "before" | "after" | "after_step";
 
 /**
  * cucumber-js's own `ITestCaseHookParameter` shape (m21b-compat-execution
@@ -41,13 +55,21 @@ export interface HookParameter {
    * same field name real glue already reads, so that read resolves to a
    * real, stable, per-scenario string instead of `undefined`. */
   readonly testCaseStartedId: string;
-  /** After-hook only (cucumber-js itself never sets this for Before).
-   * `status` reuses cucumber's own `Status` enum's *string values*
-   * (`"PASSED"`/`"FAILED"`), not the enum itself: `@cucumber/cucumber` does
-   * not export `Status`, so glue written as `result.status === Status.FAILED`
-   * would fail to even import, while the equally common
-   * `result.status === "FAILED"` string comparison keeps meaning what it
-   * always meant. */
+  /** After-hook and AfterStep-hook only (cucumber-js itself never sets this
+   * for Before) — for After, the scenario's own outcome so far; for
+   * AfterStep (t7-compat-status-afterstep task spec), that one step's own
+   * outcome, not the scenario's. `status` reuses cucumber's own `Status`
+   * enum's *string values* (`"PASSED"`/`"FAILED"`) — and, as of this task,
+   * `nukadoko/compat` also re-exports that exact enum, under the same name,
+   * as `Status` (src/compat/index.ts, re-exporting `@cucumber/messages`'s
+   * `TestStepResultStatus` verbatim), so glue written as
+   * `result.status === Status.FAILED` now imports and compares correctly.
+   * This comment used to claim `@cucumber/cucumber` doesn't export `Status`
+   * either — that was simply wrong (cucumber-js does; the compat audit that
+   * drove this task counted that exact `result.status === Status.FAILED`
+   * shape 3 times, across 3 real-world repos). The equally common
+   * `result.status === "FAILED"` string comparison still means what it
+   * always meant, unaffected by the enum's own re-export. */
   readonly result?: { readonly status: "PASSED" | "FAILED" };
   /** nukadoko has no retry mechanism, so this is always `false` — present
    * because real glue destructures it as a sibling of the fields above, and
@@ -128,7 +150,7 @@ function registerHook(
   optionsOrFn: HookOptions | HookFn | string,
   maybeFn: HookFn | undefined,
 ): void {
-  const label = type === "before" ? "Before" : "After";
+  const label = type === "before" ? "Before" : type === "after" ? "After" : "AfterStep";
 
   if (typeof optionsOrFn === "function") {
     hookBuffer.push({ type, tags: undefined, fn: optionsOrFn, registrationOrder: hookCounter++ });
@@ -200,6 +222,24 @@ export function After(options: HookOptions, fn: HookFn): void;
 export function After(tags: string, fn: HookFn): void;
 export function After(optionsOrFn: HookOptions | HookFn | string, fn?: HookFn): void {
   registerHook("after", optionsOrFn, fn);
+}
+
+/** `AfterStep(fn)`: attempted after every step that actually ran in this
+ * scenario (t7-compat-status-afterstep task spec, item 2-3) — not after a
+ * step this scenario skipped because an earlier one already failed: a
+ * skipped step never began, so there is no "after" for this hook to run at.
+ * See src/run/run-scenario.ts's own `runAfterStepHooks` for where that
+ * boundary is actually drawn at execution time (this file only registers). */
+export function AfterStep(fn: HookFn): void;
+/** `AfterStep({ tags }, fn)`: attempted only for a scenario matching
+ * `tags` — same single-`@tag`/`not @tag` support as `Before`/`After`
+ * (src/compat/tag-expression.ts), no new tag-filter mechanism of its own. */
+export function AfterStep(options: HookOptions, fn: HookFn): void;
+/** `AfterStep("@tag", fn)` / `AfterStep("not @tag", fn)`: same bare-string
+ * shorthand as `Before`/`After`. */
+export function AfterStep(tags: string, fn: HookFn): void;
+export function AfterStep(optionsOrFn: HookOptions | HookFn | string, fn?: HookFn): void {
+  registerHook("after_step", optionsOrFn, fn);
 }
 
 /** Read once, at the end of a discovery run (src/discover/discover-

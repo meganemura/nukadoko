@@ -35,6 +35,7 @@ export {
 export {
   Before,
   After,
+  AfterStep,
   type HookFn,
   type HookOptions,
   type HookParameter,
@@ -45,3 +46,21 @@ export { DataTable } from "./data-table.js";
 // m2c-typed-world task spec, item 2: World's own declaration surface —
 // "measurement is always on, declaration is opt-in".
 export { defineWorld, type InferWorldFields } from "./define-world.js";
+// `Status` (t7-compat-status-afterstep task spec): the compat audit counted
+// `result.status === Status.FAILED`-style glue 3 times, across 3 real-world
+// repos — an ESM named import missing this one name drops that whole
+// `import { ... }` statement's file. Re-exports `@cucumber/messages`'s own
+// `TestStepResultStatus` verbatim (a real string enum, `PASSED = "PASSED"`
+// etc.) rather than defining a second one: `HookParameter.result.status`
+// (src/compat/hooks.ts) already returns that exact enum's own string values,
+// and has since before this task, so the re-export alone is enough to make
+// `result.status === Status.FAILED` both import and compare correctly.
+// `Status.PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS`/`UNKNOWN` can never
+// actually match a `HookParameter.result.status` under nukadoko — there is
+// no pending/skipped concept here (a step/hook returning either string fails
+// loudly instead, src/run/run-scenario.ts's `pendingOrSkippedMessage`, a
+// design decision already made before this task) and undefined/ambiguous are
+// step-match outcomes, never a hook's own result. A branch comparing against
+// one of those five is not a bug in migrated glue; it is a branch nukadoko
+// simply never takes, which is the correct behavior, not a gap to close.
+export { TestStepResultStatus as Status } from "@cucumber/messages";

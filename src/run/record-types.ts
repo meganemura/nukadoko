@@ -33,6 +33,21 @@
 // return), `world_invalid` (a declared World key's write, since a hook runs
 // against the same World a compat step does), and `step_error`.
 //
+// `ScenarioHookRecord.type` gains `"after_step"`, and `.step_index` is added
+// now (t7-compat-status-afterstep task spec, item 2-4): `AfterStep`
+// (src/compat/hooks.ts) runs once per *executed* pickle step, not once per
+// scenario the way Before/After do, so — unlike those two — its own record
+// entry needs to say which step it ran after, or a report reading
+// `record.hooks` would have no way to tell one AfterStep entry from another.
+// `step_index` is present only when `type` is `"after_step"`; it is the
+// 0-based index into this same record's own `steps` array (always the same
+// index as into the pickle's own `steps`, since src/run/run-scenario.ts
+// writes exactly one `steps` entry per pickle step, in order). A step this
+// scenario skipped (an earlier step already failed) gets no AfterStep entry
+// at all — it never executed, so there is no "after" for the hook to run at,
+// the same "a step nothing matched doesn't appear here" convention this
+// interface's own header already documents for a tag-mismatched hook.
+//
 // `ScenarioRecord.run_id` and `.git` are added now (m4a-run-provenance task
 // spec) — recording-side groundwork for `nuka accept` (docs/spec.md
 // "Sign-off"), which is not implemented yet and does not read either field
@@ -69,7 +84,7 @@ export interface ScenarioStepRecord {
  * simply absent, the same way a step nothing matched doesn't appear here
  * either. */
 export interface ScenarioHookRecord {
-  readonly type: "before" | "after";
+  readonly type: "before" | "after" | "after_step";
   readonly status: "ok" | "failed";
   /** Present only when `status` is `"failed"`. `kind` is the same closed
    * enum a step's own `receipt.error.kind` uses (this file's own header). */
@@ -80,6 +95,10 @@ export interface ScenarioHookRecord {
    * (src/receipt/types.ts). Present only when at least one of its own
    * sub-fields is non-empty. */
   readonly declared?: DeclaredSnapshot;
+  /** Present only when `type` is `"after_step"` (this file's own header,
+   * t7-compat-status-afterstep task spec) — the 0-based index into this
+   * record's own `steps` array that this AfterStep hook ran after. */
+  readonly step_index?: number;
 }
 
 export interface ScenarioEvidence {

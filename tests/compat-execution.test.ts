@@ -285,4 +285,38 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(after.declared.logs).toContain("after:result=FAILED");
     });
   });
+
+  // t7-compat-status-afterstep task spec, item 1: `nukadoko/compat`'s own
+  // `Status` re-export actually works in a real After hook's own
+  // `result.status === Status.FAILED` branch — not just that `Status`
+  // imports (tests/compat-status.test.ts already covers that in isolation).
+  describe("Status (t7-compat-status-afterstep task spec, item 1)", () => {
+    it("result.status === Status.FAILED is false for a passing scenario", async () => {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(0);
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      const after = record.hooks.find((h: { type: string }) => h.type === "after");
+      expect(after.declared.logs).toContain("after:statusFailedMatches=false");
+    });
+
+    it("result.status === Status.FAILED is true for a failing scenario", async () => {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "features/hook-parameter.feature:6"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(1);
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      const after = record.hooks.find((h: { type: string }) => h.type === "after");
+      expect(after.declared.logs).toContain("after:statusFailedMatches=true");
+    });
+  });
 });

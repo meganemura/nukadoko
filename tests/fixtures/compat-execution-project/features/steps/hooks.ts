@@ -1,4 +1,4 @@
-import { After, Before, When } from "../../nukadoko-compat-shim.js";
+import { After, Before, Status, When } from "../../nukadoko-compat-shim.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -30,8 +30,14 @@ Before(function ({ gherkinDocument, pickle, testCaseStartedId, willBeRetried }) 
 
 // After-only `result` (this task's spec, item 3) — absent for Before,
 // present here as `{ status }` using cucumber's own Status string values.
+// `after:statusFailedMatches` (t7-compat-status-afterstep task spec, item 1)
+// proves `Status.FAILED` isn't just importable but actually equals the same
+// string `result.status` carries — real glue's own
+// `result.status === Status.FAILED` branch, not a string literal stand-in
+// for it.
 After(function ({ result }) {
   this.log(`after:result=${result?.status}`);
+  this.log(`after:statusFailedMatches=${result?.status === Status.FAILED}`);
 });
 
 // --- item 1/2: a per-hook `{ timeout }` override, scoped to @hook-timeout

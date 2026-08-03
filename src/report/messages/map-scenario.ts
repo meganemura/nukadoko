@@ -222,49 +222,60 @@ function mapPickleSteps(
   });
 }
 
+// `hookId` is now a resolver, not a single fixed string (t7-afterstep-
+// consumers task spec, item 1): a "before"/"after" call site still always
+// returns the same id (one Hook definition, same as before this change),
+// but an "after_step" call site needs a different Hook id per `step_index`
+// (see `mapScenario`'s own AfterStep section below for why: cucumber-
+// messages has no field on `TestStep` to carry "which step" other than the
+// `Hook.name` its `hookId` points at, so distinct step indices need
+// distinct Hook envelopes to have distinct names).
 function mapHookSteps(
-  hooks: readonly ScenarioHookRecord[],
-  type: "before" | "after",
-  hookId: string,
+  hooksToMap: readonly ScenarioHookRecord[],
+  hookIdFor: (hook: ScenarioHookRecord) => string,
   timestampMs: number,
   evidenceDir: string,
   testCaseStartedId: string,
   newId: () => string,
 ): MappedTestStep[] {
-  return hooks
-    .filter((hook) => hook.type === type)
-    .map((hook): MappedTestStep => {
-      const testStepId = newId();
-      const attachments = declaredAttachmentPlans(hook.declared, evidenceDir, testCaseStartedId, testStepId);
-      // Before-hook = scenario start, after-hook = scenario finish, both
-      // zero-width (this task's spec, decision 8) — record.json carries no
-      // per-hook timestamp of its own (the same known limit
-      // src/report/allure/emitter.ts's own header documents).
-      return {
-        testStep: { id: testStepId, hookId },
-        testStepStarted: {
-          testCaseStartedId,
-          testStepId,
-          timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(timestampMs),
-        },
-        testStepFinished: {
-          testCaseStartedId,
-          testStepId,
-          timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(timestampMs),
-          testStepResult: buildResult(statusForHook(hook.status), hook.error?.message, timestampMs, timestampMs),
-        },
-        attachments,
-      };
-    });
+  return hooksToMap.map((hook): MappedTestStep => {
+    const testStepId = newId();
+    const attachments = declaredAttachmentPlans(hook.declared, evidenceDir, testCaseStartedId, testStepId);
+    // Before-hook = scenario start, after-hook (both "after" and
+    // "after_step") = scenario finish, all zero-width (this task's spec,
+    // decision 8, extended by t7-afterstep-consumers task spec, item 1 to
+    // "after_step" — record.json carries no per-hook timestamp of its own,
+    // the same known limit src/report/allure/emitter.ts's own header
+    // documents, and the same collapse src/report/allure/map-scenario.ts's
+    // own `mapHooks` already makes for "after_step").
+    return {
+      testStep: { id: testStepId, hookId: hookIdFor(hook) },
+      testStepStarted: {
+        testCaseStartedId,
+        testStepId,
+        timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(timestampMs),
+      },
+      testStepFinished: {
+        testCaseStartedId,
+        testStepId,
+        timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(timestampMs),
+        testStepResult: buildResult(statusForHook(hook.status), hook.error?.message, timestampMs, timestampMs),
+      },
+      attachments,
+    };
+  });
 }
 
-/** A `Hook` envelope this scenario is the first to need, alongside which of
- * the two run-wide slots (`hookIds.before`/`hookIds.after`) it fills (this
- * task's spec, decision 6: created lazily, on first need). */
-export interface NewHookEnvelope {
-  readonly type: "before" | "after";
-  readonly hook: Hook;
-}
+/** A `Hook` envelope this scenario is the first to need, alongside which
+ * run-wide slot it fills (this task's spec, decision 6: created lazily, on
+ * first need) — `hookIds.before`/`hookIds.after` for `"before"`/`"after"`,
+ * or `hookIds.afterStep[stepIndex]` for `"after_step"` (t7-afterstep-
+ * consumers task spec, item 1: one Hook definition per distinct
+ * `step_index`, not one for the whole run, since each needs its own
+ * `AfterStep[<index>]` name). */
+export type NewHookEnvelope =
+  | { readonly type: "before" | "after"; readonly hook: Hook }
+  | { readonly type: "after_step"; readonly stepIndex: number; readonly hook: Hook };
 
 export interface MapScenarioInput {
   readonly record: ScenarioRecord;
@@ -275,12 +286,18 @@ export interface MapScenarioInput {
   readonly receipts: ReadonlyMap<string, Receipt | null>;
   readonly pickle: Pickle;
   readonly newId: () => string;
-  /** The `Hook` id already assigned to the "before"/"after" hook type
-   * earlier in this run (this task's spec, decision 6) — `undefined` means
-   * not yet assigned; this call then allocates one via `newId` and returns
-   * it in `newHooks` for the caller (emitter.ts) to remember for every later
-   * scenario. */
-  readonly hookIds: { readonly before?: string; readonly after?: string };
+  /** The `Hook` id(s) already assigned earlier in this run (this task's
+   * spec, decision 6) — `undefined`/absent means not yet assigned; this call
+   * then allocates one via `newId` and returns it in `newHooks` for the
+   * caller (emitter.ts) to remember for every later scenario.
+   * `afterStep` is keyed by `step_index` (t7-afterstep-consumers task
+   * spec, item 1) — one id per index, not one for the whole run, since each
+   * index gets its own `AfterStep[<index>]`-named Hook. */
+  readonly hookIds: {
+    readonly before?: string;
+    readonly after?: string;
+    readonly afterStep?: { readonly [stepIndex: number]: string };
+  };
 }
 
 export interface MappedScenario {
@@ -289,8 +306,15 @@ export interface MappedScenario {
   readonly testCaseStarted: TestCaseStarted;
   readonly testCaseFinished: TestCaseFinished;
   /** In envelope order: before-hook test steps, then pickle-step test steps,
-   * then after-hook test steps (this task's spec, decision 7) — also exactly
-   * `testCase.testSteps`' own order. */
+   * then after_step-hook test steps, then after-hook test steps (this
+   * task's spec, decision 7, extended by t7-afterstep-consumers task spec,
+   * item 1) — also exactly `testCase.testSteps`' own order. `after_step`
+   * sits before `after`, not after it, even though both collapse to the
+   * same zero-width `scenarioStopMs` instant (this file's own `mapHookSteps`
+   * comment): every AfterStep hook actually finishes, in real execution,
+   * before the scenario-level After hook ever starts, so this is the one
+   * place that relative fact can still be preserved even though the exact
+   * timestamps can't be. */
   readonly steps: readonly MappedTestStep[];
 }
 
@@ -299,12 +323,13 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
   const scenarioStartMs = Date.parse(record.started_at);
   const scenarioStopMs = Date.parse(record.finished_at);
 
-  const hasBeforeHook = record.hooks.some((hook) => hook.type === "before");
-  const hasAfterHook = record.hooks.some((hook) => hook.type === "after");
+  const beforeHooks = record.hooks.filter((hook) => hook.type === "before");
+  const afterHooks = record.hooks.filter((hook) => hook.type === "after");
+  const afterStepHooks = record.hooks.filter((hook) => hook.type === "after_step");
 
   const newHooks: NewHookEnvelope[] = [];
   let beforeHookId = hookIds.before;
-  if (hasBeforeHook && beforeHookId === undefined) {
+  if (beforeHooks.length > 0 && beforeHookId === undefined) {
     beforeHookId = newId();
     newHooks.push({
       type: "before",
@@ -312,7 +337,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     });
   }
   let afterHookId = hookIds.after;
-  if (hasAfterHook && afterHookId === undefined) {
+  if (afterHooks.length > 0 && afterHookId === undefined) {
     afterHookId = newId();
     newHooks.push({
       type: "after",
@@ -320,18 +345,61 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     });
   }
 
+  // AfterStep (t7-afterstep-consumers task spec, item 1): one Hook
+  // definition per distinct `step_index`, created lazily and reused across
+  // the run the same way before/after are (`hookIds.afterStep`, threaded in
+  // by emitter.ts) — not folded onto the existing "after" Hook id, since
+  // that would give every AfterStep occurrence the same "After" name and
+  // erase exactly the fact this task exists to stop dropping (which step it
+  // ran after). `type: HookType.AFTER_TEST_STEP` is the protocol's own
+  // existing concept for a step-level hook (messages.d.ts's `HookType`
+  // enum) — using it, rather than reusing `AFTER_TEST_CASE`, is not "a new
+  // concept on the cucumber-messages side" (the thing this task's spec rules
+  // out); it is the concept the protocol already ships for exactly this
+  // case. `Hook.name` still folds the index in (`AfterStep[<index>]`, same
+  // as src/report/allure/map-scenario.ts's own `mapHooks`) because
+  // `TestStep` itself has no field of its own to carry "which step" — only
+  // `hookId`/`pickleStepId` (messages.d.ts's `TestStep`) — so the index has
+  // nowhere to live except the Hook definition's own name. `step_index` is
+  // guaranteed present on every `"after_step"` record entry
+  // (record-types.ts's own contract), hence the `!`.
+  const afterStepHookIds: Record<number, string> = { ...hookIds.afterStep };
+  for (const hook of afterStepHooks) {
+    const stepIndex = hook.step_index!;
+    if (afterStepHookIds[stepIndex] === undefined) {
+      const id = newId();
+      afterStepHookIds[stepIndex] = id;
+      newHooks.push({
+        type: "after_step",
+        stepIndex,
+        hook: { id, name: `AfterStep[${stepIndex}]`, type: HookType.AFTER_TEST_STEP, sourceReference: {} },
+      });
+    }
+  }
+
   const testCaseId = newId();
   const testCaseStartedId = newId();
 
-  const beforeSteps = hasBeforeHook
-    ? mapHookSteps(record.hooks, "before", beforeHookId!, scenarioStartMs, record.evidence.dir, testCaseStartedId, newId)
-    : [];
+  const beforeSteps = mapHookSteps(
+    beforeHooks,
+    () => beforeHookId!,
+    scenarioStartMs,
+    record.evidence.dir,
+    testCaseStartedId,
+    newId,
+  );
   const pickleSteps = mapPickleSteps(record, receipts, pickle.steps, scenarioStartMs, testCaseStartedId, newId);
-  const afterSteps = hasAfterHook
-    ? mapHookSteps(record.hooks, "after", afterHookId!, scenarioStopMs, record.evidence.dir, testCaseStartedId, newId)
-    : [];
+  const afterStepSteps = mapHookSteps(
+    afterStepHooks,
+    (hook) => afterStepHookIds[hook.step_index!]!,
+    scenarioStopMs,
+    record.evidence.dir,
+    testCaseStartedId,
+    newId,
+  );
+  const afterSteps = mapHookSteps(afterHooks, () => afterHookId!, scenarioStopMs, record.evidence.dir, testCaseStartedId, newId);
 
-  const steps = [...beforeSteps, ...pickleSteps, ...afterSteps];
+  const steps = [...beforeSteps, ...pickleSteps, ...afterStepSteps, ...afterSteps];
 
   const testCase: TestCase = {
     id: testCaseId,

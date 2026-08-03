@@ -163,6 +163,14 @@ import { writeScenarioRecord } from "./write-record.js";
 // into every `runScenario` call unchanged — the same "measured once per
 // run, not once per pickle" shape `targetVersion` above already has. This
 // file only ever copies them onto each scenario record it writes.
+//
+// t7-compat-status-afterstep task spec: `runAfterStepHooks` (defined just
+// above the pickle.steps loop it's called from) adds `AfterStep` execution —
+// once per pickle step that actually ran, not once per scenario the way
+// Before/After are — with the exact same non-breaking failure handling the
+// After loop above already has (see that function's own header). Only a
+// step that actually executed reaches it; a skipped/never-began step does
+// not, matching this task's spec, item 2-3.
 
 /** The declared-mutates read-only refusal message (this task's spec,
  * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
@@ -654,6 +662,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     .filter((hook) => hook.type === "after" && hookApplies(hook.tags, pickleTags))
     .slice()
     .reverse();
+  // AfterStep hooks (t7-compat-status-afterstep task spec, item 2-1): same
+  // tag-filter as Before/After. Kept in registration order, unlike After's
+  // own reversal above — that reversal exists because After is teardown for
+  // Before's setup and cucumber-js unwinds teardown in the opposite order
+  // setup ran in; AfterStep has no such setup/teardown pairing (each
+  // AfterStep hook is independent of every other one), so there is no
+  // "unwind" for a reversal to model.
+  const afterStepHooks = compatHooks.filter(
+    (hook) => hook.type === "after_step" && hookApplies(hook.tags, pickleTags),
+  );
 
   // Hooks get their own boundary, never a step's own receipt dir (this
   // task's spec, item 5: a hook's own network stays outside any step
@@ -737,8 +755,109 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     }
   }
 
-  for (const pickleStep of pickle.steps) {
+  /**
+   * Runs every applicable AfterStep hook for one pickle step that actually
+   * executed (t7-compat-status-afterstep task spec, item 2-3) — the three
+   * call sites below are exactly the three places a step's own execution
+   * reaches a final `"ok"`/`"failed"` status: the typed branch, the compat
+   * branch, and the general per-step backstop catch's `began !== null` arm.
+   * A step that never began at all (undefined, ambiguous, the read-only
+   * declared-mutates refusal, or the backstop's own `began === null` arm)
+   * has no receipt and no "after" for this hook to run at, so none of those
+   * call this function — the same reasoning already covers a step this
+   * scenario skipped outright (the `if (scenarioFailed)` check at the very
+   * top of the loop below never reaches this function either, since it
+   * `continue`s before matching/running anything).
+   *
+   * `stepStatus` is that one step's own outcome, not the scenario's running
+   * one (item 2-2: `HookParameter.result` reflects "the step itself", the
+   * same distinction `buildHookParameter`'s own header draws for After).
+   *
+   * Failure handling mirrors the After loop above exactly (item 2-5: read
+   * that loop before touching this one) — an AfterStep hook's own failure
+   * still lets every other AfterStep hook for this same step run (no
+   * `break`, unlike the Before loop above: Before breaks because its own
+   * phase failing leaves nothing left to prepare into, but a sibling
+   * AfterStep hook for this exact step is just as reachable as it always
+   * was) and only sets `scenarioFailed` — which the next iteration of the
+   * pickle.steps loop below reads, skipping every remaining step exactly as
+   * if that step itself had failed.
+   */
+  async function runAfterStepHooks(stepIndex: number, stepStatus: "ok" | "failed"): Promise<void> {
+    if (afterStepHooks.length === 0) {
+      return;
+    }
+    // Same boundary redirect as the Before/After loops (this file's own
+    // header, m2b-compat-execution task spec, item 5): a hook's own network
+    // activity stays outside any step's own receipt boundary. Without this,
+    // an AfterStep hook's own requests would keep writing into the step it
+    // just ran after's own http.jsonl, even though that step's receipt (and
+    // its `observed` tally) was already built and written by
+    // `finishExecutedStep` before this function is ever called.
+    contextHandle.beginStep(scenarioDir);
+    worldInstrumentation.beginStep();
+    const hookParameter = buildHookParameter(
+      gherkinDocument,
+      pickle,
+      scenarioId,
+      stepStatus === "ok" ? "PASSED" : "FAILED",
+    );
+    for (const hook of afterStepHooks) {
+      // Same per-hook declared boundary as the Before/After loops (m2d-
+      // allure-shim task spec, item 4) — reset right before, read right
+      // after, so one AfterStep hook's own declared data never bleeds into a
+      // sibling's.
+      declaredCollector.beginStep(scenarioDir);
+      let hookStatus: "ok" | "failed" = "ok";
+      let hookErrorMessage = "";
+      let hookErrorKind: ErrorKind = "step_error";
+      if (hook.fn.length >= 2) {
+        hookStatus = "failed";
+        hookErrorMessage = doneCallbackMessage("Hook", "AfterStep");
+        hookErrorKind = "unsupported";
+      } else {
+        try {
+          const returnValue = await runWithTimeout(
+            () => Promise.resolve(hook.fn.call(world, hookParameter)),
+            hook.timeoutMs ?? defaultTimeoutMs,
+            "Hook",
+            "AfterStep",
+          );
+          if (returnValue === "pending" || returnValue === "skipped") {
+            hookStatus = "failed";
+            hookErrorMessage = pendingOrSkippedMessage("Hook", "AfterStep", returnValue);
+            hookErrorKind = "unsupported";
+          }
+        } catch (error) {
+          hookStatus = "failed";
+          hookErrorMessage = error instanceof Error ? error.message : String(error);
+          hookErrorKind = classifyCaughtError(error);
+        }
+      }
+      const declared = declaredCollector.snapshot();
+      if (hookStatus === "ok") {
+        hookRecords.push({ type: "after_step", step_index: stepIndex, status: "ok", ...(declared ? { declared } : {}) });
+      } else {
+        hookRecords.push({
+          type: "after_step",
+          step_index: stepIndex,
+          status: "failed",
+          error: { message: hookErrorMessage, kind: hookErrorKind },
+          ...(declared ? { declared } : {}),
+        });
+        // No `break` — see this function's own header (item 2-5: same
+        // non-breaking failure handling as the After loop above).
+        scenarioFailed = true;
+      }
+    }
+  }
+
+  for (const [stepIndex, pickleStep] of pickle.steps.entries()) {
     if (scenarioFailed) {
+      // item 2-3's own regression case: a step skipped because an earlier
+      // one already failed never executes, so it never reaches any of the
+      // three `runAfterStepHooks` call sites below either — this `continue`
+      // is exactly where that "no after for a skipped step" boundary lives.
       stepRecords.push({ text: pickleStep.text, status: "skipped", receipt: null });
       continue;
     }
@@ -923,6 +1042,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           entry.step,
           entry.step.mutates,
         );
+        await runAfterStepHooks(stepIndex, status);
       } else {
         // entry.kind === "compat" (m2b-compat-execution task spec, items
         // 2-3): fn is called with `this = World` and positional arguments —
@@ -1036,6 +1156,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           undefined,
           null,
         );
+        await runAfterStepHooks(stepIndex, status);
       }
     } catch (error) {
       // The backstop itself (see the comment above `began`): anything that
@@ -1102,6 +1223,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           receipt: began.receiptId,
           error: { message },
         });
+        // `began !== null`: this step's own execution had already begun (a
+        // receipt was written above) before the uncaught throw this backstop
+        // exists for — so, unlike the `began === null` arm just above (never
+        // began at all), this step did execute, and AfterStep runs after it
+        // exactly like the typed/compat branches' own calls further up.
+        await runAfterStepHooks(stepIndex, "failed");
       }
     }
   }

@@ -1,4 +1,4 @@
-import { IdGenerator, TestStepResultStatus, TimeConversion } from "@cucumber/messages";
+import { HookType, IdGenerator, TestStepResultStatus, TimeConversion } from "@cucumber/messages";
 import { describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { mapScenario } from "../src/report/messages/map-scenario.js";
@@ -164,6 +164,140 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
     expect(mapped.steps).toHaveLength(1);
     expect(mapped.steps[0]!.testStep.hookId).toBeUndefined();
     expect(mapped.newHooks).toHaveLength(0);
+  });
+});
+
+describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task spec, test item 1)", () => {
+  it("gives an after_step hook its own HookType.AFTER_TEST_STEP Hook named AfterStep[<step_index>], not folded onto \"After\"", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
+    const record = baseRecord({ steps: [step], hooks: [afterStepHook] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: {},
+    });
+
+    expect(mapped.newHooks).toHaveLength(1);
+    const newHook = mapped.newHooks[0]!;
+    expect(newHook.type).toBe("after_step");
+    expect(newHook.hook.name).toBe("AfterStep[0]");
+    expect(newHook.hook.type).toBe(HookType.AFTER_TEST_STEP);
+
+    // Detectable both by count (one hook-derived test step alongside the
+    // one pickle-step test step) and by which step it names (this task's
+    // spec, "テスト": "件数だけでなく、どの step の後かも"検出できる形で).
+    expect(mapped.steps).toHaveLength(2);
+    const afterStepTestStep = mapped.steps.find((s) => s.testStep.hookId !== undefined)!;
+    expect(afterStepTestStep.testStep.hookId).toBe(newHook.hook.id);
+  });
+
+  it("orders testSteps as before -> pickle steps -> after_step -> after", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
+    const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
+    const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const record = baseRecord({ steps: [step], hooks: [beforeHook, afterStepHook, afterHook] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: {},
+    });
+
+    expect(mapped.steps).toHaveLength(4);
+    expect(mapped.steps[0]!.testStep.hookId).toBe(mapped.newHooks.find((h) => h.type === "before")!.hook.id);
+    expect(mapped.steps[1]!.testStep.pickleStepId).toBeDefined();
+    expect(mapped.steps[2]!.testStep.hookId).toBe(mapped.newHooks.find((h) => h.type === "after_step")!.hook.id);
+    expect(mapped.steps[3]!.testStep.hookId).toBe(mapped.newHooks.find((h) => h.type === "after")!.hook.id);
+
+    expect(mapped.testCase.testSteps.map((s) => s.id)).toEqual(mapped.steps.map((s) => s.testStep.id));
+  });
+
+  it("gives distinct step_index values distinct Hook envelopes and distinct test steps", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const steps: ScenarioStepRecord[] = [
+      { text: "the cart has items", status: "passed", receipt: null },
+      { text: "the customer pays", status: "passed", receipt: null },
+    ];
+    const hooks: ScenarioHookRecord[] = [
+      { type: "after_step", status: "ok", step_index: 0 },
+      { type: "after_step", status: "ok", step_index: 1 },
+    ];
+    const record = baseRecord({ steps, hooks });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: {},
+    });
+
+    const afterStepHooks = mapped.newHooks.filter((h) => h.type === "after_step");
+    expect(afterStepHooks).toHaveLength(2);
+    expect(afterStepHooks.map((h) => h.hook.name).sort()).toEqual(["AfterStep[0]", "AfterStep[1]"]);
+    expect(new Set(afterStepHooks.map((h) => h.hook.id)).size).toBe(2);
+  });
+
+  it("reuses two already-assigned hookIds.afterStep entries and emits no new Hook envelope for either", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const steps: ScenarioStepRecord[] = [
+      { text: "the cart has items", status: "passed", receipt: null },
+      { text: "the customer pays", status: "passed", receipt: null },
+    ];
+    const hooks: ScenarioHookRecord[] = [
+      { type: "after_step", status: "ok", step_index: 0 },
+      { type: "after_step", status: "ok", step_index: 1 },
+    ];
+    const record = baseRecord({ steps, hooks });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: { afterStep: { 0: "already-assigned-0", 1: "already-assigned-1" } },
+    });
+
+    expect(mapped.newHooks).toHaveLength(0);
+    const hookSteps = mapped.steps.filter((s) => s.testStep.hookId !== undefined);
+    expect(hookSteps.map((s) => s.testStep.hookId).sort()).toEqual(["already-assigned-0", "already-assigned-1"]);
+  });
+
+  it("collapses multiple after_step hook records for the same step_index onto one shared Hook id", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const hooks: ScenarioHookRecord[] = [
+      { type: "after_step", status: "ok", step_index: 0 },
+      { type: "after_step", status: "failed", step_index: 0, error: { message: "boom", kind: "step_error" } },
+    ];
+    const record = baseRecord({ steps: [step], hooks });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: {},
+    });
+
+    expect(mapped.newHooks.filter((h) => h.type === "after_step")).toHaveLength(1);
+    const hookSteps = mapped.steps.filter((s) => s.testStep.hookId !== undefined);
+    expect(hookSteps).toHaveLength(2);
+    expect(hookSteps[0]!.testStep.hookId).toBe(hookSteps[1]!.testStep.hookId);
   });
 });
 

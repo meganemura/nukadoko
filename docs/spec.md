@@ -305,8 +305,8 @@ import { Given, When, Then } from "nukadoko/compat";
 - Compat steps run as-is: same pattern syntax, a World (`this`) whose
   `page` / `request` are provided and managed by nukadoko's harness. Custom
   World classes extend nukadoko's base via `setWorldConstructor`. The supported
-  API is the commonly used subset (Given/When/Then, World, Before/After);
-  it grows on demand, not speculatively.
+  API is the commonly used subset (Given/When/Then, World, Before/After,
+  AfterStep); it grows on demand, not speculatively.
 - Registration semantics: `Given`/`When`/`Then` are three names for one
   registration — a keyword means nothing at registration time; position in
   the scenario decides at run time, exactly as in Cucumber. Patterns are
@@ -339,7 +339,25 @@ import { Given, When, Then } from "nukadoko/compat";
   receive cucumber's own hook parameter, filter on `@tag` / `not @tag`
   only — anything fancier fails loudly rather than mismatching silently —
   appear in the scenario record's `hooks` array rather than as receipts,
-  and their network traffic sits outside any step's boundary.
+  and their network traffic sits outside any step's boundary. `AfterStep`
+  shares that same registration surface (all three call shapes, the same
+  `@tag` / `not @tag` filter), but where Before/After bracket the whole
+  scenario, it runs once per pickle step that actually executed. A step
+  this scenario skipped because an earlier one already failed never began,
+  so there is no "after" for `AfterStep` to run at, and none appears for
+  it — the same convention a tag-mismatched hook already follows. Each
+  `AfterStep` entry in the `hooks` array carries `step_index`, the executed
+  step's 0-based index into that record's own `steps` array, so a report
+  can tell one entry from another; both the Allure and cucumber-messages
+  emitters carry it through. The hook parameter's `result.status` reuses
+  `@cucumber/messages`'s own `TestStepResultStatus` string values, and
+  `nukadoko/compat` re-exports that same enum as `Status`, so glue written
+  as `result.status === Status.FAILED` now imports and compares correctly.
+  The enum's other members — `PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS` —
+  can never match, because nukadoko has no pending, skipped, undefined-step,
+  or ambiguous-match concept for a hook's own result to carry; a comparison
+  against one of those is a branch migrated glue simply never takes, not a
+  gap left open.
   `BeforeAll`/`AfterAll` bracket the whole run instead of a scenario — no
   tags, no World, skipped entirely when no scenario was selected — and
   report through the exit code, since a record is a scenario-shaped thing
