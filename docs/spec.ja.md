@@ -144,7 +144,11 @@ export default defineStep({
 この 1 つの規則が、今後のあらゆる「これは ctx に置くべきか」という問いを決めます。
 
 - `await ctx.page()`(Playwright の Page。初回呼び出しでブラウザが起動し、session の storageState から復元され、設定された baseURL が browser context に配線されるため `page.goto("/path")` はそれを基準に解決されます)
-- `await ctx.request()`(設定された baseURL と session の cookie を持つ Playwright の APIRequestContext)
+- `await ctx.request()`(session の cookie を持つ Playwright の APIRequestContext)。
+  baseURL はここでは任意です。上の `ctx.page()` と同じです。
+  複数のホストへ絶対 URL だけで話すスイートには述べるべき単一の baseURL がなく、nukadoko はこの呼び出しのためだけに意味のない baseURL を config に書かせません。
+  baseURL が未設定のまま step が相対パスを渡した場合、その失敗は Playwright 自身のものです。
+  nukadoko はそれを先回りして防ぐために URL 解決規則を自前で実装しません。
 - `ctx.env`(設定された envFiles から得られる環境変数、読み取り専用)。
   これは便利機能ではなく、決定論(プロセス環境は決してマージされない)と secrets の赤塗り(redact できるのは nukadoko 自身がロードした値だけ)が強制される場所です。
 - `ctx.requireEnv(name)` は `ctx.env[name]` と同じ値を返しますが、必須の変数を読む step がそれぞれ自前で書く羽目になっていた存在チェックを肩代わりします。
@@ -157,6 +161,8 @@ export default defineStep({
   `ctx` が見るのは常にマージ済みの結果だけで、`config.envFiles` のリストを見ることは決してないからです。
   すべてのキーを一度に欲しい稀な step のために `ctx.env` は残ります。
 - `ctx.baseURL`(設定された baseURL。自分で URL を組み立てる、まれな場合のためのものです。よくある経路には上記のとおり配線済みです)
+  `config.baseURL` が未設定のときは `undefined` になります。
+  絶対 URL だけのスイートにとってそれは正当な状態であり、エラー状態ではありません。
 - `ctx.resultOf(stepModule)` は、現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
   `nuka do` の下では、あるいはその step がまだ成功していない場合は `undefined` になります。
   これは scenario 経路のデータチャネルであり、意図的に World ではありません。

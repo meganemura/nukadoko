@@ -229,13 +229,18 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     async request(): Promise<APIRequestContext> {
       if (!requestContext) {
-        if (!config.baseURL) {
-          throw new Error(
-            'ctx.request() requires a baseURL: set "baseURL" in nukadoko.config.ts',
-          );
-        }
+        // No `baseURL` requirement here, matching `ctx.page()` above, which
+        // already passes `config.baseURL` through as `undefined` without
+        // complaint (baseurl-and-chaining-doc task spec, item A) — a suite
+        // that only ever talks to absolute URLs across several hosts has no
+        // single baseURL to state, and forcing one into config would make
+        // config assert something untrue. If a step written against a
+        // relative path actually needs a baseURL and none was configured,
+        // Playwright's own `newContext`/fetch call fails on that URL; this
+        // module does not duplicate Playwright's URL-resolution rules to
+        // pre-empt that with its own error.
         const raw = await playwrightRequest.newContext({
-          baseURL: config.baseURL,
+          ...(config.baseURL ? { baseURL: config.baseURL } : {}),
           ...(storageState ? { storageState } : {}),
         });
         requestContext = wrapRequestContextWithLogging(

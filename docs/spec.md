@@ -183,8 +183,13 @@ every future "does this belong on ctx?" question.
   restored from the session's storageState, with the configured baseURL
   wired into the browser context so `page.goto("/path")` resolves against
   it.
-- `await ctx.request()` — Playwright APIRequestContext with the configured
-  baseURL and the session's cookies.
+- `await ctx.request()` — Playwright APIRequestContext with the session's
+  cookies. `baseURL` is optional here, the same as `ctx.page()` above: a
+  suite that only ever calls absolute URLs across multiple hosts has no
+  single baseURL to state, and nukadoko does not force one into config just
+  to satisfy this call. If `baseURL` is unset and a step passes a relative
+  path anyway, the resulting failure is Playwright's own — nukadoko does
+  not re-implement its URL resolution to pre-empt it.
 - `ctx.env` — environment variables from the configured envFiles
   (read-only). Not a convenience: it is where determinism (the process
   environment is never merged) and secrets redaction (only values nukadoko
@@ -201,7 +206,9 @@ every future "does this belong on ctx?" question.
   `ctx` only ever sees the merged result, never `config.envFiles`'s list.
   `ctx.env` stays for the rare step that wants every key at once.
 - `ctx.baseURL` — the configured baseURL, for the occasional URL assembled
-  by hand; the common paths get it wired in above.
+  by hand; the common paths get it wired in above. `undefined` when
+  `config.baseURL` is unset — legitimate for an absolute-URL-only suite,
+  not an error state.
 - `ctx.resultOf(stepModule)` — the validated result of that step's most
   recent successful execution in the current scenario; `undefined` under
   `nuka do` or when the step hasn't succeeded yet. This is the scenario

@@ -117,14 +117,18 @@ describe("createStepContext / ctx.request()", () => {
     expect(evidence.http).toBeUndefined();
   });
 
-  it("throws an error naming the baseURL config key when unset", async () => {
-    const { ctx } = createStepContext({
+  it("returns an APIRequestContext without a baseURL, for suites that only use absolute URLs", async () => {
+    const { ctx, dispose } = createStepContext({
       config: baseConfig({ baseURL: undefined }),
       evidenceDir,
       env: {},
     });
 
-    await expect(ctx.request()).rejects.toThrow(/baseURL/);
+    const request = await ctx.request();
+    const ok = await request.get(`${baseURL}/ok`);
+    expect(ok.status()).toBe(200);
+
+    await dispose("ok");
   });
 });
 
