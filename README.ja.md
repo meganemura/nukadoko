@@ -25,6 +25,8 @@ nukadoko は同じそのファイルを実行します。
 
 ## Agent-first is a design constraint, not a slogan
 
+**agent-first はスローガンではなく、設計上の制約**
+
 agent は、介助なしにループ全体を完了できなければなりません。
 語彙を発見し(`nuka steps --json`)、契約を読み(`nuka describe`、スキーマは JSON Schema として)、1 つの step を実行し(`nuka do`、receipt は stdout に、意味のある exit code とともに)、バリデーション済みの result を読み、次の呼び出しを決めます。
 語彙に操作が欠けているときは、agent が新しい step を scaffold して実装し、人間がその PR をレビューします。
@@ -42,6 +44,8 @@ agent によるある実行の報告は、その実行の記録そのものに�
 
 ## Status
 
+**現況**
+
 **Pre-0.1 です。**
 0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
 
@@ -53,6 +57,8 @@ agent によるある実行の報告は、その実行の記録そのものに�
 推測にとどまるものについては、この README がその旨を書きます。
 
 ## Install
+
+**インストール**
 
 ```sh
 npm install -D nukadoko
@@ -97,6 +103,8 @@ compat の扉は丸ごとスキップしてください。
 
 ## What it fixes
 
+**何を直すのか**
+
 | The failure | What nukadoko does about it |
 |---|---|
 | 重複する step(どれが一致したか分からない) | `nuka check` は、何かが実行される前に、同じテキストが 2 回登録されている **duplicate patterns** と、feature の 1 行に異なる 2 つの pattern がどちらも一致し得る **ambiguous steps** を報告します |
@@ -114,6 +122,8 @@ compat の扉は丸ごとスキップしてください。
 実行が自分自身の request context と page を通じて実際に行った非 GET な呼び出しはいまも数えますが、その回数はもはや判定ではなく receipt 上の記録です。
 
 ## Before / after
+
+**移行前 / 移行後**
 
 regex のグルーコードを型付きの step に昇格させる例です。
 feature 行のテキスト自体は変わりません。
@@ -163,6 +173,8 @@ export default defineStep({
 
 ## The compat door, and the way back
 
+**compat の扉と、戻る道**
+
 既存の Cucumber + Playwright スイートの移行経路は、import を 1 つ切り替えることです。
 `@cucumber/cucumber` の代わりに `nukadoko/compat` を使い、同じ pattern の構文、hooks、World をそのまま動かしながら、その裏で nukadoko のハーネスが receipt の計測を始めます。
 step を `defineStep` に昇格させるかどうかは、そこから先は書き換えではなく step ごとの判断になり、半分だけ昇格したスイートもそのまま通り続けます。
@@ -191,6 +203,8 @@ compat の資産は、切り替えにも部分的な移行にも耐えなけれ�
 手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
 ## Reports fill themselves
+
+**レポートはひとりでに埋まる**
 
 従来型の Cucumber の実行がレポートに映す evidence は、チームが自分で配線したものです(trace やスクリーンショットのための hook の boilerplate を、プロジェクトごとに書いて保守しています)。
 [Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を emit するだけで、HTML 自体は決してレンダリングしません。
@@ -222,6 +236,8 @@ npx allure open allure-report                 # serve one already generated
 
 ## Self-healing, with the deviation on the record
 
+**自己修復、ただし逸脱は記録に残す**
+
 スクリプト化された scenario が壊れるのは、アプリが変わったからであり、テストが間違っていたからではありません。
 nukadoko が作られているのは、この修復のループのためです。
 
@@ -251,6 +267,8 @@ receipt が記録するのは実行が何をしたかであって、assertion �
 
 ## Skills for coding agents
 
+**コーディング agent のための skill**
+
 nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
 
 - **acceptance** はチケットの受け入れ基準を、コミットされた記録まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、`nuka accept` します)。
@@ -273,6 +291,8 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 
 ## When do you reach for which command
 
+**どのコマンドをいつ使うか**
+
 | When | Commands |
 |---|---|
 | 立ち上げ | `nuka init` → `nuka scaffold <name>` |
@@ -286,6 +306,8 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 `check` は安価な静的ゲートで、`run` は receipt の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結します。
 
 ## Try it against your own suite first
+
+**まず自分のスイートで試す**
 
 何かを移行しなくても、これが合うかどうかは分かります。
 agent を自分のリポジトリに向けて、以下のプロンプトを渡してください。
@@ -329,6 +351,8 @@ access to a document you need, say so rather than assuming.
 
 ## What this does not do
 
+**これがやらないこと**
+
 - **Receipts は偽造不可能ではありません。**
   shell アクセスを持つ agent は、receipt を含めどんなファイルでも書けます。
   これは secrets と同じ、正直な限界です。
@@ -353,6 +377,8 @@ access to a document you need, say so rather than assuming.
 
 ## Why not just drop Cucumber?
 
+**いっそ Cucumber をやめては?**
+
 それは妥当な問いであり、nukadoko はその答えではありません。
 Gherkin の層が割に合わないとチームが結論づけるなら、Playwright Test に直接移ることは合理的な判断であり、このツールはそれに異を唱えません。
 
@@ -362,10 +388,14 @@ nukadoko はその 2 つのコストを置き換え、scenario とそれを読�
 
 ## Design
 
+**設計**
+
 設計の全体、すなわち課題設定、型付き step、キーワードの意味論、receipt、session/environment/secret、sign-off、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
 
 English: [README.md](README.md) / [docs/spec.md](docs/spec.md)
 
 ## License
+
+**ライセンス**
 
 [MIT](LICENSE)
