@@ -8,7 +8,7 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)とそれが駆動する acceptance skill、そして M5 の両方の skill も実装済みです。
+Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)と M5 の両方の skill も実装済みです。
 `nuka check` における compat gap 検出が、M1-M5 の中でまだ実装されていない唯一の部分です。
 
 ## nukadoko とは
@@ -399,8 +399,8 @@ scenario はチケットの受け入れ基準から書かれ、green になる�
 後で再実行することが目的ではなく、nukadoko の中で再実行するものは何もありません。
 
 ```sh
-nuka run acceptance/PROJ-123.feature     # 必要なだけ何度でも実行する
-nuka accept acceptance/PROJ-123.feature  # 直近の green な run を凍結する
+nuka run acceptance/PROJ-123.feature     # execute, as often as needed
+nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 ```
 
 - `accept` は実行しません。
@@ -610,7 +610,6 @@ nuka skill path               where the bundled skill lives, for a project
   secret のオンボーディングは再設計されました。
 - **M2(compat API)**: `nukadoko/compat`(Given/When/Then/World/hooks のサブセット)、cucumber-js + Playwright のスイート向け移行ガイド。
 - **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)エミッタ(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results エミッタ。
-  drop-in なダッシュボードのストーリー。
 - **M4(sign-off)**: `nuka accept`、それが拒否の根拠にする commit と working tree のクリーンさのチェック、そして feature の隣に書かれる凍結された記録です。
 - **M5(skills)**: nukadoko が同梱する skill と、`nuka skill path` です。
   CLI は意図的に小さな動詞の集まりです。
