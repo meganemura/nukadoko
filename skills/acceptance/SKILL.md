@@ -31,7 +31,8 @@ just produces a scenario that proves the wrong thing.
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
 4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
-   Then bound to a mutating step — before anything runs.
+   Then bound to a mutating step, a chained key whose producing step is
+   missing or bound too late — before anything runs.
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
@@ -41,7 +42,9 @@ just produces a scenario that proves the wrong thing.
 ## Reading the vocabulary
 
 - `nuka steps --json` — every step, typed and compat: name, patterns,
-  description, mutates.
+  description, mutates, and where each chained args key comes from. That
+  last one is how to tell, without opening a file, which steps have to run
+  before which.
 - `nuka describe <step>` — its full contract: args/returns as JSON Schema.
 - Prefer what already exists. If an acceptance condition can be expressed
   with an existing step, use it — do not scaffold a new one just because a
@@ -55,6 +58,13 @@ just produces a scenario that proves the wrong thing.
    before it ever touches a feature. Fix and re-run until it does what it's
    supposed to; only move on to the feature-level `nuka run` once every new
    step in the scenario has passed this way on its own.
+
+A step that declares `from` (see "Chaining a value from an earlier step")
+still runs alone: pass the key in `--args` like any other, or add
+`--use <receipt-id>` to take it from the result of an execution you already
+have. The upstream step's name never goes on the command line — the cited
+receipt already records which step it belongs to. Repeat `--use` for as
+many upstreams as the step reads.
 
 `mutates` defaults to `true` — a new step is assumed to change state unless
 it says `mutates: false`, and `nuka describe <step>` tells you which before
@@ -165,8 +175,11 @@ that judgment is what PR review of the feature is for.
 ## Before running
 
 `nuka check <feature>`. Undefined steps, pattern/schema mismatches, a Then
-bound to a mutating step — every static inconsistency it can catch, catch
-before anything executes.
+bound to a mutating step, a step whose `from` key has no producing step
+earlier in that scenario — every static inconsistency it can catch, catch
+before anything executes. The last one is the one that otherwise costs a
+whole browser session to discover, since the scenario looks correct until
+the consuming step actually runs.
 
 Pass the feature path. A bare `nuka check` only walks `featuresDir`, and an
 acceptance feature is supposed to live outside it (see "What not to do"), so
