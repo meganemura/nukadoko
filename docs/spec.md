@@ -719,7 +719,10 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 - `sessions/<env>/<name>.json` — storageState; live credentials in
   plaintext, created with restricted permissions
 - `allure-results/` — the emitter's output, appended to across runs and
-  safe to delete whenever a fresh Allure launch is wanted
+  safe to delete whenever a fresh Allure launch is wanted; `init` also
+  creates it empty, since Allure's own CLI refuses to start against a
+  missing directory but accepts an empty one, letting `allure watch` already
+  be running before the first `nuka run`
 - `messages.ndjson` — the messages emitter's output, one stream per run;
   truncated at the start of every `nuka run` (see "Messages emitter")
 

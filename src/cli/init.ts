@@ -164,6 +164,17 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     stdout.write(".gitignore\n");
   }
 
+  // Allure's own CLI (`watch`/`generate`) refuses to start against a
+  // results directory that doesn't exist yet, but an empty one is enough
+  // (verified against allure 3.14.3: `watch` serves and `generate` produces
+  // an empty report). Creating it here — always the schema default, since
+  // `--features-dir` never touches `stateDir` — lets `allure watch` already
+  // be running before the first `nuka run`, instead of requiring one run to
+  // exist first just to make the directory appear.
+  const allureResultsDirRelative = path.join(defaults.stateDir, "allure-results");
+  await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
+  stdout.write(`${allureResultsDirRelative}\n`);
+
   try {
     const config = await loadConfig(rootDir);
     await discoverSteps(rootDir, config.featuresDir);

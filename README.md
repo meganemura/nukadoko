@@ -244,7 +244,9 @@ npx allure open allure-report                 # serve one already generated
 `watch` is the one to reach for while iterating: leave it running in one
 terminal, `nuka run` in another, and the report updates as each scenario
 lands. It serves on a random port — `--port` fixes one — and does not open
-a browser unless you pass `--open`.
+a browser unless you pass `--open`. `nuka init` creates
+`.nukadoko/allure-results/` up front, so `watch` can already be running
+before the first `nuka run`.
 
 `allure-results/` is append-only; nukadoko never clears it. A report
 therefore accumulates every run until you delete the directory yourself,

@@ -531,7 +531,10 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 - `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json` と、scenario スコープの evidence(trace.zip、最終スクリーンショット))。
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
 - `sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
-- `allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)
+- `allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)。
+  `init` もこれを空のまま作ります。
+  Allure 自身の CLI は、存在しないディレクトリでは起動を拒む一方、空のディレクトリなら受け付けるからです。
+  これにより、最初の `nuka run` より前から `allure watch` を起動しておけます。
 - `messages.ndjson`(messages emitter の出力。run ごとに 1 つのストリームで、`nuka run` のたびに先頭が truncate される。Messages emitter を参照)
 
 耐久性のある成果物はその代わりにリポジトリの中に置かれます: feature ファイル、型付き step、sign-off の記録です。

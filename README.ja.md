@@ -229,6 +229,7 @@ npx allure open allure-report                 # serve one already generated
 片方の端末で走らせたまま、もう片方で `nuka run` すると、scenario が着地するたびにレポートが更新されます。
 待ち受けるポートはランダムです(`--port` で固定できます)。
 `--open` を渡さないかぎり、ブラウザが開くことはありません。
+`nuka init` は `.nukadoko/allure-results/` をあらかじめ作るので、最初の `nuka run` より前から `watch` を起動しておけます。
 
 `allure-results/` は追記のみで、nukadoko がそれを消すことはありません。
 そのため、自分でディレクトリを削除するまでレポートには毎回の実行が積み重なります。

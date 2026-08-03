@@ -44,6 +44,7 @@ describe("nuka init", () => {
       "nukadoko.config.ts",
       path.join("features", "steps"),
       ".gitignore",
+      path.join(".nukadoko", "allure-results"),
     ]);
 
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
@@ -55,6 +56,20 @@ describe("nuka init", () => {
 
     const gitignore = await readFile(path.join(rootDir, ".gitignore"), "utf8");
     expect(gitignore).toContain(".nukadoko/");
+  });
+
+  it("creates <stateDir>/allure-results and reports its path on stdout", async () => {
+    const stdout = createCaptureSink();
+
+    const exitCode = await runCli(["init"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "allure-results"))).toBe(true);
+    expect(stdout.text()).toContain(path.join(".nukadoko", "allure-results"));
   });
 
   it("reflects --base-url in the generated config", async () => {
@@ -85,6 +100,7 @@ describe("nuka init", () => {
       "nukadoko.config.ts",
       path.join("e2e", "steps"),
       ".gitignore",
+      path.join(".nukadoko", "allure-results"),
     ]);
 
     expect(existsSync(path.join(rootDir, "e2e", "steps"))).toBe(true);
@@ -125,6 +141,17 @@ describe("nuka init", () => {
     });
     expect(stepsExitCode).toBe(0);
     expect(stepsStdout.text()).toContain("ping");
+  });
+
+  it("creates <stateDir>/allure-results at the default location even when --features-dir is given", async () => {
+    const exitCode = await runCli(["init", "--features-dir", "e2e"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "allure-results"))).toBe(true);
   });
 
   it("omits featuresDir from the generated config when --features-dir wasn't given (default stays undeclared)", async () => {
