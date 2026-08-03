@@ -11,20 +11,27 @@ import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-
 import { MissingEnvError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
+import { createSectionsCollector } from "./sections.js";
 import { createUsedCollector } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution hands
 // to a step's `run(ctx, args)` — env, baseURL (also wired into the browser
 // context so `page.goto("/path")` resolves against it), lazy browser, lazy
 // logged HTTP context — plus a `dispose` the executor calls *after* `run`
-// returns, never itself reachable from `ctx`. `poll` and `section` are
-// deliberately not assembled here: `poll` is a pure helper exported directly
-// from the package (src/context/poll.ts, src/index.ts), and `section` does
-// not exist yet (m2pre-ctx-surface task spec, decision 1 — docs/spec.md
-// "Context API"'s boundary rule). That split is the whole point: docs/spec.md's
-// trust model requires that a step cannot control its own receipt or
-// evidence collection, so nothing evidence-related is exposed on the object
-// passed into `run`; only the executor (src/cli/do.ts), which never hands
+// returns, never itself reachable from `ctx`. `poll` is deliberately not
+// assembled here: it is a pure helper exported directly from the package
+// (src/context/poll.ts, src/index.ts) that needs nothing this module owns.
+// `ctx.section`, unlike `poll`, *is* assembled here (t3-sections task spec,
+// decision 4): it only writes into the `sections` collector below (same
+// shape as `observed`/`used`), so the read side (`sectionsSnapshot()`) and
+// the reset (`beginStep`) stay executor-only, the same trust-model rule as
+// everything else on this handle — a step can write a label but can never
+// read back or clear what it or an earlier step already wrote.
+// docs/spec.md's Context API boundary rule (`ctx` carries only what the
+// executor must inject) is the whole point: docs/spec.md's trust model
+// requires that a step cannot control its own receipt or evidence
+// collection, so nothing evidence-related is exposed on the object passed
+// into `run`; only the executor (src/cli/do.ts), which never hands
 // `dispose` onward, can call it.
 // The same split applies to sessions: this module restores a loaded
 // storageState into whichever context(s) a step opens and hands back
@@ -53,6 +60,13 @@ import { createUsedCollector } from "./used.js";
 // every network path this ctx opens tallies into, never exposed on `ctx`
 // (same trust-model rule as `dispose`/`beginStep`: a step cannot see or
 // reset its own observation).
+//
+// `beginStep` resets `sections` the same way (t3-sections task spec,
+// decision 4): `nuka run` shares one `ctx`, hence one `sections` collector,
+// across every step of a pickle, so without this reset a later step's
+// receipt would start out already carrying whichever labels an earlier
+// step called `ctx.section` with — the same bleed-across-steps bug this
+// reset already prevents for `observed`/`used`.
 //
 // `env` arrives already loaded and merged (m1-secrets task spec, decision
 // 2): the executor is the one place that knows the full envFiles list *and*
@@ -111,14 +125,21 @@ export interface StepContextHandle {
    * (m2pre-resultof task spec, decision 2). Never exposed on `ctx` — same
    * rule as `observedCounts()`. */
   usedReceiptIds(): string[];
+  /** Executor-only: the labels `ctx.section` was called with since the
+   * current step boundary began, in call order (t3-sections task spec,
+   * decisions 1-2). Never exposed on `ctx` — same rule as
+   * `observedCounts()`/`usedReceiptIds()`. */
+  sectionsSnapshot(): string[];
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
-   * tally to zero. `nuka run`'s executor calls this once per step, right
-   * before running it, so a pickle's shared ctx still logs and tallies each
-   * step's own network calls under that step's own receipt dir (m1-run task
-   * spec, decision 5; m2pre-observed task spec, decision 2). Never exposed
-   * on `ctx` — same executor-only rule as `dispose`. */
+   * tally, the `used` log, and the `sections` log to empty. `nuka run`'s
+   * executor calls this once per step, right before running it, so a
+   * pickle's shared ctx still logs and tallies each step's own network
+   * calls, provenance reads, and section labels under that step's own
+   * receipt dir (m1-run task spec, decision 5; m2pre-observed task spec,
+   * decision 2; t3-sections task spec, decision 4). Never exposed on
+   * `ctx` — same executor-only rule as `dispose`. */
   beginStep(dir: string): void;
 }
 
@@ -182,6 +203,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // Same lifetime rule as `observed`, for provenance instead of network
   // calls (m2pre-resultof task spec, decision 2).
   const used = createUsedCollector();
+  // Same lifetime rule again, for `ctx.section`'s call log (t3-sections
+  // task spec, decision 4).
+  const sections = createSectionsCollector();
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -241,6 +265,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // 2: "空なら省略" — a call that returned `undefined` leaves no trace).
       used.record(entry.receiptId);
       return entry.result as z.infer<S["returns"]>;
+    },
+    section(label: string): void {
+      sections.record(label);
     },
   };
 
@@ -319,11 +346,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return used.snapshot();
   }
 
+  function sectionsSnapshot(): string[] {
+    return sections.snapshot();
+  }
+
   function beginStep(dir: string): void {
     httpLogDir = dir;
     observed.reset();
     used.reset();
+    sections.reset();
   }
 
-  return { ctx, dispose, observedCounts, usedReceiptIds, beginStep };
+  return { ctx, dispose, observedCounts, usedReceiptIds, sectionsSnapshot, beginStep };
 }

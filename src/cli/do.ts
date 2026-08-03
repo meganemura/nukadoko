@@ -307,6 +307,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `observed` below still records what actually happened, for a report
     // to catch a wrong declaration after the fact.
     const observed = contextHandle.observedCounts();
+    // `ctx.section` works the same under `nuka do` as under `nuka run` (t3-
+    // sections task spec, decision 6) — there is no scenario/pickle
+    // concept here to special-case, so this is read the same way
+    // `observed` is, right above.
+    const sections = contextHandle.sectionsSnapshot();
 
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
@@ -360,6 +365,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             evidence: { dir: relativeDir, ...evidence },
             observed,
             mutates: entry.step.mutates,
+            ...(sections.length > 0 ? { sections } : {}),
           }
         : {
             receipt_id: receiptId,
@@ -383,6 +389,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             mutates: entry.step.mutates,
             evidence: { dir: relativeDir, ...evidence },
             observed,
+            ...(sections.length > 0 ? { sections } : {}),
           };
 
     // Redacted once, as one object — args/result/error.message and every

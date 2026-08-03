@@ -511,6 +511,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // touches.
     const observed = contextHandle.observedCounts();
     const usedReceiptIds = contextHandle.usedReceiptIds();
+    // Labels `ctx.section` was called with since the current step boundary
+    // began (t3-sections task spec, decisions 1-2, 4) — reset at the same
+    // `beginStep` calls `observed`/`used` already are, so a step never
+    // inherits an earlier step's labels in this shared-`ctx` pickle.
+    const sectionLabels = contextHandle.sectionsSnapshot();
     // World reads/writes tallied since the current step boundary began (m2c-
     // typed-world task spec, item 3) — always empty for a typed step (no
     // `this`), so the `world` field below is naturally omitted for one,
@@ -554,6 +559,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             observed,
             mutates,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+            ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
               : {}),
@@ -587,6 +593,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             observed,
             mutates,
             ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+            ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
               : {}),
@@ -1047,6 +1054,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const httpLogExists = existsSync(path.join(began.receiptDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
         const usedReceiptIds = contextHandle.usedReceiptIds();
+        // Same backstop-only read as `observed`/`used` just above (t3-
+        // sections task spec, decision 4) — whatever labels this step
+        // reached before the uncaught throw still belong on its receipt.
+        const sectionLabels = contextHandle.sectionsSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
         const receipt: Receipt = {
@@ -1074,6 +1085,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           observed,
           mutates: began.mutates,
           ...(usedReceiptIds.length > 0 ? { used: usedReceiptIds } : {}),
+          ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
             ? { world: worldReadsWrites }
             : {}),

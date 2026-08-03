@@ -1,0 +1,20 @@
+import { z } from "zod";
+import { defineStep } from "../../nukadoko-shim.js";
+
+// Reaches two sections, then throws before ever reaching a third — proves a
+// failed step's receipt still carries the sections it reached before
+// failing (t3-sections task spec, "確定判断" item 2; test bullet 3, the
+// requirement's own reason for existing: "落ちた step の receipt にも、そこ
+// まで通った段階が載る").
+export default defineStep({
+  pattern: "a step falls in the middle of a section",
+  description: "Calls ctx.section twice, then throws",
+  args: z.object({}),
+  returns: z.object({ ok: z.boolean() }),
+  mutates: false,
+  async run(ctx) {
+    ctx.section("setup");
+    ctx.section("working");
+    throw new Error("boom mid-section");
+  },
+});

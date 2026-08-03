@@ -25,6 +25,17 @@
 // common case (most steps never call `resultOf` at all), so this follows
 // `target_version`'s "absence is the normal case" convention instead.
 //
+// `sections` is added now (t3-sections task spec, decisions 1-3): the labels
+// `ctx.section` was called with during this execution, in call order — how
+// far a step got, not how long each stage took, deliberately (no start/end
+// timestamps: that shape can be added later without a breaking change,
+// while a premature one would just sit unused). Optional and omitted when
+// empty, the same convention `used` follows for the same reason (most steps
+// never call it). No separate `error.section` field exists on
+// `ReceiptFailed`: a failed step's `sections` array still carries whichever
+// labels it reached before failing, and its last element already answers
+// "which stage was it in" — one fact, one place to read it.
+//
 // `world` is added now (m2c-typed-world task spec, item 3): a compat step's
 // own World reads/writes, measured the same "always on" way `observed` is —
 // deduplicated, in access order, both arrays omitted together (`used`'s own
@@ -148,6 +159,16 @@ interface ReceiptBase {
    * decisions 1-2). Present only when non-empty; deduplicated, in read
    * order. */
   used?: string[];
+  /** Labels `ctx.section` was called with during this execution, in call
+   * order (t3-sections task spec, decisions 1-3). Present only when
+   * non-empty; a failed step's array still carries whichever labels it
+   * reached before failing — that array's last element is "the last stage
+   * this execution entered", so there is no separate `error.section` field
+   * duplicating the same fact. Only a typed step's `ctx` has `section`
+   * (decision 5) — a compat step has no counterpart on `this`, so this
+   * field is simply omitted for one, the same way `used` is omitted for a
+   * typed step that never calls `ctx.resultOf`. */
+  sections?: string[];
   /** A compat step's own World reads/writes (m2c-typed-world task spec,
    * item 3) — deduplicated, in access order. Present only when at least one
    * of `reads`/`writes` is non-empty; absent for a typed step (no World),

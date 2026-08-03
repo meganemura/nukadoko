@@ -18,9 +18,18 @@ import type { Step } from "./step/define-step.js";
 // The boundary rule (docs/spec.md "Context API"): `ctx` carries only what
 // the executor must inject; pure helpers are imports, not context members.
 // `poll` (`import { poll } from "nukadoko"`, src/context/poll.ts) needs
-// nothing the executor owns, so it is not here. `section` is not here
-// either, for the opposite reason — it would do nothing until the
-// progress-log feature exists (m2pre-ctx-surface task spec).
+// nothing the executor owns, so it is not here.
+//
+// `section` (t3-sections task spec) reverses m2pre-ctx-surface's original
+// call: that decision withheld it because it would have been a no-op until
+// a progress-log feature existed. Its actual destination turned out to be
+// the receipt, not a live log — `sections: string[]` (docs/spec.md
+// "Receipts", src/context/sections.ts) lets a failed step's receipt say
+// which stage it reached, which needs no progress-log feature at all. It is
+// a bare label-in, nothing-out call (no span, no timing) on purpose: a
+// function that wraps a block would have to decide what nesting, async
+// boundaries, and early `return`s inside it mean, none of which "where did
+// it fail" requires.
 
 export interface StepContext {
   /** Playwright Page; browser launches on first call, restored from the
@@ -56,4 +65,12 @@ export interface StepContext {
    * is visible twice — as a static `import` of `step`, and at run time in
    * the receipt chain (docs/spec.md "Receipts"). */
   resultOf<S extends Step>(step: S): z.infer<S["returns"]> | undefined;
+  /** Marks that execution has reached stage `label` — this task's spec,
+   * decision 1. Synchronous and void: there is no matching "end" call and
+   * no return value, so calling it costs nothing to place before an
+   * `await`, inside a loop, or right before a step throws. Every call is
+   * appended, in call order, to this execution's receipt under
+   * `sections`; a step that never calls it gets no `sections` key at all
+   * (empty is omitted, the same convention `used` already follows). */
+  section(label: string): void;
 }
