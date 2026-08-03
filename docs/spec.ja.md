@@ -121,6 +121,11 @@ export default defineStep({
   Gherkin の table が初めて型を持つことになります。
   attachment が存在するのに未消費の必須キーが 0 個または複数ある場合は `check`/`run` のエラーになります。
   予約されたキー名はありません。
+- `from` は、pattern がキャプチャしなかった args キーの値がどこから来るかを宣言します。
+  `from: { projectId: [createProject, "id"] }` は「`projectId` は、この scenario 内で以前 `createProject` が返した結果の `id` である」という意味になります。
+  executor は args のバリデーションより前にこのキーを埋めるので、キーは required のままにでき、スキーマはその step が実際に何を求めているかを言い続けられます。
+  値になれるのはキー名だけで、決して変換ではありません。
+  なぜその制限こそが要点なのか、そしてキー名だけでは足りないときにどうすればよいかは「step の連鎖」を参照してください。
 - `mutates`(デフォルトは `true`)は、その step が触れる範囲のどこかで状態を変更するかどうかを表します。
   読み取り専用の step は `mutates: false` を宣言します。
 - `rationale` は任意で、デフォルト値を持ちません。
@@ -171,6 +176,10 @@ export default defineStep({
   これは scenario 経路のデータチャネルであり、意図的に World ではありません。
   そこには何も書き込めず、読み取れるのは `returns` のスキーマを通過した結果だけで、依存関係は他の step モジュールへの目に見える `import` になります(その step 自身のスキーマによって型付けられ、diff の中でレビューできます)。
   「その listing は閉じている」のような feature の一文は、その参照先がバリデーション済みの結果を生成した範囲でのみ実装できます。
+  `from`(「step の連鎖」を参照)は同じ読み取りを宣言的な形にしたものであり、まず手を伸ばすべきはそちらです。
+  `resultOf` に残るのは、キー名では表せない読み取りです。
+  discovery が登録しなかった `Step` を渡すと、`undefined` を返す代わりに投げます。
+  その規則がどんな間違いを捕まえるためのものかは「step の連鎖」を参照してください。
 - `ctx.section(label: string): void` は、実行がその名前の段階に到達したことを記録します。
   同期的で、返り値はなく、対になる「終了」呼び出しもありません。
   呼び出しはすべて、呼ばれた順で receipt の `sections`(「Receipt」を参照)に追加され、一度も呼ばない step には `sections` キー自体が現れません。
@@ -191,6 +200,8 @@ progress log の機能が実行中の一区間に名前を付けて記録する�
 receipt こそがすでにその行き先であり、step 自身の実行がどの段階に達したかを言うのに、生きた log は一度も必要なかったのです。
 必要だったのは、それをどこかに書き留めることだけでした。
 
+### step の連鎖
+
 CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` を与えて scenario に束ねると、その step が単体では直面しなかった問いが立ち上がります。
 以前の step が生成した値は、どうやってこの step まで届くのか、という問いです。
 一見もっともらしい 2 つの答えは、どちらも何かを失います。
@@ -200,31 +211,93 @@ CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` �
 setup 全体を 1 つの複合 step にまとめれば既存の step には触れずに済みますが、Given の行が粗くなります。
 その複合 step が実際に何をしているかは、その 1 文の裏に隠れて見えなくなります。
 
-両方を成り立たせる方法は、引数を optional にし、`run` の中で前の step の結果へフォールバックすることです。
+`from` は、キーがどこから来るかを一度だけ、データとして述べることで両方を成り立たせます。
 
 ```ts
-async run(ctx, args) {
-  const projectId = args.projectId ?? ctx.resultOf(createProject)?.id;
-  if (projectId === undefined) {
-    throw new Error("projectId: pass it, or run the create-project step first");
-  }
-  // ...
-}
+import { defineStep } from "nukadoko";
+import { z } from "zod";
+import createProject from "./create-project.js";
+
+export default defineStep({
+  pattern: "the project is archived",
+  description: "Archive the project created earlier in this scenario",
+  args: z.object({ projectId: z.string() }),
+  returns: z.object({ archived: z.boolean() }),
+  from: { projectId: [createProject, "id"] },
+  async run(ctx, args) {
+    // args.projectId is present or this line was never reached.
+    const res = await (await ctx.request()).post(`/projects/${args.projectId}/archive`);
+    return res.json();
+  },
+});
 ```
 
-引数を渡せば、その step は `nuka do` の下でも単体のまま走ります。
-省略すれば、同じ scenario 内で以前に実行された step から入力を読み取ります。
-フォールバックも空であれば、その step 自身が「引数を渡すか、先に前の step を走らせろ」と言うエラーで落ちます。
-理由の分からないスキーマ不一致で落ちるよりも、そちらの方がましです。
+pattern の capture は今も優先されます。
+`from` が補うのはこの step のこの出現がキャプチャしなかったキーだけなので、同じ step が、ある scenario では Gherkin の行から値を取り、別の scenario では以前の step から値を取ることができます。
+そこで取られるのは、その以前の step がこの scenario 内で直近に成功した実行の結果です。
+これは `ctx.resultOf` が持つのと同じ寿命です。
+同じ chain だからです。
+注入は args のバリデーションより前に起こります。
+それこそが要点です。
+キーは **required** のままであり、`args` は、呼び出し元の誰かがたまたまどう供給しているかではなく、その step が何を要求しているかを言い続けます。
 
-これは、書き手が自分で守らなければならない 1 つの規律に依存しています。
-何もそれを検査してくれないからです。
-pattern に capture のないスキーマのキーは、**必ず optional として宣言しなければなりません**。
-required のままだと、その step を Gherkin 経由で実行するたびに毎回 args のバリデーションに落ちます。
-capture のないキーは、フォールバックを通じてしか値を得られず、マッチを通じては決して得られないからです。
-`nuka check` はこれを捕まえません。
-見ているのは pattern の capture がスキーマのキーに存在するかだけで(未知の capture はエラーになります)、その逆、つまりスキーマのキーに対応する capture が存在するかは見ないからです。
-capture のないキーを optional に保つのは、書き手が自分で担う規律であり、`check` が強制してくれるものではありません。
+なぜ selector 関数ではなくキー名なのか。
+キー名はデータです。
+`nuka steps --json` と `nuka describe` の中に「`projectId` ← `createProject.id`」として生き残り、それによって agent は一度も教わっていない順序を自分で組み立てられます。
+`nuka check` が何かが実行される前に scenario を判断する際に読むのも、まさにこれです。
+関数はより多くを表現しながらより少なくしか言えません。
+ツールは、あるキーがどの step から来たかは報告できても、その step のどの部分から来たかは決して報告できないからです。
+キーで参照できるくらい平らな形に `returns` を作ることは軽いコストであり、そのほうが step も結局は読みやすくなります。
+
+`from` を宣言することは、確信を得るのに何も犠牲を払わないチェックを手に入れることです。
+あらゆる scenario 内のその step のあらゆる出現について、`nuka check` は — そして `nuka run` も、その scenario を実行する前に — 宣言された各キーがその行でキャプチャされているかを尋ね、されていなければ、上流の step が同じ pickle 内でそれより前に現れているか(Background を含みます。pickle は自分の Background の step を運ぶからです)を尋ねます。
+`nuka run` がこれを行うのは、check し忘れることがブラウザセッション 1 回分の代償で罰せられないようにするためです。
+どちらもない **required** なキーはエラーです。
+その run は確実に args のバリデーションに落ちるので、早い段階でそう言っても偽陽性を生みません。
+どちらもない **optional** なキーは何も言いません。
+スキーマがすでに値は無くてもよいと言っており、守られている契約について警告することは、ノイズが致命的な唯一の場所でノイズを出すだけだからです。
+これは `from` を動機づけたケースを閉じます。
+消費者を生産者より前に束ねる scenario は、実際のブラウザ時間で数分が費やされるまで、正しい scenario と見分けがつきませんでした。
+
+`from` と `ctx.resultOf` はどちらも、上流の step を名前ではなく `Step` オブジェクトそのもので識別します。
+そのため `await import()` を経由して届いた step は discovery が登録したものとは別のインスタンスに解決され、何にもマッチしません。
+これはかつては無音でした。
+`resultOf` はただずっと `undefined` を返し続けるだけでした。
+今はもう無音ではありません。
+登録されていない `Step` は、それが見つかった場所でエラーになります。
+`from` は静的にそれを名指しするので `nuka check` がそれを報告し、`run`/`do` はその step の実行そのものを拒否します。
+一方 `resultOf` は呼び出しの時点でしか捕まえられず、そこで投げます。
+登録済みだがまだ実行されていない step は今も `undefined` を返します。
+それは間違いではなく状態です。
+
+`from` が表現できないものは `ctx.resultOf` に残ります。
+途中で形を変える必要がある値、必要かどうかが実行時にしか決まらない読み取り、2 つの上流 step のどちらからでも来うるキー、あるいは result 全体をまるごと使う場合です。
+そうした場合は `resultOf` に手を伸ばし、その step が単体でも走らなければならないなら、引数を optional にして `run` の中でフォールバックするという、以前からの形を使います。
+この形はもう既定のやり方ではなく、例外です。
+
+`nuka do` の下には scenario がなく、したがって chain もありません。
+そのため `from` のキーは、他の引数と同じように `--args` で渡されるか、`--use` を使って以前の実行の receipt から取られるか(「単体 step」を参照)、2 つの経路のどちらかで届きます。
+どちらの経路でも step の契約は変わらず、値がどこから来るかだけが変わります。
+
+`from` が意図的にやらないことが 1 つあります。
+上流の step をあなたの代わりに実行することです。
+生産者が scenario から欠けているキーは feature ファイル側で直す誤りであって、ツールが黙って挿し込む step ではありません。
+実行されたすべてを名指ししない feature は、このツール全体が存在する理由である記録であることをやめてしまうからです。
+これに関連する圧力は現実のもので、別の答えを持っています。
+連鎖する値は必ずどこかの step から来なければならず、その step は feature の中に現れなければならないため、scenario には id を運ぶためだけに存在し(`And the project's billing page is fetched`)、その feature が書かれた対象の読み手には何も意味しない行が残ることがあります。
+ある操作がその読み手にとって価値を持たないなら、それはそもそも step であるべきではありません。
+`features/steps/lib/` の下に普通の関数として置き、それを必要とする step から呼び出します。
+そこで手放すのはそのヘルパー自身の receipt であり、それが行う HTTP は今も `observed` に数えられ、`ctx.section` も実行がどこまで進んだかを記録し続けられます。
+記録の粒度と feature の読みやすさは、step の書き手が場合ごとに下す判断であり、これがその判断を下す軸です。
+
+step の連鎖は宣言と計測が出会う場所であり、`mutates` の場合(「キーワードの意味論」を参照)とは違う出会い方をします。
+そちらでは、計測はプロキシです。
+HTTP メソッドが書き込みの意味論の代わりを務めており、そのためツールは両方を記録しながらどちらも突き合わせません。
+ここにはプロキシがありません。
+どの receipt から値が来たかは正確に分かっています。
+そして `from` はそれを記述するのではなく実行そのものを駆動するため、宣言と実際に起きたことは食い違いようがなく、そもそも突き合わせるべきものが最初から存在しません。
+receipt の `used`(「Receipt」を参照)は、それゆえ宣言に対するチェックではなく、宣言には答えられない問いに答えます。
+値を供給したのがどの step かはファイルが書かれた時点ですでに決まっていましたが、それを供給したのがどの実行かは実行時にしか決まらず、`used` が答えるのはその問いです。
 
 ### キーワードの意味論
 
@@ -373,6 +446,12 @@ pickle ごとに 1 つの scenario record(feature のパス、scenario 名、順
 Evidence は自然なスコープに従います。
 各 step の receipt はその step の http.jsonl を持ち、一方 Playwright の trace は共有された context にまたがるため、個々の step ではなく scenario 自身のディレクトリに置かれます。
 
+pickle が実行される前に、その step たちの `from` 宣言は自分自身の step の順序と照合されます。
+required な連鎖キーの生産者が欠けているか、より後ろで束ねられている場合、その scenario は何かが起動するより前に失敗します。
+実行しても、数分後に同じ失敗に終わるだけだからです(「step の連鎖」を参照)。
+ファイル内の他の scenario はそのまま実行されます。
+これは 1 つの scenario の性質であって、ファイル全体の性質ではないからです。
+
 undefined な step は、マッチに失敗したテキストを名指しして scenario を失敗させ、`nuka scaffold` を提案します。
 同梱の skill に従う agent が、欠けている型付き step を作成して PR として提出します。
 feature のバックログが語彙の成長を駆動します。
@@ -381,6 +460,7 @@ feature のバックログが語彙の成長を駆動します。
 
 ```sh
 nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
+nuka do archive-project --use rcpt-20260801-143022-a1b2
 ```
 
 1 つの型付き step を実行し、その receipt を stdout に出力します(ok なら exit 0、failed なら 1)。
@@ -390,6 +470,15 @@ agent が選べるのはどの step をどの args で呼ぶかだけで、何�
 `do` には意図的にグループ化のラベルがありません。
 ad-hoc な一連の呼び出しは作業記録であり、evidence ではありません。
 証明する価値のあるものはすべて scenario として表現され、`nuka run` によって証明されます(Self-healing を参照)。
+
+`--use <receipt-id>`(繰り返し指定可)は、scenario なら chain が渡していたはずの値の代わりに、以前の実行から step の `from` キーを供給します(「step の連鎖」を参照)。
+上流の step の名前がコマンドラインに書かれないのは、receipt がすでにそれを運んでいるからです。
+nukadoko はその receipt がどの step を記録したものかを読み、そこを指す `from` のエントリを見つけ、名指しされたキーをその receipt に保存された `result` から取り出します。
+この step が `from` を宣言していない step の receipt は、黙った no-op ではなくエラーになります。
+実行が失敗した receipt も同様にエラーになります。
+失敗した step は読み取れるバリデーション済みの結果を一度も生み出していないからです。
+同じキーについては scenario の中で pattern の capture が勝つのとまったく同じように、`--args` は今も `--use` に勝ちます。
+実際に取り出された receipt id はこの実行自身の `used` に載るので、複数回の `do` 呼び出しにまたがって手で組み立てた chain も、scenario が駆動した chain と同じくらい後から追跡できます。
 
 ## Receipt
 
@@ -438,9 +527,16 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   この回数はそれ単独では何も決めません。
   Then の位置も読み取り専用の environment も、作用する対象は `mutates` の宣言であり、この回数では決してありません。
   `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
-- `used`(空でないときだけ現れます)は、この実行が `ctx.resultOf` を通じて実際に読んだ result の receipt id の一覧です。
-  アクセサはツールが提供しているので、読み取りは計測可能です。
-  依存関係はこうして二重に可視になります: 静的には import として、実行時には receipt 連鎖の provenance としてです。
+- `used`(空でないときだけ現れます)は、この実行が値を引き出した以前の実行の一覧です。
+  `from` による注入、`ctx.resultOf` の呼び出し、あるいは `nuka do` での `--use` の receipt のいずれかを通じたものです。
+  どの経路もライブラリのコードを通るため、読み取りは計測されるのであって宣言されるのではありません。
+  各エントリは `{ "receipt": "rcpt-…", "step": "create-project" }` の形です。
+  step 名は引用元の receipt と重複していますが、それでも書き留めます。
+  読むために他のファイルと突き合わせなければならない receipt は、単独で読める receipt より劣った受け入れの記録であり、突き合わせる相手になるファイルはローカルな作業記録にすぎず、sign-off(「Sign-off」を参照)よりずっと先に寿命が尽きるからです。
+  エントリは receipt id で重複排除され、最初に読まれた順に並びます。
+  依存関係はこうして二重に可視になります: 静的には `from` か import として、実行時には receipt 連鎖の provenance としてです。
+  値がどの上流の *step* から来たかは、その step ファイルが書かれた時点ですでに決まっていました。
+  そのどの *実行* が値を供給したかは、ここでしか分かりません。
 - `sections`(空でないときだけ現れます)は、`ctx.section` が呼ばれたラベルを、呼ばれた順に並べたものです。
   `used` と違って重複は除きません。
   ループやリトライで 2 回入ったラベルは 2 回入ったのであり、配列はそのとおりに読めるべきです。
@@ -449,7 +545,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   問いは「どこで遅かったか」ではなく「どこで実行が止まったか」だからで、`string[]` は破壊的変更なしに後でより豊かな形へ広げられますが、いま先にその形を作ってしまうと、誰も求めていない部分まで出荷することになります。
   失敗した step の `sections` も、失敗するまでに到達したラベルをそのまま保持しており、その配列の最後の要素がすでに「どの段階にいたか」に答えているため、同じ事実の置き場所をもう 1 つ作る `error.section` フィールドは別途ありません。
   `section` を持つのは typed step の `ctx` だけで、compat step には `this` 上に対応するものがないため、`sections` は単に省略されます。
-  これは typed step が一度も `ctx.resultOf` を呼ばなかったときに `used` が省略されるのと同じです。
+  これは、typed step が一度も chain から読み取らなかったときに `used` が省略されるのと同じです。
 - `required_env`(空でないときだけ現れます)は、この実行中に `ctx.requireEnv` が呼ばれた名前を、初めて読まれた順に重複なく並べたものです。
   `used` や `sections` がすでに持っているのと同じ、宣言ではなく計測という形です。
   `requireEnv` はライブラリが制御できる唯一の呼び出し口だからです。
@@ -746,16 +842,23 @@ npm パッケージは `nukadoko` で、それがインストールするただ 
 
 ```
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results
-nuka do <step> --args '<json>' execute one typed step; receipt to stdout
+nuka do <step> --args '<json>' [--use <receipt-id>]
+                              execute one typed step; receipt to stdout.
+                              --use supplies its `from` keys from an
+                              earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates
+                              name, patterns, description, mutates, and
+                              where each chained args key comes from
 nuka describe <step>          full contract, schemas as JSON Schema, plus
                               rationale when the step declared one
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
-                              both match), duplicate patterns, config
+                              both match), duplicate patterns, a required
+                              `from` key whose producer is absent or bound
+                              later in the scenario, a `from` naming a step
+                              discovery never registered, config
                               coherence, unreadable step files (reported,
                               not fatal — the rest of the project is still
                               checked), unsupported hook tag expressions;
@@ -815,6 +918,8 @@ nuka skill path               where the bundled skill lives, for a project
   その最初の段階は `nuka check` がそれらの gap を報告することに依存しており、`nuka check` は今それを行っています(「Compat steps」を参照)。
   どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。
   それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
+- **M6(chained arguments)**: `from`、`nuka check` と `nuka run` が共有する scenario 順序チェック、`do` の `--use`、そして引用する receipt の隣に step 名を記す `used` のエントリです。
+  step の入力がどこから来るかは、`run` の本体の中の散文であることをやめ、ツールが読む宣言になります(「step の連鎖」を参照)。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート

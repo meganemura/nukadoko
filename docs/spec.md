@@ -152,6 +152,14 @@ export default defineStep({
   Gherkin tables get types for the first time. Zero or several unconsumed
   required keys with an attachment present is a `check`/`run` error; no
   reserved key name exists.
+- `from` declares where an args key's value comes from when the pattern
+  did not capture it: `from: { projectId: [createProject, "id"] }` reads as
+  "`projectId` is the `id` of whatever `createProject` returned earlier in
+  this scenario". The executor fills the key in before args validation, so
+  the key stays required and the schema keeps saying what the step actually
+  demands. A key name, never a transform — see "Chaining steps" for why
+  that limit is the point, and for what to do when a key name is not
+  enough.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
 - `rationale` is optional with no default — omitted, `Step.rationale` is
@@ -221,7 +229,12 @@ every future "does this belong on ctx?" question.
   read from it, and the dependency is a visible `import` of the other step
   module — typed by that step's own schema, reviewable in the diff. A
   feature line like "that listing is closed" is implementable exactly to
-  the extent its referent produced a validated result.
+  the extent its referent produced a validated result. `from` (see
+  "Chaining steps") is the declarative form of the same read and the one
+  to reach for first; `resultOf` is what remains for the reads a key name
+  cannot express. Passing a `Step` that discovery never registered throws
+  rather than returning `undefined` — see "Chaining steps" for the mistake
+  that rule exists to catch.
 - `ctx.section(label: string): void` — marks that execution has reached a
   named stage; synchronous, no return value, no matching "end" call. Every
   call is appended, in call order, to the receipt's `sections` (see
@@ -250,6 +263,8 @@ API and missed where the naming actually needed to land: the receipt was
 already the destination, and a step's own execution never needed a live
 log to say which stage it reached — only somewhere to write it down.
 
+### Chaining steps
+
 Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
 binds into a scenario raises a question the step never faced standalone: how
 does a value an earlier step produced reach this one? Two answers that look
@@ -262,35 +277,113 @@ composite step avoids touching the existing steps, but flattens the Given
 line: whatever the composite step actually does behind that one sentence
 stops being visible to a reviewer reading the feature file.
 
-The way to keep both: make the argument optional, and fall back to the
-prior step's result inside `run`.
+`from` keeps both by saying, once and as data, where a key comes from:
 
 ```ts
-async run(ctx, args) {
-  const projectId = args.projectId ?? ctx.resultOf(createProject)?.id;
-  if (projectId === undefined) {
-    throw new Error("projectId: pass it, or run the create-project step first");
-  }
-  // ...
-}
+import { defineStep } from "nukadoko";
+import { z } from "zod";
+import createProject from "./create-project.js";
+
+export default defineStep({
+  pattern: "the project is archived",
+  description: "Archive the project created earlier in this scenario",
+  args: z.object({ projectId: z.string() }),
+  returns: z.object({ archived: z.boolean() }),
+  from: { projectId: [createProject, "id"] },
+  async run(ctx, args) {
+    // args.projectId is present or this line was never reached.
+    const res = await (await ctx.request()).post(`/projects/${args.projectId}/archive`);
+    return res.json();
+  },
+});
 ```
 
-Called with the argument, the step still runs standalone under `nuka do`.
-Left out, it reads its input from whichever step produced it earlier in the
-same scenario. If the fallback is also empty, the step throws its own
-error saying so — pass the argument, or run the prior step first — rather
-than failing on a schema mismatch that doesn't say why.
+A pattern capture still wins: `from` supplies only the keys this occurrence
+of the step did not capture, so the same step can take the value from the
+Gherkin line in one scenario and from an earlier step in another. What it
+takes is that earlier step's most recent successful result in this
+scenario — the same lifetime `ctx.resultOf` has, because it is the same
+chain. Injection happens before args validation, which is the point: the
+key stays **required**, and `args` goes on describing what the step
+demands instead of describing how one of its callers happens to supply it.
 
-This depends on one rule the step author has to hold, because nothing
-checks it: a schema key with no capture in the pattern **must be declared
-optional**. Left required, args validation fails on every Gherkin-driven run
-of that step — a captureless key can only ever arrive through the fallback,
-never through a match. `nuka check` does not catch this: it checks a
-pattern's captures against the schema's keys (an unknown capture is an
-error), never the reverse — a schema key with no matching capture is never
-flagged. Keeping a captureless
-key optional is discipline the step author owns, not something `check`
-enforces.
+Why a key name and not a selector function. A name is data: it survives
+into `nuka steps --json` and `nuka describe` as "`projectId` ← `createProject.id`",
+which is what lets an agent assemble an order it was never told, and it is
+what `nuka check` reads to judge a scenario before anything runs. A
+function would express more and say less — the tool could report which
+step a key came from but never which part of it. A `returns` shaped flat
+enough to be addressed by key is a mild cost, and steps read better that
+way anyway.
+
+Declaring `from` buys a check that costs nothing to be sure about. For
+every occurrence of the step in every scenario, `nuka check` — and `nuka
+run`, before it executes that scenario, so forgetting to check is not
+punished with a browser session — asks whether each declared key is
+captured by that line; if it is not, whether the upstream step appears
+earlier in the same pickle (Background included, since a pickle carries
+its Background steps). A **required** key with neither is an error: that
+run would fail args validation with certainty, so saying so early invents
+no false positive. An **optional** key with neither is silent — the schema
+already said the value may be absent, and warning about a contract being
+honored would be noise in the one place noise is fatal. This closes the
+case that motivated `from`: a scenario that binds the consumer before the
+producer used to be indistinguishable from a correct one until minutes of
+real browser time had been spent.
+
+`from` and `ctx.resultOf` both identify the upstream step by the `Step`
+object itself, never by name, so a step reached through `await import()`
+resolves to a different instance than the one discovery registered and
+matches nothing. That used to be silent — `resultOf` simply kept returning
+`undefined` forever. It is not silent now: an unregistered `Step` is an
+error where it is found — `from` names one statically, so `nuka check`
+reports it and `run`/`do` refuse to execute the step at all, while
+`resultOf` can only be caught at the call, where it throws. A registered
+step that has not run yet still returns `undefined`; that is a state, not
+a mistake.
+
+What `from` cannot express stays with `ctx.resultOf`: a value that needs
+reshaping on the way, a read whose necessity is decided at run time, a key
+that could come from either of two upstream steps, or a whole result used
+as one. Reach for `resultOf` for those, and keep the argument optional
+with a fallback inside `run` if the step must also run standalone — the
+older shape, now the exception rather than the house style.
+
+Under `nuka do` there is no scenario and therefore no chain, so a `from`
+key arrives one of two ways: passed in `--args` like any other, or taken
+from an earlier execution's receipt with `--use` (see "Single steps"). A
+step's contract does not change between the two paths; only where the
+value comes from does.
+
+One thing `from` deliberately does not do: run the upstream step for you.
+A key whose producer is missing from the scenario is an error to fix in
+the feature file, not a step for the tool to insert quietly — a feature
+that does not name everything that ran would stop being the record this
+whole tool exists to keep. The related pressure is real and has a
+different answer: because a chained value has to come from a step, and a
+step has to appear in the feature, a scenario can end up with a line that
+exists only to move an id (`And the project's billing page is fetched`)
+and means nothing to the reader the feature was written for. When an
+operation has no value to that reader, it should not be a step at all —
+make it an ordinary function under `features/steps/lib/` and call it from
+the step that needs it. What is given up is that helper's own receipt; the
+HTTP it performs is still counted in `observed`, and `ctx.section` can
+still mark where execution went. Granularity of the record against
+legibility of the feature is a judgment the step author makes per case,
+and this is the axis to make it on.
+
+Chaining is where declaration and measurement meet, and it meets
+differently than `mutates` does (see "Keyword semantics"). There, the
+measurement is a proxy — HTTP method standing in for write semantics — so
+the tool records both and reconciles neither. Here there is no proxy:
+which receipt a value came from is exactly known. And because `from`
+drives the execution rather than describing it, the declaration and what
+happened cannot drift apart, so there is nothing to reconcile in the first
+place. `used` on the receipt (see "Receipts") is therefore not a check on
+the declaration; it answers the question the declaration cannot — not
+which step supplied the value, which was decided when the file was
+written, but which *execution* of it did, which is only ever decided at
+run time.
 
 ### Keyword semantics
 
@@ -515,6 +608,13 @@ scope: each step's receipt carries that step's http.jsonl, while the
 Playwright trace spans the shared context and therefore lives in the
 scenario's own directory, not on any single step.
 
+Before a pickle runs, its steps' `from` declarations are checked against
+its own step order: a required chained key whose producer is absent or
+bound later fails that scenario before anything launches, since executing
+it could only end in the same failure minutes later (see "Chaining
+steps"). Other scenarios in the file still run — this is one scenario's
+property, not the file's.
+
 An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
 the missing typed step and submits it as a PR — the feature backlog drives
@@ -524,6 +624,7 @@ vocabulary growth.
 
 ```sh
 nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
+nuka do archive-project --use rcpt-20260801-143022-a1b2
 ```
 
 Executes one typed step and prints its receipt to stdout (exit 0 on ok, 1 on
@@ -533,6 +634,20 @@ which args; it cannot choose what gets recorded. There is deliberately no
 grouping label on `do`: ad-hoc sequences are working records, not evidence —
 anything worth attesting to is expressed as a scenario and proven by
 `nuka run` (see Self-healing).
+
+`--use <receipt-id>` (repeatable) supplies the step's `from` keys from an
+earlier execution instead of the chain a scenario would have provided (see
+"Chaining steps"). The upstream step's name is not written on the command
+line because the receipt already carries it: nukadoko reads which step that
+receipt records, finds the `from` entries pointing at it, and takes the
+named keys out of its stored `result`. A receipt for a step this one does
+not declare a `from` on is an error rather than a silent no-op, as is a
+receipt whose execution failed — a failed step never produced a validated
+result to read. `--args` still wins over `--use` for the same key, the same
+way a pattern capture wins inside a scenario. The receipt ids actually
+drawn from land in this execution's own `used`, so a chain assembled by
+hand across several `do` calls is as traceable afterwards as one a scenario
+drove.
 
 ## Receipts
 
@@ -590,11 +705,21 @@ shape whether the step ran inside a scenario or via `do`.
   position and read-only environments act on the `mutates` declaration,
   never on this count. `observed` sits beside `mutates` (declared) so a
   wrong declaration is falsifiable, here and in the Allure report.
-- `used` (present only when non-empty) lists the receipt ids whose results
-  this execution actually read through `ctx.resultOf` — the accessor is
-  tool-provided, so the reads are measurable. The dependency is thus
-  visible twice: statically as an import, at run time as provenance in the
-  receipt chain.
+- `used` (present only when non-empty) lists the earlier executions whose
+  results this one drew a value from — through a `from` injection, a
+  `ctx.resultOf` call, or a `--use` receipt on `nuka do`. Every path runs
+  through library code, so the reads are measured, not declared. Each entry
+  is `{ "receipt": "rcpt-…", "step": "create-project" }`: the step name is
+  redundant with the cited receipt and is written down anyway, because a
+  receipt that has to be resolved against other files to be read is a worse
+  acceptance record than one that is legible alone — and the file it would
+  be resolved against is a local working record that a sign-off (see
+  Sign-off) long outlives. Entries are deduplicated by receipt id, in the
+  order first read. The dependency is thus visible twice over: statically
+  as `from` or an import, at run time as provenance in the receipt chain.
+  Which upstream *step* a value came from was settled when the step file
+  was written; which *execution* of it supplied the value is knowable only
+  here.
 - `sections` (present only when non-empty) lists the labels `ctx.section`
   was called with, in call order. Not deduplicated, unlike `used`: a label
   entered twice — a loop, a retry — was entered twice, and the array
@@ -609,7 +734,7 @@ shape whether the step ran inside a scenario or via `do`.
   field putting the same fact in a second place. Only a typed step's `ctx`
   has `section`; a compat step has no counterpart on `this`, so `sections`
   is simply omitted for one, the same way `used` is omitted for a typed
-  step that never calls `ctx.resultOf`.
+  step that never read from the chain.
 - `required_env` (present only when non-empty) lists the names
   `ctx.requireEnv` was called with during this execution, deduplicated, in
   the order first read — the same measured-not-declared shape `used` and
@@ -1026,16 +1151,23 @@ The npm package is `nukadoko`; the one command it installs is `nuka`.
 
 ```
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results
-nuka do <step> --args '<json>' execute one typed step; receipt to stdout
+nuka do <step> --args '<json>' [--use <receipt-id>]
+                              execute one typed step; receipt to stdout.
+                              --use supplies its `from` keys from an
+                              earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates
+                              name, patterns, description, mutates, and
+                              where each chained args key comes from
 nuka describe <step>          full contract, schemas as JSON Schema, plus
                               rationale when the step declared one
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
-                              both match), duplicate patterns, config
+                              both match), duplicate patterns, a required
+                              `from` key whose producer is absent or bound
+                              later in the scenario, a `from` naming a step
+                              discovery never registered, config
                               coherence, unreadable step files (reported,
                               not fatal — the rest of the project is still
                               checked), unsupported hook tag expressions;
@@ -1109,6 +1241,11 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   Neither writes down a fact the CLI already answers — vocabulary,
   contracts, refusal reasons — because a skill that copies those starts
   lying the moment the command changes.
+- **M6 — chained arguments**: `from`, the scenario-order check `nuka check`
+  and `nuka run` share, `--use` on `do`, and a `used` entry that names the
+  step beside the receipt it cites. Where a step's inputs come from stops
+  being prose inside a `run` body and becomes a declaration the tool reads
+  (see "Chaining steps").
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
