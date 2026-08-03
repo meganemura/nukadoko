@@ -203,6 +203,23 @@ emitter は、配線ゼロであらゆる receipt からレポートを満たし
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 [Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
 
+nukadoko が書くのは結果であって HTML ではないため、それを描画するのは Allure 3 の CLI です(`npm i -g allure`、または以下のように `npx allure`)。
+
+```sh
+npx allure watch .nukadoko/allure-results     # live, re-renders as a run writes
+npx allure generate .nukadoko/allure-results --output allure-report
+npx allure open allure-report                 # serve one already generated
+```
+
+反復しながら書いている間に使うのは `watch` です。
+片方の端末で走らせたまま、もう片方で `nuka run` すると、scenario が着地するたびにレポートが更新されます。
+待ち受けるポートはランダムです(`--port` で固定できます)。
+`--open` を渡さないかぎり、ブラウザが開くことはありません。
+
+`allure-results/` は追記のみで、nukadoko がそれを消すことはありません。
+そのため、自分でディレクトリを削除するまでレポートには毎回の実行が積み重なります。
+新しい launch を始めたいときも、その削除が方法です。
+
 ## Self-healing, with the deviation on the record
 
 スクリプト化された scenario が壊れるのは、アプリが変わったからであり、テストが間違っていたからではありません。

@@ -232,6 +232,24 @@ running our own stream through `@cucumber/junit-xml-formatter`, not just
 asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
 [Messages emitter](docs/spec.md#messages-emitter).
 
+Since nukadoko writes results and never HTML, rendering them is Allure 3's
+CLI (`npm i -g allure`, or `npx allure` as below):
+
+```sh
+npx allure watch .nukadoko/allure-results     # live, re-renders as a run writes
+npx allure generate .nukadoko/allure-results --output allure-report
+npx allure open allure-report                 # serve one already generated
+```
+
+`watch` is the one to reach for while iterating: leave it running in one
+terminal, `nuka run` in another, and the report updates as each scenario
+lands. It serves on a random port — `--port` fixes one — and does not open
+a browser unless you pass `--open`.
+
+`allure-results/` is append-only; nukadoko never clears it. A report
+therefore accumulates every run until you delete the directory yourself,
+which is also how you start a fresh launch.
+
 ## Self-healing, with the deviation on the record
 
 A scripted scenario breaks because the app changed, not because the test was
