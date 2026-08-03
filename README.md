@@ -48,10 +48,10 @@ Allure.
 
 ## Status
 
-**Pre-0.1, and this is version 0.0.1** — the first published one. The
-public API can change without a major bump until 0.1.
+**Pre-0.1, and this is version 0.0.2.** The public API can change without a
+major bump until 0.1.
 
-Implemented and covered by 523 tests: typed steps, receipts, sessions,
+Implemented and covered by 528 tests: typed steps, receipts, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), and two agent skills. Not implemented:
 compat gap detection in `nuka check`, an AI-assisted glue converter, and
@@ -157,7 +157,7 @@ promoted keeps passing.
 standing design rule, not a happy accident: compat assets must survive both
 the switch and a partial migration, so leaving is always one edit away.
 This is the answer to the fair question of whether to bet an existing suite
-on a 0.0.1 tool from one maintainer.
+on a pre-0.1 tool from one maintainer.
 
 How much else has to change was measured rather than assumed. Against eight
 public cucumber-js suites, **none went through on the import alone** when
