@@ -11,8 +11,7 @@
 // commonly used reader methods cucumber-js's own DataTable has
 // (`raw`/`rows`/`hashes`/`rowsHash`/`transpose`); more (e.g. `diff`) is
 // added only when a real migration needs it — the same "commonly used
-// subset, grown on demand" rule as every other compat surface
-// (m2-design.md section 1).
+// subset, grown on demand" rule as every other compat surface.
 
 export class DataTable {
   private readonly source: readonly (readonly string[])[];

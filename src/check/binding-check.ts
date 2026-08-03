@@ -36,11 +36,10 @@ import type { CheckIssue } from "./types.js";
 // (compat has none) or folded into the alias-key-mismatch check (compat has
 // no aliases — one registration is one pattern is one vocabulary entry).
 // This module also lists every compat-origin `defineParameterType` call as
-// a warning (parameter-types-design.md's "gradual compat" section: "config
-// が typed 時代の家") and merges it into the *same* registry config-origin
-// entries use, so a name collision between the two sources raises the exact
-// same `parameter-type-invalid` issue a config/config collision already
-// does.
+// a warning ("config が typed 時代の家") and merges it into the *same*
+// registry config-origin entries use, so a name collision between the two
+// sources raises the exact same `parameter-type-invalid` issue a
+// config/config collision already does.
 
 export type CheckedPattern =
   | {
@@ -107,8 +106,8 @@ function expressionErrorToIssue(error: unknown, stepName: string, pattern: strin
 /** One `defineParameterType` call made from compat code (this task's spec,
  * item 6, third bullet): visible so a reviewer can see the registration
  * exists and where, and see the nudge toward `config.parameterTypes` — the
- * "typed-era home" for it (parameter-types-design.md). A stable code so a
- * script can filter these out or count them across a project. */
+ * "typed-era home" for it. A stable code so a script can filter these out
+ * or count them across a project. */
 function supportOriginParameterTypeWarning(entry: CompatParameterTypeEntry): CheckIssue {
   return {
     code: "parameter-type-support-origin",
@@ -128,14 +127,13 @@ export function checkBindings(
   }
 
   // A name collision in config.parameterTypes (against a built-in type,
-  // another config entry, or now a compat-origin entry — parameter-types-
-  // design.md's "gradual compat" section, point 2: "名前衝突は既存エラー")
-  // is a config-authoring error, not something any individual pattern did
-  // wrong (this task's spec, decision 3) — reported once, here, as its own
-  // issue rather than once per pattern that would otherwise have used the
-  // registry. No pattern can be checked at all without a working registry,
-  // so `patterns` is empty in this case, same as any other early return
-  // below.
+  // another config entry, or now a compat-origin entry — "名前衝突は既存エ
+  // ラー") is a config-authoring error, not something any individual
+  // pattern did wrong (this task's spec, decision 3) — reported once, here,
+  // as its own issue rather than once per pattern that would otherwise have
+  // used the registry. No pattern can be checked at all without a working
+  // registry, so `patterns` is empty in this case, same as any other early
+  // return below.
   let registry: ReturnType<typeof createParameterTypeRegistry>;
   try {
     registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);

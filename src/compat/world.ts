@@ -139,10 +139,10 @@ let registeredConstructor: WorldConstructor | undefined;
 
 /**
  * Registers the World subclass compat step/hook functions run against for
- * the rest of this discovery/execution run — cucumber-js's own semantics
- * (m2-design.md section 2): not attributed to any file (discovery has no
- * per-file meaning for "which World is current"), and a second call simply
- * replaces the first — last-wins, no warning, same as cucumber-js itself.
+ * the rest of this discovery/execution run — cucumber-js's own semantics:
+ * not attributed to any file (discovery has no per-file meaning for "which
+ * World is current"), and a second call simply replaces the first —
+ * last-wins, no warning, same as cucumber-js itself.
  */
 export function setWorldConstructor(ctor: WorldConstructor): void {
   registeredConstructor = ctor;
@@ -167,7 +167,7 @@ export interface InstantiatedWorld {
  * `setWorldConstructor` last registered), attaches `ctx` as the runtime
  * bridge `openPage()`/`openRequest()` read from, and wraps the fresh
  * instance for measurement + optional declared-key validation (m2c-typed-
- * world task spec, items 1-2; proto-typed-world/findings.md's verified
+ * world task spec, items 1-2; a throwaway prototype measured this
  * own-data-defineProperty mechanism), applied right here, before any hook or
  * step ever sees this instance ("instantiateWorldForPickle が生成直後の
  * World に適用" — this task's spec, item 1). Called exactly once per

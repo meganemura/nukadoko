@@ -92,8 +92,8 @@ export interface CompatStepDefinition {
 export interface CompatVocabularyEntry {
   readonly kind: "compat";
   /** `compat: <patternSource>` — a compat step has no file-derived name (one
-   * file can register many), so identity comes from the pattern itself
-   * (m2-design.md section 2). This is also this entry's key in `Vocabulary`. */
+   * file can register many), so identity comes from the pattern itself.
+   * This is also this entry's key in `Vocabulary`. */
   readonly name: string;
   readonly filePath: string;
   readonly compat: CompatStepDefinition;
@@ -110,8 +110,7 @@ export type Vocabulary = ReadonlyMap<string, VocabularyEntry>;
 /** A `defineParameterType` call made from compat ("support") code, plus the
  * file it came from. src/check/binding-check.ts merges these into the same
  * `ParameterTypeRegistry` as `config.parameterTypes` and warns that they
- * exist (parameter-types-design.md's "gradual compat" section: "config が
- * typed 時代の家"). */
+ * exist ("config が typed 時代の家"). */
 export interface CompatParameterTypeEntry extends CompatParameterTypeRegistration {
   readonly filePath: string;
 }

@@ -62,9 +62,9 @@ export interface MappedChildStep {
 /** A file-path attachment names its *source* file (emitter.ts resolves it
  * against `rootDir` and lets allure-js-commons copy it); a buffer attachment
  * carries content this module already built in memory (`result`'s JSON) and
- * must be paired with an explicit `fileExtension` (api-facts.md 1.2: a
- * Buffer attachment gets no extension from a source path to infer one
- * from). */
+ * must be paired with an explicit `fileExtension` (verified against
+ * allure-js-commons' own API: a Buffer attachment gets no extension from a
+ * source path to infer one from). */
 export type MappedAttachment =
   | { readonly kind: "path"; readonly name: string; readonly contentType: string; readonly path: string }
   | {
@@ -175,10 +175,11 @@ function markedMessage(kind: ErrorKind, message: string): string {
 }
 
 // --- gherkin document lookups (astNodeIds -> Scenario / Examples row) ---
-// api-facts.md section 3.2 (ii)/(iii): a pickle's own `astNodeIds` always
-// starts with its Scenario's id, and an outline row's `astNodeIds` also
-// carries the matching Examples row's id — walking every scenario (through
-// Rule children too) once builds both lookup maps this needs.
+// Verified against @cucumber/messages' own type definitions: a pickle's own
+// `astNodeIds` always starts with its Scenario's id, and an outline row's
+// `astNodeIds` also carries the matching Examples row's id — walking every
+// scenario (through Rule children too) once builds both lookup maps this
+// needs.
 
 function collectScenarios(doc: GherkinDocument): Scenario[] {
   const scenarios: Scenario[] = [];
@@ -576,10 +577,10 @@ interface HookMapping {
 function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopMs: number): HookMapping[] {
   return record.hooks.map((hook): HookMapping => {
     const outcome = resolveHookOutcome(hook);
-    // record.json never carries a hook's own start/stop (design.md section
-    // 7's own documented limit, restated on emitter.ts): every before-hook
-    // collapses to the scenario's own `started_at`, every after-hook to its
-    // `finished_at`, both zero-width.
+    // record.json never carries a hook's own start/stop (documented limit,
+    // restated on emitter.ts): every before-hook collapses to the
+    // scenario's own `started_at`, every after-hook to its `finished_at`,
+    // both zero-width.
     const timestampMs = hook.type === "before" ? scenarioStartMs : scenarioStopMs;
     const declared = mapDeclared(hook.declared, record.evidence.dir);
     return {

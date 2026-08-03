@@ -91,8 +91,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // step's own receipt (`used`). Only a *typed* step's chain key ever exists
 // (compat has no Step object, and no validated result to offer — see below),
 // so this chain is exclusively typed-to-typed provenance, unchanged by this
-// slice's compat additions (m2-design.md section 6: "interop の データの橋は
-// v1 では作らない").
+// slice's compat additions ("interop の データの橋は v1 では作らない").
 //
 // Object identity survives a step file importing another step file
 // (m2pre-module-identity task spec): src/discover/discover-steps.ts loads

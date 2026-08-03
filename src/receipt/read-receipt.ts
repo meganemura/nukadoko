@@ -6,8 +6,8 @@ import type { Receipt } from "./types.js";
 // specifically for src/report/allure/emitter.ts. The whole allure-js-commons
 // `ReporterRuntime`/`Writer` surface that emitter drives is synchronous by
 // contract (every `Writer` method returns `void`, never a `Promise` —
-// m3b-allure-emitter task spec's own api-facts.md, section 1.3), and the
-// emitter's own public `emitScenario(...): void` is pinned to the same
+// verified against allure-js-commons' own `Writer` type), and the emitter's
+// own public `emitScenario(...): void` is pinned to the same
 // shape (that task's spec, decision 12: "この形にする"). write-receipt.ts's
 // own `fs/promises` style would force `emitScenario` to become `async`,
 // contradicting that pinned signature — so this reads synchronously instead

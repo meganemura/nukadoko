@@ -31,12 +31,12 @@ import { createAtomicWriter } from "./writer.js";
 // that touches the filesystem beyond what the `Writer` itself does
 // (resolving the project name, reading each step's own receipt.json).
 //
-// Known limit, restated from design.md section 7: record.json carries no
-// per-hook timestamp of its own, so every before-hook collapses to the
-// scenario's own `started_at` and every after-hook to its `finished_at`,
-// both zero-width — a hook's own duration is not observable through this
-// mapping today. Widening record.json to carry it is a decision for outside
-// this task (this task's spec: "スキーマの変更をしない方針を優先").
+// Known limit: record.json carries no per-hook timestamp of its own, so
+// every before-hook collapses to the scenario's own `started_at` and every
+// after-hook to its `finished_at`, both zero-width — a hook's own duration
+// is not observable through this mapping today. Widening record.json to
+// carry it is a decision for outside this task (this task's spec: "スキーマ
+// の変更をしない方針を優先").
 //
 // AllureEmitterOptions carries no `stateDir` of its own (this task's spec,
 // decision 12 pins its exact shape): `readReceiptsForRecord`
@@ -229,11 +229,10 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           parameters: mapped.test.parameters,
           // Allure 2's own categories matching reads `error.message`/
           // `statusDetails.message` at the *test* level, never a step's
-          // (render-check.md section 10 — verified against the real
-          // @allurereport/plugin-classic source) — without this, the nine
-          // categories.json rules this emitter also writes can never match
-          // anything, no matter how correct their own regexes are (this
-          // task's spec, M3-C item 1).
+          // (verified against the real @allurereport/plugin-classic source)
+          // — without this, the nine categories.json rules this emitter
+          // also writes can never match anything, no matter how correct
+          // their own regexes are (this task's spec, M3-C item 1).
           ...(mapped.test.message !== undefined ? { statusDetails: { message: mapped.test.message } } : {}),
         };
         // Mutates `partialTest.labels` in place, appending suite labels only

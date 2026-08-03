@@ -11,10 +11,10 @@
 // resolutions produce the identical absolute file URL, and tsx's per-
 // discovery-run namespace (register({ namespace }) in discover-steps.ts)
 // caches a module by that resolved URL — so the two paths converge on one
-// shared buffer for the whole discovery run (m2-design.md section 2: "compat
-// モジュールインスタンスとバッファも discovery ごとに独立", a module-identity
-// consequence already relied on for typed steps — see discover-steps.ts's own
-// header). tests/compat-discover.test.ts's concurrent-discovery test is what
+// shared buffer for the whole discovery run ("compat モジュールインスタンスと
+// バッファも discovery ごとに独立", a module-identity consequence already
+// relied on for typed steps — see discover-steps.ts's own header).
+// tests/compat-discover.test.ts's concurrent-discovery test is what
 // pins this down empirically: two `discoverSteps()` calls each get their own
 // tsx namespace and therefore their own instance of this module, so
 // registering the exact same pattern text "at the same time" in both never
@@ -83,10 +83,9 @@ export interface CompatStepOptions {
   readonly timeout?: number;
 }
 
-/** Same shape a `config.parameterTypes` entry takes (parameter-types-
- * design.md's "gradual compat" section) — `regexp`/`transformer` are handed
- * to `@cucumber/cucumber-expressions`' own `ParameterType` almost verbatim,
- * same as the config-origin path (src/binding/registry.ts). */
+/** Same shape a `config.parameterTypes` entry takes — `regexp`/`transformer`
+ * are handed to `@cucumber/cucumber-expressions`' own `ParameterType` almost
+ * verbatim, same as the config-origin path (src/binding/registry.ts). */
 export interface CompatParameterTypeOptions {
   readonly name: string;
   readonly regexp: RegExp | string;
@@ -202,8 +201,7 @@ export function Then(
  * config-origin entries by src/binding/registry.ts, not a registry of its
  * own — a name collision between the two sources is caught there exactly
  * like a collision between two config entries, and moving a registration
- * from here to config later changes nothing about what any pattern matches
- * (parameter-types-design.md's "gradual compat" section, point 3).
+ * from here to config later changes nothing about what any pattern matches.
  */
 export function defineParameterType(options: CompatParameterTypeOptions): void {
   parameterTypeBuffer.push({ ...options, registrationOrder: registrationCounter++ });

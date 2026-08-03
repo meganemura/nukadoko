@@ -5,10 +5,10 @@ import { buildFailureMarker, statusForKind } from "./map-scenario.js";
 
 // Responsibility: the run-wide categories.json (this task's spec, decision
 // 4) — one rule per `ErrorKind`, always all nine, written once at the start
-// of a run (design.md section 4: the content never depends on how the run
-// goes, so there's no reason to wait until it finishes). Each rule's own
-// `matchedStatuses`/marker format comes from map-scenario.ts's own
-// `statusForKind`/`buildFailureMarker` rather than a second copy of that
+// of a run (the content never depends on how the run goes, so there's no
+// reason to wait until it finishes). Each rule's own `matchedStatuses`/
+// marker format comes from map-scenario.ts's own `statusForKind`/
+// `buildFailureMarker` rather than a second copy of that
 // table here — the categories.json regex and the message map-scenario.ts
 // actually writes into `statusDetails.message` must never drift apart, and
 // importing the single source of truth is cheaper than a test that only
@@ -48,9 +48,9 @@ const NAME_BY_KIND: Readonly<Record<ErrorKind, string>> = {
 };
 
 // allure-js-commons' own `escapeRegExp` (dist/cjs/sdk/reporter/utils.js) is
-// not part of the package's public exports (api-facts.md 1.4) — a small
-// reimplementation here is unavoidable, not a rejection of "don't
-// reimplement the SDK".
+// not part of the package's public exports (verified against allure-js-
+// commons' own exports) — a small reimplementation here is unavoidable, not
+// a rejection of "don't reimplement the SDK".
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

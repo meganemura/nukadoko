@@ -8,19 +8,19 @@ import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 
-// Responsibility: the run-time half of capture-binding-design.md's shared
-// seam — build the matching CucumberExpression (or, for a compat RegExp
-// pattern, nothing to build at all) for every pattern in the vocabulary
-// directly from src/binding/* (not src/check/binding-check.ts, which mixes
-// in check-only issue reporting; this task's spec, decision 1: "run が同じ層
+// Responsibility: the run-time half of the shared seam — build the matching
+// CucumberExpression (or, for a compat RegExp pattern, nothing to build at
+// all) for every pattern in the vocabulary directly from src/binding/* (not
+// src/check/binding-check.ts, which mixes in check-only issue reporting;
+// this task's spec, decision 1: "run が同じ層
 // でマッチ + 束縛を行う前提で、check 専用の知識を混ぜない"), match one pickle
 // step's text against them, and zip the matched values onto the step's named
 // capture keys plus the one table/docstring key they left unconsumed
-// (capture-binding-design.md's "final argument" rule, enforced here at run
-// time exactly as `nuka check` enforces it statically). A pattern that fails
-// to build (bad capture name, unknown parameter type) can never match
-// anything at run time either — reporting *why* it failed to build is `nuka
-// check`'s job, not this module's; here it is simply skipped, so any pickle
+// ("final argument" rule, enforced here at run time exactly as `nuka check`
+// enforces it statically). A pattern that fails to build (bad capture name,
+// unknown parameter type) can never match anything at run time either —
+// reporting *why* it failed to build is `nuka check`'s job, not this
+// module's; here it is simply skipped, so any pickle
 // step text relying on it surfaces as "undefined" instead.
 //
 // m2b-compat-execution task spec, item 2 closes m2a-compat-registry's

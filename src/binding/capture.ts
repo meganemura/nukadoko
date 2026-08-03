@@ -3,11 +3,10 @@ import { InvalidCaptureKeyError, UnnamedCaptureError } from "./errors.js";
 // Responsibility: parse the text inside one `{...}` token from a pattern
 // into its name and type, per docs/spec.md "Typed steps" (`{key:type}`,
 // split on the *first* `:` so a custom parameter type name containing a
-// dash is never mistaken for part of the split — the design's own reason,
-// capture-binding-design.md). Pure text parsing, nothing else: no
-// dependency on cucumber-expressions or zod, so both `nuka check`'s schema
-// checks and (later) `nuka run`'s matching can sit on top of it without
-// pulling in the other's concerns.
+// dash is never mistaken for part of the split). Pure text parsing, nothing
+// else: no dependency on cucumber-expressions or zod, so both `nuka
+// check`'s schema checks and (later) `nuka run`'s matching can sit on top
+// of it without pulling in the other's concerns.
 
 const CAPTURE_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 

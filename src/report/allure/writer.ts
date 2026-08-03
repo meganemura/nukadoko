@@ -7,15 +7,14 @@ import type { Globals, TestResult, TestResultContainer } from "allure-js-commons
 // Responsibility: a drop-in `Writer` (this task's spec, decision 10) that
 // replaces allure-js-commons' own `FileSystemWriter`'s plain `writeFileSync`
 // with temp+rename. `allure watch` polls its results directory every 300ms
-// and reads each new file exactly once (design.md section 8/research notes
-// section 6) — a half-written result.json read mid-write is read wrong
-// forever, not just late, so this is the one place this task's spec
-// deliberately does not "thinly pass through" the official SDK (design.md
-// section 8's own words). Implements the bare `Writer` interface directly
-// as a plain object (api-facts.md 1.3: `ReporterRuntimeConfig.writer`
-// accepts one with no class inheritance) rather than extending or wrapping
-// `FileSystemWriter` — mirrors its own per-method behavior (verified
-// against `FileSystemWriter.js`) without reusing any of its code.
+// and reads each new file exactly once — a half-written result.json read
+// mid-write is read wrong forever, not just late, so this is the one place
+// this task's spec deliberately does not "thinly pass through" the official
+// SDK. Implements the bare `Writer` interface directly as a plain object
+// (verified against allure-js-commons' own exports: `ReporterRuntimeConfig
+// .writer` accepts one with no class inheritance) rather than extending or
+// wrapping `FileSystemWriter` — mirrors its own per-method behavior
+// (verified against `FileSystemWriter.js`) without reusing any of its code.
 //
 // Every temp name carries a leading dot and a `.tmp` marker (this task's
 // spec, decision 10) so neither `allure watch`'s own `*-result.json`/

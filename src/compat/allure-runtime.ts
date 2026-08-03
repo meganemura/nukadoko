@@ -95,9 +95,10 @@ export class NukadokoAllureTestRuntime extends MessageTestRuntime {
         // still saves a file whose extension matches what was declared,
         // instead of an extensionless one map-scenario.ts's own
         // `contentTypeForFileName` can only resolve to
-        // `application/octet-stream` (render-check.md section 4, M3-C spec
-        // item 2). Reusing the same table here rather than adding a second
-        // one is deliberate (this task's spec: "新しい表を作らない").
+        // `application/octet-stream` (verified against the real Allure
+        // report, M3-C spec item 2). Reusing the same table here rather than
+        // adding a second one is deliberate (this task's spec: "新しい表を作
+        // らない").
         const extension = normalizeFileExtension(fileExtension) || extensionForMediaType(contentType);
         collector.recordAttachment(name, Buffer.from(content, encoding), extension);
         break;

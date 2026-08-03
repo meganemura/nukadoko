@@ -57,7 +57,7 @@ export class UnsupportedTagExpressionError extends Error {
 }
 
 /** `this.<reserved>` was reassigned at run time (m2c-typed-world task spec,
- * item 1's reserved-key deny-list; proto-typed-world/findings.md Q5) —
+ * item 1's reserved-key deny-list; a throwaway prototype measured this) —
  * `attach`/`log`/`link`/`parameters` are, in cucumber-js itself, ordinary
  * writable own data properties despite being typed `readonly` upstream, so
  * nothing but this explicit guard would stop `this.attach = "oops"` from
@@ -92,7 +92,7 @@ export class ReservedWorldKeyDeclaredError extends Error {
  * (src/compat/world-instrumentation.ts), so it becomes an ordinary step
  * failure exactly like any other throw from a compat step's own glue
  * function; the write is never recorded into `receipt.world.writes` (thrown
- * before that record happens — proto-typed-world/findings.md Q1's bug,
+ * before that record happens — a throwaway prototype measured this bug,
  * regularized into this module's own contract). */
 const WORLD_WRITE_VALIDATION_ERROR_BRAND: unique symbol = Symbol.for(
   "nukadoko.worldWriteValidationError",
