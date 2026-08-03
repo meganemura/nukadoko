@@ -37,6 +37,12 @@ import { Given, When, Then } from "nukadoko/compat";
 - `Given(pattern, fn)` と `Given(pattern, { timeout }, fn)` のどちらの登録形も受け付け、その `timeout` は尊重されます。
 - `World`(`this`)、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、裸の文字列の `Before("@tag", fn)`)で書ける、単一の `@tag` または `not @tag` でフィルタされる `Before`/`After` フック、カスタムの `setWorldConstructor` サブクラス。
   フックは cucumber 自身のフック引数を受け取るので、`Before(function ({ pickle }) {...})` は書いたとおりに動きます。
+- `AfterStep` は `Before`/`After` と同じ 3 通りの書き方で登録します。
+  scenario 全体につき 1 回の `Before`/`After` と違い、scenario 内で実際に実行された step ごとに 1 回走ります。
+  この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` もその step については走りません。
+  始まってすらいない step に「後」は存在しないからです。
+- `Status` は cucumber-js 自身の `TestStepResultStatus` enum を同じ名前で re-export したものです。
+  `Before` / `After` / `AfterStep` フック内の `result.status === Status.FAILED` は、これで正しく import され比較できるようになります。
 - `DataTable`(`raw()`/`rows()`/`hashes()`/`rowsHash()`/`transpose()`)。
   `table.hashes()` を呼ぶ step は書いたとおりにそのまま動き続けます(摩擦ゼロで、examples/migration 自身のスイートを移行する形で計測済みです)。
 - glue 内の `allure.*` 呼び出し(`attach`/`log`/`link`、ラベル、パラメータ)は、消えるのではなく receipt の `declared` フィールドに入ります。
@@ -61,17 +67,28 @@ glue はテキストとして読むだけで、実行はしていません。
 その一部は何かを実行するより前に `nuka check` がすでに名指しし、その一部はその step に達した最初の `nuka run` で初めて表に出ます。
 どちらなのかは以下の各項が言うので、この準備は探し物ではなく順にこなせるリストです。
 
-- **`nukadoko/compat` がエクスポートしていない名前を値として使う**: `AfterStep`、`Status`、`setParallelCanAssign` です。
-  ES モジュールの named import はリンク時に解決されるため、これらのどれか 1 つを import して使うだけで import 文全体、ひいてはそのファイルが丸ごと落ちます。
+- **`setParallelCanAssign` を値として使う**: `nukadoko/compat` はこれを export していません。
+  ES モジュールの named import はリンク時に解決されるため、これを import して呼び出すだけで import 文全体、ひいてはそのファイルが丸ごと落ちます。
   import を分割するか、その呼び出しを削ってください。
   何かが実行されるより前に捕まります: `nuka check` は、そのファイルを Node 自身のエラーメッセージ付きの `step-file-import-failed` として報告し、`check` を省略していた場合は同じ失敗がそのファイルを import しようとする最初の `nuka run` で表に出ます。
-  (`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。以下を参照してください。)
-- **同じ種類の名前でも、型としてしか使っていない場合**(`IWorldOptions`、`ITestCaseHookParameter` が監査自身の例です)は別のケースであり、上のケースを小さくしたものではありません。
+  これはこのリストの中で唯一、判断として未対応のままにしている名前であり、対応がまだ追いついていないだけではありません。
+  nukadoko には並列実行がなく、roadmap にもないため、work-assignment のコールバックが実際に制御すべき対象がそもそも存在しません。
+  この呼び出しを no-op として受け入れることは、拒否するより悪い結果になります。
+  それは import が通って実行され、並列割り当てのルールが効いていると信じたままのスイートに、何も強制しないまま残すことになるからです。
+  これはまさに、この扉が拒むために存在する静かな失敗そのものです(docs/spec.ja.md「Compat steps(移行の扉)」)。
+  import の時点で失敗させることが、その約束を守ります。
+  このリストの他のすべての名前と同じやり方です。
+  もし nukadoko がいつか並列実行を持つことになれば、そのとき `setParallelCanAssign` は、その実行が実際に何を制御すべきかに照らして再検討されます。
+  ただし、いつそうなるとも、そもそもそうなるとも、ここでは何も約束していません。
+  (`AfterStep`、`Status`、`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。上記を参照してください。)
+- **同じ種類の名前でも、型としてしか使っていない場合**は別のケースであり、上のケースを小さくしたものではありません。
   esbuild が型だけの import をコンパイル済み出力から取り除くため、その名前は実行時には実際には一度も import されません。
   出荷される glue がそのまま実行されるものなので、`nuka check` も `nuka run` も何も問題を見つけません。
   文句を言うのは `tsc` だけで、それは `tsc` の仕事であり nukadoko の仕事ではありません。
   これは検出漏れではなく境界です。
   実行時にはもう検出すべきものが何も残っていません。
+  (このカテゴリの監査自身の例だった `IWorldOptions` と `ITestCaseHookParameter` は、今では export されています。
+  `WorldConstructorParams`/`HookParameter` のエイリアスとして、他の compat の名前と同じように typecheck を通ります。)
 - **CommonJS の glue**: nukadoko は ESM 専用なので、`require("nukadoko/compat")` は `ERR_PACKAGE_PATH_NOT_EXPORTED` で即座に失敗します。
   8 本のうち 2 本は、全体が CommonJS のスイートでした。
   この扉が受け入れるのは ES module の glue だけです。

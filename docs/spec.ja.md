@@ -233,7 +233,7 @@ import { Given, When, Then } from "nukadoko/compat";
 - Compat の step はそのまま動きます。
   パターン構文は同じで、`page` / `request` を持つ World(`this`)は nukadoko の harness によって提供され、管理されます。
   カスタムの World クラスは `setWorldConstructor` を通じて nukadoko の基底クラスを拡張します。
-  サポートされる API はよく使われるサブセット(Given/When/Then、World、Before/After)で、必要に応じて拡張され、先回りしては拡張されません。
+  サポートされる API はよく使われるサブセット(Given/When/Then、World、Before/After、AfterStep)で、必要に応じて拡張され、先回りしては拡張されません。
 - 登録の意味論: `Given` / `When` / `Then` は 1 つの登録の 3 つの名前です。
   キーワードは登録時には何も意味せず、実行時に scenario 内の位置が決めます(Cucumber とまったく同じです)。
   pattern は文字列(素の cucumber-expressions。named capture はここでは要求されません(その規律は typed step のものです))または RegExp です。
@@ -256,6 +256,16 @@ import { Given, When, Then } from "nukadoko/compat";
   Before / After フックは、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、`Before("@tag", fn)`)のどれでも書け、cucumber 自身のフック引数を受け取ります。
   タグ絞り込みは `@tag` と `not @tag` のみで、それ以上の式は黙って誤マッチする代わりに大きな声で失敗します。
   フックは receipt ではなく scenario record の `hooks` 配列に現れ、フック中のネットワークはどの step の境界にも属しません。
+  `AfterStep` はこれと同じ登録面(3 通りの呼び出し形、同じ `@tag` / `not @tag` のフィルタ)を共有しますが、Before/After が scenario 全体を挟み込むのに対し、`AfterStep` は実際に実行された pickle step ごとに 1 回走ります。
+  この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` にとっての「後」はそこには存在せず、その step については何も現れません。
+  これはタグが一致しなかった hook がすでに従っている慣習と同じです。
+  `hooks` 配列内の各 `AfterStep` エントリは `step_index` を運びます。
+  これは、その record 自身の `steps` 配列の中での実行された step の 0 始まりの index であり、レポートがエントリ同士を区別できるようにするためのものです。
+  Allure と cucumber-messages の両方の emitter がこれをそのまま運びます。
+  フック引数の `result.status` は `@cucumber/messages` 自身の `TestStepResultStatus` の文字列値をそのまま使っているため、`nukadoko/compat` は同じ enum を `Status` として re-export しており、`result.status === Status.FAILED` と書かれた glue はこれで正しく import され比較できるようになります。
+  この enum の他のメンバー(`PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS`)は決して一致しません。
+  nukadoko には、hook 自身の result が運びうる pending、skipped、undefined-step、ambiguous-match のいずれの概念もないからです。
+  それらのどれかとの比較は、移行した glue が決して通らない分岐であり、残された gap ではありません。
   `BeforeAll`/`AfterAll` は scenario ではなく run 全体を挟み込み(tags は取らず、World もなく、scenario が 1 つも選ばれなければ丸ごとスキップされます)、record は scenario の形をしたものであり、これらの hook はどの scenario にも属さないため、報告は exit code を通じて行われます。
   `setDefaultTimeout` は、自分の timeout を宣言していないものすべてに既定値を与えます。
   呼ばずにおけば、step は cucumber の 5 秒という上限を持ち込む代わりに無制限のままになります。
@@ -282,8 +292,10 @@ import { Given, When, Then } from "nukadoko/compat";
   どちらも、何かが実行される前に、そのファイルのテキストだけから分かります。
   **`nuka run` で初めて見つかること**: step や hook が `"pending"` / `"skipped"` を返すこと、そして done コールバックの glue は、その step が実際に実行されたときに何をするかの性質であり、ファイルの import のされ方の性質ではないため、その step 自身の実行より前には何も指摘できません。
   **どちらでもない(gap ではない)こと**: 型注釈にしか使われていない、あるいは import はされたが一度も参照されない名前は、nukadoko がそのファイルを import するより前に esbuild によってコンパイル済み出力から取り除かれるため、その import は実行時には実際には一度も起きません。
-  glue は書かれたとおりに実行され、`IWorldOptions` / `ITestCaseHookParameter`(未サポートですが、監査が読んだすべてのスイートで型としてしか使われていませんでした)がまさに監査自身の例です。
-  `tsc` はそれでも文句を言うかもしれませんが、`nuka` には文句を言う対象がそもそも残っていません。
+  glue は書かれたとおりに実行されます。
+  `tsc` はその名前を compat が export しているものに対して解決するので、欠けている名前はコンパイルエラーであって実行時のエラーではありません。
+  監査がこの分類で見つけた 2 つの名前、`IWorldOptions` と `ITestCaseHookParameter` を export する価値があったのはまさにそのためです。
+  `nuka` がそれらの失敗を一度も見なかったとしても、その代償は利用者の実行ではなく利用者の型検査が払っていました。
 - この節と、移行に触れる今後のすべての設計に適用される恒久的な設計規則: 今日動いている compat の資産は、チームが nukadoko を採用したことや、他のどこかを typed 側へ動かしたことを理由に、動かなくなってはなりません。
   移行途中の「住まいが 2 つある」状態(support コードに登録された parameter type と config に住む parameter type、World のバッグと typed の result の併存)は、禁止するのではなく受け入れます。
   ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
@@ -417,6 +429,13 @@ Cucumber が持ったことのない実行インフラです:
   `nuka check` は各 env file の分類と secret のキー名を報告します(値は決して報告しません)。
 
 Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+
+`browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります(browser の種類は chromium だけで、`newContext` の `viewport` のようなオプションは別の Playwright の型であり、ここでは受け付けません。v1 は launch のみです)。
+zod は「これがオブジェクトかどうか」以上には形を再検証しません。
+型は `defineConfig` から来るため、`tsc` は `nukadoko.config.ts` の他の場所と同じやり方で typo を捕まえます。
+Playwright のオプションを zod で列挙し直すと、Playwright が 1 つ追加するたびに追随が必要になり、その追随が追いつくまでのあいだ、config を書く人は本当は使える Playwright のオプションを使えなくなってしまいます。
+今日読まれているのは `headless` だけで、そのまま `chromium.launch` に渡されます。
+省略した場合は Playwright 自身の既定値(`headless: true`)が適用されます。
 
 `parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
 たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。
