@@ -56,7 +56,7 @@ describe("nuka check: compat integration", () => {
     expect(exitCode).toBe(1);
   });
 
-  it("then-compat-step's message says static check can't clear it and points at run-time observation", async () => {
+  it("then-compat-step's message says static check can't clear it and names the gap as static, not a run-time finding", async () => {
     const stdout = createCaptureSink();
     await runCli(["check", "--json"], {
       rootDir: fixture("check-compat-project"),
@@ -70,7 +70,7 @@ describe("nuka check: compat integration", () => {
     );
     expect(thenCompat).toBeDefined();
     expect(thenCompat.message).toContain("Then position");
-    expect(thenCompat.message).toContain("run-time observation");
+    expect(thenCompat.message).toContain("static coverage gap");
   });
 
   it("parameter-type-support-origin names the support-origin type and the config home it could move to", async () => {

@@ -1,12 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import {
-  PickleStepType,
-  type GherkinDocument,
-  type Pickle,
-  type PickleStep,
-} from "@cucumber/messages";
+import { type GherkinDocument, type Pickle, type PickleStep } from "@cucumber/messages";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { DataTable } from "../compat/data-table.js";
 import {
@@ -40,10 +35,10 @@ import { writeScenarioRecord } from "./write-record.js";
 // "シナリオ実行器") — the scenario-level counterpart to cli/do.ts's execution
 // phase. One `ctx` is created for the whole pickle and shared by every step
 // (docs/spec.md "Running": "Steps in one pickle share one context"); a
-// step's own failure/undefined/ambiguous/Then-position-observed-write stops
-// matching or running any further step in this scenario, but every step
-// still gets a scenario-record entry (`skipped` for the rest). Evidence
-// follows its natural scope (this task's spec, decision 5): the browser's
+// step's own failure/undefined/ambiguous stops matching or running any
+// further step in this scenario, but every step still gets a scenario-record
+// entry (`skipped` for the rest). Evidence follows its natural scope (this
+// task's spec, decision 5): the browser's
 // trace/screenshots belong to the scenario as a whole (one `dispose()` call,
 // at the very end), while each step's own http.jsonl belongs to that step's
 // receipt dir — reached by calling `contextHandle.beginStep` right before
@@ -57,34 +52,37 @@ import { writeScenarioRecord } from "./write-record.js";
 // mirroring `nuka do`'s own setup/execution split (this task's spec,
 // decision 4).
 //
-// A Then-position (`PickleStepType.OUTCOME`) step is no longer rejected
-// ahead of execution for its *declared* `mutates` (m2pre-observed task
-// spec, decisions 4-5, superseding this file's earlier static check): the
-// same step text can legitimately appear in both Action and Outcome
-// position, so only what a given occurrence's execution actually observed
-// can settle it. The step always runs and always gets a receipt; if it is
-// bound in Then position and its execution observed a network write, the
-// receipt is demoted to `status: "failed"` afterward — measured, per
-// occurrence, regardless of what `run` returned or what was declared.
+// A Then-position (`PickleStepType.OUTCOME`) step's own execution is never
+// judged by what it observed on the wire (t2-trust-declaration task spec):
+// this file used to demote an otherwise-"ok" status when a Then-bound step's
+// execution measured a network write, but the write/read-method proxy that
+// measurement rests on is not the semantics itself — GraphQL, RPC-over-POST,
+// and many vendor query APIs run a semantically pure read through POST, and
+// nukadoko has no way to tell those apart from the HTTP layer alone. A
+// step's own `mutates` declaration is what nukadoko trusts instead; `nuka
+// check`'s static check (src/check/feature-check.ts) still warns when a
+// declared-mutating step is bound in Then position, but nothing in this file
+// enforces it at runtime any more — the step just runs like any other.
 //
 // `policy: "read-only"` enforcement (m2pre-resultof task spec, decision 3)
 // closes a gap this file always had: unlike cli/do.ts, `nuka run` never
-// looked at the resolved environment's policy at all. It is two checks, one
-// declared and one measured, exactly mirroring cli/do.ts's own split: a step
-// whose *declared* `mutates` is `true` is refused before it ever runs — a
-// "never began" outcome, alongside undefined/ambiguous, with `receipt: null`
-// and the rest of the scenario skipped — while a step that declares
-// `mutates: false` yet is *measured* observing a network write still gets a
-// failed receipt afterward (the same lie backstop `nuka do` already has).
-// The measured backstop can coincide with the Then-position measured check
-// above (both key off the same `observed.http_writes`); when both apply to
-// the same occurrence, `errorMessage` says both rather than picking one.
+// looked at the resolved environment's policy at all. Only the declared half
+// of that check remains (t2-trust-declaration task spec, same reasoning as
+// the Then-position paragraph above): a step whose *declared* `mutates` is
+// `true` is refused before it ever runs — a "never began" outcome, alongside
+// undefined/ambiguous, with `receipt: null` and the rest of the scenario
+// skipped. There is no longer a measured backstop for a step that declares
+// `mutates: false` yet is observed writing anyway — `observed.http_writes`
+// is still tallied and still lands on the receipt (docs/spec.md
+// "Receipts"), it just no longer decides `status`; a wrong declaration stays
+// visible there and in http.jsonl for a report to catch, rather than failing
+// the run that exposed it.
 //
 // `ctx.resultOf` (m2pre-resultof task spec, decisions 1-2): this file is the
 // one place a pickle's result chain is held — a `Map` keyed by the Step
-// object itself (not by name), updated only when a step's *final* status
-// (after every demotion above) is `"ok"`. The chain is created fresh per
-// scenario and never escapes this function, so it cannot leak between
+// object itself (not by name), updated only when a step's own status is
+// `"ok"`. The chain is created fresh per scenario and never escapes this
+// function, so it cannot leak between
 // pickles; a step's own reader is wired into createStepContext's `resultOf`
 // option as a plain closure over this map, and every value-returning read is
 // reflected back afterward via `contextHandle.usedReceiptIds()` onto that
@@ -173,17 +171,6 @@ function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): 
   return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
 }
 
-/** The measured read-only backstop message (this task's spec, decision 3):
- * matches cli/do.ts's own execution-phase backstop wording — a declared
- * `mutates: false` that the execution's own observed writes contradict. */
-function readOnlyObservedWritesMessage(
-  stepName: string,
-  environment: string,
-  writes: number,
-): string {
-  return `Step "${stepName}" observed ${writes} network write${writes === 1 ? "" : "s"} but environment "${environment}" has policy "read-only"`;
-}
-
 /** One pickle's own result chain: which Step object most recently finished
  * with `status: "ok"`, and what its validated result plus receipt id were
  * (this task's spec, decision 1). */
@@ -221,10 +208,12 @@ export interface RunScenarioOptions {
   readonly git: GitState | undefined;
   readonly environment: string;
   /** The resolved environment's `policy` (cli/run.ts's `resolvedEnv.policy`)
-   * — `"read-only"` refuses a declared-mutating step before it runs and
-   * backstops a declared `mutates: false` step whose execution is measured
-   * writing anyway (this task's spec, decision 3); `undefined` means no
-   * restriction. */
+   * — `"read-only"` refuses a declared-mutating step before it runs (this
+   * task's spec, decision 3); `undefined` means no restriction. A step
+   * declared `mutates: false` that is nonetheless measured writing is no
+   * longer demoted for it (t2-trust-declaration task spec) — the
+   * declaration is trusted, and `observed.http_writes` on its receipt is
+   * where a wrong one stays visible instead. */
   readonly policy: "read-only" | undefined;
   readonly targetVersion: string | undefined;
   readonly session: string | null;
@@ -262,13 +251,6 @@ export interface RunScenarioOptions {
    * wherever that is `undefined`; an own declaration always wins. Not
    * applied to a typed step, which has no timeout mechanism at all. */
   readonly defaultTimeoutMs: number | undefined;
-}
-
-/** The Then-position + observed-write failure message (this task's spec,
- * decision 4): states the fact this receipt now records — writes were
- * measured, not merely declared, while bound in Then position. */
-function thenObservedWritesMessage(stepName: string, writes: number): string {
-  return `Step "${stepName}" is bound in Then position and observed ${writes} network write${writes === 1 ? "" : "s"}: Then must not mutate`;
 }
 
 function undefinedStepMessage(text: string): string {
@@ -479,16 +461,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   /**
    * Shared by the typed and compat branches below (this task's spec, item
-   * 2's asymmetry-closing and item 3's compat receipt shape): applies the
-   * Then-position and read-only *measured* demotions (identical, regardless
-   * of kind — both key off `observed.http_writes`, which every network path
-   * this ctx opens tallies into whichever kind of step opened it), records
-   * this step in `chain` when `chainKey` is given and the final status is
-   * `"ok"` (typed only — `undefined` for a compat step, this task's spec,
-   * item 4: "World は compat 同士"), then builds, redacts, and writes the
-   * receipt and this step's own scenario-record entry. A closure over this
-   * function's own `chain`/`contextHandle`/`environment`/`policy`/
-   * `targetVersion`/`session`/`scenarioId`/`secrets`, and mutates the outer
+   * 2's asymmetry-closing and item 3's compat receipt shape): records this
+   * step in `chain` when `chainKey` is given and the final status is `"ok"`
+   * (typed only — `undefined` for a compat step, this task's spec, item 4:
+   * "World は compat 同士"), then builds, redacts, and writes the receipt
+   * and this step's own scenario-record entry. `observed.http_writes` (every
+   * network path this ctx opens tallies into whichever kind of step opened
+   * it, typed or compat alike) is recorded on every receipt below regardless
+   * of position or policy, but no longer demotes `status` from it
+   * (t2-trust-declaration task spec: measurement stays a record, never a
+   * verdict — see this file's own header). A closure over this function's
+   * own `chain`/`contextHandle`/`environment`/`policy`/`targetVersion`/
+   * `session`/`scenarioId`/`secrets`, and mutates the outer
    * `scenarioFailed`/`stepRecords` — kept as a nested function rather than
    * a free one specifically so it can reach all of that without threading
    * every one of those through its own parameter list.
@@ -512,27 +496,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // has no declaration at all) — this task's spec, decision 3.
     mutates: boolean | null,
   ): Promise<void> {
-    let status = initialStatus;
-    let errorMessage = initialErrorMessage;
-    let errorKind = initialErrorKind;
+    const status = initialStatus;
+    const errorMessage = initialErrorMessage;
+    const errorKind = initialErrorKind;
 
-    // Then-position measured enforcement (m2pre-observed task spec,
-    // decision 4) and the read-only measured backstop (m2pre-resultof task
-    // spec, decision 3) both only ever demote an otherwise-"ok" status — a
-    // step that already failed for its own reason keeps that truthful
-    // failure and message rather than being overwritten by either of
-    // these. Both key off the same `observed.http_writes` and can
-    // therefore both apply to the same occurrence at once; when they do,
-    // `errorMessage` says both rather than picking one, and `errorKind`
-    // takes `then_mutated`. A closed enum can only carry one value, and
-    // that is the one worth carrying: a mutating step bound in Then
-    // position is a defect in the vocabulary itself, true in every
-    // environment and fixable once, whereas a read-only violation
-    // describes where this particular run happened to point. The
-    // structural fault is the more actionable category for a report to
-    // file the failure under. Applied uniformly
-    // regardless of kind (m2b-compat-execution task spec, item 6: "compat
-    // step にも実行時の観測強制がそのまま適用される").
+    // `observed.http_writes`/`http_reads` are tallied every occurrence,
+    // typed or compat alike, and always land on the receipt below — this is
+    // a record, not a verdict (t2-trust-declaration task spec): nukadoko no
+    // longer demotes `status` for what a step's execution measured, whether
+    // that step is bound in Then position or running under a read-only
+    // policy. What's left of that enforcement is entirely declared: the
+    // read-only refusal above (before this step ever ran) and `nuka
+    // check`'s static Then-position warning, neither of which this function
+    // touches.
     const observed = contextHandle.observedCounts();
     const usedReceiptIds = contextHandle.usedReceiptIds();
     // World reads/writes tallied since the current step boundary began (m2c-
@@ -545,23 +521,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // task spec, items 2-3) — `undefined` when nothing was ever recorded
     // this step, omitted from the receipt the same way `used`/`world` are.
     const declared = declaredCollector.snapshot();
-    const demotionMessages: string[] = [];
-    let demotionKind: ErrorKind | undefined;
-    if (status === "ok" && pickleStep.type === PickleStepType.OUTCOME && observed.http_writes > 0) {
-      demotionMessages.push(thenObservedWritesMessage(outcomeStepName, observed.http_writes));
-      demotionKind ??= "then_mutated";
-    }
-    if (status === "ok" && policy === "read-only" && observed.http_writes > 0) {
-      demotionMessages.push(
-        readOnlyObservedWritesMessage(outcomeStepName, environment, observed.http_writes),
-      );
-      demotionKind ??= "read_only_violation";
-    }
-    if (demotionMessages.length > 0) {
-      status = "failed";
-      errorMessage = demotionMessages.join("; ");
-      errorKind = demotionKind;
-    }
 
     // Only a step whose *final* status is "ok" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
@@ -605,13 +564,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step: outcomeStepName,
             kind: "run",
             args: rawArgs,
-            // `errorKind` is guaranteed set by this point: either the
-            // caller passed one in (status already "failed" on entry) or a
-            // demotion above just set both `status` and `errorKind`
-            // together. The `?? "step_error"` fallback is a belt-and-
-            // braces default only, matching this task's own "判定に迷った
-            // ら step_error に倒す" principle — it should never actually be
-            // reached.
+            // `errorKind` is guaranteed set by this point: the caller always
+            // passes one alongside `initialStatus === "failed"`, and this
+            // function no longer demotes an "ok" status to "failed" itself
+            // (t2-trust-declaration task spec). The `?? "step_error"`
+            // fallback is a belt-and-braces default only, matching this
+            // task's own "判定に迷ったら step_error に倒す" principle — it
+            // should never actually be reached.
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment,
@@ -788,9 +747,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // doesn't either), and nothing between it and here caught it before
     // this task. This backstop changes nothing about any failure already
     // handled by name below (undefined/ambiguous/binding failure/args
-    // zod/the step's own `run` throw/Then-position writes/read-only) —
-    // each keeps its own branch, unchanged; this is only the last net
-    // underneath all of them. `began` mirrors the exact point (marked
+    // zod/the step's own `run` throw/the read-only declared-mutates
+    // refusal) — each keeps its own branch, unchanged; this is only the
+    // last net underneath all of them. `began` mirrors the exact point (marked
     // below, unchanged from before this task) this function already
     // treats as "a receipt is always written from here on": a throw
     // before it is "never began" (`receipt: null`, the same family as
@@ -850,12 +809,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // ambiguous above — no receipt id or directory is created, and the
         // rest of the scenario is skipped, matching cli/do.ts's own
         // setup-phase refusal for the same policy. `mutates: false` steps
-        // are unaffected regardless of policy; the measured backstop for a
-        // *false* declaration lives inside `finishExecutedStep`, after the
-        // step has actually run. A compat entry has no declared `mutates`
-        // at all (m2b-compat-execution task spec, item 2), so this check
-        // simply does not apply to one — only the measured backstop below
-        // ever catches a compat step's read-only violation.
+        // are unaffected regardless of policy — and, since
+        // t2-trust-declaration, so is a step that goes on to actually write
+        // despite that declaration: the declaration is trusted, not
+        // re-verified against what execution measures, so
+        // `finishExecutedStep` no longer has a backstop for it. A compat
+        // entry has no declared `mutates` at all (m2b-compat-execution task
+        // spec, item 2), so this check simply does not apply to one; nothing
+        // in this file checks a compat step's read-only behavior either.
         if (policy === "read-only" && entry.step.mutates) {
           scenarioFailed = true;
           stepRecords.push({

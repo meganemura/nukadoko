@@ -59,7 +59,7 @@ one is:
 | Input | pattern capture only, unchecked | validated against an `args` schema, each field carrying a `.describe()` |
 | Output | discarded — the receipt's `result` is `null` | validated against a `returns` schema and stored in the receipt |
 | Dependencies | side effects on the World, invisible in the function signature | pulled through `ctx.resultOf`, named in an import, recorded as `used` in the receipt |
-| Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is declared and checked against what the run actually `observed`, so a mutation there fails |
+| Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the receipt's `observed` counts |
 | Running alone | not possible — the World is empty outside a scenario | `nuka do <step>` runs it directly, receipt printed to stdout — but a dependency read via `ctx.resultOf` finds nothing, since no step ran before it |
 
 That last row is a separate fact from the "Dependencies" row above it, not a
@@ -122,8 +122,10 @@ What changed:
   (`{name:string}` → `args.name`), so the pattern alone shows which text
   becomes which field.
 - `mutates: true` is now a declaration, not just a fact about what the code
-  happens to do — bind this step to `Then` and a run that observes a write
-  is rejected.
+  happens to do — `nuka check` warns if this step is ever bound to `Then`,
+  and a read-only environment refuses to run it at all. The receipt still
+  records what the run actually sent, for review, but that count doesn't
+  get the step rejected.
 - `this.request` becomes `ctx.request()`: only what the executor actually
   injects is on `ctx`, nothing implicit.
 

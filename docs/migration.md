@@ -140,8 +140,10 @@ execution via `nuka do` — none of which a compat step has.
 `nuka check` is the running meter of how much migration is left:
 
 - `then-compat-step` warns when a compat step is bound in `Then` position —
-  compat steps have no declared `mutates` to check statically, so this
-  flags where run-time observation alone is doing the enforcement work.
+  compat steps have no declared `mutates` for nukadoko to trust there (see
+  docs/spec.md "Keyword semantics"), so this flags a step with no static
+  signal at all in that spot, not one the tool has caught doing anything.
+  Promoting it to `defineStep` is how it gains a declaration to check.
 - `parameter-type-support-origin` warns on every support-side
   `defineParameterType`, pointing at the config move above.
 - Receipts tell the same story at run time: `world` (compat steps only) and

@@ -167,7 +167,7 @@ describe("nuka run: typed World measurement + declaration", () => {
     expect(record.steps[0].error.message).toContain("attach");
     expect(record.steps[0].error.message).toContain("reserved");
     // m3a-receipt-kinds task spec: `ReservedWorldKeyWriteError` isn't one of
-    // the nine named kinds (only a declared-schema failure, thrown by
+    // the named kinds (only a declared-schema failure, thrown by
     // `WorldWriteValidationError`, is "world_invalid") — this must stay
     // "step_error", not be swept into "world_invalid" just because it's
     // also a World-related throw.

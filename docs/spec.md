@@ -224,47 +224,56 @@ records.
 
 ### Keyword semantics
 
-Gherkin keywords stop being decoration — not because declarations are
-trusted, but because the tool measures. Real corpora forced this split:
-the same sentence legitimately appears in both Action and Outcome
-positions, idiomatic suites chain actions after `Then` via `And`, and a
-step wrapping an arbitrary command has no single truthful `mutates` value.
-A per-step boolean cannot carry a per-occurrence fact, so enforcement is
-layered:
+Gherkin keywords carry a real fact because `mutates` is a **declaration
+nukadoko trusts**, not because the tool re-derives the fact from what ran
+and overrides the declaration when they disagree. Real corpora forced the
+split that follows: the same sentence legitimately appears in both Action
+and Outcome positions, idiomatic suites chain actions after `Then` via
+`And`, and a step wrapping an arbitrary command has no single truthful
+`mutates` value. A per-step boolean cannot carry a per-occurrence fact, so
+what a declaration settles is layered:
 
-- `mutates` stays as the step's **declared intent** (default `true`;
-  read-only steps declare `false`).
+- `mutates` is the step's **declared intent** (default `true`; read-only
+  steps declare `false`).
 - **Statically**, `nuka check` warns — not errors — when a declared-
   mutating step is bound in Then position. The tension deserves human
-  eyes, but the declaration alone cannot settle it.
+  eyes; the declaration alone cannot settle it, and this check only warns.
+- **Read-only environments refuse a declared-mutating step before it
+  runs** — the one place the declaration gates execution rather than
+  drawing review's attention.
 - **At run time**, the receipt records what the execution actually did:
   every network call the tool saw (through `ctx.request()` and the page
-  alike), with non-GET/HEAD calls counted as observed writes. A step
-  executing in Then position whose execution observes writes fails — per
-  occurrence, measured, regardless of what was declared.
+  alike), with non-GET/HEAD calls counted as observed writes, next to
+  `mutates` (declared). That count settles nothing on its own anymore —
+  not Then position, not a read-only environment's own policy. A declared
+  `mutates: false` is trusted, whatever `observed` says.
 - Gherkin classifies an `And`/`But` step by inheriting the pickle step type
   of the preceding primary keyword (Given/When/Then) — gherkin's own
-  pickle-compilation behavior, not a nukadoko choice. An action chained
-  after `Then` therefore runs under Then-position observation: fine while
-  it only reads, failed the moment it writes.
-- Read-only environments refuse declared-mutating steps before execution
-  and additionally fail any execution that observes writes — a false
-  `mutates: false` cannot slip through the policy.
-- Honest limits: observation sees network writes only, and it sees them
-  through HTTP method — non-GET/HEAD counts as a write — which is a proxy
-  for write semantics, not the semantics itself. Purely client-side state
-  and a server that mutates on GET are invisible to it in one direction;
-  in the other, a step calling a semantically pure read implemented over
-  POST (GraphQL, RPC-over-POST, most vendors' query endpoints) still
-  records a write even though it truthfully declares `mutates: false` —
-  every non-GET/HEAD call counts as one regardless of what it actually
-  did. That step cannot sit in Then position, because the measurement
-  overrides the declaration, and cannot run in a `policy: "read-only"`
-  environment, whatever it declared. The declaration and PR review carry
-  all of these cases; the proxy is a property of counting by HTTP method,
-  not a gap this document is quiet about.
-- Compat (untyped) steps cannot be checked statically; run-time
-  observation applies to them unchanged.
+  pickle-compilation behavior, not a nukadoko choice — so an action chained
+  after `Then` is recorded under Then-position observation the same as any
+  other step there, not gated by it.
+- Why measurement stopped settling this: write detection runs on HTTP
+  method — non-GET/HEAD counts as a write — which is a proxy for write
+  semantics, not the semantics itself. GraphQL, RPC-over-POST, and most
+  vendors' query APIs implement a semantically pure read over POST; whether
+  a call actually changed server state is the external system's own
+  semantics, and nukadoko sits one layer below that, at HTTP. What would
+  distinguish a read from a write is protocol-specific every time — a
+  GraphQL body's `query` vs. `mutation`, an RPC body's method name, a
+  vendor's own path convention — so no general mechanical judgment can
+  stand in for the proxy. What the count guarantees is what a step sent,
+  not whether the server's state changed; those are different facts, and
+  treating the first as proof of the second overclaimed.
+- Nothing about the record shrank: `observed`, http.jsonl, and the Allure
+  declared/observed table stay exactly as measured, so a declaration that
+  turns out wrong is still visible there — falsifiable after the fact.
+  Accepting a falsifiable declaration is not measurement giving up; it is
+  where the tool's authority over this particular fact actually ends.
+- Compat (untyped) steps have no `mutates` to declare at all (see "What
+  compat steps lack") — `nuka check`'s `then-compat-step` warning flags
+  one bound in Then position as that coverage gap instead of a mutation
+  tension, and run-time observation records its counts the same as any
+  step's, gating nothing.
 
 ## Compat steps (the migration door)
 
@@ -335,8 +344,8 @@ import { Given, When, Then } from "nukadoko/compat";
   already get measured receipts — status, timing, trace, screenshots, HTTP
   log — with zero code change.
 - What compat steps lack: typed contracts, a validated `result` in the
-  receipt, single-step CLI execution, and Then enforcement. Promoting a hot
-  step to `defineStep` is the upgrade, one step at a time.
+  receipt, and single-step CLI execution. Promoting a hot step to
+  `defineStep` is the upgrade, one step at a time.
 - The door's width is measured, not asserted. Eight public cucumber-js
   suites were audited against it — their glue read as text, never run — and
   none of them ran on the import switch alone at the time, and closing the
@@ -383,9 +392,7 @@ get no receipt (an execution that never began must not be citable; the
 scenario record is what says "skipped"). Evidence follows its natural
 scope: each step's receipt carries that step's http.jsonl, while the
 Playwright trace spans the shared context and therefore lives in the
-scenario's own directory, not on any single step. Then-position
-enforcement applies at run time by observation: a Then-positioned
-execution that observes network writes fails (see Keyword semantics).
+scenario's own directory, not on any single step.
 
 An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
@@ -441,14 +448,13 @@ shape whether the step ran inside a scenario or via `do`.
   replaces it. Compat steps record `result: null`.
 - `error.kind` is a closed set, beside the message a human reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
-  `then_mutated`, `read_only_violation`, `timeout`, `unsupported`,
-  `step_error`. Closed because a report has to classify against it — an
-  open one, extended per step, would classify nothing. The first six name
-  failures that exist only because there is a contract to violate, which
-  is the part a report built on a runner that discards return values
-  cannot fill in; a classifier that isn't sure says `step_error`, since
-  claiming a contract failure wrongly is worse than not claiming one. Hook
-  records in the scenario record carry the same field.
+  `timeout`, `unsupported`, `step_error`. Closed because a report has to
+  classify against it — an open one, extended per step, would classify
+  nothing. The first four name failures that exist only because there is a
+  contract to violate, which is the part a report built on a runner that
+  discards return values cannot fill in; a classifier that isn't sure says
+  `step_error`, since claiming a contract failure wrongly is worse than not
+  claiming one. Hook records in the scenario record carry the same field.
 - `mutates` is the step's own declaration (`null` for a compat step, which
   has none to record — not `false`), sitting beside the `observed` counts
   so declared and measured can be compared without a second artifact.
@@ -459,9 +465,10 @@ shape whether the step ran inside a scenario or via `do`.
   make, through `ctx.request()` and the page alike; non-GET/HEAD counts as
   a write — HTTP method as a proxy for write semantics, not semantics
   itself, so a POST-based read counts against a step that never wrote
-  anything (see Keyword semantics' Honest limits). It is what run-time
-  keyword enforcement and read-only environments act on — measured, never
-  declared.
+  anything (see Keyword semantics). It settles nothing on its own: Then
+  position and read-only environments act on the `mutates` declaration,
+  never on this count. `observed` sits beside `mutates` (declared) so a
+  wrong declaration is falsifiable, here and in the Allure report.
 - `used` (present only when non-empty) lists the receipt ids whose results
   this execution actually read through `ctx.resultOf` — the accessor is
   tool-provided, so the reads are measurable. The dependency is thus
@@ -660,27 +667,29 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
 - A step's parameters carry its declaration and what was actually observed
   side by side: `mutates (declared)` next to the measured `http reads
   (observed)` / `http writes (observed)` (and, for a compat step, `world
-  reads (observed)` / `world writes (observed)`) — declaration and
-  measurement, in the same table, is nukadoko's whole claim made visible in
-  the report itself. The observed side is an HTTP-method proxy, not a
-  semantic judgment (see Keyword semantics' Honest limits): a row can show
-  a truthful `mutates (declared): false` next to a nonzero `http writes
-  (observed)` when the step called a POST-based read, and that is the
-  proxy showing through the table, not either number lying.
+  reads (observed)` / `world writes (observed)`) — not because the two are
+  checked against each other automatically, but so a reviewer can: the
+  declaration is what nukadoko trusts and acts on, the observed counts are
+  what actually happened, and this row is where the two sit close enough to
+  compare by eye. The observed side is an HTTP-method proxy, not a semantic
+  judgment (see Keyword semantics): a row can show a truthful `mutates
+  (declared): false` next to a nonzero `http writes (observed)` when the
+  step called a POST-based read, and that is the proxy showing through the
+  table, not either number lying.
 - A failed step or test's message is prefixed `[nukadoko.failure=<kind>]`,
   naming the same `error.kind` its receipt already carries; the same
   `error.kind` is also written as a `nukadoko.failure` result label. The two
   Allure generations turn that into a category by different paths, and they
   need different things from a user.
 - **Allure 2** has no per-result category field, so the emitter also writes
-  `categories.json` (one rule per `error.kind`, all nine, every run,
+  `categories.json` (one rule per `error.kind`, all seven, every run,
   matching the message prefix by regex) — the message prefix and the
   category rule are two views of the same classification, and no user
   configuration is needed.
 - **Allure 3**'s `allure generate`/`allure report` never read a results
   directory's `categories.json` — categories there come only from Allure 3's
   own config, matched against a result's labels, and `nukadoko.failure` is
-  exactly such a label. `examples/allure/allurerc.mjs` ships nine
+  exactly such a label. `examples/allure/allurerc.mjs` ships seven
   label-matcher rules, one per `error.kind`; dropped at a project's root it
   is picked up automatically (Allure 3 auto-detects
   `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory,

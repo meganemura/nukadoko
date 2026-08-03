@@ -40,10 +40,11 @@ import type { WritableSink } from "./writable-sink.js";
 //      schema failure are all `status: "failed"` with `error.message`; only
 //      a step whose args and returns both validate and whose `run` doesn't
 //      throw is `status: "ok"`. The setup phase's read-only refusal above
-//      only ever sees the step's *declared* `mutates`; the execution phase
-//      adds a measured backstop for it here — an otherwise-"ok" run that
-//      nonetheless observed a network write in a read-only environment is
-//      demoted to `status: "failed"` (m2pre-observed task spec, decision 4).
+//      only ever sees the step's *declared* `mutates`, and that declaration
+//      is trusted (t2-trust-declaration task spec) — an otherwise-"ok" run
+//      that observed a network write in a read-only environment is no
+//      longer demoted for it; `receipt.observed` still records what
+//      happened, it just doesn't decide `status` any more.
 //
 // `--env` is resolved (environment/resolve-environment.ts) right after
 // config loads and before anything session-related, because session paths
@@ -299,20 +300,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       }
     }
 
-    // Measured, not declared (this task's spec, decision 4): a read-only
-    // environment already refused a *declared* mutator above, in setup,
-    // before anything ran — this is the backstop for a step that declared
-    // `mutates: false` (or was never checked, since read-only refusal keys
-    // off the declaration) yet still wrote over the wire. Only promotes an
-    // otherwise-"ok" status: a step that already failed for its own reason
-    // (args/returns validation, its own throw) is already a truthful
-    // failure, and that message is kept rather than replaced.
+    // A read-only environment already refused a *declared* mutator above, in
+    // setup, before anything ran; a step that declared `mutates: false` yet
+    // wrote over the wire anyway is no longer demoted for it here
+    // (t2-trust-declaration task spec) — the declaration is trusted, and
+    // `observed` below still records what actually happened, for a report
+    // to catch a wrong declaration after the fact.
     const observed = contextHandle.observedCounts();
-    if (status === "ok" && resolvedEnv.policy === "read-only" && observed.http_writes > 0) {
-      status = "failed";
-      errorMessage = `Step "${name}" observed ${observed.http_writes} network write${observed.http_writes === 1 ? "" : "s"} but environment "${resolvedEnv.name}" has policy "read-only"`;
-      errorKind = "read_only_violation";
-    }
 
     const finishedAt = new Date();
     let disposeResult: DisposeResult;

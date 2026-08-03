@@ -230,7 +230,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           // Allure 2's own categories matching reads `error.message`/
           // `statusDetails.message` at the *test* level, never a step's
           // (verified against the real @allurereport/plugin-classic source)
-          // — without this, the nine categories.json rules this emitter
+          // — without this, the categories.json rules this emitter
           // also writes can never match anything, no matter how correct
           // their own regexes are (this task's spec, M3-C item 1).
           ...(mapped.test.message !== undefined ? { statusDetails: { message: mapped.test.message } } : {}),

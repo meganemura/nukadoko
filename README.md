@@ -87,12 +87,18 @@ first — the compat sections below are for suites that already exist.
 | `this.foo` — an untyped bag | A step returns a value against a `returns` schema; the next step reads it through `ctx.resultOf`, which is an import you can see and a receipt entry you can audit |
 | A report that only says `passed` | Every execution writes a receipt: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
-| A `Then` that quietly mutates state | `mutates` is declared per step and **checked against what the run observed** — a Then-position step that writes fails, whatever it declared |
+| A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives — a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the receipt for review |
 
-The last one is worth being precise about, because declaration alone would
-be worthless: the tool counts the non-GET calls an execution actually made
-through its own request context and page, and fails on the measurement, not
-on the promise.
+The last one is worth being precise about, because the tool used to fail on
+the count instead of the promise, and that overclaimed. Write detection
+runs on HTTP method, a proxy that breaks for GraphQL, RPC-over-POST, and
+any vendor query API that implements a pure read over POST — a truthful
+`mutates: false` step calling one of those would still get counted as a
+write, for reasons no general HTTP-layer rule can tell apart from a real
+one. So nukadoko trusts the declaration instead: it still counts every
+non-GET call an execution actually made, through its own request context
+and page, but that count now sits on the receipt as a record, not a
+verdict.
 
 ## Before / after
 
@@ -332,15 +338,18 @@ access to a document you need, say so rather than assuming.
   guarantees the shape of inputs and outputs and the fact of execution —
   a typed contract makes an empty assertion easier to spot in review, but
   nothing rejects one automatically.
-- **Mutation observation sees network writes only, through HTTP method as a
-  proxy.** A Then-position step that writes over HTTP fails on the
-  measurement. Purely client-side state, or a server that mutates on a GET,
-  is invisible to it; a step calling a semantically pure read implemented
-  over POST (GraphQL, RPC-over-POST, many vendors' query endpoints) trips
-  the same measurement the other way, even when it truthfully declares
-  `mutates: false` — see
-  [Honest limits](docs/spec.md#keyword-semantics) for what that costs a
-  step. The `mutates` declaration and review carry all of these cases.
+- **`mutates` is trusted, not re-derived from what the network shows.**
+  Write detection runs on HTTP method as a proxy for write semantics, not
+  the semantics itself: purely client-side state and a server that mutates
+  on GET are invisible to it, and a step calling a semantically pure read
+  implemented over POST (GraphQL, RPC-over-POST, many vendors' query
+  endpoints) would count as a write it never made. No general HTTP-layer
+  rule can tell those two cases apart, which is why nukadoko stopped
+  failing steps on the count — see
+  [Keyword semantics](docs/spec.md#keyword-semantics) for the fuller
+  argument. The count is still recorded, on the receipt and in Allure, so a
+  wrong `mutates` declaration is falsifiable after the fact; the
+  declaration and review carry the judgment.
 - **CommonJS suites cannot use `nukadoko/compat`** without a module-format
   change first (above).
 - No test parallelism, sharding, retries, or CI reporting. No HTML

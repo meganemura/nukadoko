@@ -405,7 +405,7 @@ function resolveStepOutcome(step: ScenarioStepRecord, receipts: ReadonlyMap<stri
     return { status: "skipped" };
   }
   if (step.status === "undefined" || step.status === "ambiguous") {
-    // A vocabulary defect, not one of the nine `ErrorKind`s (there is no
+    // A vocabulary defect, not one of the `ErrorKind`s (there is no
     // receipt to carry one) — broken, unmarked (this task's spec, decision
     // 3).
     return { status: "broken", message: step.error?.message };

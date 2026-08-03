@@ -54,7 +54,7 @@
 // text meant for humans) and a way to check a step's declared `mutates`
 // against what it actually did without a second lookup. `ErrorKind` is a
 // closed enum on purpose — an open string would grow one value per step and
-// stop being usable as a classifier — and only the first six values name a
+// stop being usable as a classifier — and only the first four values name a
 // failure the contract layer itself can point at (the same "Tier A" claim
 // README makes); every other throw is `"step_error"`, the deliberate
 // catch-all a caller falls back to whenever it isn't sure (this task's spec:
@@ -83,9 +83,6 @@ import type { ObservedCounts } from "../context/observed.js";
  *     do` has no pickle to bind from).
  *   - `world_invalid` — a declared World key's write failed its own
  *     `defineWorld` schema.
- *   - `then_mutated` — a step bound in Then position was measured writing.
- *   - `read_only_violation` — a step was measured writing under a
- *     `policy: "read-only"` environment.
  *   - `timeout` — a compat step's/hook's own `{ timeout }` (or the run's
  *     `setDefaultTimeout`) fired before it settled.
  *   - `unsupported` — a compat-only shape nukadoko doesn't implement: a
@@ -97,8 +94,6 @@ export type ErrorKind =
   | "result_invalid"
   | "binding_invalid"
   | "world_invalid"
-  | "then_mutated"
-  | "read_only_violation"
   | "timeout"
   | "unsupported"
   | "step_error";

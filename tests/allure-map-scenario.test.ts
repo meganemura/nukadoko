@@ -84,8 +84,6 @@ describe("mapScenario: status mapping", () => {
     "result_invalid",
     "binding_invalid",
     "world_invalid",
-    "then_mutated",
-    "read_only_violation",
     "timeout",
     "unsupported",
     "step_error",

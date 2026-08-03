@@ -27,8 +27,8 @@
 // exists), so this is where a hook's own failure gets the same machine-
 // readable classification a step's receipt does — the M3 Allure emitter
 // maps a hook to a fixture the same way it maps a step to a test result.
-// Only four of the nine `ErrorKind` values are reachable here: a hook has no
-// args/returns/binding/World-position (Then/read-only) concept of its own —
+// Only four of the seven `ErrorKind` values are reachable here: a hook has
+// no args/returns/binding concept of its own —
 // only `timeout`, `unsupported` (done-callback arity, pending/skipped
 // return), `world_invalid` (a declared World key's write, since a hook runs
 // against the same World a compat step does), and `step_error`.

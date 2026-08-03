@@ -67,7 +67,7 @@ describe("nuka check", () => {
     );
     expect(thenMutates).toBeDefined();
     expect(thenMutates.message).toContain("bound in Then position");
-    expect(thenMutates.message).toContain("run time");
+    expect(thenMutates.message).toContain("tension");
     expect(exitCode).toBe(0);
   });
 

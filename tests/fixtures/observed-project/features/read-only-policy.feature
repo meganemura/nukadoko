@@ -4,5 +4,5 @@ Feature: Read-only policy enforcement for nuka run
     Given a declared mutating step runs
     Then an unreachable step never runs
 
-  Scenario: a step that declares mutates false but actually writes gets a failed receipt
+  Scenario: a step that declares mutates false but actually writes is trusted anyway
     Given a step lying about being read-only runs

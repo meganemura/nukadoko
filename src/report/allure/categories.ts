@@ -4,9 +4,9 @@ import type { ErrorKind } from "../../receipt/types.js";
 import { buildFailureMarker, statusForKind } from "./map-scenario.js";
 
 // Responsibility: the run-wide categories.json (this task's spec, decision
-// 4) — one rule per `ErrorKind`, always all nine, written once at the start
-// of a run (the content never depends on how the run goes, so there's no
-// reason to wait until it finishes). Each rule's own `matchedStatuses`/
+// 4) — one rule per `ErrorKind`, always all of them, written once at the
+// start of a run (the content never depends on how the run goes, so there's
+// no reason to wait until it finishes). Each rule's own `matchedStatuses`/
 // marker format comes from map-scenario.ts's own `statusForKind`/
 // `buildFailureMarker` rather than a second copy of that
 // table here — the categories.json regex and the message map-scenario.ts
@@ -22,14 +22,12 @@ const ERROR_KINDS: readonly ErrorKind[] = [
   "result_invalid",
   "binding_invalid",
   "world_invalid",
-  "then_mutated",
-  "read_only_violation",
   "timeout",
   "unsupported",
   "step_error",
 ];
 
-// One human-readable classification name per kind. Only the first six carry
+// One human-readable classification name per kind. Only the first four carry
 // the "Contract: ..." register — they are failures the contract layer
 // itself can name (README's own Tier A); the remaining three are not: a
 // timeout/unsupported-shape/step_error is a vocabulary or execution defect
@@ -40,8 +38,6 @@ const NAME_BY_KIND: Readonly<Record<ErrorKind, string>> = {
   result_invalid: "Contract: result failed the step's schema",
   binding_invalid: "Contract: the step's text couldn't bind",
   world_invalid: "Contract: a World key's write failed its schema",
-  then_mutated: "Contract: a Then step was observed writing",
-  read_only_violation: "Policy: a write under a read-only environment",
   timeout: "Timeout",
   unsupported: "Compat: unsupported step shape",
   step_error: "Step error",
@@ -55,7 +51,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** All nine `ErrorKind` rules, Allure 2's "first rule wins, full-text,
+/** One rule per `ErrorKind`, Allure 2's "first rule wins, full-text,
  * DOTALL" regex format (this task's spec, decision 4). Order follows
  * `ErrorKind`'s own declaration order in receipt/types.ts — the regexes are
  * mutually exclusive by construction (each matches only messages carrying

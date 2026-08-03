@@ -1,4 +1,4 @@
-// What this is: maps nukadoko's nine ErrorKind values to Allure 3
+// What this is: maps nukadoko's seven ErrorKind values to Allure 3
 // categories via the `nukadoko.failure` label every failed/broken result
 // already carries — Allure 3's own generate/report tooling never reads a
 // results directory's categories.json (unlike Allure 2), so without this
@@ -20,7 +20,7 @@
 // `matchedStatuses`/`messageRegex` keys in the same rule throws at
 // generate time (see `@allurereport/core-api/dist/categories.js`).
 //
-// The nine `name` values below are copied verbatim from
+// The seven `name` values below are copied verbatim from
 // `src/report/allure/categories.ts`'s own `NAME_BY_KIND` — that file is
 // the source of truth; a drift test (tests/allure-config-drift.test.ts)
 // keeps this file's copy honest against it.
@@ -41,14 +41,6 @@ export default {
     {
       name: "Contract: a World key's write failed its schema",
       matchers: [{ labels: { "nukadoko.failure": "world_invalid" } }],
-    },
-    {
-      name: "Contract: a Then step was observed writing",
-      matchers: [{ labels: { "nukadoko.failure": "then_mutated" } }],
-    },
-    {
-      name: "Policy: a write under a read-only environment",
-      matchers: [{ labels: { "nukadoko.failure": "read_only_violation" } }],
     },
     {
       name: "Timeout",

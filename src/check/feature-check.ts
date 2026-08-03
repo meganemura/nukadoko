@@ -25,10 +25,10 @@ import type { CheckIssue } from "./types.js";
 // `then-mutates` is a *warning*, not an error (m2pre-observed task spec,
 // decision 5, superseding this module's earlier classification): a
 // declared-mutating step bound in Then position is a tension worth a
-// reviewer's eyes, but the declaration alone can't settle whether a given
-// occurrence's execution actually writes — only run-time observation can
-// (docs/spec.md "Keyword semantics"). Every other issue this module reports
-// stays an error.
+// reviewer's eyes, but `mutates` is a declaration nukadoko trusts, not a
+// fact the tool re-derives from what ran — nothing at run time settles this
+// tension anymore (docs/spec.md "Keyword semantics"). Every other issue
+// this module reports stays an error.
 //
 // m2a-compat-registry task spec, item 6: a compat pattern participates in
 // undefined-step and ambiguous-match detection on equal footing with a typed
@@ -39,9 +39,9 @@ import type { CheckIssue } from "./types.js";
 // — the mutates/Then tension and the table/docstring key rule — do not
 // apply (compat has no declared `mutates` and no args schema to check a
 // table/docstring against); Then-position compat instead gets its own soft
-// warning, since static check simply cannot know what a compat step's
-// execution will do (docs/spec.md "Compat steps": "run-time observation
-// applies to them unchanged").
+// warning, since compat has no declaration to trust here at all — a static
+// coverage gap, not a run-time finding (docs/spec.md "Compat steps",
+// "Keyword semantics").
 
 interface MatchResult {
   readonly stepNames: readonly string[];
@@ -195,7 +195,7 @@ export function checkFeatures(
           if (entry.kind === "typed" && entry.step.mutates) {
             warnings.push({
               code: "then-mutates",
-              message: `Step "${stepName}" is bound in Then position but declares mutates: true — declaration and position are in tension here; a per-occurrence execution's observed network writes settle it at run time (docs/spec.md "Keyword semantics")`,
+              message: `Step "${stepName}" is bound in Then position but declares mutates: true — declaration and position are in tension here (docs/spec.md "Keyword semantics")`,
               file: feature.relativePath,
               line,
               step: stepName,
@@ -203,7 +203,7 @@ export function checkFeatures(
           } else if (entry.kind === "compat") {
             warnings.push({
               code: "then-compat-step",
-              message: `Step "${stepName}" is a compat step bound in Then position — compat steps have no declared mutation to check statically (docs/spec.md "Compat steps"); run-time observation applies to them exactly as it does to typed steps (docs/spec.md "Keyword semantics")`,
+              message: `Step "${stepName}" is a compat step bound in Then position — compat steps have no mutates declaration to trust here; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Keyword semantics")`,
               file: feature.relativePath,
               line,
               step: stepName,

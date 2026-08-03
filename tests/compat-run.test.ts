@@ -11,7 +11,10 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // (closing m2a-compat-registry's two temporary asymmetries): string/RegExp
 // patterns, a compat-registered custom parameter type, table (as a
 // DataTable)/docstring as the trailing positional argument, a throwing step,
-// and Then-position measured enforcement against a compat step.
+// and a Then-position compat step that observes a network write and passes
+// anyway (t2-trust-declaration task spec: compat has no `mutates` to trust,
+// so the old measured Then-position check — now gone entirely — never had a
+// declaration to fall back on either way).
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {
   return new Promise((resolve) => {
@@ -148,7 +151,14 @@ describe("nuka run: compat step execution", () => {
     expect(record.steps[1].receipt).toBeNull();
   });
 
-  it("a Then-position compat step that observes a network write fails (runtime enforcement applies to compat too)", async () => {
+  // Before t2-trust-declaration, this same fixture failed: a Then-position
+  // step's own measured write demoted its receipt regardless of any
+  // declaration, and compat has no `mutates` declaration at all, so it
+  // could never opt out. Now that the measured Then-position check is gone
+  // entirely (this file's own header), a compat step bound in Then position
+  // passes exactly like any other step — the write is still recorded, just
+  // no longer judged.
+  it("a Then-position compat step that observes a network write passes, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/compat-then.feature"], {
       rootDir,
@@ -156,18 +166,15 @@ describe("nuka run: compat step execution", () => {
       stderr: createCaptureSink(),
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    expect(record.status).toBe("failed");
-    expect(record.steps[0].status).toBe("failed");
-    expect(record.steps[0].error.message).toContain("Then must not mutate");
+    expect(record.status).toBe("passed");
+    expect(record.steps[0].status).toBe("passed");
 
     const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.status).toBe("failed");
+    expect(receipt.status).toBe("ok");
+    // The measured tally is unchanged by this task (this file's own header)
+    // — only whether it fails the step changed.
     expect((receipt as { observed: { http_writes: number } }).observed.http_writes).toBe(1);
-    // m3a-receipt-kinds task spec: the Then-position demotion classifies a
-    // compat step's receipt exactly like a typed step's (finishExecutedStep
-    // applies uniformly regardless of kind).
-    expect((receipt as { error: { kind: string } }).error.kind).toBe("then_mutated");
   });
 });

@@ -4,7 +4,7 @@ Feature: Then-position measured enforcement
     Given a setup step exists
     Then only a read happens
 
-  Scenario: Then position observes a write
+  Scenario: Then position observes a write it declares as non-mutating
     Given a setup step exists
     Then a write happens
-    And a step after the write never runs
+    And a step after the write also runs

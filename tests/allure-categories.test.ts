@@ -9,17 +9,15 @@ const ALL_KINDS: readonly ErrorKind[] = [
   "result_invalid",
   "binding_invalid",
   "world_invalid",
-  "then_mutated",
-  "read_only_violation",
   "timeout",
   "unsupported",
   "step_error",
 ];
 
 describe("buildCategories", () => {
-  it("writes exactly nine rules, one per ErrorKind", () => {
+  it("writes exactly seven rules, one per ErrorKind", () => {
     const categories = buildCategories();
-    expect(categories).toHaveLength(9);
+    expect(categories).toHaveLength(7);
   });
 
   it.each(ALL_KINDS)("rule for %s matches the status statusForKind assigns it", (kind) => {

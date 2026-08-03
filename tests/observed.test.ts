@@ -9,11 +9,13 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: measured mutates end to end against tests/fixtures/
 // observed-project — a real local http server, exercised through both
 // `nuka do` and `nuka run` (this task's spec's m2pre-observed spec, scope
-// item 6): the request-side `{1, 1}` tally landing on a receipt, Then-
-// position measured enforcement (GET passes, POST fails and skips the
-// rest), and the read-only environment's backstop against a declared
-// `mutates: false` lie. Page-side (chromium) observation has its own test in
-// browser-evidence.test.ts, following that file's existing convention for
+// item 6): the request-side `{1, 1}` tally landing on a receipt, and — since
+// t2-trust-declaration — that a declared `mutates: false` step's own
+// occurrence is never failed by what it actually observed writing, whether
+// it is bound in Then position or run under a `policy: "read-only"`
+// environment; `observed` still records the write either way, only `status`
+// stopped reacting to it. Page-side (chromium) observation has its own test
+// in browser-evidence.test.ts, following that file's existing convention for
 // browser-path evidence.
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {
@@ -89,67 +91,67 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].status).toBe("passed");
   });
 
-  it("nuka run: a Then-position step observing a write fails, measured, and skips the rest", async () => {
+  // Before t2-trust-declaration this scenario failed: a Then-position step's
+  // own measured write demoted its receipt regardless of what it declared,
+  // and skipped the rest of the scenario. The step here now declares
+  // `mutates: false` (tests/fixtures/observed-project/features/steps/
+  // a-write-happens.ts) — nukadoko trusts that declaration instead of the
+  // measurement, so the whole scenario passes and the following step, which
+  // used to be skipped, actually runs.
+  it("nuka run: a Then-position step declared mutates: false passes even though it observes a write, and the rest of the scenario keeps running", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
       ["run", "features/then-position.feature:7"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(0);
     const record = JSON.parse(stdout.text().trim().split("\n")[0]!);
-    expect(record.status).toBe("failed");
+    expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(3);
 
     expect(record.steps[0].status).toBe("passed");
+    expect(record.steps[1].status).toBe("passed");
+    expect(record.steps[2].status).toBe("passed");
 
-    expect(record.steps[1].status).toBe("failed");
-    // Unlike the old declare-based rejection, the step's execution actually
-    // began, so it gets a real receipt id, not `null` (this task's spec,
-    // decision 4).
-    expect(typeof record.steps[1].receipt).toBe("string");
-    expect(record.steps[1].error.message).toContain("bound in Then position");
-    expect(record.steps[1].error.message).toContain("observed 1 network write");
-
-    // m3a-receipt-kinds task spec: a Then-position step measured writing
-    // classifies as "then_mutated", distinct from "read_only_violation"
-    // (the other measured demotion, keyed off environment policy instead).
-    const failedReceipt = JSON.parse(
+    // The write is still measured and still lands on the receipt (this
+    // task's spec, decision 5: the record is unchanged) — only whether it
+    // fails the step changed.
+    const receipt = JSON.parse(
       await readFile(
         path.join(rootDir, ".nukadoko", "receipts", record.steps[1].receipt, "receipt.json"),
         "utf8",
       ),
     );
-    expect(failedReceipt.error.kind).toBe("then_mutated");
-
-    expect(record.steps[2].status).toBe("skipped");
-    expect(record.steps[2].receipt).toBeNull();
+    expect(receipt.status).toBe("ok");
+    expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
-  it("read-only environment: a declared mutates:false step that actually POSTs gets a failed receipt (the lie backstop)", async () => {
+  // Before t2-trust-declaration this was the "lie backstop": a declared
+  // `mutates: false` step that actually POSTed under a read-only
+  // environment used to be demoted to `status: "failed"`. nukadoko now
+  // trusts the declaration instead of measuring against it, so this
+  // succeeds — the write still lands on `observed`, unredacted and
+  // unchanged, for a report to catch the wrong declaration after the fact.
+  it("read-only environment: a declared mutates:false step that actually POSTs passes, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
       ["do", "read-only-lie", "--args", "{}", "--env", "readonly"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(0);
     const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("failed");
+    expect(receipt.status).toBe("ok");
     expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
-    expect(receipt.error.message).toContain("read-only-lie");
-    expect(receipt.error.message).toContain("readonly");
-    expect(receipt.error.message).toContain("read-only");
-    // m3a-receipt-kinds task spec: the measured read-only backstop
-    // classifies as "read_only_violation", distinct from "then_mutated".
-    expect(receipt.error.kind).toBe("read_only_violation");
   });
 
   // `nuka run` against a read-only environment (this task's spec, decision
   // 3): the gap the previous slice surfaced — `nuka run` never looked at
-  // `policy` at all — closed the same way `nuka do` already handles it,
-  // generalized to "declared-mutates refusal is a never-began outcome; a
-  // declared-false lie is a measured backstop".
+  // `policy` at all — closed the same way `nuka do` already handles it. A
+  // declared `mutates: true` step is still refused before it ever runs
+  // (t2-trust-declaration task spec keeps this half unchanged); a declared
+  // `mutates: false` lie is no longer backstopped — see the test below.
   it("nuka run: a declared-mutating step is refused before it runs in a read-only environment; the rest of the scenario is skipped", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
@@ -175,25 +177,22 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].receipt).toBeNull();
   });
 
-  it("nuka run: a step declared mutates:false that actually writes gets a failed receipt under a read-only environment (the lie backstop)", async () => {
+  // Before t2-trust-declaration this was `nuka run`'s own version of the
+  // lie backstop above, and failed the same way. It now passes for the same
+  // reason: the declaration is trusted over the measurement.
+  it("nuka run: a step declared mutates:false that actually writes passes under a read-only environment, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
       ["run", "features/read-only-policy.feature:7", "--env", "readonly"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(0);
     const record = JSON.parse(stdout.text().trim().split("\n")[0]!);
-    expect(record.status).toBe("failed");
+    expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(1);
 
-    expect(record.steps[0].status).toBe("failed");
-    // Unlike the declared-mutates refusal above, this step's execution
-    // actually began, so it gets a real receipt id, not `null`.
-    expect(typeof record.steps[0].receipt).toBe("string");
-    expect(record.steps[0].error.message).toContain("observed 1 network write");
-    expect(record.steps[0].error.message).toContain("readonly");
-    expect(record.steps[0].error.message).toContain("read-only");
+    expect(record.steps[0].status).toBe("passed");
 
     const receipt = JSON.parse(
       await readFile(
@@ -201,9 +200,7 @@ describe("measured mutates: request-side observed counts", () => {
         "utf8",
       ),
     );
+    expect(receipt.status).toBe("ok");
     expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
-    // m3a-receipt-kinds task spec: `nuka run`'s own measured read-only
-    // backstop classifies the same way cli/do.ts's does.
-    expect(receipt.error.kind).toBe("read_only_violation");
   });
 });
