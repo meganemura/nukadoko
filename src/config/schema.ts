@@ -1,3 +1,4 @@
+import type { LaunchOptions } from "playwright";
 import { z } from "zod";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
@@ -7,12 +8,14 @@ import { z } from "zod";
 // is now typed exactly (m1-environments task spec, decision 1): baseURL/
 // envFiles per environment layer on top of the top-level values (resolution
 // lives in src/environment/resolve-environment.ts, not here), `policy:
-// "read-only"` and `version` exist only per-environment. `browser` stays
-// loosely typed: its concrete shape is out of this slice's scope, and a
-// config author setting it shouldn't be told the key itself is invalid
-// before that shape is designed. `secrets` is *not* given the same loose
-// treatment (m1-secrets task spec, scope item 2): its one field is small and
-// fully designed by docs/spec.md today, so it is typed exactly.
+// "read-only"` and `version` exist only per-environment. `browser` takes
+// Playwright's own `LaunchOptions` type directly (t6-config-browser task
+// spec, decision 1) rather than a bespoke enumeration — see the field's own
+// doc comment for why zod does not re-validate its shape. `secrets` is
+// typed differently again (m1-secrets task spec, scope item 2): its one
+// field is small and fully designed by docs/spec.md today, so it is typed
+// exactly, the same as `environments` above but for the opposite reason
+// `browser` is not — there is no upstream type to defer to for it.
 // `parameterTypes` (m2pre-parameter-types task spec, decision 1) is typed
 // exactly for the same reason `secrets` is: docs/spec.md fully designs its
 // one shape today, `{ name, regexp, transformer? }`. Registering it — and
@@ -106,14 +109,24 @@ export const configSchema = z
     // types" as its own no-op default, so this mirrors that rather than
     // making every call site handle `undefined` separately.
     parameterTypes: z.array(parameterTypeConfigSchema).default([]),
-    /** Deliberately unvalidated: `headless` is the only field read today
-     * (src/context/create-context.ts duck-types it), and pinning a schema
-     * around one field would fix a surface before the rest of it has a use
-     * to be measured against. Whenever the shape is designed it takes
-     * Playwright's own option names directly — coupling to Playwright is an
-     * accepted design choice (docs/spec.md "Out of scope"), so there is no
-     * driver-name level here to keep a door open for. */
-    browser: z.unknown().optional(),
+    /** Playwright's own `LaunchOptions` type, taken as-is (t6-config-browser
+     * task spec, decision 1): coupling to Playwright is an accepted design
+     * choice (docs/spec.md "Out of scope"), so there is no vocabulary of our
+     * own to translate its option names through, and no need to widen this
+     * schema every time Playwright adds one. zod here checks only "is this
+     * an object" — the actual shape is `tsc`'s job, through `defineConfig`'s
+     * type, since `nukadoko.config.ts` is TypeScript already. Re-describing
+     * `LaunchOptions` field-by-field in zod would need to track every
+     * Playwright release, and until that tracking caught up a config author
+     * would be told a real Playwright option is a typo — the opposite of
+     * what `.strict()` on this schema is for. Chromium is the only browser
+     * type (no key here selects firefox/webkit — out of scope until there
+     * is demand), and this is launch-only: `newContext`'s options
+     * (`viewport`, `locale`, `timezoneId`, ...) are a different Playwright
+     * type and are not accepted here. */
+    browser: z.custom<LaunchOptions>(
+      (value) => typeof value === "object" && value !== null,
+    ).optional(),
     /** Individual secret-source keys to demote to plain (never redacted).
      * Default `{ public: [] }`: nothing is public unless named. There is no
      * promotion counterpart — a tracked file's value is definitionally not a

@@ -27,6 +27,25 @@ async function isChromiumAvailable(): Promise<boolean> {
 
 const chromiumAvailable = await isChromiumAvailable();
 
+// Same reasoning as `isChromiumAvailable` above, but for a *headed* launch
+// specifically (t6-config-browser task spec, tests): a CI runner can have
+// chromium installed yet no display server to open a window on (a plain
+// Linux runner with no Xvfb), which is a `headless: false` launch failing
+// while `headless: true` still succeeds. Checked separately, and only when
+// the base capability already holds, so the headed-only tests below skip
+// themselves rather than fail in that environment.
+async function isHeadedChromiumAvailable(): Promise<boolean> {
+  try {
+    const browser = await chromium.launch({ headless: false });
+    await browser.close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const headedChromiumAvailable = chromiumAvailable ? await isHeadedChromiumAvailable() : false;
+
 function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
   return {
     featuresDir: "features",
@@ -132,7 +151,66 @@ describe("createStepContext / ctx.page()", () => {
     console.warn(
       "browser-evidence.test.ts: chromium unavailable, browser-path tests skipped",
     );
+  } else if (!headedChromiumAvailable) {
+    console.warn(
+      "browser-evidence.test.ts: headed chromium unavailable (no display?), config.browser headless:false test skipped",
+    );
   }
+});
+
+// Responsibility: config.browser reaching the real chromium.launch call
+// unmodified (t6-config-browser task spec, decision 4 and tests) — measured
+// through the browser it actually launches, not assumed from Playwright's
+// own documented default. A launched chromium reports "HeadlessChrome" in
+// its own User-Agent string when headless and a plain "Chrome" one when
+// not (verified by hand against this Playwright version before writing
+// these assertions), which is the most direct signal available from inside
+// a step's own `ctx.page()` — there is no public Playwright API that asks
+// "is this browser headless".
+describe("createStepContext / ctx.page(): config.browser controls headless", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-headless-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    "launches headless when a project sets no config.browser at all",
+    async () => {
+      const { ctx, dispose } = createStepContext({
+        config: baseConfig(),
+        evidenceDir,
+        env: {},
+      });
+
+      const page = await ctx.page();
+      const userAgent = await page.evaluate(() => navigator.userAgent);
+      expect(userAgent).toContain("HeadlessChrome");
+
+      await dispose("ok");
+    },
+  );
+
+  it.skipIf(!headedChromiumAvailable)(
+    "launches headed when config.browser: { headless: false }",
+    async () => {
+      const { ctx, dispose } = createStepContext({
+        config: baseConfig({ browser: { headless: false } }),
+        evidenceDir,
+        env: {},
+      });
+
+      const page = await ctx.page();
+      const userAgent = await page.evaluate(() => navigator.userAgent);
+      expect(userAgent).not.toContain("HeadlessChrome");
+
+      await dispose("ok");
+    },
+  );
 });
 
 // Responsibility: the page-side half of measured mutates (m2pre-observed

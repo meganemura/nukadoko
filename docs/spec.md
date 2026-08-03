@@ -562,6 +562,18 @@ Cucumber-style), `baseURL`, `envFiles`, `environments`, `stateDir` (default
 `resultsDir`, see "Allure emitter"), `messages` (only `output`, see
 "Messages emitter").
 
+`browser` takes Playwright's own `LaunchOptions` type directly (chromium is
+the only browser type; `newContext`'s options like `viewport` are a
+different Playwright type and are not accepted here — v1 is launch-only).
+zod does not re-validate its shape beyond "is this an object": the type
+comes from `defineConfig`, so `tsc` catches a typo the same way it catches
+one anywhere else in `nukadoko.config.ts`; re-enumerating Playwright's
+options in zod would need updating every time Playwright adds one, and a
+config author would be blocked from a real option until that catch-up
+landed. Only `headless` is read today, passed straight to
+`chromium.launch`; omitted, Playwright's own default (`headless: true`)
+applies.
+
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
 type — `{ name, regexp, transformer? }`, e.g.
 `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }`

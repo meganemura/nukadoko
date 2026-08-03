@@ -177,6 +177,31 @@ describe("configSchema: parameterTypes", () => {
   });
 });
 
+describe("configSchema: browser", () => {
+  it("leaves browser undefined when omitted", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.browser).toBeUndefined();
+    }
+  });
+
+  it("accepts a Playwright LaunchOptions object, unmodified", () => {
+    const result = configSchema.safeParse({ browser: { headless: false, slowMo: 50 } });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.browser).toEqual({ headless: false, slowMo: 50 });
+    }
+  });
+
+  it("rejects a non-object value (t6-config-browser task spec: zod checks only 'is this an object')", () => {
+    expect(configSchema.safeParse({ browser: "headless" }).success).toBe(false);
+    expect(configSchema.safeParse({ browser: 42 }).success).toBe(false);
+    expect(configSchema.safeParse({ browser: true }).success).toBe(false);
+    expect(configSchema.safeParse({ browser: null }).success).toBe(false);
+  });
+});
+
 describe("configSchema: allure", () => {
   it("leaves allure undefined when omitted (the <stateDir>/allure-results default is applied by the caller, not this schema)", () => {
     const result = configSchema.safeParse({});

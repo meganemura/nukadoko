@@ -1,6 +1,12 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type LaunchOptions,
+  type Page,
+} from "playwright";
 import type { StorageState } from "../session/storage-state.js";
 import type { ObservedCollector } from "./observed.js";
 
@@ -26,8 +32,14 @@ import type { ObservedCollector } from "./observed.js";
 // the step boundary, not resubscribing.
 
 export interface LaunchBrowserOptions {
-  /** Maps to `config.browser.headless`, default true. */
-  headless: boolean;
+  /** `config.browser` (config/schema.ts) as a config author wrote it,
+   * passed straight through to `chromium.launch` (t6-config-browser task
+   * spec, decision 4) — this module no longer picks `headless` out of it
+   * itself. `undefined` when a project sets no `browser` at all; passing
+   * `undefined` to `chromium.launch` is the same as omitting the argument,
+   * so Playwright's own default (`headless: true`) applies exactly as it
+   * would without nukadoko in between. */
+  browser?: LaunchOptions;
   /** Where trace.zip and screenshot(s) are written. Must already exist. */
   evidenceDir: string;
   /** Restores a `--session`'s prior storageState, when one was loaded;
@@ -68,7 +80,7 @@ export interface BrowserEvidenceHandle {
 export async function launchBrowserWithTracing(
   options: LaunchBrowserOptions,
 ): Promise<BrowserEvidenceHandle> {
-  const browser: Browser = await chromium.launch({ headless: options.headless });
+  const browser: Browser = await chromium.launch(options.browser);
   const context: BrowserContext = await browser.newContext({
     ...(options.storageState ? { storageState: options.storageState } : {}),
     ...(options.baseURL ? { baseURL: options.baseURL } : {}),

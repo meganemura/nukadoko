@@ -174,15 +174,6 @@ export interface CreateStepContextOptions {
   resultOf?: (step: Step) => { result: unknown; receiptId: string } | undefined;
 }
 
-function isBrowserHeadless(config: NukadokoConfig): boolean {
-  // `config.browser` is intentionally loosely typed in config/schema.ts —
-  // its concrete shape isn't designed yet. Duck-typing the one field this
-  // slice needs is preferable to blocking on that design or widening the
-  // schema ourselves.
-  const browser = config.browser as { headless?: boolean } | undefined;
-  return browser?.headless ?? true;
-}
-
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
   const {
     config,
@@ -227,7 +218,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     async page(): Promise<Page> {
       if (!browserHandle) {
         browserHandle = await launchBrowserWithTracing({
-          headless: isBrowserHeadless(config),
+          browser: config.browser,
           evidenceDir,
           storageState,
           observed,
