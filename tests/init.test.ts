@@ -69,6 +69,87 @@ describe("nuka init", () => {
     expect(config.baseURL).toBe("https://example.com");
   });
 
+  it("creates <featuresDir>/steps, records featuresDir in the config, and the self-check discovers under it", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init", "--features-dir", "e2e"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
+    expect(stdout.text().trim().split("\n")).toEqual([
+      "nukadoko.config.ts",
+      path.join("e2e", "steps"),
+      ".gitignore",
+    ]);
+
+    expect(existsSync(path.join(rootDir, "e2e", "steps"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "features"))).toBe(false);
+
+    const configContent = await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8");
+    expect(configContent).toContain('featuresDir: "e2e"');
+
+    const config = await loadConfig(rootDir);
+    expect(config.featuresDir).toBe("e2e");
+
+    // A typed step placed under the non-default featuresDir is what proves
+    // the self-check (and later `nuka steps`/`nuka do`) actually discover
+    // from `config.featuresDir` rather than the schema's own default
+    // ("features") — this task's spec: "self-check がそのディレクトリを見る".
+    await writeFile(
+      path.join(rootDir, "e2e", "steps", "ping.ts"),
+      [
+        'import { defineStep } from "nukadoko";',
+        'import { z } from "zod";',
+        "export default defineStep({",
+        '  description: "ping",',
+        "  args: z.object({}),",
+        "  returns: z.object({}),",
+        "  run() {",
+        "    return {};",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const stepsStdout = createCaptureSink();
+    const stepsExitCode = await runCli(["steps"], {
+      rootDir,
+      stdout: stepsStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(stepsExitCode).toBe(0);
+    expect(stepsStdout.text()).toContain("ping");
+  });
+
+  it("omits featuresDir from the generated config when --features-dir wasn't given (default stays undeclared)", async () => {
+    const exitCode = await runCli(["init"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+
+    const configContent = await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8");
+    expect(configContent).not.toContain("featuresDir");
+  });
+
+  it("rejects an empty --features-dir before writing anything", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init", "--features-dir", ""], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain("--features-dir");
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
+  });
+
   it("refuses the whole command when nukadoko.config.ts already exists, writing nothing", async () => {
     const existingConfig =
       'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n';

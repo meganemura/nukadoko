@@ -85,6 +85,7 @@ interface SessionClearArgs {
 
 interface InitArgs {
   baseUrl?: string;
+  featuresDir?: string;
 }
 
 interface ScaffoldArgs {
@@ -316,15 +317,21 @@ export async function runCli(
     command: "init",
     describe: "set up a project; ends with a self-check",
     builder: (y: Argv) =>
-      y.option("base-url", {
-        type: "string",
-        describe: "baseURL to record in the generated config",
-      }) as Argv<InitArgs>,
+      y
+        .option("base-url", {
+          type: "string",
+          describe: "baseURL to record in the generated config",
+        })
+        .option("features-dir", {
+          type: "string",
+          describe: "featuresDir to use instead of the default, recorded in the generated config",
+        }) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
       exitCode = await runInit({
         rootDir,
         baseUrl: args.baseUrl ?? null,
+        featuresDir: args.featuresDir ?? null,
         stdout,
         stderr,
       });
