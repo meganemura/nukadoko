@@ -1215,6 +1215,69 @@ agent workflow (bundled skill), not engine magic. Self-healing without an
 audit trail is how test suites silently stop testing anything — the deviation
 record is the point.
 
+## Tending
+
+`nuka check` answers one question: can this project run right now. A
+project can pass it every time and still be rotting. A sign-off can stop
+describing the code it froze. A declaration can go years without anything
+exercising it. A contract can be unreadable to the agent that has to pick
+it. None of that stops a run, and all of it costs more the longer it sits —
+which is the failure mode this tool is named after. A nukadoko tended
+daily matures; neglected, it dies.
+
+`nuka tend` answers the other question: is this vocabulary, and the record
+it has produced, still healthy.
+
+The reason it is a separate command rather than more warnings on `check`
+is that the two are read at different moments and mean different things.
+`check` runs before every run, in CI, inside an agent's loop, and every
+line it prints is something standing between the project and a green run —
+which is why a finding there has to be worth stopping for. Tending
+findings are not: nothing here has to be fixed today, and if they appeared
+on every `check`, they would teach everyone to skim past the line that
+did have to be fixed. Noise is not a cosmetic problem in a tool whose main
+claim is that its checks are worth reading.
+
+What it looks at, and why each one is rot rather than style:
+
+- **A sign-off that no longer matches the code it froze.** A record
+  carries the feature source it accepted and every receipt from that run.
+  If a frozen `result` no longer passes its step's current `returns`
+  schema, or the frozen feature source no longer matches the file it was
+  taken from, or a step it cites is gone from the vocabulary, then the
+  record is still on disk making a claim it can no longer support. This
+  is the one finding here that is an error rather than a note: a sign-off
+  that has quietly stopped meaning what it says is worse than no sign-off,
+  because it is still being counted.
+- **A `from` declaration nothing exercises.** Every occurrence of the step
+  across every feature captures that key from the line, so the declared
+  producer never supplies anything. Reported as the fact it is — the
+  declaration may still be reached through `nuka do --use` — not as a
+  verdict that it should be deleted.
+- **A step with a pattern that no feature binds.** A step meant only for
+  the CLI should have no pattern at all; one that has a pattern is
+  claiming a place in a scenario it does not occupy.
+- **A schema field with no `.describe()`.** This is the tending finding
+  aimed squarely at the agent: `nuka describe` is how an agent learns what
+  a field means, and a field with no description tells it nothing a name
+  did not already. Human readers of the step file can see the surrounding
+  code; the agent choosing between two steps cannot.
+- **A step with no `rationale`.** `description` says what the step does,
+  which is enough to call it. `rationale` says why it is built this way and
+  what was rejected, which is what an agent needs before deciding it may
+  rewrite the step. Missing, every rewrite is uninformed.
+- **A configured parameter type no pattern uses.** Dead configuration,
+  reported like any other.
+
+Findings are `--json` like everything else. The sign-off finding exits
+non-zero so a periodic job can act on it; the rest do not, because a
+project is allowed to carry them.
+
+`tend` reports and does not repair. Fixing means writing a description,
+deleting a step, or re-accepting a feature — decisions with an author
+behind them, which is the same reason `accept` refuses rather than
+fixes up a dirty tree.
+
 ## CLI summary
 
 The npm package is `nukadoko`; the one command it installs is `nuka`.
@@ -1248,6 +1311,13 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
+nuka tend [--json]            what is rotting rather than what is broken:
+                              a sign-off that no longer matches the code it
+                              froze (the one finding that exits non-zero),
+                              a `from` nothing exercises, a patterned step
+                              no feature binds, a schema field with no
+                              `.describe()`, a step with no `rationale`, a
+                              configured parameter type no pattern uses
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
@@ -1328,6 +1398,9 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   step beside the receipt it cites. Where a step's inputs come from stops
   being prose inside a `run` body and becomes a declaration the tool reads
   (see "Chaining steps").
+- **M7 — tending**: `nuka tend`, the findings that are about rot rather
+  than breakage (see "Tending"). Kept off `nuka check` on purpose: `check`
+  is read before every run and has to stay worth stopping for.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
