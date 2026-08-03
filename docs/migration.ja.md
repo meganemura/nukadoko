@@ -99,7 +99,10 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
 
 `nuka check` は、移行がどれだけ残っているかを示す走行メーターです:
 
-- `then-compat-step` は、compat の step が `Then` の位置に結び付けられていると警告します(compat の step には静的にチェックできる宣言上の `mutates` が無いため、これは実行時の観測だけが強制を担っている箇所を示します)。
+- `then-compat-step` は、compat の step が `Then` の位置に結び付けられていると警告します。
+  compat の step には、そこで nukadoko が信頼できる宣言済みの `mutates` がありません(docs/spec.ja.md の「キーワードの意味論」を参照)。
+  そのためこの警告が示しているのは、その位置に静的な手掛かりが何もないという事実であり、ツールが何かを捕まえたわけではありません。
+  `defineStep` に昇格させることが、チェックできる宣言を得る方法です。
 - `parameter-type-support-origin` は、support 側の `defineParameterType` すべてに対して警告し、上記の config への移動を指し示します。
 - receipt は実行時に同じ話を語ります: スイートがより多く typed step と `ctx.resultOf` に昇格するにつれて、`world`(compat の step のみ)と `declared` が縮んでいきます。
 

@@ -174,33 +174,42 @@ export default defineStep({
 
 ### キーワードの意味論
 
-Gherkin のキーワードは装飾であることをやめますが、それは宣言が信頼されるからではなく、ツールが計測するからです。
-実際の corpus がこの分割を強いたのは、同じ文が Action の位置と Outcome の位置の両方に正当に現れ、慣用的なスイートが `And` を使って `Then` の後に操作を連ね、任意のコマンドをラップする step には単一の正直な `mutates` の値がないからです。
-step ごとの boolean は出現ごとの事実を運べないため、強制は層になっています:
+Gherkin のキーワードが本当の事実を運ぶのは、`mutates` が**nukadoko が信頼する宣言**だからです。
+ツールが実行結果から事実を導き直し、食い違えば宣言を上書きするから、ではありません。
+実際の corpus がこの先の分割を強いたのは、同じ文が Action の位置と Outcome の位置の両方に正当に現れ、慣用的なスイートが `And` を使って `Then` の後に操作を連ね、任意のコマンドをラップする step には単一の正直な `mutates` の値がないからです。
+step ごとの boolean は出現ごとの事実を運べないため、宣言が何を解決するかは層になっています:
 
-- `mutates` は step の**宣言された意図**のままです(デフォルトは `true`。読み取り専用の step は `false` を宣言します)。
+- `mutates` は step の**宣言された意図**です(デフォルトは `true`。読み取り専用の step は `false` を宣言します)。
 - **静的には**、宣言上 mutate する step が Then の位置に結び付けられていると、`nuka check` はエラーではなく警告を出します。
-  この緊張関係は人の目でのレビューに値しますが、宣言だけではそれを解決できません。
+  この緊張関係は人の目でのレビューに値します。
+  宣言だけではそれを解決できず、このチェックはあくまで警告にとどまります。
+- **読み取り専用の environment は、宣言上 mutate する step を実行前に拒否します。**
+  宣言がレビューの目を引くのではなく、実行そのものをゲートする唯一の場所です。
 - **実行時には**、receipt がその実行が実際に行ったことを記録します。
-  ツールが見たすべてのネットワーク呼び出しが対象であり(`ctx.request()` と page の両方を通じたもの)、GET/HEAD 以外の呼び出しはすべて観測された書き込みとして数えられます。
-  Then の位置で実行される step は、その実行が書き込みを観測すると失敗します。
-  これは宣言が何であったかにかかわらず、出現ごとに計測に基づいて判定されます。
+  ツールが見たすべてのネットワーク呼び出しが対象であり(`ctx.request()` と page の両方を通じたもの)、GET/HEAD 以外の呼び出しはすべて観測された書き込みとして数えられ、`mutates`(宣言)の隣に置かれます。
+  この回数はもはやそれ単独では何も決めません。
+  Then の位置も、読み取り専用の environment 自身のポリシーもです。
+  宣言された `mutates: false` は、`observed` が何を示していようと信頼されます。
 - gherkin は `And`/`But` の step を、直前の主要なキーワード(Given/When/Then)の pickle step type を継承することで分類します。
   これは nukadoko の選択ではなく、gherkin 自身の pickle コンパイルの挙動です。
-  そのため `Then` の後に連なる操作は、Then の位置の観測のもとで実行されます。
-  読み取りだけをしている間は問題なく、書き込みをした瞬間に失敗します。
-- 読み取り専用の environment は、宣言上 mutate する step を実行前に拒否し、さらに書き込みを観測したあらゆる実行を失敗させます。
-  誤った `mutates: false` の宣言が、このポリシーをすり抜けることはできません。
-- 正直な限界があります。
-  観測が見るのはネットワークの書き込みだけであり、それを HTTP メソッド越しに見ています(GET/HEAD 以外を書き込みとして数えます)。
-  これは書き込みの意味論そのものではなく、そのためのプロキシです。
-  純粋にクライアント側だけの状態や、GET で mutate するサーバーは、一方向としてそこからは見えません。
-  もう一方では、意味的には純粋な読み取りを POST 上に実装している step(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)が、`mutates: false` を正直に宣言していても書き込みとして記録されます。
-  実際に何をしたかにかかわらず、GET/HEAD 以外の呼び出しはすべて 1 件として数えられるからです。
-  計測が宣言を上書きするため、その step は Then の位置に置くことができず、宣言がどうであれ `policy: "read-only"` の environment でも実行できません。
-  宣言と PR レビューはこれらすべてのケースを引き続き担いますが、このプロキシは HTTP メソッドで数えることの性質であり、本ドキュメントが黙っている抜け穴ではありません。
-- Compat(型のない)step は静的にチェックできません。
-  実行時の観測は変わらず適用されます。
+  そのため `Then` の後に連なる操作も、そこにある他のどの step とも同じように Then の位置の観測のもとで記録されますが、それによってゲートされることはありません。
+- なぜ計測がこれを決めるのをやめたのか。
+  書き込みの検出は HTTP メソッドに基づいており(GET/HEAD 以外はすべて書き込みとして数えます)、これは書き込みの意味論そのものではなく、そのためのプロキシです。
+  GraphQL、RPC-over-POST、そして多くのベンダーの query API は、意味的に純粋な読み取りを POST の上に実装します。
+  ある呼び出しが実際にサーバーの状態を変えたかどうかは外部システム自身の意味論であり、nukadoko はその 1 つ下の層、HTTP のレイヤーにいます。
+  読み取りと書き込みを区別する手掛かりは、毎回プロトコル固有です。
+  GraphQL の body の `query` と `mutation` の違い、RPC の body のメソッド名、ベンダー独自の path の規約などです。
+  だからこのプロキシに代わる、汎用の機械的な判定は原理的にありません。
+  この回数が保証するのは step が何を送ったかであって、サーバーの状態が変わったかどうかではありません。
+  この 2 つは別の事実であり、前者を後者の証拠として扱うことは言い過ぎでした。
+- 記録が縮んだわけではありません。
+  `observed`、http.jsonl、そして Allure の declared/observed テーブルは、計測されたとおりにそのまま残ります。
+  そのため誤りだった宣言も、そこには見え続けます。
+  事後に反証可能なままだということです。
+  反証可能な宣言を受け入れることは計測の放棄ではなく、この特定の事実についてツールの権限が実際に及ぶ範囲の終わりです。
+- Compat(型のない)step には、そもそも宣言すべき `mutates` がありません(「compat step に欠けているもの」を参照)。
+  `nuka check` の `then-compat-step` 警告は、Then の位置に結び付けられた compat step を、mutation の緊張ではなくこのカバレッジの欠落として指摘します。
+  実行時の観測はどの step とも同じようにその回数を記録しますが、何もゲートしません。
 
 ## Compat step(移行の扉)
 
@@ -249,7 +258,7 @@ import { Given, When, Then } from "nukadoko/compat";
   cucumber 自身の `attach` / `log` / `link` / `parameters` は予約キーです。
   計測されず、宣言もできず、上書きは黙った破壊の代わりにエラーになります。
 - harness がブラウザと request のオブジェクトを所有しているため、compat の step もコードを一切変更せずに、計測済みの receipt(status、timing、trace、screenshots、HTTP log)をすでに得られます。
-- compat の step に欠けているのは、型付きの契約、receipt 内でバリデーションされた `result`、単体 step の CLI 実行、そして Then の強制です。
+- compat の step に欠けているのは、型付きの契約、receipt 内でバリデーションされた `result`、そして単体 step の CLI 実行です。
   よく使う step を `defineStep` に昇格させることが、1 step ずつ進めるアップグレードです。
 - 扉の幅は、主張ではなく計測されています。
   公開されている cucumber-js のスイート 8 本を、この扉に対して監査しました(glue はテキストとして読んだだけで、実行はしていません)。
@@ -282,8 +291,6 @@ pickle ごとに 1 つの scenario record(feature のパス、scenario 名、順
 失敗した step は scenario の残りをスキップし、スキップされた step には receipt が作られません(始まってすらいない実行が引用可能であってはならず、「skipped」と言うのは scenario record の役目です)。
 Evidence は自然なスコープに従います。
 各 step の receipt はその step の http.jsonl を持ち、一方 Playwright の trace は共有された context にまたがるため、個々の step ではなく scenario 自身のディレクトリに置かれます。
-Then の位置に対する強制は、観測によって実行時に適用されます。
-Then の位置で実行され、ネットワークへの書き込みを観測した実行は失敗します(キーワードの意味論を参照)。
 
 undefined な step は、マッチに失敗したテキストを名指しして scenario を失敗させ、`nuka scaffold` を提案します。
 同梱の skill に従う agent が、欠けている型付き step を作成して PR として提出します。
@@ -336,17 +343,20 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
   失敗時には `error: { kind, message }` がそれに置き換わります。
   compat の step は `result: null` を記録します。
-- `error.kind` は閉じた集合で、人間が読むメッセージのほかに `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`then_mutated`、`read_only_violation`、`timeout`、`unsupported`、`step_error` の値を取ります。
+- `error.kind` は閉じた集合で、人間が読むメッセージのほかに `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`step_error` の値を取ります。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
-  最初の 6 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
+  最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
   確信が持てない分類器が `step_error` を返すのは、契約違反を誤って主張するほうが、主張しないより悪いからです。
   scenario record の中の hook record も同じフィールドを持ちます。
 - `mutates` は step 自身の宣言であり(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)、`observed` のカウントと並んで置かれることで、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`ctx.request()` の呼び出しはすべて http.jsonl に記録され、receipt 自体が一次記録になります。
 - `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`ctx.request()` と page の両方を通じたもの)。
-  GET/HEAD 以外はすべて書き込みとして数えられます(書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります。キーワードの意味論の「正直な限界」を参照してください)。
-  これは実行時のキーワード強制と読み取り専用の environment が作用する対象であり、常に計測されたものであって宣言されたものでは決してありません。
+  GET/HEAD 以外はすべて書き込みとして数えられます。
+  これは書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります(キーワードの意味論を参照してください)。
+  この回数はそれ単独では何も決めません。
+  Then の位置も読み取り専用の environment も、作用する対象は `mutates` の宣言であり、この回数では決してありません。
+  `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
 - `used`(空でないときだけ現れます)は、この実行が `ctx.resultOf` を通じて実際に読んだ result の receipt id の一覧です。
   アクセサはツールが提供しているので、読み取りは計測可能です。
   依存関係はこうして二重に可視になります: 静的には import として、実行時には receipt 連鎖の provenance としてです。
@@ -490,18 +500,20 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
 - Attachment: scenario 自身の trace とスクリーンショット、そして step ごとにその HTTP ログとバリデーション済みの result です。
   それとは別に、step が自分自身について宣言したもの(attachment、link、ログの一行)も出力され、常に `declared:` を接頭辞に付けた名前の下に置かれます。
   すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
-- step の parameter は、その宣言と実際に観測されたものを並べて運びます: 計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
-  宣言と計測が同じテーブルの中にあることこそ、nukadoko の主張のすべてをレポートそのものの中で目に見えるようにしたものです。
-  observed 側は意味論上の判定ではなく HTTP メソッドによるプロキシです(キーワードの意味論の「正直な限界」を参照してください)。
+- step の parameter は、その宣言と実際に観測されたものを並べて運びます。
+  計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
+  この 2 つが自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。
+  宣言は nukadoko が信頼し作用する対象であり、observed の回数は実際に起きたことであり、この行は両者を目で見比べられる場所です。
+  observed 側は意味論上の判定ではなく HTTP メソッドによるプロキシです(キーワードの意味論を参照してください)。
   step が POST ベースの読み取りを呼んでいた場合、正直な `mutates (declared): false` の隣にゼロでない `http writes (observed)` が並ぶことがありますが、それはこのプロキシがテーブルに透けて見えているだけであり、どちらの数値も嘘をついているわけではありません。
 - 失敗した step や test のメッセージには `[nukadoko.failure=<kind>]` という接頭辞が付き、その receipt が既に持っている同じ `error.kind` を名指しします。
   同じ `error.kind` は `nukadoko.failure` という result label としても書き出されます。
   2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。
-- **Allure 2** には result ごとの category フィールドが無いため、emitter は `categories.json` も書き出します(`error.kind` ごとに 1 つの rule、全 9 個、すべての run で、メッセージの接頭辞を正規表現でマッチさせます)。
+- **Allure 2** には result ごとの category フィールドが無いため、emitter は `categories.json` も書き出します(`error.kind` ごとに 1 つの rule、全 7 個、すべての run で、メッセージの接頭辞を正規表現でマッチさせます)。
   メッセージの接頭辞と category の rule は同じ分類を 2 つの視点から見たものであり、利用者側の設定は不要です。
 - **Allure 3** の `allure generate`/`allure report` は、結果ディレクトリの `categories.json` を一切読みません。
   そこでの category は Allure 3 自身の config だけから決まり、result の label と照合され、`nukadoko.failure` はまさにそのような label です。
-  `examples/allure/allurerc.mjs` は `error.kind` ごとに 1 つ、9 個の label-matcher rule を同梱しています。
+  `examples/allure/allurerc.mjs` は `error.kind` ごとに 1 つ、7 個の label-matcher rule を同梱しています。
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
   それを置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。
 - Identity(`fullName`/`testCaseId`/`historyId`)は、公式の cucumberjs 用 Allure adapter と同じ方法で計算されます。
