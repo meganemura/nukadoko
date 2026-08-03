@@ -27,6 +27,14 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // committed. Nothing else about a receipt is touched — this module does not
 // redact a second time (redaction already happened once, when the receipt
 // was first written, src/cli/run.ts's own scenario/receipt pipeline).
+//
+// A "Declared vs observed" section is added now (accept-declared-vs-observed
+// task spec) — every scenario's own receipts already carry both `mutates`
+// (declared) and `observed` (measured), so the record can say, in one place
+// at its own tail, which steps declared `mutates: false` but were measured
+// making a write. It never changes whether `nuka accept` refuses (that stays
+// cli/accept.ts's seven conditions, untouched) and never asserts the step is
+// wrong — see renderDeclaredVsObserved's own comment for why.
 
 function needsYamlQuoting(value: string): boolean {
   if (value.length === 0) return true;
@@ -156,7 +164,11 @@ function renderHook(hook: ScenarioRecord["hooks"][number]): string[] {
   return ["", `#### ${hookLabel(hook)}`, "", "```json", JSON.stringify(hook, null, 2), "```"];
 }
 
-function renderStep(scenarioId: string, step: ScenarioRecord["steps"][number], receipts: ReadonlyMap<string, Receipt | null>): string[] {
+// Shared by renderStep and the "Declared vs observed" section below: both
+// need the same step-to-receipt lookup, and both must fail the same way
+// (MissingReceiptError) when a passed scenario's own record disagrees with
+// what is actually on disk — one failure mode, one place it is checked.
+function resolveReceipt(scenarioId: string, step: ScenarioRecord["steps"][number], receipts: ReadonlyMap<string, Receipt | null>): Receipt {
   if (step.receipt === null) {
     throw new MissingReceiptError(scenarioId, step.text, null);
   }
@@ -164,6 +176,11 @@ function renderStep(scenarioId: string, step: ScenarioRecord["steps"][number], r
   if (receipt === null || receipt === undefined) {
     throw new MissingReceiptError(scenarioId, step.text, step.receipt);
   }
+  return receipt;
+}
+
+function renderStep(scenarioId: string, step: ScenarioRecord["steps"][number], receipts: ReadonlyMap<string, Receipt | null>): string[] {
+  const receipt = resolveReceipt(scenarioId, step, receipts);
   // `evidence` is the one key this record deliberately never carries (this
   // file's own header) — every other field of the receipt, `evidence`
   // included in the destructure only to drop it, passes through untouched.
@@ -180,6 +197,82 @@ function renderScenarioSection(scenario: AcceptedScenario): string[] {
   for (const hook of record.hooks) {
     lines.push(...renderHook(hook));
   }
+  return lines;
+}
+
+/** One step whose own receipt declared `mutates: false` but was measured
+ * making at least one write (accept-declared-vs-observed task spec, scope). */
+interface DeclaredVsObservedMismatch {
+  readonly scenarioName: string;
+  readonly stepText: string;
+  readonly writes: number;
+}
+
+/** Walks every accepted scenario's own steps once, sorting each into one of
+ * three buckets a receipt's own `mutates` already answers: declared true
+ * (never interesting here, matches its own claim), declared false and
+ * observed writes (a mismatch), or `mutates: null` (a compat step, which has
+ * no declaration to compare against at all — reconcile-declared-vs-measured
+ * design doc's own "recommended" section, unresolved point 2: kept out of
+ * the mismatch count rather than folded into "no mismatch", since "nothing
+ * to compare" and "compared and matched" are different facts). */
+function collectDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): {
+  mismatches: DeclaredVsObservedMismatch[];
+  compatStepCount: number;
+} {
+  const mismatches: DeclaredVsObservedMismatch[] = [];
+  let compatStepCount = 0;
+  for (const { record, receipts } of scenarios) {
+    for (const step of record.steps) {
+      const receipt = resolveReceipt(record.scenario_id, step, receipts);
+      if (receipt.mutates === null) {
+        compatStepCount += 1;
+        continue;
+      }
+      if (receipt.mutates === false && receipt.observed.http_writes > 0) {
+        mismatches.push({ scenarioName: record.scenario, stepText: step.text, writes: receipt.observed.http_writes });
+      }
+    }
+  }
+  return { mismatches, compatStepCount };
+}
+
+// The record's own tail: one roll-up section rather than a note per
+// scenario, since a per-scenario note is exactly what a reader scrolling
+// past scenario after scenario misses. Always present, even with zero
+// mismatches, so "compared, found nothing" stays distinguishable from
+// "never compared at all" — the same reason `compatStepCount` stays
+// distinguishable from a mismatch count of zero. Deliberately states only
+// the raw fact (declared value, observed count) and never a verdict — a step
+// reading over POST is expected to land here every time it is accepted, by
+// design, for the same reason run-time `mutates` enforcement was dropped:
+// the HTTP method is not a trustworthy signal of a write. So this section is
+// a record, not an accusation.
+function renderDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): string[] {
+  const { mismatches, compatStepCount } = collectDeclaredVsObserved(scenarios);
+  const lines: string[] = ["", "## Declared vs observed", ""];
+
+  if (mismatches.length === 0) {
+    lines.push("No step declared `mutates: false` and was measured making a write.");
+  } else {
+    lines.push(
+      "Steps that declared `mutates: false` and were measured making writes. This is a comparison, not a verdict: a step that reads over POST records writes by design.",
+      "",
+    );
+    for (const mismatch of mismatches) {
+      const writeWord = mismatch.writes === 1 ? "write" : "writes";
+      lines.push(
+        `- "${mismatch.stepText}" (scenario "${mismatch.scenarioName}"): declared mutates: false, observed ${mismatch.writes} ${writeWord}`,
+      );
+    }
+  }
+
+  if (compatStepCount > 0) {
+    const stepWord = compatStepCount === 1 ? "step" : "steps";
+    const verb = compatStepCount === 1 ? "has" : "have";
+    lines.push("", `${compatStepCount} compat ${stepWord} ${verb} no \`mutates\` declaration to compare.`);
+  }
+
   return lines;
 }
 
@@ -207,6 +300,8 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
   for (const scenario of options.scenarios) {
     body.push(...renderScenarioSection(scenario));
   }
+
+  body.push(...renderDeclaredVsObserved(options.scenarios));
 
   return `${[...frontmatter, ...body].join("\n")}\n`;
 }

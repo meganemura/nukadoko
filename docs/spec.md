@@ -347,7 +347,11 @@ what a declaration settles is layered:
   settled fact — a GraphQL call, an RPC-over-POST call, or a vendor API that
   reads over POST would each read as a false positive, every time — which is
   the same reason run-time enforcement was dropped, above, applied here to
-  reporting instead of execution.
+  reporting instead of execution. `nuka accept`'s own record is the one
+  place this comparison is written out (see Sign-off) — sign-off is the
+  single moment a human already reads and judges a run, so stating the raw
+  fact there costs nothing in false-positive noise the way stating it on
+  every `nuka run`/`nuka check` invocation would.
 - Compat (untyped) steps have no `mutates` to declare at all (see "What
   compat steps lack") — `nuka check`'s `then-compat-step` warning flags
   one bound in Then position as that coverage gap instead of a mutation
@@ -746,6 +750,22 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   `.nukadoko/`, and a CI artifact is where they belong when they are
   wanted at all. The copy is made by the tool, never transcribed by a
   human: transcription would demote a measurement back to a claim.
+- The record's own tail carries one more section, "Declared vs observed":
+  every step across every scenario in the record whose receipt declared
+  `mutates: false` but was measured making at least one write
+  (`observed.http_writes > 0`, see Keyword semantics), stated as a raw
+  fact — declared value beside the observed count — never a verdict. It
+  never refuses: none of the refusal conditions above read it, and a step
+  that reads over POST is expected to land here every time it is accepted,
+  by design (the same HTTP-method proxy that made run-time `mutates`
+  enforcement itself unreliable, above). Rolled into one section covering
+  every scenario, not spread one line per scenario, so it cannot be
+  scanned past by accident. Written even when nothing disagrees, so
+  "compared, found nothing" stays distinguishable from "never compared at
+  all". A compat step (`mutates: null`, see "What compat steps lack") has
+  no declaration to compare against `observed` at all; it is counted
+  separately, never folded into either outcome above, since "nothing to
+  compare" and "compared and matched" are different facts.
 - Nothing in the record links to a ticket, because Gherkin already has the
   room. A tag and the free description under `Feature:` carry the ticket
   id, its URL, and the acceptance criteria in the reviewer's own words;

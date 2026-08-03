@@ -114,6 +114,12 @@ describe("nuka accept: a green run", () => {
       expect(typeof receipt.receipt_id).toBe("string");
     }
     expect(blocks[0]!.args).toEqual({ name: "Ada" });
+
+    // The record's own tail (accept-declared-vs-observed task spec): none of
+    // this fixture's steps make an HTTP call, so the section still exists
+    // but reports zero mismatches rather than being omitted.
+    expect(content).toContain("## Declared vs observed");
+    expect(content).toContain("No step declared `mutates: false` and was measured making a write.");
   });
 
   it("writes ran_at/accepted_at as local-offset ISO strings whose date matches the filename (m4c-record-timestamps)", async () => {
@@ -372,5 +378,76 @@ describe("nuka accept: overwrite semantics", () => {
 
     const secondContent = await readFile(path.join(rootDir, relativePath), "utf8");
     expect(secondContent).not.toBe(firstContent);
+  });
+});
+
+describe("nuka accept: declared vs observed (accept-declared-vs-observed task spec)", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("accept-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("does not refuse — and still writes a record — when a step's declared mutates: false disagrees with its own observed writes", async () => {
+    await initGitRepo(rootDir);
+
+    const runExit = await runCli(["run", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(0);
+
+    // The fixture's own "the visitor {name} is greeted" step already
+    // declares `mutates: false` but never calls `ctx.request()`, so its
+    // receipt's own `observed.http_writes` is 0 — no mismatch to compare
+    // against. Editing that one receipt.json directly is the only way to
+    // produce a real declared/observed disagreement without adding network
+    // I/O to a fixture whose whole point is running with no server at all.
+    const stateDir = path.join(rootDir, ".nukadoko");
+    const scenariosDir = path.join(stateDir, "scenarios");
+    const scenarioIds = await readdir(scenariosDir);
+    let receiptPath: string | undefined;
+    let stepText: string | undefined;
+    for (const scenarioId of scenarioIds) {
+      const record = JSON.parse(await readFile(path.join(scenariosDir, scenarioId, "record.json"), "utf8")) as {
+        feature: string;
+        steps: { text: string; receipt: string | null }[];
+      };
+      if (record.feature !== "features/greeting.feature") continue;
+      const step = record.steps.find((s) => s.text.includes("greeted"));
+      if (step?.receipt) {
+        receiptPath = path.join(stateDir, "receipts", step.receipt, "receipt.json");
+        stepText = step.text;
+      }
+    }
+    if (!receiptPath || !stepText) throw new Error("could not locate the greeting step's own receipt in the fixture run");
+
+    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { observed: { http_reads: number; http_writes: number } };
+    receipt.observed = { http_reads: 0, http_writes: 2 };
+    await writeFile(receiptPath, JSON.stringify(receipt));
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const acceptExit = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    // The mismatch is recorded as a fact, never a reason to refuse — none of
+    // the seven rejection conditions read `mutates`/`observed` at all.
+    expect(acceptExit).toBe(0);
+    expect(stderr.text()).toBe("");
+
+    const relativePath = stdout.text().trim();
+    const content = await readFile(path.join(rootDir, relativePath), "utf8");
+    expect(content).toContain("## Declared vs observed");
+    expect(content).toContain(`declared mutates: false, observed 2 writes`);
+    expect(content).toContain(stepText);
   });
 });

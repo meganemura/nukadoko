@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { renderAcceptanceRecord, type RenderAcceptanceRecordOptions } from "../src/accept/render-record.js";
-import type { ScenarioHookRecord, ScenarioRecord } from "../src/run/record-types.js";
+import { renderAcceptanceRecord, type AcceptedScenario, type RenderAcceptanceRecordOptions } from "../src/accept/render-record.js";
+import type { Receipt } from "../src/receipt/types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 
 // Responsibility: unit tests for render-record.ts's `renderHook`/`hookLabel`
 // (t7-afterstep-consumers task spec, item 2) — a non-exhaustive ternary used
@@ -92,5 +93,167 @@ describe("renderAcceptanceRecord: hook labels (t7-afterstep-consumers task spec,
     const markdown = renderAcceptanceRecord(baseOptions(hooks));
 
     expect(headings(markdown)).toEqual(["#### AfterStep hook (step 0)", "#### AfterStep hook (step 2)"]);
+  });
+});
+
+// Responsibility: unit tests for renderDeclaredVsObserved (accept-declared-
+// vs-observed task spec) — the record's own tail section that compares each
+// step's own receipt.mutates (declared) against receipt.observed.http_writes
+// (measured), without ever changing whether renderAcceptanceRecord itself
+// throws or what cli/accept.ts does with its result (this module never
+// decides refusal; see render-record.ts's own header).
+
+function makeReceipt(overrides: { mutates: boolean | null; observed: { http_reads: number; http_writes: number }; receiptId?: string }): Receipt {
+  return {
+    receipt_id: overrides.receiptId ?? "rcpt-1",
+    step: "some.step",
+    kind: "run",
+    args: {},
+    environment: "default",
+    session: null,
+    scenario: "scn-1",
+    started_at: "2026-08-01T00:00:00.000Z",
+    finished_at: "2026-08-01T00:00:01.000Z",
+    evidence: { dir: ".nukadoko/receipts/rcpt-1", screenshots: [] },
+    observed: overrides.observed,
+    mutates: overrides.mutates,
+    status: "ok",
+    result: {},
+  };
+}
+
+function stepRecord(text: string, receiptId: string): ScenarioStepRecord {
+  return { text, status: "passed", receipt: receiptId };
+}
+
+function scenarioWithSteps(
+  steps: readonly ScenarioStepRecord[],
+  receipts: ReadonlyMap<string, Receipt | null>,
+  overrides: Partial<ScenarioRecord> = {},
+): AcceptedScenario {
+  return { record: baseRecord({ steps, ...overrides }), receipts };
+}
+
+function optionsFor(scenarios: readonly AcceptedScenario[]): RenderAcceptanceRecordOptions {
+  return {
+    featurePath: "features/checkout.feature",
+    featureSource: "Feature: Checkout\n  Scenario: a customer checks out\n",
+    featureName: "Checkout",
+    commit: "a".repeat(40),
+    runId: "run-1",
+    ranAt: "2026-08-01T00:00:00.000Z",
+    acceptedAt: "2026-08-01T00:00:05.000Z",
+    environment: "default",
+    targetVersion: undefined,
+    scenarios,
+  };
+}
+
+/** The "## Declared vs observed" section and everything after it — the only
+ * part of the record these tests care about. */
+function declaredVsObservedSection(markdown: string): string {
+  const idx = markdown.indexOf("## Declared vs observed");
+  if (idx === -1) throw new Error("no '## Declared vs observed' section found in rendered record");
+  return markdown.slice(idx);
+}
+
+describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-observed task spec)", () => {
+  it("lists a step that declared mutates: false and was measured making writes", () => {
+    const receipts = new Map<string, Receipt | null>([
+      ["r-1", makeReceipt({ receiptId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 2 } })],
+    ]);
+    const scenario = scenarioWithSteps([stepRecord("the todo list is fetched", "r-1")], receipts, {
+      scenario: "a visitor browses",
+    });
+
+    const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
+
+    expect(section).toContain(
+      '- "the todo list is fetched" (scenario "a visitor browses"): declared mutates: false, observed 2 writes',
+    );
+  });
+
+  it("omits a step that declared mutates: false but was measured making zero writes", () => {
+    const receipts = new Map<string, Receipt | null>([
+      ["r-1", makeReceipt({ receiptId: "r-1", mutates: false, observed: { http_reads: 3, http_writes: 0 } })],
+    ]);
+    const scenario = scenarioWithSteps([stepRecord("the todo list is fetched", "r-1")], receipts);
+
+    const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
+
+    expect(section).not.toContain("the todo list is fetched");
+    expect(section).toContain("No step declared `mutates: false` and was measured making a write.");
+  });
+
+  it("omits a step that declared mutates: true even though it was measured making writes", () => {
+    const receipts = new Map<string, Receipt | null>([
+      ["r-1", makeReceipt({ receiptId: "r-1", mutates: true, observed: { http_reads: 0, http_writes: 3 } })],
+    ]);
+    const scenario = scenarioWithSteps([stepRecord("the todo is created", "r-1")], receipts);
+
+    const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
+
+    expect(section).not.toContain("the todo is created");
+    expect(section).toContain("No step declared `mutates: false` and was measured making a write.");
+  });
+
+  it("still writes the section, with an explicit zero-mismatch sentence, when nothing disagrees", () => {
+    const receipts = new Map<string, Receipt | null>([
+      ["r-1", makeReceipt({ receiptId: "r-1", mutates: true, observed: { http_reads: 0, http_writes: 1 } })],
+    ]);
+    const scenario = scenarioWithSteps([stepRecord("the todo is created", "r-1")], receipts);
+
+    const markdown = renderAcceptanceRecord(optionsFor([scenario]));
+
+    // The section header itself must exist — its absence would be
+    // indistinguishable from "never compared at all", the exact ambiguity
+    // this section exists to remove.
+    expect(markdown).toContain("## Declared vs observed");
+    expect(declaredVsObservedSection(markdown)).toContain(
+      "No step declared `mutates: false` and was measured making a write.",
+    );
+  });
+
+  it("excludes a compat step (mutates: null) from the mismatch list and counts it separately", () => {
+    const receipts = new Map<string, Receipt | null>([
+      ["r-1", makeReceipt({ receiptId: "r-1", mutates: null, observed: { http_reads: 0, http_writes: 5 } })],
+    ]);
+    const scenario = scenarioWithSteps([stepRecord("a compat step runs", "r-1")], receipts);
+
+    const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
+
+    // Not a mismatch — a compat step has no `mutates` declaration to compare
+    // against `observed` at all, which is a different fact from "compared
+    // and agreed" (design doc, unresolved point 2).
+    expect(section).not.toContain("a compat step runs");
+    expect(section).toContain("No step declared `mutates: false` and was measured making a write.");
+    expect(section).toContain("1 compat step has no `mutates` declaration to compare.");
+  });
+
+  it("pluralizes the compat-step count and rolls up mismatches from every scenario into one section", () => {
+    const receipts = new Map<string, Receipt | null>([
+      ["r-1", makeReceipt({ receiptId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 1 } })],
+      ["r-2", makeReceipt({ receiptId: "r-2", mutates: false, observed: { http_reads: 0, http_writes: 4 } })],
+      ["r-3", makeReceipt({ receiptId: "r-3", mutates: null, observed: { http_reads: 0, http_writes: 0 } })],
+      ["r-4", makeReceipt({ receiptId: "r-4", mutates: null, observed: { http_reads: 0, http_writes: 0 } })],
+    ]);
+    const scenarioA = scenarioWithSteps([stepRecord("step one", "r-1"), stepRecord("step three", "r-3")], receipts, {
+      scenario_id: "scn-a",
+      scenario: "scenario A",
+    });
+    const scenarioB = scenarioWithSteps([stepRecord("step two", "r-2"), stepRecord("step four", "r-4")], receipts, {
+      scenario_id: "scn-b",
+      scenario: "scenario B",
+    });
+
+    const markdown = renderAcceptanceRecord(optionsFor([scenarioA, scenarioB]));
+
+    // One roll-up section, not one per scenario (task spec: "scenario ごと
+    // に散らさない").
+    expect(markdown.split("## Declared vs observed")).toHaveLength(2);
+    const section = declaredVsObservedSection(markdown);
+    expect(section).toContain('- "step one" (scenario "scenario A"): declared mutates: false, observed 1 write');
+    expect(section).toContain('- "step two" (scenario "scenario B"): declared mutates: false, observed 4 writes');
+    expect(section).toContain("2 compat steps have no `mutates` declaration to compare.");
   });
 });
