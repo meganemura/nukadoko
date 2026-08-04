@@ -57,6 +57,26 @@ function normalizeFeaturePath(rootDir: string, featureArg: string): string {
   return path.relative(rootDir, path.resolve(rootDir, featureArg));
 }
 
+// The number of failed scenarios named in a "red" refusal is capped (this
+// task's spec: truncation is fine, silent truncation is not) so one feature
+// with dozens of scenarios can't turn the refusal into a wall of text; the
+// "(+N more)" tail is what keeps the cap from reading as the whole story.
+const MAX_FAILED_SCENARIOS_NAMED = 5;
+
+// git-state refusals just above already name what they read (run_id,
+// commit) — this task's spec brings "red"/"partial-only" in line with that,
+// rather than leaving them the only refusals in this file that don't.
+function formatFailedScenarios(group: readonly ScenarioRecord[]): string {
+  const failed = group.filter((record) => record.status !== "passed").sort((a, b) => a.line - b.line);
+  const shown = failed.slice(0, MAX_FAILED_SCENARIOS_NAMED);
+  const parts = shown.map((record) => `${record.scenario} (line ${record.line}) failed`);
+  const omitted = failed.length - shown.length;
+  if (omitted > 0) {
+    parts.push(`(+${omitted} more)`);
+  }
+  return parts.join("; ");
+}
+
 function localDateStamp(iso: string): string {
   const d = new Date(iso);
   const yyyy = d.getFullYear();
@@ -160,14 +180,21 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     return 1;
   }
   if (outcome.kind === "red") {
+    const runId = outcome.group[0]!.run_id;
     stderr.write(
-      `nuka accept: the most recent full run of ${featurePath} was not all green — fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
+      `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${outcome.startedAt.toISOString()}) was not all green — ${formatFailedScenarios(outcome.group)} — fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
     );
     return 1;
   }
   if (outcome.kind === "partial-only") {
+    // Every record in this group shares the run that produced it, so its
+    // own `line` set is exactly the scenario(s) that run touched — usually
+    // one, since `:line` is `selectPickles`'s only way to produce a partial
+    // group at all (src/run/select-pickles.ts).
+    const touchedLines = [...new Set(outcome.group.map((record) => record.line))].sort((a, b) => a - b);
+    const lineWord = touchedLines.length === 1 ? "line" : "lines";
     stderr.write(
-      `nuka accept: only partial runs of ${featurePath} exist (e.g. \`nuka run ${featurePath}:<line>\`) — run the whole feature with \`nuka run ${featurePath}\` before accepting.\n`,
+      `nuka accept: only partial runs of ${featurePath} exist (most recent covered ${lineWord} ${touchedLines.join(", ")} of ${featureLines.size} scenarios, started ${outcome.startedAt.toISOString()}) — run the whole feature with \`nuka run ${featurePath}\` before accepting.\n`,
     );
     return 1;
   }

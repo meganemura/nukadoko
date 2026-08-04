@@ -238,6 +238,38 @@ describe("nuka run", () => {
     expect(await readdir(scenariosDir)).toHaveLength(1);
   });
 
+  it("stderr announces a partial run when :line is given, naming the selected/total scenario counts, without touching stdout's record JSON (partial-run-visibility task spec)", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/lines.feature:6"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toContain("Partial run: features/lines.feature:6 selects 1 of 2 scenarios");
+    expect(stderr.text()).toContain("A partial run cannot be accepted");
+    expect(stderr.text()).toContain("nuka accept");
+
+    const lines = nonEmptyLines(stdout.text());
+    expect(lines).toHaveLength(1);
+    const record = JSON.parse(lines[0]!);
+    expect(record.scenario).toBe("second scenario");
+  });
+
+  it("stderr says nothing about a partial run when no :line is given (partial-run-visibility task spec)", async () => {
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/lines.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
+  });
+
   it("an invalid :line is a setup failure: stderr + exit 1, nothing written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

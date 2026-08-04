@@ -84,7 +84,12 @@ describe("measured mutates: request-side observed counts", () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    // `:3` is a partial run of this two-scenario feature, so that notice is
+    // expected on stderr — asserted as "one line, and it is that one"
+    // rather than by its exact wording, which this test has no stake in:
+    // what it is checking is that nothing *else* warned.
+    expect(stderr.text().split("\n").filter((line) => line.length > 0)).toHaveLength(1);
+    expect(stderr.text()).toContain("Partial run:");
     const record = JSON.parse(stdout.text().trim().split("\n")[0]!);
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);

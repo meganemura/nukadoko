@@ -36,6 +36,12 @@ export function parseFeatureTarget(featureArg: string): FeatureTarget {
 export interface SelectedScenarios {
   readonly relativePath: string;
   readonly pickles: readonly Pickle[];
+  /** How many pickles the file has in total, whether or not `:line` cut the
+   * selection down. Carried here rather than recovered by a second
+   * `selectPickles` call without the line: this one already compiled the
+   * whole document to filter it, and parsing the file twice would let the
+   * two counts describe two different reads of it. */
+  readonly totalPickles: number;
   /** This feature file's own parsed document (m21b-compat-execution task
    * spec, item 3) — threaded through to every `runScenario` call so a
    * Before/After hook's `HookParameter.gherkinDocument` is this run's real
@@ -72,12 +78,22 @@ export function selectPickles(rootDir: string, featureArg: string): SelectedScen
   }
 
   if (target.line === null) {
-    return { relativePath: target.relativePath, pickles: allPickles, gherkinDocument };
+    return {
+      relativePath: target.relativePath,
+      pickles: allPickles,
+      totalPickles: allPickles.length,
+      gherkinDocument,
+    };
   }
 
   const matching = allPickles.filter((pickle) => pickle.location?.line === target.line);
   if (matching.length === 0) {
     throw new NoMatchingScenarioError(target.relativePath, target.line);
   }
-  return { relativePath: target.relativePath, pickles: matching, gherkinDocument };
+  return {
+    relativePath: target.relativePath,
+    pickles: matching,
+    totalPickles: allPickles.length,
+    gherkinDocument,
+  };
 }

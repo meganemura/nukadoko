@@ -39,6 +39,18 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // so the answer is "red"; if none ever did, every group that exists for this
 // feature was partial, so the answer is "partial-only"; and if there were no
 // groups at all, no run has ever touched this feature.
+//
+// partial-run-visibility task spec: "red" and "partial-only" now carry the
+// group and startedAt they were decided from, not just their kind — a
+// refusal that names nothing forces the reader back to guessing which run,
+// of possibly many, is the one being talked about. This module still has no
+// opinion on wording (this file's own header, above): it hands cli/accept.ts
+// data, never a sentence. "red" carries the most recent *full-coverage*
+// group regardless of its own pass/fail (there is no all-passed one, or this
+// would have been "ok" instead) — "the most recent full run" per docs/
+// spec.md "Sign-off". "partial-only" carries the most recent group of any
+// kind, which in this branch is guaranteed partial: every group here failed
+// full coverage, or "red" would have won instead.
 
 export interface RunStartedAt {
   readonly runId: string;
@@ -84,8 +96,8 @@ function runStartedAt(group: readonly ScenarioRecord[]): Date {
 
 export type SelectRunResult =
   | { readonly kind: "none-ever" }
-  | { readonly kind: "red" }
-  | { readonly kind: "partial-only" }
+  | { readonly kind: "red"; readonly group: readonly ScenarioRecord[]; readonly startedAt: Date }
+  | { readonly kind: "partial-only"; readonly group: readonly ScenarioRecord[]; readonly startedAt: Date }
   | { readonly kind: "ok"; readonly group: readonly ScenarioRecord[]; readonly startedAt: Date };
 
 /**
@@ -116,18 +128,32 @@ export function selectAcceptableRun(
 
   let sawFullCoverage = false;
   let best: { group: ScenarioRecord[]; startedAt: Date } | null = null;
+  // Tracked alongside `best` (this file's own header,
+  // partial-run-visibility task spec): the data a "red"/"partial-only"
+  // refusal needs to name a run, which `best` alone can't supply once it
+  // stays `null`.
+  let bestFullCoverage: { group: ScenarioRecord[]; startedAt: Date } | null = null;
+  let mostRecent: { group: ScenarioRecord[]; startedAt: Date } | null = null;
 
   for (const group of groups.values()) {
     const lines = new Set(group.map((record) => record.line));
     const fullCoverage =
       lines.size === featureLines.size && [...featureLines].every((line) => lines.has(line));
+    const startedAt = runStartedAt(group);
+
+    if (mostRecent === null || startedAt.getTime() > mostRecent.startedAt.getTime()) {
+      mostRecent = { group, startedAt };
+    }
+
     if (fullCoverage) {
       sawFullCoverage = true;
+      if (bestFullCoverage === null || startedAt.getTime() > bestFullCoverage.startedAt.getTime()) {
+        bestFullCoverage = { group, startedAt };
+      }
     }
 
     const allPassed = group.every((record) => record.status === "passed");
     if (fullCoverage && allPassed) {
-      const startedAt = runStartedAt(group);
       if (best === null || startedAt.getTime() > best.startedAt.getTime()) {
         best = { group, startedAt };
       }
@@ -137,5 +163,12 @@ export function selectAcceptableRun(
   if (best !== null) {
     return { kind: "ok", group: best.group, startedAt: best.startedAt };
   }
-  return { kind: sawFullCoverage ? "red" : "partial-only" };
+  if (sawFullCoverage) {
+    // Non-null: `sawFullCoverage` is only set inside the branch that also
+    // sets `bestFullCoverage`.
+    return { kind: "red", group: bestFullCoverage!.group, startedAt: bestFullCoverage!.startedAt };
+  }
+  // Non-null: `featureRecords.length === 0` already returned above, so at
+  // least one group exists, and `mostRecent` is set for every group.
+  return { kind: "partial-only", group: mostRecent!.group, startedAt: mostRecent!.startedAt };
 }

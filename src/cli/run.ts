@@ -23,7 +23,7 @@ import {
   runScenario,
   runWithTimeout,
 } from "../run/run-scenario.js";
-import { selectPickles } from "../run/select-pickles.js";
+import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { acquireLock, releaseLock } from "../session/lock.js";
@@ -182,6 +182,13 @@ import type { WritableSink } from "./writable-sink.js";
 // scenario-order guard itself (docs/spec.md "Chaining steps") is a second,
 // separate check, run once *per pickle* inside src/run/run-scenario.ts —
 // see that file's own header for why it has to live there instead of here.
+//
+// partial-run-visibility task spec: a `:line` target gets one stderr line
+// right after `selectPickles` resolves it, naming that the run is partial
+// and that `nuka accept` refuses it — said here rather than left for accept
+// to reveal several commands later (docs/spec.md "Scenarios (the scripted
+// path)"). stdout is untouched: its one-record-per-line contract (below)
+// is read by machines, and this notice is not part of it.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -271,6 +278,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     } catch (error) {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
+    }
+
+    // See this file's own header (partial-run-visibility task spec) — no
+    // notice at all when `:line` wasn't given, so a normal full run stays
+    // silent every time.
+    if (parseFeatureTarget(featureArg).line !== null) {
+      stderr.write(
+        `Partial run: ${featureArg} selects ${selected.pickles.length} of ${selected.totalPickles} scenarios. ` +
+          "A partial run cannot be accepted; `nuka accept` needs a run of the whole feature.\n",
+      );
     }
 
     // --- Execution phase: from here, every pickle that begins gets a

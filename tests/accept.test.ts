@@ -283,14 +283,16 @@ describe("nuka accept: refusal conditions", () => {
     expect(await mdFilesIn(featuresDir)).toEqual([]);
   });
 
-  it("refuses when only a red run of the feature exists and writes no record", async () => {
+  it("refuses when only a red run of the feature exists, naming the run_id and the failed scenario's name and line, and writes no record", async () => {
     await initGitRepo(rootDir);
+    const runStdout = createCaptureSink();
     const runExit = await runCli(["run", "features/failing.feature"], {
       rootDir,
-      stdout: createCaptureSink(),
+      stdout: runStdout,
       stderr: createCaptureSink(),
     });
     expect(runExit).toBe(1);
+    const runId = (JSON.parse(runStdout.text().trim()) as { run_id: string }).run_id;
 
     const stderr = createCaptureSink();
     const acceptExit = await runCli(["accept", "features/failing.feature"], {
@@ -301,10 +303,14 @@ describe("nuka accept: refusal conditions", () => {
 
     expect(acceptExit).toBe(1);
     expect(stderr.text()).toMatch(/not all green/);
+    // partial-run-visibility task spec: a "red" refusal names what it read
+    // to decide (docs/spec.md "Sign-off") — the run_id, not just "a run".
+    expect(stderr.text()).toContain(`run_id ${runId}`);
+    expect(stderr.text()).toContain("it fails partway through (line 3) failed");
     expect(await mdFilesIn(featuresDir)).toEqual([]);
   });
 
-  it("refuses when only a partial (:line) run of the feature exists and writes no record", async () => {
+  it("refuses when only a partial (:line) run of the feature exists, naming the line it covered and the feature's total, and writes no record", async () => {
     await initGitRepo(rootDir);
     const runExit = await runCli(["run", "features/multi.feature:3"], {
       rootDir,
@@ -322,6 +328,9 @@ describe("nuka accept: refusal conditions", () => {
 
     expect(acceptExit).toBe(1);
     expect(stderr.text()).toMatch(/partial/);
+    // partial-run-visibility task spec: names the line the most recent
+    // partial run actually touched, out of the feature's own total.
+    expect(stderr.text()).toContain("covered line 3 of 2 scenarios");
     expect(await mdFilesIn(featuresDir)).toEqual([]);
   });
 });
