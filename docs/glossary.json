@@ -83,6 +83,11 @@
       "en": ["wait", "waits", "waiting", "waited"],
       "ja": "待ち",
       "note": "外部システムへの反映が見えるまで待つこと。動詞は 待つ。API 名の poll とは書き分ける(poll は英語のまま)"
+    },
+    {
+      "en": ["scan", "scans", "scanned", "scanning"],
+      "ja": "スキャン",
+      "note": "nuka check / nuka tend が静的検査のために feature ディレクトリを対象に取ること。ディレクトリを実際にたどる動作を指す walk(歩く)とは書き分ける"
     }
   ],
   "keep_english": [

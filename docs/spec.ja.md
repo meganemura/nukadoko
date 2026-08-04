@@ -616,6 +616,17 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   依存関係はこうして二重に可視になります: 静的には `from` か import として、実行時には receipt 連鎖の provenance としてです。
   値がどの上流の *step* から来たかは、その step ファイルが書かれた時点ですでに決まっていました。
   そのどの *実行* が値を供給したかは、ここでしか分かりません。
+- **失敗した** step の receipt に限り、各 `used` エントリは追加で `result` を持ちます。
+  id/step のすぐ隣に置かれる、上流の receipt のバリデーション済みの result 全体です。
+  これにより、step が実際に何を見たかを確かめるためだけに 2 つ目の receipt.json を開かなくても、失敗した receipt 単体を読むだけで済みます。
+  `ok` な receipt の `used` エントリが `result` を持つことは決してありません。
+  重要だった値はすでにその step 自身の `result`(`from` 経由で入ってきた場合は `args`)に載っているため、そこで上流の値を繰り返しても冗長になるだけだからです。
+  運ぶのは result 全体であり、`from` の注入や `resultOf` の呼び出しがたまたま読んだ 1 つのキーに絞り込まれることはありません。
+  失敗を診断するのに必要なのは、どのキーが参照されたかではなく、上流の値が *なぜ* そうなったかだからです。
+  参照されたキーに絞り込んでしまうと、receipt 側で同じ罠を作り直すことになります。
+  それは「後続の step が参照するものを返す」という、参照だけに頼る罠であり、「型付き step」ですでに戒められているものです。
+  これはまた、このフィールドが運べるのは上流の step 自身の `returns` スキーマがそもそも保持していたものだけだということも意味します。
+  値を落とす `returns` は、ここからもその値を落とします。
 - `sections`(空でないときだけ現れます)は、`ctx.section` が呼ばれたラベルを、呼ばれた順に並べたものです。
   `used` と違って重複は除きません。
   ループやリトライで 2 回入ったラベルは 2 回入ったのであり、配列はそのとおりに読めるべきです。
@@ -692,7 +703,19 @@ Cucumber が持ったことのない実行インフラです:
   名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
   それを決めるのは git の追跡/未追跡の分類と `secrets.redact` だけです。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`additionalFeatureDirs`、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+
+`additionalFeatureDirs`(デフォルトは `[]`)は、`featuresDir` とは違う問いに答えます。
+`featuresDir` は無人で *実行される* 集合です。
+引数なしの `nuka run` はちょうどそのディレクトリだけを反復し、このキーがそれを広げることは決してありません。
+`featuresDir` と `additionalFeatureDirs` を合わせたものが、静的チェックが語彙を *結び付ける* 対象となる集合です。
+引数なしの `nuka check` と `nuka tend` はどちらもこの広い集合を歩きます。
+ある step の pattern が結び付けられているかどうかはプロジェクト全体の性質であり、今日の無人の run が何を実行するかの性質ではないからです。
+だからこそ acceptance feature(「Sign-off」を参照)は `additionalFeatureDirs` に属します。
+acceptance feature が `featuresDir` の外に置かれているのは、まさに回帰として拾われることが決してないようにするためです。
+`additionalFeatureDirs` にそのディレクトリを名指しすれば、その feature が結び付ける step は `pattern-unbound` として報告される代わりに結び付けられていると数えられ、それでいてなお無人では実行されません。
+ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
+`nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` は同じ事実を注記として報告します。
 
 `browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります(browser の種類は chromium だけです)。
 `newContext` の `viewport` のようなオプションは別の Playwright の型であり、この `browser` キーでは受け付けません(下記の `browserContext`/`requestContext` を参照)。
@@ -810,8 +833,8 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
    tag と `Feature:` の下の説明文が、チケットの id とレビュアーの言葉による基準を運びます。
    scenario は、その基準を語彙に翻訳したものです。
 4. 何かが実行される前に、`nuka check <feature>` を行います(未定義の step、pattern と schema の不一致、mutate する step に結び付いた Then)。
-   引数は実質必須です。
-   受け入れの feature は `featuresDir` の外にあり、引数なしの `nuka check` はそこを歩かないからです。
+   受け入れの feature が置かれているディレクトリが `additionalFeatureDirs` に列挙されていない限り、パスを渡します。
+   引数なしの `nuka check` は `featuresDir` とそのリストを歩くため、`featuresDir` の外に意図的に置かれ、どこにも名指しされていない feature こそが、まさにそれが届かない対象だからです。
 5. commit します。
    run は、まだチェックアウトされているその commit で、クリーンな working tree に対して行われた場合にしか凍結できないため、dirty な working tree に対するデバッグ用の run はかまいません。
    ただそれらは accept できないだけです。
@@ -947,8 +970,15 @@ sign-off は、自分が凍結したコードを言い表さなくなること�
 `tend` の所見はそうではありません: ここにあるものはどれも今日直さなければならないものではなく、もしそれらが毎回の `check` に現れたなら、本当に直すべきだった行までみんなが読み飛ばすことを覚えてしまうでしょう。
 チェックが読む価値のあるものだという主張を中心に据えたツールにとって、ノイズは見た目だけの問題ではありません。
 
-所見を挙げる前に、`tend` はぬか床がいまどこにあるかを述べます: 語彙のうちどれだけが、いまも compat のままではなく型付けされているか、そして型付き step が宣言できることのうち、実際にどれだけが宣言されているか、です。
-これは所見ではなく、exit code にも影響しません — 移行の途中にあるスイートはそれ自体が異常な状態ではなく通常の状態であり、毎回それについて警告すれば、本当に対応が必要な所見を埋もれさせてしまうでしょう。
+所見を挙げる前に、`tend` はぬか床がいまどこにあるかを述べる 3 行のサマリーを出力します。
+この 3 行のどれも所見ではなく、exit code にも影響しません — 移行の途中にあるスイートはそれ自体が異常な状態ではなく通常の状態であり、毎回それについて警告すれば、本当に対応が必要な所見を埋もれさせてしまうでしょう:
+
+- `scanned:` は、この run が実際に見たすべてのディレクトリを名指しします。
+  `featuresDir` と、各 `additionalFeatureDirs` エントリです(「Session、environment、secret」を参照)。
+  最初に出力されるのは、件数は何について数えられたかを読み手が知るまで何も意味しないからです。
+- `bed:` は、語彙のうちどれだけが、いまも compat のままではなく型付けされているかを示します。
+  加えて、型付き step のうちいくつが `mutates: false`(読み取り専用)を宣言しているかも示します。
+- `declared:` は、型付き step が宣言できることのうち、実際にどれだけが宣言されているか(`rationale`、各スキーマフィールドの `.describe()`)を示します。
 
 これが存在する理由は、その情報がすでにそこにありながら誰にも読まれていなかったからです。
 receipt の `world` と `declared` の件数は、スイートが昇格するにつれて確かに縮みますが、それは人が進捗を見て取る手段としては真実であっても無意味です: 誰も、自分がどこまで進んだかを割り出すために receipt のディレクトリを読んだりはしないからです。
@@ -973,6 +1003,16 @@ receipt の `world` と `declared` の件数は、スイートが昇格するに
 - **`secrets.public` または `secrets.redact` のエントリが、どの envFile も定義していないキーを名指ししているもの。** 何にも届いていない、実在する指示です — 自分が記述している対象のファイルから設定がずれてしまっているということです。
   これも同じ理由で `check` から移されました: この run を実行すべきかどうかは、これによって何も変わらないからです。
   その隣にある所見は `check` に残っており、対比する価値があります — 値が短すぎて redact されない `redact` エントリと、secret らしく見えるキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味し、それはまさに事前に知っておくべきことだからです。
+- **設定された `additionalFeatureDirs` エントリがディスク上に存在しないもの。** それは `nuka check`/`nuka tend` が何をスキャンするかを広げるためだけに名指しされたものです。
+  だからこそ、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合とまったく同じです。
+  ただし `tend` には `check` が持つような config の誤り専用のエラー枠がないため、ここでは注記になります。
+  `nuka check` が同じ事実をエラーとして報告しているのとは対照的です。
+- **`nuka check`/`nuka tend` がスキャンするどのディレクトリの外にもある、accept 済みの feature。** sign-off の記録はその feature が green で走ったことをすでに証明していますが、ここが一切歩かない feature は、それが結び付ける step を、このレポートの他のあらゆる所見に対して `pattern-unbound` のまま見せ続けます。
+  sign-off の記録が読まれるのは、この所見の可視性のためだけです。
+  何をスキャン対象にするかを決めるためではありません。
+  スキャン対象をそこから広げてしまうと、少なくとも一度は accept されたことのある feature にしか気付けず、まだ書きかけの feature を静かに見逃してしまいます。
+  それこそ、誤った `pattern-unbound` がいちばん人を誤解させる feature です。
+  `additionalFeatureDirs` にそのディレクトリを名指しすることが、実際にこれを直す方法です。
 
 所見は、他のすべてと同じく `--json` に対応します。
 sign-off の所見は非ゼロの exit code で終了し、定期実行されるジョブがそれに反応できるようにする一方、残りの所見はそうしません、プロジェクトはそれらを抱えたままでいることが許されているからです。
@@ -1010,24 +1050,30 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               coherence, unreadable step files (reported,
                               not fatal — the rest of the project is still
                               checked), unsupported hook tag expressions;
-                              a feature argument checks that one file
-                              instead of featuresDir, for a feature living
-                              outside it
+                              with no argument, scans featuresDir plus
+                              additionalFeatureDirs; a feature argument
+                              checks that one file instead, for a feature
+                              living outside both
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
-nuka tend [--json]            where the bed is, then what is rotting rather
-                              than what is broken: how much of the
-                              vocabulary is typed rather than compat and
-                              how much of it declares what it could, then
-                              a sign-off that no longer matches the code it
-                              froze (the one finding that exits non-zero),
-                              a `from` nothing exercises, a patterned step
-                              no feature binds, a schema field with no
+nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
+                              then where the bed is, then what is rotting
+                              rather than what is broken: how much of the
+                              vocabulary is typed rather than compat, how
+                              many typed steps are read-only, and how much
+                              of it declares what it could, then a sign-off
+                              that no longer matches the code it froze (the
+                              one finding that exits non-zero), a `from`
+                              nothing exercises, a patterned step no
+                              feature binds, a schema field with no
                               `.describe()`, a step with no `rationale`, a
                               configured parameter type no pattern uses, a
                               `defineParameterType` still registered from
                               support code, a secrets entry naming a key no
-                              envFile defines
+                              envFile defines, a configured
+                              additionalFeatureDirs entry absent from disk,
+                              an accepted feature outside every scanned
+                              directory
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
