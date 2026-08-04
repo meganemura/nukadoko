@@ -4,7 +4,7 @@ Notable changes to nukadoko. Versions follow [Semantic Versioning](https://semve
 with one caveat stated in the README: this is pre-0.1, so the public API can
 change without a major bump until 0.1.
 
-## Unreleased
+## 0.0.4 — 2026-08-04
 
 ### Added
 
