@@ -9,6 +9,14 @@ just until 0.1.
 
 ### Changed
 
+- **`nuka tend`'s summary is three lines, not two.** A `scanned:` line comes
+  first, naming every directory that run actually looked at — a finding that
+  turns out to be wrong is unreadable without knowing what produced it — and
+  the `bed:` line now also counts read-only typed steps. Both lines are
+  summary, not findings: neither affects the exit code. Called out here
+  rather than filed under Added because anything counting `nuka tend`'s text
+  output breaks on it; `--json` carries the same fields and does not shift
+  under you.
 - **`poll` moved onto `ctx`, and now leaves a record.** `import { poll }
   from "nukadoko"` is gone; the same loop is `ctx.poll(fn, options)`, and
   every completed call lands on the receipt's `polls` with how many
@@ -46,9 +54,7 @@ just until 0.1.
   (`signed-feature-unscanned`, a `tend` note — deliberately never used to
   widen the scanned set itself, since that would only ever notice a
   feature already accepted at least once, silently missing the one still
-  being drafted). `nuka tend`'s summary grew a `scanned:` line, printed
-  first, naming every directory that run actually looked at; its `bed:`
-  line now also states how many typed steps are read-only.
+  being drafted).
 - **A failed step's receipt carries the upstream values it read.** Each
   `used` entry on a failed step's receipt now also carries `result`: the
   full validated result of the receipt it cites, not only the id and step
