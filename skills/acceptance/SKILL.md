@@ -221,6 +221,25 @@ it — don't guess, and don't look up the list elsewhere first; stderr is the
 source of truth here and anything written in this file would just go stale
 next to it.
 
+## Keeping records honest over time
+
+A record freezes the feature source and every receipt from the run it
+accepted — but not the contracts behind them. Change a step's `returns`
+after accepting, edit the feature, or delete a step it cites, and the
+record still sits there claiming a green run it can no longer support.
+Nothing about that stops a future run, so `nuka check` never mentions it.
+
+`nuka tend` is what finds it: a frozen result that no longer passes its
+step's current schema, a frozen feature source that no longer matches the
+file, a cited step gone from the vocabulary. Those exit non-zero, so a
+periodic job can act on them.
+
+Run it periodically, not in the loop above — it answers whether the
+vocabulary and its records are healthy, not whether this run can proceed.
+When it reports a stale record, the fix is to run the feature again and
+`nuka accept` it again, or to undo the change that invalidated it. Never
+by editing the record.
+
 ## What not to do
 
 - Don't put an acceptance feature inside the project's regression suite —

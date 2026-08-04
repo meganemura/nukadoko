@@ -102,7 +102,8 @@ delegated to Allure.
 
 Implemented and covered by tests: typed steps, receipts, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, sign-off (`nuka accept`), and two agent skills. Not implemented:
+emitters, sign-off (`nuka accept`), tending (`nuka tend`), and two agent
+skills. Not implemented:
 an AI-assisted glue converter and scenario harvesting — see the
 [roadmap](docs/spec.md#roadmap).
 
@@ -348,11 +349,14 @@ assertion.
 | Checking before running | `nuka check [feature]` |
 | Verifying for real | `nuka run <feature>` |
 | Recording an acceptance | `nuka accept <feature>` |
+| Keeping the vocabulary healthy | `nuka tend [--json]` |
 | Keeping posture | `nuka session list` / `clear`, `--env <name>` |
 | Handing the loop to an agent | `nuka skill path` |
 
 `check` is the cheap static gate; `run` leaves the receipt trail; `accept`
-freezes one green run as a committed record beside its feature.
+freezes one green run as a committed record beside its feature; `tend` is
+the periodic one, and the only one you are meant to *not* run before every
+change.
 
 ## The compat door
 
@@ -472,6 +476,28 @@ access to a document you need, say so rather than assuming.
   change first (above).
 - No test parallelism, sharding, retries, or CI reporting. No HTML
   rendering — that is Allure's job.
+
+## The bed has to be tended
+
+A nukadoko is the fermented rice-bran bed that pickles cucumbers. It is
+alive: tended daily it matures, neglected it dies. That is the claim this
+tool makes about a suite's step definitions — a living culture rather than
+a write-once asset — and it is not only a remark about the name.
+
+`nuka check` asks whether the project can run right now, and is meant to be
+read before every run. `nuka tend` asks the other question: is any of this
+rotting. A sign-off whose frozen result no longer passes its step's current
+schema, so the record is still counted while no longer meaning what it
+says. A `from` declaration nothing exercises. A schema field with no
+description — which reads fine to a person looking at the file and tells
+the agent choosing between two steps nothing at all. None of those stop a
+run, which is exactly why they needed somewhere else to be said: printed
+before every run, they would train everyone to skim past the lines that do
+stop one.
+
+It opens with where the bed is — how much of the vocabulary is typed rather
+than still compat — because that number was previously only visible by
+reading a directory of receipts, which nobody does.
 
 ## Design
 

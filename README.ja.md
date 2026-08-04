@@ -89,7 +89,7 @@ end-to-end の実行には、ブラウザと分単位の時間というコスト
 **Pre-0.1 です。**
 0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
 
-テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
@@ -137,7 +137,7 @@ Node が諦める時点では、CLI がまだ読み込まれていないから�
 
 **すでに cucumber-js のスイートを保守していますか。**
 そのための扉があります。
-import を 1 つ切り替えるだけで既存のスイートがこのハーネスの上で動くようになり、step を昇格させるかどうかは書き換えではなく step ごとの判断になります。
+import を 1 つ切り替えるだけで既存のスイートがこの harness の上で動くようになり、step を昇格させるかどうかは書き換えではなく step ごとの判断になります。
 詳しくは、下の [The compat door](#the-compat-door) を参照してください。
 型付きのパスのどこにも、cucumber-js のスイートが先にあったという前提はありません — まっさらな状態から始めるなら、これは無視して `defineStep` を直接書いてください。
 
@@ -319,10 +319,11 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 | 実行前の検査 | `nuka check [feature]` |
 | 本番の検証 | `nuka run <feature>` |
 | 受け入れの記録 | `nuka accept <feature>` |
+| 語彙を健全に保つ | `nuka tend [--json]` |
 | 態勢の管理 | `nuka session list` / `clear`、`--env <name>` |
 | ループを agent に渡す | `nuka skill path` |
 
-`check` は安価な静的ゲートで、`run` は receipt の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結します。
+`check` は安価な静的ゲートであり、`run` は receipt の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
 ## The compat door
 
@@ -332,7 +333,7 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 この節は、それがある場合のためのものです。
 
 既存の Cucumber + Playwright スイートの移行経路は、import を 1 つ切り替えることです。
-`@cucumber/cucumber` の代わりに `nukadoko/compat` を使い、同じ pattern の構文、hooks、World をそのまま動かしながら、その裏で nukadoko のハーネスが receipt の計測を始めます。
+`@cucumber/cucumber` の代わりに `nukadoko/compat` を使い、同じ pattern の構文、hooks、World をそのまま動かしながら、その裏で nukadoko の harness が receipt の計測を始めます。
 step を `defineStep` に昇格させるかどうかは、そこから先は書き換えではなく step ごとの判断になり、半分だけ昇格したスイートもそのまま通り続けます。
 
 扉はスイートが入ってくる場所であって、留まる場所ではありません。
@@ -430,6 +431,23 @@ access to a document you need, say so rather than assuming.
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - テストの並列実行、シャーディング、リトライ、CI レポーティングはありません。
   HTML のレンダリングもありません(それは Allure の仕事です)。
+
+## The bed has to be tended
+
+**床には手入れが要る**
+
+nukadoko は、きゅうりを漬ける発酵させた米糠の床です。
+それは生きており、毎日手入れをすれば熟成し、放っておけば死にます。
+このツールが、あるスイートの step 定義について主張しているのはまさにそれです — 書いて終わりの資産ではなく、生きた培養菌だということ — そして、これは単に名前についての言い回しにとどまりません。
+
+`nuka check` が問うのは、プロジェクトがいますぐ run できるかであり、あらゆる run の前に読まれることを意図しています。
+`nuka tend` が問うのは別の問い、すなわちこれのどこかが腐りつつあるかです。
+凍結された result がその step の現在のスキーマをもはや通らない sign-off — その記録はいまも数えられ続けながら、もはや自分が述べている内容を言い表していません。
+何にも行使されない `from` 宣言。
+description のないスキーマフィールド — ファイルを見る人にはそれで問題なく読めても、2 つの step のどちらかを選ぶ agent には何も伝えません。
+そのどれも run を止めはしませんが、だからこそどこか他の場所で言われる必要があったのです — あらゆる run の前に出力されていたら、本当に止めるべき行までみんなが読み飛ばすことを覚えてしまうでしょう。
+
+これは、床がいまどこにあるか — 語彙のうちどれだけが、まだ compat のままではなく型付きになっているか — から始まりますが、それは、その数がこれまで receipt のディレクトリを読むことでしか見えず、そんなことをする者は誰もいなかったからです。
 
 ## Design
 
