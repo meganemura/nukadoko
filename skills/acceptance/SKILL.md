@@ -183,6 +183,17 @@ like its own. A green run is no proof the wait sits in the right place —
 the value may just have been supplied by that later step's own wait. Only a
 route skipping that step can show where the wait actually belongs.
 
+What `fn` waits for matters as much as where the wait lives. It can't be
+the thing you're about to observe: when that observation's correct answer
+is sometimes absence, waiting for it to appear means it can never come back
+absent on purpose, because "not there yet" and "not there" look identical
+to the wait. Wait instead for whatever tells you the observation is safe to
+make at all — a loading flag going false, a count leaving `undefined` — and
+only then read the thing you actually care about. And when that read comes
+back absent, return proof the read was valid alongside it, not the absence
+alone: a bare `false` can't tell whoever reads the receipt later whether
+the target really isn't there or the page just wasn't ready to say.
+
 ## Writing the feature
 
 Everything you were able to learn about the ticket goes into the feature
@@ -269,6 +280,31 @@ full validated result of the upstream step it read from, sitting right on
 the receipt that failed. One receipt is usually enough to see what the
 step actually saw and why it didn't hold up — no second receipt.json to
 open and cross-reference by hand.
+
+Read it as one timeline rather than a bag of separate fields: `started_at`,
+`finished_at`, `sections[].at`, `polls[].at`, and
+`evidence.screenshots[].at` all share the same clock, so sorting them
+together turns the receipt into an ordered account of what happened when.
+
+```sh
+jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finished"}]
+  + (.sections // [] | map({at, event: "section:\(.label)"}))
+  + (.polls // [] | map({at, event: "poll:\(.description // "poll")"}))
+  + (.evidence.screenshots // [] | map({at, event: "screenshot:\(.file)"})))
+  | sort_by(.at)[] | "\(.at)  \(.event)"' receipt.json
+```
+
+If an absence claim turns up on that timeline, check whether its own
+moment sits before whatever readiness evidence the step returned alongside
+it. Earlier means the read landed before the page was ready to be read —
+premature, not a state problem to go chase in the app. Don't trust
+`final.png` to show the moment of failure either: it's taken once the step
+has already returned or thrown, during teardown, so compare its `at`
+against `finished_at` rather than the screenshot's contents alone — a gap
+of several seconds between them reads, at a glance, like state that was
+flickering, and it has been misdiagnosed as exactly that. Reach for the
+trace only when the DOM itself is what's in question: `npx playwright
+show-trace <evidence.dir>/trace.zip`.
 
 If that receipt only sharpens a hypothesis rather than confirming it, test
 the hypothesis with `nuka do <step> --use <upstream-receipt-id>` instead of

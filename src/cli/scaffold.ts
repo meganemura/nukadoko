@@ -31,6 +31,11 @@ import type { WritableSink } from "./writable-sink.js";
 // leaves a receipt that cannot say which date it sent, and the answer has
 // to be reconstructed from someone else's error message instead.
 //
+// The absence line right beneath it is the same idea, sharpened by an
+// incident: `visible: false` and `count: 0` erase the difference between
+// "genuinely not there" and "not rendered yet" unless the step returns
+// proof of which one it saw (docs/spec.md "Typed steps").
+//
 // The template omits `pattern`/`patterns` on purpose (this task's spec,
 // decision 2): no pattern means CLI-only vocabulary by default (docs/
 // spec.md "Typed steps") — a human adds a pattern by hand when the step is
@@ -67,6 +72,8 @@ function stepTemplate(name: string): string {
     "    // Not only what later steps cite: also the values this step's own",
     "    // correctness rests on — the date it computed, the id it picked —",
     "    // because a receipt can only be read for what it was given.",
+    "    // If a result can be an absence (false, 0, an empty string), return",
+    "    // proof the read was valid too, not the absence on its own.",
     '    // id: z.string().describe("what this step produced, and what a failure here would be diagnosed from"),',
     "  }),",
     "  run() {",

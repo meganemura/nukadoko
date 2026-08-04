@@ -195,6 +195,30 @@ export default defineStep({
   reconstructed from an error message written by someone else's system.
   This is `observed` and `sections`' own measure-and-keep reasoning
   applied to the one field the step itself fills in.
+- An observation that claims absence — `visible: false`, `count: 0`, an
+  empty string — is ambiguous in exactly the way its presence-claiming
+  counterpart is not: the target may genuinely not be there, or the page
+  may simply not have finished rendering yet, and those two situations
+  produce the identical value on the receipt unless the step says
+  otherwise. A step whose `returns` can carry absence should carry, beside
+  it, whatever proves the read itself was valid — that the page had
+  reached a state where absence was a real answer rather than a symptom of
+  asking too soon. Without that, every hypothesis a reviewer could form
+  from the receipt is equally consistent with it, which is what
+  unfalsifiable means in practice. Presence needs no such companion:
+  `visible: true` is its own proof that the read landed on a rendered
+  page, since neither a hidden nor an unrendered element can produce
+  `true`. That asymmetry — a positive claim vouches for itself, a negative
+  one does not — is the reason to treat the two differently rather than
+  applying one convention to both. It bites hardest exactly where it looks
+  irrelevant: an acceptance criterion phrased "hidden unless the condition
+  holds" is satisfied by the same `false` an unrendered page also
+  produces, so a scenario asserting it can go green while the page never
+  finished loading — green for the wrong reason, indistinguishable from
+  green for the right one without readiness evidence on the receipt. A
+  tool whose purpose is tying acceptance criteria to an execution that
+  either happened or did not cannot treat that as a minor gap; it is the
+  gap.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
 - `rationale` is optional with no default — omitted, `Step.rationale` is
@@ -286,7 +310,25 @@ every future "does this belong on ctx?" question.
   value is what `poll` returns; the `timeout` budget running out first
   throws `PollTimeoutError` instead. Every completed call lands on the receipt's `polls`
   (see "Receipts") with how many attempts it took, how long it waited, and
-  how it ended.
+  how it ended. What `fn` polls for is a contract choice, not an
+  implementation detail: it cannot be the observed target's own presence,
+  because a target whose correct passing state is absence becomes
+  indistinguishable, under that condition, from one that simply has not
+  rendered yet — polling for presence makes it impossible for `fn` to ever
+  return the answer the step is there to give. Poll instead for whatever
+  makes a verdict about the target possible in the first place — a loading
+  flag going false, a count leaving `undefined`, anything the page renders
+  unconditionally once its data has arrived — and read the target itself
+  only once that has resolved. A wait taken on the browser directly
+  instead, through `page.waitForSelector` or `waitForLoadState`, waits the
+  same way but leaves nothing behind: going through `ctx.poll` is what
+  puts `at`, `attempts`, `waited_ms`, and `outcome` on the receipt, which
+  is the only way to tell "resolved on the first attempt, the wait did
+  nothing" apart from "resolved four seconds in" after the fact. That is
+  the same self-reported/measured line the Allure emitter already draws
+  with its `declared:` prefix (see "Allure emitter") — drawn here between
+  a wait the tool measured and one that happened invisibly inside
+  Playwright.
 
 Where a wait belongs is a contract question, not a convenience one. A step
 that writes to a system whose effect lands elsewhere asynchronously is not
