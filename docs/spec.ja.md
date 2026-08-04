@@ -159,7 +159,7 @@ export default defineStep({
 純粋なヘルパーは context のメンバーではなく import です。
 この 1 つの規則が、今後のあらゆる「これは ctx に置くべきか」という問いを決めます。
 
-- `await ctx.page()`(Playwright の Page。初回呼び出しでブラウザが起動し、session の storageState から復元され、設定された baseURL が browser context に配線されるため `page.goto("/path")` はそれを基準に解決されます)
+- `await ctx.page()`(Playwright の Page。初回呼び出しでブラウザが起動し、session の storageState から復元され、設定された baseURL が browser context に渡されるため `page.goto("/path")` はそれを基準に解決されます)
 - `await ctx.request()`(session の cookie を持つ Playwright の APIRequestContext)。
   baseURL はここでは任意です。上の `ctx.page()` と同じです。
   複数のホストへ絶対 URL だけで話すスイートには述べるべき単一の baseURL がなく、nukadoko はこの呼び出しのためだけに意味のない baseURL を config に書かせません。
@@ -179,7 +179,7 @@ export default defineStep({
   `requireEnv` に渡した名前は、その呼び出しが値を見つけた場合も投げた場合も、読み取った順に重複なく receipt の `required_env`(「Receipt」を参照)に記録されます。
   同じ値を `ctx.env` から直接読んだ場合はそこには残りません。
   そちらはプレーンなオブジェクトであり、ライブラリはそこに一切関与しないからです。
-- `ctx.baseURL`(設定された baseURL。自分で URL を組み立てる、まれな場合のためのものです。よくある経路には上記のとおり配線済みです)
+- `ctx.baseURL`(設定された baseURL。自分で URL を組み立てる、まれな場合のためのものです。よくある経路には上記のとおり最初から通してあります)
   `config.baseURL` が未設定のときは `undefined` になります。
   絶対 URL だけのスイートにとってそれは正当な状態であり、エラー状態ではありません。
 - `ctx.resultOf(stepModule)` は、現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
@@ -901,6 +901,13 @@ sign-off は、自分が凍結したコードを言い表さなくなること�
 `tend` の所見はそうではありません: ここにあるものはどれも今日直さなければならないものではなく、もしそれらが毎回の `check` に現れたなら、本当に直すべきだった行までみんなが読み飛ばすことを覚えてしまうでしょう。
 チェックが読む価値のあるものだという主張を中心に据えたツールにとって、ノイズは見た目だけの問題ではありません。
 
+所見を挙げる前に、`tend` はぬか床がいまどこにあるかを述べます: 語彙のうちどれだけが、いまも compat のままではなく型付けされているか、そして型付き step が宣言できることのうち、実際にどれだけが宣言されているか、です。
+これは所見ではなく、exit code にも影響しません — 移行の途中にあるスイートはそれ自体が異常な状態ではなく通常の状態であり、毎回それについて警告すれば、本当に対応が必要な所見を埋もれさせてしまうでしょう。
+
+これが存在する理由は、その情報がすでにそこにありながら誰にも読まれていなかったからです。
+receipt の `world` と `declared` の件数は、スイートが昇格するにつれて確かに縮みますが、それは人が進捗を見て取る手段としては真実であっても無意味です: 誰も、自分がどこまで進んだかを割り出すために receipt のディレクトリを読んだりはしないからです。
+それを一度だけ、ぬか床の健全さそのものを主題とするコマンドの中で述べること — それが、誰もが実際に目にするものにしている当のものです。
+
 `tend` が見るもの、そしてそれぞれがなぜスタイルの問題ではなく腐敗なのか:
 
 - **もはや自分が凍結したコードと一致しない sign-off。** 記録は、自分が受け入れた feature のソースと、その run のすべての receipt を運びます。
@@ -915,6 +922,11 @@ sign-off は、自分が凍結したコードを言い表さなくなること�
   `rationale` はなぜこのように作られているのか、何が却下されたのかを述べており、それは agent がその step を書き換えてよいと決める前に必要とする情報です。
   それが欠けていれば、あらゆる書き換えは根拠を欠いたまま行われます。
 - **どの pattern からも使われていない設定済みの parameter type。** 使われていない設定であり、他のものと同様に報告されます。
+- **support コード側にまだ登録されたままの `defineParameterType`。** それは動き続けており、`config.parameterTypes` がその typed 時代の住まいであって、登録をそちらへ移してもマッチは何も変わりません。
+  これはかつて `nuka check` の warning でしたが、それは分類の誤りでした: スイートに compat が少しでも残っている限り現れ続けるものであり、それは正常な状態であって、毎回の run の前にそれを出力すれば、人々に本当に run を止める行を読み飛ばすことを覚えさせてしまいます。
+- **`secrets.public` または `secrets.redact` のエントリが、どの envFile も定義していないキーを名指ししているもの。** 何にも届いていない、実在する指示です — 自分が記述している対象のファイルから設定がずれてしまっているということです。
+  これも同じ理由で `check` から移されました: この run を実行すべきかどうかは、これによって何も変わらないからです。
+  その隣にある所見は `check` に残っており、対比する価値があります — 値が短すぎて redact されない `redact` エントリと、secret らしく見えるキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味し、それはまさに事前に知っておくべきことだからです。
 
 所見は、他のすべてと同じく `--json` に対応します。
 sign-off の所見は非ゼロの exit code で終了し、定期実行されるジョブがそれに反応できるようにする一方、残りの所見はそうしません、プロジェクトはそれらを抱えたままでいることが許されているからです。
@@ -955,13 +967,19 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
-nuka tend [--json]            what is rotting rather than what is broken:
+nuka tend [--json]            where the bed is, then what is rotting rather
+                              than what is broken: how much of the
+                              vocabulary is typed rather than compat and
+                              how much of it declares what it could, then
                               a sign-off that no longer matches the code it
                               froze (the one finding that exits non-zero),
                               a `from` nothing exercises, a patterned step
                               no feature binds, a schema field with no
                               `.describe()`, a step with no `rationale`, a
-                              configured parameter type no pattern uses
+                              configured parameter type no pattern uses, a
+                              `defineParameterType` still registered from
+                              support code, a secrets entry naming a key no
+                              envFile defines
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
