@@ -22,6 +22,15 @@ import type { WritableSink } from "./writable-sink.js";
 // step that already has a real implementation must never be silently
 // replaced by this template.
 //
+// The `returns` comment deliberately does not frame the field as "what
+// later steps cite" alone (docs/spec.md "Typed steps"): that framing is
+// what a first reader adopts, and it drops every value the step's own
+// correctness depends on but nothing downstream reads — which is exactly
+// the set a receipt gets interrogated for once a run has gone wrong: a
+// step that sends a date nothing cites, computed in the wrong timezone,
+// leaves a receipt that cannot say which date it sent, and the answer has
+// to be reconstructed from someone else's error message instead.
+//
 // The template omits `pattern`/`patterns` on purpose (this task's spec,
 // decision 2): no pattern means CLI-only vocabulary by default (docs/
 // spec.md "Typed steps") — a human adds a pattern by hand when the step is
@@ -55,7 +64,10 @@ function stepTemplate(name: string): string {
     '    // name: z.string().describe("what this value is, in the words a criterion uses"),',
     "  }),",
     "  returns: z.object({",
-    '    // id: z.string().describe("what this step produced, and what later steps cite"),',
+    "    // Not only what later steps cite: also the values this step's own",
+    "    // correctness rests on — the date it computed, the id it picked —",
+    "    // because a receipt can only be read for what it was given.",
+    '    // id: z.string().describe("what this step produced, and what a failure here would be diagnosed from"),',
     "  }),",
     "  run() {",
     `    throw new Error("not implemented: ${name}");`,
