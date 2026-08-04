@@ -72,6 +72,17 @@
           "ja": ["結び付ける", "結び付けられる"]
         }
       ]
+    },
+    {
+      "en": ["partial run", "partial runs"],
+      "ja": "部分実行",
+      "note": "nuka run <feature>:<line> が実行するもの。対語は full run = フル実行。sign-off できるのは後者だけ"
+    },
+    { "en": ["full run"], "ja": "フル実行" },
+    {
+      "en": ["wait", "waits", "waiting", "waited"],
+      "ja": "待ち",
+      "note": "外部システムへの反映が見えるまで待つこと。動詞は 待つ。API 名の poll とは書き分ける(poll は英語のまま)"
     }
   ],
   "keep_english": [
@@ -109,7 +120,11 @@
       "why": "mutates フィールド名と地続きの動詞として常に英語。「状態を mutate する」のように活用させずに使う"
     },
     { "term": "sign-off", "why": "nuka accept が書く記録の呼び名。常にハイフン付きの英語" },
-    { "term": "schema", "why": "zod schema、args / returns の schema と直接対応する" }
+    { "term": "schema", "why": "zod schema、args / returns の schema と直接対応する" },
+    {
+      "term": "poll",
+      "why": "ctx.poll と receipt の polls フィールドに直接対応する API 名。散文の「待つ / 待ち」とは書き分ける —— 待ちという行為の話か、その API の話かを読み手が区別できる必要がある"
+    }
   ],
   "identifiers": {
     "rule": "コード識別子と CLI コマンド名は常に原文のスペルのまま、バッククォート付きで書く",

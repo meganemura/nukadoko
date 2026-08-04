@@ -184,6 +184,17 @@ export default defineStep({
   mutually exclusive producers — see "Chaining steps" for why that limit is
   the point, for how alternatives are resolved, and for what to do when a
   key name is not enough.
+- What `returns` carries decides what a failure can be diagnosed from, so
+  "return what later steps cite" is the wrong rule to design it by. That
+  rule drops every value this step's own correctness depends on but
+  nothing downstream reads — the date it computed, the id it picked, the
+  name it resolved before sending — and those are precisely the values a
+  receipt is interrogated for once a run has gone wrong. Returned, they
+  are on the receipt as validated facts and the question "what did it
+  actually send" has an answer; withheld, the answer has to be
+  reconstructed from an error message written by someone else's system.
+  This is `observed` and `sections`' own measure-and-keep reasoning
+  applied to the one field the step itself fills in.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
 - `rationale` is optional with no default — omitted, `Step.rationale` is
@@ -269,23 +280,51 @@ every future "does this belong on ctx?" question.
   an `await` crossing its boundary mean, and none of that is required to
   answer the question it exists for — where execution stopped, not how
   the block that stopped is shaped.
+- `await ctx.poll(fn, { description, timeout, interval })` — the
+  submit-poll-fetch loop for a state that has been asked for but is not
+  there yet: `fn` returns `undefined` until it is, and its first defined
+  value is what `poll` returns; the `timeout` budget running out first
+  throws `PollTimeoutError` instead. Every completed call lands on the receipt's `polls`
+  (see "Receipts") with how many attempts it took, how long it waited, and
+  how it ended.
+
+Where a wait belongs is a contract question, not a convenience one. A step
+that writes to a system whose effect lands elsewhere asynchronously is not
+finished when the write is accepted; it is finished when the effect is
+visible to whatever the next step will look at, and the wait belongs
+inside that step — the same rule as "a contract says what the step
+demands", read forward instead of backward. Putting it in a later step
+instead appears to work, because that step waits and the scenario passes,
+but the wait is then attached to a path rather than to the operation that
+needed it: another scenario reaching the same state by a route that skips
+that step waits for nothing and fails. What surfaces is one scenario going
+red while its siblings stay green, which reads like a property of that
+scenario and is not one. A green scenario is no evidence that its waits
+are placed correctly — every wait it needed could have been supplied by
+coincidence, further down. Only a route that does not pass through them
+can show where they actually belong.
 
 `page()` and `request()` hand back Playwright's own `Page` and
 `APIRequestContext` rather than types of nukadoko's own. That is a choice
 with a cost, and it is stated as one (see "Out of scope").
 
-Helpers live as imports: `import { poll } from "nukadoko"` gives the
-submit-poll-fetch loop for asynchronous jobs — it needs nothing the
-executor owns, so it is not on `ctx`. `ctx.section` looks like it could be
-one too, but it isn't: it writes into a collector the executor owns and
-resets at each step boundary, the same lifetime `observed` and `used`
-already have, so it belongs on `ctx` by this section's own rule. An
-earlier version of this boundary rule withheld `ctx.section` entirely, on
-the grounds that it would do nothing until a progress-log feature
-recorded named stretches of a run live. That reasoning held for a no-op
-API and missed where the naming actually needed to land: the receipt was
-already the destination, and a step's own execution never needed a live
-log to say which stage it reached — only somewhere to write it down.
+Helpers live as imports, and what decides the boundary is whether the call
+has to reach something the executor owns. `ctx.section` writes into a
+collector the executor owns and resets at each step boundary, the same
+lifetime `observed` and `used` already have, so it is on `ctx` by this
+section's own rule. `poll` was an import for exactly as long as it
+recorded nothing — and it got there by the same mistake, made twice. An
+earlier version of this rule withheld `ctx.section` entirely, on the
+grounds that it would do nothing until a progress-log feature recorded
+named stretches of a run live; `poll`'s own `description` was then
+documented against that same log, which was never built, so the label a
+caller wrote went nowhere at all. Both readings missed where the naming
+needed to land. The receipt was already the destination: a step's
+execution never needed a live log to say which stage it reached, and a
+wait that has already finished needs one even less to say how long it
+took — only somewhere to write it down. A wait that leaves no trace
+cannot be told apart from one that returned on its first attempt, and
+those two call for opposite fixes.
 
 ### Chaining steps
 
@@ -669,6 +708,14 @@ executes the steps in order. One receipt per step; one scenario record
 (feature path, scenario name, ordered receipt ids, per-step status) per
 pickle.
 
+`:12` selects one scenario, which is the iteration path — a feature's full
+run costs every scenario's minutes, and getting one of them right is
+usually what the next few runs are about. It is not a smaller version of
+the same thing: a partial run can never be signed off (see "Sign-off"), so
+a green one is a debugging result and nothing else. `nuka run` says so
+where the line number is given, rather than leaving it for `nuka accept`
+to reveal several runs later, once the road has already been taken.
+
 Steps in one pickle share one context — the World semantics Cucumber users
 expect: a Background that logs in hands its browser and cookies to every
 later step. A failed step skips the rest of the scenario, and skipped steps
@@ -718,6 +765,19 @@ way a pattern capture wins inside a scenario. The receipt ids actually
 drawn from land in this execution's own `used`, so a chain assembled by
 hand across several `do` calls is as traceable afterwards as one a scenario
 drove.
+
+A step that passes under `do` has not thereby been shown to pass under
+`run`. `do` gives every execution its own browser and its own everything
+else; a scenario gives one context to all of its steps, so the second one
+meets whatever the first left behind — already signed in, on a different
+page, a dialog still open. The two questions are different and neither
+answer substitutes for the other: `do` asks whether the step works, `run`
+asks whether it works there. `--session` narrows the gap by carrying
+storageState across `do` calls, which covers login state and nothing else;
+where execution had got to is not in it. This lands hardest on a step
+whose own setup is a no-op the second time it runs, and the fix is in the
+feature rather than in the engine: establish the state once, in the step
+whose name says it does, instead of once per step.
 
 ## Receipts
 
@@ -805,6 +865,21 @@ shape whether the step ran inside a scenario or via `do`.
   has `section`; a compat step has no counterpart on `this`, so `sections`
   is simply omitted for one, the same way `used` is omitted for a typed
   step that never read from the chain.
+- `polls` (present only when non-empty) records every `ctx.poll` call that
+  finished during this execution: its `description` when one was given,
+  how many times the predicate ran, the milliseconds elapsed, and how it
+  ended — `resolved`, `timed_out`, or `failed` when the predicate itself
+  threw. In completion order rather than call order: a nested poll
+  finishes before the one containing it, and only a finished poll has
+  counts to state. A timed-out poll is recorded like any other, since the
+  receipt of the step that failed on that timeout is exactly where the
+  numbers are wanted. Unlike `sections` this does carry timing, because
+  the question it exists for is a timing question: one attempt at 0ms says
+  the condition was already true and the wait was a no-op, forty attempts
+  over 20s says it was genuinely late, and the two look identical from
+  outside the step while calling for opposite fixes. A compat step has no
+  `ctx` to call it on, so `polls` is simply omitted for one, the same way
+  `sections` is.
 - `required_env` (present only when non-empty) lists the names
   `ctx.requireEnv` was called with during this execution, deduplicated, in
   the order first read — the same measured-not-declared shape `used` and
@@ -969,6 +1044,15 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   meaningful loop. It takes the newest green run of that feature and
   freezes it. Runs are identified by feature path, never by id: run ids
   exist for machines reading `nuka run`'s output, not for humans to type.
+- The run it freezes has to cover the whole feature. A run selected with
+  `<feature>:<line>` covered one scenario, so it is not a candidate however
+  green it was — freezing it would leave a record beside a feature most of
+  which that run never reached. The three ways this can come out are
+  different situations for whoever is reading, and are reported as
+  different ones: no run of this feature has ever existed, the last full
+  run was red, or only partial runs exist. A refusal names what it read to
+  decide — which run, when it started, which of its scenarios failed — so
+  the next command is chosen against the record rather than guessed at.
 - It refuses unless the working tree is completely clean, untracked files
   included, and the run it is freezing happened at the current HEAD. The
   record's whole claim is "this scenario was green at commit X"; an
@@ -1311,7 +1395,9 @@ fixes up a dirty tree.
 The npm package is `nukadoko`; the one command it installs is `nuka`.
 
 ```
-nuka run <feature[:line]>     execute scenarios; receipts + allure-results
+nuka run <feature[:line]>     execute scenarios; receipts + allure-results.
+                              :line runs one scenario, for iteration only —
+                              a partial run can never be accepted
 nuka do <step> --args '<json>' [--use <receipt-id>]
                               execute one typed step; receipt to stdout.
                               --use supplies its `from` keys from an
@@ -1370,6 +1456,13 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   context.
 - A sign-off is not a proof that the software is correct. It records that an
   agreed scenario was green at one named commit, and says nothing about today.
+  It does not even claim that same commit would be green now. A defect that
+  depends on when the run happened — a date computed in one timezone and
+  read in another, a boundary the clock crosses — is missing from
+  the record exactly as it was missing from the run, and nukadoko does not
+  re-run a frozen scenario to find out. The honesty is that a record only
+  ever speaks about one execution; the limit is that a whole class of defect
+  is invisible to any single one.
 - **Promoting a step to `defineStep` is one-way.** The migration door's
   promise covers compat assets: switching the import back leaves a plain
   cucumber-js suite. `defineStep` has no import to switch back to. A
