@@ -923,10 +923,35 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
 - 書き込みは追記のみです: 既存の `allure-results/` ディレクトリがクリアされたり置き換えられたりすることは決してありません。
   2 回の `nuka run` の呼び出しを 1 つの Allure launch とみなすか 2 つとみなすかは呼び出し側に委ねられています。
   新しい launch が欲しいユーザーは、自分でそのディレクトリを削除します。
+- `allure-results/` は `nuka run` がまだ実行中でも安全に読めます。
+  各 scenario 自身の result は、その scenario が終わり次第書き込まれます。
+  `categories.json`/`environment.properties` は run の最初、最初の scenario が始まる前に、一度だけ書き込まれます。
+  run の途中でそのディレクトリに対して `allure generate` を実行すると、そこまでに終わった scenario がすべて報告されます。
+  このディレクトリ自身の整合性は、run が完了しているかどうかに何も依存していません。
 - scenario の実行は 1 つの Allure test result に対応します: 各 gherkin の step は 1 つの Allure step になり、各 Before/After フックはそれぞれ独立した fixture(Allure container)になります。
 - Attachment: scenario 自身の trace とスクリーンショット、そして step ごとにその HTTP ログとバリデーション済みの result です。
   それとは別に、step が自分自身について宣言したもの(attachment、link、ログの一行)も出力され、常に `declared:` を接頭辞に付けた名前の下に置かれます。
   すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
+- receipt が存在する step には、合否を問わずすべて、その receipt 全体がそのまま `receipt.json` という attachment として付きます。
+  これはディスクに書き込まれたのと同じオブジェクトです(そこですでに redact 済みなので、ここで 2 度目の redact は行いません)。
+  フィールドごとに分解せず丸ごと添付しているのは意図的なものです: `receipt.json` に後からフィールドが増えても、emitter を変更しなくてもレポートに自動で届きます。
+  下にある個別にマップされたフィールドもそのまま残ります。
+  1 つの事実を知りたいだけの読み手が attachment を開かなくて済むようにするためです。
+  `receipt.json` は、個別のマッピングが書かれていない場合でもレポートを完全に保つ、その受け皿です。
+- step 自身の `sections` と `polls`(「Receipt」を参照)は、その step の下にネストされた 1 本の child step タイムラインにまとめられます。
+  マージは `at` の昇順です。
+  section は、自分のラベルを名前に持つ幅ゼロのマーカーとしてレンダリングされます。
+  poll は自分の開始点から `waited_ms` 後まで幅を持ち、名前は `<description> (<attempts> attempts)` です。
+  こうすることで、1 回の試行で解決した待ちと 40 回かかった待ちを、receipt を開かなくても読み分けられます。
+  所要時間だけでは両者を見分けられず、その回数こそが名前でしか運べない唯一の事実だからです。
+  poll 自身の outcome は child step の status を決めます: `resolved` は passed、`timed_out` は failed(待っていた条件が満たされなかった、つまり step 自身の契約が成立しなかった)、`failed` は broken(poll のコールバック自身が例外を投げた、それは何を待っていたかとは無関係)です。
+  親 step 自身の start/stop の範囲にクランプすることは決してありません。
+  その範囲の外に出た timeline entry は実際に起きたことであり、隠せば読めなくなるだけで、起きなかったことにはなりません。
+- `page_events`(「Receipt」を参照)は、最大で 3 つの parameter として表に出ます: `console errors (observed)`、`page errors (observed)`、`failed requests (observed)` です。
+  それぞれ、少なくとも 1 件記録された種類だけに現れます。
+  こうすることで、すべての entry を全文運んでいる `receipt.json` という attachment を開かなくても、読み手は件数を見られます。
+  収集側が打ち切った種類(「Receipt」の `page_events.truncated` を参照)は、表示件数の隣に真の総数を示します(例えば `100 of 4213`)。
+  表示件数だけでは、実際に起きたことを過少に見せてしまいます。
 - step の parameter は、その宣言と実際に観測されたものを並べて運びます。
   計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
   この 2 つが自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。

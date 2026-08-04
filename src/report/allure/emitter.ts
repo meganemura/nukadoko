@@ -127,23 +127,27 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
-  // `declared.logs` becomes a zero-width child step at the parent's own
-  // start (this task's spec, decision 7) — the same shape the allure facade's
-  // own `logStep` produces, without importing the facade itself (this
-  // emitter drives `ReporterRuntime` directly).
+  // Each child step carries its own `startMs`/`stopMs`/`status` now
+  // (p2-allure-measurement task spec, scope 2 — `MappedChildStep` widened
+  // from `{ name }` alone) — a declared log line still renders exactly as
+  // before (zero-width at the parent's own start, `PASSED`; `mapDeclared`,
+  // map-scenario.ts, produces that shape itself), and a step's own
+  // `sections`/`polls` entries now render with their real duration and
+  // outcome the same way. No `timestampMs` parameter here anymore: every
+  // child step already knows its own moment, where previously all of them
+  // (there was only ever one kind) shared the parent's.
   function writeChildSteps(
     rootUuid: string,
     parentStepUuid: string | null,
     childSteps: readonly MappedChildStep[],
-    timestampMs: number,
   ): void {
     for (const child of childSteps) {
-      const uuid = runtime.startStep(rootUuid, parentStepUuid, { name: child.name, start: timestampMs });
+      const uuid = runtime.startStep(rootUuid, parentStepUuid, { name: child.name, start: child.startMs });
       if (uuid !== undefined) {
         runtime.updateStep(uuid, (s) => {
-          s.status = Status.PASSED;
+          s.status = allureStatus(child.status);
         });
-        runtime.stopStep(uuid, { stop: timestampMs });
+        runtime.stopStep(uuid, { stop: child.stopMs });
       }
     }
   }
@@ -197,7 +201,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           for (const attachment of hook.attachments) {
             writeMappedAttachment(fixtureUuid, null, attachment);
           }
-          writeChildSteps(fixtureUuid, null, hook.childSteps, hook.startMs);
+          writeChildSteps(fixtureUuid, null, hook.childSteps);
           runtime.stopFixture(fixtureUuid, { stop: hook.stopMs });
         }
 
@@ -261,7 +265,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           for (const attachment of step.attachments) {
             writeMappedAttachment(testUuid, stepUuid, attachment);
           }
-          writeChildSteps(testUuid, stepUuid, step.childSteps, step.startMs);
+          writeChildSteps(testUuid, stepUuid, step.childSteps);
           runtime.stopStep(stepUuid, { stop: step.stopMs });
         }
 

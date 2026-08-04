@@ -9,7 +9,7 @@ import type {
   TableRow,
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
-import type { ErrorKind, Receipt } from "../../receipt/types.js";
+import type { ErrorKind, PollRecord, Receipt } from "../../receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
@@ -56,8 +56,18 @@ export interface MappedParameter {
   readonly excluded?: boolean;
 }
 
+/** A child step nested under a mapped step/hook (p2-allure-measurement task
+ * spec, decision: widened from `{ name }` alone) — a declared log line
+ * (`mapDeclared`, always zero-width, `startMs === stopMs`, `"passed"`) or one
+ * entry of a step's own `sections`/`polls` timeline (`mapTimelineChildSteps`,
+ * below), which carry their own real duration and outcome. One shape for
+ * both keeps `writeChildSteps` (emitter.ts) from needing to know which kind
+ * of child step it is rendering. */
 export interface MappedChildStep {
   readonly name: string;
+  readonly startMs: number;
+  readonly stopMs: number;
+  readonly status: MappedStatus;
 }
 
 /** A file-path attachment names its *source* file (emitter.ts resolves it
@@ -367,7 +377,11 @@ interface MappedDeclared {
 
 const EMPTY_DECLARED: MappedDeclared = { attachments: [], childSteps: [], links: [], labels: [], parameters: [] };
 
-function mapDeclared(declared: DeclaredSnapshot | undefined, evidenceDir: string): MappedDeclared {
+function mapDeclared(
+  declared: DeclaredSnapshot | undefined,
+  evidenceDir: string,
+  timestampMs: number,
+): MappedDeclared {
   if (!declared) {
     return EMPTY_DECLARED;
   }
@@ -380,7 +394,17 @@ function mapDeclared(declared: DeclaredSnapshot | undefined, evidenceDir: string
     contentType: contentTypeForFileName(fileName),
     path: joinRelative(evidenceDir, fileName),
   }));
-  const childSteps: MappedChildStep[] = (declared.logs ?? []).map((text) => ({ name: text }));
+  // Zero-width at the caller's own `timestampMs` (the step's own start, or
+  // the hook's own collapsed timestamp) and always `"passed"` — the same
+  // rendering `writeChildSteps` (emitter.ts) produced before `MappedChildStep`
+  // grew `startMs`/`stopMs`/`status` (p2-allure-measurement task spec: a
+  // declared log line's own behavior is not to change).
+  const childSteps: MappedChildStep[] = (declared.logs ?? []).map((text) => ({
+    name: text,
+    startMs: timestampMs,
+    stopMs: timestampMs,
+    status: "passed",
+  }));
   const links: MappedLink[] = (declared.links ?? []).map((link) => ({
     url: link.url,
     name: link.name,
@@ -454,6 +478,93 @@ function resolveHookOutcome(hook: ScenarioHookRecord): Outcome {
   return { status: statusForKind(kind), message: markedMessage(kind, hook.error.message), kind };
 }
 
+// --- sections + polls -> one child-step timeline (p2-allure-measurement
+// task spec, scope 2) ---
+//
+// `PollRecord.outcome` -> `MappedStatus`: this is a different mapping than
+// the existing `allureStatus` helper (emitter.ts) covers — that one goes
+// `MappedStatus -> allure-js's own Status`, not `PollRecord["outcome"] ->
+// MappedStatus` — so it cannot be reused here; this is the "local table"
+// this task's spec allows when the existing helper's own meaning doesn't
+// fit. `"resolved"` is what a poll's caller actually asked for, so
+// `"passed"`. `"timed_out"` means the condition the step waited for was
+// never met — the step is reporting its own contract failed to hold, the
+// same "failed" a step's own kind-classified receipt error gets, never
+// "broken" (this task's spec: "期待した条件が満たされなかった"). `"failed"`
+// means the poll's own `fn` threw, unrelated to whatever it was polling for
+// — the contract layer failing to reach a verdict, "broken", the same
+// bucket `statusForKind`'s own unclassified kinds fall into.
+function pollOutcomeStatus(outcome: PollRecord["outcome"]): MappedStatus {
+  switch (outcome) {
+    case "resolved":
+      return "passed";
+    case "timed_out":
+      return "failed";
+    case "failed":
+      return "broken";
+  }
+}
+
+interface TimelineEntry {
+  /** The original ISO 8601 string this entry's own `at` sorts by — kept
+   * alongside the already-built `childStep` rather than re-derived from its
+   * `startMs`, since a poll's own `startMs` is what `PollRecord.at` parses to
+   * (verified in that field's own doc comment: "this poll's own start") and
+   * comparing the source strings directly is what this task's spec asks for
+   * ("両方 ISO 8601 なので比較は素直"). */
+  readonly at: string;
+  readonly childStep: MappedChildStep;
+}
+
+/** One step's own `sections` and `polls`, merged into one child-step
+ * timeline in ascending `at` order (p2-allure-measurement task spec, scope
+ * 2) — a section is a zero-width marker at the moment `ctx.section` was
+ * called; a poll spans its own `at` through `at + waited_ms`, its `attempts`
+ * folded into the name because that count is the one fact only the name can
+ * carry here (`attempts: 1` means the wait was a no-op; `40` means the
+ * opposite fix is needed, and duration alone can't tell those apart).
+ * Deliberately never clamped to the parent step's own start/stop: a receipt
+ * whose own `sections`/`polls` timeline runs outside its step's measured
+ * window is a real anomaly, not something to hide by clipping it. */
+function mapTimelineChildSteps(receipt: Receipt): MappedChildStep[] {
+  const entries: TimelineEntry[] = [];
+  for (const section of receipt.sections ?? []) {
+    const at = Date.parse(section.at);
+    entries.push({ at: section.at, childStep: { name: section.label, startMs: at, stopMs: at, status: "passed" } });
+  }
+  for (const poll of receipt.polls ?? []) {
+    const startMs = Date.parse(poll.at);
+    entries.push({
+      at: poll.at,
+      childStep: {
+        name: `${poll.description ?? "poll"} (${poll.attempts} attempts)`,
+        startMs,
+        stopMs: startMs + poll.waited_ms,
+        status: pollOutcomeStatus(poll.outcome),
+      },
+    });
+  }
+  // `Array.prototype.sort` is stable, so two entries that share the exact
+  // same instant keep the order they were pushed in above (a section before
+  // a poll recorded at that same millisecond).
+  entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return entries.map((entry) => entry.childStep);
+}
+
+/** `page_events`'s three categories as step parameters (p2-allure-measurement
+ * task spec, scope 3) — visible without opening the `receipt.json` attachment
+ * (scope 1) that already carries the same data in full. A category with no
+ * entries is omitted, never shown as `0` (this task's spec). A truncated
+ * category (`page_events.truncated.<category>` present) reports the *true*
+ * total beside the shown count (`"100 of 4213"`) — the shown count alone
+ * would understate what actually happened. */
+function pageEventCount(entries: readonly unknown[] | undefined, truncatedTotal: number | undefined): string | undefined {
+  if (!entries || entries.length === 0) {
+    return undefined;
+  }
+  return truncatedTotal !== undefined ? `${entries.length} of ${truncatedTotal}` : String(entries.length);
+}
+
 // --- steps ---
 
 interface StepMapping {
@@ -494,6 +605,7 @@ function mapSteps(
     const parameters: MappedParameter[] = [];
     const attachments: MappedAttachment[] = [];
     let declared: MappedDeclared = EMPTY_DECLARED;
+    let timelineChildSteps: MappedChildStep[] = [];
 
     if (receipt) {
       parameters.push({ name: "receipt", value: receipt.receipt_id });
@@ -517,6 +629,44 @@ function mapSteps(
       if (receipt.required_env && receipt.required_env.length > 0) {
         parameters.push({ name: "required env", value: receipt.required_env.join(", ") });
       }
+      if (receipt.page_events) {
+        const consoleErrors = pageEventCount(
+          receipt.page_events.console_errors,
+          receipt.page_events.truncated?.console_errors,
+        );
+        if (consoleErrors !== undefined) {
+          parameters.push({ name: "console errors (observed)", value: consoleErrors });
+        }
+        const pageErrors = pageEventCount(receipt.page_events.page_errors, receipt.page_events.truncated?.page_errors);
+        if (pageErrors !== undefined) {
+          parameters.push({ name: "page errors (observed)", value: pageErrors });
+        }
+        const failedRequests = pageEventCount(
+          receipt.page_events.failed_requests,
+          receipt.page_events.truncated?.failed_requests,
+        );
+        if (failedRequests !== undefined) {
+          parameters.push({ name: "failed requests (observed)", value: failedRequests });
+        }
+      }
+
+      // The whole receipt, verbatim, as one JSON attachment (p2-allure-
+      // measurement task spec, scope 1) — every step whose receipt exists,
+      // success or failure alike, never only the fields this module happens
+      // to map individually below. Already redacted before it ever reached
+      // disk (write-receipt.ts's own callers), so no second redaction pass
+      // belongs here; this is the same object `readReceiptsForRecord`
+      // (emitter.ts) read back. The point is durability against drift: a new
+      // receipt field reaches this attachment automatically, with no emitter
+      // change required, where the individually-mapped fields below need one
+      // every time.
+      attachments.push({
+        kind: "buffer",
+        name: "receipt.json",
+        contentType: "application/json",
+        content: JSON.stringify(receipt, null, 2),
+        fileExtension: ".json",
+      });
 
       if (receipt.status === "ok" && receipt.result !== null) {
         attachments.push({
@@ -556,8 +706,9 @@ function mapSteps(
         });
       }
 
-      declared = mapDeclared(receipt.declared, receipt.evidence.dir);
+      declared = mapDeclared(receipt.declared, receipt.evidence.dir, startMs);
       attachments.push(...declared.attachments);
+      timelineChildSteps = mapTimelineChildSteps(receipt);
     }
 
     // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
@@ -578,7 +729,10 @@ function mapSteps(
         stopMs,
         parameters,
         attachments,
-        childSteps: declared.childSteps,
+        // Declared log lines first (unchanged position and rendering), the
+        // step's own sections/polls timeline after (this task's spec, scope
+        // 2) — additive, never reordering what was already there.
+        childSteps: [...declared.childSteps, ...timelineChildSteps],
       },
       declaredLinks: declared.links,
       declaredLabels: declared.labels,
@@ -607,7 +761,7 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
     // `"after_step"` alike (t7-compat-status-afterstep task spec) — to its
     // `finished_at`, both zero-width.
     const timestampMs = hook.type === "before" ? scenarioStartMs : scenarioStopMs;
-    const declared = mapDeclared(hook.declared, record.evidence.dir);
+    const declared = mapDeclared(hook.declared, record.evidence.dir, timestampMs);
     // `"after_step"` folds onto Allure's own `"after"` fixture type (this
     // task's spec, item 2-6 — see `MappedHook.type`'s own comment for why);
     // the step it ran after is named into the fixture instead, since that is

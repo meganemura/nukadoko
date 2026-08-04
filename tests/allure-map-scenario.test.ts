@@ -455,7 +455,7 @@ describe("mapScenario: declared attachments/links/labels/logs", () => {
     expect(mapped.test.labels).toContainEqual({ name: "custom", value: "v" });
   });
 
-  it("turns declared.logs into zero-width child steps", () => {
+  it("turns declared.logs into zero-width, passed child steps (p2-allure-measurement: unchanged regardless of MappedChildStep's own widened shape)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({
@@ -474,7 +474,10 @@ describe("mapScenario: declared attachments/links/labels/logs", () => {
       posixPath: "features/checkout.feature",
     });
 
-    expect(mapped.steps[0]!.childSteps).toEqual([{ name: "hello from glue" }]);
+    const stepStartMs = Date.parse(receipt.started_at);
+    expect(mapped.steps[0]!.childSteps).toEqual([
+      { name: "hello from glue", startMs: stepStartMs, stopMs: stepStartMs, status: "passed" },
+    ]);
   });
 
   it("does the same for a hook's own declared data, sourced from the scenario's own evidence.dir", () => {
@@ -501,7 +504,10 @@ describe("mapScenario: declared attachments/links/labels/logs", () => {
       contentType: "text/plain",
       path: ".nukadoko/scenarios/scn-1/hook-file.txt",
     });
-    expect(mapped.hooks[0]!.childSteps).toEqual([{ name: "hook log" }]);
+    const hookTimestampMs = Date.parse(record.started_at);
+    expect(mapped.hooks[0]!.childSteps).toEqual([
+      { name: "hook log", startMs: hookTimestampMs, stopMs: hookTimestampMs, status: "passed" },
+    ]);
     expect(mapped.test.links).toContainEqual({ url: "https://x/1", name: undefined, type: undefined });
   });
 });
@@ -802,5 +808,290 @@ describe("mapScenario: declared parameters", () => {
 
     const names = mapped.test.parameters.map((p) => p.name);
     expect(names).toEqual(["role", "declared-only", "environment", "target_version"]);
+  });
+});
+
+// --- p2-allure-measurement task spec: sections + polls timeline, page_events
+// parameters, and the full-receipt attachment ---
+
+describe("mapScenario: sections + polls merged into one child-step timeline", () => {
+  it("merges section and poll entries in ascending `at` order, regardless of each array's own order", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      sections: [
+        { label: "C", at: "2026-08-01T00:00:00.300Z" },
+        { label: "A", at: "2026-08-01T00:00:00.100Z" },
+      ],
+      polls: [
+        { description: "D", at: "2026-08-01T00:00:00.400Z", attempts: 1, waited_ms: 0, outcome: "resolved" },
+        { description: "B", at: "2026-08-01T00:00:00.200Z", attempts: 2, waited_ms: 50, outcome: "resolved" },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual([
+      "A",
+      "B (2 attempts)",
+      "C",
+      "D (1 attempts)",
+    ]);
+  });
+
+  it("keeps declared log child steps first, ahead of the sections/polls timeline", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      declared: { logs: ["from glue"] },
+      sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["from glue", "reached checkout"]);
+  });
+
+  it("gives a section a zero-width marker at its own `at`, status passed", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const at = Date.parse("2026-08-01T00:00:00.100Z");
+    expect(mapped.steps[0]!.childSteps).toEqual([{ name: "reached checkout", startMs: at, stopMs: at, status: "passed" }]);
+  });
+});
+
+describe("mapScenario: poll outcome -> status/startMs/stopMs, all three outcomes", () => {
+  it("maps resolved/timed_out/failed to passed/failed/broken with startMs = at and stopMs = at + waited_ms", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      polls: [
+        { description: "r", at: "2026-08-01T00:00:00.000Z", attempts: 3, waited_ms: 120, outcome: "resolved" },
+        { description: "t", at: "2026-08-01T00:00:01.000Z", attempts: 40, waited_ms: 20000, outcome: "timed_out" },
+        { description: "f", at: "2026-08-01T00:00:02.000Z", attempts: 5, waited_ms: 10, outcome: "failed" },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const [resolved, timedOut, failed] = mapped.steps[0]!.childSteps;
+    const resolvedAt = Date.parse("2026-08-01T00:00:00.000Z");
+    const timedOutAt = Date.parse("2026-08-01T00:00:01.000Z");
+    const failedAt = Date.parse("2026-08-01T00:00:02.000Z");
+
+    expect(resolved).toEqual({ name: "r (3 attempts)", startMs: resolvedAt, stopMs: resolvedAt + 120, status: "passed" });
+    expect(timedOut).toEqual({
+      name: "t (40 attempts)",
+      startMs: timedOutAt,
+      stopMs: timedOutAt + 20000,
+      status: "failed",
+    });
+    expect(failed).toEqual({ name: "f (5 attempts)", startMs: failedAt, stopMs: failedAt + 10, status: "broken" });
+  });
+
+  it("falls back to the bare name 'poll' when no description was given", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      polls: [{ at: "2026-08-01T00:00:00.000Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps[0]!.name).toBe("poll (1 attempts)");
+  });
+
+  it("never clamps a timeline entry to the parent step's own start/stop range", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      started_at: "2026-08-01T00:00:01.000Z",
+      finished_at: "2026-08-01T00:00:01.500Z",
+      // Outside the receipt's own started_at/finished_at window: a real
+      // anomaly this task's spec says to report as-is, not clip.
+      sections: [{ label: "before the step even started", at: "2026-08-01T00:00:00.000Z" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const sectionAt = Date.parse("2026-08-01T00:00:00.000Z");
+    const stepStartMs = Date.parse(receipt.started_at);
+    expect(sectionAt).toBeLessThan(stepStartMs);
+    expect(mapped.steps[0]!.childSteps[0]!.startMs).toBe(sectionAt);
+  });
+});
+
+describe("mapScenario: page_events as step parameters", () => {
+  function consoleErrorEntry(index: number) {
+    return {
+      text: `error ${index}`,
+      location: { url: "https://example/app.js", lineNumber: 1, columnNumber: 1 },
+      at: "2026-08-01T00:00:00.100Z",
+    };
+  }
+
+  it("shows only the non-empty categories, each as an (observed) parameter", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      page_events: { console_errors: [consoleErrorEntry(1)] },
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const params = mapped.steps[0]!.parameters;
+    expect(params).toContainEqual({ name: "console errors (observed)", value: "1" });
+    expect(params.some((p) => p.name === "page errors (observed)")).toBe(false);
+    expect(params.some((p) => p.name === "failed requests (observed)")).toBe(false);
+  });
+
+  it("reports the true total, not the shown count, once a category was truncated", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const shown = Array.from({ length: 100 }, (_, i) => consoleErrorEntry(i));
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      page_events: { console_errors: shown, truncated: { console_errors: 4213 } },
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.parameters).toContainEqual({ name: "console errors (observed)", value: "100 of 4213" });
+  });
+});
+
+describe("mapScenario: the whole receipt as a receipt.json attachment", () => {
+  it("attaches it to a passed step, verbatim", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({ status: "ok", result: { ok: true } });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.attachments).toContainEqual({
+      kind: "buffer",
+      name: "receipt.json",
+      contentType: "application/json",
+      content: JSON.stringify(receipt, null, 2),
+      fileExtension: ".json",
+    });
+  });
+
+  it("attaches it to a failed step just the same", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({ status: "failed", error: { message: "it broke", kind: "step_error" } });
+    delete (receipt as { result?: unknown }).result;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", receipt: "rcpt-1" };
+    const record = baseRecord({ status: "failed", steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.attachments).toContainEqual({
+      kind: "buffer",
+      name: "receipt.json",
+      contentType: "application/json",
+      content: JSON.stringify(receipt, null, 2),
+      fileExtension: ".json",
+    });
   });
 });

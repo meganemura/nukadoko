@@ -1295,6 +1295,13 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   cleared or replaced. Whether two `nuka run` invocations count as one
   Allure launch or two is left to the caller; a user who wants a fresh
   launch removes the directory themselves.
+- `allure-results/` is safe to read while `nuka run` is still going: each
+  scenario's own result is written as soon as that scenario finishes, and
+  `categories.json`/`environment.properties` are written once, at the very
+  start of the run, before the first scenario starts. Running `allure
+  generate` against that directory mid-run reports every scenario that has
+  finished so far; nothing about the directory's own consistency depends on
+  the run having completed.
 - A scenario run maps to one Allure test result: each gherkin step becomes
   an Allure step, and each Before/After hook becomes its own fixture
   (Allure container).
@@ -1304,6 +1311,38 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   under a name prefixed `declared:`; that prefix is the one place where
   provenance (measured by nukadoko vs. self-reported by the step) survives
   once everything is sitting in the same result file.
+- Every step whose receipt exists, passing or failing alike, also gets that
+  whole receipt attached verbatim, as `receipt.json`. It is the same object
+  that reached disk (already redacted there, so nothing here redacts it a
+  second time), attached whole rather than picked apart field by field, on
+  purpose: a field added to `receipt.json` later shows up in the report on
+  its own, with no emitter change needed to carry it there. The individually
+  mapped fields below stay too, since a reader who wants one fact should not
+  have to open an attachment to get it; `receipt.json` is the fallback that
+  keeps the report complete even where an individual mapping was never
+  written.
+- A step's own `sections` and `polls` (see Receipts) become one child-step
+  timeline nested under that step, merged in ascending `at` order. A
+  section renders as a zero-width marker named after its own label. A poll
+  spans its own start through `waited_ms` later, named `<description>
+  (<attempts> attempts)`, so a wait that resolved in one attempt reads
+  differently from one that took forty without opening the receipt: the
+  duration alone cannot tell those two apart, and the count is the one fact
+  only the name can carry here. A poll's own outcome sets the child step's
+  status: `resolved` is passed, `timed_out` is failed (the condition it
+  waited for was never met, the step's own contract not holding), `failed`
+  is broken (the poll's callback itself threw, unrelated to whatever it was
+  waiting for). Never clamped to the parent step's own start/stop range: a
+  timeline entry outside that range already happened, and hiding it would
+  make it unreadable rather than making it not true.
+- `page_events` (see Receipts) surfaces as up to three more parameters,
+  `console errors (observed)`, `page errors (observed)`, `failed requests
+  (observed)`, one per category that recorded at least one entry, so a
+  reader sees the count without opening the `receipt.json` attachment that
+  already carries every entry in full. A category the collector truncated
+  (see Receipts, `page_events.truncated`) reports its true total beside the
+  shown count, e.g. `100 of 4213`: the shown count alone would understate
+  what actually happened.
 - A step's parameters carry its declaration and what was actually observed
   side by side: `mutates (declared)` next to the measured `http reads
   (observed)` / `http writes (observed)` (and, for a compat step, `world

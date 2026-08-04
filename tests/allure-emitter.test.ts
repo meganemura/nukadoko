@@ -198,7 +198,7 @@ describe("createAllureEmitter", () => {
       expect(step.parameters).toContainEqual({ name: "receipt", value: "rcpt-1" });
       expect(step.parameters).toContainEqual({ name: "mutates (declared)", value: "true" });
       const attachmentNames = step.attachments.map((a) => a.name).sort();
-      expect(attachmentNames).toEqual(["declared: note.txt", "http log", "result"]);
+      expect(attachmentNames).toEqual(["declared: note.txt", "http log", "receipt.json", "result"]);
 
       expect(test.attachments!.map((a) => a.name).sort()).toEqual(["shot1.png", "trace"]);
     });

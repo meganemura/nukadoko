@@ -9,6 +9,20 @@ just until 0.1.
 
 ### Added
 
+- **The Allure report carries what nukadoko measured.** Three things
+  nukadoko had been recording never reached the report at all. Each step's
+  own receipt is now attached whole as `receipt.json`, so a field the
+  receipt gains later arrives without a second mapping to keep in sync.
+  `sections` and `polls` merge by their absolute timestamps into a
+  child-step timeline under the step they belong to, which is what those
+  `at` fields were added for: a poll renders with its real duration and its
+  own outcome, and its name carries the attempt count, because one attempt
+  and forty attempts ask for opposite fixes and nothing else in the report
+  tells them apart. `page_events` counts appear as parameters, so a step
+  that passed while the page logged three console errors says so without
+  anyone opening an attachment, and a truncated category reads `100 of
+  4213` rather than the number it happened to keep.
+
 - **A receipt now records what the page itself said.** Console errors,
   uncaught page errors, and failed requests land on the step's own receipt
   under `page_events`, so a step that passed while the page threw three
