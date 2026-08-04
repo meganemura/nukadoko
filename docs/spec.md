@@ -1485,10 +1485,11 @@ The npm package is `nukadoko`; the one command it installs is `nuka`.
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results.
                               :line runs one scenario, for iteration only —
                               a partial run can never be accepted
-nuka do <step> --args '<json>' [--use <receipt-id>]
+nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               execute one typed step; receipt to stdout.
-                              --use supplies its `from` keys from an
-                              earlier execution's result
+                              --args is required unless --use supplies
+                              every key; --use fills its `from` keys
+                              from an earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, and
                               where each chained args key comes from

@@ -9,6 +9,14 @@ just until 0.1.
 
 ### Changed
 
+- **`nuka do --args` is optional once `--use` is given.** A step whose every
+  argument arrives via `from` used to still demand `--args '{}'` on the
+  command line — ritual, not a real requirement, once `--use` already says
+  "arguments come from the chain". `--args` stays required the rest of the
+  time: the exemption only fires when `--use` is present, so a bare `nuka do
+  <step>` (neither flag, likely a typo) still fails fast with a message
+  naming both flags instead of parsing and only failing later at args
+  validation.
 - **`nuka tend`'s summary is three lines, not two.** A `scanned:` line comes
   first, naming every directory that run actually looked at — a finding that
   turns out to be wrong is unreadable without knowing what produced it — and

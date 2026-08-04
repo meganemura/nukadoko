@@ -74,7 +74,12 @@ interface DescribeArgs {
 
 interface DoArgs {
   name: string;
-  args: string;
+  /** Optional only when `--use` is also given (fb4-args-optional task
+   * spec) — `doCommand`'s own `.check()` below enforces that at least one
+   * of the two is present; the handler defaults a missing `args` to
+   * `"{}"` so `--use`'s `from` injection (do.ts, execution phase) still has
+   * an object to fill. */
+  args?: string;
   session?: string;
   env?: string;
   /** `--use <receipt-id>` (repeatable, m6c-do-use task spec) — yargs'
@@ -227,8 +232,8 @@ export async function runCli(
         })
         .option("args", {
           type: "string",
-          demandOption: true,
-          describe: "step arguments as a JSON object",
+          describe:
+            "step arguments as a JSON object (may be omitted only when --use supplies every key)",
         })
         .option("session", {
           type: "string",
@@ -243,13 +248,41 @@ export async function runCli(
           array: true,
           describe:
             "receipt id whose result fills this step's `from` keys (repeatable; --args still wins for a key it also sets)",
+        })
+        // `--args` lost its `demandOption` (fb4-args-optional task spec):
+        // once `--use` is given, "arguments come from the chain" is already
+        // stated, so making the caller also write `--args '{}'` for a step
+        // every key of which `from` fills is pure ritual. This `.check()`
+        // is what still refuses the case that matters — neither flag given
+        // — kept in the same yargs layer `demandOption` used to occupy
+        // (not moved into do.ts) so a bad invocation still fails before any
+        // receipt-writing setup runs, exactly as it did before.
+        //
+        // `--args` is deliberately not made unconditionally optional: doing
+        // so would let a typo'd `nuka do <step>` (missing `--args`
+        // entirely, `--use` also forgotten) parse successfully and only
+        // fail later at args-schema validation, deep inside the execution
+        // phase, instead of failing fast here. `--use` is the one signal
+        // that specifically means "arguments come from the chain instead",
+        // so only its presence earns the exemption.
+        .check((checkArgs) => {
+          const useValues = checkArgs.use as string[] | undefined;
+          if (checkArgs.args === undefined && (useValues === undefined || useValues.length === 0)) {
+            throw new Error("--args is required unless --use supplies this step's arguments");
+          }
+          return true;
         }) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       if (argsFailed) return;
       exitCode = await runDo({
         rootDir,
         name: args.name,
-        argsJson: args.args,
+        // `--args`'s own `.check()` above already refused this when both
+        // it and `--use` are absent, so `??` here only ever fires when
+        // `--use` supplies this step's arguments (fb4-args-optional task
+        // spec) — `"{}"` gives do.ts's `from` injection (execution phase)
+        // an object to fill.
+        argsJson: args.args ?? "{}",
         session: args.session ?? null,
         env: args.env ?? null,
         use: args.use ?? [],

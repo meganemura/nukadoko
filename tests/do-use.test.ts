@@ -223,6 +223,44 @@ describe("nuka do --use", () => {
     expect(archiveStderr.text()).toContain("create-owner");
   });
 
+  it("--args may be omitted entirely when --use fills every key (fb4-args-optional task spec)", async () => {
+    const createStdout = createCaptureSink();
+    await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
+      rootDir,
+      stdout: createStdout,
+      stderr: createCaptureSink(),
+    });
+    const createReceipt = JSON.parse(createStdout.text());
+
+    const archiveStdout = createCaptureSink();
+    const archiveStderr = createCaptureSink();
+    const exitCode = await runCli(["do", "archive-project", "--use", createReceipt.receipt_id], {
+      rootDir,
+      stdout: archiveStdout,
+      stderr: archiveStderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(archiveStderr.text()).toBe("");
+    const archiveReceipt = JSON.parse(archiveStdout.text());
+    expect(archiveReceipt.status).toBe("ok");
+    // No --args at all means the default is `{}`, so every key on this
+    // receipt's own `args` came from `--use`'s `from` injection alone.
+    expect(archiveReceipt.args).toEqual({ projectId: "p_acme" });
+    expect(archiveReceipt.used).toEqual([{ receipt: createReceipt.receipt_id, step: "create-project" }]);
+  });
+
+  it("neither --args nor --use: refused before any receipt is written, naming both flags", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["do", "archive-project"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain("--args");
+    expect(stderr.text()).toContain("--use");
+  });
+
   it("an unknown receipt id fails setup", async () => {
     const archiveStdout = createCaptureSink();
     const archiveStderr = createCaptureSink();
