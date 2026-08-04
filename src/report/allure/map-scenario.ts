@@ -543,12 +543,16 @@ function mapSteps(
           path: joinRelative(receipt.evidence.dir, receipt.evidence.trace),
         });
       }
+      // `screenshot.at` is never surfaced here (fb4-evidence-time task spec,
+      // scope: "at は Allure には出さない") — an attachment has no field to
+      // put a timestamp on, so `file` (the only part Allure can place) is
+      // all this mapping carries forward.
       for (const screenshot of receipt.evidence.screenshots) {
         attachments.push({
           kind: "path",
-          name: screenshot,
+          name: screenshot.file,
           contentType: "image/png",
-          path: joinRelative(receipt.evidence.dir, screenshot),
+          path: joinRelative(receipt.evidence.dir, screenshot.file),
         });
       }
 
@@ -742,9 +746,9 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
   for (const screenshot of record.evidence.screenshots) {
     testAttachments.push({
       kind: "path",
-      name: screenshot,
+      name: screenshot.file,
       contentType: "image/png",
-      path: joinRelative(record.evidence.dir, screenshot),
+      path: joinRelative(record.evidence.dir, screenshot.file),
     });
   }
 

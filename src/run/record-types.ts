@@ -62,7 +62,7 @@
 // either field.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
-import type { ErrorKind } from "../receipt/types.js";
+import type { ErrorKind, ScreenshotEntry } from "../receipt/types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
@@ -107,8 +107,11 @@ export interface ScenarioEvidence {
   readonly dir: string;
   /** Present only when a browser was used anywhere in the scenario. */
   readonly trace?: string;
-  /** Screenshot file names actually written; empty when no browser was used. */
-  readonly screenshots: readonly string[];
+  /** Screenshots actually written; empty when no browser was used. Same
+   * shape as `EvidenceMeta.screenshots` (src/receipt/types.ts, fb4-evidence-
+   * time task spec, item 2) — at most one entry, `final.png`, with its own
+   * `at`. */
+  readonly screenshots: readonly ScreenshotEntry[];
 }
 
 export interface ScenarioRecord {

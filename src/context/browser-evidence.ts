@@ -8,17 +8,32 @@ import {
   type LaunchOptions,
   type Page,
 } from "playwright";
+import type { ScreenshotEntry } from "../receipt/types.js";
 import type { StorageState } from "../session/storage-state.js";
 import type { ObservedCollector } from "./observed.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
 // calls `ctx.page()` — launch chromium, trace the whole browser context,
-// and capture screenshot(s) at the end — kept separate from
+// and capture a screenshot at the end — kept separate from
 // context/create-context.ts so that module isn't also responsible for
 // Playwright's specific launch/newContext/tracing/newPage lifecycle and its
 // mirrored teardown. `finalize` is never reachable from a step's `run`: only
 // create-context.ts's `dispose` (executor-only) calls it, after `run` has
 // already returned or thrown.
+//
+// `finalize` takes no `status` argument (fb4-evidence-time task spec, item
+// 1) — it used to write the same screenshot buffer a second time, under a
+// second name, whenever `status === "failed"`. That second file carried no
+// information `receipt.status` didn't already carry, and because `finalize`
+// only ever runs after `run` has returned or thrown, it could be seconds
+// stale relative to the failure it was named for — a real run once measured
+// an ~8s gap, leaving `status: "failed"` sitting next to a screenshot that
+// showed the target present, and that pairing was read as "state is
+// flickering" when it was actually "these two facts are 8 seconds apart and
+// nothing said so". One screenshot, always named `final.png`, with its own
+// `at` (see `ScreenshotEntry`, src/receipt/types.ts) is what replaces it:
+// the timestamp is the information a second file was standing in for
+// without ever stating it.
 //
 // The browser context's own `request` events are also tallied into
 // `observed` (this task's spec, scope item 2): every request the page
@@ -78,11 +93,11 @@ export interface BrowserEvidenceHandle {
    * `undefined` here means create-context.ts's `dispose` leaves the
    * existing session file untouched). */
   collectStorageState(): Promise<StorageState | undefined>;
-  /** Stops tracing, saves trace.zip, captures screenshot(s), and closes the
-   * browser. Returns the screenshot file names actually written (best
-   * effort: a screenshot failure here must never mask the step's real
-   * outcome, so it is swallowed rather than thrown). */
-  finalize(status: "ok" | "failed"): Promise<string[]>;
+  /** Stops tracing, saves trace.zip, captures the final screenshot, and
+   * closes the browser. Returns the screenshot(s) actually written — at
+   * most one, `final.png` (best effort: a screenshot failure here must never
+   * mask the step's real outcome, so it is swallowed rather than thrown). */
+  finalize(): Promise<ScreenshotEntry[]>;
 }
 
 export async function launchBrowserWithTracing(
@@ -109,19 +124,16 @@ export async function launchBrowserWithTracing(
     }
   }
 
-  async function finalize(status: "ok" | "failed"): Promise<string[]> {
-    const screenshots: string[] = [];
+  async function finalize(): Promise<ScreenshotEntry[]> {
+    const screenshots: ScreenshotEntry[] = [];
     try {
       const buffer = await page.screenshot();
+      // Taken right when the screenshot itself resolved (this file's own
+      // header) — not after the write below, which measures disk I/O rather
+      // than the moment the page was actually captured.
+      const at = new Date().toISOString();
       await writeFile(path.join(options.evidenceDir, "final.png"), buffer);
-      screenshots.push("final.png");
-      // "final.png" is always saved; on failure it is additionally saved
-      // again as "failure.png" so a failed receipt's evidence is easy to
-      // spot without opening every screenshot to find the relevant one.
-      if (status === "failed") {
-        await writeFile(path.join(options.evidenceDir, "failure.png"), buffer);
-        screenshots.push("failure.png");
-      }
+      screenshots.push({ file: "final.png", at });
     } catch {
       // The page may already be closed or otherwise unusable after a failed
       // run; losing a screenshot is not a reason to also lose the receipt.

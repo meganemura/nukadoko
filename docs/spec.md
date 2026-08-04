@@ -803,7 +803,7 @@ shape whether the step ran inside a scenario or via `do`.
   "evidence": {
     "dir": ".nukadoko/receipts/rcpt-20260801-143022-a1b2",
     "trace": "trace.zip",
-    "screenshots": ["final.png"],
+    "screenshots": [{ "file": "final.png", "at": "..." }],
     "http": "http.jsonl"
   }
 }
@@ -827,6 +827,17 @@ shape whether the step ran inside a scenario or via `do`.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `ctx.request()`
   call logged to http.jsonl, the receipt itself as the primary record.
+- `evidence.screenshots` is at most one entry, `{ "file": "final.png", "at":
+  "..." }` — a browser-using execution's evidence used to be two files, the
+  same buffer saved under a second name whenever the step failed. That cost
+  nothing to write but implied something the tool never measured: that a
+  "failure" screenshot exists as a distinct fact from the last one taken. It
+  never was — the screenshot only ever runs once, after `run` has already
+  returned or thrown, so that second copy could already be stale relative to
+  the failure it was named for. `at` (ISO 8601, the same format
+  `started_at`/`finished_at` use) is what the second file was standing in
+  for without ever stating it, and it says the real thing: how long after
+  this execution's own timeline the screenshot was actually taken.
 - `observed` counts the network calls the tool itself saw the execution
   make, through `ctx.request()` and the page alike; non-GET/HEAD counts as
   a write — HTTP method as a proxy for write semantics, not semantics
@@ -866,35 +877,50 @@ shape whether the step ran inside a scenario or via `do`.
   means this field can only carry what the upstream step's own `returns`
   schema kept in the first place: a `returns` that dropped a value drops it
   from here too.
-- `sections` (present only when non-empty) lists the labels `ctx.section`
-  was called with, in call order. Not deduplicated, unlike `used`: a label
-  entered twice — a loop, a retry — was entered twice, and the array
-  should read that way, where `used` names a receipt id once because an id
-  is an identity worth citing once, not a point in a sequence. It carries
-  no timing: the question is where execution stopped, not where it was
-  slow, and `string[]` can widen to a richer shape later without a
-  breaking change, while building that shape now would ship parts nobody
-  asked for. A failed step's `sections` still holds whichever labels it
-  reached before the failure, and that array's last element already
-  answers "which stage was it in" — there is no separate `error.section`
-  field putting the same fact in a second place. Only a typed step's `ctx`
-  has `section`; a compat step has no counterpart on `this`, so `sections`
-  is simply omitted for one, the same way `used` is omitted for a typed
-  step that never read from the chain.
+- `sections` (present only when non-empty) lists the `ctx.section` calls
+  made during this execution, each `{ "label": "...", "at": "..." }`, in
+  call order. Not deduplicated, unlike `used`: a label entered twice — a
+  loop, a retry — was entered twice, and the array should read that way,
+  where `used` names a receipt id once because an id is an identity worth
+  citing once, not a point in a sequence. `at` was left off at first, on the
+  reasoning that the question `sections` answers is where execution
+  stopped, not where it was slow — that turned out to be only half true. A
+  label alone says a stage was reached, never *when* relative to anything
+  else this same receipt carries, and a real run surfaced exactly the gap
+  that leaves: a `status: "failed"` sitting next to a `final.png` that
+  showed the target still present, roughly eight seconds apart, with
+  nothing on the receipt saying so — read at face value, that looks like
+  the state was flickering, and it was misdiagnosed as exactly that. `at`
+  (ISO 8601, taken by the collector itself when `ctx.section` is called,
+  never supplied by the step) puts every label on the same absolute
+  timeline `started_at`/`finished_at`, `polls`' own `at`, and
+  `evidence.screenshots[].at` already share, so "did the state actually
+  change" and "was this read taken before it settled" stop being
+  indistinguishable from a receipt alone. A failed step's `sections` still
+  holds whichever labels it reached before the failure, and that array's
+  last element already answers "which stage was it in" — there is no
+  separate `error.section` field putting the same fact in a second place.
+  Only a typed step's `ctx` has `section`; a compat step has no
+  counterpart on `this`, so `sections` is simply omitted for one, the same
+  way `used` is omitted for a typed step that never read from the chain.
 - `polls` (present only when non-empty) records every `ctx.poll` call that
   finished during this execution: its `description` when one was given,
-  how many times the predicate ran, the milliseconds elapsed, and how it
-  ended — `resolved`, `timed_out`, or `failed` when the predicate itself
-  threw. In completion order rather than call order: a nested poll
-  finishes before the one containing it, and only a finished poll has
-  counts to state. A timed-out poll is recorded like any other, since the
-  receipt of the step that failed on that timeout is exactly where the
-  numbers are wanted. Unlike `sections` this does carry timing, because
+  `at` — the ISO 8601 moment that call began — how many times the
+  predicate ran, the milliseconds elapsed, and how it ended — `resolved`,
+  `timed_out`, or `failed` when the predicate itself threw. In completion
+  order rather than call order: a nested poll finishes before the one
+  containing it, and only a finished poll has counts to state. A timed-out
+  poll is recorded like any other, since the receipt of the step that
+  failed on that timeout is exactly where the numbers are wanted. Unlike
+  `sections`, `polls` always carried timing beyond a bare label, because
   the question it exists for is a timing question: one attempt at 0ms says
   the condition was already true and the wait was a no-op, forty attempts
   over 20s says it was genuinely late, and the two look identical from
-  outside the step while calling for opposite fixes. A compat step has no
-  `ctx` to call it on, so `polls` is simply omitted for one, the same way
+  outside the step while calling for opposite fixes. `at` adds the missing
+  half — an absolute start, not just a duration — so a poll can be placed on
+  the same timeline `sections` and `evidence.screenshots` now share, instead
+  of read as a length with no fixed point to measure from. A compat step has
+  no `ctx` to call it on, so `polls` is simply omitted for one, the same way
   `sections` is.
 - `required_env` (present only when non-empty) lists the names
   `ctx.requireEnv` was called with during this execution, deduplicated, in

@@ -53,6 +53,13 @@ export interface PollOutcome {
   readonly attempts: number;
   readonly waitedMs: number;
   readonly outcome: "resolved" | "timed_out" | "failed";
+  /** ISO 8601 — this poll's own start (fb4-evidence-time task spec, item 4),
+   * derived from the same `startedAt` epoch-ms value already used to compute
+   * `waitedMs` below, so the two can never disagree about when this poll
+   * began. Exposed so `PollRecord.at` (src/receipt/types.ts) can place this
+   * poll on the same absolute timeline `sections`' own `at` and
+   * `evidence.screenshots[].at` already share. */
+  readonly at: string;
 }
 
 /**
@@ -78,6 +85,7 @@ export async function pollWithRecording<T>(
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const interval = options.interval ?? DEFAULT_INTERVAL_MS;
   const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
   let attempts = 0;
   let outcome: PollOutcome["outcome"] = "resolved";
 
@@ -101,6 +109,6 @@ export async function pollWithRecording<T>(
       await sleep(interval);
     }
   } finally {
-    onFinish({ attempts, waitedMs: Date.now() - startedAt, outcome });
+    onFinish({ attempts, waitedMs: Date.now() - startedAt, outcome, at: startedAtIso });
   }
 }

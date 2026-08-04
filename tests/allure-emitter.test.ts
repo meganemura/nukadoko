@@ -146,7 +146,11 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:02.000Z",
         steps: [step],
         hooks: [beforeHook, afterHook],
-        evidence: { dir: ".nukadoko/scenarios/scn-1", trace: "trace.zip", screenshots: ["shot1.png"] },
+        evidence: {
+          dir: ".nukadoko/scenarios/scn-1",
+          trace: "trace.zip",
+          screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.500Z" }],
+        },
       };
 
       emitter.emitScenario({

@@ -4,7 +4,7 @@ import { request as playwrightRequest, type APIRequestContext, type Page } from 
 import type { z } from "zod";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
-import type { PollRecord } from "../receipt/types.js";
+import type { PollRecord, ScreenshotEntry, SectionEntry } from "../receipt/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
@@ -137,7 +137,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 
 export interface EvidenceResult {
   trace?: string;
-  screenshots: string[];
+  screenshots: ScreenshotEntry[];
   http?: string;
 }
 
@@ -158,8 +158,13 @@ export interface StepContextHandle {
   /** Closes whatever this execution opened (browser, request context),
    * reports which evidence files it actually produced (docs/spec.md
    * "Receipts": only files that exist), and hands back the storageState (if
-   * any) the executor should persist for this run's session. */
-  dispose(status: "ok" | "failed"): Promise<DisposeResult>;
+   * any) the executor should persist for this run's session. Takes no
+   * `status` (fb4-evidence-time task spec, item 1): its only past use was
+   * passing it on to `browserHandle.finalize`, which no longer takes one
+   * either — see browser-evidence.ts's own header for why keeping an unused
+   * `status` parameter here would itself be a misleading residue, implying
+   * evidence still varies by outcome when it no longer does. */
+  dispose(): Promise<DisposeResult>;
   /** Executor-only: the network calls tallied since the current step
    * boundary began (this execution's whole lifetime for `nuka do`, since
    * `nuka run` since the last `beginStep`) — GET/HEAD as reads, anything
@@ -182,11 +187,11 @@ export interface StepContextHandle {
    * (fb3-used-result task spec) is the upstream's own full validated result
    * — carried the same way `ctx.resultOf`'s own wrapper below already does. */
   recordUsed(receiptId: string, stepName: string, result: unknown): void;
-  /** Executor-only: the labels `ctx.section` was called with since the
-   * current step boundary began, in call order (t3-sections task spec,
-   * decisions 1-2). Never exposed on `ctx` — same rule as
-   * `observedCounts()`/`usedSnapshot()`. */
-  sectionsSnapshot(): string[];
+  /** Executor-only: the `ctx.section` calls made since the current step
+   * boundary began, in call order (t3-sections task spec, decisions 1-2;
+   * `at` added by fb4-evidence-time task spec, item 3). Never exposed on
+   * `ctx` — same rule as `observedCounts()`/`usedSnapshot()`. */
+  sectionsSnapshot(): SectionEntry[];
   /** Executor-only: every `ctx.poll` call that finished since the current
    * step boundary began, in completion order (ctx-poll-receipt task spec).
    * Never exposed on `ctx` — same rule as `observedCounts()`/
@@ -390,6 +395,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       return pollWithRecording(fn, options, (finished) => {
         polls.record({
           ...(options.description !== undefined ? { description: options.description } : {}),
+          at: finished.at,
           attempts: finished.attempts,
           waited_ms: finished.waitedMs,
           outcome: finished.outcome,
@@ -398,7 +404,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
   };
 
-  async function dispose(status: "ok" | "failed"): Promise<DisposeResult> {
+  async function dispose(): Promise<DisposeResult> {
     const evidence: EvidenceResult = { screenshots: [] };
     let browserStorageState: StorageState | undefined;
     let requestStorageState: StorageState | undefined;
@@ -408,7 +414,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // and storageState() can only succeed on one that's still open (see
       // browser-evidence.ts's collectStorageState doc comment).
       browserStorageState = await browserHandle.collectStorageState();
-      evidence.screenshots = await browserHandle.finalize(status);
+      evidence.screenshots = await browserHandle.finalize();
       // Only claim trace.zip exists if tracing.stop actually got to write
       // it: browser-evidence.ts's finalize swallows tracing.stop failures
       // (the browser/context can be gone by the time it runs), so this must
@@ -477,7 +483,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     used.record(receiptId, stepName, result);
   }
 
-  function sectionsSnapshot(): string[] {
+  function sectionsSnapshot(): SectionEntry[] {
     return sections.snapshot();
   }
 

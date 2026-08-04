@@ -36,6 +36,35 @@ just until 0.1.
   receipt of the step that failed on that timeout is precisely where the
   numbers are wanted. Migration is mechanical — drop the import, call
   `ctx.poll` instead.
+- **A browser step's evidence is one screenshot, not two.** The former
+  `finalize(status)` took a screenshot once and wrote the same buffer to
+  both `final.png` and, on a failed run, a second time under a second name —
+  a second file with zero additional information, since `receipt.status`
+  already answers "did this fail". Worse, because that screenshot only ever
+  runs after `run` has already returned or thrown, the second copy could be
+  taken seconds after the failure it was named for, showing a page that had
+  since changed: `status: "failed"` sitting next to a screenshot that looked
+  fine, an apparent contradiction with no fix but to distrust one of the
+  two — and a real run once measured that gap at roughly eight seconds,
+  misdiagnosed as the state itself flickering. `finalize`'s and `dispose`'s
+  own `status` argument is gone with it: it had no remaining use once the
+  second file did.
+- **`evidence.screenshots` entries are `{ file, at }`, not bare file
+  names.** `at` is the ISO 8601 moment the screenshot actually resolved (the
+  same format `started_at`/`finished_at` already use) — the fact a second
+  screenshot file used to exist to paper over without ever stating it. A
+  screenshot's own timestamp is now on the receipt directly, so a reader
+  does not have to guess how stale it might be relative to the step's own
+  `finished_at`.
+- **`sections` entries are `{ label, at }`, and `polls` gained `at`.** A
+  label used to say only that execution reached a stage, never when — and
+  "when" turned out to matter: a receipt can carry a `status: "failed"` next
+  to a screenshot that looks unaffected, and without a shared timeline there
+  was no way to tell a real state change apart from a read taken before the
+  state settled. `sections`' `at` and `polls`' new `at` (alongside
+  `waited_ms`) put every stage and every wait on the same absolute timeline
+  `started_at`/`finished_at`/`evidence.screenshots[].at` already use, so
+  that question has an answer from the receipt alone.
 
 ### Added
 

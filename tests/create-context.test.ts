@@ -60,7 +60,7 @@ describe("createStepContext / ctx.request()", () => {
     const missing = await request.get("/missing");
     expect(missing.status()).toBe(404);
 
-    const { evidence } = await dispose("ok");
+    const { evidence } = await dispose();
     expect(evidence.http).toBe("http.jsonl");
     expect(evidence.trace).toBeUndefined();
     expect(evidence.screenshots).toEqual([]);
@@ -97,7 +97,7 @@ describe("createStepContext / ctx.request()", () => {
     const request = await ctx.request();
     await request.fetch("/ok", { method: "PUT" });
 
-    await dispose("ok");
+    await dispose();
 
     const lines = (await readFile(path.join(evidenceDir, "http.jsonl"), "utf8"))
       .trim()
@@ -115,7 +115,7 @@ describe("createStepContext / ctx.request()", () => {
       env: {},
     });
 
-    const { evidence } = await dispose("ok");
+    const { evidence } = await dispose();
     expect(evidence.http).toBeUndefined();
   });
 
@@ -130,7 +130,7 @@ describe("createStepContext / ctx.request()", () => {
     const ok = await request.get(`${baseURL}/ok`);
     expect(ok.status()).toBe(200);
 
-    await dispose("ok");
+    await dispose();
   });
 });
 
@@ -171,7 +171,7 @@ describe("createStepContext / ctx.request(): config.requestContext reaches newCo
       expect.objectContaining({ ignoreHTTPSErrors: true, baseURL: "http://127.0.0.1:1" }),
     );
 
-    await dispose("ok");
+    await dispose();
   });
 
   it("passes no extra options to newContext when requestContext is unset (regression)", async () => {
@@ -185,7 +185,7 @@ describe("createStepContext / ctx.request(): config.requestContext reaches newCo
 
     expect(newContextSpy).toHaveBeenCalledWith({ baseURL: "http://127.0.0.1:1" });
 
-    await dispose("ok");
+    await dispose();
   });
 });
 

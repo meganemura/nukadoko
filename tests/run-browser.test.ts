@@ -86,7 +86,9 @@ describe("nuka run (Background + browser)", () => {
 
     // Scenario-level browser evidence, not on either step's receipt.
     expect(record.evidence.trace).toBe("trace.zip");
-    expect(record.evidence.screenshots).toContain("final.png");
+    expect(record.evidence.screenshots).toHaveLength(1);
+    expect(record.evidence.screenshots[0].file).toBe("final.png");
+    expect(Number.isNaN(Date.parse(record.evidence.screenshots[0].at))).toBe(false);
     const scenarioDir = path.join(rootDir, record.evidence.dir);
     expect(existsSync(path.join(scenarioDir, "trace.zip"))).toBe(true);
     expect(existsSync(path.join(scenarioDir, "final.png"))).toBe(true);

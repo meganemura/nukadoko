@@ -1581,11 +1581,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   }
 
   const finishedAt = new Date();
-  const scenarioStatusForEvidence: "ok" | "failed" = scenarioFailed ? "failed" : "ok";
 
   let disposeResult;
   try {
-    disposeResult = await contextHandle.dispose(scenarioStatusForEvidence);
+    // No status argument (fb4-evidence-time task spec, item 1) — `dispose`'s
+    // own evidence no longer varies by outcome, so there is nothing left for
+    // this scenario's `scenarioFailed`/pass-fail status to select between.
+    disposeResult = await contextHandle.dispose();
   } catch {
     // Same backstop as cli/do.ts: teardown failures must never take the
     // scenario record down with them.

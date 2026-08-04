@@ -479,7 +479,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
     try {
-      disposeResult = await contextHandle.dispose(status);
+      // No status argument (fb4-evidence-time task spec, item 1) — see
+      // create-context.ts's own `dispose` doc comment for why.
+      disposeResult = await contextHandle.dispose();
     } catch {
       // Last resort: browser-evidence.ts and create-context.ts's own dispose
       // already swallow their teardown failures, but this catch is the final

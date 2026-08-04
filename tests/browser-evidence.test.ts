@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
@@ -70,7 +70,7 @@ describe("createStepContext / ctx.page()", () => {
   });
 
   it.skipIf(!chromiumAvailable)(
-    "launches chromium, traces the run, and saves a final screenshot",
+    "launches chromium, traces the run, and saves a final screenshot with an ISO 8601 at",
     async () => {
       const { ctx, dispose } = createStepContext({
         config: baseConfig(),
@@ -81,35 +81,35 @@ describe("createStepContext / ctx.page()", () => {
       const page = await ctx.page();
       await page.setContent("<html><body>hello</body></html>");
 
-      const { evidence, storageState } = await dispose("ok");
+      const beforeDispose = Date.now();
+      const { evidence, storageState } = await dispose();
+      const afterDispose = Date.now();
 
       expect(evidence.trace).toBe("trace.zip");
-      expect(evidence.screenshots).toEqual(["final.png"]);
+      // fb4-evidence-time task spec, item 1: one screenshot only, always
+      // named final.png — the former second, per-outcome copy (a "did this
+      // fail" fact `receipt.status` already carries, on a buffer that could
+      // already be stale by the time it was taken) is gone.
+      expect(evidence.screenshots).toHaveLength(1);
+      expect(evidence.screenshots[0]!.file).toBe("final.png");
+      const at = Date.parse(evidence.screenshots[0]!.at);
+      expect(Number.isNaN(at)).toBe(false);
+      // `at` was measured somewhere inside this very `dispose()` call — a
+      // real bound, not merely "parses as a date" (this task's spec: value
+      // ordering, not only format).
+      expect(at).toBeGreaterThanOrEqual(beforeDispose);
+      expect(at).toBeLessThanOrEqual(afterDispose);
       expect(existsSync(path.join(evidenceDir, "trace.zip"))).toBe(true);
       expect(existsSync(path.join(evidenceDir, "final.png"))).toBe(true);
+      // Only one screenshot file total, by listing the directory rather than
+      // asserting a specific other name is absent — the point is that
+      // exactly one exists, not the name of whichever second file used to.
+      const pngFiles = (await readdir(evidenceDir)).filter((name) => name.endsWith(".png"));
+      expect(pngFiles).toEqual(["final.png"]);
       // A browser context was opened, so there is always something to
       // persist for a session, even one with no cookies yet (this task's
       // spec, decision 2).
       expect(storageState).toBeDefined();
-    },
-  );
-
-  it.skipIf(!chromiumAvailable)(
-    "additionally saves failure.png when the execution failed",
-    async () => {
-      const { ctx, dispose } = createStepContext({
-        config: baseConfig(),
-        evidenceDir,
-        env: {},
-      });
-
-      const page = await ctx.page();
-      await page.setContent("<html><body>hello</body></html>");
-
-      const { evidence } = await dispose("failed");
-
-      expect(evidence.screenshots.sort()).toEqual(["failure.png", "final.png"]);
-      expect(existsSync(path.join(evidenceDir, "failure.png"))).toBe(true);
     },
   );
 
@@ -134,7 +134,7 @@ describe("createStepContext / ctx.page()", () => {
       const page = await ctx.page();
       await page.context().browser()?.close();
 
-      const { evidence, storageState } = await dispose("failed");
+      const { evidence, storageState } = await dispose();
 
       expect(evidence.screenshots).toEqual([]);
       expect(evidence.trace).toBeUndefined();
@@ -192,7 +192,7 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
       const userAgent = await page.evaluate(() => navigator.userAgent);
       expect(userAgent).toContain("HeadlessChrome");
 
-      await dispose("ok");
+      await dispose();
     },
   );
 
@@ -209,7 +209,7 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
       const userAgent = await page.evaluate(() => navigator.userAgent);
       expect(userAgent).not.toContain("HeadlessChrome");
 
-      await dispose("ok");
+      await dispose();
     },
   );
 });
@@ -259,7 +259,7 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
         expect.objectContaining({ ignoreHTTPSErrors: true, baseURL: "http://127.0.0.1:1" }),
       );
 
-      await dispose("ok");
+      await dispose();
       launchSpy.mockRestore();
     },
   );
@@ -286,7 +286,7 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
       expect(newContextSpy).toBeDefined();
       expect(newContextSpy).toHaveBeenCalledWith({ baseURL: "http://127.0.0.1:1" });
 
-      await dispose("ok");
+      await dispose();
       launchSpy.mockRestore();
     },
   );
@@ -341,7 +341,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
 
       expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 1 });
 
-      const { evidence } = await dispose("ok");
+      const { evidence } = await dispose();
       // `ctx.request()` was never called this run — page traffic must not
       // have been folded into http.jsonl (this task's spec, scope item 2).
       expect(evidence.http).toBeUndefined();
@@ -393,7 +393,7 @@ describe("createStepContext / ctx.page(): baseURL wired into the browser context
       expect(response?.ok()).toBe(true);
       expect(page.url()).toBe(`${baseURL}/hello`);
 
-      await dispose("ok");
+      await dispose();
     },
   );
 });

@@ -48,6 +48,23 @@
 // labels it reached before failing, and its last element already answers
 // "which stage was it in" — one fact, one place to read it.
 //
+// `sections` widens to `SectionEntry[]` — `{ label, at }` — now (fb4-
+// evidence-time task spec, item 3): "no start/end timestamps" above was a
+// bet that the shape could wait, and it turned out wrong the first time a
+// receipt was actually read under pressure. A real run left `status:
+// "failed"` sitting next to a `final.png` that showed the target present —
+// `finalize` only screenshots once `run` has already returned or thrown, so
+// the two facts were roughly 8 seconds apart, and nothing on the receipt
+// said so. Read without a clock, that looks like the state flickered; it
+// was misdiagnosed as exactly that. A label alone says a stage was reached,
+// never when relative to anything else this receipt also carries — `at`
+// (ISO 8601, collected by `SectionsCollector` itself, never passed in by a
+// step: a step-supplied time would be a claim, not a measurement) puts every
+// label on the same absolute timeline `started_at`/`finished_at`,
+// `polls`' own `at`, and each `evidence.screenshots[].at` already share, so
+// "did the state actually change" and "was this read taken before it
+// settled" stop being indistinguishable from a receipt alone.
+//
 // `polls` is added now (ctx-poll-receipt task spec): every `ctx.poll` call
 // that finished during this execution, in completion order rather than call
 // order — a nested poll finishes before the one containing it, so recording
@@ -63,6 +80,16 @@
 // never swallows it. Present only when non-empty, `used`/`sections`' own
 // convention; a compat step has no `ctx` to call `poll` on, so this field is
 // simply omitted for one, the same way `sections` is.
+//
+// `PollRecord.at` is added now (fb4-evidence-time task spec, item 4): a
+// `waited_ms` duration alone has no fixed point to measure from, so a poll
+// could not be placed on the same timeline `sections`' new `at` and
+// `evidence.screenshots[].at` share — and putting timestamps on only one of
+// "how far" (`sections`) and "how long" (`polls`) would still leave the
+// other unplaceable. `at` is the poll's own start (`pollWithRecording`
+// already measured it as `startedAt`; this only exposes it), so a receipt
+// reader can line up every stage and every wait without opening trace.zip
+// by hand.
 //
 // `world` is added now (m2c-typed-world task spec, item 3): a compat step's
 // own World reads/writes, measured the same "always on" way `observed` is —
@@ -152,12 +179,33 @@ export type ErrorKind =
   | "unsupported"
   | "step_error";
 
+/** One `ctx.section` call's own record (fb4-evidence-time task spec, item 3;
+ * docs/spec.md "Receipts") — a label alone said only *that* execution
+ * reached a stage, never *when*; `at` is what lets it share one timeline
+ * with `polls` and `evidence.screenshots` (see this file's own header for
+ * why that gap turned out to matter). */
+export interface SectionEntry {
+  /** The string `ctx.section(label)` was called with. */
+  readonly label: string;
+  /** ISO 8601 — the moment `ctx.section` was called, taken by
+   * `SectionsCollector` itself (src/context/sections.ts), never supplied by
+   * the step: a step-supplied time would be a claim, not a measurement. */
+  readonly at: string;
+}
+
 /** One `ctx.poll` call's own record (ctx-poll-receipt task spec; docs/spec.md
  * "Receipts"). */
 export interface PollRecord {
   /** `options.description`, when the call was given one — included in
    * `PollTimeoutError`'s own message too (src/context/poll.ts). */
   readonly description?: string;
+  /** ISO 8601 — this poll's own start (fb4-evidence-time task spec, item 4),
+   * the same instant `pollWithRecording` (src/context/poll.ts) already
+   * measures as `startedAt` to compute `waited_ms` from — this field just
+   * exposes it, so a poll can be placed on the same absolute timeline
+   * `sections` and `evidence.screenshots` share instead of read as a bare
+   * duration with no fixed point to measure from. */
+  readonly at: string;
   /** How many times `fn` was called. `1` means it resolved on the very
    * first attempt: the wait was a no-op, not a genuine delay. */
   readonly attempts: number;
@@ -170,14 +218,36 @@ export interface PollRecord {
   readonly outcome: "resolved" | "timed_out" | "failed";
 }
 
+/** One screenshot the harness actually wrote (fb4-evidence-time task spec,
+ * item 2) — replaces the former bare file-name string. A second, differently
+ * named file used to exist so a failed receipt's evidence was easy to spot,
+ * but it was the same buffer as `final.png` written a second time: zero
+ * additional information, since `receipt.status` already answers "did this
+ * fail", and `finalize` only runs from `dispose` — after `run` has already
+ * returned or thrown — so that second copy could show a page that had since
+ * changed, without anything on the receipt saying so. `at` is what a second
+ * file was standing in for without ever stating it. */
+export interface ScreenshotEntry {
+  /** The screenshot's file name, relative to `EvidenceMeta.dir` /
+   * `ScenarioEvidence.dir` — always `"final.png"`; there is only ever one. */
+  readonly file: string;
+  /** ISO 8601 — the moment `page.screenshot()` resolved (src/context/
+   * browser-evidence.ts's `finalize`), not when the file finished writing or
+   * when `finalize` itself was called. */
+  readonly at: string;
+}
+
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
    * ".nukadoko/receipts/rcpt-..."). */
   dir: string;
   /** Present only when a browser was used. */
   trace?: string;
-  /** Screenshot file names actually written; empty when no browser was used. */
-  screenshots: string[];
+  /** Screenshots actually written; empty when no browser was used. At most
+   * one entry (fb4-evidence-time task spec, item 1: the second, per-outcome
+   * copy is gone, so a run that used the browser writes exactly
+   * `final.png`, whatever the outcome). */
+  screenshots: ScreenshotEntry[];
   /** Present only when at least one `ctx.request()` call was logged. */
   http?: string;
 }
@@ -222,16 +292,17 @@ interface ReceiptBase {
    * declared, and reading `ctx.env[name]` directly instead leaves no trace
    * here. */
   required_env?: string[];
-  /** Labels `ctx.section` was called with during this execution, in call
-   * order (t3-sections task spec, decisions 1-3). Present only when
-   * non-empty; a failed step's array still carries whichever labels it
-   * reached before failing — that array's last element is "the last stage
-   * this execution entered", so there is no separate `error.section` field
-   * duplicating the same fact. Only a typed step's `ctx` has `section`
-   * (decision 5) — a compat step has no counterpart on `this`, so this
-   * field is simply omitted for one, the same way `used` is omitted for a
-   * typed step that never calls `ctx.resultOf`. */
-  sections?: string[];
+  /** `ctx.section` calls made during this execution, in call order (t3-
+   * sections task spec, decisions 1-3; `at` added by fb4-evidence-time task
+   * spec, item 3). Present only when non-empty; a failed step's array still
+   * carries whichever labels it reached before failing — that array's last
+   * element is "the last stage this execution entered", so there is no
+   * separate `error.section` field duplicating the same fact. Only a typed
+   * step's `ctx` has `section` (decision 5) — a compat step has no
+   * counterpart on `this`, so this field is simply omitted for one, the same
+   * way `used` is omitted for a typed step that never calls
+   * `ctx.resultOf`. */
+  sections?: SectionEntry[];
   /** Every `ctx.poll` call that finished during this execution, in
    * completion order rather than call order (ctx-poll-receipt task spec;
    * this file's own header). Present only when non-empty; only a typed
