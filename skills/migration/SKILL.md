@@ -82,7 +82,8 @@ dependencies are named as `from` entries, visible in an import, so a
 `nuka do` call can supply them by hand: `--args` for an ordinary key, or
 `--use <receipt-id>` for one drawn from an earlier execution's result — the
 upstream step's own name never has to appear on the command line, because
-the cited receipt already carries it. What still finds nothing outside a
+the cited receipt already carries it. A step whose every key arrives that
+way needs no `--args` at all: `--use` on its own is a complete invocation. What still finds nothing outside a
 scenario is a dependency read through `ctx.resultOf` from inside `run`: that
 call has no chain to walk when there was no scenario to build one,
 `--use` or not.
