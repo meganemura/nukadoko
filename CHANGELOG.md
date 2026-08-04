@@ -5,6 +5,55 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0 — not
 just until 0.1.
 
+## Unreleased
+
+### Changed
+
+- **`poll` moved onto `ctx`, and now leaves a record.** `import { poll }
+  from "nukadoko"` is gone; the same loop is `ctx.poll(fn, options)`, and
+  every completed call lands on the receipt's `polls` with how many
+  attempts it took, how long it waited, and whether it resolved, timed out,
+  or threw. It was an import because it needed nothing the executor owned,
+  which was true and was the wrong thing to optimize for: a wait that
+  leaves no trace cannot be told apart, afterwards, from one that returned
+  on its first attempt — and those two situations call for opposite fixes.
+  One attempt at 0ms says the condition was already true and the wait was a
+  no-op, so whatever is late is something else entirely; forty attempts
+  over 20s says that condition really was the late one. From outside the
+  step the two look the same, which is exactly when a receipt is supposed
+  to be the thing that answers. Recording it means writing into a collector
+  the executor owns and resets at each step boundary, and that is what puts
+  it on `ctx` — the same route `ctx.section` took, for the same reason,
+  after the same mistake. A timed-out poll is recorded like any other: the
+  receipt of the step that failed on that timeout is precisely where the
+  numbers are wanted. Migration is mechanical — drop the import, call
+  `ctx.poll` instead.
+
+### Added
+
+- **`nuka run <feature>:<line>` says that it is a partial run.** Running one
+  scenario is the iteration path and is worth taking: a feature's full run
+  costs every scenario's minutes. What it is not is a smaller version of the
+  same thing — a partial run can never be signed off, so a green one is a
+  debugging result. That was already true and was discoverable only at the
+  end, when `nuka accept` refused a road that had been chosen several runs
+  earlier. It is now said where the line number is given, on stderr, leaving
+  stdout's one-record-per-line contract untouched.
+- **`nuka accept`'s refusals name what they were decided from.** A run that
+  was red, or a feature that only ever had partial runs, now come back with
+  the run in question — its id, when it started, and which of its scenarios
+  failed, or which lines the most recent partial run covered. The refusal
+  reasons themselves are unchanged; what changed is that the next command
+  can be chosen against the record instead of guessed at, which is what the
+  git-state refusals in the same command already did.
+- **`nuka scaffold`'s template stops framing `returns` as "what later steps
+  cite".** That framing is the one a first reader adopts, and it drops every
+  value the step's own correctness depends on but nothing downstream reads:
+  the date it computed, the id it picked, the name it resolved before
+  sending. Those are exactly the values a receipt gets interrogated for once
+  a run has gone wrong — and a step that sends a date nothing cites, computed
+  in the wrong timezone, leaves a receipt that cannot say which date it sent.
+
 ## 0.0.4 — 2026-08-04
 
 ### Added
