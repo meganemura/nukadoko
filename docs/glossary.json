@@ -88,6 +88,25 @@
       "en": ["scan", "scans", "scanned", "scanning"],
       "ja": "スキャン",
       "note": "nuka check / nuka tend が静的検査のために feature ディレクトリを対象に取ること。ディレクトリを実際にたどる動作を指す walk(歩く)とは書き分ける"
+    },
+    {
+      "en": ["timeline"],
+      "ja": "タイムライン",
+      "note": "started_at/finished_at、polls の at、evidence.screenshots[].at、sections の at が共有する絶対時刻の並びを指す"
+    },
+    {
+      "en": ["absence claim", "claims absence"],
+      "ja": "不在の主張",
+      "note": "receipt 上の値が対象の不在(visible: false、count: 0 など)を述べていること。対語は presence claim = 存在の主張。不在の主張には、それが未描画による見かけ上の不在ではないことを示す証拠が要る"
+    },
+    {
+      "en": ["presence claim", "presence-claiming"],
+      "ja": "存在の主張"
+    },
+    {
+      "en": ["collector"],
+      "ja": "コレクタ",
+      "note": "executor が所有し step の境界ごとにリセットする、ctx.section や ctx.poll の呼び出しを集める内部の収集役"
     }
   ],
   "keep_english": [
@@ -129,6 +148,10 @@
     {
       "term": "poll",
       "why": "ctx.poll と receipt の polls フィールドに直接対応する API 名。散文の「待つ / 待ち」とは書き分ける —— 待ちという行為の話か、その API の話かを読み手が区別できる必要がある"
+    },
+    {
+      "term": "readiness",
+      "why": "ページが読み取り可能な状態(unrendered の反対)に達していたことを示す証拠を指す語。「準備」等に訳すと一般語に埋もれて曖昧になるため英語のまま残す"
     }
   ],
   "identifiers": {
