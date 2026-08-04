@@ -1,20 +1,31 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile } from "@cucumber/gherkin";
 import { IdGenerator, type GherkinDocument, type Pickle } from "@cucumber/messages";
 
-// Responsibility: walk `featuresDir` for `**/*.feature` files and turn each
-// into pickles via @cucumber/gherkin — the official parser owns Background
-// merging, Scenario Outline expansion, and table/docstring attachment
-// (docs/spec.md "nukadoko deliberately owns as little as possible"). This
-// module does not interpret a pickle's steps at all (matching them against
-// the vocabulary is src/check/feature-check.ts's job) — it only turns
-// `.feature` text into the pickles @cucumber/gherkin produces. A malformed
-// feature file is collected as a per-file parse error rather than thrown, so
-// one broken file doesn't stop `nuka check` from reporting every other
-// feature's issues too (mirrors src/discover/discover-steps.ts's own
-// tolerance for a missing featuresDir: an empty/partial answer beats a
-// crash).
+// Responsibility: walk `featuresDir` plus each `additionalFeatureDirs` entry
+// for `**/*.feature` files and turn each into pickles via @cucumber/gherkin
+// — the official parser owns Background merging, Scenario Outline
+// expansion, and table/docstring attachment (docs/spec.md "nukadoko
+// deliberately owns as little as possible"). This module does not interpret
+// a pickle's steps at all (matching them against the vocabulary is
+// src/check/feature-check.ts's job) — it only turns `.feature` text into
+// the pickles @cucumber/gherkin produces. A malformed feature file is
+// collected as a per-file parse error rather than thrown, so one broken
+// file doesn't stop `nuka check` from reporting every other feature's
+// issues too (mirrors src/discover/discover-steps.ts's own tolerance for a
+// missing featuresDir: an empty/partial answer beats a crash).
+//
+// `loadFeaturesFromDirs` de-duplicates by absolute path, so a file
+// reachable from more than one of the walked directories (e.g. one nested
+// inside another) is never parsed or counted twice. `featuresDir` is
+// fail-open on a missing directory — config-check.ts's
+// `features-dir-missing` already reports that case on its own, with its own
+// message. An `additionalFeatureDirs` entry that does not exist, by
+// contrast, is reported back via `missingAdditionalDirs` rather than
+// silently treated as empty — it was named specifically to widen what gets
+// scanned, so a typo in it is a config mistake, not a valid "nothing here"
+// answer.
 //
 // `parseFeatureSource` is exported so `nuka run` (src/run/select-pickles.ts)
 // can parse the one feature file it was pointed at without walking a whole
@@ -91,32 +102,65 @@ export function parseFeatureSource(source: string, relativePath: string): Parsed
   return { gherkinDocument, pickles };
 }
 
-export function loadFeatures(rootDir: string, featuresDir: string): LoadFeaturesResult {
-  const featuresRoot = path.join(rootDir, featuresDir);
-  const filePaths = walkFeatureFiles(featuresRoot);
+export interface LoadFeaturesFromDirsResult extends LoadFeaturesResult {
+  /** Which `additionalFeatureDirs` entries (never `featuresDir` — see this
+   * file's own header) do not exist on disk, in the order they were given. */
+  readonly missingAdditionalDirs: readonly string[];
+}
 
+/**
+ * Walks `featuresDir` plus every `additionalFeatureDirs` entry
+ * (this file's own header), de-duplicating a file reachable from more than
+ * one of them by its absolute path.
+ */
+export function loadFeaturesFromDirs(
+  rootDir: string,
+  featuresDir: string,
+  additionalFeatureDirs: readonly string[],
+): LoadFeaturesFromDirsResult {
   const features: FeatureFile[] = [];
   const parseErrors: FeatureParseError[] = [];
+  const missingAdditionalDirs: string[] = [];
+  const seenAbsolutePaths = new Set<string>();
 
-  for (const filePath of filePaths) {
-    const relativePath = path.relative(rootDir, filePath);
-    const source = readFileSync(filePath, "utf8");
+  const collect = (dir: string): void => {
+    for (const filePath of walkFeatureFiles(path.join(rootDir, dir))) {
+      if (seenAbsolutePaths.has(filePath)) {
+        continue;
+      }
+      seenAbsolutePaths.add(filePath);
 
-    try {
-      // `loadFeatures` (src/check/*.ts's own caller) has no hook to run
-      // against — its own `FeatureFile` keeps `pickles` only, same as before
-      // this task; the `gherkinDocument` this returns is exclusively for
-      // `nuka run`'s own path (src/run/select-pickles.ts) onward to
-      // src/run/run-scenario.ts.
-      const { pickles } = parseFeatureSource(source, relativePath);
-      features.push({ relativePath, pickles });
-    } catch (error) {
-      parseErrors.push({
-        relativePath,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      const relativePath = path.relative(rootDir, filePath);
+      const source = readFileSync(filePath, "utf8");
+      try {
+        // This caller (src/check/*.ts, src/tend/*.ts) has no hook to run
+        // against, so its own `FeatureFile` keeps `pickles` only; the
+        // `gherkinDocument` `parseFeatureSource` also returns is exclusively
+        // for `nuka run`'s own path (src/run/select-pickles.ts) onward to
+        // src/run/run-scenario.ts.
+        const { pickles } = parseFeatureSource(source, relativePath);
+        features.push({ relativePath, pickles });
+      } catch (error) {
+        parseErrors.push({
+          relativePath,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
+  };
+
+  // featuresDir is fail-open (walkFeatureFiles itself tolerates a missing
+  // directory) — a missing featuresDir already has its own,
+  // differently-worded report (config-check.ts's features-dir-missing).
+  collect(featuresDir);
+
+  for (const dir of additionalFeatureDirs) {
+    if (!existsSync(path.join(rootDir, dir))) {
+      missingAdditionalDirs.push(dir);
+      continue;
+    }
+    collect(dir);
   }
 
-  return { features, parseErrors };
+  return { features, parseErrors, missingAdditionalDirs };
 }

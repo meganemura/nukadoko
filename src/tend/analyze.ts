@@ -1,13 +1,15 @@
 import { checkBindings } from "../check/binding-check.js";
 import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
-import { loadFeatures } from "../feature/load-features.js";
+import { loadFeaturesFromDirs } from "../feature/load-features.js";
+import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missing.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
 import { analyzeFieldDescriptions } from "./missing-describe.js";
 import { findMissingRationale } from "./missing-rationale.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
+import { findSignedFeatureUnscanned } from "./signed-feature-unscanned.js";
 import { findSignoffRot } from "./signoff-rot.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
@@ -15,19 +17,25 @@ import { findUnusedParameterTypes } from "./unused-parameter-type.js";
 import type { TendIssue, TendReport } from "./types.js";
 
 // Responsibility: the one function `nuka tend` runs — load the project the
-// same way `nuka check` does (loadConfig, discoverSteps, loadFeatures) and
-// run this task's now-seven note-only findings, in the fixed order below so
-// a human reading text output sees findings grouped by kind without this
+// same way `nuka check` does (loadConfig, discoverSteps, loadFeaturesFromDirs)
+// and run this task's now-nine note-only findings, in the fixed order below
+// so a human reading text output sees findings grouped by kind without this
 // module needing to sort anything after the fact (this task's spec: text
 // output "種類ごとにまとまっていること" — src/cli/tend.ts pushes each
 // category's array through in one block rather than interleaving). Two of
-// the seven — `findSupportOriginParameterTypes` and `findUnknownSecretsKeys`
+// the nine — `findSupportOriginParameterTypes` and `findUnknownSecretsKeys`
 // — did not start here: they were `nuka check` warnings
 // (`parameter-type-support-origin`, `secrets-public-key-unknown`/
 // `secrets-redact-key-unknown`) that m8d-move-to-tend reclassified, on the
 // same "does this have to be known before the run" test docs/spec.md
 // "Tending" states — their own detection logic is untouched, only where a
-// caller reads the finding from.
+// caller reads the finding from. Two more —
+// `findMissingAdditionalFeatureDirs` and `findSignedFeatureUnscanned` — are
+// fb3-scan-dirs's own additions: the first reports a configured-but-absent
+// `additionalFeatureDirs` entry, the second makes visible the exact gap this
+// task spec exists to close — an accepted feature outside every scanned
+// directory, which is what made `pattern-unbound` misreport a bound step as
+// unbound before `additionalFeatureDirs` existed to name where it lives.
 //
 // `patterns` is built once, here, via src/check/binding-check.ts's own
 // `checkBindings` — the same parsed-pattern array src/check/feature-check.ts
@@ -44,7 +52,11 @@ import type { TendIssue, TendReport } from "./types.js";
 // project — the same migrating-suite reasoning that file's own header
 // gives, just without this module reporting the import failure itself
 // (that stays `check`'s own finding; `tend` silently has one fewer step to
-// look at).
+// look at). It is still called with `config.featuresDir` alone, unchanged
+// by fb3-scan-dirs: only `loadFeaturesFromDirs` below widens to include
+// `additionalFeatureDirs` — the vocabulary a step pattern is checked against
+// is a different question from which feature files get walked for
+// occurrences (src/check/analyze.ts's own header makes the same split).
 //
 // `errors` is populated by `findSignoffRot` alone (m8b-tend-signoff-rot task
 // spec): sign-off staleness is the one docs/spec.md "Tending" finding marked
@@ -55,12 +67,13 @@ import type { TendIssue, TendReport } from "./types.js";
 // (src/tend/record-parse.ts) and checks each one against this same
 // `vocabulary`, never a second one it builds itself.
 //
-// `summary` (m8c-tend-summary task spec) is built from the same
-// `vocabulary` plus `rationaleIssues`/`fieldDescriptions`, both already
-// computed above for `notes` — it is where the bed currently is, not a
-// finding, so it never feeds `errors` or `notes` and never changes the
-// caller's exit code (src/cli/tend.ts still derives that from `errors`
-// alone).
+// `summary` (m8c-tend-summary task spec, extended by fb3-scan-dirs) is built
+// from the same `vocabulary` plus `rationaleIssues`/`fieldDescriptions`,
+// both already computed above for `notes`, plus `scannedFeatureDirs` (the
+// same `featuresDir` + `additionalFeatureDirs` list `loadFeaturesFromDirs`
+// was called with) — it is where the bed currently is, not a finding, so it
+// never feeds `errors` or `notes` and never changes the caller's exit code
+// (src/cli/tend.ts still derives that from `errors` alone).
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
@@ -69,7 +82,12 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   });
 
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
-  const { features } = loadFeatures(rootDir, config.featuresDir);
+  const scannedFeatureDirs = [config.featuresDir, ...config.additionalFeatureDirs];
+  const { features, missingAdditionalDirs } = loadFeaturesFromDirs(
+    rootDir,
+    config.featuresDir,
+    config.additionalFeatureDirs,
+  );
   const occurrences = resolveStepOccurrences(features, patterns);
 
   const errors: TendIssue[] = [...findSignoffRot(rootDir, vocabulary)];
@@ -88,9 +106,11 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnusedParameterTypes(vocabulary, config.parameterTypes),
     ...findSupportOriginParameterTypes(compatParameterTypes),
     ...findUnknownSecretsKeys(rootDir, config),
+    ...findMissingAdditionalFeatureDirs(missingAdditionalDirs),
+    ...findSignedFeatureUnscanned(rootDir, scannedFeatureDirs),
   ];
 
-  const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions);
+  const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);
 
   return { errors, notes, summary };
 }

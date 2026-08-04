@@ -26,6 +26,15 @@ import type { WritableSink } from "./writable-sink.js";
 // finding). It always prints, even with zero compat steps or an otherwise
 // empty report — "typed 12, compat 0" is itself the useful fact that
 // migration is done (this task's spec).
+//
+// The `scanned:` line (fb3-scan-dirs task spec, decision 3) prints first,
+// ahead of `bed:` — a reader needs to know what was looked at before a count
+// derived from that look means anything; this is the fact that makes
+// `pattern-unbound` legible instead of quietly wrong the moment an accepted
+// feature lives outside `featuresDir`. `read-only` joins the `bed:` line
+// itself (same task spec, decision 5: "bed 行に出す") rather than a fourth
+// line, since it is counted in the exact same vocabulary walk as
+// `typed`/`compat` (src/tend/summary.ts).
 
 export interface RunTendOptions {
   rootDir: string;
@@ -61,7 +70,8 @@ function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
 // `report.summary` for `--json`, which dumps the whole report as-is below.
 function formatSummaryLines(summary: TendSummary): string[] {
   return [
-    `bed: typed ${summary.typedSteps}, compat ${summary.compatSteps}`,
+    `scanned: ${summary.scannedFeatureDirs.join(", ")}`,
+    `bed: typed ${summary.typedSteps}, compat ${summary.compatSteps}, read-only ${summary.readOnlySteps}`,
     `declared: rationale ${summary.rationale.declared}/${summary.rationale.total}, describe ${summary.describe.declared}/${summary.describe.total}`,
   ];
 }

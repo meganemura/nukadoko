@@ -55,13 +55,27 @@ export interface TendDeclarationCoverage {
  * those steps/fields individually (with a `file`), so repeating the names
  * here would be the same information twice; only the migration breakdown is
  * new, because nothing else in this report currently names a compat step at
- * all. */
+ * all.
+ *
+ * `scannedFeatureDirs` and `readOnlySteps` (fb3-scan-dirs task spec,
+ * decisions 3 and 5) are the two exceptions to the "cap at three numbers"
+ * rule just above, added deliberately rather than by drift: `pattern-unbound`
+ * had gone quietly wrong for any project that placed an accepted feature
+ * outside `featuresDir` (docs/spec.md's own recommendation), because nothing
+ * in `tend`'s own output said which directories it had actually looked at —
+ * `scannedFeatureDirs` is what makes that fixable by reading the output
+ * rather than the source. `readOnlySteps` is the one number this task's own
+ * spec calls out by exact source location (src/tend/summary.ts's own
+ * counting loop, `entry.step.mutates === false`) as belonging beside the
+ * typed/compat counts it is already computed alongside. */
 export interface TendSummary {
   readonly typedSteps: number;
   readonly compatSteps: number;
   readonly compatStepNames: readonly string[];
   readonly rationale: TendDeclarationCoverage;
   readonly describe: TendDeclarationCoverage;
+  readonly scannedFeatureDirs: readonly string[];
+  readonly readOnlySteps: number;
 }
 
 export interface TendReport {

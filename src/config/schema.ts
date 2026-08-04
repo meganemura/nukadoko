@@ -108,6 +108,21 @@ type RequestContextOptions = NonNullable<Parameters<APIRequest["newContext"]>[0]
 export const configSchema = z
   .object({
     featuresDir: z.string().default("features"),
+    /** `featuresDir` is the set that runs with no argument (`nuka run`,
+     * `nuka check`, `nuka tend` all default to it); `additionalFeatureDirs`
+     * is a second, disjoint set that never runs on its own but still binds
+     * vocabulary — a step's pattern is bound or unbound as a property of the
+     * whole project, not just of what `nuka run` would execute today
+     * (fb3-scan-dirs task spec, decision 1). This is why an acceptance
+     * feature — recommended to live outside `featuresDir` precisely so it is
+     * never picked up as a regression (skills/acceptance/SKILL.md) — belongs
+     * here: it must never run unattended, but a static check that doesn't
+     * see it will wrongly call the steps it uses unbound. `nuka check`
+     * (no argument) and `nuka tend` read both sets; `nuka run` (no argument)
+     * reads only `featuresDir`, unchanged — this asymmetry is the field's
+     * whole point, not an oversight. Default `[]`: nothing extra is scanned
+     * unless named. */
+    additionalFeatureDirs: z.array(z.string()).default([]),
     stateDir: z.string().default(".nukadoko"),
     baseURL: z.string().optional(),
     envFiles: z.array(z.string()).optional(),

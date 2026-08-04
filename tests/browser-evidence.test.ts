@@ -49,6 +49,7 @@ const headedChromiumAvailable = chromiumAvailable ? await isHeadedChromiumAvaila
 function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
   return {
     featuresDir: "features",
+    additionalFeatureDirs: [],
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],

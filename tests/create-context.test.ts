@@ -12,6 +12,7 @@ import { MissingEnvError } from "../src/context/errors.js";
 function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
   return {
     featuresDir: "features",
+    additionalFeatureDirs: [],
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],

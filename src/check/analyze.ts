@@ -4,7 +4,7 @@ import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
-import { loadFeatures, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
+import { loadFeaturesFromDirs, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
@@ -43,14 +43,15 @@ import type { CheckIssue, CheckReport } from "./types.js";
 // being reported.
 //
 // m5b-check-feature-arg task spec: `featureArg`, when given, *replaces*
-// which feature(s) get checked — the `featuresDir` walk above is skipped
-// entirely in favor of that one file (not added to it: an existing error
-// under `featuresDir` would otherwise bury the very feature this argument
-// exists to single out). `discoverSteps` above is untouched by this
-// parameter (config/binding checks and the vocabulary they check features
-// against always come from `featuresDir`, spec's own decision) — only the
-// `loadFeatures` call below is conditional. A `featureArg` that doesn't
-// exist or can't be read is a usage mistake, not a project finding: it
+// which feature(s) get checked — the `featuresDir`(+`additionalFeatureDirs`,
+// fb3-scan-dirs task spec) walk above is skipped entirely in favor of that
+// one file (not added to it: an existing error under `featuresDir` would
+// otherwise bury the very feature this argument exists to single out).
+// `discoverSteps` above is untouched by this parameter (config/binding
+// checks and the vocabulary they check features against always come from
+// `featuresDir`, spec's own decision) — only the `loadFeaturesFromDirs` call
+// below is conditional. A `featureArg` that doesn't exist or can't be read
+// is a usage mistake, not a project finding: it
 // throws `CheckFeatureNotFoundError` (message pre-formatted "nuka check: …",
 // same tone as `nuka accept`'s own hand-written stderr messages) rather than
 // becoming a `feature-parse-error` report entry, and src/cli/check.ts's
@@ -190,7 +191,14 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   }
 
   const { features, parseErrors } =
-    featureArg === undefined ? loadFeatures(rootDir, config.featuresDir) : loadSingleFeature(rootDir, featureArg);
+    featureArg === undefined
+      ? // additionalFeatureDirs joins featuresDir here too (fb3-scan-dirs
+        // task spec, decision 1: "含めるコマンド: nuka check(引数なし)") —
+        // a config mistake in additionalFeatureDirs itself is
+        // config-check.ts's own `additional-feature-dir-missing`, not
+        // repeated here; `missingAdditionalDirs` is intentionally unread.
+        loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs)
+      : loadSingleFeature(rootDir, featureArg);
   for (const parseError of parseErrors) {
     errors.push({
       code: "feature-parse-error",

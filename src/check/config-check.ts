@@ -7,13 +7,16 @@ import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
 import type { CheckIssue } from "./types.js";
 
 // Responsibility: this task's spec's "config coherence" category (item 5) —
-// featuresDir not existing on disk is the one error-level item; a
-// configured envFile (top-level or per-environment) not existing is a
-// warning. The distinction matters: `do`/`run` are already tolerant of a
-// missing envFile (loadEnvFiles just contributes nothing) — check's job
-// here is to surface that leniency, not turn it into a reason to fail
-// (docs/spec.md "Secrets": redaction correctness at runtime is the real
-// guarantee; this is visibility only).
+// featuresDir not existing on disk is one error-level item (joined by
+// fb3-scan-dirs's own additionalFeatureDirs-missing check, same severity and
+// same reasoning: a directory named in config to be scanned and absent from
+// disk is a config mistake, not a leniency to extend); a configured envFile
+// (top-level or per-environment) not existing is a warning. The distinction
+// there matters: `do`/`run` are already tolerant of a missing envFile
+// (loadEnvFiles just contributes nothing) — check's job here is to surface
+// that leniency, not turn it into a reason to fail (docs/spec.md "Secrets":
+// redaction correctness at runtime is the real guarantee; this is
+// visibility only).
 //
 // secrets-redact-and-warning task spec added another item to that same
 // visibility job: `secrets-redact-key-too-short`, a `secrets.redact` entry
@@ -98,6 +101,24 @@ export async function checkConfig(
       code: "features-dir-missing",
       message: `featuresDir "${config.featuresDir}" does not exist at ${featuresRoot}`,
     });
+  }
+
+  // Same error-level treatment as featuresDir above, one entry at a time
+  // (fb3-scan-dirs task spec, decision 2): additionalFeatureDirs is named
+  // specifically to widen what nuka check/tend scan, so an entry that
+  // doesn't exist is a config mistake to report, not an empty answer to
+  // fail open on — src/feature/load-features.ts's loadFeaturesFromDirs
+  // already treats it that way; this is check's own report of the same
+  // fact for the no-argument default path.
+  for (const relativePath of config.additionalFeatureDirs) {
+    const absolutePath = path.join(rootDir, relativePath);
+    if (!existsSync(absolutePath)) {
+      errors.push({
+        code: "additional-feature-dir-missing",
+        message: `additionalFeatureDirs names "${relativePath}", which does not exist at ${absolutePath}`,
+        file: relativePath,
+      });
+    }
   }
 
   for (const relativePath of config.envFiles ?? []) {
