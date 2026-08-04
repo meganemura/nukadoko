@@ -5,6 +5,7 @@ import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
+import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { probeVersion } from "../environment/probe-version.js";
 import {
@@ -357,6 +358,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     const runId = generateRunId();
     const git = await probeGitState(rootDir);
+    // One instance for this whole `nuka run` invocation (p3a-trace-per-step
+    // task spec, scope B item 2) — passed unchanged into every `runScenario`
+    // call below, so a run whose several steps (across one scenario or
+    // several) each hit an unreadable trace version still only ever writes
+    // the stderr warning once, not once per occurrence.
+    const onUnknownTraceVersion = createTraceVersionWarner(stderr);
 
     const envFiles = resolvedEnv.envFiles;
     const envVars = loadEnvFiles(rootDir, envFiles);
@@ -547,6 +554,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             instantiateCompatWorld,
             compatHooks,
             defaultTimeoutMs,
+            onUnknownTraceVersion,
           });
 
           // One JSON line per completed scenario record, streamed as it

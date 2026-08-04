@@ -758,14 +758,28 @@ a green one is a debugging result and nothing else. `nuka run` says so
 where the line number is given, rather than leaving it for `nuka accept`
 to reveal several runs later, once the road has already been taken.
 
-Steps in one pickle share one context — the World semantics Cucumber users
-expect: a Background that logs in hands its browser and cookies to every
+Steps in one pickle share one context (the World semantics Cucumber users
+expect): a Background that logs in hands its browser and cookies to every
 later step. A failed step skips the rest of the scenario, and skipped steps
 get no receipt (an execution that never began must not be citable; the
-scenario record is what says "skipped"). Evidence follows its natural
-scope: each step's receipt carries that step's http.jsonl, while the
-Playwright trace spans the shared context and therefore lives in the
-scenario's own directory, not on any single step.
+scenario record is what says "skipped"). Evidence follows its natural scope:
+each step's receipt carries that step's own http.jsonl and its own
+Playwright trace alike. The trace used to span the whole shared context and
+live in the scenario's own directory instead, one file, opened once at the
+first `ctx.page()` call and closed once at the end. It is cut at every step
+boundary now, the same window `ctx.page()` was already lazy about: a step
+that never touches the browser gets no trace chunk at all, and a step that
+does gets one holding only what it did. Opening the trace for the step that
+actually failed is faster than scrubbing through a whole scenario's
+recording for the moment things went wrong, and that is the entire reason
+for the change. What a single scenario-long trace also gave for free, a
+network view spanning every step at once, a step-scoped trace does not:
+each step's own trace still shows that step's own requests, so nothing about
+a single step's traffic is lost, only the ability to browse every request
+the whole scenario made without opening more than one file. `ctx.request()`
+traffic already has that whole-run view in http.jsonl; page-issued traffic
+crossing a step boundary does not yet, and closing that gap is later work,
+not this one.
 
 Before a pickle runs, its steps' `from` declarations are checked against
 its own step order: a required chained key whose producer is absent or
@@ -1014,6 +1028,41 @@ shape whether the step ran inside a scenario or via `do`.
   anywhere else, so no separate redaction path exists for this field.
   Present on both a successful and a failed step's receipt alike: a page
   error is evidence about the page, not a verdict on the step.
+- `actions` (present only when non-empty) is read out of this step's own
+  trace chunk (`evidence.trace`, above): every Playwright call the step made
+  through `ctx.page()`, `expect` waits included, in the order the trace
+  recorded them finishing. Nothing about `expect` needed its own fixture or
+  wrapper to get here: a step reaches it the same way a Playwright test
+  file would (`import { expect } from "@playwright/test"`), and the trace
+  records the call underneath that wrapper, at Playwright's own layer, the
+  same place `goto`, `click`, and every other call already lands. Each entry
+  is `{ "method", "expression"?, "selector"?, "url"?, "is_not"?,
+  "timeout_ms"?, "ms", "outcome", "at" }`: `method` and the five optional
+  fields are copied straight off the trace's own call, `ms` is that call's
+  own duration on the trace's own clock, `outcome` is `"failed"` when the
+  trace recorded an error on it and `"passed"` otherwise, and `at` (ISO
+  8601) is converted from the trace's own monotonic clock into an absolute
+  timestamp, landing `actions` on the same timeline `sections`/`polls`/
+  `evidence.screenshots[].at` already share. The five optional fields are an
+  allowlist, not everything the call carried: a `setContent` call's own HTML
+  body, for one, can run to kilobytes, and nothing a receipt is for needs it
+  when trace.zip already has the whole thing. Capped at 100 entries, same
+  convention as `page_events`, with the same sibling `truncated` field
+  reporting the true total when the cap is hit: `"truncated": { "actions":
+  214 }`. Redacted the same single pass every other field is: a secret can
+  land in a `url` or `selector` as easily as it can anywhere else, so no
+  separate redaction path exists for this field either. A trace chunk that
+  cannot be read at all (corrupt, or simply never opened because the step
+  never called `ctx.page()`) costs `actions` silently, the same
+  measurement-must-never-break-execution rule every other evidence-reading
+  field on this list already follows. The one loud exception is a trace
+  format version this build does not recognize: guessing at an unverified
+  shape is worse than reporting nothing, so `actions` is still omitted, but
+  `nuka run`/`nuka do` also warn once, on stderr (`warning: trace format
+  version <n> is not readable by this build; step actions were not
+  recorded`), because a silently empty `actions` sitting next to a
+  `evidence.trace` that plainly exists would otherwise read as "nothing
+  happened" rather than "this build could not read it".
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
@@ -1152,8 +1201,10 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 - `receipts/<id>/` — one directory per receipt: the receipt JSON and its
   evidence files (trace.zip, screenshots, http.jsonl)
 - `scenarios/<id>/` — one directory per scenario run: `record.json` plus
-  the scenario-scoped evidence (trace.zip, final screenshot) — mirroring
-  Playwright's own per-test `test-results/` convention one level up
+  the scenario's own final screenshot, mirroring Playwright's own per-test
+  `test-results/` convention one level up. No trace.zip here any more: each
+  step's own trace lives under that step's own `receipts/<id>/` instead
+  (see "Running")
 - `sessions/<env>/<name>.json` — storageState; live credentials in
   plaintext, created with restricted permissions
 - `allure-results/` — the emitter's output, appended to across runs and
@@ -1305,8 +1356,8 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
 - A scenario run maps to one Allure test result: each gherkin step becomes
   an Allure step, and each Before/After hook becomes its own fixture
   (Allure container).
-- Attachments: the scenario's own trace and screenshot, and per step, its
-  HTTP log and its validated result. Separately, whatever a step declared
+- Attachments: the scenario's own screenshot, and per step, its own trace,
+  HTTP log, and validated result. Separately, whatever a step declared
   about itself — an attachment, a link, a log line — is emitted too, always
   under a name prefixed `declared:`; that prefix is the one place where
   provenance (measured by nukadoko vs. self-reported by the step) survives
@@ -1321,10 +1372,13 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   have to open an attachment to get it; `receipt.json` is the fallback that
   keeps the report complete even where an individual mapping was never
   written.
-- A step's own `sections` and `polls` (see Receipts) become one child-step
-  timeline nested under that step, merged in ascending `at` order. A
-  section renders as a zero-width marker named after its own label. A poll
-  spans its own start through `waited_ms` later, named `<description>
+- A step's own `sections`, `polls`, and `actions` (see Receipts) become one
+  child-step timeline nested under that step, merged in ascending `at`
+  order; two entries that land on the exact same millisecond keep a fixed
+  order, `sections` before `polls` before `actions`, so a rerun of the same
+  receipt never reshuffles the timeline into an unreadable diff. A section
+  renders as a zero-width marker named after its own label. A poll spans
+  its own start through `waited_ms` later, named `<description>
   (<attempts> attempts)`, so a wait that resolved in one attempt reads
   differently from one that took forty without opening the receipt: the
   duration alone cannot tell those two apart, and the count is the one fact
@@ -1332,9 +1386,26 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   status: `resolved` is passed, `timed_out` is failed (the condition it
   waited for was never met, the step's own contract not holding), `failed`
   is broken (the poll's callback itself threw, unrelated to whatever it was
-  waiting for). Never clamped to the parent step's own start/stop range: a
-  timeline entry outside that range already happened, and hiding it would
-  make it unreadable rather than making it not true.
+  waiting for). An action spans its own start through `ms` later, named
+  after its own `method` plus, when the call carried one, its `selector` or
+  `url` (e.g. `goto /orders`); an `expect` call is named with its matcher
+  and target instead (e.g. `expect #late to.be.visible`, with `not` folded
+  in for a negated assertion), since neither is implied by `method` alone
+  the way a `goto`'s own target is implied by `url`. Neither `ms` nor
+  `timeout_ms` ever lands in the name: `ms` is already visible as the child
+  step's own width, the same reason `page_events`'s counts stay off step
+  names too, and `timeout_ms` stays in the `receipt.json` attachment. An
+  action's own `outcome` sets the child step's status, passed or failed,
+  no third bucket: unlike a poll, a Playwright call either resolved the way
+  the step asked or it did not. When `actions` itself was capped at 100
+  entries (see Receipts, `truncated.actions`), the timeline gets one more
+  child step at its own tail, zero-width and passed, naming the cut (e.g.
+  `... 4113 more actions not shown`), for the same reason `page_events`'s
+  own `truncated` field exists: a reader scanning only the timeline must
+  never mistake a capped list for everything that happened. Never clamped
+  to the parent step's own start/stop range: a timeline entry outside that
+  range already happened, and hiding it would make it unreadable rather
+  than making it not true.
 - `page_events` (see Receipts) surfaces as up to three more parameters,
   `console errors (observed)`, `page errors (observed)`, `failed requests
   (observed)`, one per category that recorded at least one entry, so a

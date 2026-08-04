@@ -76,6 +76,7 @@ describe("createStepContext / ctx.page()", () => {
         config: baseConfig(),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       const page = await ctx.page();
@@ -129,6 +130,7 @@ describe("createStepContext / ctx.page()", () => {
         config: baseConfig(),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       const page = await ctx.page();
@@ -186,6 +188,7 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
         config: baseConfig(),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       const page = await ctx.page();
@@ -203,6 +206,7 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
         config: baseConfig({ browser: { headless: false } }),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       const page = await ctx.page();
@@ -250,6 +254,7 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
         }),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       await ctx.page();
@@ -279,6 +284,7 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
         config: baseConfig({ baseURL: "http://127.0.0.1:1" }),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       await ctx.page();
@@ -328,6 +334,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
         config: baseConfig(),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       const page = await ctx.page();
@@ -385,6 +392,7 @@ describe("createStepContext / ctx.page(): baseURL wired into the browser context
         config: baseConfig({ baseURL }),
         evidenceDir,
         env: {},
+        stepTitle: "browser step",
       });
 
       const page = await ctx.page();

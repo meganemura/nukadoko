@@ -4,6 +4,7 @@ import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
+import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { probeVersion } from "../environment/probe-version.js";
@@ -375,6 +376,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // is about `step` itself, not about whether a lookup would have
       // succeeded, so it must fire here exactly as it does under `nuka run`.
       isRegisteredStep,
+      // `nuka do` is one execution, one trace chunk (p3a-trace-per-step task
+      // spec, scope A item 4: "`nuka do` では step 名") — this ctx never
+      // calls `beginStep`, so the step's own name, known once here, is the
+      // only title its chunk (if `ctx.page()` is ever called) will use.
+      stepTitle: name,
     });
     const startedAt = new Date();
 
@@ -499,6 +505,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
     }
     const { evidence, storageState: storageStateToPersist } = disposeResult;
+    // `dispose()` above is what closes this execution's own (only) trace
+    // chunk, if `ctx.page()` was ever called (create-context.ts's own
+    // `closeCurrentChunk`) — trace.zip, when it exists at all, is fully
+    // written by the time this runs, so `actions`/`truncated` can be read
+    // out of it here (p3a-trace-per-step task spec, scope B).
+    const traceEvidence = await collectTraceEvidence(evidenceDir, createTraceVersionWarner(stderr));
 
     // Save whenever a session was requested *and* dispose() actually
     // produced something to persist (this task's spec, decision 2): a run
@@ -545,6 +557,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
+            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           }
         : {
             receipt_id: receiptId,
@@ -577,6 +591,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
+            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           };
 
     // Redacted once, as one object — args/result/error.message and every

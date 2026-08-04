@@ -987,6 +987,233 @@ describe("mapScenario: poll outcome -> status/startMs/stopMs, all three outcomes
   });
 });
 
+// --- p3c-allure-actions task spec: actions merged into the same
+// sections/polls timeline, plus the truncation marker ---
+
+describe("mapScenario: actions merged into the sections/polls timeline", () => {
+  it("merges an action alongside sections/polls in ascending `at` order", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      sections: [{ label: "A", at: "2026-08-01T00:00:00.100Z" }],
+      polls: [{ description: "B", at: "2026-08-01T00:00:00.200Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
+      actions: [
+        { method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.300Z" },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["A", "B (1 attempts)", "goto /orders"]);
+  });
+
+  it("names an expect action with its matcher and target, never its ms/timeout_ms", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      actions: [
+        {
+          method: "expect",
+          expression: "to.be.visible",
+          selector: "#late",
+          timeout_ms: 5000,
+          ms: 1234,
+          outcome: "passed",
+          at: "2026-08-01T00:00:00.100Z",
+        },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const at = Date.parse("2026-08-01T00:00:00.100Z");
+    expect(mapped.steps[0]!.childSteps[0]).toEqual({
+      name: "expect #late to.be.visible",
+      startMs: at,
+      stopMs: at + 1234,
+      status: "passed",
+    });
+  });
+
+  it("folds a negated expect's own `.not` into the matcher, so it never reads as its own opposite", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      actions: [
+        {
+          method: "expect",
+          expression: "to.be.visible",
+          selector: "#late",
+          is_not: true,
+          ms: 10,
+          outcome: "passed",
+          at: "2026-08-01T00:00:00.100Z",
+        },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps[0]!.name).toBe("expect #late not to.be.visible");
+  });
+
+  it("names a non-expect action with its method and url when there is no selector", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      actions: [{ method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps[0]!.name).toBe("goto /orders");
+  });
+
+  it("maps outcome: failed to status failed", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      actions: [{ method: "click", selector: "#submit", ms: 10, outcome: "failed", at: "2026-08-01T00:00:00.100Z" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps[0]!.status).toBe("failed");
+  });
+
+  it("keeps a fixed sections -> polls -> actions order when all three tie on the exact same `at`", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const sameInstant = "2026-08-01T00:00:00.100Z";
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      sections: [{ label: "section", at: sameInstant }],
+      polls: [{ description: "poll", at: sameInstant, attempts: 1, waited_ms: 0, outcome: "resolved" }],
+      actions: [{ method: "click", selector: "#go", ms: 0, outcome: "passed", at: sameInstant }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["section", "poll (1 attempts)", "click #go"]);
+  });
+
+  it("appends one zero-width, passed marker naming the cut when actions was truncated", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const actions = Array.from({ length: 3 }, (_, index) => ({
+      method: "click",
+      selector: `#item-${index}`,
+      ms: 5,
+      outcome: "passed" as const,
+      at: `2026-08-01T00:00:00.${String(100 + index).padStart(3, "0")}Z`,
+    }));
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      actions,
+      truncated: { actions: 103 },
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const childSteps = mapped.steps[0]!.childSteps;
+    const marker = childSteps[childSteps.length - 1]!;
+    expect(marker.name).toBe("... 100 more actions not shown");
+    expect(marker.status).toBe("passed");
+    expect(marker.startMs).toBe(marker.stopMs);
+    expect(marker.startMs).toBe(childSteps[childSteps.length - 2]!.stopMs);
+  });
+
+  it("adds no marker when actions is present but not truncated", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      actions: [{ method: "click", selector: "#go", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["click #go"]);
+  });
+});
+
 describe("mapScenario: page_events as step parameters", () => {
   function consoleErrorEntry(index: number) {
     return {

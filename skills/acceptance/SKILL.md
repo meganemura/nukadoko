@@ -282,7 +282,7 @@ step actually saw and why it didn't hold up — no second receipt.json to
 open and cross-reference by hand.
 
 Read it as one timeline rather than a bag of separate fields: `started_at`,
-`finished_at`, `sections[].at`, `polls[].at`, and
+`finished_at`, `sections[].at`, `polls[].at`, `actions[].at`, and
 `evidence.screenshots[].at` all share the same clock, so sorting them
 together turns the receipt into an ordered account of what happened when.
 
@@ -290,9 +290,16 @@ together turns the receipt into an ordered account of what happened when.
 jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finished"}]
   + (.sections // [] | map({at, event: "section:\(.label)"}))
   + (.polls // [] | map({at, event: "poll:\(.description // "poll")"}))
+  + (.actions // [] | map({at, event: "action:\(.method) (\(.ms)ms, \(.outcome))"}))
   + (.evidence.screenshots // [] | map({at, event: "screenshot:\(.file)"})))
   | sort_by(.at)[] | "\(.at)  \(.event)"' receipt.json
 ```
+
+`actions` is every Playwright call this step made through `ctx.page()`,
+`expect` waits included, each with its own duration and outcome, read
+straight off the step's own trace: an `expect` that timed out shows up here
+with `outcome: "failed"` and a real `ms`, often enough to explain a failure
+without opening the trace viewer at all.
 
 If the step opened a browser (`ctx.page()`), also check `page_events` on
 that receipt: a console error, an uncaught page error, or a failed request
@@ -301,15 +308,17 @@ since it comes from the page itself rather than anything the step declared.
 
 If an absence claim turns up on that timeline, check whether its own
 moment sits before whatever readiness evidence the step returned alongside
-it. Earlier means the read landed before the page was ready to be read —
+it. Earlier means the read landed before the page was ready to be read,
 premature, not a state problem to go chase in the app. Don't trust
 `final.png` to show the moment of failure either: it's taken once the step
 has already returned or thrown, during teardown, so compare its `at`
-against `finished_at` rather than the screenshot's contents alone — a gap
-of several seconds between them reads, at a glance, like state that was
-flickering, and it has been misdiagnosed as exactly that. Reach for the
+against `finished_at` rather than the screenshot's contents alone (a gap of
+several seconds between them reads, at a glance, like state that was
+flickering, and it has been misdiagnosed as exactly that). Reach for the
 trace only when the DOM itself is what's in question: `npx playwright
-show-trace <evidence.dir>/trace.zip`.
+show-trace <evidence.dir>/trace.zip`. That trace is this one step's own
+window now, not the whole scenario's recording, so what it shows is exactly
+this failure, nothing earlier in the scenario to scrub past first.
 
 If that receipt only sharpens a hypothesis rather than confirming it, test
 the hypothesis with `nuka do <step> --use <upstream-receipt-id>` instead of

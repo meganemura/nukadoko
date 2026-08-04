@@ -165,10 +165,24 @@
 // exists for the same reason). Named `mutates`, not `declared`, because
 // `declared` already means something else on this exact interface (self-
 // reported allure-js data, directly above) — reusing it here would collide.
+//
+// `actions` and its sibling `truncated` are added now (p3a-trace-per-step
+// task spec, scope B): every Playwright call the step made through
+// `ctx.page()`, read back out of that step's own trace chunk
+// (`evidence.trace`, now a per-step file rather than one spanning the whole
+// scenario — see this file's own `evidence.trace`-adjacent notes below and
+// `ScenarioEvidence` in src/run/record-types.ts). Parsing lives in
+// src/context/trace-actions.ts, which also documents the allowlist that
+// keeps a call's own `params` from ever landing on the receipt whole (a
+// `setContent` call's own HTML body is the case that motivated it). Present
+// only when non-empty, `page_events`/`sections`' own convention; capped at
+// 100 entries, `truncated: { actions: <true total> }` reporting the same way
+// `page_events`'s own per-category `truncated` does when the cap is hit.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ObservedCounts } from "../context/observed.js";
 import type { PageEventsSnapshot } from "../context/page-events.js";
+import type { ActionEntry } from "../context/trace-actions.js";
 import type { UsedEntry, UsedEntryWithResult } from "../context/used.js";
 
 /** The closed set of machine-readable failure causes a receipt's `error` can
@@ -347,6 +361,23 @@ interface ReceiptBase {
    * absent when `ctx.page()` was never called this execution, or was and
    * the page stayed clean. */
   page_events?: PageEventsSnapshot;
+  /** Every Playwright call this step made through `ctx.page()`, read back
+   * out of this step's own trace chunk (p3a-trace-per-step task spec, scope
+   * B; this file's own header) — `expect` waits included, with their own
+   * `ms`. Present only when non-empty; capped at 100 entries, same
+   * convention as `page_events`. Omitted, never present-and-empty, when
+   * `ctx.page()` was never called this step, when the chunk itself could not
+   * be read (a corrupt trace.zip — measurement must never break execution,
+   * this file's own header), or when the chunk's own trace format version
+   * is one this build does not know how to read (`nuka run`/`nuka do`
+   * report that case once, on stderr, instead — src/context/trace-
+   * actions.ts's own header). */
+  actions?: readonly ActionEntry[];
+  /** Present only when `actions` above hit its own 100-entry cap — the true
+   * total call count, the same `{ category: <true total> }` shape
+   * `page_events`'s own `truncated` field already uses, with `actions` as
+   * this receipt's only category. */
+  truncated?: { actions: number };
   /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
    * the counterpart to `observed` a receipt needs to let "declared vs
    * observed" be checked from the receipt alone (this task's spec, decision

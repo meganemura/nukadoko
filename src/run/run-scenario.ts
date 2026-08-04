@@ -1,7 +1,12 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { type GherkinDocument, type Pickle, type PickleStep } from "@cucumber/messages";
+import {
+  type GherkinDocument,
+  type Pickle,
+  type PickleStep,
+  type Step as GherkinStep,
+} from "@cucumber/messages";
 import type { z } from "zod";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import type { CheckedPattern } from "../check/binding-check.js";
@@ -20,6 +25,7 @@ import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
 import { createStepContext } from "../context/create-context.js";
+import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
@@ -278,6 +284,13 @@ export interface RunScenarioOptions {
    * wherever that is `undefined`; an own declaration always wins. Not
    * applied to a typed step, which has no timeout mechanism at all. */
   readonly defaultTimeoutMs: number | undefined;
+  /** Reports a trace format version this build cannot read (p3a-trace-per-
+   * step task spec, scope B item 2) — one instance per `nuka run`
+   * invocation (`src/context/trace-actions.ts`'s `createTraceVersionWarner`,
+   * built once by cli/run.ts and passed unchanged into every
+   * `runScenario` call for that invocation), so a run whose several steps
+   * each hit this still only ever writes the stderr warning once. */
+  readonly onUnknownTraceVersion: (version: number) => void;
 }
 
 function undefinedStepMessage(text: string): string {
@@ -286,6 +299,49 @@ function undefinedStepMessage(text: string): string {
 
 function ambiguousStepMessage(text: string, stepNames: readonly string[]): string {
   return `"${text}" matches more than one step: ${[...stepNames].sort().join(", ")}`;
+}
+
+// --- p3a-trace-per-step task spec, scope A item 4: a step's own trace chunk
+// is titled with its full gherkin text, keyword included ("Given the page is
+// open"), so the chunk names itself the same way a reader would refer to the
+// step. `pickleStep.text` alone never carries the keyword (gherkin's own
+// pickle compiler strips it — the same reason src/report/allure/
+// map-scenario.ts resolves it separately for its own step-name mapping); the
+// only place left to read it is the original `GherkinDocument`, by walking
+// from `pickleStep.astNodeIds[0]` back to the `Step` node that produced it.
+// A small, local re-derivation rather than an import from map-scenario.ts:
+// that module's own helpers are private, and even if they were not, src/
+// report/** is out of this task's scope entirely (this task's spec, "対象
+// ファイル").
+
+function collectGherkinStepKeywords(doc: GherkinDocument): Map<string, string> {
+  const keywords = new Map<string, string>();
+  const addSteps = (steps: readonly GherkinStep[] | undefined): void => {
+    for (const step of steps ?? []) {
+      keywords.set(step.id, step.keyword);
+    }
+  };
+  for (const child of doc.feature?.children ?? []) {
+    addSteps(child.background?.steps);
+    addSteps(child.scenario?.steps);
+    for (const ruleChild of child.rule?.children ?? []) {
+      addSteps(ruleChild.background?.steps);
+      addSteps(ruleChild.scenario?.steps);
+    }
+  }
+  return keywords;
+}
+
+/** `"Given the page is open"` — the keyword (trailing space already
+ * included in gherkin's own `Step.keyword`) plus `pickleStep.text`, or the
+ * bare text alone when the keyword can't be resolved (no astNodeIds, or an
+ * id this pickle's own document doesn't have — should not happen for a
+ * step that matched at all, but falling back rather than throwing keeps a
+ * chunk title from ever being the reason a step fails). */
+function stepChunkTitle(stepKeywords: ReadonlyMap<string, string>, pickleStep: PickleStep): string {
+  const astNodeId = pickleStep.astNodeIds[0];
+  const keyword = astNodeId !== undefined ? stepKeywords.get(astNodeId) : undefined;
+  return keyword !== undefined ? `${keyword}${pickleStep.text}` : pickleStep.text;
 }
 
 // --- m6a-from-core task spec, item 4: `from` injection (scenario path
@@ -570,12 +626,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     instantiateCompatWorld,
     compatHooks,
     defaultTimeoutMs,
+    onUnknownTraceVersion,
   } = options;
 
   const scenarioId = generateScenarioId();
   const relativeScenarioDir = path.join(config.stateDir, "scenarios", scenarioId);
   const scenarioDir = path.join(rootDir, relativeScenarioDir);
   await mkdir(scenarioDir, { recursive: true });
+  // This pickle's own step keywords, for each step's own trace chunk title
+  // (this file's own header, just above) — built once per pickle, the same
+  // "cheap, rebuilt per call" convention `stepNameOf` below already follows.
+  const stepKeywords = collectGherkinStepKeywords(gherkinDocument);
 
   const startedAt = new Date();
 
@@ -735,6 +796,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const errorMessage = initialErrorMessage;
     const errorKind = initialErrorKind;
 
+    // Closes this step's own trace chunk, if one is open, *before* anything
+    // below reads from `begun.receiptDir` (p3a-trace-per-step task spec) —
+    // the reason this is a dedicated call rather than left to the next
+    // `beginStep` (which only runs once the next step, or a hook boundary,
+    // starts, well after this step's own receipt is already written): a
+    // step's own `evidence.trace` has to be knowable *now*, from this
+    // step's own chunk having already been written to disk.
+    await contextHandle.endStep();
+    const traceEvidence = await collectTraceEvidence(begun.receiptDir, onUnknownTraceVersion);
+
     // `observed.http_writes`/`http_reads` are tallied every occurrence,
     // typed or compat alike, and always land on the receipt below — this is
     // a record, not a verdict (t2-trust-declaration task spec): nukadoko no
@@ -812,6 +883,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               dir: begun.relativeReceiptDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
+              ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
             },
             observed,
             mutates,
@@ -828,6 +900,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               : {}),
             ...(declared ? { declared } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
+            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           }
         : {
             receipt_id: begun.receiptId,
@@ -853,6 +927,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               dir: begun.relativeReceiptDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
+              ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
             },
             observed,
             mutates,
@@ -869,6 +944,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               : {}),
             ...(declared ? { declared } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
+            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,
@@ -938,8 +1015,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // task's spec, item 5: a hook's own network stays outside any step
   // boundary) — redirected
   // to the scenario dir itself, the same place `httpLogDir` already starts
-  // out pointed at before any step's own `beginStep()` call ever runs.
-  contextHandle.beginStep(scenarioDir);
+  // out pointed at before any step's own `beginStep()` call ever runs. No
+  // title is given (p3a-trace-per-step task spec) — a hook boundary never
+  // opens a trace chunk of its own (see create-context.ts's own header for
+  // why hooks are kept out of this task's scope).
+  await contextHandle.beginStep(scenarioDir);
   // Same step-boundary point for the World's own instrumentation (m2c-typed-
   // world task spec, item 1's reconcile + item 3's per-boundary reset) — a
   // Before hook's own World reads/writes get tallied here but are discarded
@@ -1054,8 +1134,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // an AfterStep hook's own requests would keep writing into the step it
     // just ran after's own http.jsonl, even though that step's receipt (and
     // its `observed` tally) was already built and written by
-    // `finishExecutedStep` before this function is ever called.
-    contextHandle.beginStep(scenarioDir);
+    // `finishExecutedStep` before this function is ever called. No title
+    // (p3a-trace-per-step task spec) — same hook-boundary reasoning as the
+    // Before/After loops.
+    await contextHandle.beginStep(scenarioDir);
     worldInstrumentation.beginStep();
     const hookParameter = buildHookParameter(
       gherkinDocument,
@@ -1225,7 +1307,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
         const receiptDir = path.join(rootDir, relativeReceiptDir);
         await mkdir(receiptDir, { recursive: true });
-        contextHandle.beginStep(receiptDir);
+        // Titled with this step's own gherkin text, keyword included (this
+        // file's own header) — the trace chunk `ctx.page()` opens lazily
+        // during this step, if it does, self-identifies the same way this
+        // task's spec asked for.
+        await contextHandle.beginStep(receiptDir, stepChunkTitle(stepKeywords, pickleStep));
         worldInstrumentation.beginStep();
         declaredCollector.beginStep(receiptDir);
         began = {
@@ -1329,7 +1415,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
         const receiptDir = path.join(rootDir, relativeReceiptDir);
         await mkdir(receiptDir, { recursive: true });
-        contextHandle.beginStep(receiptDir);
+        // Titled with this step's own gherkin text, keyword included (this
+        // file's own header) — same as the typed branch above.
+        await contextHandle.beginStep(receiptDir, stepChunkTitle(stepKeywords, pickleStep));
         worldInstrumentation.beginStep();
         declaredCollector.beginStep(receiptDir);
         began = {
@@ -1451,6 +1539,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           error: { message },
         });
       } else {
+        // Same "close this step's own chunk before reading anything from
+        // its receipt dir" call `finishExecutedStep` makes (this file's own
+        // header, p3a-trace-per-step task spec) — a chunk can be open here
+        // too: `began !== null` means this step's own `beginStep` already
+        // ran, so `ctx.page()` could already have opened one before the
+        // uncaught throw this backstop exists for.
+        await contextHandle.endStep();
+        const traceEvidence = await collectTraceEvidence(began.receiptDir, onUnknownTraceVersion);
         const stepFinishedAt = new Date();
         const httpLogExists = existsSync(path.join(began.receiptDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
@@ -1495,6 +1591,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             dir: began.relativeReceiptDir,
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
+            ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
           },
           observed,
           mutates: began.mutates,
@@ -1507,6 +1604,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             : {}),
           ...(declared ? { declared } : {}),
           ...(pageEvents ? { page_events: pageEvents } : {}),
+          ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
+          ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
         };
         const redactedReceipt = redact(receipt, secrets) as Receipt;
         await writeReceipt(began.receiptDir, redactedReceipt);
@@ -1531,8 +1630,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // `this.page`/`this.request` while the browser/request context is open —
   // redirected to the scenario's own boundary for the same reason Before
   // hooks are, above, rather than left pointed at whichever step happened
-  // to run last.
-  contextHandle.beginStep(scenarioDir);
+  // to run last. No title (p3a-trace-per-step task spec) — same hook-
+  // boundary reasoning as the Before loop.
+  await contextHandle.beginStep(scenarioDir);
   worldInstrumentation.beginStep();
   for (const hook of afterHooks) {
     // Same per-hook declared boundary as the Before loop above (this task's
@@ -1636,7 +1736,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     evidence: {
       dir: relativeScenarioDir,
       screenshots: browserEvidence.screenshots,
-      ...(browserEvidence.trace !== undefined ? { trace: browserEvidence.trace } : {}),
+      // No scenario-level `trace` any more (p3a-trace-per-step task spec):
+      // the whole-scenario recording this used to report is retired, split
+      // into each step's own `receipt.evidence.trace` instead (this file's
+      // own header). `ScenarioEvidence.trace` (record-types.ts) stays typed
+      // as optional for src/report/**'s own sake (out of this task's
+      // scope), but this executor never sets it any more.
     },
   };
 

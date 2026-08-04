@@ -541,7 +541,13 @@ feature のフル実行はすべての scenario の分数を消費し、その�
 ログインする Background は、以降のすべての step にブラウザと cookie を引き継ぎます。
 失敗した step は scenario の残りをスキップし、スキップされた step には receipt が作られません(始まってすらいない実行が引用可能であってはならず、「skipped」と言うのは scenario record の役目です)。
 Evidence は自然なスコープに従います。
-各 step の receipt はその step の http.jsonl を持ち、一方 Playwright の trace は共有された context にまたがるため、個々の step ではなく scenario 自身のディレクトリに置かれます。
+各 step の receipt は、その step 自身の http.jsonl と、その step 自身の Playwright trace の両方を持ちます。
+trace はかつて、共有された context 全体にまたがる 1 本のファイルとして scenario 自身のディレクトリに置かれ、最初の `ctx.page()` 呼び出しで一度だけ開かれ、最後に一度だけ閉じられていました。
+今は step の境界ごとに切られ、ブラウザに一度も触れない step にはそもそも trace の chunk が無く、触れた step にはその step 自身の操作だけが入った chunk があります(これは `ctx.page()` がすでに持っていた「初回呼び出しで開く」という性質と同じ切り方です)。
+落ちた step の trace を直接開けるほうが、何が起きたかを scenario 全体の録画からスクラブして探すより速く、それがこの変更の理由のすべてです。
+シナリオ全体の 1 本の trace がついでに与えていたもの、つまり全 step をまたいだネットワークの通し view は、step ごとの trace には無くなります。
+各 step 自身の trace にはその step 自身の通信は変わらず入っているので、1 つの step 単体の通信について失われるものは無く、失われるのは scenario 全体の通信を 1 つのファイルだけ開いて眺められるという点だけです。
+`ctx.request()` の通信にはすでに http.jsonl という通しの view がありますが、step の境界をまたぐ page 由来の通信にはまだそれが無く、その隙間を埋めるのは今回ではなく別の作業です。
 
 pickle が実行される前に、その step たちの `from` 宣言は自分自身の step の順序と照合されます。
 required な連鎖キーの生産者が欠けているか、より後ろで束ねられている場合、その scenario は何かが起動するより前に失敗します。
@@ -720,6 +726,24 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   secret はコンソールのテキストにも、失敗したリクエストの URL にも、他のどこにと同じくらい容易に載りうるため、このフィールド専用の別の redact 経路は存在しません。
   成功した step の receipt にも失敗した step の receipt にも、同じように現れます。
   page のエラーは page についての証跡であり、step についての判定ではないからです。
+- `actions`(空でないときだけ現れます)は、この step 自身の trace chunk(上の `evidence.trace`)から読み出されます。
+  この step が `ctx.page()` を通して行った Playwright の呼び出しすべてで、`expect` の待ちも含み、trace が完了を記録した順に並びます。
+  `expect` のためだけの fixture やラッパーは何も要りません。
+  step は Playwright のテストファイルと同じやり方(`import { expect } from "@playwright/test"`)でそこにたどり着き、trace はそのラッパーの下、Playwright 自身の層でその呼び出しを記録します。
+  `goto`、`click`、その他すべての呼び出しがすでに同じ場所に載っているのと同じです。
+  各エントリは `{ "method", "expression"?, "selector"?, "url"?, "is_not"?, "timeout_ms"?, "ms", "outcome", "at" }` です。
+  `method` と 5 つの任意フィールドは trace 自身の呼び出しからそのまま写され、`ms` はその呼び出し自身の所要時間を trace 自身の時計で測ったもの、`outcome` は trace がその呼び出しに error を記録していれば `"failed"`、そうでなければ `"passed"` です。
+  `at`(ISO 8601)は trace 自身の monotonic clock から絶対時刻に変換したもので、`actions` を `sections`/`polls`/`evidence.screenshots[].at` がすでに共有しているのと同じタイムラインに載せます。
+  5 つの任意フィールドは allowlist であり、その呼び出しが運んでいたものすべてではありません。
+  `setContent` 呼び出し自身の HTML 本文は一例ですが、数キロバイトに達することもあり、trace.zip にすでに全体があるのに receipt にそれを必要とするものは何もないからです。
+  上限は 100 件で `page_events` と同じ規約であり、上限に達したときに真の総数を報告する兄弟フィールド `truncated` も同じです: `"truncated": { "actions": 214 }`。
+  他のどのフィールドとも同じ 1 回の redact で覆われます。
+  secret は `url` や `selector` にも、他のどこにと同じくらい容易に載りうるため、このフィールドにも専用の別の redact 経路はありません。
+  trace chunk がそもそも読めないとき(壊れている、あるいは step が `ctx.page()` を一度も呼ばずそもそも開かれなかったとき)は `actions` は黙って失われます。
+  このリストにある他のどの evidence 読み取りフィールドもすでに従っている、計測が実行を壊してはならないという同じ規則です。
+  唯一の声を上げる例外は、この build が認識しない trace format のバージョンです。
+  検証していない形を推測することは、何も報告しないことより悪いため、`actions` はやはり省かれますが、`nuka run`/`nuka do` は stderr にも一度だけ警告します(`warning: trace format version <n> is not readable by this build; step actions were not recorded`)。
+  `evidence.trace` は確かに存在するのに `actions` だけが黙って空になっていると、それは「この build が読めなかった」ではなく「何も起きなかった」と読めてしまうからです。
 - receipt は state directory(`.nukadoko/`、gitignore 対象)の下に置かれます。
   それらはローカルな作業記録であり、耐久性のある成果物は sign-off です。
 
@@ -821,8 +845,10 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置かれ(`init` によって gitignore されます)、そのどれもコミットされることを意図していません:
 
 - `receipts/<id>/`(receipt ごとに 1 つのディレクトリ: receipt の JSON とその evidence ファイル(trace.zip、screenshots、http.jsonl))
-- `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json` と、scenario スコープの evidence(trace.zip、最終スクリーンショット))。
+- `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json` と、scenario 自身の最終スクリーンショット)。
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
+  ここにはもう trace.zip はありません。
+  各 step 自身の trace は、その step 自身の `receipts/<id>/` の下に置かれます(「実行」を参照)。
 - `sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)。
   `init` もこれを空のまま作ります。
@@ -929,7 +955,7 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   run の途中でそのディレクトリに対して `allure generate` を実行すると、そこまでに終わった scenario がすべて報告されます。
   このディレクトリ自身の整合性は、run が完了しているかどうかに何も依存していません。
 - scenario の実行は 1 つの Allure test result に対応します: 各 gherkin の step は 1 つの Allure step になり、各 Before/After フックはそれぞれ独立した fixture(Allure container)になります。
-- Attachment: scenario 自身の trace とスクリーンショット、そして step ごとにその HTTP ログとバリデーション済みの result です。
+- Attachment: scenario 自身のスクリーンショット、そして step ごとにその trace、HTTP ログ、バリデーション済みの result です。
   それとは別に、step が自分自身について宣言したもの(attachment、link、ログの一行)も出力され、常に `declared:` を接頭辞に付けた名前の下に置かれます。
   すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
 - receipt が存在する step には、合否を問わずすべて、その receipt 全体がそのまま `receipt.json` という attachment として付きます。
@@ -938,13 +964,23 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   下にある個別にマップされたフィールドもそのまま残ります。
   1 つの事実を知りたいだけの読み手が attachment を開かなくて済むようにするためです。
   `receipt.json` は、個別のマッピングが書かれていない場合でもレポートを完全に保つ、その受け皿です。
-- step 自身の `sections` と `polls`(「Receipt」を参照)は、その step の下にネストされた 1 本の child step タイムラインにまとめられます。
+- step 自身の `sections`、`polls`、`actions`(「Receipt」を参照)は、その step の下にネストされた 1 本の child step タイムラインにまとめられます。
   マージは `at` の昇順です。
+  同じミリ秒に複数の entry が重なったときは、`sections`、`polls`、`actions` の順という決まった並びを保ちます。
+  同じ receipt を読み直すたびに順序が入れ替わって diff が読めなくなる、ということがないようにするためです。
   section は、自分のラベルを名前に持つ幅ゼロのマーカーとしてレンダリングされます。
   poll は自分の開始点から `waited_ms` 後まで幅を持ち、名前は `<description> (<attempts> attempts)` です。
   こうすることで、1 回の試行で解決した待ちと 40 回かかった待ちを、receipt を開かなくても読み分けられます。
   所要時間だけでは両者を見分けられず、その回数こそが名前でしか運べない唯一の事実だからです。
   poll 自身の outcome は child step の status を決めます: `resolved` は passed、`timed_out` は failed(待っていた条件が満たされなかった、つまり step 自身の契約が成立しなかった)、`failed` は broken(poll のコールバック自身が例外を投げた、それは何を待っていたかとは無関係)です。
+  action は自分の開始点から `ms` 後まで幅を持ち、名前は自分の `method` に、呼び出しが持っていれば `selector` か `url` を添えたものです(例: `goto /orders`)。
+  `expect` の呼び出しだけは代わりに matcher と対象で名付けられます(例: `expect #late to.be.visible`。否定された assertion では `not` が畳み込まれます)。
+  `goto` の対象が `url` から自明であるのと違い、`expect` の matcher と対象はどちらも `method` だけからは分かりません。
+  `ms` も `timeout_ms` も名前には決して入りません: `ms` は child step 自身の幅としてすでに見えており、これは `page_events` の件数を step の名前に入れない理由と同じです。
+  `timeout_ms` は `receipt.json` という attachment の中にとどまります。
+  action 自身の `outcome` は child step の status を passed か failed のどちらかに決め、第 3 の分類はありません: poll と違い、Playwright の呼び出しは step が求めた通りに解決したか、しなかったかのどちらかだからです。
+  `actions` 自身が 100 件で打ち切られていたとき(「Receipt」の `truncated.actions` を参照)、タイムラインの末尾にもう 1 つ、幅ゼロで passed の child step が加わり、打ち切りの事実を名指しします(例: `... 4113 more actions not shown`)。
+  これは `page_events` 自身の `truncated` フィールドが存在するのと同じ理由です: タイムラインだけを見た読み手が、打ち切られたリストを全部だと取り違えることが決してないようにするためです。
   親 step 自身の start/stop の範囲にクランプすることは決してありません。
   その範囲の外に出た timeline entry は実際に起きたことであり、隠せば読めなくなるだけで、起きなかったことにはなりません。
 - `page_events`(「Receipt」を参照)は、最大で 3 つの parameter として表に出ます: `console errors (observed)`、`page errors (observed)`、`failed requests (observed)` です。

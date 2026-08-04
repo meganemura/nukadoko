@@ -9,6 +9,7 @@ import type {
   TableRow,
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
+import type { ActionEntry } from "../../context/trace-actions.js";
 import type { ErrorKind, PollRecord, Receipt } from "../../receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
@@ -516,16 +517,74 @@ interface TimelineEntry {
   readonly childStep: MappedChildStep;
 }
 
-/** One step's own `sections` and `polls`, merged into one child-step
- * timeline in ascending `at` order (p2-allure-measurement task spec, scope
- * 2) — a section is a zero-width marker at the moment `ctx.section` was
- * called; a poll spans its own `at` through `at + waited_ms`, its `attempts`
- * folded into the name because that count is the one fact only the name can
- * carry here (`attempts: 1` means the wait was a no-op; `40` means the
- * opposite fix is needed, and duration alone can't tell those apart).
- * Deliberately never clamped to the parent step's own start/stop: a receipt
- * whose own `sections`/`polls` timeline runs outside its step's measured
- * window is a real anomaly, not something to hide by clipping it. */
+/** `ActionEntry.outcome` -> `MappedStatus` — unlike `pollOutcomeStatus`
+ * above, an action's own outcome is already binary (trace-actions.ts: the
+ * trace's own `after` entry either carried an `error` or it didn't), so
+ * there is no third "broken" bucket to reach for here: `"failed"` means the
+ * Playwright call itself (an `expect` wait included) did not resolve the way
+ * the step asked it to, the same "the system under test violated the
+ * contract" the receipt's own `error.kind` already distinguishes from
+ * "the contract layer failed to reach a verdict" (this file's own header on
+ * `FAILED_KINDS`) — an action's failure is always the former, never the
+ * latter. */
+function actionOutcomeStatus(outcome: ActionEntry["outcome"]): MappedStatus {
+  return outcome === "failed" ? "failed" : "passed";
+}
+
+/** A readable name for one Playwright call (p3c-allure-actions task spec,
+ * scope 1) — `ms` and `timeout_ms` are deliberately never folded in here:
+ * `ms` is already visible as this child step's own width (unlike a poll's
+ * `attempts`, which the width alone can't reveal), and `timeout_ms` already
+ * lives in the `receipt.json` attachment. `expect` needs its matcher and
+ * target named explicitly (`before.params.expression`/`selector`) — neither
+ * is implied by `method` alone, the way `goto`'s own target is implied by
+ * `url` — so it gets its own branch; every other method falls back to
+ * `method` plus whichever of `selector`/`url` the call happened to carry
+ * (e.g. `goto /orders`), or bare `method` when neither was recorded.
+ * `is_not` (an `expect` call's own `.not`) is folded into the matcher too —
+ * an unhandled negation would render identically to its own opposite, which
+ * is exactly the silent-misread this name exists to prevent. */
+function actionName(action: ActionEntry): string {
+  const target = action.selector ?? action.url;
+  if (action.method === "expect" && action.expression !== undefined) {
+    const matcher = action.is_not === true ? `not ${action.expression}` : action.expression;
+    return target !== undefined ? `expect ${target} ${matcher}` : `expect ${matcher}`;
+  }
+  return target !== undefined ? `${action.method} ${target}` : action.method;
+}
+
+/** One step's own `sections`, `polls`, and `actions`, merged into one
+ * child-step timeline in ascending `at` order (p2-allure-measurement task
+ * spec, scope 2; widened to include `actions` by p3c-allure-actions task
+ * spec, scope 1) — a section is a zero-width marker at the moment
+ * `ctx.section` was called; a poll spans its own `at` through
+ * `at + waited_ms`, its `attempts` folded into the name because that count
+ * is the one fact only the name can carry here (`attempts: 1` means the
+ * wait was a no-op; `40` means the opposite fix is needed, and duration
+ * alone can't tell those apart); an action spans its own `at` through
+ * `at + ms`, named by `actionName` above. Deliberately never clamped to the
+ * parent step's own start/stop: a receipt whose own timeline runs outside
+ * its step's measured window is a real anomaly, not something to hide by
+ * clipping it.
+ *
+ * Same-instant order, when `sections`/`polls`/`actions` land on the exact
+ * same millisecond (p3c-allure-actions task spec, scope 3): sections, then
+ * polls, then actions, always — a fixed choice (nothing about "what a
+ * section/poll/action *is*" makes one belong before another at the same
+ * instant) rather than a discovered one, made here once so a rerun of the
+ * same receipt never reorders the timeline and turns into an unreadable
+ * diff. Enforced by `Array.prototype.sort`'s own stability: each category is
+ * pushed to `entries` in that same order below, so two entries that tie on
+ * `at` keep the order they were pushed in.
+ *
+ * A truncated `actions` array (`receipt.truncated.actions` present) gets one
+ * more child step appended after the sort, naming the cut so a reader
+ * scanning only the timeline never mistakes a capped list for the whole
+ * story (this task's spec, scope 2 — the same reason `page_events`'s own
+ * `truncated` field exists, this file's own `pageEventCount` below). Placed
+ * at the tail on purpose: it names a fact about the receipt as a whole, not
+ * a moment inside the step, so it is appended to the array rather than
+ * merged into the `at`-ordered sort above. */
 function mapTimelineChildSteps(receipt: Receipt): MappedChildStep[] {
   const entries: TimelineEntry[] = [];
   for (const section of receipt.sections ?? []) {
@@ -544,11 +603,45 @@ function mapTimelineChildSteps(receipt: Receipt): MappedChildStep[] {
       },
     });
   }
+  for (const action of receipt.actions ?? []) {
+    const startMs = Date.parse(action.at);
+    entries.push({
+      at: action.at,
+      childStep: {
+        name: actionName(action),
+        startMs,
+        stopMs: startMs + action.ms,
+        status: actionOutcomeStatus(action.outcome),
+      },
+    });
+  }
   // `Array.prototype.sort` is stable, so two entries that share the exact
-  // same instant keep the order they were pushed in above (a section before
-  // a poll recorded at that same millisecond).
+  // same instant keep the order they were pushed in above (sections, then
+  // polls, then actions — this function's own doc comment).
   entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  return entries.map((entry) => entry.childStep);
+  const childSteps = entries.map((entry) => entry.childStep);
+
+  if (receipt.truncated?.actions !== undefined) {
+    const shownCount = receipt.actions?.length ?? 0;
+    const notShownCount = receipt.truncated.actions - shownCount;
+    // Anchored to the last real entry's own `stopMs` (falling back to the
+    // step's own start when the timeline is otherwise empty, which cannot
+    // happen in practice — `truncated.actions` is only ever present
+    // alongside a full 100-entry `actions` array — but is not a type-level
+    // guarantee `receipt` itself carries) so this marker reads as "right
+    // after everything already shown" on both axes: last in the array
+    // (`writeChildSteps`, emitter.ts, renders children in array order) and
+    // latest in time.
+    const lastStopMs = childSteps.length > 0 ? childSteps[childSteps.length - 1]!.stopMs : Date.parse(receipt.started_at);
+    childSteps.push({
+      name: `... ${notShownCount} more actions not shown`,
+      startMs: lastStopMs,
+      stopMs: lastStopMs,
+      status: "passed",
+    });
+  }
+
+  return childSteps;
 }
 
 /** `page_events`'s three categories as step parameters (p2-allure-measurement

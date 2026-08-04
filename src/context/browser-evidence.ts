@@ -57,6 +57,21 @@ import type { PageEventsCollector } from "./page-events.js";
 // own header). `console` is filtered to `msg.type() === "error"` right here
 // — a warning is routine SPA noise, not evidence — the other two categories
 // have no such filter: every `weberror`/`requestfailed` is worth recording.
+//
+// `beginStepChunk`/`endStepChunk` (p3a-trace-per-step task spec) replace the
+// former "one trace.zip per context" shape: `tracing.start()` below still
+// opens one tracing session for this handle's whole lifetime (a chunk needs
+// a started session to begin from), but nothing is ever written from it
+// directly any more. create-context.ts opens and closes a chunk at each
+// step boundary instead, so `evidence.trace` on a receipt is that step's own
+// window, not the whole scenario's — a step that failed can be opened
+// directly instead of scrubbed for out of one long recording (the "前提" this
+// task's spec measured: `tracing.stop()` throws once a chunk has been used
+// at all, so the two shapes cannot coexist; the single scenario-long trace
+// is retired, not merely supplemented). `startChunk({ title })`'s own
+// `title` lands on the trace's `context-options` entry (also measured), so
+// each chunk names the step it came from without create-context.ts writing
+// that anywhere else.
 
 export interface LaunchBrowserOptions {
   /** `config.browser` (config/schema.ts) as a config author wrote it,
@@ -107,10 +122,32 @@ export interface BrowserEvidenceHandle {
    * `undefined` here means create-context.ts's `dispose` leaves the
    * existing session file untouched). */
   collectStorageState(): Promise<StorageState | undefined>;
-  /** Stops tracing, saves trace.zip, captures the final screenshot, and
-   * closes the browser. Returns the screenshot(s) actually written — at
-   * most one, `final.png` (best effort: a screenshot failure here must never
-   * mask the step's real outcome, so it is swallowed rather than thrown). */
+  /** Opens a new trace chunk (`tracing.startChunk({ title })`) — `title`
+   * lands on the chunk's own `context-options` entry (this file's own
+   * header). Executor-only, called from create-context.ts, never from a
+   * step's own `ctx`. Must not be called while a chunk is already open
+   * (create-context.ts's own `chunkOpen` bookkeeping is what keeps that
+   * true); unlike `endStepChunk` below, a failure here is not swallowed —
+   * it propagates out of whichever `ctx.page()` call triggered it, the same
+   * way a `launchBrowserWithTracing` failure already does, since a chunk
+   * that failed to open leaves nothing for `ctx.page()`'s own caller to
+   * usefully continue on. */
+  beginStepChunk(title: string): Promise<void>;
+  /** Closes the currently open trace chunk (`tracing.stopChunk({ path })`),
+   * writing it to `path`. Executor-only; only ever called when a chunk is
+   * actually open. Swallows its own failure — the same fault-tolerance
+   * `finalize`'s own teardown calls already have, and for the same reason:
+   * losing one step's own trace chunk must not cost that step's receipt
+   * (docs/spec.md's "measurement must never break execution"). */
+  endStepChunk(path: string): Promise<void>;
+  /** Captures the final screenshot and closes the context and browser.
+   * Returns the screenshot(s) actually written — at most one, `final.png`
+   * (best effort: a screenshot failure here must never mask the step's real
+   * outcome, so it is swallowed rather than thrown). No longer calls
+   * `tracing.stop()` (this file's own header: that call fails once a chunk
+   * has been used) — whatever chunk is still open when this runs is the
+   * caller's own responsibility to have already closed via `endStepChunk`,
+   * same as create-context.ts's `dispose()` does. */
   finalize(): Promise<ScreenshotEntry[]>;
 }
 
@@ -163,6 +200,19 @@ export async function launchBrowserWithTracing(
     }
   }
 
+  async function beginStepChunk(title: string): Promise<void> {
+    // Not swallowed — see the interface's own doc comment above for why.
+    await context.tracing.startChunk({ title });
+  }
+
+  async function endStepChunk(filePath: string): Promise<void> {
+    try {
+      await context.tracing.stopChunk({ path: filePath });
+    } catch {
+      // See the interface's own doc comment above.
+    }
+  }
+
   async function finalize(): Promise<ScreenshotEntry[]> {
     const screenshots: ScreenshotEntry[] = [];
     try {
@@ -177,17 +227,15 @@ export async function launchBrowserWithTracing(
       // The page may already be closed or otherwise unusable after a failed
       // run; losing a screenshot is not a reason to also lose the receipt.
     }
-    // Same reasoning for the three teardown calls below: a step can reach
-    // the browser via ctx.page() and close (or crash) it before throwing, so
-    // tracing.stop/context.close/browser.close can each fail on an already-
-    // gone context/browser. A missing trace.zip or a browser left half-torn-
-    // down is not a reason to also lose the receipt, so each is swallowed
-    // independently and best-effort teardown continues.
-    try {
-      await context.tracing.stop({ path: path.join(options.evidenceDir, "trace.zip") });
-    } catch {
-      // See comment above.
-    }
+    // Same reasoning for the two teardown calls below: a step can reach the
+    // browser via ctx.page() and close (or crash) it before throwing, so
+    // context.close/browser.close can each fail on an already-gone context/
+    // browser. A browser left half-torn-down is not a reason to also lose
+    // the receipt, so each is swallowed independently and best-effort
+    // teardown continues. `tracing.stop()` is deliberately not called here
+    // any more (this file's own header) — the caller (create-context.ts's
+    // `dispose`) already closed whatever chunk was open via `endStepChunk`
+    // before calling this.
     try {
       await context.close();
     } catch {
@@ -201,5 +249,5 @@ export async function launchBrowserWithTracing(
     return screenshots;
   }
 
-  return { page, collectStorageState, finalize };
+  return { page, collectStorageState, beginStepChunk, endStepChunk, finalize };
 }
