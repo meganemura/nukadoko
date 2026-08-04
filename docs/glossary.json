@@ -1,0 +1,143 @@
+{
+  "note": "英日の訳語対応。README.ja.md / docs/spec.ja.md / docs/migration.ja.md を書くとき・レビューするときに引く。ここにあるのはその3ファイルで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
+  "usage": [
+    "jq -r '.terms[] | select(.en | index(\"contract\")) | .ja' docs/glossary.json",
+    "jq -r '.terms[] | select(any(.en[]; test(\"wir\"; \"i\")))' docs/glossary.json",
+    "jq -r '.keep_english[] | select(.term == \"receipt\")' docs/glossary.json",
+    "jq -r '.headings[\"docs/spec.ja.md\"]' docs/glossary.json"
+  ],
+  "terms": [
+    {
+      "en": ["acceptance criteria", "acceptance criterion"],
+      "ja": "受け入れ基準",
+      "note": "以前 受け入れ条件 と割れていたが統一済み"
+    },
+    { "en": ["problem"], "ja": "課題", "context": "節タイトル" },
+    { "en": ["running"], "ja": "実行", "context": "scenario の実行を指す節タイトル" },
+    {
+      "en": ["tending", "tend"],
+      "ja": "手入れ",
+      "note": "「ぬか床は毎日手入れをすれば熟成し、放っておけば死ぬ」という比喩と対になっている。コマンド名 nuka tend は英語のまま"
+    },
+    { "en": ["rot", "rotting", "rotten"], "ja": "腐る / 腐敗" },
+    { "en": ["mature", "matures"], "ja": "熟成する" },
+    { "en": ["deviation"], "ja": "逸脱" },
+    { "en": ["chain", "chaining", "chained"], "ja": "連鎖" },
+    { "en": ["declare", "declared", "declaration"], "ja": "宣言" },
+    { "en": ["contract"], "ja": "契約" },
+    { "en": ["vocabulary"], "ja": "語彙" },
+    { "en": ["promote", "promoted", "promotion"], "ja": "昇格させる / 昇格した" },
+    {
+      "en": ["refuse", "refuses", "reject", "rejects"],
+      "ja": "拒否する",
+      "note": "英語では2語だが日本語では区別せず、どちらも 拒否する"
+    },
+    { "en": ["measure", "measured", "measurement"], "ja": "計測" },
+    {
+      "en": ["validated", "validation", "validate"],
+      "ja": "バリデーション(済み)",
+      "avoid": ["検証"],
+      "note": "docs/migration.ja.md にだけ 検証 が混在していたが統一済み"
+    },
+    {
+      "en": ["wire", "wire up", "wired", "wiring", "zero wiring"],
+      "ja": null,
+      "avoid": ["配線"],
+      "note": "「配線」は電気工事の語感が強く技術文書として浮く。文脈で訳し分ける",
+      "by_context": [
+        {
+          "when": "値や設定を別の層に届ける",
+          "ja": ["渡す", "通す"],
+          "example": "設定された baseURL が browser context に渡される"
+        },
+        {
+          "when": "仕組みを自分で作り込む",
+          "ja": ["仕込む"],
+          "example": "hook の boilerplate をチームが自分で仕込む"
+        },
+        { "when": "zero wiring", "ja": ["何も仕込まずに"] }
+      ]
+    },
+    {
+      "en": ["bind", "bound", "binding", "binds"],
+      "ja": null,
+      "note": "英語では同じ語だが、日本語では別の行為として読めるほうがよいので意図的に使い分ける。統一しない",
+      "by_context": [
+        {
+          "when": "scenario の中でその step が前方に置かれていること",
+          "ja": ["束ねる", "束ねられる"]
+        },
+        {
+          "when": "pattern を feature の行に、capture を schema のキーに対応させること",
+          "ja": ["結び付ける", "結び付けられる"]
+        }
+      ]
+    }
+  ],
+  "keep_english": [
+    {
+      "term": "step",
+      "why": "Gherkin の行、defineStep で定義される単位そのものを指すドメイン語。訳すと概念との結び付きが失われる"
+    },
+    { "term": "receipt", "why": "nukadoko 固有の中核データ構造。receipt.json と直接対応する" },
+    { "term": "scenario", "why": "Gherkin の Scenario: キーワードと直接対応する" },
+    {
+      "term": "agent",
+      "why": "エージェント等に訳すと、このツールが第一の読者と位置づける AI agent という語感が薄れる"
+    },
+    { "term": "feature", "why": ".feature ファイル、Feature: キーワードと直接対応する" },
+    {
+      "term": "pattern",
+      "why": "step 定義の pattern / patterns フィールド名と直接対応する場面では常に英語。パターンマッチングのような一般的な文脈ではカタカナのパターンも使われ、それはフィールド名としての pattern とは別の使われ方"
+    },
+    { "term": "environment", "why": "environment / --env、config の environments と直接対応する" },
+    { "term": "session", "why": "session / --session、nuka session コマンドと直接対応する" },
+    { "term": "secret", "why": "secrets config、{{secret.NAME}} token と直接対応する" },
+    { "term": "compat", "why": "nukadoko/compat という実在のサブパス名そのもの" },
+    { "term": "evidence", "why": "receipt の evidence フィールドと直接対応する" },
+    { "term": "trace", "why": "Playwright の trace (trace.zip) という具体物を指す" },
+    { "term": "World", "why": "cucumber-js 由来の this オブジェクトの正式名称。固有名詞的に大文字のまま" },
+    { "term": "harness", "why": "3ファイルとも英語のまま。README.ja.md だけ ハーネス だったが統一済み" },
+    { "term": "hook", "why": "cucumber/gherkin のドメイン語" },
+    { "term": "pickle", "why": "cucumber/gherkin のドメイン語" },
+    { "term": "glue", "why": "cucumber/gherkin のドメイン語" },
+    { "term": "gate", "why": "cucumber/gherkin のドメイン語" },
+    { "term": "observed", "why": "receipt のフィールド名と直接対応する" },
+    { "term": "provenance", "why": "receipt のフィールドが答える性質の名前として英語のまま" },
+    {
+      "term": "mutate",
+      "why": "mutates フィールド名と地続きの動詞として常に英語。「状態を mutate する」のように活用させずに使う"
+    },
+    { "term": "sign-off", "why": "nuka accept が書く記録の呼び名。常にハイフン付きの英語" },
+    { "term": "schema", "why": "zod schema、args / returns の schema と直接対応する" }
+  ],
+  "identifiers": {
+    "rule": "コード識別子と CLI コマンド名は常に原文のスペルのまま、バッククォート付きで書く",
+    "examples": ["defineStep", "from", "mutates", "ctx", "nuka check", "nuka tend"],
+    "why": "語彙としての選択ではなく、実際にそのままのスペルで動くコードだから。例外なし"
+  },
+  "headings": {
+    "note": "ファイルごとに規則が違う。これは歴史的な経緯であって設計ではない。統一する価値はあるが、既存の見出しを動かすとリンクのアンカーが壊れるので、まとめてやるときに一度で行う",
+    "README.ja.md": {
+      "rule": "英語のまま残し、直下に太字の日本語訳を本文1行目として置く",
+      "exceptions": "なし。16個すべてがこの書式"
+    },
+    "docs/spec.ja.md": {
+      "rule": "見出しの主題が keep_english に載っている語なら英語のまま。説明的な句なら日本語化。どちらとも言い切れない英語の術語が単独で立つ場合だけ、丸括弧で短い日本語の言い換えを添える",
+      "examples": {
+        "english": ["Context API", "Receipt", "Sign-off", "Allure emitter", "CLI summary"],
+        "japanese": ["nukadoko とは", "課題", "キーワードの意味論", "実行", "ロードマップ"],
+        "parenthetical": [
+          "Compat steps(移行の扉)",
+          "Scenario(スクリプト化された経路)",
+          "Self-healing(監査付き)",
+          "Tending(手入れ)",
+          "Out of scope(正直な限界)"
+        ]
+      }
+    },
+    "docs/migration.ja.md": {
+      "rule": "日本語化する。ただし Stage N のような段階ラベルと、コードスパンで書かれたコマンド名はそのまま残す"
+    }
+  }
+}

@@ -106,11 +106,15 @@ change against before writing it.
 - Paired files are kept in sync: README.md/README.ja.md,
   docs/spec.md/docs/spec.ja.md, docs/migration.md/docs/migration.ja.md
   (Japanese: one sentence per line; the English file is the source of
-  truth). **Read `docs/glossary.md` before translating anything** — it
+  truth). **Query `docs/glossary.json` before translating anything** — it
   holds the settled term pairs, which words stay in English and why, and
-  the per-file rule for headings. Terminology drifted twice before it
-  existed, once per translator deciding on the spot; add a term there when
-  a new one is settled rather than deciding it again next time.
+  the per-file rule for headings. JSON rather than prose because what reads
+  it is a model with `jq`: `en` is an array, so
+  `select(any(.en[]; test("wir"; "i")))` finds wire/wired/wiring in one
+  query, and the file's own `usage` field carries working examples.
+  Terminology drifted twice before it existed, once per translator deciding
+  on the spot; add a term there when a new one is settled rather than
+  deciding it again next time.
 - **A change to the CLI surface, to a step's contract, or to what `check`
   catches is not finished until `skills/` says so too.** The skills are how
   a user actually reaches a feature, so a skill describing the previous CLI
