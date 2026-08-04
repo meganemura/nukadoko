@@ -2,24 +2,24 @@
 
 Notable changes to nukadoko. Versions follow [Semantic Versioning](https://semver.org/),
 with one caveat stated in the README: while this is 0.x, the public API can
-change in any release. That holds for the whole 0.x range, up to 1.0 — not
+change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
-## Unreleased
+## 0.0.5 — 2026-08-05
 
 ### Changed
 
 - **`nuka do --args` is optional once `--use` is given.** A step whose every
   argument arrives via `from` used to still demand `--args '{}'` on the
-  command line — ritual, not a real requirement, once `--use` already says
+  command line: ritual, not a real requirement, once `--use` already says
   "arguments come from the chain". `--args` stays required the rest of the
   time: the exemption only fires when `--use` is present, so a bare `nuka do
   <step>` (neither flag, likely a typo) still fails fast with a message
   naming both flags instead of parsing and only failing later at args
   validation.
 - **`nuka tend`'s summary is three lines, not two.** A `scanned:` line comes
-  first, naming every directory that run actually looked at — a finding that
-  turns out to be wrong is unreadable without knowing what produced it — and
+  first, naming every directory that run actually looked at (a finding that
+  turns out to be wrong is unreadable without knowing what produced it), and
   the `bed:` line now also counts read-only typed steps. Both lines are
   summary, not findings: neither affects the exit code. Called out here
   rather than filed under Added because anything counting `nuka tend`'s text
@@ -32,63 +32,74 @@ just until 0.1.
   or threw. It was an import because it needed nothing the executor owned,
   which was true and was the wrong thing to optimize for: a wait that
   leaves no trace cannot be told apart, afterwards, from one that returned
-  on its first attempt — and those two situations call for opposite fixes.
+  on its first attempt. Those two situations call for opposite fixes.
   One attempt at 0ms says the condition was already true and the wait was a
   no-op, so whatever is late is something else entirely; forty attempts
   over 20s says that condition really was the late one. From outside the
   step the two look the same, which is exactly when a receipt is supposed
   to be the thing that answers. Recording it means writing into a collector
   the executor owns and resets at each step boundary, and that is what puts
-  it on `ctx` — the same route `ctx.section` took, for the same reason,
+  it on `ctx`: the same route `ctx.section` took, for the same reason,
   after the same mistake. A timed-out poll is recorded like any other: the
   receipt of the step that failed on that timeout is precisely where the
-  numbers are wanted. Migration is mechanical — drop the import, call
+  numbers are wanted. Migration is mechanical: drop the import, call
   `ctx.poll` instead.
 - **A browser step's evidence is one screenshot, not two.** The former
   `finalize(status)` took a screenshot once and wrote the same buffer to
-  both `final.png` and, on a failed run, a second time under a second name —
-  a second file with zero additional information, since `receipt.status`
-  already answers "did this fail". Worse, because that screenshot only ever
-  runs after `run` has already returned or thrown, the second copy could be
-  taken seconds after the failure it was named for, showing a page that had
-  since changed: `status: "failed"` sitting next to a screenshot that looked
-  fine, an apparent contradiction with no fix but to distrust one of the
-  two — and a real run once measured that gap at roughly eight seconds,
-  misdiagnosed as the state itself flickering. `finalize`'s and `dispose`'s
-  own `status` argument is gone with it: it had no remaining use once the
-  second file did.
+  both `final.png` and, on a failed run, a second time under a second name.
+  That second file carried zero additional information, since
+  `receipt.status` already answers "did this fail". Worse, because that
+  screenshot only ever runs after `run` has already returned or thrown, the
+  second copy could be taken seconds after the failure it was named for,
+  showing a page that had since changed: `status: "failed"` sitting next to
+  a screenshot that looked fine, an apparent contradiction with no fix but
+  to distrust one of the two. A real run once measured that gap at roughly
+  eight seconds, misdiagnosed as the state itself flickering. `finalize`'s
+  and `dispose`'s own `status` argument is gone with it: it had no
+  remaining use once the second file did.
 - **`evidence.screenshots` entries are `{ file, at }`, not bare file
   names.** `at` is the ISO 8601 moment the screenshot actually resolved (the
-  same format `started_at`/`finished_at` already use) — the fact a second
+  same format `started_at`/`finished_at` already use): the fact a second
   screenshot file used to exist to paper over without ever stating it. A
   screenshot's own timestamp is now on the receipt directly, so a reader
   does not have to guess how stale it might be relative to the step's own
   `finished_at`.
 - **`sections` entries are `{ label, at }`, and `polls` gained `at`.** A
-  label used to say only that execution reached a stage, never when — and
-  "when" turned out to matter: a receipt can carry a `status: "failed"` next
+  label used to say only that execution reached a stage, never when. "When"
+  turned out to matter: a receipt can carry a `status: "failed"` next
   to a screenshot that looks unaffected, and without a shared timeline there
   was no way to tell a real state change apart from a read taken before the
   state settled. `sections`' `at` and `polls`' new `at` (alongside
   `waited_ms`) put every stage and every wait on the same absolute timeline
   `started_at`/`finished_at`/`evidence.screenshots[].at` already use, so
   that question has an answer from the receipt alone.
+- **User-facing strings across the CLI no longer use an em-dash.** Forty of
+  them changed: `nuka check` and `nuka tend`'s finding messages, `nuka
+  accept`'s refusal text, and other strings the CLI prints straight to a
+  reader trying to find out what went wrong. `nuka accept` alone had eight,
+  more than any other command, since every one of its messages is a reason
+  someone cannot do the thing they just tried. Anything that greps one of
+  these strings for an exact match is affected: 0.x never made the wording
+  a contract, but the wording did move, and that is worth recording here.
+  The information itself did not shrink: most of the forty became two
+  sentences in place of a comma, so a reader gets the same facts, just
+  differently punctuated.
 
 ### Added
 
 - **`additionalFeatureDirs` config, and a wider static scan.** A step's
   pattern is bound or unbound as a property of the whole project, not just
-  of what an unattended `nuka run` would execute today — so an acceptance
+  of what an unattended `nuka run` would execute today. So an acceptance
   feature, recommended to live outside `featuresDir` precisely so it never
   runs as a regression, made `nuka check`/`nuka tend` report its steps
   `pattern-unbound` even though they genuinely bind. `additionalFeatureDirs`
   (default `[]`) names directories `nuka check` (no argument) and `nuka
-  tend` scan in addition to `featuresDir`, without ever executing them —
+  tend` scan in addition to `featuresDir`, without ever executing them.
   `nuka run` still reads `featuresDir` alone. Two findings come with it: a
   configured `additionalFeatureDirs` entry that does not exist
   (`additional-feature-dir-missing`, an error on `check`, a note on `tend`)
   and an accepted feature outside every scanned directory
-  (`signed-feature-unscanned`, a `tend` note — deliberately never used to
+  (`signed-feature-unscanned`, a `tend` note: deliberately never used to
   widen the scanned set itself, since that would only ever notice a
   feature already accepted at least once, silently missing the one still
   being drafted).
@@ -97,23 +108,23 @@ just until 0.1.
   full validated result of the receipt it cites, not only the id and step
   name. Diagnosing a failure used to mean opening a second receipt.json for
   every upstream step a `from` or `resultOf` read from; now the one
-  receipt that failed already has it. Present only on a failed receipt — an
+  receipt that failed already has it. Present only on a failed receipt (an
   `ok` receipt's own `result` already holds whatever value mattered, so
-  repeating an upstream one there would be redundant — and carries the
+  repeating an upstream one there would be redundant), and carries the
   whole result rather than the one key that was actually read, since a
   diagnosis needs why the value came out that way, not which key was
   cited.
 - **`nuka run <feature>:<line>` says that it is a partial run.** Running one
   scenario is the iteration path and is worth taking: a feature's full run
   costs every scenario's minutes. What it is not is a smaller version of the
-  same thing — a partial run can never be signed off, so a green one is a
+  same thing: a partial run can never be signed off, so a green one is a
   debugging result. That was already true and was discoverable only at the
   end, when `nuka accept` refused a road that had been chosen several runs
   earlier. It is now said where the line number is given, on stderr, leaving
   stdout's one-record-per-line contract untouched.
 - **`nuka accept`'s refusals name what they were decided from.** A run that
   was red, or a feature that only ever had partial runs, now come back with
-  the run in question — its id, when it started, and which of its scenarios
+  the run in question: its id, when it started, and which of its scenarios
   failed, or which lines the most recent partial run covered. The refusal
   reasons themselves are unchanged; what changed is that the next command
   can be chosen against the record instead of guessed at, which is what the
@@ -123,8 +134,8 @@ just until 0.1.
   value the step's own correctness depends on but nothing downstream reads:
   the date it computed, the id it picked, the name it resolved before
   sending. Those are exactly the values a receipt gets interrogated for once
-  a run has gone wrong — and a step that sends a date nothing cites, computed
-  in the wrong timezone, leaves a receipt that cannot say which date it sent.
+  a run has gone wrong. A step that sends a date nothing cites, computed in
+  the wrong timezone, leaves a receipt that cannot say which date it sent.
 
 ## 0.0.4 — 2026-08-04
 
