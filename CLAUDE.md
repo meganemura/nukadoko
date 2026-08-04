@@ -38,8 +38,10 @@ compat gap detection in `nuka check` (the migration skill's prerequisite)
 are all implemented, closing out M1-M5. M6 (chained arguments) is
 implemented too: `from` on `defineStep`, the binding-order check `nuka
 check` and `nuka run` share, `nuka do --use`, and `used` naming the step
-beside each receipt. Still unimplemented: the AI-assisted glue converter
-and scenario harvesting.
+beside each receipt. M7 (tending) is in: `nuka tend`, for what is rotting
+rather than what is broken — kept off `nuka check` so that command stays
+worth stopping for. Still unimplemented: the AI-assisted glue converter and
+scenario harvesting.
 
 ## Naming rule
 
@@ -104,7 +106,11 @@ change against before writing it.
 - Paired files are kept in sync: README.md/README.ja.md,
   docs/spec.md/docs/spec.ja.md, docs/migration.md/docs/migration.ja.md
   (Japanese: one sentence per line; the English file is the source of
-  truth).
+  truth). **Read `docs/glossary.md` before translating anything** — it
+  holds the settled term pairs, which words stay in English and why, and
+  the per-file rule for headings. Terminology drifted twice before it
+  existed, once per translator deciding on the spot; add a term there when
+  a new one is settled rather than deciding it again next time.
 - **A change to the CLI surface, to a step's contract, or to what `check`
   catches is not finished until `skills/` says so too.** The skills are how
   a user actually reaches a feature, so a skill describing the previous CLI

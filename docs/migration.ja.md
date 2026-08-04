@@ -116,7 +116,7 @@ glue はテキストとして読むだけで、実行はしていません。
 互いに独立した、順不同で単独でも安全に行える 2 つの漸進的な一手があります:
 
 - **World keys**: 依存しているキーを `defineWorld({ key: someZodSchema })` でラップして拡張します(`class MyWorld extends defineWorld({ seededCount: z.number() })`)。
-  そのキーへの書き込みはこれで検証されるようになり(スキーマに失敗した書き込みは step を失敗させ、記録されません)、それ以外のすべてのキーは計測されるが検証されないまま動き続けます。
+  そのキーへの書き込みはこれでバリデーションされるようになり(スキーマに失敗した書き込みは step を失敗させ、記録されません)、それ以外のすべてのキーは計測されるがバリデーションされないまま動き続けます。
   `MyWorld` の `this` も、宣言されたキーについては型が付きます。
 - **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka check` が警告し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
 
@@ -126,8 +126,8 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
 読み手は、`this` から読んでいたキーについて `from: { key: [producerStep, "resultKey"] }` を宣言します(参照: docs/spec.ja.md の「step の連鎖」)。
 これが、既存の `this` への書き込みのほとんどが実は表していたものをカバーします: 1 つの名前付きキーで読める 1 つの名前付きの値です。
 読み方がそれに当てはまらない場合 — 値の変形が要る、どの producer から読むかが実行時にしか決まらない、あるいは 1 つのキーではなく result 全体が欲しい場合 — は、引数を optional のままにし、`run` の中で `ctx.resultOf(producerModule)` にフォールバックします。
-これは `this` がかつて答えていたのと同じ読みであり、違いはいまや検証済みの result に対して行われる点だけです。
-昇格した step は、型付きの契約、検証済みの `result`、`nuka do` による単体実行を得ます(そのどれも compat の step にはありません)。
+これは `this` がかつて答えていたのと同じ読みであり、違いはいまやバリデーション済みの result に対して行われる点だけです。
+昇格した step は、型付きの契約、バリデーション済みの `result`、`nuka do` による単体実行を得ます(そのどれも compat の step にはありません)。
 
 ## ダッシュボードは `nuka check`
 
