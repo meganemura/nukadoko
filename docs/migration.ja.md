@@ -118,7 +118,7 @@ glue はテキストとして読むだけで、実行はしていません。
 - **World keys**: 依存しているキーを `defineWorld({ key: someZodSchema })` でラップして拡張します(`class MyWorld extends defineWorld({ seededCount: z.number() })`)。
   そのキーへの書き込みはこれでバリデーションされるようになり(スキーマに失敗した書き込みは step を失敗させ、記録されません)、それ以外のすべてのキーは計測されるがバリデーションされないまま動き続けます。
   `MyWorld` の `this` も、宣言されたキーについては型が付きます。
-- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka check` が警告し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
+- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
 
 ## Stage 2: step を昇格させる
 
@@ -137,7 +137,7 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   compat の step には、そこで nukadoko が信頼できる宣言済みの `mutates` がありません(docs/spec.ja.md の「キーワードの意味論」を参照)。
   そのためこの警告が示しているのは、その位置に静的な手掛かりが何もないという事実であり、ツールが何かを捕まえたわけではありません。
   `defineStep` に昇格させることが、チェックできる宣言を得る方法です。
-- `parameter-type-support-origin` は、support 側の `defineParameterType` すべてに対して警告し、上記の config への移動を指し示します。
+- `parameter-type-support-origin` は `nuka tend` に移りました(上の Stage 1.5 参照)。スイートに compat が残っている限り出続けるのが正常な状態であり、毎回の run の前に印字すべきものではないためです。
 - `step-file-import-failed` は、import が例外を投げた step ファイルにエラーを出します。
   未サポートの名前を値として使っている、CommonJS の `require`、深い subpath の import(上の「切り替えで引き継がれないもの」の最初の 3 つの gap です)のいずれかで、Node 自身のエラーメッセージとファイルパスを運びます。
   プロジェクトの残りはそれと並行して引き続き discovery され報告されます。

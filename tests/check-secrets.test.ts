@@ -13,10 +13,12 @@ import {
 // Responsibility: `nuka check`'s two secrets-redact-and-warning task spec
 // additions.
 //
-// Part A — secrets-redact-key-unknown / secrets-redact-key-too-short: pure
-// config-coherence warnings, same shape as the existing
-// secrets-public-key-unknown, so a static fixture is enough (no git state
-// involved).
+// Part A — secrets-redact-key-too-short: a pure config-coherence warning,
+// checked against a static fixture (no git state involved). Its sibling,
+// secrets-redact-key-unknown, moved to `nuka tend` (m8d-move-to-tend task
+// spec) — tests/tend-moved-findings.test.ts reuses this same
+// check-secrets-redact-project fixture to prove it now surfaces there
+// instead, and that `check` no longer reports it.
 //
 // Part B — tracked-secret-looking-key: only fires for a *tracked* envFile,
 // so each of its tests needs a real git repository with a real commit —
@@ -25,7 +27,7 @@ import {
 // use for "this file is genuinely tracked" cases.
 
 describe("nuka check: secrets.redact config-coherence warnings", () => {
-  it("reports secrets-redact-key-unknown and secrets-redact-key-too-short, no errors", async () => {
+  it("reports secrets-redact-key-too-short, no errors, and no longer reports secrets-redact-key-unknown", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-secrets-redact-project"),
@@ -35,19 +37,12 @@ describe("nuka check: secrets.redact config-coherence warnings", () => {
 
     const report = JSON.parse(stdout.text());
     expect(report.errors).toEqual([]);
-    expect(report.warnings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "secrets-redact-key-unknown",
-          message: expect.stringContaining("UNKNOWN_REDACT_KEY"),
-        }),
-        expect.objectContaining({
-          code: "secrets-redact-key-too-short",
-          message: expect.stringContaining("SHORT_REDACT_KEY"),
-        }),
-      ]),
-    );
-    expect(report.warnings).toHaveLength(2);
+    expect(report.warnings).toEqual([
+      expect.objectContaining({
+        code: "secrets-redact-key-too-short",
+        message: expect.stringContaining("SHORT_REDACT_KEY"),
+      }),
+    ]);
     expect(exitCode).toBe(0);
   });
 });

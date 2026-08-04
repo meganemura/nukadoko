@@ -35,6 +35,13 @@ import type { TendIssue } from "./types.js";
 // module isn't in this task's file ownership, and the check is one line
 // with no behavior to keep in sync — duplicating it here is cheaper and
 // safer than widening that module's exports for one caller.
+//
+// `analyzeFieldDescriptions` (m8c-tend-summary) is now the one export doing
+// the walk: it returns this finding's issues *and* the total/described field
+// counts src/tend/summary.ts needs for the "how much of what a typed step
+// could declare is actually declared" summary line — same `hasDescription`
+// call per field either way, so the summary's number and this finding's
+// "which fields are missing" can never quietly disagree.
 
 type Unwrappable = z.ZodTypeAny & { unwrap(): z.ZodTypeAny };
 
@@ -55,36 +62,62 @@ function hasDescription(fieldSchema: z.ZodTypeAny): boolean {
   }
 }
 
-function undescribedFields(schema: z.ZodTypeAny, label: "args" | "returns"): string[] {
+// A field's own `label.key` name plus whether it carries a `.describe()` —
+// one entry per schema field, so both this finding's "which ones are
+// missing" and m8c-tend-summary's "how many total, how many described"
+// summary count come from the exact same per-field walk (that task's spec:
+// "二度数えないこと"), never a second traversal re-deciding `hasDescription`
+// for the summary.
+interface FieldCoverageEntry {
+  readonly name: string;
+  readonly described: boolean;
+}
+
+function fieldCoverage(schema: z.ZodTypeAny, label: "args" | "returns"): FieldCoverageEntry[] {
   const shape = asObjectShape(schema);
   if (shape === undefined) {
     return [];
   }
-  return Object.entries(shape)
-    .filter(([, fieldSchema]) => !hasDescription(fieldSchema))
-    .map(([key]) => `${label}.${key}`);
+  return Object.entries(shape).map(([key, fieldSchema]) => ({
+    name: `${label}.${key}`,
+    described: hasDescription(fieldSchema),
+  }));
 }
 
-export function findMissingFieldDescriptions(vocabulary: Vocabulary): TendIssue[] {
+/** `findMissingFieldDescriptions`'s issues, plus the field totals m8c-tend-
+ * summary's "how much of what a typed step could declare is actually
+ * declared" summary line needs — both `args` and `returns` fields of every
+ * typed step, counted once here rather than a second time in
+ * src/tend/summary.ts. */
+export interface FieldDescriptionAnalysis {
+  readonly issues: TendIssue[];
+  readonly totalFields: number;
+  readonly describedFields: number;
+}
+
+export function analyzeFieldDescriptions(vocabulary: Vocabulary): FieldDescriptionAnalysis {
   const issues: TendIssue[] = [];
+  let totalFields = 0;
+  let describedFields = 0;
 
   for (const entry of vocabulary.values()) {
     if (entry.kind !== "typed") {
       continue; // Compat has no zod schema at all.
     }
-    const missing = [
-      ...undescribedFields(entry.step.args, "args"),
-      ...undescribedFields(entry.step.returns, "returns"),
-    ];
+    const fields = [...fieldCoverage(entry.step.args, "args"), ...fieldCoverage(entry.step.returns, "returns")];
+    const missing = fields.filter((field) => !field.described);
+    totalFields += fields.length;
+    describedFields += fields.length - missing.length;
+
     if (missing.length === 0) {
       continue;
     }
     issues.push({
       code: "schema-field-undescribed",
-      message: `Step "${entry.name}" has schema fields with no .describe(): ${missing.join(", ")} — \`nuka describe\` can name them but not explain them, which is all an agent choosing between steps has to go on.`,
+      message: `Step "${entry.name}" has schema fields with no .describe(): ${missing.map((field) => field.name).join(", ")} — \`nuka describe\` can name them but not explain them, which is all an agent choosing between steps has to go on.`,
       step: entry.name,
     });
   }
 
-  return issues;
+  return { issues, totalFields, describedFields };
 }

@@ -31,7 +31,7 @@ describe("nuka check", () => {
     expect(stdout.text()).toContain("ok: no issues found");
   });
 
-  it("exits 0 with warnings only: env-file-missing, environment-env-file-missing, secrets-public-key-unknown, then-mutates", async () => {
+  it("exits 0 with warnings only: env-file-missing, environment-env-file-missing, then-mutates", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-warnings-project"),
@@ -45,11 +45,17 @@ describe("nuka check", () => {
       expect.arrayContaining([
         expect.objectContaining({ code: "env-file-missing" }),
         expect.objectContaining({ code: "environment-env-file-missing" }),
-        expect.objectContaining({ code: "secrets-public-key-unknown" }),
         expect.objectContaining({ code: "then-mutates" }),
       ]),
     );
-    expect(report.warnings).toHaveLength(4);
+    // secrets-public-key-unknown moved to `nuka tend` (m8d-move-to-tend
+    // task spec) — this fixture's config still names an undefined
+    // secrets.public key (tests/tend-moved-findings.test.ts's own fixture
+    // reuse), but `check` no longer reports it.
+    expect(report.warnings.some((issue: { code: string }) => issue.code === "secrets-public-key-unknown")).toBe(
+      false,
+    );
+    expect(report.warnings).toHaveLength(3);
     expect(exitCode).toBe(0);
   });
 

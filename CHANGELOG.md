@@ -8,6 +8,37 @@ change without a major bump until 0.1.
 
 ### Added
 
+- **`nuka tend`, for what is rotting rather than what is broken.**
+  `nuka check` answers whether a project can run right now, and everything
+  it prints stands between the project and a green run — which is what
+  makes its output worth reading, and why findings nobody has to act on
+  today do not belong there. Printed before every run, they would train
+  people to skim past the line that did have to be acted on. `tend`
+  answers the other question, read at a different moment: is this
+  vocabulary, and the record it produced, still healthy.
+  One finding is an error and exits non-zero — a sign-off that no longer
+  matches the code it froze: a frozen `result` that no longer passes its
+  step's current `returns` schema, a frozen feature source that no longer
+  matches the file, a cited step gone from the vocabulary, or a record that
+  cannot be read at all. A record that has quietly stopped meaning what it
+  says is worse than no record, because it is still being counted.
+  Five are notes a project is allowed to carry: a `from` no occurrence
+  exercises, a patterned step no feature binds, a schema field with no
+  `.describe()`, a step with no `rationale`, a configured parameter type no
+  pattern uses. The middle two are aimed at the agent rather than the
+  reader — `nuka describe` is how an agent learns what a field means and
+  whether it may rewrite a step, and both go quiet when those are missing.
+  Findings state facts and never instruct: a `from` no feature exercises
+  may still be reached through `nuka do --use`, so the note says what is
+  true and leaves the decision where it belongs.
+  It opens with where the bed is — how much of the vocabulary is typed
+  rather than still compat, and how much of what a step could declare is
+  declared. That is not a finding and does not touch the exit code; a suite
+  mid-migration is in a normal state. It exists because the information was
+  already there and unread: a receipt's `world` and `declared` counts do
+  shrink as a suite promotes, which is true and useless as a way for a
+  person to see progress. `--json` names the compat steps rather than
+  counting them, since what reads it is assembling work.
 - **`from` on `defineStep`, and the binding-order check it buys.** Passing a
   value from one step to the next had exactly one shape: declare the args key
   optional, and fall back to `ctx.resultOf` inside `run`. That worked, and
@@ -105,6 +136,21 @@ change without a major bump until 0.1.
 
 ### Changed
 
+- **Three findings moved from `nuka check` to `nuka tend`.**
+  `parameter-type-support-origin`, `secrets-public-key-unknown`, and
+  `secrets-redact-key-unknown` all describe a run that will succeed, so by
+  the line the two commands are split on — is this something to know
+  *before* this run — they were on the wrong side. The first is the clearest
+  case: it appears for as long as a suite has any compat glue left, which is
+  a normal state to be in, and printing it before every run trains people
+  past the lines that do stop one. The codes are unchanged, so the move is
+  a change of address rather than of vocabulary.
+  Their neighbours stay on `check`, and the contrast is the point:
+  `secrets-redact-key-too-short` and `tracked-secret-looking-key` both mean
+  plaintext reaches a log the moment the run starts, which is exactly
+  something to know beforehand. So does `then-compat-step` — a compat step
+  in Then position is a live tension about this run, and promoting it is
+  only one of the ways to resolve it.
 - **A receipt's `used` names the step beside each receipt it cites.** It was
   a bare list of receipt ids, which made an acceptance record unreadable
   without resolving every id against other files — files that are local

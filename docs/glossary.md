@@ -28,6 +28,11 @@
 - **refuse / reject → 拒否する**
   この 2 つの英語は日本語では区別されず、どちらも「拒否する」に訳されている。
 - **measure / measurement → 計測**
+- **wire / wire up / wiring → 文脈で訳し分ける(「配線」は使わない)**
+  英語では 1 語だが、日本語の「配線」は電気工事の語感が強く、技術文書としては浮く。
+  値や設定を別の層に届ける意味なら「渡す」「通す」(例: baseURL が browser context に渡される)。
+  仕組みを自分で作り込む意味なら「仕込む」(例: hook の boilerplate をチームが自分で仕込む)。
+  `zero wiring` は「何も仕込まずに」。
 - **bind / bound → 束ねる / 結び付ける(意味で使い分ける)**
   scenario の中で「その step が前方に置かれている」ことを言うときは「束ねる」。
   pattern を feature の行に、capture を schema のキーに、といった対応関係を作ることを言うときは「結び付ける」。

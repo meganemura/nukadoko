@@ -1238,6 +1238,20 @@ on every `check`, they would teach everyone to skim past the line that
 did have to be fixed. Noise is not a cosmetic problem in a tool whose main
 claim is that its checks are worth reading.
 
+Before any finding, `tend` states where the bed currently is: how much of
+the vocabulary is typed rather than still compat, and how much of what a
+typed step could declare is actually declared. This is not a finding and
+does not touch the exit code — a suite in the middle of a migration is in a
+normal state, not a faulty one, and warning about it every time would
+drown the findings that do need acting on.
+
+It exists because the information was already there and unread. A receipt's
+`world` and `declared` counts do shrink as a suite promotes, which is true
+and useless as a way for a person to see progress: nobody reads a directory
+of receipts to work out how far along they are. Stating it once, in the
+command whose whole subject is the health of the bed, is what makes it
+something anyone actually sees.
+
 What it looks at, and why each one is rot rather than style:
 
 - **A sign-off that no longer matches the code it froze.** A record
@@ -1268,6 +1282,20 @@ What it looks at, and why each one is rot rather than style:
   rewrite the step. Missing, every rewrite is uninformed.
 - **A configured parameter type no pattern uses.** Dead configuration,
   reported like any other.
+- **A `defineParameterType` still registered from support code.** It keeps
+  working, and `config.parameterTypes` is its typed-era home; moving the
+  registration changes no match. This one used to be a `nuka check`
+  warning, which was a mis-sort: it appears for as long as a suite has any
+  compat left, which is a normal state to be in, and printing it before
+  every run trains people past the lines that do stop a run.
+- **A `secrets.public` or `secrets.redact` entry naming a key no envFile
+  defines.** A real instruction reaching nothing — configuration that has
+  drifted from the files it describes. Also moved from `check` for the same
+  reason: nothing about it changes whether this run should happen. Its
+  neighbors stay on `check` and are worth the contrast — a `redact` entry
+  whose value is too short to be redacted, and a tracked env file with a
+  secret-looking key, both mean plaintext reaches a log the moment the run
+  starts, which is exactly something to know beforehand.
 
 Findings are `--json` like everything else. The sign-off finding exits
 non-zero so a periodic job can act on it; the rest do not, because a
@@ -1311,13 +1339,19 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               outside it
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
-nuka tend [--json]            what is rotting rather than what is broken:
+nuka tend [--json]            where the bed is, then what is rotting rather
+                              than what is broken: how much of the
+                              vocabulary is typed rather than compat and
+                              how much of it declares what it could, then
                               a sign-off that no longer matches the code it
                               froze (the one finding that exits non-zero),
                               a `from` nothing exercises, a patterned step
                               no feature binds, a schema field with no
                               `.describe()`, a step with no `rationale`, a
-                              configured parameter type no pattern uses
+                              configured parameter type no pattern uses, a
+                              `defineParameterType` still registered from
+                              support code, a secrets entry naming a key no
+                              envFile defines
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check

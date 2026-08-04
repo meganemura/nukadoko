@@ -8,40 +8,71 @@ import type { CheckIssue } from "./types.js";
 
 // Responsibility: this task's spec's "config coherence" category (item 5) —
 // featuresDir not existing on disk is the one error-level item; a
-// configured envFile (top-level or per-environment) not existing, and a
-// `secrets.public`/`secrets.redact` entry that names a key no configured
-// envFile actually defines, are all warnings. The distinction matters:
-// `do`/`run` are already tolerant of a missing envFile (loadEnvFiles just
-// contributes nothing) and of a `secrets.public`/`secrets.redact` entry
-// that never matches anything — check's job here is to surface that
-// leniency, not turn it into a reason to fail (docs/spec.md "Secrets":
-// redaction correctness at runtime is the real guarantee; this is
-// visibility only).
+// configured envFile (top-level or per-environment) not existing is a
+// warning. The distinction matters: `do`/`run` are already tolerant of a
+// missing envFile (loadEnvFiles just contributes nothing) — check's job
+// here is to surface that leniency, not turn it into a reason to fail
+// (docs/spec.md "Secrets": redaction correctness at runtime is the real
+// guarantee; this is visibility only).
 //
-// secrets-redact-and-warning task spec added two more items to that same
-// visibility job:
-//   - `secrets-redact-key-too-short`: a `secrets.redact` entry whose value
-//     is under MIN_REDACTABLE_LENGTH never actually gets redacted
-//     (build-secret-set.ts applies the same floor to every key regardless
-//     of origin) — surfacing that, rather than letting an explicit
-//     instruction silently do nothing, is the same reasoning as
-//     `secrets-redact-key-unknown` below it.
-//   - `tracked-secret-looking-key`: a tracked envFile defining a
-//     secret-*looking* key (by name pattern) that isn't in
-//     `secrets.redact`. This is the one check category in this file that
-//     is a heuristic rather than a derived fact — unlike everything above
-//     it, "looks like a secret" is a guess about a key's *name*, not a
-//     property this module can verify. That guess is used for exactly one
-//     purpose: deciding whether to emit this warning. It never feeds back
-//     into whether anything is actually redacted — that decision stays
-//     entirely with git's tracked/untracked classification plus
-//     `secrets.redact`, in build-secret-set.ts, unchanged by this file.
-//     Requires classifying envFiles (classifyEnvFiles, async) — the reason
-//     this function itself is now async.
+// secrets-redact-and-warning task spec added another item to that same
+// visibility job: `secrets-redact-key-too-short`, a `secrets.redact` entry
+// whose value is under MIN_REDACTABLE_LENGTH and so never actually gets
+// redacted (build-secret-set.ts applies the same floor to every key
+// regardless of origin) — surfacing that, rather than letting an explicit
+// instruction silently do nothing, is check's job because plaintext then
+// reaches a log the moment the run starts.
+//
+// `secrets-public-key-unknown` and `secrets-redact-key-unknown` — a
+// `secrets.public`/`secrets.redact` entry naming a key no configured
+// envFile defines at all — used to live here too, as warnings. They moved
+// to src/tend/secrets-unknown-key.ts (m8d-move-to-tend task spec): neither
+// changes whether a run should happen, unlike their `-too-short` neighbor
+// above, which means plaintext reaches a log immediately. `collectDefinedEnvKeys`
+// below is exported so that module can answer "which keys does any envFile
+// define" the exact same way this file's own `secrets-redact-key-too-short`
+// check does, rather than re-deriving it.
+//
+// `tracked-secret-looking-key`: a tracked envFile defining a
+// secret-*looking* key (by name pattern) that isn't in `secrets.redact`.
+// This is the one check category in this file that is a heuristic rather
+// than a derived fact — unlike everything above it, "looks like a secret"
+// is a guess about a key's *name*, not a property this module can verify.
+// That guess is used for exactly one purpose: deciding whether to emit this
+// warning. It never feeds back into whether anything is actually redacted —
+// that decision stays entirely with git's tracked/untracked classification
+// plus `secrets.redact`, in build-secret-set.ts, unchanged by this file.
+// Requires classifying envFiles (classifyEnvFiles, async) — the reason this
+// function itself is now async.
 
 export interface ConfigCheckResult {
   readonly errors: readonly CheckIssue[];
   readonly warnings: readonly CheckIssue[];
+}
+
+/** Every key any configured envFile defines, across the top-level list and
+ * every environment's own list, plus the flattened list of envFile paths
+ * itself — loadEnvFiles already tolerates a missing file (contributes
+ * nothing), so this is the one place envFiles get parsed for their values.
+ * Shared by this file's own `secrets-redact-key-too-short` check and
+ * src/tend/secrets-unknown-key.ts's `secrets-public-key-unknown`/
+ * `secrets-redact-key-unknown` findings, so "which keys exist" can never
+ * quietly disagree between the two. */
+export function collectDefinedEnvKeys(
+  rootDir: string,
+  config: NukadokoConfig,
+): {
+  readonly allEnvFiles: readonly string[];
+  readonly allDefinedEnv: Record<string, string>;
+  readonly allDefinedKeys: ReadonlySet<string>;
+} {
+  const environmentEnvFiles: string[] = [];
+  for (const environmentConfig of Object.values(config.environments ?? {})) {
+    environmentEnvFiles.push(...(environmentConfig.envFiles ?? []));
+  }
+  const allEnvFiles = [...(config.envFiles ?? []), ...environmentEnvFiles];
+  const allDefinedEnv = loadEnvFiles(rootDir, allEnvFiles);
+  return { allEnvFiles, allDefinedEnv, allDefinedKeys: new Set(Object.keys(allDefinedEnv)) };
 }
 
 // Case-insensitive partial match for the four keyword substrings; `KEY` is
@@ -79,10 +110,8 @@ export async function checkConfig(
     }
   }
 
-  const environmentEnvFiles: string[] = [];
   for (const [environmentName, environmentConfig] of Object.entries(config.environments ?? {})) {
     for (const relativePath of environmentConfig.envFiles ?? []) {
-      environmentEnvFiles.push(relativePath);
       if (!existsSync(path.join(rootDir, relativePath))) {
         warnings.push({
           code: "environment-env-file-missing",
@@ -93,27 +122,13 @@ export async function checkConfig(
     }
   }
 
-  // Every key any configured envFile defines, across the top-level list and
-  // every environment's own list — loadEnvFiles already tolerates a missing
-  // file (contributes nothing), so this reuses it rather than re-parsing.
-  const allEnvFiles = [...(config.envFiles ?? []), ...environmentEnvFiles];
-  const allDefinedEnv = loadEnvFiles(rootDir, allEnvFiles);
-  const allDefinedKeys = new Set(Object.keys(allDefinedEnv));
-  for (const key of config.secrets.public) {
-    if (!allDefinedKeys.has(key)) {
-      warnings.push({
-        code: "secrets-public-key-unknown",
-        message: `secrets.public names "${key}", which is not defined in any configured envFile`,
-      });
-    }
-  }
+  const { allEnvFiles, allDefinedEnv, allDefinedKeys } = collectDefinedEnvKeys(rootDir, config);
 
   for (const key of config.secrets.redact) {
     if (!allDefinedKeys.has(key)) {
-      warnings.push({
-        code: "secrets-redact-key-unknown",
-        message: `secrets.redact names "${key}", which is not defined in any configured envFile`,
-      });
+      // Undefined — src/tend/secrets-unknown-key.ts's
+      // secrets-redact-key-unknown reports it now; nothing about it
+      // changes whether this run should happen.
       continue;
     }
     // Non-null: `key` just passed the allDefinedKeys.has check above, and

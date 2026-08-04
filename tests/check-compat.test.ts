@@ -1,17 +1,20 @@
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: m2a-compat-registry task spec's check-integration tests
 // (item 6) — compat participates in undefined-step/duplicate/ambiguous
-// detection across kind, a Then-position compat step gets a soft warning,
-// and a compat-origin defineParameterType is listed as a warning while
-// sharing one registry with config-origin entries (collision reuses the
-// existing `parameter-type-invalid` error).
+// detection across kind, and a Then-position compat step gets a soft
+// warning. A compat-origin defineParameterType still shares one registry
+// with config-origin entries (collision reuses the existing
+// `parameter-type-invalid` error) — but is no longer listed as a `check`
+// warning itself: `parameter-type-support-origin` moved to `nuka tend`
+// (m8d-move-to-tend task spec; see tests/tend-moved-findings.test.ts, which
+// reuses this same check-compat-project fixture to prove it now surfaces
+// there instead).
 
 describe("nuka check: compat integration", () => {
-  it("reports kind-crossing duplicate-pattern and ambiguous-step errors, plus then-compat-step and parameter-type-support-origin warnings", async () => {
+  it("reports kind-crossing duplicate-pattern and ambiguous-step errors, plus a then-compat-step warning", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
@@ -44,15 +47,10 @@ describe("nuka check: compat integration", () => {
       ["ambiguous-step", "duplicate-pattern"].sort(),
     );
 
-    expect(report.warnings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "then-compat-step" }),
-        expect.objectContaining({ code: "parameter-type-support-origin" }),
-      ]),
-    );
-    expect(report.warnings.map((issue) => issue.code).sort()).toEqual(
-      ["parameter-type-support-origin", "then-compat-step"].sort(),
-    );
+    // parameter-type-support-origin no longer appears here (moved to
+    // `nuka tend`) even though this fixture's compat-glue.ts still registers
+    // a support-origin parameter type — only then-compat-step remains.
+    expect(report.warnings.map((issue) => issue.code)).toEqual(["then-compat-step"]);
 
     expect(exitCode).toBe(1);
   });
@@ -72,42 +70,6 @@ describe("nuka check: compat integration", () => {
     expect(thenCompat).toBeDefined();
     expect(thenCompat.message).toContain("Then position");
     expect(thenCompat.message).toContain("static coverage gap");
-  });
-
-  it("parameter-type-support-origin names the support-origin type and the config home it could move to", async () => {
-    const stdout = createCaptureSink();
-    await runCli(["check", "--json"], {
-      rootDir: fixture("check-compat-project"),
-      stdout,
-      stderr: createCaptureSink(),
-    });
-
-    const report = JSON.parse(stdout.text());
-    const supportOrigin = report.warnings.find(
-      (issue: { code: string }) => issue.code === "parameter-type-support-origin",
-    );
-    expect(supportOrigin).toBeDefined();
-    expect(supportOrigin.message).toContain("shout-compat");
-    expect(supportOrigin.message).toContain("config.parameterTypes");
-  });
-
-  it("parameter-type-support-origin's file, and the path embedded in its message, are rootDir-relative like every other issue's file", async () => {
-    const stdout = createCaptureSink();
-    await runCli(["check", "--json"], {
-      rootDir: fixture("check-compat-project"),
-      stdout,
-      stderr: createCaptureSink(),
-    });
-
-    const report = JSON.parse(stdout.text());
-    const supportOrigin = report.warnings.find(
-      (issue: { code: string }) => issue.code === "parameter-type-support-origin",
-    );
-    expect(supportOrigin).toBeDefined();
-    const expectedRelativePath = path.join("features", "steps", "compat-glue.ts");
-    expect(supportOrigin.file).toBe(expectedRelativePath);
-    expect(path.isAbsolute(supportOrigin.file)).toBe(false);
-    expect(supportOrigin.message).toContain(expectedRelativePath);
   });
 
   it("reuses the existing parameter-type-invalid error when a compat-origin type collides with a built-in", async () => {

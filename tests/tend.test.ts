@@ -14,8 +14,77 @@ describe("nuka tend", () => {
 
     expect(stderr.text()).toBe("");
     const report = JSON.parse(stdout.text());
-    expect(report).toEqual({ errors: [], notes: [] });
+    // Checked field by field, not via a single `toEqual(report)` (m8a's
+    // original assertion here): `report` now always carries a `summary`
+    // too (m8c-tend-summary task spec — asserted on its own below), and a
+    // whole-object equality would make this test couple to that field's
+    // exact shape for no reason this test cares about.
+    expect(report.errors).toEqual([]);
+    expect(report.notes).toEqual([]);
     expect(exitCode).toBe(0);
+  });
+
+  it("summary: a typed-only project reports compat 0, and every declared number fully satisfied", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["tend", "--json"], {
+      rootDir: fixture("tend-clean-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    const report = JSON.parse(stdout.text());
+
+    // "typed 12, compat 0" is itself useful — migration is done — so the
+    // migration line is present even though this fixture has no compat step
+    // at all (this task's spec).
+    expect(report.summary.typedSteps).toBe(2);
+    expect(report.summary.compatSteps).toBe(0);
+    expect(report.summary.compatStepNames).toEqual([]);
+    // Every typed step in this fixture carries a rationale, and every
+    // args/returns field carries a .describe() (tests/fixtures/tend-clean-
+    // project's own step files) — declared === total on both.
+    expect(report.summary.rationale).toEqual({ declared: 2, total: 2 });
+    expect(report.summary.describe).toEqual({ declared: 5, total: 5 });
+    // A summary-only report (zero errors, zero notes) still exits 0 — the
+    // summary itself never touches the exit code (this task's spec).
+    expect(report.errors).toEqual([]);
+    expect(report.notes).toEqual([]);
+    expect(exitCode).toBe(0);
+  });
+
+  it("summary: a mid-migration project reports both typed and compat counts, and names each compat step", async () => {
+    const stdout = createCaptureSink();
+    await runCli(["tend", "--json"], {
+      rootDir: fixture("tend-findings-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    const report = JSON.parse(stdout.text());
+
+    // tests/fixtures/tend-findings-project has 7 typed step files and
+    // features/steps/compat-glue.ts's 2 Given() registrations.
+    expect(report.summary.typedSteps).toBe(7);
+    expect(report.summary.compatSteps).toBe(2);
+    expect(report.summary.compatStepNames.slice().sort()).toEqual(
+      ["compat: a compat thing that nobody calls happens", "compat: a shout {used-type} is heard"].sort(),
+    );
+  });
+
+  it("summary: rationale and describe coverage counts match this task's fixture exactly, not just non-zero", async () => {
+    const stdout = createCaptureSink();
+    await runCli(["tend", "--json"], {
+      rootDir: fixture("tend-findings-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    const report = JSON.parse(stdout.text());
+
+    // Of 7 typed steps, only no-rationale-step.ts omits `rationale`.
+    expect(report.summary.rationale).toEqual({ declared: 6, total: 7 });
+    // Of the 15 args/returns fields across all 7 typed steps, only
+    // undescribed-field-step.ts's `args.label` has no .describe() — the
+    // same fact tests/tend.test.ts's own schema-field-undescribed test
+    // already checks by name, counted here rather than re-derived.
+    expect(report.summary.describe).toEqual({ declared: 14, total: 15 });
   });
 
   it("prints a human-readable ok line when there is nothing to tend", async () => {
@@ -176,17 +245,39 @@ describe("nuka tend", () => {
     });
 
     expect(exitCode).toBe(0);
-    const lines = stdout.text().trim().split("\n");
-    expect(lines).toHaveLength(5);
-    for (const line of lines) {
+    const allLines = stdout.text().trim().split("\n");
+    // The summary (m8c-tend-summary task spec) prints first, two lines, and
+    // is visually distinct from a finding line: no leading `error\t`/
+    // `note\t` (this task's spec: "所見と視覚的に区別がつくこと").
+    const summaryLines = allLines.slice(0, 2);
+    const noteLines = allLines.slice(2);
+    for (const line of summaryLines) {
+      expect(line).not.toMatch(/^(error|note)\t/);
+    }
+
+    expect(noteLines).toHaveLength(5);
+    for (const line of noteLines) {
       expect(line).toMatch(/^note\t/);
     }
     // Grouped by kind: same code's lines (there is at most one per code in
     // this fixture) sit together, which — for a single-occurrence-per-code
     // fixture — just means the codes column has no duplicate reappearing
     // after a different code interrupts it.
-    const codes = lines.map((line) => line.split("\t")[1]);
+    const codes = noteLines.map((line) => line.split("\t")[1]);
     expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  it("prints the summary before findings, and before the 'nothing to tend' line on a healthy project", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["tend"], {
+      rootDir: fixture("tend-clean-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const lines = stdout.text().trim().split("\n");
+    expect(lines).toEqual(["bed: typed 2, compat 0", "declared: rationale 2/2, describe 5/5", "ok: nothing to tend"]);
   });
 
   it("propagates a config error as stderr + exit 1, no report on stdout", async () => {

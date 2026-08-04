@@ -1,5 +1,5 @@
 import { analyzeTend } from "../tend/analyze.js";
-import type { TendIssue } from "../tend/types.js";
+import type { TendIssue, TendSummary } from "../tend/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -17,6 +17,15 @@ import type { WritableSink } from "./writable-sink.js";
 // convention (this task's spec: "nuka check の text 出力の作りに倣う") —
 // sharing the implementation would wire the two commands' output format
 // together for no reason either command needs.
+//
+// `formatSummaryLines` (m8c-tend-summary task spec) prints ahead of every
+// finding, in plain "label: value" prose rather than the tab-separated
+// `error`/`note` line shape below — deliberately, so a reader can tell "this
+// is where the bed is" from "this is a finding" without reading either
+// line's content (docs/spec.md "Tending": the summary is not itself a
+// finding). It always prints, even with zero compat steps or an otherwise
+// empty report — "typed 12, compat 0" is itself the useful fact that
+// migration is done (this task's spec).
 
 export interface RunTendOptions {
   rootDir: string;
@@ -45,6 +54,18 @@ function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
   return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}`;
 }
 
+// Two lines, matching docs/spec.md's own CLI summary phrasing for `nuka
+// tend` ("how much of the vocabulary is typed rather than compat and how
+// much of it declares what it could"). `compatStepNames` is left out of text
+// on purpose (this task's spec: "text 出力は数字のまま") — it is still on
+// `report.summary` for `--json`, which dumps the whole report as-is below.
+function formatSummaryLines(summary: TendSummary): string[] {
+  return [
+    `bed: typed ${summary.typedSteps}, compat ${summary.compatSteps}`,
+    `declared: rationale ${summary.rationale.declared}/${summary.rationale.total}, describe ${summary.describe.declared}/${summary.describe.total}`,
+  ];
+}
+
 export async function runTend(options: RunTendOptions): Promise<number> {
   const { rootDir, json, stdout, stderr } = options;
 
@@ -59,10 +80,14 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   if (json) {
     stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
-    // Grouped by kind (this task's spec): errors first (always empty until
-    // m8b), then notes — and `analyzeTend` already builds `notes` as five
-    // consecutive per-finding blocks, so printing it in order is grouping,
-    // with no sort needed here.
+    // Summary first (m8c-tend-summary task spec: "findings の前"), then
+    // findings grouped by kind (this task's spec): errors first (always
+    // empty until m8b), then notes — and `analyzeTend` already builds
+    // `notes` as consecutive per-finding blocks, so printing it in order is
+    // grouping, with no sort needed here.
+    for (const line of formatSummaryLines(report.summary)) {
+      stdout.write(`${line}\n`);
+    }
     for (const issue of report.errors) {
       stdout.write(`${formatIssueLine("error", issue)}\n`);
     }

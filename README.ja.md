@@ -218,9 +218,9 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 
 **レポートはひとりでに埋まる**
 
-従来型の Cucumber の実行がレポートに映す evidence は、チームが自分で配線したものです(trace やスクリーンショットのための hook の boilerplate を、プロジェクトごとに書いて保守しています)。
+従来型の Cucumber の実行がレポートに映す evidence は、チームが自分で仕込んだものです(trace やスクリーンショットのための hook の boilerplate を、プロジェクトごとに書いて保守しています)。
 [Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を emit するだけで、HTML 自体は決してレンダリングしません。
-emitter は、配線ゼロであらゆる receipt からレポートを満たします。
+emitter は、何も仕込まずに、あらゆる receipt からレポートを満たします。
 バリデーション済みの result、trace、HTTP log、observed な読み書き、environment と version です。
 その中の 1 つ(バリデーション済みの per-step result)は、レポート側のどんな努力を積んでも足せません。
 従来型の Cucumber は step の返り値を捨ててしまうからです。

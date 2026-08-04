@@ -35,11 +35,15 @@ import type { CheckIssue } from "./types.js";
 // source text). Neither compat variant is checked against an args schema
 // (compat has none) or folded into the alias-key-mismatch check (compat has
 // no aliases — one registration is one pattern is one vocabulary entry).
-// This module also lists every compat-origin `defineParameterType` call as
-// a warning (config is the typed-era home for this) and merges it into the *same*
-// registry config-origin entries use, so a name collision between the two
-// sources raises the exact same `parameter-type-invalid` issue a
-// config/config collision already does.
+// This module also merges every compat-origin `defineParameterType` call
+// into the *same* registry config-origin entries use, so a name collision
+// between the two sources raises the exact same `parameter-type-invalid`
+// issue a config/config collision already does. Listing each compat-origin
+// registration as its own finding used to happen here too, as a warning;
+// it moved to src/tend/parameter-type-support-origin.ts (m8d-move-to-tend
+// task spec) — it fires for as long as a suite has any compat left, which
+// is a normal in-progress state rather than a reason to stop a run, so it
+// no longer belongs on `nuka check`'s own report.
 
 export type CheckedPattern =
   | {
@@ -103,28 +107,12 @@ function expressionErrorToIssue(error: unknown, stepName: string, pattern: strin
   return { code: "pattern-syntax-error", message: `${context}: ${message}`, step: stepName };
 }
 
-/** One `defineParameterType` call made from compat code (this task's spec,
- * item 6, third bullet): visible so a reviewer can see the registration
- * exists and where, and see the nudge toward `config.parameterTypes` — the
- * "typed-era home" for it. A stable code so a script can filter these out
- * or count them across a project. */
-function supportOriginParameterTypeWarning(entry: CompatParameterTypeEntry): CheckIssue {
-  return {
-    code: "parameter-type-support-origin",
-    message: `Custom parameter type "${entry.name}" is registered from compat ("support") code at ${entry.filePath}, not from config.parameterTypes — config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
-    file: entry.filePath,
-  };
-}
-
 export function checkBindings(
   vocabulary: Vocabulary,
   customTypes: readonly ParameterTypeConfig[] = [],
   compatParameterTypes: readonly CompatParameterTypeEntry[] = [],
 ): BindingCheckResult {
   const warnings: CheckIssue[] = [];
-  for (const entry of compatParameterTypes) {
-    warnings.push(supportOriginParameterTypeWarning(entry));
-  }
 
   // A name collision in config.parameterTypes (against a built-in type,
   // another config entry, or now a compat-origin entry — this reuses the

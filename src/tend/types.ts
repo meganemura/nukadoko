@@ -28,7 +28,44 @@ export interface TendIssue {
   readonly step?: string;
 }
 
+/** How much of a countable thing typed steps declare vs. could declare —
+ * shared shape for the two "declaration coverage" numbers below (m8c-tend-
+ * summary task spec: exactly two such numbers, `rationale` and `describe`,
+ * kept to that shape rather than each spelling out its own field names so a
+ * reader sees at a glance that both mean "declared out of total"). */
+export interface TendDeclarationCoverage {
+  readonly declared: number;
+  readonly total: number;
+}
+
+/** Where the vocabulary currently is, stated once before any finding
+ * (docs/spec.md "Tending": "Before any finding, `tend` states where the bed
+ * currently is") — not itself a finding: a suite mid-migration with compat
+ * steps still on disk is a normal state, so this never touches `errors`/
+ * `notes` or the exit code (m8c-tend-summary task spec, "非スコープ").
+ * Capped at the three numbers docs/spec.md's own two paragraphs name —
+ * typed vs. compat, and the two declaration-coverage ratios — on purpose:
+ * every additional number here dilutes the ones that matter (task spec:
+ * "数字を増やさない…並べるほど1つあたりの意味が薄まる").
+ *
+ * `compatStepNames` names every counted entity for `--json`'s reader (an
+ * agent, per this task's spec: "「compat が8個」より「この8個」のほうが
+ * 使える"). `rationale`/`describe` do *not* get an equivalent name list —
+ * `missing-rationale.ts`/`missing-describe.ts`'s own notes already name
+ * those steps/fields individually (with a `file`), so repeating the names
+ * here would be the same information twice; only the migration breakdown is
+ * new, because nothing else in this report currently names a compat step at
+ * all. */
+export interface TendSummary {
+  readonly typedSteps: number;
+  readonly compatSteps: number;
+  readonly compatStepNames: readonly string[];
+  readonly rationale: TendDeclarationCoverage;
+  readonly describe: TendDeclarationCoverage;
+}
+
 export interface TendReport {
   readonly errors: readonly TendIssue[];
   readonly notes: readonly TendIssue[];
+  readonly summary: TendSummary;
 }
