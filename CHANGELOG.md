@@ -31,6 +31,35 @@ just until 0.1.
 
 ### Added
 
+- **`additionalFeatureDirs` config, and a wider static scan.** A step's
+  pattern is bound or unbound as a property of the whole project, not just
+  of what an unattended `nuka run` would execute today — so an acceptance
+  feature, recommended to live outside `featuresDir` precisely so it never
+  runs as a regression, made `nuka check`/`nuka tend` report its steps
+  `pattern-unbound` even though they genuinely bind. `additionalFeatureDirs`
+  (default `[]`) names directories `nuka check` (no argument) and `nuka
+  tend` scan in addition to `featuresDir`, without ever executing them —
+  `nuka run` still reads `featuresDir` alone. Two findings come with it: a
+  configured `additionalFeatureDirs` entry that does not exist
+  (`additional-feature-dir-missing`, an error on `check`, a note on `tend`)
+  and an accepted feature outside every scanned directory
+  (`signed-feature-unscanned`, a `tend` note — deliberately never used to
+  widen the scanned set itself, since that would only ever notice a
+  feature already accepted at least once, silently missing the one still
+  being drafted). `nuka tend`'s summary grew a `scanned:` line, printed
+  first, naming every directory that run actually looked at; its `bed:`
+  line now also states how many typed steps are read-only.
+- **A failed step's receipt carries the upstream values it read.** Each
+  `used` entry on a failed step's receipt now also carries `result`: the
+  full validated result of the receipt it cites, not only the id and step
+  name. Diagnosing a failure used to mean opening a second receipt.json for
+  every upstream step a `from` or `resultOf` read from; now the one
+  receipt that failed already has it. Present only on a failed receipt — an
+  `ok` receipt's own `result` already holds whatever value mattered, so
+  repeating an upstream one there would be redundant — and carries the
+  whole result rather than the one key that was actually read, since a
+  diagnosis needs why the value came out that way, not which key was
+  cited.
 - **`nuka run <feature>:<line>` says that it is a partial run.** Running one
   scenario is the iteration path and is worth taking: a feature's full run
   costs every scenario's minutes. What it is not is a smaller version of the

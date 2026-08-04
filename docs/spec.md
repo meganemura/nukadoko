@@ -850,6 +850,22 @@ shape whether the step ran inside a scenario or via `do`.
   Which upstream *step* a value came from was settled when the step file
   was written; which *execution* of it supplied the value is knowable only
   here.
+- On a **failed** step's receipt only, each `used` entry additionally
+  carries `result`: the upstream receipt's full validated result, sitting
+  right beside the id/step pointer. This is what lets one failed receipt be
+  read alone instead of opening a second receipt.json just to see what the
+  step actually saw. An `ok` receipt's `used` entries never carry `result`
+  — the value that mattered is already sitting on that step's own `result`
+  (or on its `args`, if it came in through `from`), so repeating the
+  upstream one there would only be redundant. The whole result, not
+  narrowed to the one key a `from` injection or `resultOf` call happened to
+  read: diagnosing a failure needs *why* the upstream value came out this
+  way, not which key was cited — narrowing to the cited key would recreate,
+  on the receipt side, the same citation-only trap "return more than what a
+  later step cites" (see Typed steps) already warns against. That also
+  means this field can only carry what the upstream step's own `returns`
+  schema kept in the first place: a `returns` that dropped a value drops it
+  from here too.
 - `sections` (present only when non-empty) lists the labels `ctx.section`
   was called with, in call order. Not deduplicated, unlike `used`: a label
   entered twice — a loop, a retry — was entered twice, and the array
@@ -949,10 +965,27 @@ The execution infrastructure Cucumber never had:
 
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
-Cucumber-style), `baseURL`, `envFiles`, `environments`,
-`stateDir` (default `.nukadoko`), `browser`, `browserContext`,
-`requestContext`, `secrets`, `parameterTypes`, `allure` (only `resultsDir`,
-see "Allure emitter"), `messages` (only `output`, see "Messages emitter").
+Cucumber-style), `additionalFeatureDirs`, `baseURL`, `envFiles`,
+`environments`, `stateDir` (default `.nukadoko`), `browser`,
+`browserContext`, `requestContext`, `secrets`, `parameterTypes`, `allure`
+(only `resultsDir`, see "Allure emitter"), `messages` (only `output`, see
+"Messages emitter").
+
+`additionalFeatureDirs` (default `[]`) answers a different question than
+`featuresDir` does. `featuresDir` is the set that *runs* unattended: `nuka
+run` with no argument iterates exactly that directory, and this key never
+widens it. `featuresDir` plus `additionalFeatureDirs` together is the set
+a static check *binds vocabulary against*: `nuka check` with no argument
+and `nuka tend` both walk the wider set, because whether a step's pattern
+is bound is a property of the whole project, not of what today's
+unattended run would execute. This is why an acceptance feature (see
+"Sign-off") — kept outside `featuresDir` precisely so it is never picked up
+as a regression — belongs in `additionalFeatureDirs`: named there, the
+steps it binds are counted as bound instead of reported `pattern-unbound`,
+and it still never runs unattended. An entry that does not exist on disk is
+a config mistake, not an empty scan result to fail open on: `nuka check`
+reports it as an error (`additional-feature-dir-missing`), and `nuka tend`
+reports the same fact as a note.
 
 `browser` takes Playwright's own `LaunchOptions` type directly (chromium is
 the only browser type; `newContext`'s options like `viewport` are a
@@ -1120,9 +1153,11 @@ What an agent does when a ticket's acceptance criteria are handed to it:
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
 4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
-   Then bound to a mutating step — before anything runs. The argument is not
-   optional in spirit here: an acceptance feature living outside
-   `featuresDir` is exactly what a bare `nuka check` does not walk.
+   Then bound to a mutating step — before anything runs. Pass the path
+   unless the directory the acceptance feature lives in is listed in
+   `additionalFeatureDirs`: a bare `nuka check` walks `featuresDir` and that
+   list, so a feature deliberately kept outside `featuresDir` and named
+   nowhere else is exactly what it does not reach.
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
@@ -1322,12 +1357,22 @@ on every `check`, they would teach everyone to skim past the line that
 did have to be fixed. Noise is not a cosmetic problem in a tool whose main
 claim is that its checks are worth reading.
 
-Before any finding, `tend` states where the bed currently is: how much of
-the vocabulary is typed rather than still compat, and how much of what a
-typed step could declare is actually declared. This is not a finding and
-does not touch the exit code — a suite in the middle of a migration is in a
-normal state, not a faulty one, and warning about it every time would
-drown the findings that do need acting on.
+Before any finding, `tend` prints three summary lines that state where the
+bed currently is. None of the three is a finding, and none touches the exit
+code — a suite in the middle of a migration is in a normal state, not a
+faulty one, and warning about it every time would drown the findings that
+do need acting on:
+
+- `scanned:` names every directory this run actually looked at —
+  `featuresDir` plus each `additionalFeatureDirs` entry (see "Sessions,
+  environments, secrets"). Printed first, because a count means nothing
+  until a reader knows what it was counted over.
+- `bed:` gives how much of the vocabulary is typed rather than still
+  compat, plus how many of the typed steps declare `mutates: false`
+  (read-only).
+- `declared:` gives how much of what a typed step could declare —
+  `rationale`, a `.describe()` on each schema field — is actually
+  declared.
 
 It exists because the information was already there and unread. A receipt's
 `world` and `declared` counts do shrink as a suite promotes, which is true
@@ -1380,6 +1425,22 @@ What it looks at, and why each one is rot rather than style:
   whose value is too short to be redacted, and a tracked env file with a
   secret-looking key, both mean plaintext reaches a log the moment the run
   starts, which is exactly something to know beforehand.
+- **A configured `additionalFeatureDirs` entry that does not exist on
+  disk.** It was named specifically to widen what `nuka check`/`nuka tend`
+  scan, so an absent directory is a config mistake to report, the same way
+  a missing `featuresDir` is — except `tend` has no error bucket for a
+  config mistake the way `check` does, so this is a note here even though
+  `nuka check` reports the identical fact as an error.
+- **An accepted feature outside every directory `nuka check`/`nuka tend`
+  scan.** A sign-off record already proves that feature ran green, but a
+  feature nothing here walks still leaves the steps it binds looking
+  `pattern-unbound` to every other finding in this report. Sign-off
+  records are read for this finding's visibility only, never to decide
+  what gets scanned: growing the scanned set from them would only ever
+  notice a feature that has already been accepted at least once, silently
+  missing the one still being drafted — exactly the feature a false
+  `pattern-unbound` would most mislead someone about. Naming the
+  directory in `additionalFeatureDirs` is what actually fixes it.
 
 Findings are `--json` like everything else. The sign-off finding exits
 non-zero so a periodic job can act on it; the rest do not, because a
@@ -1420,24 +1481,30 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               coherence, unreadable step files (reported,
                               not fatal — the rest of the project is still
                               checked), unsupported hook tag expressions;
-                              a feature argument checks that one file
-                              instead of featuresDir, for a feature living
-                              outside it
+                              with no argument, scans featuresDir plus
+                              additionalFeatureDirs; a feature argument
+                              checks that one file instead, for a feature
+                              living outside both
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
-nuka tend [--json]            where the bed is, then what is rotting rather
-                              than what is broken: how much of the
-                              vocabulary is typed rather than compat and
-                              how much of it declares what it could, then
-                              a sign-off that no longer matches the code it
-                              froze (the one finding that exits non-zero),
-                              a `from` nothing exercises, a patterned step
-                              no feature binds, a schema field with no
+nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
+                              then where the bed is, then what is rotting
+                              rather than what is broken: how much of the
+                              vocabulary is typed rather than compat, how
+                              many typed steps are read-only, and how much
+                              of it declares what it could, then a sign-off
+                              that no longer matches the code it froze (the
+                              one finding that exits non-zero), a `from`
+                              nothing exercises, a patterned step no
+                              feature binds, a schema field with no
                               `.describe()`, a step with no `rationale`, a
                               configured parameter type no pattern uses, a
                               `defineParameterType` still registered from
                               support code, a secrets entry naming a key no
-                              envFile defines
+                              envFile defines, a configured
+                              additionalFeatureDirs entry absent from disk,
+                              an accepted feature outside every scanned
+                              directory
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
