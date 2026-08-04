@@ -107,6 +107,36 @@
       "en": ["collector"],
       "ja": "コレクタ",
       "note": "executor が所有し step の境界ごとにリセットする、ctx.section や ctx.poll の呼び出しを集める内部の収集役"
+    },
+    {
+      "en": ["from-order violation", "from-order"],
+      "ja": "`from` の束縛順序違反",
+      "note": "from が読む step が先に束ねられていない、という nuka check の finding。bind の by_context にある「束ねる」系の訳語と揃えた。finding code そのもの(from-order-violation)はコード片としてバッククォート付きの英語のまま、コード片以外の地の文で使うときの訳"
+    },
+    {
+      "en": ["undefined step"],
+      "ja": "未定義の step",
+      "note": "docs/spec.ja.md ですでに使われていた訳語をそのまま踏襲。finding code(undefined-step)はコード片としてバッククォート付きの英語のまま"
+    },
+    {
+      "en": ["retry", "retries"],
+      "ja": "リトライ",
+      "note": "カタカナに統一する。docs/spec.ja.md には retry のまま英語で残っている箇所(L1150)とカタカナの箇所(L664)が両方あり統一されていない。spec.ja.md 側の統一は別タスク"
+    },
+    {
+      "en": ["sharding"],
+      "ja": "シャーディング",
+      "note": "retry と同じ理由でカタカナに統一。docs/spec.ja.md L1150 は sharding と英語のまま残っている"
+    },
+    {
+      "en": ["parallel execution"],
+      "ja": "並列実行",
+      "note": "3 ファイルで既に一致していた訳語を明文化しただけ。ドリフト防止のために追加"
+    },
+    {
+      "en": ["upgrade", "upgrading"],
+      "ja": "アップグレード",
+      "note": "npm パッケージのバージョンを上げること。「更新」と訳さない。README の Upgrading 節は npm update では版が動かないことを説明する章で、「更新」だと npm update と読めて章の主張と衝突する"
     }
   ],
   "keep_english": [
@@ -163,7 +193,7 @@
     "note": "ファイルごとに規則が違う。これは歴史的な経緯であって設計ではない。統一する価値はあるが、既存の見出しを動かすとリンクのアンカーが壊れるので、まとめてやるときに一度で行う",
     "README.ja.md": {
       "rule": "英語のまま残し、直下に太字の日本語訳を本文1行目として置く",
-      "exceptions": "なし。16個すべてがこの書式"
+      "exceptions": "なし。19個すべてがこの書式(2026-08-04 の再構成で 16 から 19 に)"
     },
     "docs/spec.ja.md": {
       "rule": "見出しの主題が keep_english に載っている語なら英語のまま。説明的な句なら日本語化。どちらとも言い切れない英語の術語が単独で立つ場合だけ、丸括弧で短い日本語の言い換えを添える",
