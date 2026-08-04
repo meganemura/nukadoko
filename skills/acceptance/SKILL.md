@@ -60,6 +60,16 @@ just produces a scenario that proves the wrong thing.
    supposed to; only move on to the feature-level `nuka run` once every new
    step in the scenario has passed this way on its own.
 
+`do` gives every call its own browser; `run` shares one page across a
+scenario's steps, so a step green under `do` can still fail under `run` if
+it depends on state an earlier step left — signed in, navigated elsewhere,
+a dialog left open. The rule above ("passed this way on its own") checks
+that each step works alone, not that it works in the scenario's own order;
+only `run` checks that. `nuka do --session <name>` narrows the gap only for
+login state, carrying storageState across `do` calls — not where execution
+had got to — so anything else still needs fixing in the feature: give
+shared state its own step, named for what it establishes, and call it once.
+
 A step that declares `from` (see "Chaining a value from an earlier step")
 still runs alone: pass the key in `--args` like any other, or add
 `--use <receipt-id>` to take it from the result of an execution you already
@@ -88,6 +98,13 @@ which condition. This matters most on the Then side (`mutates: false`): a
 step verifying "an error is shown" needs its `returns` field for that
 message described, or the link between the criterion and what was actually
 observed is lost.
+
+Return more than what a later step cites. Basing `returns` on citation alone
+drops the values this step's own correctness depended on but nothing
+downstream reads — a computed date, a chosen id, a resolved name — and
+those are exactly what a receipt gets read for once something has failed.
+Return them even if the scenario never reads them back; the alternative is
+reconstructing what was actually sent from another system's error message.
 
 ## Chaining a value from an earlier step
 
@@ -140,6 +157,25 @@ key names a producer that never appears in the scenario, that is a
 something nukadoko inserts quietly to make the run succeed. A feature that
 doesn't name everything that ran stops being the record this whole loop
 exists to leave.
+
+## Waiting for an external effect
+
+A step that writes to a system whose effect lands elsewhere asynchronously
+isn't finished when the write is accepted — it's finished once that effect
+is visible to whatever runs next. Wait for it there, with
+`ctx.poll(fn, { description, timeout, interval })`; give `description` a
+value and the receipt's `polls` carries `attempts`, `waited_ms`, and
+`outcome` beside it. That is what separates a wait that actually waited
+from one that returned on its first attempt — the second means the
+condition was never the late one, and something else is, which is a
+different problem with a different fix.
+
+Don't put the wait in a later step that merely reads the effect: that
+step's wait then only covers scenarios passing through it, so a sibling
+scenario reaching the same state another way fails for no reason that looks
+like its own. A green run is no proof the wait sits in the right place —
+the value may just have been supplied by that later step's own wait. Only a
+route skipping that step can show where the wait actually belongs.
 
 ## Writing the feature
 
@@ -209,6 +245,9 @@ there outright, regardless of what `--env` was given.
    the run needs — including any step files from "When an operation is
    missing" above — into a commit first.
 2. `nuka run <feature>` — repeat until every scenario is green.
+   `<feature>:<line>` is fine for narrowing this while iterating, but the
+   run this step ends on must cover the whole feature — `accept` never
+   treats a partial run as a candidate, however green it was.
 3. `nuka accept <feature>` — freezes the newest all-green run of that
    feature as a record beside it.
 4. Commit the record `accept` wrote.
