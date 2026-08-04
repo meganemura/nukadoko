@@ -1,5 +1,6 @@
 import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
+import type { PollOptions } from "./context/poll.js";
 import type { Step } from "./step/define-step.js";
 
 // Responsibility: the shape of `ctx` a step's `run(ctx, args)` receives, per
@@ -16,9 +17,15 @@ import type { Step } from "./step/define-step.js";
 // decision 1).
 //
 // The boundary rule (docs/spec.md "Context API"): `ctx` carries only what
-// the executor must inject; pure helpers are imports, not context members.
-// `poll` (`import { poll } from "nukadoko"`, src/context/poll.ts) needs
-// nothing the executor owns, so it is not here.
+// the executor must inject; a helper that needs nothing the executor owns
+// stays a plain import instead of a member here. `poll` used to be exactly
+// that (`import { poll } from "nukadoko"`, pre-ctx-poll-receipt) — until the
+// same mistake `section` made once already (see below) showed up again from
+// the other direction: a wait that finishes without being recorded cannot
+// be told apart, from a receipt, from one that returned on its first
+// attempt, and those two call for opposite fixes (ctx-poll-receipt task
+// spec). `poll` therefore moved onto `ctx` too; see `PollRecord`/`polls`
+// (src/receipt/types.ts) for where a finished call now lands.
 //
 // `section` (t3-sections task spec) reverses m2pre-ctx-surface's original
 // call: that decision withheld it because it would have been a no-op until
@@ -73,4 +80,12 @@ export interface StepContext {
    * `sections`; a step that never calls it gets no `sections` key at all
    * (empty is omitted, the same convention `used` already follows). */
   section(label: string): void;
+  /** Waits for `fn` to return a defined value, retrying at
+   * `options.interval` (default 500ms) until `options.timeout` (default
+   * 30_000ms) is reached; throws `PollTimeoutError` (src/context/poll.ts)
+   * if it is. `fn`'s own throw propagates unchanged. Every completed call —
+   * resolved, timed out, or `fn` itself threw — is recorded on this
+   * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
+   * attempts it took, how long it waited, and how it ended. */
+  poll<T>(fn: () => Promise<T | undefined>, options?: PollOptions): Promise<T>;
 }

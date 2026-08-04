@@ -48,6 +48,22 @@
 // labels it reached before failing, and its last element already answers
 // "which stage was it in" — one fact, one place to read it.
 //
+// `polls` is added now (ctx-poll-receipt task spec): every `ctx.poll` call
+// that finished during this execution, in completion order rather than call
+// order — a nested poll finishes before the one containing it, so recording
+// at call time would have nothing to report yet. Unlike `sections` it does
+// carry timing (`attempts`, `waited_ms`): the question `polls` exists to
+// answer is a timing one — one attempt at 0ms says a wait was a no-op, many
+// attempts over seconds says something else was genuinely late, and those
+// two looked identical from a receipt for as long as `poll` stayed a pure
+// import that wrote nothing down (docs/spec.md "Context API": "poll was an
+// import for exactly as long as it recorded nothing, and arriving there was
+// the same mistake twice"). `outcome: "failed"` means `fn` itself threw,
+// and that throw still propagates to the step — `polls` records the fact,
+// never swallows it. Present only when non-empty, `used`/`sections`' own
+// convention; a compat step has no `ctx` to call `poll` on, so this field is
+// simply omitted for one, the same way `sections` is.
+//
 // `world` is added now (m2c-typed-world task spec, item 3): a compat step's
 // own World reads/writes, measured the same "always on" way `observed` is —
 // deduplicated, in access order, both arrays omitted together (`used`'s own
@@ -136,6 +152,24 @@ export type ErrorKind =
   | "unsupported"
   | "step_error";
 
+/** One `ctx.poll` call's own record (ctx-poll-receipt task spec; docs/spec.md
+ * "Receipts"). */
+export interface PollRecord {
+  /** `options.description`, when the call was given one — included in
+   * `PollTimeoutError`'s own message too (src/context/poll.ts). */
+  readonly description?: string;
+  /** How many times `fn` was called. `1` means it resolved on the very
+   * first attempt: the wait was a no-op, not a genuine delay. */
+  readonly attempts: number;
+  /** Milliseconds elapsed across the whole `ctx.poll` call, start to
+   * finish. */
+  readonly waited_ms: number;
+  /** `"resolved"` — `fn` returned a defined value. `"timed_out"` — the
+   * call's own `PollTimeoutError` fired. `"failed"` — `fn` itself threw,
+   * and that throw propagated out of `ctx.poll` unchanged. */
+  readonly outcome: "resolved" | "timed_out" | "failed";
+}
+
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
    * ".nukadoko/receipts/rcpt-..."). */
@@ -204,6 +238,12 @@ interface ReceiptBase {
    * field is simply omitted for one, the same way `used` is omitted for a
    * typed step that never calls `ctx.resultOf`. */
   sections?: string[];
+  /** Every `ctx.poll` call that finished during this execution, in
+   * completion order rather than call order (ctx-poll-receipt task spec;
+   * this file's own header). Present only when non-empty; only a typed
+   * step's `ctx` has `poll`, so this field is simply omitted for a compat
+   * step, the same way `sections` is. */
+  polls?: readonly PollRecord[];
   /** A compat step's own World reads/writes (m2c-typed-world task spec,
    * item 3) — deduplicated, in access order. Present only when at least one
    * of `reads`/`writes` is non-empty; absent for a typed step (no World),

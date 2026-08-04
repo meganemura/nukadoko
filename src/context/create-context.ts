@@ -4,6 +4,7 @@ import { request as playwrightRequest, type APIRequestContext, type Page } from 
 import type { z } from "zod";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
+import type { PollRecord } from "../receipt/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
@@ -12,6 +13,8 @@ import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, UnregisteredStepError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
+import { pollWithRecording, type PollOptions } from "./poll.js";
+import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
 import { createUsedCollector, type UsedEntry } from "./used.js";
 
@@ -19,15 +22,17 @@ import { createUsedCollector, type UsedEntry } from "./used.js";
 // to a step's `run(ctx, args)` — env, baseURL (also wired into the browser
 // context so `page.goto("/path")` resolves against it), lazy browser, lazy
 // logged HTTP context — plus a `dispose` the executor calls *after* `run`
-// returns, never itself reachable from `ctx`. `poll` is deliberately not
-// assembled here: it is a pure helper exported directly from the package
-// (src/context/poll.ts, src/index.ts) that needs nothing this module owns.
-// `ctx.section`, unlike `poll`, *is* assembled here (t3-sections task spec,
-// decision 4): it only writes into the `sections` collector below (same
-// shape as `observed`/`used`), so the read side (`sectionsSnapshot()`) and
-// the reset (`beginStep`) stay executor-only, the same trust-model rule as
-// everything else on this handle — a step can write a label but can never
-// read back or clear what it or an earlier step already wrote.
+// returns, never itself reachable from `ctx`. `ctx.section` and `ctx.poll`
+// are both assembled here for the same reason (t3-sections task spec,
+// decision 4; ctx-poll-receipt task spec): each only writes into a
+// collector below (`sections`, `polls` — same shape as `observed`/`used`),
+// so the read side (`sectionsSnapshot()`/`pollsSnapshot()`) and the reset
+// (`beginStep`) stay executor-only, the same trust-model rule as everything
+// else on this handle — a step can write a label or run a poll but can
+// never read back or clear what it or an earlier step already wrote.
+// `poll`'s own retry loop still lives entirely in src/context/poll.ts
+// (`pollWithRecording`, unchanged in its own right) — this module only owns
+// the `polls` collector and binds the two together to produce `ctx.poll`.
 // docs/spec.md's Context API boundary rule (`ctx` carries only what the
 // executor must inject) is the whole point: docs/spec.md's trust model
 // requires that a step cannot control its own receipt or evidence
@@ -68,6 +73,13 @@ import { createUsedCollector, type UsedEntry } from "./used.js";
 // receipt would start out already carrying whichever labels an earlier
 // step called `ctx.section` with — the same bleed-across-steps bug this
 // reset already prevents for `observed`/`used`.
+//
+// `beginStep` resets `polls` the same way (ctx-poll-receipt task spec): one
+// `ctx.poll` collector per `ctx`, shared across every step of a pickle just
+// like `sections`, so without this reset a later step's receipt would start
+// out already carrying whichever polls an earlier step made — the same
+// bleed-across-steps bug this reset already prevents for
+// `observed`/`used`/`sections`.
 //
 // `env` arrives already loaded and merged (m1-secrets task spec, decision
 // 2): the executor is the one place that knows the full envFiles list *and*
@@ -173,6 +185,11 @@ export interface StepContextHandle {
    * decisions 1-2). Never exposed on `ctx` — same rule as
    * `observedCounts()`/`usedSnapshot()`. */
   sectionsSnapshot(): string[];
+  /** Executor-only: every `ctx.poll` call that finished since the current
+   * step boundary began, in completion order (ctx-poll-receipt task spec).
+   * Never exposed on `ctx` — same rule as `observedCounts()`/
+   * `sectionsSnapshot()`. */
+  pollsSnapshot(): PollRecord[];
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError` (env-reads-and-
@@ -182,14 +199,15 @@ export interface StepContextHandle {
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
-   * tally, the `used` log, the `sections` log, and the `required_env` log to
-   * empty. `nuka run`'s executor calls this once per step, right before
-   * running it, so a pickle's shared ctx still logs and tallies each step's
-   * own network calls, provenance reads, section labels, and required env
-   * names under that step's own receipt dir (m1-run task spec, decision 5;
-   * m2pre-observed task spec, decision 2; t3-sections task spec, decision 4;
-   * env-reads-and-mutates-doc task spec, item A). Never exposed on `ctx` —
-   * same executor-only rule as `dispose`. */
+   * tally, the `used` log, the `sections` log, the `polls` log, and the
+   * `required_env` log to empty. `nuka run`'s executor calls this once per
+   * step, right before running it, so a pickle's shared ctx still logs and
+   * tallies each step's own network calls, provenance reads, section
+   * labels, finished polls, and required env names under that step's own
+   * receipt dir (m1-run task spec, decision 5; m2pre-observed task spec,
+   * decision 2; t3-sections task spec, decision 4; ctx-poll-receipt task
+   * spec; env-reads-and-mutates-doc task spec, item A). Never exposed on
+   * `ctx` — same executor-only rule as `dispose`. */
   beginStep(dir: string): void;
 }
 
@@ -263,6 +281,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // Same lifetime rule again, for `ctx.section`'s call log (t3-sections
   // task spec, decision 4).
   const sections = createSectionsCollector();
+  // Same lifetime rule again, for `ctx.poll`'s own finished-call log
+  // (ctx-poll-receipt task spec).
+  const polls = createPollsCollector();
   // Same lifetime rule again, for `ctx.requireEnv`'s name log (env-reads-
   // and-mutates-doc task spec, item A).
   const envReads = createEnvReadsCollector();
@@ -361,6 +382,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     section(label: string): void {
       sections.record(label);
     },
+    poll<T>(fn: () => Promise<T | undefined>, options: PollOptions = {}): Promise<T> {
+      return pollWithRecording(fn, options, (finished) => {
+        polls.record({
+          ...(options.description !== undefined ? { description: options.description } : {}),
+          attempts: finished.attempts,
+          waited_ms: finished.waitedMs,
+          outcome: finished.outcome,
+        });
+      });
+    },
   };
 
   async function dispose(status: "ok" | "failed"): Promise<DisposeResult> {
@@ -446,6 +477,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return sections.snapshot();
   }
 
+  function pollsSnapshot(): PollRecord[] {
+    return polls.snapshot();
+  }
+
   function envReadsSnapshot(): string[] {
     return envReads.snapshot();
   }
@@ -455,6 +490,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     observed.reset();
     used.reset();
     sections.reset();
+    polls.reset();
     envReads.reset();
   }
 
@@ -465,6 +501,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     usedSnapshot,
     recordUsed,
     sectionsSnapshot,
+    pollsSnapshot,
     envReadsSnapshot,
     beginStep,
   };

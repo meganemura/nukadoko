@@ -8,7 +8,10 @@ export { defineConfig } from "./config/define-config.js";
 export { ConfigError } from "./config/errors.js";
 export type { StepContext } from "./context.js";
 export { MissingEnvError } from "./context/errors.js";
-export { poll, PollTimeoutError } from "./context/poll.js";
+// `poll` itself is not exported: it moved onto `ctx.poll` (ctx-poll-receipt
+// task spec) — see src/context.ts's own header for why a runnable `poll`
+// stayed importable for exactly as long as it recorded nothing.
+export { PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./context/poll.js";
 export type {
   ErrorKind,

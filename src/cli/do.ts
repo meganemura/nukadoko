@@ -456,6 +456,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // concept here to special-case, so this is read the same way
     // `observed` is, right above.
     const sections = contextHandle.sectionsSnapshot();
+    // Every `ctx.poll` call that finished during this execution, read the
+    // same "after execution, whatever its outcome" way `sections` is right
+    // above — a poll that timed out or whose `fn` threw still finished, in
+    // the sense that matters here, and its own record is what a receipt for
+    // a failed step needs most (ctx-poll-receipt task spec).
+    const polls = contextHandle.pollsSnapshot();
     // Recorded even on a `MissingEnvError` failure (that throw happens
     // inside `entry.step.run`, above, well before this read) — same
     // "read the tally after execution, whatever its outcome" shape as
@@ -523,6 +529,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             mutates: entry.step.mutates,
             ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
+            ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           }
         : {
@@ -549,6 +556,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             observed,
             ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
+            ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           };
 

@@ -750,6 +750,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `beginStep` calls `observed`/`used` already are, so a step never
     // inherits an earlier step's labels in this shared-`ctx` pickle.
     const sectionLabels = contextHandle.sectionsSnapshot();
+    // Every `ctx.poll` call that finished since the current step boundary
+    // began, in completion order (ctx-poll-receipt task spec) — same
+    // "read after execution, whatever the outcome" shape as `sectionLabels`
+    // right above; a poll that timed out or whose `fn` threw is exactly the
+    // record a failed step's receipt needs.
+    const pollRecords = contextHandle.pollsSnapshot();
     // Env var names `ctx.requireEnv` was called with since the current step
     // boundary began, including a call that went on to throw
     // `MissingEnvError` (env-reads-and-mutates-doc task spec, item A) —
@@ -803,6 +809,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             mutates,
             ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+            ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
@@ -838,6 +845,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             mutates,
             ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+            ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
               ? { world: worldReadsWrites }
@@ -1433,6 +1441,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // sections task spec, decision 4) — whatever labels this step
         // reached before the uncaught throw still belong on its receipt.
         const sectionLabels = contextHandle.sectionsSnapshot();
+        // Same backstop-only read again, for `polls` (ctx-poll-receipt task
+        // spec) — a poll this step was mid-wait on when the uncaught throw
+        // hit still finished (`finally` in poll.ts's own loop guarantees
+        // that), so its own record still belongs on this receipt.
+        const pollRecords = contextHandle.pollsSnapshot();
         // Same backstop-only read again, for `required_env` (env-reads-and-
         // mutates-doc task spec, item A) — whatever names this step
         // required before the uncaught throw still belong on its receipt.
@@ -1465,6 +1478,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           mutates: began.mutates,
           ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
           ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+          ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
           ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
             ? { world: worldReadsWrites }
