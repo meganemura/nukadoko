@@ -13,9 +13,13 @@ export default defineConfig({
     // what made real navigations stall for tens of seconds and read as
     // hangs. Capping the pool costs a few seconds of wall clock and removes
     // the contention rather than widening a timeout to tolerate it.
-    poolOptions: {
-      forks: { maxForks: 4 },
-    },
+    //
+    // Spelled `maxWorkers` rather than `poolOptions.forks.maxForks`: Vitest 4
+    // moved the pool sizing knobs to the top level and *ignores* the old
+    // nested form, warning about it instead of failing. That is a cap which
+    // silently stops capping — the suite still goes green on an idle machine,
+    // and the contention it was there to prevent only comes back under load.
+    maxWorkers: 4,
     // Vitest's own 5s default is not a realistic budget for this suite:
     // several files launch a real chromium (browser-evidence, session-
     // browser, run-browser) and one spawns the CLI as a subprocess (skill),
