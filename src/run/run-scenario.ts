@@ -766,6 +766,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `requireEnv` counterpart on `this`), so `required_env` is naturally
     // omitted for one below, the same way `sections` already is.
     const requiredEnv = contextHandle.envReadsSnapshot();
+    // Console errors/uncaught page errors/failed requests the browser
+    // context saw since the current step boundary began (P0-page-events
+    // task spec) — same "read after execution, whatever the outcome" shape
+    // as `observed`/`sectionLabels`/`pollRecords`/`requiredEnv` above;
+    // `undefined` when `ctx.page()` was never called this step, or was and
+    // the page stayed clean.
+    const pageEvents = contextHandle.pageEventsSnapshot();
     // World reads/writes tallied since the current step boundary began (m2c-
     // typed-world task spec, item 3) — always empty for a typed step (no
     // `this`), so the `world` field below is naturally omitted for one,
@@ -820,6 +827,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ? { world: worldReadsWrites }
               : {}),
             ...(declared ? { declared } : {}),
+            ...(pageEvents ? { page_events: pageEvents } : {}),
           }
         : {
             receipt_id: begun.receiptId,
@@ -860,6 +868,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ? { world: worldReadsWrites }
               : {}),
             ...(declared ? { declared } : {}),
+            ...(pageEvents ? { page_events: pageEvents } : {}),
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,
@@ -1459,6 +1468,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // mutates-doc task spec, item A) — whatever names this step
         // required before the uncaught throw still belong on its receipt.
         const requiredEnv = contextHandle.envReadsSnapshot();
+        // Same backstop-only read again, for `page_events` (P0-page-events
+        // task spec) — whatever the browser context already saw before the
+        // uncaught throw still belongs on this receipt.
+        const pageEvents = contextHandle.pageEventsSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
         const receipt: Receipt = {
@@ -1493,6 +1506,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ? { world: worldReadsWrites }
             : {}),
           ...(declared ? { declared } : {}),
+          ...(pageEvents ? { page_events: pageEvents } : {}),
         };
         const redactedReceipt = redact(receipt, secrets) as Receipt;
         await writeReceipt(began.receiptDir, redactedReceipt);

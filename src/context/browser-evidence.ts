@@ -11,6 +11,7 @@ import {
 import type { ScreenshotEntry } from "../receipt/types.js";
 import type { StorageState } from "../session/storage-state.js";
 import type { ObservedCollector } from "./observed.js";
+import type { PageEventsCollector } from "./page-events.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
 // calls `ctx.page()` — launch chromium, trace the whole browser context,
@@ -46,6 +47,16 @@ import type { ObservedCollector } from "./observed.js";
 // context creation, and lives for the context's whole lifetime — it is
 // `observed`'s own `reset()` (create-context.ts's `beginStep`) that advances
 // the step boundary, not resubscribing.
+//
+// `console`/`weberror`/`requestfailed` are subscribed the same way, into
+// `pageEvents` (P0-page-events task spec) — a green step can still be
+// sitting on top of a broken page, and cucumber-js has no browser context of
+// its own to have ever recorded that from. Subscribed on `context`, not
+// `page`, for the same "outlives a future page-fixture override" reason
+// `observed`'s own `request` subscription is (src/context/page-events.ts's
+// own header). `console` is filtered to `msg.type() === "error"` right here
+// — a warning is routine SPA noise, not evidence — the other two categories
+// have no such filter: every `weberror`/`requestfailed` is worth recording.
 
 export interface LaunchBrowserOptions {
   /** `config.browser` (config/schema.ts) as a config author wrote it,
@@ -72,6 +83,9 @@ export interface LaunchBrowserOptions {
   /** Tallies every request this browser context's page(s) make — see this
    * module's header comment. */
   observed: ObservedCollector;
+  /** Records console errors, uncaught page errors, and failed requests this
+   * browser context's page(s) produce — see this module's header comment. */
+  pageEvents: PageEventsCollector;
   /** `config.baseURL`, wired into the browser context so `page.goto("/path")`
    * resolves against it (docs/spec.md "Context API"). Omitted from
    * `newContext` when unset — Playwright's own default for an unset
@@ -111,6 +125,31 @@ export async function launchBrowserWithTracing(
   });
   context.on("request", (request) => {
     options.observed.record(request.method());
+  });
+  context.on("console", (msg) => {
+    if (msg.type() !== "error") {
+      return;
+    }
+    const location = msg.location();
+    options.pageEvents.recordConsoleError({
+      text: msg.text(),
+      location: {
+        url: location.url,
+        lineNumber: location.lineNumber,
+        columnNumber: location.columnNumber,
+      },
+    });
+  });
+  context.on("weberror", (webError) => {
+    options.pageEvents.recordPageError(webError.error().message);
+  });
+  context.on("requestfailed", (request) => {
+    const failure = request.failure();
+    options.pageEvents.recordFailedRequest({
+      method: request.method(),
+      url: request.url(),
+      ...(failure ? { failure: failure.errorText } : {}),
+    });
   });
   await context.tracing.start({ screenshots: true, snapshots: true });
   const page = await context.newPage();

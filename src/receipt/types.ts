@@ -127,6 +127,24 @@
 // all). Always empty, hence always omitted, for a compat step: compat's
 // `this` has no counterpart to `requireEnv` (same spec, scope).
 //
+// `page_events` is added now (P0-page-events task spec): console errors,
+// uncaught page errors, and failed requests the harness itself saw a
+// browser context produce, which cucumber-js has no way to hold at all — it
+// has no browser context of its own to measure from. A step can pass
+// (`status: "ok"`) while the page underneath it was throwing the whole time,
+// and before this field that fact left no trace on the receipt at all.
+// Measured by `PageEventsCollector` (src/context/page-events.ts), which also
+// documents *why* each category is shaped the way it is (console limited to
+// `error`, `weberror` never carrying `Error#stack`, the 100-entries-per-
+// category cap reported through the sibling `truncated` field rather than by
+// changing a category's own type, fix-union task spec). Present on both
+// `ReceiptOk` and `ReceiptFailed` alike, and independent of `status`: a page
+// error is evidence about the page, not a verdict on the step. The whole
+// field, and each of its three categories individually, is omitted when
+// empty — `sections`/`used`/`declared`'s own convention — so a step that
+// never called `ctx.page()`, or did and the page stayed clean, carries no
+// `page_events` key at all.
+//
 // `error.kind` and `mutates` are added now (m3a-receipt-kinds task spec,
 // decisions 1, 3): M3's Allure interop needs a machine-readable failure
 // marker (Categories.json can't be generated from `error.message`, free
@@ -150,6 +168,7 @@
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ObservedCounts } from "../context/observed.js";
+import type { PageEventsSnapshot } from "../context/page-events.js";
 import type { UsedEntry, UsedEntryWithResult } from "../context/used.js";
 
 /** The closed set of machine-readable failure causes a receipt's `error` can
@@ -320,6 +339,14 @@ interface ReceiptBase {
    * differs from `evidence`/`observed`. Present only when at least one of
    * its own sub-fields is non-empty. */
   declared?: DeclaredSnapshot;
+  /** Console errors, uncaught page errors, and failed requests the browser
+   * context saw during this execution (P0-page-events task spec; this
+   * file's own header) — measured, the same "harness saw it happen" way
+   * `observed` is, never declared by the step. Present only when at least
+   * one of `console_errors`/`page_errors`/`failed_requests` is non-empty;
+   * absent when `ctx.page()` was never called this execution, or was and
+   * the page stayed clean. */
+  page_events?: PageEventsSnapshot;
   /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
    * the counterpart to `observed` a receipt needs to let "declared vs
    * observed" be checked from the receipt alone (this task's spec, decision

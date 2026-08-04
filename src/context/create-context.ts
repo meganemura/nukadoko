@@ -13,6 +13,7 @@ import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, UnregisteredStepError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
+import { createPageEventsCollector, type PageEventsSnapshot } from "./page-events.js";
 import { pollWithRecording, type PollOptions } from "./poll.js";
 import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
@@ -80,6 +81,16 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // out already carrying whichever polls an earlier step made — the same
 // bleed-across-steps bug this reset already prevents for
 // `observed`/`used`/`sections`.
+//
+// `beginStep` resets `pageEvents` the same way again (P0-page-events task
+// spec): one collector per `ctx`, created once here and handed to
+// browser-evidence.ts's launch the same way `observed` is, so a later
+// step's receipt does not inherit console/uncaught/failed-request evidence
+// an earlier step's page already produced. The context's own `console`/
+// `weberror`/`requestfailed` subscriptions (browser-evidence.ts) are set up
+// once, at context creation, and outlive every reset — `nuka do` never
+// calls `beginStep` at all, so its single collector simply accumulates for
+// the execution's whole lifetime, the same as `observed`'s.
 //
 // `env` arrives already loaded and merged (m1-secrets task spec, decision
 // 2): the executor is the one place that knows the full envFiles list *and*
@@ -203,18 +214,27 @@ export interface StepContextHandle {
    * mutates-doc task spec, item A). Never exposed on `ctx` — same rule as
    * `observedCounts()`/`usedSnapshot()`/`sectionsSnapshot()`. */
   envReadsSnapshot(): string[];
+  /** Executor-only: console errors, uncaught page errors, and failed
+   * requests the browser context saw since the current step boundary began
+   * (P0-page-events task spec), or `undefined` when none of the three
+   * happened at all — whether because `ctx.page()` was never called this
+   * step, or because it was and the page simply stayed clean. Never exposed
+   * on `ctx` — same rule as `observedCounts()`/`sectionsSnapshot()`/
+   * `pollsSnapshot()`. */
+  pageEventsSnapshot(): PageEventsSnapshot | undefined;
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
-   * tally, the `used` log, the `sections` log, the `polls` log, and the
-   * `required_env` log to empty. `nuka run`'s executor calls this once per
-   * step, right before running it, so a pickle's shared ctx still logs and
-   * tallies each step's own network calls, provenance reads, section
-   * labels, finished polls, and required env names under that step's own
+   * tally, the `used` log, the `sections` log, the `polls` log, the
+   * `required_env` log, and the `pageEvents` log to empty. `nuka run`'s
+   * executor calls this once per step, right before running it, so a
+   * pickle's shared ctx still logs and tallies each step's own network
+   * calls, provenance reads, section labels, finished polls, required env
+   * names, and page-origin evidence under that step's own
    * receipt dir (m1-run task spec, decision 5; m2pre-observed task spec,
    * decision 2; t3-sections task spec, decision 4; ctx-poll-receipt task
-   * spec; env-reads-and-mutates-doc task spec, item A). Never exposed on
-   * `ctx` — same executor-only rule as `dispose`. */
+   * spec; env-reads-and-mutates-doc task spec, item A; P0-page-events task
+   * spec). Never exposed on `ctx` — same executor-only rule as `dispose`. */
   beginStep(dir: string): void;
 }
 
@@ -294,6 +314,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // Same lifetime rule again, for `ctx.requireEnv`'s name log (env-reads-
   // and-mutates-doc task spec, item A).
   const envReads = createEnvReadsCollector();
+  // Same lifetime rule again, for console errors/uncaught page errors/
+  // failed requests the browser context saw (P0-page-events task spec) —
+  // created once, handed to browser-evidence.ts's launch below, and only
+  // ever populated if `ctx.page()` is actually called this ctx's lifetime.
+  const pageEvents = createPageEventsCollector();
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -331,6 +356,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           evidenceDir,
           storageState,
           observed,
+          pageEvents,
           baseURL: config.baseURL,
         });
       }
@@ -495,6 +521,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return envReads.snapshot();
   }
 
+  function pageEventsSnapshot(): PageEventsSnapshot | undefined {
+    return pageEvents.snapshot();
+  }
+
   function beginStep(dir: string): void {
     httpLogDir = dir;
     observed.reset();
@@ -502,6 +532,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     sections.reset();
     polls.reset();
     envReads.reset();
+    pageEvents.reset();
   }
 
   return {
@@ -513,6 +544,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     sectionsSnapshot,
     pollsSnapshot,
     envReadsSnapshot,
+    pageEventsSnapshot,
     beginStep,
   };
 }

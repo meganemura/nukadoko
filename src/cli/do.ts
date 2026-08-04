@@ -475,6 +475,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `ctx.resultOf` never returns a value (`resultOf: () => undefined`
     // above), so `--use` is the only thing that can ever populate this here.
     const used = contextHandle.usedSnapshot();
+    // Console errors/uncaught page errors/failed requests the browser
+    // context saw during this execution, read the same "after execution,
+    // whatever its outcome" way `observed`/`sections`/`polls`/`requiredEnv`
+    // are (P0-page-events task spec) — `undefined` when `ctx.page()` was
+    // never called, or was and the page stayed clean.
+    const pageEvents = contextHandle.pageEventsSnapshot();
 
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
@@ -538,6 +544,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(sections.length > 0 ? { sections } : {}),
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
+            ...(pageEvents ? { page_events: pageEvents } : {}),
           }
         : {
             receipt_id: receiptId,
@@ -569,6 +576,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(sections.length > 0 ? { sections } : {}),
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
+            ...(pageEvents ? { page_events: pageEvents } : {}),
           };
 
     // Redacted once, as one object — args/result/error.message and every

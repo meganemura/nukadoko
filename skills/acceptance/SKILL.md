@@ -294,6 +294,11 @@ jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finishe
   | sort_by(.at)[] | "\(.at)  \(.event)"' receipt.json
 ```
 
+If the step opened a browser (`ctx.page()`), also check `page_events` on
+that receipt: a console error, an uncaught page error, or a failed request
+recorded there can explain a failure nothing else on the receipt mentions,
+since it comes from the page itself rather than anything the step declared.
+
 If an absence claim turns up on that timeline, check whether its own
 moment sits before whatever readiness evidence the step returned alongside
 it. Earlier means the read landed before the page was ready to be read —

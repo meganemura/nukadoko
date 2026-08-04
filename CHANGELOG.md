@@ -5,6 +5,23 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **A receipt now records what the page itself said.** Console errors,
+  uncaught page errors, and failed requests land on the step's own receipt
+  under `page_events`, so a step that passed while the page threw three
+  uncaught errors is readable instead of invisible. The subscription sits on
+  the BrowserContext rather than the Page, which is what lets it pick up a
+  popup (`window.open`) without a second listener. Each category caps at 100
+  entries; when one is cut, a sibling `truncated` field carries the true
+  total, because a field whose shape changed with volume would make `jq
+  '.page_events.console_errors | length'` quietly answer a different
+  question. Secrets are redacted on the pass the rest of the receipt already
+  goes through. Service workers stay outside this: a `Worker` has no request
+  or error event to subscribe to, so what they emit is not covered.
+
 ## 0.0.5 — 2026-08-05
 
 ### Changed

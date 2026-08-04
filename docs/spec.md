@@ -974,6 +974,41 @@ shape whether the step ran inside a scenario or via `do`.
   that reads `ctx.env[name]` directly leaves no trace here: this field
   counts only what passed through `requireEnv`, never a plain object read
   the library never sees.
+- `page_events` (present only when at least one category is non-empty)
+  records what the browser context itself saw while a step ran: console
+  errors (`console.error` calls only, never warnings, which most SPAs emit
+  routinely enough to be noise), uncaught page errors (`BrowserContext`'s
+  `weberror`, the context-level counterpart to `Page`'s `pageerror`), and
+  requests that failed at the network level. cucumber-js has no browser
+  context of its own to hold any of this: a step can pass (`status: "ok"`)
+  while the page underneath it was throwing the whole time, and before this
+  field nothing on the receipt said so. Each category is present only when
+  it recorded at least one entry, and is always a bare array, never
+  something whose own type depends on how many entries it holds:
+  `console_errors`, each entry `{ "text", "location": { "url", "lineNumber",
+  "columnNumber" }, "at" }`; `page_errors`, each entry `{ "message", "at" }`
+  (never the error's own stack: trace.zip already carries it, and a stack
+  widens what redaction has to reach for little gain); `failed_requests`,
+  each entry `{ "method", "url", "failure", "at" }`. `at` (ISO 8601) is
+  taken by the collector itself, the same measured, never declared
+  convention `sections`/`polls` already follow. Capped at 100 entries per
+  category: a redirect loop or a chatty page can produce thousands of these
+  in one step, and a receipt trying to hold all of them would stop being
+  something a reader can open. A category that hits the cap stays a bare
+  array (still capped at 100) and instead adds its own name to a sibling
+  `truncated` object on `page_events`, mapped to its true total, present
+  only when at least one category was actually truncated:
+  `"truncated": { "console_errors": 4213 }`. An earlier version reported
+  the same fact by turning a truncated category itself into
+  `{ entries, total, truncated: true }`, so a category's type changed with
+  how many entries it held and a reader had to branch on that type before
+  trusting a count read off it; the sibling field exists so every category
+  is always the same shape and a truncation is a separate fact, reported
+  once, in one place. Redacted the same way every other field is: a secret
+  can land in console text or a failed request's URL as easily as it can
+  anywhere else, so no separate redaction path exists for this field.
+  Present on both a successful and a failed step's receipt alike: a page
+  error is evidence about the page, not a verdict on the step.
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
