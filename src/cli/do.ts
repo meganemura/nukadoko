@@ -4,6 +4,7 @@ import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
+import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { probeVersion } from "../environment/probe-version.js";
 import {
@@ -402,7 +403,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // matching key was already overridden by `--args` contributed
         // nothing to this run, so it is not cited.
         if (filledAnyKey) {
-          contextHandle.recordUsed(resolved.used.receipt, resolved.used.step);
+          contextHandle.recordUsed(resolved.used.receipt, resolved.used.step, resolved.used.result);
         }
       }
     }
@@ -527,7 +528,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             evidence: { dir: relativeDir, ...evidence },
             observed,
             mutates: entry.step.mutates,
-            ...(used.length > 0 ? { used } : {}),
+            // `omitUsedResults` (fb3-used-result task spec, decision 2): an
+            // "ok" receipt keeps `used`'s original `{ receipt, step }` shape
+            // — see the failed branch just below for the case that keeps
+            // the upstream's own result.
+            ...(used.length > 0 ? { used: omitUsedResults(used) } : {}),
             ...(sections.length > 0 ? { sections } : {}),
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
@@ -554,6 +559,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             mutates: entry.step.mutates,
             evidence: { dir: relativeDir, ...evidence },
             observed,
+            // Unstripped here, unlike the "ok" branch above (fb3-used-result
+            // task spec, decisions 1-2, 4): a failed step's receipt is
+            // exactly where a reader most needs "what upstream value did
+            // this `--use` draw on", without opening a second receipt.json.
             ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
             ...(polls.length > 0 ? { polls } : {}),

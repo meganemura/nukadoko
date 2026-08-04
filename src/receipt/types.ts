@@ -123,7 +123,7 @@
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ObservedCounts } from "../context/observed.js";
-import type { UsedEntry } from "../context/used.js";
+import type { UsedEntry, UsedEntryWithResult } from "../context/used.js";
 
 /** The closed set of machine-readable failure causes a receipt's `error` can
  * carry (m3a-receipt-kinds task spec, decision 1) — see this file's own
@@ -215,12 +215,6 @@ interface ReceiptBase {
    * enforcement and read-only environments act on (docs/spec.md "Keyword
    * semantics", "Receipts"; this task's spec, decisions 1-4). */
   observed: ObservedCounts;
-  /** The earlier executions whose validated results this execution actually
-   * read from — through a `from` injection or a `ctx.resultOf` call alike
-   * (docs/spec.md "Receipts"; m2pre-resultof task spec, decisions 1-2;
-   * m6a-from-core task spec, item 5). Present only when non-empty;
-   * deduplicated by receipt id, in read order. */
-  used?: UsedEntry[];
   /** Env var names `ctx.requireEnv` was actually called with during this
    * execution (docs/spec.md "Receipts"; env-reads-and-mutates-doc task spec,
    * item A). Present only when non-empty; deduplicated, in read order.
@@ -278,6 +272,18 @@ export interface ReceiptOk extends ReceiptBase {
   /** Passed the step's `returns` schema; this is the trust anchor
    * (docs/spec.md "Receipts"). */
   result: unknown;
+  /** The earlier executions whose validated results this execution actually
+   * read from — through a `from` injection or a `ctx.resultOf` call alike
+   * (docs/spec.md "Receipts"; m2pre-resultof task spec, decisions 1-2;
+   * m6a-from-core task spec, item 5). Present only when non-empty;
+   * deduplicated by receipt id, in read order. `UsedEntry`, not
+   * `UsedEntryWithResult` (fb3-used-result task spec, type-hardening
+   * follow-up): an "ok" receipt's own `used` can never carry the upstream's
+   * `result` — the value is already sitting on this step's own
+   * `args`/upstream receipt, and a construction site that tries to hand a
+   * result-bearing entry here fails to compile instead of silently leaking
+   * one. */
+  used?: UsedEntry[];
 }
 
 export interface ReceiptFailed extends ReceiptBase {
@@ -286,6 +292,12 @@ export interface ReceiptFailed extends ReceiptBase {
    * had. `kind` is new (this task's spec, decision 1): a machine-readable
    * classification alongside it, never a replacement for it. */
   error: { message: string; kind: ErrorKind };
+  /** Same field as `ReceiptOk.used`, but `UsedEntryWithResult` (fb3-used-
+   * result task spec, decisions 1-3, type-hardening follow-up): a failed
+   * step's receipt is exactly where a reader most needs "what upstream
+   * value did this read", without opening a second receipt.json — so
+   * `result` is required here, not merely allowed. */
+  used?: UsedEntryWithResult[];
 }
 
 export type Receipt = ReceiptOk | ReceiptFailed;

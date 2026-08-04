@@ -29,3 +29,7 @@ Feature: from fills a chained args key
 
   Scenario: an optional from key is silent when its upstream is missing
     Then the project is filed with an optional note
+
+  Scenario: from's injected value is recorded with its result when the reading step fails
+    Given a project "acme" is created
+    Then the project archival explodes

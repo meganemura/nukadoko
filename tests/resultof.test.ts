@@ -143,6 +143,28 @@ describe("ctx.resultOf", () => {
     expect(freshReceipt.used).toBeUndefined();
   });
 
+  it("a failed step's receipt carries the ctx.resultOf-read value's own result (fb3-used-result task spec)", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/resultof.feature:12"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(1);
+    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    expect(record.status).toBe("failed");
+    expect(record.steps).toHaveLength(2);
+
+    const createReceiptId = record.steps[0].receipt as string;
+    const explodeReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+
+    expect(explodeReceipt.status).toBe("failed");
+    expect(explodeReceipt.used).toEqual([
+      { receipt: createReceiptId, step: "create-listing", result: { id: "l_first-widget", name: "first-widget" } },
+    ]);
+  });
+
   it("nuka do: ctx.resultOf is always undefined", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["do", "listing-is-closed", "--args", "{}"], {

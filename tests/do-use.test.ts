@@ -106,6 +106,49 @@ describe("nuka do --use", () => {
     ]);
   });
 
+  it("a failed step's receipt carries every --use'd upstream's own result (fb3-used-result task spec)", async () => {
+    const createStdout = createCaptureSink();
+    await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
+      rootDir,
+      stdout: createStdout,
+      stderr: createCaptureSink(),
+    });
+    const createReceipt = JSON.parse(createStdout.text());
+
+    const ownerStdout = createCaptureSink();
+    await runCli(["do", "create-owner", "--args", '{"name":"jane"}'], {
+      rootDir,
+      stdout: ownerStdout,
+      stderr: createCaptureSink(),
+    });
+    const ownerReceipt = JSON.parse(ownerStdout.text());
+
+    const archiveStdout = createCaptureSink();
+    const exitCode = await runCli(
+      [
+        "do",
+        "archive-project-with-owner-fails",
+        "--args",
+        "{}",
+        "--use",
+        createReceipt.receipt_id,
+        "--use",
+        ownerReceipt.receipt_id,
+      ],
+      { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
+    );
+
+    expect(exitCode).toBe(1);
+    const archiveReceipt = JSON.parse(archiveStdout.text());
+    expect(archiveReceipt.status).toBe("failed");
+    // Both upstreams, each carrying its own full result (this task's spec,
+    // decisions 3-4) — not just the first one.
+    expect(archiveReceipt.used).toEqual([
+      { receipt: createReceipt.receipt_id, step: "create-project", result: { id: "p_acme" } },
+      { receipt: ownerReceipt.receipt_id, step: "create-owner", result: { id: "o_jane" } },
+    ]);
+  });
+
   it("--args wins over --use for the same key; a fully-overridden receipt is not cited in used", async () => {
     const createStdout = createCaptureSink();
     await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {

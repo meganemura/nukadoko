@@ -1,4 +1,4 @@
-import type { UsedEntry } from "../context/used.js";
+import type { UsedEntryWithResult } from "../context/used.js";
 import type { Receipt } from "../receipt/types.js";
 import { fromCandidates, type Step } from "../step/define-step.js";
 
@@ -43,12 +43,17 @@ export interface ResolveUseSuccess {
    * for a key it already set), so this is offered up unconditionally, not
    * pre-filtered. */
   readonly filled: Readonly<Record<string, unknown>>;
-  /** The `{ receipt, step }` shape the `used` collector (src/context/used.ts)
-   * already records — handed straight to `StepContextHandle.recordUsed`
-   * (m6a-from-core task spec's own collector; this task's spec, item 6: no
-   * second recording path) once the caller decides at least one of
-   * `filled`'s keys actually landed. */
-  readonly used: UsedEntry;
+  /** The `{ receipt, step, result }` shape the `used` collector
+   * (src/context/used.ts) already records — handed straight to
+   * `StepContextHandle.recordUsed` (m6a-from-core task spec's own collector;
+   * this task's spec, item 6: no second recording path) once the caller
+   * decides at least one of `filled`'s keys actually landed. `result` is
+   * this upstream receipt's own full validated result (fb3-used-result task
+   * spec, decision 4) — always populated here (this function only ever
+   * reaches this point for a receipt whose `status` is already checked
+   * `"ok"`, above); the caller strips it back off for an "ok" receipt of its
+   * own the same way run-scenario.ts's `finishExecutedStep` does. */
+  readonly used: UsedEntryWithResult;
 }
 
 export type ResolveUseResult = ResolveUseError | ResolveUseSuccess;
@@ -116,5 +121,5 @@ export function resolveUse(
     filled[key] = result[upstreamKey];
   }
 
-  return { ok: true, filled, used: { receipt: receiptId, step: receipt.step } };
+  return { ok: true, filled, used: { receipt: receiptId, step: receipt.step, result: receipt.result } };
 }

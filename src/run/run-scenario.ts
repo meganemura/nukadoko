@@ -20,6 +20,7 @@ import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
 import { createStepContext } from "../context/create-context.js";
+import { omitUsedResults } from "../context/used.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
 import type { ErrorKind, Receipt } from "../receipt/types.js";
@@ -336,7 +337,7 @@ function injectFrom(
   step: Step,
   chain: ReadonlyMap<Step, ChainEntry>,
   stepNameOf: ReadonlyMap<Step, string>,
-  recordUsed: (receiptId: string, stepName: string) => void,
+  recordUsed: (receiptId: string, stepName: string, result: unknown) => void,
 ): Map<string, string> {
   const stillMissing = new Map<string, string>();
   for (const [key, entry] of Object.entries(step.from)) {
@@ -370,7 +371,7 @@ function injectFrom(
 
     const { upstreamKey, chainEntry } = present[0]!;
     value[key] = (chainEntry.result as Record<string, unknown>)[upstreamKey];
-    recordUsed(chainEntry.receiptId, chainEntry.stepName);
+    recordUsed(chainEntry.receiptId, chainEntry.stepName, chainEntry.result);
   }
   return stillMissing;
 }
@@ -807,7 +808,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
-            ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
+            // `omitUsedResults` (fb3-used-result task spec, decision 2): an
+            // "ok" receipt keeps `used`'s original `{ receipt, step }` shape
+            // — the upstream's own result is only worth a second look on a
+            // *failed* receipt, the failed branch just below.
+            ...(usedEntries.length > 0 ? { used: omitUsedResults(usedEntries) } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
@@ -843,6 +848,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
+            // Unstripped here, unlike the "ok" branch above (fb3-used-result
+            // task spec, decisions 1-2): a failed step's receipt is exactly
+            // where a reader most needs "what upstream value did this read",
+            // without opening a second receipt.json to find out.
             ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),

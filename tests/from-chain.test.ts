@@ -157,6 +157,30 @@ describe("from: scenario-path injection", () => {
     // and both write into the same collector (this task's spec, item 5).
     expect(closeReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-project" }]);
   });
+
+  it("a failed step's receipt carries the from-injected value's own result (fb3-used-result task spec)", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/chain.feature:33"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(1);
+    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    expect(record.status).toBe("failed");
+    expect(record.steps).toHaveLength(2);
+
+    const createReceiptId = record.steps[0].receipt as string;
+    const explodeReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+
+    expect(explodeReceipt.status).toBe("failed");
+    // The upstream's own full validated result, not just the `projectId` key
+    // `from` happened to read (this task's spec, decision 3).
+    expect(explodeReceipt.used).toEqual([
+      { receipt: createReceiptId, step: "create-project", result: { id: "p_acme", name: "acme" } },
+    ]);
+  });
 });
 
 describe("ctx.resultOf: unregistered Step throws", () => {

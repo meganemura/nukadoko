@@ -16,7 +16,7 @@ import { createObservedCollector, type ObservedCounts } from "./observed.js";
 import { pollWithRecording, type PollOptions } from "./poll.js";
 import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
-import { createUsedCollector, type UsedEntry } from "./used.js";
+import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution hands
 // to a step's `run(ctx, args)` — env, baseURL (also wired into the browser
@@ -171,15 +171,17 @@ export interface StepContextHandle {
    * `from` injection alike (m2pre-resultof task spec, decision 2; m6a-from-
    * core task spec, item 5) — deduplicated by receipt id, in read order.
    * Never exposed on `ctx` — same rule as `observedCounts()`. */
-  usedSnapshot(): UsedEntry[];
+  usedSnapshot(): UsedEntryWithResult[];
   /** Executor-only: records one provenance read the same `used` collector
    * `ctx.resultOf`'s own wrapper writes into, for a read that happens
    * *outside* `ctx.resultOf` entirely — a `from` injection (m6a-from-core
    * task spec, items 4-5), which fills an args key before the step's `run()`
    * is ever called, so there is no `ctx.resultOf` call for it to ride along
    * with. Never exposed on `ctx`; only the executor (run-scenario.ts) calls
-   * this, immediately after actually reading the value it names. */
-  recordUsed(receiptId: string, stepName: string): void;
+   * this, immediately after actually reading the value it names. `result`
+   * (fb3-used-result task spec) is the upstream's own full validated result
+   * — carried the same way `ctx.resultOf`'s own wrapper below already does. */
+  recordUsed(receiptId: string, stepName: string, result: unknown): void;
   /** Executor-only: the labels `ctx.section` was called with since the
    * current step boundary began, in call order (t3-sections task spec,
    * decisions 1-2). Never exposed on `ctx` — same rule as
@@ -375,8 +377,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         return undefined;
       }
       // Recorded only on an actual read (m2pre-resultof task spec, decision
-      // 2: omit when empty — a call that returned `undefined` leaves no trace).
-      used.record(entry.receiptId, entry.stepName);
+      // 2: omit when empty — a call that returned `undefined` leaves no
+      // trace). `entry.result` is carried alongside (fb3-used-result task
+      // spec) the same way a `from` injection's own `recordUsed` call does.
+      used.record(entry.receiptId, entry.stepName, entry.result);
       return entry.result as z.infer<S["returns"]>;
     },
     section(label: string): void {
@@ -465,12 +469,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return observed.snapshot();
   }
 
-  function usedSnapshot(): UsedEntry[] {
+  function usedSnapshot(): UsedEntryWithResult[] {
     return used.snapshot();
   }
 
-  function recordUsed(receiptId: string, stepName: string): void {
-    used.record(receiptId, stepName);
+  function recordUsed(receiptId: string, stepName: string, result: unknown): void {
+    used.record(receiptId, stepName, result);
   }
 
   function sectionsSnapshot(): string[] {

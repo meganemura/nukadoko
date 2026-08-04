@@ -8,3 +8,7 @@ Feature: resultOf chains a validated result to a later step
     Given a listing "first" is created
     Given a listing "second" is created
     Then that listing is closed
+
+  Scenario: a resultOf read is recorded with its result when the reading step fails
+    Given a listing "first-widget" is created
+    Then closing that listing explodes
