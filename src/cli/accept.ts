@@ -155,13 +155,13 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   const currentGit = await probeGitState(rootDir);
   if (currentGit === undefined) {
     stderr.write(
-      "nuka accept: not a git repository (or no commit yet) — a sign-off records a commit, and there is none to record.\n",
+      "nuka accept: not a git repository (or no commit yet). A sign-off records a commit, and there is none to record.\n",
     );
     return 1;
   }
   if (!currentGit.clean) {
     stderr.write(
-      "nuka accept: the working tree is dirty (untracked files included) — commit or stash first, then run `nuka accept` again.\n",
+      "nuka accept: the working tree is dirty (untracked files included). Commit or stash first, then run `nuka accept` again.\n",
     );
     return 1;
   }
@@ -175,14 +175,14 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
 
   if (outcome.kind === "none-ever") {
     stderr.write(
-      `nuka accept: no run has ever executed ${featurePath} — run \`nuka run ${featurePath}\` first.\n`,
+      `nuka accept: no run has ever executed ${featurePath}. Run \`nuka run ${featurePath}\` first.\n`,
     );
     return 1;
   }
   if (outcome.kind === "red") {
     const runId = outcome.group[0]!.run_id;
     stderr.write(
-      `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${outcome.startedAt.toISOString()}) was not all green — ${formatFailedScenarios(outcome.group)} — fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
+      `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${outcome.startedAt.toISOString()}) was not all green: ${formatFailedScenarios(outcome.group)}. Fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
     );
     return 1;
   }
@@ -194,7 +194,7 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     const touchedLines = [...new Set(outcome.group.map((record) => record.line))].sort((a, b) => a - b);
     const lineWord = touchedLines.length === 1 ? "line" : "lines";
     stderr.write(
-      `nuka accept: only partial runs of ${featurePath} exist (most recent covered ${lineWord} ${touchedLines.join(", ")} of ${featureLines.size} scenarios, started ${outcome.startedAt.toISOString()}) — run the whole feature with \`nuka run ${featurePath}\` before accepting.\n`,
+      `nuka accept: only partial runs of ${featurePath} exist (most recent covered ${lineWord} ${touchedLines.join(", ")} of ${featureLines.size} scenarios, started ${outcome.startedAt.toISOString()}). Run the whole feature with \`nuka run ${featurePath}\` before accepting.\n`,
     );
     return 1;
   }
@@ -205,20 +205,20 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   // --- Refusal conditions 5-7: the *selected run's own* git state. ---
   if (anyRecord.git === undefined) {
     stderr.write(
-      `nuka accept: the run being frozen (run_id ${anyRecord.run_id}) recorded no git state — re-run \`nuka run ${featurePath}\` inside a git repository, then accept again.\n`,
+      `nuka accept: the run being frozen (run_id ${anyRecord.run_id}) recorded no git state. Re-run \`nuka run ${featurePath}\` inside a git repository, then accept again.\n`,
     );
     return 1;
   }
   const runGit = anyRecord.git;
   if (runGit.commit !== currentGit.commit) {
     stderr.write(
-      `nuka accept: HEAD has moved since that run (run was at ${runGit.commit.slice(0, 7)}, HEAD is now at ${currentGit.commit.slice(0, 7)}) — run \`nuka run ${featurePath}\` again at the current commit, then accept.\n`,
+      `nuka accept: HEAD has moved since that run (run was at ${runGit.commit.slice(0, 7)}, HEAD is now at ${currentGit.commit.slice(0, 7)}). Run \`nuka run ${featurePath}\` again at the current commit, then accept.\n`,
     );
     return 1;
   }
   if (!runGit.clean) {
     stderr.write(
-      `nuka accept: that run started on a dirty working tree, so it cannot be frozen as a clean sign-off — commit, then \`nuka run ${featurePath}\` again, then accept.\n`,
+      `nuka accept: that run started on a dirty working tree, so it cannot be frozen as a clean sign-off. Commit, then \`nuka run ${featurePath}\` again, then accept.\n`,
     );
     return 1;
   }

@@ -61,7 +61,7 @@ function unfillableKeyMessage(stepName: string, key: string): string {
   return (
     `Step "${stepName}"'s args key "${key}" is required, but nothing on this line can fill it: ` +
     `no named capture in the matched pattern binds it, there is no table/docstring attachment ` +
-    `that resolves to filling it, and it has no declared from.${key} — this line would fail args ` +
+    `that resolves to filling it, and it has no declared from.${key}. This line would fail args ` +
     `validation with certainty. Fix one of: add a named capture for "${key}" to the step's ` +
     `pattern; attach a table/docstring that fills it; declare from.${key}; or make "${key}" ` +
     `optional in the step's args schema`

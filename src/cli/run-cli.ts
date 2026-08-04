@@ -469,7 +469,7 @@ export async function runCli(
       y.positional("feature", {
         type: "string",
         demandOption: true,
-        describe: "feature file path (no :line — only a whole-feature run can be accepted)",
+        describe: "feature file path (no :line; only a whole-feature run can be accepted)",
       }) as Argv<AcceptArgs>,
     handler: async (args: Arguments<AcceptArgs>) => {
       if (argsFailed) return;

@@ -70,7 +70,7 @@ function stepTemplate(name: string): string {
     "  }),",
     "  returns: z.object({",
     "    // Not only what later steps cite: also the values this step's own",
-    "    // correctness rests on — the date it computed, the id it picked —",
+    "    // correctness rests on (the date it computed, the id it picked)",
     "    // because a receipt can only be read for what it was given.",
     "    // If a result can be an absence (false, 0, an empty string), return",
     "    // proof the read was valid too, not the absence on its own.",

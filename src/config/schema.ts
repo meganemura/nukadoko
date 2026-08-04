@@ -250,7 +250,7 @@ export const configSchema = z
         for (const key of value.public) {
           if (redactSet.has(key)) {
             ctx.addIssue(
-              `secrets.public and secrets.redact both name "${key}" — that is two opposite instructions (demote vs. promote) for the same key; remove it from one of the two lists.`,
+              `secrets.public and secrets.redact both name "${key}": that is two opposite instructions (demote vs. promote) for the same key; remove it from one of the two lists.`,
             );
           }
         }

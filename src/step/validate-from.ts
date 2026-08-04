@@ -111,7 +111,7 @@ export function validateStepFrom(
           step: stepName,
           key,
           message:
-            `from.${key} names a Step discovery never registered — most likely it was reached ` +
+            `from.${key} names a Step discovery never registered. Most likely it was reached ` +
             `through a different \`await import()\` than the one discovery used, producing a ` +
             `distinct module instance (docs/spec.md "Chaining steps")`,
         });

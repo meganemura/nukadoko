@@ -62,7 +62,7 @@ export function findUnusedFromDeclarations(vocabulary: Vocabulary, occurrences: 
       if (everyOccurrenceFillsKey) {
         issues.push({
           code: "from-unused",
-          message: `Step "${entry.name}"'s from.${key} declares a producer, but every bound occurrence of this step already fills "${key}" from a pattern capture or table/docstring — that producer has never supplied it. Still reachable through \`nuka do --use\`; this is a fact, not a verdict on whether to remove it.`,
+          message: `Step "${entry.name}"'s from.${key} declares a producer, but every bound occurrence of this step already fills "${key}" from a pattern capture or table/docstring. That producer has never supplied it. Still reachable through \`nuka do --use\`; this is a fact, not a verdict on whether to remove it.`,
           step: entry.name,
         });
       }

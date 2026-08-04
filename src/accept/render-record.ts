@@ -282,7 +282,7 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
   const title = options.featureName ?? options.featurePath;
   const body: string[] = [
     "",
-    `# ${title} — green at ${options.commit.slice(0, 7)}`,
+    `# ${title}: green at ${options.commit.slice(0, 7)}`,
     "",
     "## The scenario as it ran",
     "",

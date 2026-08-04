@@ -177,7 +177,7 @@ export function checkFeatures(
           reportedUndefinedText.add(step.text);
           const escapeHint = findEscapeHint(step.text, patterns, customTypes);
           const hintSuffix = escapeHint
-            ? ` — hint: would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped — cucumber-expressions reads bare ( ) as optional text and / as alternation`
+            ? `; hint: would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation`
             : "";
           errors.push({
             code: "undefined-step",
@@ -212,7 +212,7 @@ export function checkFeatures(
           if (entry.kind === "typed" && entry.step.mutates) {
             warnings.push({
               code: "then-mutates",
-              message: `Step "${stepName}" is bound in Then position but declares mutates: true — declaration and position are in tension here (docs/spec.md "Keyword semantics")`,
+              message: `Step "${stepName}" is bound in Then position but declares mutates: true. Declaration and position are in tension here (docs/spec.md "Keyword semantics")`,
               file: feature.relativePath,
               line,
               step: stepName,
@@ -220,7 +220,7 @@ export function checkFeatures(
           } else if (entry.kind === "compat") {
             warnings.push({
               code: "then-compat-step",
-              message: `Step "${stepName}" is a compat step bound in Then position — compat steps have no mutates declaration to trust here; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Keyword semantics")`,
+              message: `Step "${stepName}" is a compat step bound in Then position. Compat steps have no mutates declaration to trust here; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Keyword semantics")`,
               file: feature.relativePath,
               line,
               step: stepName,

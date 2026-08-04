@@ -122,7 +122,7 @@ function fromOrderMissingMessage(stepName: string, key: string, candidates: read
       : `"${only!.name}" is never bound anywhere in this scenario`;
     return (
       `Step "${stepName}"'s from.${key} needs step "${only!.name}" to have already run earlier ` +
-      `in this scenario, but ${detail} — this line would fail args validation with certainty`
+      `in this scenario, but ${detail}. This line would fail args validation with certainty`
     );
   }
   const names = candidates.map((c) => `"${c.name}"`).join(", ");
@@ -135,7 +135,7 @@ function fromOrderMissingMessage(stepName: string, key: string, candidates: read
     .join("; ");
   return (
     `Step "${stepName}"'s from.${key} needs exactly one of its candidate producers (${names}) to have ` +
-    `already run earlier in this scenario, but none has — ${detail} — this line would fail args ` +
+    `already run earlier in this scenario, but none has: ${detail}. This line would fail args ` +
     `validation with certainty`
   );
 }
@@ -150,7 +150,7 @@ function fromOrderAmbiguousMessage(stepName: string, key: string, names: readonl
   const quoted = names.map((n) => `"${n}"`).join(", ");
   return (
     `Step "${stepName}"'s from.${key} has more than one of its candidate producers bound earlier in ` +
-    `this scenario (${quoted}) — from's candidates are mutually exclusive by design (docs/spec.md ` +
+    `this scenario (${quoted}): from's candidates are mutually exclusive by design (docs/spec.md ` +
     `"Chaining steps"), so the feature file, not the tool, must make exactly one of them win`
   );
 }

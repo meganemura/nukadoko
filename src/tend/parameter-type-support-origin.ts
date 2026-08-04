@@ -22,7 +22,7 @@ import type { TendIssue } from "./types.js";
 function supportOriginParameterTypeNote(entry: CompatParameterTypeEntry): TendIssue {
   return {
     code: "parameter-type-support-origin",
-    message: `Custom parameter type "${entry.name}" is registered from compat ("support") code at ${entry.filePath}, not from config.parameterTypes — config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
+    message: `Custom parameter type "${entry.name}" is registered from compat ("support") code at ${entry.filePath}, not from config.parameterTypes: config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
     file: entry.filePath,
   };
 }

@@ -363,7 +363,7 @@ function injectFrom(
       // Unreachable in any scenario `checkFromOrder` has already passed —
       // see this function's own doc comment.
       throw new Error(
-        `internal: from.${key} has more than one candidate producer's result available at once — ` +
+        `internal: from.${key} has more than one candidate producer's result available at once. ` +
           `nuka check's/nuka run's own from-order guard should have refused this scenario before ` +
           `execution began (docs/spec.md "Chaining steps")`,
       );
@@ -428,7 +428,7 @@ function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number):
 export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: string): string {
   return (
     `${kind} "${name}" returned ${JSON.stringify(value)}, which nukadoko does not interpret ` +
-    `as pending/skipped (unlike cucumber-js) — see docs/migration.md`
+    `as pending/skipped (unlike cucumber-js). See docs/migration.md`
   );
 }
 
@@ -445,7 +445,7 @@ export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, val
 export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
   return (
     `${kind} "${name}" appears to expect a done() callback (it declares more parameters ` +
-    `than nukadoko passes it) — nukadoko has no callback form; rewrite it to return a ` +
+    `than nukadoko passes it). nukadoko has no callback form; rewrite it to return a ` +
     `Promise (async/await). See docs/migration.md`
   );
 }

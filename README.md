@@ -89,7 +89,7 @@ feature binds B before A has run anywhere in the scenario, and `check`
 catches it before either step executes:
 
 ```
-error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario — this line would fail args validation with certainty
+error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
 ```
 
 These two are a sample, not the list. `nuka check --json` is what answers

@@ -122,7 +122,12 @@ change against before writing it.
   exempt. Japanese prose already banned it, unwritten, and it came back
   twice anyway (19 in README.ja.md, 41 in docs/spec.ja.md): the rule needs
   a place to live or it drifts back the next time someone forgets it was a
-  rule at all.
+  rule at all. A string the CLI shows a user (a finding's message, a
+  refusal's text, stderr) is prose under this rule too: the code-block
+  exemption is for a code example pasted into a document, not for a
+  sentence the code itself emits. `src/`'s own comments are out of scope
+  for now (1231 of them as of this writing); a separate pass, not folded
+  into whatever fixed the output strings.
 - **A change to the CLI surface, to a step's contract, or to what `check`
   catches is not finished until `skills/` says so too.** The skills are how
   a user actually reaches a feature, so a skill describing the previous CLI

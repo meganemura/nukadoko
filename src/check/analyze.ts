@@ -229,7 +229,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     if (suppressedCount > 0) {
       warnings.push({
         code: "undefined-step-check-suppressed",
-        message: `Suppressed ${suppressedCount} undefined-step ${suppressedCount === 1 ? "issue" : "issues"} because ${importFailures.length} step ${importFailures.length === 1 ? "file" : "files"} could not be read — undefined-step judgment is on hold until the unreadable glue is fixed`,
+        message: `Suppressed ${suppressedCount} undefined-step ${suppressedCount === 1 ? "issue" : "issues"} because ${importFailures.length} step ${importFailures.length === 1 ? "file" : "files"} could not be read. undefined-step judgment is on hold until the unreadable glue is fixed`,
       });
     }
   } else {

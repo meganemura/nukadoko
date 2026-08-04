@@ -19,7 +19,7 @@ import type { TendIssue } from "./types.js";
 export function findMissingAdditionalFeatureDirs(missingDirs: readonly string[]): TendIssue[] {
   return missingDirs.map((dir) => ({
     code: "additional-feature-dir-missing",
-    message: `additionalFeatureDirs names "${dir}", which does not exist — a directory named in config to widen what is scanned but absent from disk is a config mistake, not an empty scan result.`,
+    message: `additionalFeatureDirs names "${dir}", which does not exist. A directory named in config to widen what is scanned but absent from disk is a config mistake, not an empty scan result.`,
     file: dir,
   }));
 }

@@ -114,7 +114,7 @@ export function analyzeFieldDescriptions(vocabulary: Vocabulary): FieldDescripti
     }
     issues.push({
       code: "schema-field-undescribed",
-      message: `Step "${entry.name}" has schema fields with no .describe(): ${missing.map((field) => field.name).join(", ")} — \`nuka describe\` can name them but not explain them, which is all an agent choosing between steps has to go on.`,
+      message: `Step "${entry.name}" has schema fields with no .describe(): ${missing.map((field) => field.name).join(", ")}. \`nuka describe\` can name them but not explain them, which is all an agent choosing between steps has to go on.`,
       step: entry.name,
     });
   }

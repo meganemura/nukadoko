@@ -69,7 +69,7 @@ export function findSignedFeatureUnscanned(
 
     issues.push({
       code: "signed-feature-unscanned",
-      message: `${featurePath} has an accepted sign-off record, but it is outside every directory nuka check/nuka tend scan (featuresDir + additionalFeatureDirs) — steps it binds can be reported as unbound (pattern-unbound) even though this feature genuinely binds them. Add its directory to additionalFeatureDirs.`,
+      message: `${featurePath} has an accepted sign-off record, but it is outside every directory nuka check/nuka tend scan (featuresDir + additionalFeatureDirs). Steps it binds can be reported as unbound (pattern-unbound) even though this feature genuinely binds them. Add its directory to additionalFeatureDirs.`,
       file: featurePath,
     });
   }

@@ -291,7 +291,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         if (existingProducer !== undefined && existingProducer !== resolved.used.step) {
           stderr.write(
             `--use: key "${key}" is filled by both step "${existingProducer}" and step ` +
-              `"${resolved.used.step}" — these are different candidate producers for the same ` +
+              `"${resolved.used.step}". These are different candidate producers for the same ` +
               `\`from\` key, and \`nuka do\` cannot tell which one should win\n`,
           );
           return 1;

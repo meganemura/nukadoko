@@ -22,7 +22,7 @@ export function findMissingRationale(vocabulary: Vocabulary): TendIssue[] {
     }
     issues.push({
       code: "step-rationale-missing",
-      message: `Step "${entry.name}" has no rationale — description says what it does, but nothing here says why it's built this way or what was rejected, which is what an agent needs before deciding it may rewrite it.`,
+      message: `Step "${entry.name}" has no rationale: description says what it does, but nothing here says why it's built this way or what was rejected, which is what an agent needs before deciding it may rewrite it.`,
       step: entry.name,
     });
   }

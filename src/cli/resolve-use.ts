@@ -83,7 +83,7 @@ export function resolveUse(
   if (receipt.status !== "ok") {
     return {
       ok: false,
-      message: `--use ${receiptId}: this receipt's status is "${receipt.status}", not "ok" — a failed execution has no validated result to read`,
+      message: `--use ${receiptId}: this receipt's status is "${receipt.status}", not "ok". A failed execution has no validated result to read`,
     };
   }
 

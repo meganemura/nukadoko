@@ -75,7 +75,7 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
     if (parsed.kind === "malformed") {
       issues.push({
         code: "signoff-record-unreadable",
-        message: `${relativePath} looks like an acceptance record (its frontmatter has run_id/commit/feature/scenarios) but could not be read: ${parsed.reason}. A broken record reads as healthy if it is silently skipped, so this is reported instead — ${FIX_HINT}.`,
+        message: `${relativePath} looks like an acceptance record (its frontmatter has run_id/commit/feature/scenarios) but could not be read: ${parsed.reason}. A broken record reads as healthy if it is silently skipped, so this is reported instead: ${FIX_HINT}.`,
         file: relativePath,
       });
       continue;
@@ -90,7 +90,7 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
     } catch {
       issues.push({
         code: "signoff-feature-missing",
-        message: `${relativePath} freezes ${record.featurePath}, which no longer exists — the record is still proving a claim about a file that is gone. ${FIX_HINT}.`,
+        message: `${relativePath} freezes ${record.featurePath}, which no longer exists. The record is still proving a claim about a file that is gone. ${FIX_HINT}.`,
         file: relativePath,
       });
     }
@@ -100,7 +100,7 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
     if (currentFeatureSource !== undefined && normalizeFeatureSource(currentFeatureSource) !== record.featureSource) {
       issues.push({
         code: "signoff-feature-changed",
-        message: `${relativePath} froze ${record.featurePath} at a different state than the file has now — the record no longer describes what is on disk. ${FIX_HINT}.`,
+        message: `${relativePath} froze ${record.featurePath} at a different state than the file has now. The record no longer describes what is on disk. ${FIX_HINT}.`,
         file: relativePath,
       });
     }
@@ -113,7 +113,7 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
       if (entry === undefined) {
         issues.push({
           code: "signoff-step-missing",
-          message: `${relativePath} cites step "${receipt.step}", which is no longer in the vocabulary — the record is still proving a claim about a step that no longer exists. ${FIX_HINT}.`,
+          message: `${relativePath} cites step "${receipt.step}", which is no longer in the vocabulary. The record is still proving a claim about a step that no longer exists. ${FIX_HINT}.`,
           file: relativePath,
           step: receipt.step,
         });
@@ -129,7 +129,7 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
       if (!outcome.success) {
         issues.push({
           code: "signoff-result-invalid",
-          message: `${relativePath} froze step "${receipt.step}"'s result, which no longer passes its current returns schema (${formatValidationIssues(outcome.error.issues)}) — the step's contract changed since this record was accepted. ${FIX_HINT}.`,
+          message: `${relativePath} froze step "${receipt.step}"'s result, which no longer passes its current returns schema (${formatValidationIssues(outcome.error.issues)}). The step's contract changed since this record was accepted. ${FIX_HINT}.`,
           file: relativePath,
           step: receipt.step,
         });

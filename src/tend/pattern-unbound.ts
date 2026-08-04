@@ -28,7 +28,7 @@ export function findUnboundPatternedSteps(vocabulary: Vocabulary, occurrences: S
     }
     issues.push({
       code: "pattern-unbound",
-      message: `Step "${entry.name}" declares a pattern, but no feature line under featuresDir binds it — it has no place in any scenario right now.`,
+      message: `Step "${entry.name}" declares a pattern, but no feature line under featuresDir binds it. It has no place in any scenario right now.`,
       step: entry.name,
     });
   }
