@@ -116,6 +116,13 @@ change against before writing it.
   Terminology drifted twice before it existed, once per translator deciding
   on the spot; add a term there when a new one is settled rather than
   deciding it again next time.
+- **No em-dash in prose, English or Japanese.** Split the sentence, or use
+  a comma, a colon, or parentheses, picking whichever one the em-dash was
+  standing in for (a break, an aside, an apposition). Code blocks are
+  exempt. Japanese prose already banned it, unwritten, and it came back
+  twice anyway (19 in README.ja.md, 41 in docs/spec.ja.md): the rule needs
+  a place to live or it drifts back the next time someone forgets it was a
+  rule at all.
 - **A change to the CLI surface, to a step's contract, or to what `check`
   catches is not finished until `skills/` says so too.** The skills are how
   a user actually reaches a feature, so a skill describing the previous CLI
