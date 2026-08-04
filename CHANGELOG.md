@@ -1,8 +1,9 @@
 # Changelog
 
 Notable changes to nukadoko. Versions follow [Semantic Versioning](https://semver.org/),
-with one caveat stated in the README: this is pre-0.1, so the public API can
-change without a major bump until 0.1.
+with one caveat stated in the README: while this is 0.x, the public API can
+change in any release. That holds for the whole 0.x range, up to 1.0 — not
+just until 0.1.
 
 ## 0.0.4 — 2026-08-04
 

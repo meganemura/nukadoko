@@ -7,7 +7,7 @@ Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
 below) is implemented too — `nukadoko/compat`, typed World measurement, and
 a migration guide. Both real-world gates have now been run — typed steps
 drafted against real feature files, and the compat door audited against
-real cucumber-js glue (below). Pre-0.1; of M3+, the Allure emitter and the
+real cucumber-js glue (below). Still 0.x; of M3+, the Allure emitter and the
 messages emitter are both implemented, and so are sign-off (`nuka accept`)
 and both of M5's skills. Compat gap detection in `nuka check` — the
 migration skill's own prerequisite — is implemented too (see "Compat steps"

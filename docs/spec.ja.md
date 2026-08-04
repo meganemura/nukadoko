@@ -8,7 +8,7 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-Pre-0.1 で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)と M5 の両方の skill も実装済みです。
+まだ 0.x で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)と M5 の両方の skill も実装済みです。
 `nuka check` における compat gap 検出(migration skill 自身の前提条件)も実装済みで(「Compat steps」と docs/migration.ja.md の「ダッシュボードは `nuka check`」を参照)、M1-M5 を締めくくります。
 
 ## nukadoko とは

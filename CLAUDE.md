@@ -29,8 +29,9 @@ Writing as though the reader is a cucumber-js maintainer is a drift that has
 happened before; the reader to write for is someone who needs generated work
 checked against something that does not move.
 
-Status:
-pre-0.1; M1 (engine core) and M2 (compat) are implemented, both real-world
+Status: still 0.x — the public API can change in any release until 1.0, and
+that is the whole 0.x range rather than something that ends at 0.1. M1
+(engine core) and M2 (compat) are implemented, both real-world
 gates have been run (typed-step drafting, and the compat audit reported
 under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
 cucumber-messages emitter, sign-off (`nuka accept`), both agent skills, and

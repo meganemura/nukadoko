@@ -98,7 +98,9 @@ delegated to Allure.
 
 ## Status
 
-**Pre-0.1.** The public API can change without a major bump until 0.1.
+**0.x.** The public API can change in any release until 1.0. That is the
+whole 0.x range, not a stretch that ends at 0.1 — reaching 0.1 will mean
+more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, receipts, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
@@ -123,10 +125,11 @@ nukadoko is a devDependency: it ships its own TypeScript source alongside
 `dist/`, so stack traces land on real code and an agent reading
 `node_modules` can see why a thing works, not just its type.
 
-**Upgrading before 0.1: use `npm install -D nukadoko@latest`.** npm writes
-`^0.0.x` on install, and a caret pins the patch for `0.0.x` versions — so
-`npm update` will never move you off whichever version you first installed,
-silently, while this package is still moving fast.
+**Upgrading: use `npm install -D nukadoko@latest`.** npm writes a caret
+range on install, and on a `0.0.x` version a caret pins the patch as well —
+so `npm update` alone will never move you off whichever version you first
+installed. While this is 0.x, any release can change the public API, so
+read the changelog rather than trusting the range to keep you safe.
 
 **Secrets need no manifest.** Point `envFiles` at the env files you already
 have and git classifies them: one git doesn't track is a secret source —

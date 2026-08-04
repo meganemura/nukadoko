@@ -86,8 +86,10 @@ end-to-end の実行には、ブラウザと分単位の時間というコスト
 
 **現況**
 
-**Pre-0.1 です。**
-0.1 になるまでは、public API はメジャーバンプなしに変わり得ます。
+**0.x です。**
+1.0 になるまで、public API はどのリリースでも変わり得ます。
+これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
+0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
 テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
@@ -109,9 +111,10 @@ npx nuka steps         # the vocabulary, empty until you add a step
 nukadoko は devDependency です。
 `dist/` と並べて TypeScript のソースそのものも同梱しているため、stack trace は実際のコードを指し、`node_modules` を読む agent は型だけでなく「なぜそう動くか」まで見えます。
 
-**0.1 より前の更新には `npm install -D nukadoko@latest` を使ってください。**
-インストール時に npm が書くのは `^0.0.x` であり、`0.0.x` のバージョンではキャレットは patch を固定します。
-つまり、このパッケージがまだ速く動いている間、`npm update` は最初に入れたバージョンから決して動かしてくれません(何も言わずに)。
+**更新には `npm install -D nukadoko@latest` を使ってください。**
+インストール時に npm が書くのはキャレット範囲であり、`0.0.x` のバージョンではキャレットは patch まで固定します。
+つまり `npm update` だけでは、最初に入れたバージョンから決して動きません。
+0.x の間はどのリリースでも public API が変わり得るので、範囲指定に守ってもらうのではなく changelog を読んでください。
 
 **secret に manifest は要りません。**
 すでにある env file を `envFiles` に指定すれば、分類は git が行います。
