@@ -37,7 +37,9 @@ just produces a scenario that proves the wrong thing.
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
-6. `nuka run <feature>` until green.
+6. `nuka run <feature>` until green — when it fails, diagnose from the
+   failed step's own receipt before repeating the whole run (see "When a
+   run fails").
 7. `nuka accept <feature>`, then commit the record it wrote.
 
 ## Reading the vocabulary
@@ -105,6 +107,10 @@ downstream reads — a computed date, a chosen id, a resolved name — and
 those are exactly what a receipt gets read for once something has failed.
 Return them even if the scenario never reads them back; the alternative is
 reconstructing what was actually sent from another system's error message.
+This is also what a downstream failure's own receipt can show you: a
+failed step's `used` entries carry each upstream step's full `result` (see
+"When a run fails"), so whatever this step declined to return is exactly
+what stays missing from that receipt too.
 
 ## Chaining a value from an earlier step
 
@@ -227,10 +233,11 @@ inconsistency it can catch, catch before anything executes. Those last
 ones otherwise cost a whole browser session to discover, since the
 scenario looks correct until the consuming step actually runs.
 
-Pass the feature path. A bare `nuka check` only walks `featuresDir`, and an
-acceptance feature is supposed to live outside it (see "What not to do"), so
-without the argument the one file you care about is the one that goes
-unchecked.
+If the feature's directory is in `additionalFeatureDirs` (see "What not to
+do"), a bare `nuka check` already covers it, the same as any feature under
+`featuresDir`. Otherwise pass the feature path directly: `nuka check
+<feature>` checks that one file, since without either the argument or the
+config entry the one file you care about is the one that goes unchecked.
 
 ## Running and accepting
 
@@ -244,13 +251,36 @@ there outright, regardless of what `--env` was given.
 1. Commit. A dirty working tree can never be accepted, so get everything
    the run needs — including any step files from "When an operation is
    missing" above — into a commit first.
-2. `nuka run <feature>` — repeat until every scenario is green.
-   `<feature>:<line>` is fine for narrowing this while iterating, but the
-   run this step ends on must cover the whole feature — `accept` never
-   treats a partial run as a candidate, however green it was.
+2. `nuka run <feature>` — repeat until every scenario is green. When a
+   scenario fails, diagnose it before repeating the whole run (see "When a
+   run fails") rather than treating a full re-run as the default first
+   move. `<feature>:<line>` is fine for narrowing this while iterating,
+   but the run this step ends on must cover the whole feature — `accept`
+   never treats a partial run as a candidate, however green it was.
 3. `nuka accept <feature>` — freezes the newest all-green run of that
    feature as a record beside it.
 4. Commit the record `accept` wrote.
+
+## When a run fails
+
+Before repeating `nuka run <feature>`, read the failed step's own receipt.
+On a failure, each of that step's `used` entries carries `result`: the
+full validated result of the upstream step it read from, sitting right on
+the receipt that failed. One receipt is usually enough to see what the
+step actually saw and why it didn't hold up — no second receipt.json to
+open and cross-reference by hand.
+
+If that receipt only sharpens a hypothesis rather than confirming it, test
+the hypothesis with `nuka do <step> --use <upstream-receipt-id>` instead of
+re-running the scenario. It executes the one step in question — seconds,
+where a full `nuka run` costs minutes — and it still counts toward the
+same three-fix-and-retry-cycles rule described above ("If the same step
+still fails after three fix-and-retry cycles...").
+
+Re-run the whole feature last, once the step itself passes under `do` —
+not as the first thing tried after a failure. Repeating `nuka run` end to
+end is the expensive way to learn what a single receipt, or a single `do`
+call, would already have told you.
 
 ## When accept refuses
 
@@ -283,7 +313,11 @@ by editing the record.
 
 - Don't put an acceptance feature inside the project's regression suite —
   keep it outside `featuresDir`, so it never runs as part of the regular
-  suite.
+  suite. Add its directory to `additionalFeatureDirs` in
+  `nukadoko.config.ts` so `nuka check` and `nuka tend` still see the steps
+  it binds, instead of reporting them unbound — without it ever running
+  unattended. If you can't touch the config, pass the feature path to
+  `nuka check` instead (see "Before running").
 - Don't hand-edit a written record. It exists because it was measured, not
   claimed; editing it by hand turns it back into a claim.
 - Don't delete a record and redo it to get a cleaner one. Its git history
