@@ -697,6 +697,9 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   console error(`console.error` の呼び出しだけを対象とし、warning は対象外です。
   ほとんどの SPA は warning を日常的に出すため、それはノイズになります)、page 自身が投げた捕捉されないエラー(`BrowserContext` の `weberror`。
   `Page` の `pageerror` に相当する context 側の対応物です)、そしてネットワークレベルで失敗したリクエストの 3 種類です。
+  service worker は、browser context が見ているものの外側にあります。
+  `BrowserContext` のイベントが対象とするのは context 内の page であって worker ではなく、また Playwright の `Worker` 型が持つのは `close` と `console` だけで、耳を傾けられる request や error のイベントはありません。
+  そのため service worker が出す console と、その中で起きるバックグラウンドの fetch 失敗は、どちらも記録されません。
   cucumber-js には、これらを保持する browser context がそもそも存在しません。
   step は(`status: "ok"` のまま)裏で page がずっとエラーを投げていても pass することがあり、このフィールドが無かった頃は receipt にはそれを言うものが何もありませんでした。
   各種類は、少なくとも 1 件記録されたときだけ現れます。
@@ -1171,7 +1174,8 @@ nuka skill path               where the bundled skill lives, for a project
   step の本体をある driver の API から別の API へ書き換えることは、agent が得意とする作業です。
   portability のために先にコストを払うことは、driver の差し替えでないあらゆる変更を遅くしてしまいます。
   見直すのは、その差し替えの確率が上昇したと計測されたときであり、それより前ではありません。
-- テストの並列実行、sharding、retry、CI レポーティングはありません。
+- テストの並列実行、sharding、CI レポーティングはありません。
+  前の試行の記録を消す retry もありません。
   nukadoko 自身による outbound のネットワーク I/O もありません。
   HTML のレンダリングもありません。
   それは Allure の仕事です。

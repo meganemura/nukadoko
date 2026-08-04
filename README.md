@@ -516,20 +516,40 @@ anything runs. Put `nuka run` on the gate that actually has to be true,
 merge or deploy, since that is the one that executes and leaves a receipt
 trail behind.
 
-**Retries are out of scope permanently, not "not yet".** A green scenario
-is no evidence that its waits are placed correctly: every wait a scenario
-needed could have been supplied by coincidence, further down, and only a
-route that does not pass through them can show where they actually belong
-(see [Design](#design)). A receipt's `polls` field already keeps that
-honest, distinguishing one attempt that returned immediately from forty
-attempts spent waiting 20 seconds; a retry that reruns a whole step until
-it passes throws that distinction away to buy a green run. In a tool whose
-receipt is the record of what execution actually happened, "passed on the
-third try" is not a fact that record can state.
+**A retry that replaces the record is out of scope permanently, not "not
+yet".** A green scenario is no evidence that its waits are placed
+correctly: every wait a scenario needed could have been supplied by
+coincidence, further down, and only a route that does not pass through
+them can show where they actually belong (see [Design](#design)). A
+receipt's `polls` field already keeps that honest, distinguishing one
+attempt that returned immediately from forty attempts spent waiting 20
+seconds; a retry that reruns a whole step until it passes and keeps only
+the winning attempt throws that distinction away to buy a green run. That
+is the shape ruled out here, the one Playwright's own `retries` and
+`testInfo.retry` take, where only the last attempt reaches the final
+report. Running a scenario more than once while keeping every attempt's
+record and receipt, and naming which attempt passed, is a different shape:
+nothing about it makes a record state a fact it cannot support. That shape
+is not ruled out; nukadoko just does not ship a way to do it today, so
+read this as a boundary on the shape a future feature would have to take,
+not an announcement of one.
+
+Ruling out the record-discarding shape does not make the flake it would
+have papered over disappear. A third-party script or CI-runner resource
+contention can fail a scenario whose waits are placed correctly, and
+without a retry that failure still turns the run red. A suite that puts
+`nuka run` on a merge gate needs a human to triage that failure, because
+the fix is not always "the wait was in the wrong place."
 
 Parallel execution and sharding are not implemented today. That is a "not
 yet", not a permanent limit: both are implementable and under
-consideration, unlike retries above.
+consideration, unlike the retry shape ruled out above. Until then, every
+scenario in a run executes one after another, so a full run's wall-clock
+time grows with the suite's size rather than with how much of it a CI
+runner could otherwise cover at once. That is exactly why the split above,
+`nuka check` on every PR and `nuka run` on merge, deploy, or a nightly
+build, stops being only a convenience and becomes what keeps a growing
+suite's PR gate fast.
 
 ## What this does not do
 

@@ -979,8 +979,13 @@ shape whether the step ran inside a scenario or via `do`.
   errors (`console.error` calls only, never warnings, which most SPAs emit
   routinely enough to be noise), uncaught page errors (`BrowserContext`'s
   `weberror`, the context-level counterpart to `Page`'s `pageerror`), and
-  requests that failed at the network level. cucumber-js has no browser
-  context of its own to hold any of this: a step can pass (`status: "ok"`)
+  requests that failed at the network level. Service workers stay outside
+  what the browser context sees: `BrowserContext`'s events cover pages in
+  the context, not a worker, and Playwright's `Worker` type exposes only
+  `close` and `console`, no request or error event to listen for, so what
+  a service worker's console emits and any background fetch failure inside
+  it go unrecorded. cucumber-js has no browser context of its own to hold
+  any of this: a step can pass (`status: "ok"`)
   while the page underneath it was throwing the whole time, and before this
   field nothing on the receipt said so. Each category is present only when
   it recorded at least one entry, and is always a bare array, never
@@ -1656,7 +1661,8 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   another is work an agent does well, while paying for portability up front
   would slow every change that isn't a driver swap. Revisit when the
   probability of that swap is measured to have risen, not before.
-- No test parallelism, sharding, retries, or CI reporting. No outbound
+- No test parallelism, sharding, or CI reporting, and no retry that
+  discards a prior attempt's record. No outbound
   network I/O by nukadoko itself. No HTML rendering — that is Allure's job.
 
 ## Roadmap
