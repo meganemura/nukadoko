@@ -11,6 +11,7 @@ import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
 import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, UnregisteredStepError } from "./errors.js";
+import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createHttpOmittedCollector, type HttpOmittedCounts } from "./http-omitted.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
@@ -326,6 +327,13 @@ export interface StepContextHandle {
    * dropped. Never exposed on `ctx` — same rule as
    * `observedCounts()`/`pageEventsSnapshot()`. */
   httpOmittedSnapshot(): HttpOmittedCounts | undefined;
+  /** Executor-only (P9 task spec): every `ctx.evidence.attach`/`.path`
+   * result confirmed to exist since the current step boundary began — see
+   * src/context/evidence.ts's own `EvidenceCollector.snapshot` doc comment.
+   * `async`, unlike every other snapshot on this handle, because confirming
+   * a `path()`-allocated file's existence needs a filesystem read. Never
+   * exposed on `ctx` — same rule as `observedCounts()`/`sectionsSnapshot()`. */
+  evidenceSnapshot(): Promise<EvidenceSnapshot>;
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
@@ -487,6 +495,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // handed to browser-evidence.ts's launch below, and only ever populated
   // if `ctx.page()` is actually called this ctx's lifetime.
   const httpOmitted = createHttpOmittedCollector();
+  // Same lifetime rule again, for `ctx.evidence.attach`/`.path` (P9 task
+  // spec) — `() => httpLogDir` is the exact same moving-pointer getter
+  // `ctx.request()`'s own http.jsonl logging already reads (this file's own
+  // header): `beginStep` below redirects both at once, so an attachment
+  // always lands beside that step's own http.jsonl, trace.zip, and
+  // final.png, never in a stale directory.
+  const evidence = createEvidenceCollector(() => httpLogDir);
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -656,6 +671,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         });
       });
     },
+    // P9 task spec: `attach`/`path` handed straight through from the
+    // collector above — this object literal is what both `StepContext.
+    // evidence` and (via `buildStepFixtures`, below) `StepFixtures.evidence`
+    // actually are; `snapshot`/`reset` are deliberately left off, the same
+    // executor-only rule every other collector on this file already follows.
+    evidence: { attach: evidence.attach, path: evidence.path },
   };
 
   async function dispose(): Promise<DisposeResult> {
@@ -787,6 +808,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return httpOmitted.snapshot();
   }
 
+  async function evidenceSnapshot(): Promise<EvidenceSnapshot> {
+    return evidence.snapshot();
+  }
+
   async function beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void> {
     // Closes the *previous* boundary's own chunk before this boundary's own
     // `httpLogDir`/`pendingChunkTitle`/`pendingChunkFileName` overwrite the
@@ -805,6 +830,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     envReads.reset();
     pageEvents.reset();
     httpOmitted.reset();
+    evidence.reset();
   }
 
   async function endStep(): Promise<void> {
@@ -822,6 +848,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     envReadsSnapshot,
     pageEventsSnapshot,
     httpOmittedSnapshot,
+    evidenceSnapshot,
     beginStep,
     endStep,
   };
@@ -889,6 +916,9 @@ export async function buildStepFixtures(
         break;
       case "poll":
         fixtures.poll = ctx.poll;
+        break;
+      case "evidence":
+        fixtures.evidence = ctx.evidence;
         break;
       default:
         throw new Error(

@@ -1383,6 +1383,128 @@ describe("mapScenario: page_events as step parameters", () => {
   });
 });
 
+describe("mapScenario: receipt.evidence.attachments (P9 task spec)", () => {
+  it("maps each attachment by name, guessing contentType from file's own extension, relative to evidence.dir", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      evidence: {
+        dir: ".nukadoko/receipts/rcpt-1",
+        screenshots: [],
+        attachments: [{ name: "orders.json", file: "orders.json", at: "2026-08-01T00:00:00.100Z" }],
+      },
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.attachments).toContainEqual({
+      kind: "path",
+      name: "orders.json",
+      contentType: "application/json",
+      path: ".nukadoko/receipts/rcpt-1/orders.json",
+    });
+  });
+
+  it("falls back to application/octet-stream for an unrecognized extension, never guessing", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      evidence: {
+        dir: ".nukadoko/receipts/rcpt-1",
+        screenshots: [],
+        attachments: [{ name: "dump.bin", file: "dump.bin", at: "2026-08-01T00:00:00.100Z" }],
+      },
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.attachments).toContainEqual({
+      kind: "path",
+      name: "dump.bin",
+      contentType: "application/octet-stream",
+      path: ".nukadoko/receipts/rcpt-1/dump.bin",
+    });
+  });
+
+  it("uses name, not file, so a collision-disambiguated file still shows the step's own requested name", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      evidence: {
+        dir: ".nukadoko/receipts/rcpt-1",
+        screenshots: [],
+        attachments: [
+          { name: "dup.txt", file: "dup.txt", at: "2026-08-01T00:00:00.100Z" },
+          { name: "dup.txt", file: "dup-2.txt", at: "2026-08-01T00:00:00.200Z" },
+        ],
+      },
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.attachments).toContainEqual({
+      kind: "path",
+      name: "dup.txt",
+      contentType: "text/plain",
+      path: ".nukadoko/receipts/rcpt-1/dup.txt",
+    });
+    expect(mapped.steps[0]!.attachments).toContainEqual({
+      kind: "path",
+      name: "dup.txt",
+      contentType: "text/plain",
+      path: ".nukadoko/receipts/rcpt-1/dup-2.txt",
+    });
+  });
+
+  it("adds no attachments at all when evidence.attachments is absent", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({ status: "ok", result: null });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const record = baseRecord({ steps: [step] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map([["rcpt-1", receipt]]),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.steps[0]!.attachments.some((a) => a.name === "orders.json")).toBe(false);
+  });
+});
+
 describe("mapScenario: the whole receipt as a receipt.json attachment", () => {
   it("attaches it to a passed step, verbatim", () => {
     const { gherkinDocument, pickles } = parse();

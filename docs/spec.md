@@ -357,6 +357,26 @@ The fixture names:
   self-reported/measured line the Allure emitter already draws with its
   `declared:` prefix (see "Allure emitter"), drawn here between a wait
   the tool measured and one that happened invisibly inside Playwright.
+- `evidence.attach(name, body)` / `evidence.path(name)`: the one gap the
+  rest of this list never covered (every other fixture above hands back
+  something the harness collects on its own). Nothing existed for
+  application-specific evidence only a step can produce, an API response
+  body, a DB snapshot, a generated file's contents. `attach` writes `body`
+  (`string | Uint8Array`) into this execution's own evidence directory and
+  records it on the receipt's `evidence.attachments` (see "Receipts");
+  calling it twice with the same `name` keeps both files, never overwriting
+  the first. `path` is Playwright's own `testInfo.outputPath()`: it
+  allocates a collision-free absolute path under that same directory
+  without writing anything, and only a path a step actually wrote to by the
+  time execution ends is listed on the receipt (`path()` alone, with
+  nothing ever written there, contributes nothing). Both methods sit on one
+  object rather than two separate fixtures because both need exactly the
+  same thing from the executor (which directory this step's own evidence
+  lives in) and a step reaching for one is reaching for the other about as
+  often. A `name` containing a path separator, or equal to `.`/`..`/the
+  empty string, is refused outright, never silently rewritten: a step
+  trusting a name it never actually asked for is worse than a loud error at
+  the call that named it.
 
 Where a wait belongs is a contract question, not a convenience one. A step
 that writes to a system whose effect lands elsewhere asynchronously is not
@@ -423,7 +443,8 @@ scenario costs minutes and a real target that an API-only one does not.
 ### Fixtures
 
 The bag "Context API" describes is closed: `page`, `context`, `request`,
-`env`, `requireEnv`, `baseURL`, `resultOf`, `section`, `poll`, nothing else.
+`env`, `requireEnv`, `baseURL`, `resultOf`, `section`, `poll`, `evidence`,
+nothing else.
 A step that needs a project's own resource, a tenant, a seeded database, an
 uploaded fixture file, has had nowhere to put the cleanup for it: writing it
 into the step itself makes the feature file name something that is not an
@@ -448,7 +469,7 @@ two shapes Playwright's own fixture definitions take, so a fixture whose own
 dependencies stay inside `page`/`context`/`request`/`baseURL` can be passed
 to `base.extend()` unchanged. That shared subset is a fact about the shape,
 not a promise this package makes: a fixture that destructures `env`,
-`section`, `poll`, `resultOf`, or another nukadoko-only name means nothing
+`section`, `poll`, `resultOf`, `evidence`, or another nukadoko-only name means nothing
 to Playwright's own runner, and `auto: true` (the option that would let
 Playwright build a fixture nothing asked for) is refused outright, with a
 message naming why: the feature file names everything that ran, and a
@@ -499,7 +520,7 @@ execution is the whole of both lifetimes, so the two scopes collapse: a
 `process`-scope fixture may only depend on other `process`-scope fixtures
 and on `env`/`requireEnv`/`baseURL`, the three builtins whose value never
 depends on which scenario's context happens to read them; depending on
-`page`, `context`, `request`, `resultOf`, `section`, `poll`, or a
+`page`, `context`, `request`, `resultOf`, `section`, `poll`, `evidence`, or a
 `scenario`-scope fixture is refused (`fixture-scope-violation`), since a
 `process`-scope fixture's own build can outlive the very scenario that
 would have supplied any of those.
@@ -1175,6 +1196,34 @@ shape whether the step ran inside a scenario or via `do`.
   nobody reading a receipt for acceptance purposes traces one by one, and a
   file trying to hold all of them would stop being something a reader opens
   at all.
+- `evidence.attachments` (present only when non-empty) lists what
+  `evidence.attach`/`evidence.path` actually wrote this execution (see
+  "Context API"), each `{ "name", "file", "at" }`: `name` is what the step
+  asked for, `file` is what actually landed on disk under `evidence.dir`,
+  and the two differ only when the same `name` was used more than once this
+  execution. The second use gets `-2`, `-3`, ... inserted before the
+  extension rather than overwriting the first (`dup.txt` then `dup-2.txt`,
+  never one `dup.txt` silently replaced by the other). `at` is taken by the
+  harness itself, never supplied by the step: for `attach`, the moment the
+  write resolved; for a `path()`-allocated file, that file's own mtime once
+  execution confirmed it exists, the same measured-not-declared rule
+  `sections`/`polls`/`evidence.screenshots[].at` already follow, landing
+  attachments on that same absolute timeline. A `path()` call with nothing
+  ever written to the path it returned contributes no entry at all: only a
+  file confirmed to exist on disk is ever listed, the same "evidence lists
+  only files that exist" rule `evidence.http`/`evidence.trace` already
+  follow. Whether a `path()`-allocated file was actually written is
+  decided by the harness checking, never by the fixture bookkeeping the
+  call. A `name` containing a path separator, or equal to `.`/`..`/the
+  empty string, is refused before anything is written, never silently
+  rewritten into something safe. Capped at 100 entries, sorted by `at`, the
+  same convention `page_events`/`actions` already use; the true total, once
+  that cap is hit, lands on `truncated.evidence` (below), the same sibling
+  field `truncated.actions` already uses. The receipt's `name`/`file`
+  strings pass through the same single redaction pass every other field
+  does; the attachment's own file *contents* are never redacted (redacting
+  arbitrary bytes would as often corrupt them as protect them). What
+  `attach` is given is the step's own responsibility to keep secret-free.
 - `http_omitted` (present only when at least one page-issued request was
   left out) is what keeps that drop from being silent: the count of what
   didn't make it into http.jsonl, by resource type, e.g.
@@ -1333,7 +1382,10 @@ shape whether the step ran inside a scenario or via `do`.
   when trace.zip already has the whole thing. Capped at 100 entries, same
   convention as `page_events`, with the same sibling `truncated` field
   reporting the true total when the cap is hit: `"truncated": { "actions":
-  214 }`. Redacted the same single pass every other field is: a secret can
+  214 }`. `evidence.attachments`' own truncation (above) reports through
+  the same field too, as `truncated.evidence`, present alongside
+  `truncated.actions` whenever both caps were hit in the same execution,
+  either alone when only one was. Redacted the same single pass every other field is: a secret can
   land in a `url` or `selector` as easily as it can anywhere else, so no
   separate redaction path exists for this field either. A trace chunk that
   cannot be read at all (corrupt, or simply never opened because the step

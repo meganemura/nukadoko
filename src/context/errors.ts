@@ -67,3 +67,27 @@ export class UnregisteredStepError extends Error {
     this.name = "UnregisteredStepError";
   }
 }
+
+/** Thrown by `ctx.evidence.attach(name, body)`/`ctx.evidence.path(name)`
+ * (docs/spec.md "Context API") when `name` could resolve outside this
+ * execution's own evidence directory — a path separator (`/` or `\`), the
+ * bare segments `"."`/`".."`, or the empty string. P9 task spec's own
+ * decision: refused, never sanitized ("サニタイズするか refuse するか決め、
+ * docs に書くこと... 黙って書き換えない") — a name silently rewritten to
+ * something else would leave a step trusting a file it never actually
+ * asked for, and a step naming a path it should not have named is exactly
+ * the kind of mistake CLAUDE.md's "nothing breaks silently" asks to fail
+ * loudly rather than be quietly corrected. */
+export class InvalidEvidenceNameError extends Error {
+  readonly evidenceName: string;
+
+  constructor(name: string) {
+    super(
+      `ctx.evidence name ${JSON.stringify(name)} is not allowed: it must not contain "/" or "\\", ` +
+        'and must not be ".", "..", or empty. Every attachment/path is always written inside this ' +
+        "execution's own evidence directory, never elsewhere.",
+    );
+    this.name = "InvalidEvidenceNameError";
+    this.evidenceName = name;
+  }
+}

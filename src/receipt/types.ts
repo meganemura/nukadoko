@@ -204,6 +204,23 @@
 // execution), so a teardown failure lands on `ScenarioRecord.teardown_errors`
 // (src/run/record-types.ts) instead, the scenario-level counterpart to this
 // field.
+//
+// `EvidenceMeta.attachments` is added now (P9 task spec): the one gap the
+// rest of `evidence` never covered — application-specific evidence (an API
+// response body, a DB snapshot, a generated file) a step chooses to add,
+// where every other member of `evidence` is something the harness collects
+// on its own. `evidence.attach`/`evidence.path` (src/context/evidence.ts,
+// docs/spec.md "Context API") are the two fixtures that populate it; see
+// that module's own header for the collision-avoidance and cap rules.
+// `at` is stamped by the collector itself, never supplied by the step —
+// the same measured-not-declared rule `sections`/`polls`/
+// `evidence.screenshots[].at` already follow, so an attachment lands on the
+// same absolute timeline they do. Present only when non-empty; a
+// `evidence.path(name)` call with nothing ever written to the path it
+// returned contributes no entry (docs/spec.md "Receipts": evidence lists
+// only files that exist). `truncated.evidence` (below, ReceiptBase's own
+// field) carries the true total once this list's own 100-entry cap is hit,
+// the same sibling-field convention `truncated.actions` already uses.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { HttpOmittedCounts } from "../context/http-omitted.js";
@@ -300,6 +317,22 @@ export interface ScreenshotEntry {
   readonly at: string;
 }
 
+/** One `evidence.attach`/`evidence.path` result the harness confirmed
+ * actually landed on disk (P9 task spec; `EvidenceMeta.attachments`' own
+ * doc comment above). `name` is what the step asked for; `file` is what was
+ * actually written under `EvidenceMeta.dir` — the two can differ when the
+ * same `name` was used more than once this execution (src/context/
+ * evidence.ts's own collision-avoidance never overwrites, so the second use
+ * gets a different `file`). `at` is taken by the collector, never the step:
+ * for `evidence.attach`, the moment the write resolved; for a
+ * `evidence.path`-allocated file, the file's own mtime once this execution
+ * confirmed it exists. */
+export interface EvidenceAttachmentEntry {
+  readonly name: string;
+  readonly file: string;
+  readonly at: string;
+}
+
 export interface EvidenceMeta {
   /** Receipt directory, relative to the project root (e.g.
    * ".nukadoko/receipts/rcpt-..."). */
@@ -313,6 +346,12 @@ export interface EvidenceMeta {
   screenshots: ScreenshotEntry[];
   /** Present only when at least one `ctx.request()` call was logged. */
   http?: string;
+  /** Application-specific evidence `evidence.attach`/`evidence.path` added
+   * this execution (P9 task spec) — this file's own header, above. Present
+   * only when non-empty; capped at 100 entries, sorted by `at`. The true
+   * total, once that cap is hit, is on the receipt's own top-level
+   * `truncated.evidence` (`ReceiptBase.truncated`, below). */
+  attachments?: readonly EvidenceAttachmentEntry[];
 }
 
 interface ReceiptBase {
@@ -408,11 +447,15 @@ interface ReceiptBase {
    * report that case once, on stderr, instead — src/context/trace-
    * actions.ts's own header). */
   actions?: readonly ActionEntry[];
-  /** Present only when `actions` above hit its own 100-entry cap — the true
-   * total call count, the same `{ category: <true total> }` shape
-   * `page_events`'s own `truncated` field already uses, with `actions` as
-   * this receipt's only category. */
-  truncated?: { actions: number };
+  /** Present only when `actions` above and/or `evidence.attachments` (P9
+   * task spec) hit its own 100-entry cap — the true total for whichever of
+   * the two was actually truncated, the same `{ category: <true total> }`
+   * shape `page_events`'s own `truncated` field already uses, `actions`/
+   * `evidence` as this receipt's two categories. Built by `mergeTruncated`
+   * (src/context/evidence.ts), the one place both sources combine into this
+   * single field, so `nuka run`/`nuka do` can never report the two through
+   * two different mechanisms. */
+  truncated?: { actions?: number; evidence?: number };
   /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
    * the counterpart to `observed` a receipt needs to let "declared vs
    * observed" be checked from the receipt alone (this task's spec, decision

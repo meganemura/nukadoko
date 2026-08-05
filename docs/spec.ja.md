@@ -247,6 +247,15 @@ fixture の名前:
   `poll` を通すことで初めて `at`、`attempts`、`waited_ms`、`outcome` が receipt に載り、それが事後になって「最初の試行で解決し待ちは何もしなかった」のか「4 秒かけて解決した」のかを見分ける唯一の方法になります。
   これは、Allure emitter がすでにその `declared:` という接頭辞で引いている、自己申告か計測かという同じ線引きです(「Allure emitter」を参照)。
   ここでは、ツールが計測した待ちと、Playwright の内部で見えないまま起きた待ちとの間に、その線が引かれています。
+- `evidence.attach(name, body)` / `evidence.path(name)`: この一覧の残りが埋めていなかった唯一の穴です(上のどの fixture も harness が自分で集めるものを返すだけでした)。
+  API レスポンスの生ログ、DB のスナップショット、生成したファイルの中身のような、step にしか作れないアプリ固有の証跡を足す口は、これまで存在しませんでした。
+  `attach` は `body`(`string | Uint8Array`)をこの実行自身の evidence directory に書き込み、receipt の `evidence.attachments`(「Receipt」を参照)に記録します。
+  同じ `name` で 2 回呼んでも両方のファイルが残り、最初のファイルを上書きすることはありません。
+  `path` は Playwright 自身の `testInfo.outputPath()` に当たり、同じ directory の下に衝突しない絶対パスを、何も書き込まずに払い出します。
+  receipt に載るのは、実行が終わるまでに step が実際に書き込んだパスだけです(`path()` を呼んだだけで何も書かれなければ、何も載りません)。
+  この 2 つが別々の fixture ではなく 1 つのオブジェクトにまとまっているのは、どちらも executor から必要とするものがまったく同じ(この step 自身の証跡がどの directory にあるか)であり、step が片方に手を伸ばすときはもう片方にもほぼ同じくらいの頻度で手を伸ばすからです。
+  パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` はそのまま拒否され、黙って書き換えられることはありません。
+  step が自分では実際に頼んでいない名前を信頼してしまう方が、その名前を渡した呼び出しの場で大きな声のエラーが出るより悪い結果です。
 
 待ちがどこに属するかは契約の問題であり、便利さの問題ではありません。
 効果が非同期に別の場所へ現れるシステムに書き込む step は、その書き込みが受理された時点ではまだ終わっていません。
@@ -297,7 +306,7 @@ agent は scenario を選ぶとき、何ひとつ実行する前に、どれが�
 ### Fixtures
 
 「Context API」が説明する bag は閉じています。
-`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`section`、`poll`、それだけです。
+`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`section`、`poll`、`evidence`、それだけです。
 プロジェクト自身の資源、テナント、シードされたデータベース、アップロードされたファイルを必要とする step には、その片付けを置く場所がこれまでありませんでした。
 片付けを step 自身に書けば、feature ファイルが受け入れ条件ではない何かを名指すことになり、片付けを省けば漏れます。
 `nukadoko.config.ts` はこの隙間を埋めます。
@@ -318,7 +327,7 @@ export default defineConfig({
 fixture は素の関数か、`[関数, options]` のタプルです。
 Playwright 自身の fixture 定義が取るのと同じ 2 つの形であり、依存が `page`/`context`/`request`/`baseURL` の内側に収まる fixture なら、そのまま `base.extend()` に渡せます。
 この共有できる部分集合は形についての事実であり、このパッケージが交わす約束ではありません。
-`env`、`section`、`poll`、`resultOf`、あるいはほかの nukadoko 固有の名前を分割代入する fixture は、Playwright 自身の runner には何も意味しません。
+`env`、`section`、`poll`、`resultOf`、`evidence`、あるいはほかの nukadoko 固有の名前を分割代入する fixture は、Playwright 自身の runner には何も意味しません。
 そして `auto: true`(Playwright に、何も名指していない fixture を構築させるオプション)は、理由を名指したうえで丸ごと拒否されます。
 feature ファイルが実行されたすべてを名指すという原則があり、何にも名指されていない fixture を構築することは、まさにその原則が禁じることだからです。
 「同じ定義の形を受け取る」がこのパッケージの主張のすべてであり、その形を超えて「Playwright fixture 互換」を名乗ることはありません。
@@ -351,7 +360,7 @@ nukadoko にはまだ並列実行がなく、`worker` スコープはいまの `
 `process` スコープの fixture は、そこでは `scenario` スコープの fixture とまったく同じにふるまいます。
 `process` スコープの fixture が依存してよいのは、ほかの `process` スコープの fixture と、`env`/`requireEnv`/`baseURL` だけです。
 この 3 つの builtin だけは、どの scenario の context がそれを読むかによって値が変わりません。
-`page`、`context`、`request`、`resultOf`、`section`、`poll`、あるいは `scenario` スコープの fixture への依存は拒否されます(`fixture-scope-violation`)。
+`page`、`context`、`request`、`resultOf`、`section`、`poll`、`evidence`、あるいは `scenario` スコープの fixture への依存は拒否されます(`fixture-scope-violation`)。
 `process` スコープの fixture は自分自身の構築を、それを供給したはずのその scenario より長く生き延びさせうるからです。
 
 `process` は 1 つの `nuka run` 実行のことではなく、1 つのアドレス空間のことを名指します。
@@ -841,6 +850,24 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   どちらの経路のエントリにも必ず付くため、読み手はその行がどちらの経路から来たかを形だけから推測せずに済みます。
   page の通信のうち http.jsonl に届くのは `document`、`xhr`、`fetch`(Playwright 自身の `request.resourceType()`)のリクエストだけです。
   実際のページ読み込みは画像やスタイルシート、スクリプトを何十件も引き込みますが、それを受け入れ確認の目的で読み手が 1 つずつ追うことはなく、そのすべてを保持しようとするファイルはそもそも読み手が開けるものではなくなってしまいます。
+- `evidence.attachments`(空でないときだけ現れます)は、`evidence.attach`/`evidence.path` がこの実行で実際に書き込んだものを、`{ "name", "file", "at" }` の形でそれぞれ並べたものです(「Context API」を参照)。
+  `name` は step が頼んだ名前、`file` は実際にディスクへ書かれたファイル名で、`evidence.dir` からの相対パスです。
+  この 2 つが違うのは、同じ `name` がこの実行で 2 回以上使われたときだけです。
+  2 回目以降の使用には、拡張子の手前に `-2`、`-3`、... が挿入され、最初のファイルを上書きすることはありません(`dup.txt` の次は `dup-2.txt` になり、`dup.txt` が黙って置き換わることはありません)。
+  `at` は harness 自身が取得し、step が渡すことはありません。
+  `attach` については書き込みが完了した時点、`path()` で払い出したファイルについては実行がその存在を確認した時点のそのファイル自身の mtime です。
+  これは `sections`/`polls`/`evidence.screenshots[].at` がすでに従っている、計測であり宣言ではないという同じ規則であり、attachment を同じ絶対的なタイムラインに乗せます。
+  `path()` を呼んだだけで、返されたパスに何も書かれなければ、エントリは 1 つも現れません。
+  ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
+  `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
+  パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
+  100 件で上限を設け、`at` で並べ替えます。
+  `page_events`/`actions` と同じ規約です。
+  その上限に達したときの真の総数は、下記の `truncated.evidence` に載ります。
+  `truncated.actions` がすでに使っている、同じ兄弟フィールドです。
+  receipt の `name`/`file` という文字列は、他のどのフィールドとも同じ 1 回の redact を通ります。
+  attachment 自身のファイルの *中身* は決して redact されません(任意のバイト列を redact すれば、保護するのと同じくらいの頻度で壊してしまうからです)。
+  `attach` に渡すものを secret 抜きに保つのは、step 自身の責任です。
 - `http_omitted`(少なくとも 1 件の page 由来のリクエストが省かれたときだけ現れます)は、その省略が黙って起きないようにするためのものです。
   http.jsonl に入らなかった分をリソースタイプ別に数えます。
   例えば `{ "image": 34, "stylesheet": 5, "script": 12 }` です。
@@ -941,6 +968,8 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   5 つの任意フィールドは allowlist であり、その呼び出しが運んでいたものすべてではありません。
   `setContent` 呼び出し自身の HTML 本文は一例ですが、数キロバイトに達することもあり、trace.zip にすでに全体があるのに receipt にそれを必要とするものは何もないからです。
   上限は 100 件で `page_events` と同じ規約であり、上限に達したときに真の総数を報告する兄弟フィールド `truncated` も同じです: `"truncated": { "actions": 214 }`。
+  `evidence.attachments` 自身の打ち切り(上記)も同じフィールドを通じて報告され、`truncated.evidence` として現れます。
+  同じ実行で両方の上限に達したときは `truncated.actions` と並んで現れ、片方だけのときはそちらだけが現れます。
   他のどのフィールドとも同じ 1 回の redact で覆われます。
   secret は `url` や `selector` にも、他のどこにと同じくらい容易に載りうるため、このフィールドにも専用の別の redact 経路はありません。
   trace chunk がそもそも読めないとき(壊れている、あるいは step が `page` を一度も分割代入せずそもそも開かれなかったとき)は `actions` は黙って失われます。

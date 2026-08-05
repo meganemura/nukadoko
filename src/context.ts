@@ -82,6 +82,22 @@ import type { Step } from "./step/define-step.js";
 // unmeasured, untraced, outside every receipt this run writes. Not
 // exporting the name is what keeps that always unreachable through the bag,
 // rather than a rule a step has to remember not to break.
+//
+// `evidence` (P9 task spec) is the fixture-shaped counterpart to Playwright's
+// own `testInfo.attach()`/`testInfo.outputPath()`: every automatic evidence
+// field on a receipt (trace, screenshots, http.jsonl, page_events, ...) is
+// something the harness collects on its own, and nothing existed for the
+// application-specific evidence only a step can produce — an API response
+// body, a DB snapshot, a generated file's contents. `attach`/`path` are two
+// methods on one object, not two separate fixtures, because both need the
+// exact same thing from the executor (which directory this step's own
+// evidence lives in — src/context/evidence.ts's own `dirOf` getter, the
+// same moving pointer `ctx.request()`'s http.jsonl logging already reads),
+// and a step reaching for one is reaching for the other exactly as often.
+// The boundary rule this file opened with is why this is a fixture at all:
+// the directory itself is executor-only knowledge (create-context.ts's
+// `beginStep` is the only thing that ever moves it), so a step can name an
+// attachment but can never learn, or control, where it actually lands.
 
 export interface StepFixtures {
   /** Playwright Page; the browser launches when this name is destructured
@@ -143,6 +159,25 @@ export interface StepFixtures {
    * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
    * attempts it took, how long it waited, and how it ended. */
   readonly poll: <T>(fn: () => Promise<T | undefined>, options?: PollOptions) => Promise<T>;
+  /** The application-specific evidence fixture (P9 task spec; this file's
+   * own header) — `attach(name, body)` writes `body` (`string | Uint8Array`)
+   * to this execution's own evidence directory and records
+   * `{ name, file, at }` on the receipt's `evidence.attachments` (docs/
+   * spec.md "Receipts"); calling it twice with the same `name` keeps both
+   * files, never overwriting the first. `path(name)` allocates a
+   * collision-free absolute path under that same directory without writing
+   * anything — Playwright's own `testInfo.outputPath()` — and only a path
+   * that actually has a file on it by the time this execution ends is
+   * listed on the receipt. Both throw `InvalidEvidenceNameError` (src/
+   * context/errors.ts) for a `name` containing a path separator or equal to
+   * `"."`/`".."`/`""`: refused, never silently rewritten. Capped at 100
+   * attachments per execution, the true total reported on
+   * `truncated.evidence` once that cap is hit, the same sibling-field
+   * convention `truncated.actions` already uses. */
+  readonly evidence: {
+    readonly attach: (name: string, body: string | Uint8Array) => Promise<void>;
+    readonly path: (name: string) => string;
+  };
 }
 
 /** Every name `StepFixtures` carries, kept in sync with that interface by
@@ -165,6 +200,7 @@ const FIXTURE_NAME_MEMBERSHIP: Record<keyof StepFixtures, true> = {
   resultOf: true,
   section: true,
   poll: true,
+  evidence: true,
 };
 
 export const BUILTIN_FIXTURE_NAMES: readonly string[] = Object.keys(FIXTURE_NAME_MEMBERSHIP);
@@ -219,4 +255,12 @@ export interface StepContext {
    * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
    * attempts it took, how long it waited, and how it ended. */
   poll<T>(fn: () => Promise<T | undefined>, options?: PollOptions): Promise<T>;
+  /** The application-specific evidence fixture (P9 task spec) — see
+   * `StepFixtures.evidence`'s own doc comment above for the full contract;
+   * this is the same object, reached the older, function-based way every
+   * other member of this interface is. */
+  readonly evidence: {
+    readonly attach: (name: string, body: string | Uint8Array) => Promise<void>;
+    readonly path: (name: string) => string;
+  };
 }

@@ -4,6 +4,7 @@ import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
+import { mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
@@ -565,6 +566,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // its outcome" way `pageEvents` just above is (p3b-page-network task
     // spec, scope item 2) — `undefined` when nothing was ever left out.
     const httpOmitted = contextHandle.httpOmittedSnapshot();
+    // Application-specific evidence `evidence.attach`/`.path` produced this
+    // execution (P9 task spec), read the same "after execution, whatever
+    // its outcome" way as every other snapshot above — a `path()`-allocated
+    // file is confirmed to exist right here, on disk, so this needs neither
+    // a browser nor `dispose()` to have already run.
+    const evidenceSnapshot = await contextHandle.evidenceSnapshot();
 
     const finishedAt = new Date();
 
@@ -610,6 +617,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // written by the time this runs, so `actions`/`truncated` can be read
     // out of it here (p3a-trace-per-step task spec, scope B).
     const traceEvidence = await collectTraceEvidence(evidenceDir, createTraceVersionWarner(stderr));
+    // Combines `traceEvidence`'s own `{ actions }` truncation with
+    // `evidenceSnapshot`'s (P9 task spec) into the receipt's single
+    // top-level `truncated` field — see `mergeTruncated`'s own doc comment
+    // (src/context/evidence.ts) for why this is one shared function rather
+    // than two independent spreads.
+    const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
 
     // Save whenever a session was requested *and* dispose() actually
     // produced something to persist (this task's spec, decision 2): a run
@@ -644,7 +657,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             scenario: null,
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
-            evidence: { dir: relativeDir, ...evidence },
+            evidence: {
+              dir: relativeDir,
+              ...evidence,
+              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+            },
             observed,
             mutates: entry.step.mutates,
             // `omitUsedResults` (fb3-used-result task spec, decision 2): an
@@ -658,7 +675,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
-            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
@@ -681,7 +698,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
             mutates: entry.step.mutates,
-            evidence: { dir: relativeDir, ...evidence },
+            evidence: {
+              dir: relativeDir,
+              ...evidence,
+              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+            },
             observed,
             // Unstripped here, unlike the "ok" branch above (fb3-used-result
             // task spec, decisions 1-2, 4): a failed step's receipt is
@@ -694,7 +715,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
-            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           };
 

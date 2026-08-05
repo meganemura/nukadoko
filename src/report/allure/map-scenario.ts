@@ -814,6 +814,24 @@ function mapSteps(
           path: joinRelative(receipt.evidence.dir, screenshot.file),
         });
       }
+      // Application-specific evidence `evidence.attach`/`.path` produced
+      // (P9 task spec) — same path-attachment shape as trace/screenshots
+      // above, `name` kept as the step's own (not `file`, which can differ
+      // only when a name collided with an earlier use this same step —
+      // `receipt.evidence.attachments`' own doc comment, src/receipt/
+      // types.ts). `contentType` is guessed from `file`'s own extension
+      // (`contentTypeForFileName`, already imported below); an unrecognized
+      // extension falls back to `application/octet-stream` rather than a
+      // guess this module cannot verify (this task's spec: "推測して間違え
+      // るより落とす").
+      for (const attachment of receipt.evidence.attachments ?? []) {
+        attachments.push({
+          kind: "path",
+          name: attachment.name,
+          contentType: contentTypeForFileName(attachment.file),
+          path: joinRelative(receipt.evidence.dir, attachment.file),
+        });
+      }
 
       declared = mapDeclared(receipt.declared, receipt.evidence.dir, startMs);
       attachments.push(...declared.attachments);

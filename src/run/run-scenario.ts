@@ -25,6 +25,7 @@ import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
 import { createStepContext } from "../context/create-context.js";
+import { mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
@@ -953,6 +954,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // task spec, items 2-3) — `undefined` when nothing was ever recorded
     // this step, omitted from the receipt the same way `used`/`world` are.
     const declared = declaredCollector.snapshot();
+    // Application-specific evidence `evidence.attach`/`.path` produced since
+    // the current step boundary began (P9 task spec) — only a typed step's
+    // fixture bag has `evidence`, so this is naturally empty for a compat
+    // step, the same way `sections`/`polls` already are. Read the same
+    // "after execution, whatever the outcome" way as every snapshot above.
+    const evidenceSnapshot = await contextHandle.evidenceSnapshot();
+    // Combines `traceEvidence`'s own `{ actions }` truncation with
+    // `evidenceSnapshot`'s (P9 task spec) into the receipt's single
+    // top-level `truncated` field — see `mergeTruncated`'s own doc comment
+    // (src/context/evidence.ts) for why this is one shared function rather
+    // than two independent spreads.
+    const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
 
     // Only a step whose *final* status is "ok" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
@@ -983,6 +996,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
+              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
             },
             observed,
             mutates,
@@ -1001,7 +1015,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
-            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
@@ -1029,6 +1043,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
+              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
             },
             observed,
             mutates,
@@ -1047,7 +1062,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
-            ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           };
 
@@ -1748,6 +1763,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const httpOmitted = contextHandle.httpOmittedSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
+        // Same backstop-only read again, for `evidence.attach`/`.path` (P9
+        // task spec) — whatever this step already wrote before the
+        // uncaught throw still belongs on its receipt.
+        const evidenceSnapshot = await contextHandle.evidenceSnapshot();
+        const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
         const receipt: Receipt = {
           receipt_id: began.receiptId,
           step: began.stepName,
@@ -1770,6 +1790,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
             ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
+            ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
           },
           observed,
           mutates: began.mutates,
@@ -1784,7 +1805,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           ...(pageEvents ? { page_events: pageEvents } : {}),
           ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
           ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
-          ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+          ...(truncated !== undefined ? { truncated } : {}),
           // `fixtureUsage` (hoisted above, alongside `began`): whatever this
           // step's own bag had already resolved before the uncaught throw
           // this backstop exists for still belongs on its receipt.

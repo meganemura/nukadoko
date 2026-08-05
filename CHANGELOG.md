@@ -149,6 +149,28 @@ just until 0.1.
   whose run never launched a browser at all, the same convention
   `evidence.trace` already follows.
 
+- **A step can now add its own evidence, not only what the harness collects
+  on its own.** Two personas asked for this independently: an API response
+  body, a DB state snapshot, a generated file's contents, none of which had
+  anywhere to go before, short of logging to `console.log` and losing it, or
+  a step writing to disk on its own with no place on the receipt to point
+  at. `evidence.attach(name, body)` writes `body` (`string | Uint8Array`)
+  into the step's own evidence directory and lists it on the receipt's new
+  `evidence.attachments`, `{ name, file, at }`; calling it twice with the
+  same `name` keeps both files, never overwriting the first. `evidence.path
+  (name)` is Playwright's own `testInfo.outputPath()`: it allocates a
+  collision-free absolute path without writing anything, and only a path a
+  step actually wrote to by the time execution ends lands on the receipt, so
+  book-keeping a call was made is never mistaken for evidence that a file
+  exists. A `name` containing a path separator, or equal to `.`/`..`/the
+  empty string, is refused outright rather than silently rewritten. Capped
+  at 100 entries per execution, sorted by `at`; the true total, once that
+  cap is hit, reports through the same sibling `truncated` field
+  `truncated.actions` already uses, now `truncated.evidence` alongside it.
+  The Allure emitter attaches each one the same way it already attaches
+  trace/screenshots/http, contentType guessed from the file's own
+  extension, `application/octet-stream` when it cannot be.
+
 ### Changed
 
 - **`evidence.trace` is a step's own trace now, not the whole scenario's.**

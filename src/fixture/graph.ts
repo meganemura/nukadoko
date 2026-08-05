@@ -64,9 +64,10 @@ export interface FixtureGraph {
   readonly nodes: ReadonlyMap<string, FixtureNode>;
 }
 
-/** `page`/`context`/`request`/`resultOf`/`section`/`poll` all need this
- * run's *current scenario's* `ctx` to build (a browser, a request context,
- * this scenario's own result chain) — a `process`-scope fixture, built once
+/** `page`/`context`/`request`/`resultOf`/`section`/`poll`/`evidence` all
+ * need this run's *current scenario's* `ctx` to build (a browser, a request
+ * context, this scenario's own result chain, this step's own moving
+ * evidence directory — P9 task spec) — a `process`-scope fixture, built once
  * before any one scenario's own resources are guaranteed to still exist by
  * the time a later scenario tears them down, must never depend on one of
  * these (`findFixtureScopeViolations` below). `env`/`requireEnv`/`baseURL`
