@@ -1,28 +1,28 @@
 # nukadoko specification
 
-> nukadoko — a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
+> nukadoko, a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
 
-Status: M1 (engine core) implemented — `steps`/`describe`/`do`/`run`/
-`check`/`init`/`scaffold`, sessions, environments, secrets. M2 (compat,
-below) is implemented too — `nukadoko/compat`, typed World measurement, and
-a migration guide. Both real-world gates have now been run — typed steps
+Status: M1 (engine core) implemented (`steps`/`describe`/`do`/`run`/
+`check`/`init`/`scaffold`, sessions, environments, secrets). M2 (compat,
+below) is implemented too (`nukadoko/compat`, typed World measurement, and
+a migration guide). Both real-world gates have now been run: typed steps
 drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Still 0.x; of M3+, the Allure emitter and the
 messages emitter are both implemented, and so are sign-off (`nuka accept`)
-and both of M5's skills. Compat gap detection in `nuka check` — the
-migration skill's own prerequisite — is implemented too (see "Compat steps"
+and both of M5's skills. Compat gap detection in `nuka check` (the
+migration skill's own prerequisite) is implemented too (see "Compat steps"
 and docs/migration.md's "The dashboard is `nuka check`"), closing out
 M1-M5.
 
 ## What nukadoko is
 
 nukadoko is an agent-first engine that runs Gherkin. Humans write and review the durable
-artifacts — feature files, typed step definitions, sign-off records — and
+artifacts (feature files, typed step definitions, sign-off records) and
 agents execute them. Everything about the runtime is optimized for an agent's
 trial-and-error loop: every step has a typed contract, every step can be run
 on its own from the CLI, and every execution leaves a receipt the tool
-wrote rather than the agent. Not a receipt the agent *cannot* forge — an
-agent with shell access can write any file — but one it never had to be
+wrote rather than the agent. Not a receipt the agent *cannot* forge (an
+agent with shell access can write any file) but one it never had to be
 asked to produce (see "Out of scope").
 
 Agent-first is a design constraint, not a slogan. An agent must be able to
@@ -38,13 +38,13 @@ One consequence of that constraint deserves stating on its own, because it
 directs where this tool grows. End-to-end execution is expensive in a way
 unit tests are not: a browser, a real target, minutes. So how much of a
 scenario can be judged wrong **without running it** is, in practice, how
-fast anyone iterates on it — and for an agent, whose loop is made of cheap
+fast anyone iterates on it, and for an agent, whose loop is made of cheap
 commands, it is directly how fast it can correct its own work. Every
 declaration this spec asks for is partly paid for that way: `pattern` and
 `args` let `check` reject a line before a browser opens, `mutates` lets it
 question a Then, `from` lets it reject a scenario whose steps are in an
 order that could only fail. Widening what `nuka check` can settle is
-therefore a first-class goal here, not a convenience — and the standing
+therefore a first-class goal here, not a convenience, and the standing
 question after any failed run is whether a check could have caught it
 first. The limit is honesty, not ambition: `check` only claims what can
 *only* end one way, since a check that guesses trains people to ignore the
@@ -52,17 +52,17 @@ ones that don't.
 
 A nukadoko is the fermented rice-bran bed that turns cucumbers into pickles.
 It is alive: tended daily it matures, neglected it dies. That is the claim
-this tool makes about step definitions — they are a living culture, not a
-write-once test asset — and the agent is what tends them.
+this tool makes about step definitions (they are a living culture, not a
+write-once test asset), and the agent is what tends them.
 
 nukadoko deliberately owns as little as possible:
 
 | Concern | Owner |
 |---|---|
-| Gherkin syntax (Background, Scenario Outline, tables, docstrings, tags) | `@cucumber/gherkin` — the official parser compiles features into flat "pickles" |
+| Gherkin syntax (Background, Scenario Outline, tables, docstrings, tags) | `@cucumber/gherkin`: the official parser compiles features into flat "pickles" |
 | Step pattern matching (`{string}`, `{int}`, custom parameter types) | `@cucumber/cucumber-expressions` |
-| Pretty reports | Allure — nukadoko emits `allure-results`, never renders HTML |
-| Approval of what-would-prove-what | git — PR review of features and step definitions, CODEOWNERS |
+| Pretty reports | Allure: nukadoko emits `allure-results`, never renders HTML |
+| Approval of what-would-prove-what | git: PR review of features and step definitions, CODEOWNERS |
 | **Typed step contracts** | **nukadoko** |
 | **Execution and measurement (receipts)** | **nukadoko** |
 | **Sessions, environments, secrets** | **nukadoko** |
@@ -76,7 +76,7 @@ Two independent rots meet here.
 **BDD rot.** In Cucumber, step definitions are glue bound by patterns to
 prose. The glue library decays invisibly: duplicated steps accumulate,
 undefined steps surface only at run time, nothing types what a step consumes
-or produces, and the report can only say "passed" — there is no record of
+or produces, and the report can only say "passed": there is no record of
 what was actually sent or received. Keywords are decoration: Cucumber
 executes a Then exactly like a Given, so nothing stops an assertion step
 from mutating state.
@@ -118,39 +118,39 @@ export default defineStep({
 
 - `pattern` binds the step to Gherkin text. `patterns: [...]` allows
   aliases; giving both concatenates them, `pattern` first. A step may omit
-  patterns entirely — then it is CLI-only
+  patterns entirely: then it is CLI-only
   vocabulary for agents, invisible to feature files but importable by other
   steps: a typed building block, whose `args`/`returns` schemas keep the
   composition checked.
 - Every parameter in a pattern is named: `{key:type}` binds that capture to
   the args key `key`. Matching strips the names and hands plain `{type}` to
-  `@cucumber/cucumber-expressions` — the syntax owner is unchanged, names
+  `@cucumber/cucumber-expressions`: the syntax owner is unchanged, names
   are a thin layer above it. Names are required (an unnamed `{string}` in a
-  pattern is a `nuka check` error) because the alternative — binding
-  captures to schema keys by declaration order — swaps two same-typed
+  pattern is a `nuka check` error) because the alternative (binding
+  captures to schema keys by declaration order) swaps two same-typed
   values silently when keys are reordered, and no static check can catch
   that. The binding must survive review by being visible in the pattern
   itself. Aliases must all bind the same key set.
 - A pattern's literal text is still cucumber-expressions syntax, not free
   prose: bare `(` `)` mean optional text and bare `/` means alternation, so
-  literal occurrences must be escaped — as `\\(`, `\\)`, `\\/` in the
+  literal occurrences must be escaped, as `\\(`, `\\)`, `\\/` in the
   `pattern` string literal (one backslash in the parsed expression means
-  two in TS source) — to match literally. Unlike a schema mismatch, an
-  unescaped occurrence still compiles — `nuka check` passes and the step
-  registers — and the pattern then silently never matches the pickle text
+  two in TS source), to match literally. Unlike a schema mismatch, an
+  unescaped occurrence still compiles (`nuka check` passes and the step
+  registers), and the pattern then silently never matches the pickle text
   it was written for (hit independently in two corpora during validation).
-- A parameter cannot appear inside an optional group — an inherited
+- A parameter cannot appear inside an optional group: an inherited
   cucumber-expressions constraint. The constraint binds the group syntax,
   not the parameter itself: a custom parameter type whose own regexp is
   optional (a `{dir:from-dir}` matching `( from '…')?` or nothing) is
   legal, and is the intended way to fold "the same step with a trailing
-  location clause" into one definition — pair it with an `.optional()`
+  location clause" into one definition: pair it with an `.optional()`
   args key. Without a custom type, each variant needs its own step
   definition.
 - Aliases are for prose that is genuinely interchangeable at the args
   level: same keys, same `run()` behavior no matter which phrasing
-  matched. If `run()` needs to know which variant matched — behavior forks
-  on the phrasing itself — give each variant its own step even when their
+  matched. If `run()` needs to know which variant matched (behavior forks
+  on the phrasing itself), give each variant its own step even when their
   key sets coincide; folding them into one alias would hide that fork from
   reviewers.
 - Plurals: a pure suffix plural (`message(s)`) uses cucumber-expressions'
@@ -163,15 +163,15 @@ export default defineStep({
   number, custom types by their transformer), then the schema is the
   contract; the mapping is statically checkable (`nuka check`) in both
   directions. A capture with no schema key is an error. So is a **required**
-  schema key that nothing on a given line could fill — no capture, no
-  table/docstring, no `from` — because that line can only ever fail args
+  schema key that nothing on a given line could fill (no capture, no
+  table/docstring, no `from`), because that line can only ever fail args
   validation. The second direction went unchecked for a while, on the
   reasoning that a key might be filled some way the tool could not see;
   `from` closed that gap by making the remaining way visible, so what is
   left is genuinely unfillable rather than merely unexplained.
 - A data table or docstring attached to the step binds to the one required
   args key the named captures left unconsumed (tables as `string[][]`,
-  docstrings as `string`), validated by the schema like everything else —
+  docstrings as `string`), validated by the schema like everything else.
   Gherkin tables get types for the first time. Zero or several unconsumed
   required keys with an attachment present is a `check`/`run` error; no
   reserved key name exists.
@@ -181,54 +181,54 @@ export default defineStep({
   this scenario". The executor fills the key in before args validation, so
   the key stays required and the schema keeps saying what the step actually
   demands. A key name, never a transform, and a key may list several
-  mutually exclusive producers — see "Chaining steps" for why that limit is
+  mutually exclusive producers (see "Chaining steps" for why that limit is
   the point, for how alternatives are resolved, and for what to do when a
-  key name is not enough.
+  key name is not enough).
 - What `returns` carries decides what a failure can be diagnosed from, so
   "return what later steps cite" is the wrong rule to design it by. That
   rule drops every value this step's own correctness depends on but
-  nothing downstream reads — the date it computed, the id it picked, the
-  name it resolved before sending — and those are precisely the values a
+  nothing downstream reads (the date it computed, the id it picked, the
+  name it resolved before sending), and those are precisely the values a
   receipt is interrogated for once a run has gone wrong. Returned, they
   are on the receipt as validated facts and the question "what did it
   actually send" has an answer; withheld, the answer has to be
   reconstructed from an error message written by someone else's system.
   This is `observed` and `sections`' own measure-and-keep reasoning
   applied to the one field the step itself fills in.
-- An observation that claims absence — `visible: false`, `count: 0`, an
-  empty string — is ambiguous in exactly the way its presence-claiming
+- An observation that claims absence (`visible: false`, `count: 0`, an
+  empty string) is ambiguous in exactly the way its presence-claiming
   counterpart is not: the target may genuinely not be there, or the page
   may simply not have finished rendering yet, and those two situations
   produce the identical value on the receipt unless the step says
   otherwise. A step whose `returns` can carry absence should carry, beside
-  it, whatever proves the read itself was valid — that the page had
+  it, whatever proves the read itself was valid: that the page had
   reached a state where absence was a real answer rather than a symptom of
   asking too soon. Without that, every hypothesis a reviewer could form
   from the receipt is equally consistent with it, which is what
   unfalsifiable means in practice. Presence needs no such companion:
   `visible: true` is its own proof that the read landed on a rendered
   page, since neither a hidden nor an unrendered element can produce
-  `true`. That asymmetry — a positive claim vouches for itself, a negative
-  one does not — is the reason to treat the two differently rather than
+  `true`. That asymmetry (a positive claim vouches for itself, a negative
+  one does not) is the reason to treat the two differently rather than
   applying one convention to both. It bites hardest exactly where it looks
   irrelevant: an acceptance criterion phrased "hidden unless the condition
   holds" is satisfied by the same `false` an unrendered page also
   produces, so a scenario asserting it can go green while the page never
-  finished loading — green for the wrong reason, indistinguishable from
+  finished loading: green for the wrong reason, indistinguishable from
   green for the right one without readiness evidence on the receipt. A
   tool whose purpose is tying acceptance criteria to an execution that
   either happened or did not cannot treat that as a minor gap; it is the
   gap.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
-- `rationale` is optional with no default — omitted, `Step.rationale` is
+- `rationale` is optional with no default: omitted, `Step.rationale` is
   `undefined`, the same convention as `pattern`. It answers a different
   question than `description`: `description` is what the step does, the
   information `nuka steps` lists so an agent can pick which step to call;
   `rationale` is why it is implemented this way and what was tried and
   rejected, the information an agent needs before deciding it may rewrite
-  the step. It never appears in `nuka steps`' listing — only
-  `nuka describe` shows it — and never in a receipt: a receipt records one
+  the step. It never appears in `nuka steps`' listing (only
+  `nuka describe` shows it) and never in a receipt: a receipt records one
   execution, and rationale is a property of the contract that would be
   identical in every receipt for the step, not something that execution
   produced.
@@ -236,8 +236,8 @@ export default defineStep({
   Composition is importing another step module and calling its `run` with
   the same fixture bag. Shared helpers live in ordinary modules (e.g.
   `features/steps/lib/`).
-- Semantic correctness — whether the implementation truthfully performs what
-  the description and pattern claim — is guaranteed by PR review, not by the
+- Semantic correctness (whether the implementation truthfully performs what
+  the description and pattern claim) is guaranteed by PR review, not by the
   tool. Protect `steps/` with CODEOWNERS.
 
 ### Context API
@@ -664,7 +664,7 @@ key stays **required**, and `args` goes on describing what the step
 demands instead of describing how one of its callers happens to supply it.
 
 A key may name more than one possible producer. Some values are reachable
-two ways — a project a scenario creates, or one it imports — and the
+two ways (a project a scenario creates, or one it imports), and the
 consumer should not have to become two steps to say so:
 
 ```ts
@@ -677,7 +677,7 @@ reaching across different steps. The check below instead requires that
 **exactly one** of the listed producers is bound earlier in the scenario:
 none is the same error one missing producer already is, and two or more is
 an error as well. A scenario whose answer would depend on a rule its own
-reader cannot see is one this tool declines to run — which is what makes
+reader cannot see is one this tool declines to run, which is what makes
 this safe to add. The question "which of these supplies the value" gets a
 per-occurrence answer from the feature file, not a default from the step.
 
@@ -688,7 +688,7 @@ contract, so the later result supersedes the earlier and the question is
 only freshness. Two *different* producers ask which contract the value
 came from. Freshness has a defensible default; provenance does not.
 
-Listing producers as alternatives says they are mutually exclusive — one
+Listing producers as alternatives says they are mutually exclusive: one
 of these will have run, not both. A scenario that genuinely exercises both
 (two paths to the same record, checked against each other) is not that
 shape at all, and does not need to be written as one: give each producer
@@ -703,28 +703,28 @@ from: {
 
 Both are bound, both are read, nothing competes. If a value can arrive
 from two producers *in the same scenario* and only one key is waiting for
-it, the consumer's own shape is what is wrong — it is asking for one thing
+it, the consumer's own shape is what is wrong: it is asking for one thing
 where the scenario has two.
 
 Why a key name and not a selector function. A name is data: it survives
 into `nuka steps --json` and `nuka describe` as "`projectId` ← `createProject.id`",
 which is what lets an agent assemble an order it was never told, and it is
 what `nuka check` reads to judge a scenario before anything runs. A
-function would express more and say less — the tool could report which
+function would express more and say less: the tool could report which
 step a key came from but never which part of it. A `returns` shaped flat
 enough to be addressed by key is a mild cost, and steps read better that
 way anyway.
 
 Declaring `from` buys a check that costs nothing to be sure about. For
-every occurrence of the step in every scenario, `nuka check` — and `nuka
+every occurrence of the step in every scenario, `nuka check` (and `nuka
 run`, before it executes that scenario, so forgetting to check is not
-punished with a browser session — asks whether each declared key is
+punished with a browser session) asks whether each declared key is
 captured by that line; if it is not, whether the upstream step appears
 earlier in the same pickle (Background included, since a pickle carries
 its Background steps). A **required** key with no producer bound
 earlier is an error: that run would fail args validation with certainty,
 so saying so early invents no false positive. An **optional** key with
-none is silent — the schema already said the value may be absent, and
+none is silent: the schema already said the value may be absent, and
 warning about a contract being honored would be noise in the one place
 noise is fatal. Two or more of a key's listed producers bound earlier is
 an error whether the key is required or optional: a schema gets to say
@@ -737,9 +737,9 @@ browser time had been spent.
 `from` and `resultOf` both identify the upstream step by the `Step`
 object itself, never by name, so a step reached through `await import()`
 resolves to a different instance than the one discovery registered and
-matches nothing. That used to be silent — `resultOf` simply kept returning
+matches nothing. That used to be silent: `resultOf` simply kept returning
 `undefined` forever. It is not silent now: an unregistered `Step` is an
-error where it is found — `from` names one statically, so `nuka check`
+error where it is found: `from` names one statically, so `nuka check`
 reports it and `run`/`do` refuse to execute the step at all, while
 `resultOf` can only be caught at the call, where it throws. A registered
 step that has not run yet still returns `undefined`; that is a state, not
@@ -748,8 +748,8 @@ a mistake.
 What `from` cannot express stays with `resultOf`: a value that needs
 reshaping on the way, a read whose necessity is decided at run time, or a
 whole result used as one. Reach for `resultOf` for those, and keep the argument optional
-with a fallback inside `run` if the step must also run standalone — the
-older shape, now the exception rather than the house style.
+with a fallback inside `run` if the step must also run standalone (the
+older shape, now the exception rather than the house style).
 
 Under `nuka do` there is no scenario and therefore no chain, so a `from`
 key arrives one of two ways: passed in `--args` like any other, or taken
@@ -759,14 +759,14 @@ value comes from does.
 
 One thing `from` deliberately does not do: run the upstream step for you.
 A key whose producer is missing from the scenario is an error to fix in
-the feature file, not a step for the tool to insert quietly — a feature
+the feature file, not a step for the tool to insert quietly: a feature
 that does not name everything that ran would stop being the record this
 whole tool exists to keep. The related pressure is real and has a
 different answer: because a chained value has to come from a step, and a
 step has to appear in the feature, a scenario can end up with a line that
 exists only to move an id (`And the project's billing page is fetched`)
 and means nothing to the reader the feature was written for. When an
-operation has no value to that reader, it should not be a step at all —
+operation has no value to that reader, it should not be a step at all:
 make it an ordinary function under `features/steps/lib/` and call it from
 the step that needs it. What is given up is that helper's own receipt; the
 HTTP it performs is still counted in `observed`, and `section` can
@@ -776,13 +776,13 @@ and this is the axis to make it on.
 
 Chaining is where declaration and measurement meet, and it meets
 differently than `mutates` does (see "Keyword semantics"). There, the
-measurement is a proxy — HTTP method standing in for write semantics — so
+measurement is a proxy (HTTP method standing in for write semantics), so
 the tool records both and reconciles neither. Here there is no proxy:
 which receipt a value came from is exactly known. And because `from`
 drives the execution rather than describing it, the declaration and what
 happened cannot drift apart, so there is nothing to reconcile in the first
 place. `used` on the receipt (see "Receipts") is therefore not a check on
-the declaration; it answers the question the declaration cannot — not
+the declaration; it answers the question the declaration cannot: not
 which step supplied the value, which was decided when the file was
 written, but which *execution* of it did, which is only ever decided at
 run time.
@@ -800,38 +800,38 @@ what a declaration settles is layered:
 
 - `mutates` is the step's **declared intent** (default `true`; read-only
   steps declare `false`).
-- **Statically**, `nuka check` warns — not errors — when a declared-
+- **Statically**, `nuka check` warns (not errors) when a declared-
   mutating step is bound in Then position. The tension deserves human
   eyes; the declaration alone cannot settle it, and this check only warns.
 - **Read-only environments refuse a declared-mutating step before it
-  runs** — the one place the declaration gates execution rather than
+  runs**: the one place the declaration gates execution rather than
   drawing review's attention.
 - **At run time**, the receipt records what the execution actually did:
   every network call the tool saw (through the `request` fixture and the
   page alike), with non-GET/HEAD calls counted as observed writes, next to
-  `mutates` (declared). That count settles nothing on its own anymore —
+  `mutates` (declared). That count settles nothing on its own anymore:
   not Then position, not a read-only environment's own policy. A declared
   `mutates: false` is trusted, whatever `observed` says.
 - Gherkin classifies an `And`/`But` step by inheriting the pickle step type
-  of the preceding primary keyword (Given/When/Then) — gherkin's own
-  pickle-compilation behavior, not a nukadoko choice — so an action chained
+  of the preceding primary keyword (Given/When/Then). That is gherkin's own
+  pickle-compilation behavior, not a nukadoko choice, so an action chained
   after `Then` is recorded under Then-position observation the same as any
   other step there, not gated by it.
 - Why measurement stopped settling this: write detection runs on HTTP
-  method — non-GET/HEAD counts as a write — which is a proxy for write
+  method (non-GET/HEAD counts as a write), which is a proxy for write
   semantics, not the semantics itself. GraphQL, RPC-over-POST, and most
   vendors' query APIs implement a semantically pure read over POST; whether
   a call actually changed server state is the external system's own
   semantics, and nukadoko sits one layer below that, at HTTP. What would
-  distinguish a read from a write is protocol-specific every time — a
+  distinguish a read from a write is protocol-specific every time (a
   GraphQL body's `query` vs. `mutation`, an RPC body's method name, a
-  vendor's own path convention — so no general mechanical judgment can
+  vendor's own path convention), so no general mechanical judgment can
   stand in for the proxy. What the count guarantees is what a step sent,
   not whether the server's state changed; those are different facts, and
   treating the first as proof of the second overclaimed.
 - Nothing about the record shrank: `observed`, http.jsonl, and the Allure
   declared/observed table stay exactly as measured, so a declaration that
-  turns out wrong is still visible there — falsifiable after the fact.
+  turns out wrong is still visible there: falsifiable after the fact.
   Accepting a falsifiable declaration is not measurement giving up; it is
   where the tool's authority over this particular fact actually ends.
 - Falsifiable does not mean checked: nukadoko never runs that reconciliation
@@ -839,16 +839,16 @@ what a declaration settles is layered:
   receipt so an operator can compare them without a second artifact. No
   `nuka run` or `nuka check` output claims a mismatch between the two.
   Automating that claim would mean trusting the same HTTP-method proxy as
-  settled fact — a GraphQL call, an RPC-over-POST call, or a vendor API that
-  reads over POST would each read as a false positive, every time — which is
+  settled fact (a GraphQL call, an RPC-over-POST call, or a vendor API that
+  reads over POST would each read as a false positive, every time), which is
   the same reason run-time enforcement was dropped, above, applied here to
   reporting instead of execution. `nuka accept`'s own record is the one
-  place this comparison is written out (see Sign-off) — sign-off is the
+  place this comparison is written out (see Sign-off): sign-off is the
   single moment a human already reads and judges a run, so stating the raw
   fact there costs nothing in false-positive noise the way stating it on
   every `nuka run`/`nuka check` invocation would.
 - Compat (untyped) steps have no `mutates` to declare at all (see "What
-  compat steps lack") — `nuka check`'s `then-compat-step` warning flags
+  compat steps lack"): `nuka check`'s `then-compat-step` warning flags
   one bound in Then position as that coverage gap instead of a mutation
   tension, and run-time observation records its counts the same as any
   step's, gating nothing.
@@ -869,36 +869,36 @@ import { Given, When, Then } from "nukadoko/compat";
   API is the commonly used subset (Given/When/Then, World, Before/After,
   AfterStep); it grows on demand, not speculatively.
 - Registration semantics: `Given`/`When`/`Then` are three names for one
-  registration — a keyword means nothing at registration time; position in
+  registration: a keyword means nothing at registration time; position in
   the scenario decides at run time, exactly as in Cucumber. Patterns are
-  strings (plain cucumber-expressions — named captures are not required
+  strings (plain cucumber-expressions: named captures are not required
   here; that discipline belongs to typed steps) or RegExp, since legacy
   glue is regex-heavy and the door must admit it. Both call shapes
-  cucumber-js accepts are accepted — `Given(pattern, fn)` and
-  `Given(pattern, { timeout }, fn)`, the timeout honored — and an
+  cucumber-js accepts are accepted (`Given(pattern, fn)` and
+  `Given(pattern, { timeout }, fn)`, the timeout honored), and an
   unrecognized option key throws at registration rather than disappearing.
   Discovery imports the
   files and attributes each registration to the file that made it; a
   compat step's identity is its pattern text, `nuka steps` lists it with
   its kind, `nuka describe` shows the contract it doesn't have, and
-  `nuka do` refuses it by name — promoting to `defineStep` is what buys
+  `nuka do` refuses it by name: promoting to `defineStep` is what buys
   single-step execution.
 - `defineParameterType` from compat code registers into the same single
-  registry as `config.parameterTypes` — moving a registration to config
+  registry as `config.parameterTypes`: moving a registration to config
   changes nothing about what any pattern matches, which is what makes the
   move safe to take early. `nuka check` lists support-origin registrations
   as warnings: config is where they retire to.
 - Execution keeps the door's promise two ways: glue that launches its own
   Playwright keeps working, unmeasured, while `await this.openPage()` /
   `await this.openRequest()` hand out the harness's measured page and
-  request — the same context a mixed scenario's typed steps share,
+  request, the same context a mixed scenario's typed steps share,
   cookies and all. Tables arrive as a thin, dependency-free `DataTable`
   (raw/rows/hashes/rowsHash/transpose), because `table.hashes()` glue
   must not break on an import switch; docstrings stay plain strings.
   Before/After hooks may be written any of the three ways cucumber-js
   accepts (`Before(fn)`, `Before({ tags }, fn)`, `Before("@tag", fn)`),
   receive cucumber's own hook parameter, filter on `@tag` / `not @tag`
-  only — anything fancier fails loudly rather than mismatching silently —
+  only (anything fancier fails loudly rather than mismatching silently),
   appear in the scenario record's `hooks` array rather than as receipts,
   and their network traffic sits outside any step's boundary: http.jsonl
   and the observed read/write tally stay scenario-wide, never attributed to
@@ -916,7 +916,7 @@ import { Given, When, Then } from "nukadoko/compat";
   scenario, it runs once per pickle step that actually executed. A step
   this scenario skipped because an earlier one already failed never began,
   so there is no "after" for `AfterStep` to run at, and none appears for
-  it — the same convention a tag-mismatched hook already follows. Each
+  it, the same convention a tag-mismatched hook already follows. Each
   `AfterStep` entry in the `hooks` array carries `step_index`, the executed
   step's 0-based index into that record's own `steps` array, so a report
   can tell one entry from another; both the Allure and cucumber-messages
@@ -924,22 +924,22 @@ import { Given, When, Then } from "nukadoko/compat";
   `@cucumber/messages`'s own `TestStepResultStatus` string values, and
   `nukadoko/compat` re-exports that same enum as `Status`, so glue written
   as `result.status === Status.FAILED` now imports and compares correctly.
-  The enum's other members — `PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS` —
+  The enum's other members (`PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS`)
   can never match, because nukadoko has no pending, skipped, undefined-step,
   or ambiguous-match concept for a hook's own result to carry; a comparison
   against one of those is a branch migrated glue simply never takes, not a
   gap left open.
-  `BeforeAll`/`AfterAll` bracket the whole run instead of a scenario — no
-  tags, no World, skipped entirely when no scenario was selected — and
+  `BeforeAll`/`AfterAll` bracket the whole run instead of a scenario (no
+  tags, no World, skipped entirely when no scenario was selected) and
   report through the exit code, since a record is a scenario-shaped thing
   and these belong to no scenario. `setDefaultTimeout` supplies the default
   for anything that didn't declare its own; leaving it uncalled keeps steps
   unbounded rather than importing cucumber's five-second ceiling, which
   would fail slow suites for no reason but migrating.
 - The World is measured, always: every compat step's receipt records
-  which World keys it read and wrote, in access order — the data flow
+  which World keys it read and wrote, in access order: the data flow
   `this.foo` used to hide. The measured surface is the bag's own data
-  properties; `#private` state never appears there, by construction — a
+  properties; `#private` state never appears there, by construction: a
   named boundary, not a bug. `defineWorld({ key: zodSchema })` opts
   individual keys into validation (a write that fails its schema fails
   the step and is never recorded as a write) and types `this` via
@@ -947,13 +947,13 @@ import { Given, When, Then } from "nukadoko/compat";
   `attach`/`log`/`link`/`parameters` are reserved: never measured, never
   declarable, and clobbering one is an error instead of a silent break.
 - Because the harness owns the browser and request objects, compat steps
-  already get measured receipts — status, timing, trace, screenshots, HTTP
-  log — with zero code change.
+  already get measured receipts (status, timing, trace, screenshots, HTTP
+  log) with zero code change.
 - What compat steps lack: typed contracts, a validated `result` in the
   receipt, and single-step CLI execution. Promoting a hot step to
   `defineStep` is the upgrade, one step at a time.
 - The door's width is measured, not asserted. Eight public cucumber-js
-  suites were audited against it — their glue read as text, never run — and
+  suites were audited against it (their glue read as text, never run), and
   none of them ran on the import switch alone at the time, and closing the
   blockers it found has since brought two of the eight to where nothing in
   their glue is rejected; what the rest still need is enumerated in
@@ -965,19 +965,19 @@ import { Given, When, Then } from "nukadoko/compat";
   missing feature ever cost time.
 - Loud failure splits into what a static pass can already say and what only
   running a step reveals, and `nuka check` reports exactly the first half.
-  **`nuka check` can say it**: a step file whose import throws — a name
+  **`nuka check` can say it**: a step file whose import throws (a name
   `nukadoko/compat` doesn't export, used as a value; a CommonJS `require` in
-  ESM glue; a deep subpath import — becomes a `step-file-import-failed`
+  ESM glue; a deep subpath import) becomes a `step-file-import-failed`
   error, and a hook's tag expression beyond a single `@tag` / `not @tag`
   becomes `unsupported-hook-tag-expression`; both are known from the file's
   own text, before anything executes. **Only `nuka run` finds it**: a step
-  or hook returning `"pending"` / `"skipped"`, and done-callback glue —
-  these are properties of what happens when that step actually runs, not of
+  or hook returning `"pending"` / `"skipped"`, and done-callback glue.
+  These are properties of what happens when that step actually runs, not of
   how its file imports, so nothing before the step's own execution can name
   the fault. **Neither is a gap**: a name imported but used only as a type
   annotation, or imported and never referenced, is elided from the compiled
   output by esbuild before nukadoko ever imports the file, so that import
-  never actually happens at run time — the glue runs exactly as written.
+  never actually happens at run time: the glue runs exactly as written.
   `tsc` still resolves the name against what compat exports, so a missing
   one is a compile error rather than a run-time one. That is exactly why
   the two names the audit found in this category, `IWorldOptions` and
@@ -988,7 +988,7 @@ import { Given, When, Then } from "nukadoko/compat";
   because the team adopted nukadoko or moved some other piece toward the
   typed side. Transitional two-home states (a parameter type registered in
   support code while another lives in config; a World bag alongside typed
-  results) are accepted rather than forbidden — but they must share one
+  results) are accepted rather than forbidden, but they must share one
   underlying mechanism, the split must be surfaced by `nuka check` instead
   of hidden, and every individual migration move must be
   semantics-preserving so it can be taken early and safely. The door
@@ -1004,7 +1004,7 @@ import { Given, When, Then } from "nukadoko/compat";
 nuka run features/checkout.feature[:12] [--env <name>] [--session <name>]
 ```
 
-`@cucumber/gherkin` compiles the file into pickles — flat, self-contained
+`@cucumber/gherkin` compiles the file into pickles: flat, self-contained
 scenarios with Background merged, Scenario Outline expanded, and tables
 attached. nukadoko matches each pickle step against the committed patterns and
 executes the steps in order. One receipt per step; one scenario record
@@ -1021,7 +1021,7 @@ some default, for a run whose pickle never launched a browser at all: a
 pickle whose steps never destructure `page`/`context` opens none, and this
 field never names a browser that never ran.
 
-`:12` selects one scenario, which is the iteration path — a feature's full
+`:12` selects one scenario, which is the iteration path: a feature's full
 run costs every scenario's minutes, and getting one of them right is
 usually what the next few runs are about. It is not a smaller version of
 the same thing: a partial run can never be signed off (see "Sign-off"), so
@@ -1066,12 +1066,12 @@ Before a pickle runs, its steps' `from` declarations are checked against
 its own step order: a required chained key whose producer is absent or
 bound later fails that scenario before anything launches, since executing
 it could only end in the same failure minutes later (see "Chaining
-steps"). Other scenarios in the file still run — this is one scenario's
+steps"). Other scenarios in the file still run: this is one scenario's
 property, not the file's.
 
 An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
-the missing typed step and submits it as a PR — the feature backlog drives
+the missing typed step and submits it as a PR: the feature backlog drives
 vocabulary growth.
 
 ### Single steps (the agent path)
@@ -1085,8 +1085,8 @@ Executes one typed step and prints its receipt to stdout (exit 0 on ok, 1 on
 failed). This is the adaptive loop: the agent reads the validated result and
 decides the next call. The agent can only choose which step to call with
 which args; it cannot choose what gets recorded. There is deliberately no
-grouping label on `do`: ad-hoc sequences are working records, not evidence —
-anything worth attesting to is expressed as a scenario and proven by
+grouping label on `do`: ad-hoc sequences are working records, not evidence.
+Anything worth attesting to is expressed as a scenario and proven by
 `nuka run` (see Self-healing).
 
 `--use <receipt-id>` (repeatable) supplies the step's `from` keys from an
@@ -1096,7 +1096,7 @@ line because the receipt already carries it: nukadoko reads which step that
 receipt records, finds the `from` entries pointing at it, and takes the
 named keys out of its stored `result`. A receipt for a step this one does
 not declare a `from` on is an error rather than a silent no-op, as is a
-receipt whose execution failed — a failed step never produced a validated
+receipt whose execution failed: a failed step never produced a validated
 result to read. `--args` still wins over `--use` for the same key, the same
 way a pattern capture wins inside a scenario. The receipt ids actually
 drawn from land in this execution's own `used`, so a chain assembled by
@@ -1106,8 +1106,8 @@ drove.
 A step that passes under `do` has not thereby been shown to pass under
 `run`. `do` gives every execution its own browser and its own everything
 else; a scenario gives one context to all of its steps, so the second one
-meets whatever the first left behind — already signed in, on a different
-page, a dialog still open. The two questions are different and neither
+meets whatever the first left behind (already signed in, on a different
+page, a dialog still open). The two questions are different and neither
 answer substitutes for the other: `do` asks whether the step works, `run`
 asks whether it works there. `--session` narrows the gap by carrying
 storageState across `do` calls, which covers login state and nothing else;
@@ -1118,7 +1118,7 @@ whose name says it does, instead of once per step.
 
 ## Receipts
 
-A receipt is the tool's own measurement of one step execution — the same
+A receipt is the tool's own measurement of one step execution: the same
 shape whether the step ran inside a scenario or via `do`.
 
 ```json
@@ -1146,31 +1146,31 @@ shape whether the step ran inside a scenario or via `do`.
 }
 ```
 
-- `result` is the trust anchor: it passed the returns schema and the tool —
-  not the caller — produced it. On failure, `error: { kind, message }`
+- `result` is the trust anchor: it passed the returns schema and the tool
+  (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
 - `error.kind` is a closed set, beside the message a human reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
   `timeout`, `unsupported`, `step_error`. Closed because a report has to
-  classify against it — an open one, extended per step, would classify
+  classify against it: an open one, extended per step, would classify
   nothing. The first four name failures that exist only because there is a
   contract to violate, which is the part a report built on a runner that
   discards return values cannot fill in; a classifier that isn't sure says
   `step_error`, since claiming a contract failure wrongly is worse than not
   claiming one. Hook records in the scenario record carry the same field.
 - `mutates` is the step's own declaration (`null` for a compat step, which
-  has none to record — not `false`), sitting beside the `observed` counts
+  has none to record, not `false`), sitting beside the `observed` counts
   so declared and measured can be compared without a second artifact.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `request` fixture
   call and the page's own document/XHR/fetch traffic alike logged to
   http.jsonl, the receipt itself as the primary record.
 - `evidence.screenshots` is at most one entry, `{ "file": "final.png", "at":
-  "..." }` — a browser-using execution's evidence used to be two files, the
+  "..." }`: a browser-using execution's evidence used to be two files, the
   same buffer saved under a second name whenever the step failed. That cost
   nothing to write but implied something the tool never measured: that a
   "failure" screenshot exists as a distinct fact from the last one taken. It
-  never was — the screenshot only ever runs once, after `run` has already
+  never was: the screenshot only ever runs once, after `run` has already
   returned or thrown, so that second copy could already be stale relative to
   the failure it was named for. `at` (ISO 8601, the same format
   `started_at`/`finished_at` use) is what the second file was standing in
@@ -1178,8 +1178,8 @@ shape whether the step ran inside a scenario or via `do`.
   this execution's own timeline the screenshot was actually taken.
 - `observed` counts the network calls the tool itself saw the execution
   make, through the `request` fixture and the page alike; non-GET/HEAD counts as
-  a write — HTTP method as a proxy for write semantics, not semantics
-  itself, so a POST-based read counts against a step that never wrote
+  a write (HTTP method as a proxy for write semantics, not semantics
+  itself), so a POST-based read counts against a step that never wrote
   anything (see Keyword semantics). It settles nothing on its own: Then
   position and read-only environments act on the `mutates` declaration,
   never on this count. `observed` sits beside `mutates` (declared) so a
@@ -1235,13 +1235,13 @@ shape whether the step ran inside a scenario or via `do`.
   expected to add up to each other, and neither being lower than the other
   is a bug.
 - `used` (present only when non-empty) lists the earlier executions whose
-  results this one drew a value from — through a `from` injection, a
+  results this one drew a value from: through a `from` injection, a
   `resultOf` call, or a `--use` receipt on `nuka do`. Every path runs
   through library code, so the reads are measured, not declared. Each entry
   is `{ "receipt": "rcpt-…", "step": "create-project" }`: the step name is
   redundant with the cited receipt and is written down anyway, because a
   receipt that has to be resolved against other files to be read is a worse
-  acceptance record than one that is legible alone — and the file it would
+  acceptance record than one that is legible alone, and the file it would
   be resolved against is a local working record that a sign-off (see
   Sign-off) long outlives. Entries are deduplicated by receipt id, in the
   order first read. The dependency is thus visible twice over: statically
@@ -1253,13 +1253,13 @@ shape whether the step ran inside a scenario or via `do`.
   carries `result`: the upstream receipt's full validated result, sitting
   right beside the id/step pointer. This is what lets one failed receipt be
   read alone instead of opening a second receipt.json just to see what the
-  step actually saw. An `ok` receipt's `used` entries never carry `result`
-  — the value that mattered is already sitting on that step's own `result`
+  step actually saw. An `ok` receipt's `used` entries never carry `result`:
+  the value that mattered is already sitting on that step's own `result`
   (or on its `args`, if it came in through `from`), so repeating the
   upstream one there would only be redundant. The whole result, not
   narrowed to the one key a `from` injection or `resultOf` call happened to
   read: diagnosing a failure needs *why* the upstream value came out this
-  way, not which key was cited — narrowing to the cited key would recreate,
+  way, not which key was cited: narrowing to the cited key would recreate,
   on the receipt side, the same citation-only trap "return more than what a
   later step cites" (see Typed steps) already warns against. That also
   means this field can only carry what the upstream step's own `returns`
@@ -1267,17 +1267,17 @@ shape whether the step ran inside a scenario or via `do`.
   from here too.
 - `sections` (present only when non-empty) lists the `section` calls
   made during this execution, each `{ "label": "...", "at": "..." }`, in
-  call order. Not deduplicated, unlike `used`: a label entered twice — a
-  loop, a retry — was entered twice, and the array should read that way,
+  call order. Not deduplicated, unlike `used`: a label entered twice (a
+  loop, a retry) was entered twice, and the array should read that way,
   where `used` names a receipt id once because an id is an identity worth
   citing once, not a point in a sequence. `at` was left off at first, on the
   reasoning that the question `sections` answers is where execution
-  stopped, not where it was slow — that turned out to be only half true. A
+  stopped, not where it was slow. That turned out to be only half true. A
   label alone says a stage was reached, never *when* relative to anything
   else this same receipt carries, and a real run surfaced exactly the gap
   that leaves: a `status: "failed"` sitting next to a `final.png` that
   showed the target still present, roughly eight seconds apart, with
-  nothing on the receipt saying so — read at face value, that looks like
+  nothing on the receipt saying so: read at face value, that looks like
   the state was flickering, and it was misdiagnosed as exactly that. `at`
   (ISO 8601, taken by the collector itself when `section` is called,
   never supplied by the step) puts every label on the same absolute
@@ -1286,15 +1286,15 @@ shape whether the step ran inside a scenario or via `do`.
   change" and "was this read taken before it settled" stop being
   indistinguishable from a receipt alone. A failed step's `sections` still
   holds whichever labels it reached before the failure, and that array's
-  last element already answers "which stage was it in" — there is no
+  last element already answers "which stage was it in": there is no
   separate `error.section` field putting the same fact in a second place.
   Only a typed step's fixture bag has `section`; a compat step has no
   counterpart on `this`, so `sections` is simply omitted for one, the same
   way `used` is omitted for a typed step that never read from the chain.
 - `polls` (present only when non-empty) records every `poll` call that
   finished during this execution: its `description` when one was given,
-  `at` — the ISO 8601 moment that call began — how many times the
-  predicate ran, the milliseconds elapsed, and how it ended — `resolved`,
+  `at` (the ISO 8601 moment that call began), how many times the
+  predicate ran, the milliseconds elapsed, and how it ended: `resolved`,
   `timed_out`, or `failed` when the predicate itself threw. In completion
   order rather than call order: a nested poll finishes before the one
   containing it, and only a finished poll has counts to state. A timed-out
@@ -1305,18 +1305,18 @@ shape whether the step ran inside a scenario or via `do`.
   the condition was already true and the wait was a no-op, forty attempts
   over 20s says it was genuinely late, and the two look identical from
   outside the step while calling for opposite fixes. `at` adds the missing
-  half — an absolute start, not just a duration — so a poll can be placed on
+  half (an absolute start, not just a duration), so a poll can be placed on
   the same timeline `sections` and `evidence.screenshots` now share, instead
   of read as a length with no fixed point to measure from. A compat step has
   no fixture bag to call it on, so `polls` is simply omitted for one, the
   same way `sections` is.
 - `required_env` (present only when non-empty) lists the names
   `requireEnv` was called with during this execution, deduplicated, in
-  the order first read — the same measured-not-declared shape `used` and
+  the order first read: the same measured-not-declared shape `used` and
   `sections` already have, since `requireEnv` is the one call site the
   library controls. Recorded before a missing key throws, so a
   `MissingEnvError` failure's receipt still shows what the step asked for.
-  Only names are recorded, never values — a value can be a secret. A step
+  Only names are recorded, never values: a value can be a secret. A step
   that reads `env[name]` directly leaves no trace here: this field
   counts only what passed through `requireEnv`, never a plain object read
   the library never sees.
@@ -1434,7 +1434,7 @@ The execution infrastructure Cucumber never had:
   `envFiles`, `policy: "read-only"` (refuses mutating steps), and an optional
   `version` probe recorded on every receipt as `target_version`. A sign-off
   freezes both, so a record names the deployment it was green against.
-- **Secrets**: git is the classifier for *origin* — an env file git does
+- **Secrets**: git is the classifier for *origin*. An env file git does
   not track (ignored or untracked, never distinguished) is a secret
   source: every value it defines is a secret, no declaration needed.
   Tracked env files are plain configuration (a committed value is not a
@@ -1445,21 +1445,21 @@ The execution infrastructure Cucumber never had:
   `secrets.redact` does the opposite, naming an individual tracked-file
   key to redact anyway. `redact` does not dispute git's own origin
   classification, and it is not a claim that a key "is a secret" the way
-  membership in a secret-source file is — it is an instruction not to let
+  membership in a secret-source file is: it is an instruction not to let
   that key's value spread to a *new* surface (a terminal, a CI log, a bug
   report someone pastes, an agent's own conversation transcript) just
   because the repository already has it. Both origins share one token,
-  `{{secret.NAME}}` — there is no second `{{redacted.NAME}}` marker, so a
+  `{{secret.NAME}}`: there is no second `{{redacted.NAME}}` marker, so a
   receipt reader only ever has to recognize one redaction shape. The same
   key cannot be named in both `public` and `redact`: that is a config
   error, since the two lists give opposite instructions for one key.
   Secret values, from either origin, are redacted wherever a receipt is
-  emitted — receipt.json, `do`'s stdout copy, http.jsonl — applied by the
+  emitted (receipt.json, `do`'s stdout copy, http.jsonl), applied by the
   executor at write time, never controllable from a step's `run`. Honest
   limits: values shorter than 4 characters are never redacted (this floor
   applies to a `redact`-named value exactly as it does to any other
-  secret), only values nukadoko itself loaded are redactable — a fresh
-  token inside a step's result is not caught — and a tracked value not
+  secret), only values nukadoko itself loaded are redactable (a fresh
+  token inside a step's result is not caught), and a tracked value not
   named in `secrets.redact` still reaches every one of those surfaces in
   plaintext, including an agent's own conversation log: that log did not
   exist when `.gitignore`'s tracked/untracked line was drawn, so "already
@@ -1468,12 +1468,12 @@ The execution infrastructure Cucumber never had:
   check` reports each env file's classification and secret-key names
   (never values), plus three warnings: `secrets.public`/`secrets.redact`
   naming a key no configured envFile defines, `secrets.redact` naming a
-  key whose value is too short to ever actually be redacted, and — for a
-  tracked env file only — a key whose *name* looks like it holds a secret
+  key whose value is too short to ever actually be redacted, and (for a
+  tracked env file only) a key whose *name* looks like it holds a secret
   (`SECRET`, `PASSWORD`, `TOKEN`, `CREDENTIAL`, or a `KEY` suffix) but
   isn't named in `secrets.redact`. That last check is a name-pattern
   heuristic, and it is used for exactly one thing: deciding whether to
-  print the warning. It never decides redaction — a name "looking like" a
+  print the warning. It never decides redaction: a name "looking like" a
   secret does not add it to what gets redacted; only git's tracked/
   untracked classification and `secrets.redact` do that.
 
@@ -1493,8 +1493,8 @@ a static check *binds vocabulary against*: `nuka check` with no argument
 and `nuka tend` both walk the wider set, because whether a step's pattern
 is bound is a property of the whole project, not of what today's
 unattended run would execute. This is why an acceptance feature (see
-"Sign-off") — kept outside `featuresDir` precisely so it is never picked up
-as a regression — belongs in `additionalFeatureDirs`: named there, the
+"Sign-off"), kept outside `featuresDir` precisely so it is never picked up
+as a regression, belongs in `additionalFeatureDirs`: named there, the
 steps it binds are counted as bound instead of reported `pattern-unbound`,
 and it still never runs unattended. An entry that does not exist on disk is
 a config mistake, not an empty scan result to fail open on: `nuka check`
@@ -1544,23 +1544,23 @@ mechanism sets `storageState`, so accepting either again here would let
 config quietly disagree with itself about which value is real.
 
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
-type — `{ name, regexp, transformer? }`, e.g.
+type: `{ name, regexp, transformer? }`, e.g.
 `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }`
 lets a pattern bind `will{negated:negation} return` to a plain
 `z.boolean()` args key. Registration lives in config because config is
 already executable TypeScript (the same reason the version probe is a
 function); nukadoko has no support-file format to put it in. Names must
-not collide with the built-in types — redefining what `{int}` means per
+not collide with the built-in types: redefining what `{int}` means per
 project would quietly change the meaning of every pattern that uses it.
 The transformer is coercion; the args schema remains the contract.
 
 An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
 version?: () => string | Promise<string> }`. Its `baseURL` overrides the
 top-level one; its `envFiles` append after the top-level list (later files
-win — the common-plus-override layering dotenv users already know);
+win, the common-plus-override layering dotenv users already know);
 `policy` and `version` exist only per environment. No `--env` means the
 name `default`, which needs no entry; an explicitly named environment must
-exist — naming one asserts it does. The `version` probe is a function
+exist: naming one asserts it does. The `version` probe is a function
 because config is executable TypeScript already (a URL+jsonPath DSL would
 be a worse way to write `fetch`); the tool calls it once per run with a
 10-second budget, and a throw or timeout costs only `target_version`,
@@ -1571,9 +1571,9 @@ never the run.
 Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 `init`); none of it is meant to be committed:
 
-- `receipts/<id>/` — one directory per receipt: the receipt JSON and its
+- `receipts/<id>/`: one directory per receipt: the receipt JSON and its
   evidence files (trace.zip, screenshots, http.jsonl)
-- `scenarios/<id>/` — one directory per scenario run: `record.json`, the
+- `scenarios/<id>/`: one directory per scenario run: `record.json`, the
   scenario's own final screenshot, and one trace chunk per Before/After/
   AfterStep hook invocation that touched the browser (named uniquely per
   invocation, e.g. `hook-before-0.zip`, `hook-after_step-1-2.zip`, since
@@ -1582,14 +1582,14 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
   per-test `test-results/` convention one level up. No whole-scenario
   trace.zip here: each step's own trace lives under that step's own
   `receipts/<id>/` instead (see "Running")
-- `sessions/<env>/<name>.json` — storageState; live credentials in
+- `sessions/<env>/<name>.json`: storageState; live credentials in
   plaintext, created with restricted permissions
-- `allure-results/` — the emitter's output, appended to across runs and
+- `allure-results/`: the emitter's output, appended to across runs and
   safe to delete whenever a fresh Allure launch is wanted; `init` also
   creates it empty, since Allure's own CLI refuses to start against a
   missing directory but accepts an empty one, letting `allure watch` already
   be running before the first `nuka run`
-- `messages.ndjson` — the messages emitter's output, one stream per run;
+- `messages.ndjson`: the messages emitter's output, one stream per run;
   truncated at the start of every `nuka run` (see "Messages emitter")
 
 The durable artifacts live in the repository instead: feature files, typed
@@ -1598,7 +1598,7 @@ steps, and sign-off records.
 ## Sign-off
 
 A sign-off records that an agreed scenario ran green at a named commit. It
-exists for acceptance — confirming once that a ticket's criteria are met —
+exists for acceptance (confirming once that a ticket's criteria are met),
 not for regression. The scenario is written from the ticket's acceptance
 criteria, run until it is green, and then kept as a record; re-running it
 later is not the point, and nothing in nukadoko re-runs it.
@@ -1609,7 +1609,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 ```
 
 - `accept` does not execute. Signing off is an explicit act, not a side
-  effect of a green run — "keep accepting until it passes" is not a
+  effect of a green run: "keep accepting until it passes" is not a
   meaningful loop. It takes the newest green run of that feature and
   freezes it. Runs are identified by feature path, never by id: run ids
   exist for machines reading `nuka run`'s output, not for humans to type.
@@ -1674,7 +1674,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   "condition unknown", never guesses at one, and never lets a note compare
   it against anything (see "Tending").
 - It carries the feature's full text, the scenario record, and each step's
-  receipt with evidence stripped — traces and screenshots stay in
+  receipt with evidence stripped: traces and screenshots stay in
   `.nukadoko/`, and a CI artifact is where they belong when they are
   wanted at all. The copy is made by the tool, never transcribed by a
   human: transcription would demote a measurement back to a claim.
@@ -1682,7 +1682,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   every step across every scenario in the record whose receipt declared
   `mutates: false` but was measured making at least one write
   (`observed.http_writes > 0`, see Keyword semantics), stated as a raw
-  fact — declared value beside the observed count — never a verdict. It
+  fact (declared value beside the observed count), never a verdict. It
   never refuses: none of the refusal conditions above read it, and a step
   that reads over POST is expected to land here every time it is accepted,
   by design (the same HTTP-method proxy that made run-time `mutates`
@@ -1702,7 +1702,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 - There is no plan subsystem and no reasoning field. The question "what
   would prove this?" is answered by the feature file and the typed steps it
   binds to, and the judgment that the scenario really expresses the
-  criteria is made where the translation happens — in PR review of that
+  criteria is made where the translation happens: in PR review of that
   feature, the git-native way. A sign-off is the record that the agreed
   check actually ran.
 
@@ -1717,15 +1717,15 @@ today.
 
 What an agent does when a ticket's acceptance criteria are handed to it:
 
-1. Read the vocabulary — `nuka steps --json`, then `nuka describe <step>`
+1. Read the vocabulary: `nuka steps --json`, then `nuka describe <step>`
    for the contract of anything that looks relevant.
 2. When an operation is missing, `nuka scaffold <name>`, implement it, and
    exercise it alone with `nuka do` until its receipt looks right.
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
-4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
-   Then bound to a mutating step — before anything runs. Pass the path
+4. `nuka check <feature>` (undefined steps, pattern/schema mismatches, a
+   Then bound to a mutating step) before anything runs. Pass the path
    unless the directory the acceptance feature lives in is listed in
    `additionalFeatureDirs`: a bare `nuka check` walks `featuresDir` and that
    list, so a feature deliberately kept outside `featuresDir` and named
@@ -1744,13 +1744,13 @@ mechanical, and the tool refuses rather than let them go wrong quietly.
 ## Allure emitter
 
 `nuka run` writes one Allure test result per scenario to the `allure-results/`
-directory (Allure 2 file format, readable by both Allure 2 and 3) —
+directory (Allure 2 file format, readable by both Allure 2 and 3):
 nukadoko's only presentation layer; nukadoko itself renders nothing.
 
 - The output location defaults to `.nukadoko/allure-results/` (the state
   directory's own `allure-results/`, above); `allure.resultsDir` in
   `nukadoko.config.ts` moves it to any other root-relative path. There is no
-  `enabled` flag and no CLI flag — the emitter always runs, so zero
+  `enabled` flag and no CLI flag: the emitter always runs, so zero
   configuration already produces a full report. It is skipped only when a
   `nuka run` invocation selects zero pickles (no `allure-results/` is
   created at all in that case), the same reason BeforeAll/AfterAll are
@@ -1771,7 +1771,7 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   (Allure container).
 - Attachments: the scenario's own screenshot, and per step, its own trace,
   HTTP log, and validated result. Separately, whatever a step declared
-  about itself — an attachment, a link, a log line — is emitted too, always
+  about itself (an attachment, a link, a log line) is emitted too, always
   under a name prefixed `declared:`; that prefix is the one place where
   provenance (measured by nukadoko vs. self-reported by the step) survives
   once everything is sitting in the same result file.
@@ -1841,7 +1841,7 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
 - A step's parameters carry its declaration and what was actually observed
   side by side: `mutates (declared)` next to the measured `http reads
   (observed)` / `http writes (observed)` (and, for a compat step, `world
-  reads (observed)` / `world writes (observed)`) — not because the two are
+  reads (observed)` / `world writes (observed)`), not because the two are
   checked against each other automatically, but so a reviewer can: the
   declaration is what nukadoko trusts and acts on, the observed counts are
   what actually happened, and this row is where the two sit close enough to
@@ -1857,11 +1857,11 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   need different things from a user.
 - **Allure 2** has no per-result category field, so the emitter also writes
   `categories.json` (one rule per `error.kind`, all seven, every run,
-  matching the message prefix by regex) — the message prefix and the
+  matching the message prefix by regex): the message prefix and the
   category rule are two views of the same classification, and no user
   configuration is needed.
 - **Allure 3**'s `allure generate`/`allure report` never read a results
-  directory's `categories.json` — categories there come only from Allure 3's
+  directory's `categories.json`: categories there come only from Allure 3's
   own config, matched against a result's labels, and `nukadoko.failure` is
   exactly such a label. `examples/allure/allurerc.mjs` ships seven
   label-matcher rules, one per `error.kind`; dropped at a project's root it
@@ -1873,7 +1873,7 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   the official cucumberjs Allure adapter computes it, so a team migrating
   onto nukadoko keeps its existing Allure history and retry tracking intact.
 - Ad-hoc `do` receipts are working records, not test results, and do not
-  appear on the dashboard — what an exploration proves is expressed by
+  appear on the dashboard: what an exploration proves is expressed by
   repairing or writing a scenario, and that scenario run is what Allure
   shows.
 - Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
@@ -1886,7 +1886,7 @@ tag like `@issue:123` to a URL).
 
 The point is not format politics: a classic cucumber run fills an Allure
 report only where glue authors hand-attached evidence, while nukadoko's
-harness measures everything anyway — and Allure's own model (attachments,
+harness measures everything anyway, and Allure's own model (attachments,
 labels, parameters) already had a first-class place for all of it. The
 Allure emitter is where nukadoko's measurement surplus becomes visible,
 automatically, today; the messages emitter below is the second, narrower
@@ -1894,25 +1894,25 @@ output, and its job is compat fidelity rather than measurement surplus.
 
 ## Messages emitter
 
-`nuka run` writes one cucumber messages stream — NDJSON, one envelope per
-line, via `@cucumber/messages` — per invocation, defaulting to
+`nuka run` writes one cucumber messages stream (NDJSON, one envelope per
+line, via `@cucumber/messages`) per invocation, defaulting to
 `.nukadoko/messages.ndjson`; `messages.output` in `nukadoko.config.ts`
 moves it to any other root-relative path. There is no `enabled` flag and
-no CLI flag, the same as Allure — the emitter always runs, and it is
+no CLI flag, the same as Allure: the emitter always runs, and it is
 skipped only when a `nuka run` invocation selects zero pickles.
 
 - One run is one stream is one file: `begin` truncates the output rather
   than appending, because appending would leave two `testRunStarted`
-  envelopes in one file — no longer a single well-formed stream to read
+  envelopes in one file: no longer a single well-formed stream to read
   back. `nuka run` runs one feature per invocation, so running a second
-  feature afterward overwrites the first stream — the intended consequence
+  feature afterward overwrites the first stream: the intended consequence
   of "one file, truncated," not an oversight.
 - This emitter's role is the Allure emitter's inverse. Allure is where
   nukadoko's measurement surplus becomes visible; this one is compat
-  fidelity, full stop — its only job is that a migrated suite's existing
+  fidelity, full stop: its only job is that a migrated suite's existing
   formatters and JUnit-based CI keep reading a nukadoko-produced run the
   way they read a classic cucumber-js one.
-- Receipt internals stay out of the stream entirely — no validated result,
+- Receipt internals stay out of the stream entirely: no validated result,
   no `mutates`, no `observed` counts, no `error.kind`. `TestStepResult` and
   `TestStepFinished` are closed schemas (`additionalProperties: false`)
   with no field for any of them, and there is no smuggling them in through
@@ -1921,7 +1921,7 @@ skipped only when a `nuka run` invocation selects zero pickles.
   attachments and log lines, the latter riding cucumber-js's own
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).
   Trace, screenshots, the HTTP log, and the validated result stay
-  Allure-only — that measurement surplus already has a home, and
+  Allure-only: that measurement surplus already has a home, and
   base64-embedding a trace here would bloat the stream for no consumer
   that wants it.
 - `testRunFinished.success` always matches the run's own exit code.
@@ -1933,13 +1933,13 @@ skipped only when a `nuka run` invocation selects zero pickles.
   construction: piping our own `messages.ndjson` through
   `@cucumber/junit-xml-formatter@0.14.0` (which drives `@cucumber/query`
   over the envelope stream) throws nothing, and every id it needs to
-  resolve — pickle to testCase to testStepFinished, `pickleStepId` back to
-  the gherkin step — does resolve. A failed scenario's `<failure>` carries
+  resolve (pickle to testCase to testStepFinished, `pickleStepId` back to
+  the gherkin step) does resolve. A failed scenario's `<failure>` carries
   the step's own error message, `<system-out>` carries a per-step
   passed/failed/skipped trace, and `<testsuite tests="...">` matches the
   real scenario count; `<failure>` itself gets no `type` or `message`
   attribute, because `TestStepResult.exception` is never set (below).
-  Only the junit-xml path has been run this way — an official HTML report
+  Only the junit-xml path has been run this way: an official HTML report
   or a third-party formatter has not been exercised against this stream,
   so what's confirmed is that this is a well-formed cucumber messages
   stream a real consumer reads without error, not that every existing
@@ -1954,7 +1954,7 @@ no `stepDefinition` envelope is emitted, because the record keeps no
 location for a step's own definition and emitting one anyway would be a
 fabricated fact; and `TestStepResult.exception` is never set, since the
 protocol requires `Exception.type` and a receipt only ever carries a
-message — the reason a failed step's JUnit `<failure>` is body-only.
+message: the reason a failed step's JUnit `<failure>` is body-only.
 
 ## Self-healing, audited
 
@@ -1963,17 +1963,17 @@ matches reality), the repair loop is:
 
 1. An agent re-runs the goal adaptively via `nuka do`, one step at a time,
    reading each receipt to decide the next call.
-2. The receipts record what actually worked — a sequence that deviates from
+2. The receipts record what actually worked: a sequence that deviates from
    the scripted scenario. They are the narrative, not the proof: the agent
    may cite them in the PR as the story of the repair.
 3. The PR updates the typed steps and/or the feature file, and its proof is
-   the repaired scenario running green — a scenario record and its
+   the repaired scenario running green: a scenario record and its
    receipts, reviewed like any other change. Attestation always flows
    through the scenario, never through an ad-hoc sequence.
 
 nukadoko's contribution is that every stage leaves a record; the authoring is an
 agent workflow (bundled skill), not engine magic. Self-healing without an
-audit trail is how test suites silently stop testing anything — the deviation
+audit trail is how test suites silently stop testing anything: the deviation
 record is the point.
 
 ## Tending
@@ -1982,7 +1982,7 @@ record is the point.
 project can pass it every time and still be rotting. A sign-off can stop
 describing the code it froze. A declaration can go years without anything
 exercising it. A contract can be unreadable to the agent that has to pick
-it. None of that stops a run, and all of it costs more the longer it sits —
+it. None of that stops a run, and all of it costs more the longer it sits,
 which is the failure mode this tool is named after. A nukadoko tended
 daily matures; neglected, it dies.
 
@@ -1992,7 +1992,7 @@ it has produced, still healthy.
 The reason it is a separate command rather than more warnings on `check`
 is that the two are read at different moments and mean different things.
 `check` runs before every run, in CI, inside an agent's loop, and every
-line it prints is something standing between the project and a green run —
+line it prints is something standing between the project and a green run,
 which is why a finding there has to be worth stopping for. Tending
 findings are not: nothing here has to be fixed today, and if they appeared
 on every `check`, they would teach everyone to skim past the line that
@@ -2001,19 +2001,19 @@ claim is that its checks are worth reading.
 
 Before any finding, `tend` prints three summary lines that state where the
 bed currently is. None of the three is a finding, and none touches the exit
-code — a suite in the middle of a migration is in a normal state, not a
+code (a suite in the middle of a migration is in a normal state, not a
 faulty one, and warning about it every time would drown the findings that
-do need acting on:
+do need acting on):
 
-- `scanned:` names every directory this run actually looked at —
+- `scanned:` names every directory this run actually looked at:
   `featuresDir` plus each `additionalFeatureDirs` entry (see "Sessions,
   environments, secrets"). Printed first, because a count means nothing
   until a reader knows what it was counted over.
 - `bed:` gives how much of the vocabulary is typed rather than still
   compat, plus how many of the typed steps declare `mutates: false`
   (read-only).
-- `declared:` gives how much of what a typed step could declare —
-  `rationale`, a `.describe()` on each schema field — is actually
+- `declared:` gives how much of what a typed step could declare
+  (`rationale`, a `.describe()` on each schema field) is actually
   declared.
 
 It exists because the information was already there and unread. A receipt's
@@ -2044,8 +2044,8 @@ What it looks at, and why each one is rot rather than style:
   so it is left out of this finding entirely rather than guessed at.
 - **A `from` declaration nothing exercises.** Every occurrence of the step
   across every feature captures that key from the line, so the declared
-  producer never supplies anything. Reported as the fact it is — the
-  declaration may still be reached through `nuka do --use` — not as a
+  producer never supplies anything. Reported as the fact it is (the
+  declaration may still be reached through `nuka do --use`), not as a
   verdict that it should be deleted.
 - **A step with a pattern that no feature binds.** A step meant only for
   the CLI should have no pattern at all; one that has a pattern is
@@ -2068,17 +2068,17 @@ What it looks at, and why each one is rot rather than style:
   compat left, which is a normal state to be in, and printing it before
   every run trains people past the lines that do stop a run.
 - **A `secrets.public` or `secrets.redact` entry naming a key no envFile
-  defines.** A real instruction reaching nothing — configuration that has
+  defines.** A real instruction reaching nothing: configuration that has
   drifted from the files it describes. Also moved from `check` for the same
   reason: nothing about it changes whether this run should happen. Its
-  neighbors stay on `check` and are worth the contrast — a `redact` entry
+  neighbors stay on `check` and are worth the contrast: a `redact` entry
   whose value is too short to be redacted, and a tracked env file with a
   secret-looking key, both mean plaintext reaches a log the moment the run
   starts, which is exactly something to know beforehand.
 - **A configured `additionalFeatureDirs` entry that does not exist on
   disk.** It was named specifically to widen what `nuka check`/`nuka tend`
   scan, so an absent directory is a config mistake to report, the same way
-  a missing `featuresDir` is — except `tend` has no error bucket for a
+  a missing `featuresDir` is, except `tend` has no error bucket for a
   config mistake the way `check` does, so this is a note here even though
   `nuka check` reports the identical fact as an error.
 - **An accepted feature outside every directory `nuka check`/`nuka tend`
@@ -2088,7 +2088,7 @@ What it looks at, and why each one is rot rather than style:
   records are read for this finding's visibility only, never to decide
   what gets scanned: growing the scanned set from them would only ever
   notice a feature that has already been accepted at least once, silently
-  missing the one still being drafted — exactly the feature a false
+  missing the one still being drafted: exactly the feature a false
   `pattern-unbound` would most mislead someone about. Naming the
   directory in `additionalFeatureDirs` is what actually fixes it.
 
@@ -2097,7 +2097,7 @@ non-zero so a periodic job can act on it; the rest do not, because a
 project is allowed to carry them.
 
 `tend` reports and does not repair. Fixing means writing a description,
-deleting a step, or re-accepting a feature — decisions with an author
+deleting a step, or re-accepting a feature: decisions with an author
 behind them, which is the same reason `accept` refuses rather than
 fixes up a dirty tree.
 
@@ -2181,8 +2181,8 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
 - A sign-off is not a proof that the software is correct. It records that an
   agreed scenario was green at one named commit, and says nothing about today.
   It does not even claim that same commit would be green now. A defect that
-  depends on when the run happened — a date computed in one timezone and
-  read in another, a boundary the clock crosses — is missing from
+  depends on when the run happened (a date computed in one timezone and
+  read in another, a boundary the clock crosses) is missing from
   the record exactly as it was missing from the run, and nukadoko does not
   re-run a frozen scenario to find out. The honesty is that a record only
   ever speaks about one execution; the limit is that a whole class of defect
@@ -2190,8 +2190,8 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
 - **Promoting a step to `defineStep` is one-way.** The migration door's
   promise covers compat assets: switching the import back leaves a plain
   cucumber-js suite. `defineStep` has no import to switch back to. A
-  promoted step's body still moves — it is written against Playwright's own
-  objects, by the same choice stated below — but its schemas, its receipt's
+  promoted step's body still moves (it is written against Playwright's own
+  objects, by the same choice stated below), but its schemas, its receipt's
   `result`, `from` and the binding-order check reading it, and every
   contract check built on those do not, and nothing here converts one back.
   Stated as a limit rather than a gap to close: the conversion is per-step
@@ -2202,7 +2202,7 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   door hands migrating glue the same objects it already used. Wrapping them
   behind an interface of nukadoko's own would cost every capability the
   wrapper didn't think to expose, and would replace a vocabulary users
-  already know with one only this tool speaks — the opposite of writing
+  already know with one only this tool speaks: the opposite of writing
   through the official SDK. The exchange is that swapping in another driver
   later breaks the public API and the compat door together. That is
   accepted, not overlooked: rewriting step bodies from one driver's API to
@@ -2211,46 +2211,46 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   probability of that swap is measured to have risen, not before.
 - No test parallelism, sharding, or CI reporting, and no retry that
   discards a prior attempt's record. No outbound
-  network I/O by nukadoko itself. No HTML rendering — that is Allure's job.
+  network I/O by nukadoko itself. No HTML rendering: that is Allure's job.
 
 ## Roadmap
 
-- **M1 — engine core**: `defineStep`, `do`, `run` over pickles, receipts,
+- **M1 (engine core)**: `defineStep`, `do`, `run` over pickles, receipts,
   sessions/environments, `check`, `init`. Secrets onboarding redesigned.
-- **M2 — compat API**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
+- **M2 (compat API)**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
-- **M3 — reporting interop**: a cucumber messages (NDJSON) emitter for
-  scenario runs — the compatibility surface that keeps a migrating team's
-  existing formatters, JUnit-based CI, and HTML reports working — plus the
+- **M3 (reporting interop)**: a cucumber messages (NDJSON) emitter for
+  scenario runs (the compatibility surface that keeps a migrating team's
+  existing formatters, JUnit-based CI, and HTML reports working), plus the
   allure-results emitter as the flagship dashboard.
-- **M4 — sign-off**: `nuka accept`, the commit and cleanliness checks it
+- **M4 (sign-off)**: `nuka accept`, the commit and cleanliness checks it
   refuses on, and the frozen record written beside the feature.
-- **M5 — skills**: the skills nukadoko ships, and `nuka skill path`. The
+- **M5 (skills)**: the skills nukadoko ships, and `nuka skill path`. The
   CLI is deliberately a set of small verbs; a skill is what turns them into
   a workflow an agent can follow without being told, and none of it changes
   the engine. Skills follow the Agent Skills specification, so `gh skill
   install` and a Claude Code plugin marketplace both distribute them across
   hosts; nukadoko does not copy files into any host's directory itself.
-  `nuka skill path` exists for the one thing neither of those can offer —
+  `nuka skill path` exists for the one thing neither of those can offer:
   the skill that shipped with the installed nukadoko, at the version that
   installed it, since a skill describes a CLI and drifts into fiction when
   the two diverge. Two ship. The **acceptance skill** drives the acceptance
-  loop end to end — criteria in, vocabulary read with `steps` and
+  loop end to end: criteria in, vocabulary read with `steps` and
   `describe`, missing operations scaffolded and implemented, the scenario
   written, then `run` until green and `accept`. The **migration skill**
   carries what the compat audit measured: the gaps a real cucumber-js suite
   actually hits, in the order they bite rather than the order they are
   documented. Its first stage leans on `nuka check` reporting those gaps,
   which `nuka check` now does (see "Compat steps").
-  Neither writes down a fact the CLI already answers — vocabulary,
-  contracts, refusal reasons — because a skill that copies those starts
+  Neither writes down a fact the CLI already answers (vocabulary,
+  contracts, refusal reasons), because a skill that copies those starts
   lying the moment the command changes.
-- **M6 — chained arguments**: `from`, the scenario-order check `nuka check`
+- **M6 (chained arguments)**: `from`, the scenario-order check `nuka check`
   and `nuka run` share, `--use` on `do`, and a `used` entry that names the
   step beside the receipt it cites. Where a step's inputs come from stops
   being prose inside a `run` body and becomes a declaration the tool reads
   (see "Chaining steps").
-- **M7 — tending**: `nuka tend`, the findings that are about rot rather
+- **M7 (tending)**: `nuka tend`, the findings that are about rot rather
   than breakage (see "Tending"). Kept off `nuka check` on purpose: `check`
   is read before every run and has to stay worth stopping for.
 - **M8 (fixtures)**: user-defined resources declared under
@@ -2272,14 +2272,14 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   `allure-js-commons`, `playwright`, `zod`, `tsx` (runtime TS import),
   `yargs` (CLI). Node >= 20.
 - When a format or protocol has an official SDK, nukadoko writes through it
-  rather than reimplementing the format — allure-results through
+  rather than reimplementing the format (allure-results through
   allure-js-commons' reporter machinery, cucumber messages through
-  `@cucumber/messages` — and stays a thin mapping layer on top. Overriding
+  `@cucumber/messages`) and stays a thin mapping layer on top. Overriding
   a piece of the official machinery is a measured decision taken when a
   concrete need appears, never the default.
 - id format: `<kind>-<timestamp>-<short random>`.
-- `nuka steps` and `nuka describe` import step modules — collecting compat
-  registrations and patterns requires it — and importing executes a file's
+- `nuka steps` and `nuka describe` import step modules (collecting compat
+  registrations and patterns requires it), and importing executes a file's
   top-level code, the same caution as running. Shell completion never
   imports: typed step names complete from file names, ids and session names
   from the state directory, so TAB stays fast regardless of vocabulary size.
