@@ -2,6 +2,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   chromium,
+  firefox,
+  webkit,
   type Browser,
   type BrowserContext,
   type BrowserContextOptions,
@@ -17,8 +19,9 @@ import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
-// calls `ctx.page()` — launch chromium, trace the whole browser context,
-// and capture a screenshot at the end — kept separate from
+// calls `ctx.page()` — launch the configured browser engine (chromium by
+// default), trace the whole browser context, and capture a screenshot at
+// the end — kept separate from
 // context/create-context.ts so that module isn't also responsible for
 // Playwright's specific launch/newContext/tracing/newPage lifecycle and its
 // mirrored teardown. `finalize` is never reachable from a step's `run`: only
@@ -86,15 +89,45 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // `title` lands on the trace's `context-options` entry (also measured), so
 // each chunk names the step it came from without create-context.ts writing
 // that anywhere else.
+//
+// `BROWSER_ENGINES` and `LaunchBrowserOptions.browserType` (p6-browser-type
+// task spec) are what let a project pick firefox or webkit instead of
+// chromium: `chromium`/`firefox`/`webkit` are three separate namespaces
+// Playwright exports, each with its own `launch`, so "which engine" is
+// answered by which namespace's `launch` gets called here, not by an option
+// passed to it (`LaunchOptions` itself has no such key; see config/
+// schema.ts's own `browserType` doc comment). `browserInfo`, read off the
+// real `Browser` object right after `launch` resolves
+// (`Browser#browserType().name()` / `Browser#version()`), is the measured
+// counterpart create-context.ts's `dispose()` hands to `ScenarioRecord.
+// browser` — never `options.browserType` itself, since a step can override
+// the `page` fixture with a browser this handle never launched, and only
+// what actually ran is trustworthy enough to record (docs/spec.md
+// "Declaration and measurement answer different questions"). An engine
+// whose binary was never installed (`npx playwright install firefox`/
+// `webkit`) fails right here, at `launch` — Playwright's own error, neither
+// caught nor reworded, since it already names the missing engine as part of
+// the executable path it looked for.
+const BROWSER_ENGINES = { chromium, firefox, webkit } as const;
+
+export type BrowserEngineName = keyof typeof BROWSER_ENGINES;
 
 export interface LaunchBrowserOptions {
+  /** `config.browserType` (config/schema.ts), naming which of `chromium`/
+   * `firefox`/`webkit` to launch (p6-browser-type task spec). `undefined`
+   * behaves exactly like `"chromium"` — the pre-this-task default — so a
+   * caller that never wires this in (existing tests, `nuka do`'s own
+   * defaults) keeps launching what it always has. */
+  browserType?: BrowserEngineName;
   /** `config.browser` (config/schema.ts) as a config author wrote it,
-   * passed straight through to `chromium.launch` (t6-config-browser task
-   * spec, decision 4) — this module no longer picks `headless` out of it
-   * itself. `undefined` when a project sets no `browser` at all; passing
-   * `undefined` to `chromium.launch` is the same as omitting the argument,
-   * so Playwright's own default (`headless: true`) applies exactly as it
-   * would without nukadoko in between. */
+   * passed straight through to the selected engine's own `launch`
+   * (t6-config-browser task spec, decision 4; p6-browser-type task spec
+   * widens this from always-chromium to whichever `browserType` above
+   * names) — this module no longer picks `headless` out of it itself.
+   * `undefined` when a project sets no `browser` at all; passing `undefined`
+   * to `launch` is the same as omitting the argument, so Playwright's own
+   * default (`headless: true`) applies exactly as it would without nukadoko
+   * in between. */
   browser?: LaunchOptions;
   /** `config.browserContext` (config/schema.ts), passed straight through to
    * `browser.newContext` (context-options task spec). `storageState` and
@@ -142,6 +175,13 @@ export interface LaunchBrowserOptions {
 
 export interface BrowserEvidenceHandle {
   readonly page: Page;
+  /** The engine and version this handle actually launched (p6-browser-type
+   * task spec) — read once, from the real `Browser` object, right after
+   * `launch` resolved (this file's own header). create-context.ts's
+   * `dispose()` hands this straight to `ScenarioRecord.browser` when this
+   * handle exists at all; it is never derived from `options.browserType`,
+   * which only says what was *asked* for. */
+  readonly browserInfo: { readonly type: string; readonly version: string };
   /** Snapshot of the browser context's current storageState, for the
    * executor to persist as the session's new state. Must be called *before*
    * `finalize()` (which closes the context) — collected on a still-open
@@ -196,7 +236,14 @@ export interface BrowserEvidenceHandle {
 export async function launchBrowserWithTracing(
   options: LaunchBrowserOptions,
 ): Promise<BrowserEvidenceHandle> {
-  const browser: Browser = await chromium.launch(options.browser);
+  // `browserType ?? "chromium"` (this file's own header) is the whole
+  // selection: every other caller keeps launching chromium exactly as
+  // before, since `undefined` and `"chromium"` land on the same namespace.
+  const engine = BROWSER_ENGINES[options.browserType ?? "chromium"];
+  const browser: Browser = await engine.launch(options.browser);
+  // Measured, not declared (this file's own header) — read once, right
+  // after `launch` resolved, from the `Browser` object itself.
+  const browserInfo = { type: browser.browserType().name(), version: browser.version() };
   const context: BrowserContext = await browser.newContext({
     ...(options.browserContext ?? {}),
     ...(options.storageState ? { storageState: options.storageState } : {}),
@@ -306,6 +353,7 @@ export async function launchBrowserWithTracing(
 
   return {
     page,
+    browserInfo,
     collectStorageState,
     beginStepChunk,
     endStepChunk,

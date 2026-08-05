@@ -250,6 +250,14 @@ export interface DisposeResult {
    * session": the executor's own contract (this task's spec, item 2) is to
    * leave an existing session file untouched when this is `undefined`. */
   storageState: StorageState | undefined;
+  /** The engine and version this execution actually launched (p6-browser-
+   * type task spec), lifted straight from `browserHandle.browserInfo`
+   * (browser-evidence.ts) — measured, never `config.browserType` itself.
+   * `undefined` whenever `ctx.page()` was never called this ctx's lifetime,
+   * the same "no browser, no field" convention `evidence.trace` already
+   * follows: run-scenario.ts only sets `ScenarioRecord.browser` when this is
+   * present. */
+  browser?: { readonly type: string; readonly version: string };
 }
 
 export interface StepContextHandle {
@@ -539,6 +547,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     async page(): Promise<Page> {
       if (!browserHandle) {
         browserHandle = await launchBrowserWithTracing({
+          // `config.browserType` (p6-browser-type task spec) — which of
+          // chromium/firefox/webkit to launch; `undefined` behaves like
+          // `"chromium"` (browser-evidence.ts's own default).
+          browserType: config.browserType,
           browser: config.browser,
           // `config.browserContext` (context-options task spec) — schema.ts
           // already rejects a `browserContext` that sets `baseURL`/
@@ -733,7 +745,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // the existing file" (this task's spec, decision 2).
     const storageStateToPersist = browserHandle ? browserStorageState : requestStorageState;
 
-    return { evidence, storageState: storageStateToPersist };
+    return {
+      evidence,
+      storageState: storageStateToPersist,
+      // Measured, not declared (DisposeResult's own doc comment) — absent
+      // whenever no browser was ever launched this ctx's lifetime, same
+      // "no browser, no field" rule `evidence.trace` already follows.
+      ...(browserHandle ? { browser: browserHandle.browserInfo } : {}),
+    };
   }
 
   function observedCounts(): ObservedCounts {

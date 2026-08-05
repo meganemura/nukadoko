@@ -128,6 +128,22 @@ just until 0.1.
   graph: a step that only destructures a fixture which itself reaches
   `page` reads `needs_browser: true` too.
 
+- **`ctx.page()` can launch firefox or webkit now, not only chromium.**
+  `nukadoko.config.ts` gains `browserType` (`"chromium"` by default,
+  `"firefox"`, or `"webkit"`), a separate key from `browser` rather than a
+  field inside it: `LaunchOptions` (`browser`'s own type) has no key that
+  selects an engine at all, so mixing one in would accept something that
+  type has no room for. A project that never sets `browserType` launches
+  exactly what it always has. Firefox and webkit each still need their own
+  binary installed (`npx playwright install firefox`/`webkit`); a missing
+  one surfaces as Playwright's own error at launch time, unmodified. Every
+  scenario record now also carries `browser: { type, version }`, read from
+  the real `Browser` object a run actually launched, never from
+  `config.browserType` itself, since a step can override the `page` fixture
+  with a different browser than config declared. Absent for a scenario
+  whose run never launched a browser at all, the same convention
+  `evidence.trace` already follows.
+
 ### Changed
 
 - **`evidence.trace` is a step's own trace now, not the whole scenario's.**

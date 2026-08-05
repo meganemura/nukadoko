@@ -28,6 +28,7 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     fixtures: {},
     fixtureTimeout: 60_000,
     secrets: { public: [], redact: [] },
+    browserType: "chromium",
     ...overrides,
   };
 }

@@ -82,6 +82,14 @@
 // either from (only a World, `this`) — `actions`, read out of the trace
 // chunk itself rather than from anything the hook explicitly called, is
 // unaffected by that gap.
+//
+// `ScenarioRecord.browser` is added now (p6-browser-type task spec) — the
+// measured counterpart to the new `config.browserType` (src/config/
+// schema.ts), which lets a project launch firefox or webkit instead of
+// chromium. It carries what the run actually launched (`Browser#
+// browserType().name()`/`Browser#version()`), never the config value
+// itself, and is absent for a scenario whose run never launched a browser
+// at all — see the field's own doc comment for why.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ActionEntry } from "../context/trace-actions.js";
@@ -176,6 +184,18 @@ export interface ScenarioRecord {
   readonly status: "passed" | "failed";
   readonly environment: string;
   readonly target_version?: string;
+  /** The browser engine and version this scenario's run actually launched
+   * (p6-browser-type task spec) — read from the real `Browser` object
+   * (`Browser#browserType().name()` / `Browser#version()`), never from
+   * `config.browserType` itself: a step can override the `page` fixture
+   * with a browser this scenario's own `ctx` never launched, so only what
+   * actually ran is trustworthy enough to record (docs/spec.md
+   * "Declaration and measurement answer different questions"). Present only
+   * when a browser was actually launched this scenario's run — a pickle
+   * whose steps never destructure `page`/`context` opens none, and this key
+   * is absent rather than naming a browser that never ran (the same
+   * "no browser, no field" convention `evidence.trace` already follows). */
+  readonly browser?: { readonly type: string; readonly version: string };
   readonly session: string | null;
   readonly started_at: string;
   readonly finished_at: string;

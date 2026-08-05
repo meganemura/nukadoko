@@ -1924,7 +1924,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // scenario record down with them.
     disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
   }
-  const { evidence: browserEvidence, storageState: storageStateToPersist } = disposeResult;
+  const {
+    evidence: browserEvidence,
+    storageState: storageStateToPersist,
+    browser: browserInfo,
+  } = disposeResult;
 
   if (sessionFilePath !== null && storageStateToPersist !== undefined) {
     try {
@@ -1944,6 +1948,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     status: scenarioFailed ? "failed" : "passed",
     environment,
     ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
+    // Measured, not declared (record-types.ts's own doc comment for
+    // `browser`) — absent whenever this scenario's own run never launched a
+    // browser at all.
+    ...(browserInfo !== undefined ? { browser: browserInfo } : {}),
     session,
     started_at: startedAt.toISOString(),
     finished_at: finishedAt.toISOString(),

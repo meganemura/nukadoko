@@ -233,6 +233,37 @@ describe("configSchema: browser", () => {
   });
 });
 
+// Responsibility: p6-browser-type task spec's own schema-level tests — the
+// "closed set of values" half of scope item 4 ("`config.browserType` が閉じた
+// 集合の値であることは zod のスキーマが弾く。それで十分。"). Whether firefox/
+// webkit are actually *installed* is not this schema's concern (that can
+// only be learned by launching, not by reading config) and is left to
+// Playwright's own error at launch time; see src/context/browser-evidence.ts.
+describe("configSchema: browserType", () => {
+  it('defaults to "chromium" when omitted', () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.browserType).toBe("chromium");
+    }
+  });
+
+  it('accepts "firefox" and "webkit" explicitly', () => {
+    for (const browserType of ["firefox", "webkit"] as const) {
+      const result = configSchema.safeParse({ browserType });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.browserType).toBe(browserType);
+      }
+    }
+  });
+
+  it("rejects a value outside chromium/firefox/webkit", () => {
+    const result = configSchema.safeParse({ browserType: "safari" });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("configSchema: browserContext", () => {
   it("leaves browserContext undefined when omitted", () => {
     const result = configSchema.safeParse({});

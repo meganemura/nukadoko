@@ -979,6 +979,16 @@ executes the steps in order. One receipt per step; one scenario record
 (feature path, scenario name, ordered receipt ids, per-step status) per
 pickle.
 
+A scenario record's own `browser` field (`{ "type": "firefox", "version":
+"133.0" }`) names the engine and version this particular run actually
+launched, read from the real `Browser` object Playwright returns, never
+from `config.browserType`. The two can disagree (a step can override the
+`page` fixture with a browser this run's own `ctx` never launched), and only
+the measured one is trustworthy enough to record. It is absent, not set to
+some default, for a run whose pickle never launched a browser at all: a
+pickle whose steps never destructure `page`/`context` opens none, and this
+field never names a browser that never ran.
+
 `:12` selects one scenario, which is the iteration path — a feature's full
 run costs every scenario's minutes, and getting one of them right is
 usually what the next few runs are about. It is not a smaller version of
@@ -1407,7 +1417,7 @@ The execution infrastructure Cucumber never had:
 Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `additionalFeatureDirs`, `baseURL`, `envFiles`,
-`environments`, `stateDir` (default `.nukadoko`), `browser`,
+`environments`, `stateDir` (default `.nukadoko`), `browserType`, `browser`,
 `browserContext`, `requestContext`, `secrets`, `parameterTypes`, `fixtures`,
 `fixtureTimeout` (see "Fixtures"), `allure` (only `resultsDir`, see "Allure
 emitter"), `messages` (only `output`, see "Messages emitter").
@@ -1428,17 +1438,33 @@ a config mistake, not an empty scan result to fail open on: `nuka check`
 reports it as an error (`additional-feature-dir-missing`), and `nuka tend`
 reports the same fact as a note.
 
-`browser` takes Playwright's own `LaunchOptions` type directly (chromium is
-the only browser type; `newContext`'s options like `viewport` are a
-different Playwright type and are not accepted through this key — see
-`browserContext`/`requestContext` below). zod does not re-validate its shape
-beyond "is this an object": the type comes from `defineConfig`, so `tsc`
-catches a typo the same way it catches one anywhere else in
-`nukadoko.config.ts`; re-enumerating Playwright's options in zod would need
-updating every time Playwright adds one, and a config author would be
-blocked from a real option until that catch-up landed. Only `headless` is
-read today, passed straight to `chromium.launch`; omitted, Playwright's own
-default (`headless: true`) applies.
+`browserType` picks which Playwright engine `ctx.page()` launches:
+`"chromium"` (default), `"firefox"`, or `"webkit"`. It is a separate key
+from `browser` rather than a field inside it, because `LaunchOptions`
+(`browser`'s own type, see below) has no key for an engine at all:
+Playwright selects one by which of `chromium`/`firefox`/`webkit`'s own
+`launch` gets called, never by an option passed to it. Mixing an engine
+selector into `browser` would mean accepting a key `LaunchOptions` itself
+has no room for, breaking `browser`'s own "hand Playwright's type through
+unmodified" contract. Firefox and webkit each need their own binary
+installed (`npx playwright install firefox`/`webkit`); whether one already
+is can only be learned by launching it, so `nuka check` makes no claim about
+it, and a missing binary surfaces as Playwright's own error at launch time,
+neither caught nor reworded. A scenario record's own `browser` field (see
+"Running") carries the engine and version a run actually launched, measured
+the same way.
+
+`browser` takes Playwright's own `LaunchOptions` type directly. zod does not
+re-validate its shape beyond "is this an object": the type comes from
+`defineConfig`, so `tsc` catches a typo the same way it catches one anywhere
+else in `nukadoko.config.ts`; re-enumerating Playwright's options in zod
+would need updating every time Playwright adds one, and a config author
+would be blocked from a real option until that catch-up landed. Only
+`headless` is read today, passed straight to the selected engine's own
+`launch` (`browserType` above chooses which); omitted, Playwright's own
+default (`headless: true`) applies. `newContext`'s options, like `viewport`,
+are a different Playwright type and are not accepted through this key: see
+`browserContext`/`requestContext` below.
 
 `browserContext` and `requestContext` are `newContext`'s counterpart to
 `browser`'s `launch`: `browser.newContext()` (built when a step's bag

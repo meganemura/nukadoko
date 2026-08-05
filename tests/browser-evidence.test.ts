@@ -56,6 +56,7 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     fixtures: {},
     fixtureTimeout: 60_000,
     secrets: { public: [], redact: [] },
+    browserType: "chromium",
     ...overrides,
   };
 }
@@ -202,10 +203,14 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
   );
 
   it.skipIf(!headedChromiumAvailable)(
-    "launches headed when config.browser: { headless: false }",
+    // Also sets `browserType: "chromium"` explicitly (p6-browser-type task
+    // spec, scope item 6: "config.browser（LaunchOptions）と併用できること") —
+    // config.browser still reaches launch unmodified when a project names
+    // its engine explicitly, not only when browserType is left to default.
+    "launches headed when config.browser: { headless: false }, alongside an explicit browserType",
     async () => {
       const { ctx, dispose } = createStepContext({
-        config: baseConfig({ browser: { headless: false } }),
+        config: baseConfig({ browser: { headless: false }, browserType: "chromium" }),
         evidenceDir,
         env: {},
         stepTitle: "browser step",
@@ -218,6 +223,62 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
       await dispose();
     },
   );
+});
+
+// Responsibility: p6-browser-type task spec's own runtime tests — kept to
+// exactly the two cases the spec itself pins down as chromium-only-safe
+// ("エンジン選択の配線は「chromium を明示的に選んだ場合」と「未知の値を拒む
+// 場合」で固定できる"): explicitly selecting "chromium" (the config-load
+// half of "unknown value" lives in tests/load-config.test.ts instead, since
+// it needs no browser at all). Firefox/webkit are deliberately not
+// exercised here — this environment has neither binary installed (by this
+// task's own instruction), and `npm run typecheck`/`npm test` must stay
+// green without `npx playwright install` ever running.
+describe("createStepContext / ctx.page(): browserType", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-type-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    'records the measured engine name and version on dispose() when browserType is explicitly "chromium"',
+    async () => {
+      const { ctx, dispose } = createStepContext({
+        config: baseConfig({ browserType: "chromium" }),
+        evidenceDir,
+        env: {},
+        stepTitle: "browser step",
+      });
+
+      await ctx.page();
+      const { browser } = await dispose();
+
+      // Measured, not the declared "chromium" echoed back (create-context.ts's
+      // own DisposeResult doc comment): `type` comes from the real `Browser`
+      // object's own `browserType().name()`, `version` from its own
+      // `version()`.
+      expect(browser?.type).toBe("chromium");
+      expect(typeof browser?.version).toBe("string");
+      expect(browser?.version).not.toBe("");
+    },
+  );
+
+  it("dispose() carries no browser field when ctx.page() was never called", async () => {
+    const { dispose } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: {},
+      stepTitle: "no browser step",
+    });
+
+    const { browser } = await dispose();
+    expect(browser).toBeUndefined();
+  });
 });
 
 // Responsibility: proves config.browserContext (context-options task spec)

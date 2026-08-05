@@ -701,6 +701,13 @@ nukadoko は各 pickle の step をコミットされた pattern と照合し、
 step ごとに 1 つの receipt。
 pickle ごとに 1 つの scenario record(feature のパス、scenario 名、順序付けられた receipt id、step ごとの status)。
 
+scenario record 自身の `browser` フィールド(`{ "type": "firefox", "version": "133.0" }`)には、この run が実際に起動したエンジンとバージョンが入ります。
+これは Playwright が返す実際の `Browser` オブジェクトから読んだ値であり、`config.browserType` から読んだ値ではありません。
+両者は食い違うことがあります(step が `page` fixture をこの run 自身の `ctx` が一度も起動していない別のブラウザで上書きすることがあるからです)。
+記録に足るだけの信頼性があるのは計測された側だけです。
+run の pickle が一度もブラウザを起動しなかった場合、このフィールドは何らかの既定値になるのではなく、存在しません。
+`page`/`context` を分割代入しない step だけの pickle は何も起動せず、このフィールドが一度も走っていないブラウザを名指すことはありません。
+
 `:12` は 1 つの scenario だけを選び、これが反復のための経路です。
 feature のフル実行はすべての scenario の分数を消費し、その中の 1 つを正しくすることが、たいてい次の数回の実行の目的です。
 これは同じものの縮小版ではありません: 部分実行は決して sign-off できず(「Sign-off」を参照)、green になったところでそれはデバッグの結果でしかないからです。
@@ -995,7 +1002,7 @@ Cucumber が持ったことのない実行インフラです:
   名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
   それを決めるのは git の追跡/未追跡の分類と `secrets.redact` だけです。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`additionalFeatureDirs`、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`fixtures`、`fixtureTimeout`(「Fixtures」を参照)、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`additionalFeatureDirs`、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browserType`、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`fixtures`、`fixtureTimeout`(「Fixtures」を参照)、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
 
 `additionalFeatureDirs`(デフォルトは `[]`)は、`featuresDir` とは違う問いに答えます。
 `featuresDir` は無人で *実行される* 集合です。
@@ -1009,13 +1016,26 @@ acceptance feature が `featuresDir` の外に置かれているのは、まさ�
 ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
 `nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` は同じ事実を注記として報告します。
 
-`browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります(browser の種類は chromium だけです)。
-`newContext` の `viewport` のようなオプションは別の Playwright の型であり、この `browser` キーでは受け付けません(下記の `browserContext`/`requestContext` を参照)。
+`browserType` は `ctx.page()` が起動する Playwright のエンジンを選びます: `"chromium"`(デフォルト)、`"firefox"`、`"webkit"` のいずれかです。
+これは `browser` の中のフィールドではなく、別のキーです。
+`browser` 自身の型である `LaunchOptions`(下記参照)には、エンジンを選ぶキーがそもそも無いからです。
+Playwright はエンジンを、`chromium`/`firefox`/`webkit` のどの名前空間から `launch` を呼ぶかで選びます。
+渡すオプションでは選びません。
+エンジンを選ぶキーを `browser` に混ぜてしまうと、`LaunchOptions` 自体には存在しないキーを受け付けることになり、`browser` 自身の「Playwright の型をそのまま渡す」という契約が壊れます。
+firefox と webkit はそれぞれ専用のバイナリのインストールが必要です(`npx playwright install firefox`/`webkit`)。
+すでにインストール済みかどうかは、実際に起動してみないと分かりません。
+そのため `nuka check` はそれについて何も主張しません。
+バイナリが無い場合は、Playwright 自身のエラーがそのまま起動時に現れます。
+握り潰したり言い換えたりはしません。
+scenario record 自身の `browser` フィールド(「実行」を参照)には、run が実際に起動したエンジンとバージョンが、同じように計測されて載ります。
+
+`browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります。
 zod は「これがオブジェクトかどうか」以上には形を再検証しません。
 型は `defineConfig` から来るため、`tsc` は `nukadoko.config.ts` の他の場所と同じやり方で typo を捕まえます。
 Playwright のオプションを zod で列挙し直すと、Playwright が 1 つ追加するたびに追随が必要になり、その追随が追いつくまでのあいだ、config を書く人は本当は使える Playwright のオプションを使えなくなってしまいます。
-今日読まれているのは `headless` だけで、そのまま `chromium.launch` に渡されます。
+今日読まれているのは `headless` だけで、選ばれたエンジン自身の `launch` にそのまま渡されます(どのエンジンかを選ぶのは上記の `browserType` です)。
 省略した場合は Playwright 自身の既定値(`headless: true`)が適用されます。
+`newContext` の `viewport` のようなオプションは別の Playwright の型であり、この `browser` キーでは受け付けません(下記の `browserContext`/`requestContext` を参照)。
 
 `browserContext` と `requestContext` は、`browser` の `launch` に対応する `newContext` 側のキーです。
 `browser.newContext()`(step の bag が `page` を名指すと構築されます)と `playwrightRequest.newContext()`(step の bag が `request` を名指すと構築されます)は別々の Playwright 呼び出しであり、オプションの型も別々なので、1 つの共有キーではなくそれぞれに専用のキーを用意しています。

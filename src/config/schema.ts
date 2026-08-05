@@ -220,6 +220,24 @@ export const configSchema = z
      * hanging indefinitely instead of failing with a named cause
      * (src/fixture/lifecycle.ts's own `FixtureTimeoutError`). */
     fixtureTimeout: z.number().positive().default(60_000),
+    /** Which Playwright browser engine `ctx.page()` launches (p6-browser-type
+     * task spec) — deliberately a separate key from `browser` below, never a
+     * field mixed into it: `LaunchOptions` (`browser`'s own type) has no key
+     * that selects an engine at all, because Playwright picks one by which
+     * of `chromium`/`firefox`/`webkit`'s own `launch` gets called, not by an
+     * option passed to it. Putting an engine selector inside `browser` would
+     * mean accepting a key `LaunchOptions` itself has no room for, which
+     * would break that field's own "hand Playwright's type through exactly
+     * as declared" contract (see its doc comment below). Default
+     * `"chromium"`: a project that never sets this launches exactly what it
+     * always has. Firefox and webkit each need their own binary installed
+     * (`npx playwright install firefox`/`webkit`) — this schema only checks
+     * that the *name* is one of the three Playwright ships; whether the
+     * binary is actually present can only be learned by launching it, so
+     * `nuka check` makes no claim about it (would be a guess, not a static
+     * fact) and a missing binary surfaces as Playwright's own error at
+     * launch time, unmodified. */
+    browserType: z.enum(["chromium", "firefox", "webkit"]).default("chromium"),
     /** Playwright's own `LaunchOptions` type, taken as-is (t6-config-browser
      * task spec, decision 1): coupling to Playwright is an accepted design
      * choice (docs/spec.md "Out of scope"), so there is no vocabulary of our
@@ -230,9 +248,10 @@ export const configSchema = z
      * `LaunchOptions` field-by-field in zod would need to track every
      * Playwright release, and until that tracking caught up a config author
      * would be told a real Playwright option is a typo — the opposite of
-     * what `.strict()` on this schema is for. Chromium is the only browser
-     * type (no key here selects firefox/webkit — out of scope until there
-     * is demand). This key is launch-only: `newContext`'s options
+     * what `.strict()` on this schema is for. Which *engine* `launch` runs
+     * against is `browserType` above, not this key — `LaunchOptions` itself
+     * has no field for that (see `browserType`'s own doc comment for why the
+     * two stay separate). This key is launch-only: `newContext`'s options
      * (`viewport`, `locale`, `timezoneId`, `ignoreHTTPSErrors`, ...) are a
      * different Playwright type from `LaunchOptions` and are not accepted
      * here — they go through `browserContext` and `requestContext` below
