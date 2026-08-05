@@ -125,7 +125,7 @@ glue はテキストとして読むだけで、実行はしていません。
 consumer より先に producer を昇格させます: `this` にデータを溜め込んでいた step を、`returns` スキーマを持つ `defineStep` にします。
 読み手は、`this` から読んでいたキーについて `from: { key: [producerStep, "resultKey"] }` を宣言します(参照: docs/spec.ja.md の「step の連鎖」)。
 これが、既存の `this` への書き込みのほとんどが実は表していたものをカバーします: 1 つの名前付きキーで読める 1 つの名前付きの値です。
-読み方がそれに当てはまらない場合 — 値の変形が要る、どの producer から読むかが実行時にしか決まらない、あるいは 1 つのキーではなく result 全体が欲しい場合 — は、引数を optional のままにし、`run` の中で `ctx.resultOf(producerModule)` にフォールバックします。
+読み方がそれに当てはまらない場合(値の変形が要る、どの producer から読むかが実行時にしか決まらない、あるいは 1 つのキーではなく result 全体が欲しい場合)は、引数を optional のままにし、`run` 自身の fixture の 1 つである `resultOf` に、`resultOf(producerModule)` としてフォールバックします。
 これは `this` がかつて答えていたのと同じ読みであり、違いはいまやバリデーション済みの result に対して行われる点だけです。
 昇格した step は、型付きの契約、バリデーション済みの `result`、`nuka do` による単体実行を得ます(そのどれも compat の step にはありません)。
 
@@ -147,12 +147,12 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   1 つの壊れたファイル自身の step が語彙から消えることは、それ以外の方法だと無関係な undefined step の山にしか見えません。
   まず import の失敗を直してください。
   抑え込まれていた findings は、そのファイルが問題なく import できるようになった時点で、本物の `undefined-step` エラーとして再び現れます。
-- receipt は実行時に同じ話を語ります: スイートがより多く typed step に昇格し、その読み手が `from` 経由でそれを読むようになるにつれて(キー名で表せない読みは `ctx.resultOf`)、`world`(compat の step のみ)と `declared` が縮んでいきます。
+- receipt は実行時に同じ話を語ります: スイートがより多く typed step に昇格し、その読み手が `from` 経由でそれを読むようになるにつれて(キー名で表せない読みは `resultOf`)、`world`(compat の step のみ)と `declared` が縮んでいきます。
 
 ## 戻り道
 
 import の切り替えは可逆であり、それは偶然の産物ではなく変わらない設計上の規則です。
-`@cucumber/cucumber` に戻せば — `openPage()`/`openRequest()` が置き換えた Playwright の bootstrapping も元に戻せば — compat の上にまだ乗っているものはすべて、再びただの cucumber-js スイートになります。
+`@cucumber/cucumber` に戻せば(`openPage()`/`openRequest()` が置き換えた Playwright の bootstrapping も元に戻せば)、compat の上にまだ乗っているものはすべて、再びただの cucumber-js スイートになります。
 
 `defineStep` に昇格させた step は話が別であり、ここまでの内容はそれをカバーしているとは読まないでください。
 `defineStep` は nukadoko 自身の API です: 切り替えて戻す import がありません。
@@ -162,11 +162,12 @@ import の切り替えは可逆であり、それは偶然の産物ではなく�
 昇格させた step が出口で手放すのは、そのスキーマの上に組まれたものすべてです: `args`/`returns` のバリデーション、receipt の `result`、`from` とそれを読む束縛順序のチェック、そして `nuka check` が行う契約チェックです。
 
 手元に残るのは body です。
-`run` は Playwright 自身の `Page` と `APIRequestContext` に対して書かれており — nukadoko は意図的にそれらをラップしません(docs/spec.ja.md の「Out of scope(正直な限界)」を参照)— 実際に作業を行うコードは、`ctx.page()`/`ctx.request()` を World が渡すものに置き換えるだけで、そのまま cucumber-js の step へと移ります。
+`run` は Playwright 自身の `Page` と `APIRequestContext` に対して書かれており、nukadoko は意図的にそれらをラップしません(docs/spec.ja.md の「Out of scope(正直な限界)」を参照)。
+実際に作業を行うコードは、分割代入で受け取っていた `page`/`request` を World が渡すものに置き換えるだけで、そのまま cucumber-js の step へと移ります。
 残りは機械的な作業です: pattern から named capture を落とし(`{name:string}` → `{string}`)、`returns` が返していたものをもう一度 `this` に書き、`from` が宣言していたものをもう一度 `this` から読みます。
 
 nukadoko はその変換のためのツールを同梱しておらず、これは昇格に反対する論拠としてではなく、限界として述べています。
-import の可逆性が存在するのは最初の一歩を編集 1 つ分のコストにするためであって、型付き側を選択制にするためではありません: compat はスイートが到着する場所であり、このツールをそもそも走らせる理由のすべて — バリデーション済みの `result`、`nuka check` が feature を突き合わせられる契約、`from`、「実行された」以上のことを証言する sign-off — は、昇格の向こう側にあります。
+import の可逆性が存在するのは最初の一歩を編集 1 つ分のコストにするためであって、型付き側を選択制にするためではありません: compat はスイートが到着する場所であり、このツールをそもそも走らせる理由のすべて(バリデーション済みの `result`、`nuka check` が feature を突き合わせられる契約、`from`、「実行された」以上のことを証言する sign-off)は、昇格の向こう側にあります。
 契約を持たせたい step を昇格させてください。
 時間が経てば、それが重要な step の大半になっているはずです。
 
