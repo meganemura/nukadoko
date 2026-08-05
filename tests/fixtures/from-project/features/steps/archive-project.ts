@@ -18,7 +18,7 @@ export default defineStep({
   args: z.object({ projectId: z.string() }),
   returns: z.object({ archived: z.boolean(), projectId: z.string() }),
   from: { projectId: [createProject, "id"] },
-  async run(_ctx, args) {
+  async run({}, args) {
     // args.projectId is present or this line was never reached.
     return { archived: true, projectId: args.projectId };
   },

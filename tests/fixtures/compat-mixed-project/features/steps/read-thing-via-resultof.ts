@@ -8,8 +8,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  run(ctx) {
-    const created = ctx.resultOf(createThing);
+  run({ resultOf }) {
+    const created = resultOf(createThing);
     if (created?.id !== "t1") {
       throw new Error(`expected resultOf to read id "t1", got ${JSON.stringify(created)}`);
     }

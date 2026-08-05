@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Read-only step used to observe the effective ctx.baseURL / ctx.env for a
+// Read-only step used to observe the effective baseURL / env for a
 // resolved environment (this task's spec's environment-resolution tests):
 // no real HTTP call, no browser, just reading what create-context.ts already
 // assembled.
@@ -14,11 +14,11 @@ export default defineStep({
     shared: z.string().nullable(),
   }),
   mutates: false,
-  async run(ctx) {
+  async run({ env, baseURL }) {
     return {
-      baseURL: ctx.baseURL ?? null,
-      key: ctx.env.KEY ?? null,
-      shared: ctx.env.SHARED ?? null,
+      baseURL: baseURL ?? null,
+      key: env.KEY ?? null,
+      shared: env.SHARED ?? null,
     };
   },
 });

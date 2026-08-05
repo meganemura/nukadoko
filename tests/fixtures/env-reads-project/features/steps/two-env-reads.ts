@@ -11,10 +11,10 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.requireEnv("API_TOKEN");
-    ctx.requireEnv("SECOND_KEY");
-    ctx.requireEnv("API_TOKEN");
+  async run({ requireEnv }) {
+    requireEnv("API_TOKEN");
+    requireEnv("SECOND_KEY");
+    requireEnv("API_TOKEN");
     return { ok: true };
   },
 });

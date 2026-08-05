@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// First scenario in session-flow.feature: hits /set-cookie via ctx.request()
+// First scenario in session-flow.feature: hits /set-cookie via request
 // so the request context's storageState (later saved to the --session file
 // by cli/run.ts's executor) carries the cookie into the *next* scenario.
 export default defineStep({
@@ -10,8 +10,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: true,
-  async run(ctx) {
-    const res = await (await ctx.request()).get("/set-cookie");
+  async run({ request }) {
+    const res = await request.get("/set-cookie");
     return res.json();
   },
 });

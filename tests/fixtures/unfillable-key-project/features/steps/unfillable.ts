@@ -12,7 +12,7 @@ export default defineStep({
   description: "A required args key nothing on this line can ever fill",
   args: z.object({ serial: z.string() }),
   returns: z.object({ serial: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { serial: args.serial };
   },
 });

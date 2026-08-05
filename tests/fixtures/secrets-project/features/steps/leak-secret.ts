@@ -13,10 +13,10 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ apiToken: z.string(), publicToken: z.string() }),
   mutates: false,
-  async run(ctx) {
-    const apiToken = ctx.env.API_TOKEN ?? "";
-    const publicToken = ctx.env.PUBLIC_TOKEN ?? "";
-    await (await ctx.request()).get(`/echo?token=${apiToken}&public=${publicToken}`);
+  async run({ request, env }) {
+    const apiToken = env.API_TOKEN ?? "";
+    const publicToken = env.PUBLIC_TOKEN ?? "";
+    await request.get(`/echo?token=${apiToken}&public=${publicToken}`);
     return { apiToken, publicToken };
   },
 });

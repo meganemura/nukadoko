@@ -9,8 +9,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ cookie: z.string().nullable() }),
   mutates: false,
-  async run(ctx) {
-    const res = await (await ctx.request()).get("/whoami");
+  async run({ request }) {
+    const res = await request.get("/whoami");
     return res.json();
   },
 });

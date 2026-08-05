@@ -3,7 +3,7 @@ import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
 import type { z } from "zod";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { StepContext } from "../context.js";
+import type { StepContext, StepFixtures } from "../context.js";
 import type { PollRecord, ScreenshotEntry, SectionEntry } from "../receipt/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { Step } from "../step/define-step.js";
@@ -20,8 +20,9 @@ import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
 import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 
-// Responsibility: assemble the real StepContext a `do`/`run` execution hands
-// to a step's `run(ctx, args)` — env, baseURL (also wired into the browser
+// Responsibility: assemble the real StepContext a `do`/`run` execution builds
+// a typed step's fixture bag from (`buildStepFixtures`, p4a-fixture-bag task
+// spec, below) — env, baseURL (also wired into the browser
 // context so `page.goto("/path")` resolves against it), lazy browser, lazy
 // logged HTTP context — plus a `dispose` the executor calls *after* `run`
 // returns, never itself reachable from `ctx`. `ctx.section` and `ctx.poll`
@@ -209,6 +210,29 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // absent (this task's spec: "ブラウザに触れない step には chunk が無い",
 // extended by p3d-hook-trace to "ブラウザに触れない hook には chunk を作ら
 // ない").
+//
+// `buildStepFixtures` (below, p4a-fixture-bag task spec) is this module's
+// second export now, alongside `createStepContext` — a typed step no longer
+// receives the `StepContext` this file still builds; it receives a
+// `StepFixtures` bag resolved from exactly the names its own `run` function
+// destructures (src/step/fixture-names.ts). `createStepContext`'s own
+// `ctx` is unchanged and still the thing this file hands to
+// `buildStepFixtures`, to compat's World (untouched, `src/compat/**`), and
+// to `run-scenario.ts`'s own `from` injection — only a typed step's `run`
+// call site (run-scenario.ts, cli/do.ts) now goes through the bag first.
+// The lazy-launch rule moves with it: `ctx.page()`'s own memoized-launch
+// branches (above) are unchanged, but the *caller* that used to be a
+// step's own body calling `ctx.page()` whenever it felt like it is now
+// exactly one call, from `buildStepFixtures`, made once per step boundary
+// and only when `page` (or `context`, which needs the same browser) is
+// among the destructured names — so "a step that never names `page` never
+// launches a browser" is now a fact about bag construction, not merely
+// about what a step's body happened to call this run. Both of `ctx.page()`
+// own branches (fresh launch vs. an already-running browser opening this
+// boundary's own chunk) stay reachable and necessary: a multi-step pickle
+// still calls `buildStepFixtures` once per step, and the second step's own
+// call reaches the second branch exactly as a step's own direct
+// `ctx.page()` call used to.
 
 export interface EvidenceResult {
   trace?: string;
@@ -782,4 +806,77 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     beginStep,
     endStep,
   };
+}
+
+/**
+ * Resolves `names` (a typed step's own `fixtureParameterNames(step.run)`,
+ * src/step/fixture-names.ts) into a `StepFixtures` bag, reading each named
+ * fixture off `ctx` (this file's own `createStepContext` output) — the
+ * "build only what was named" half of p4a-fixture-bag task spec's design
+ * (`.claude-team/playwright-native-design.md` 5 節 "構築"). `page`/`context`
+ * are the only two names that can cause a browser to launch (`context` is
+ * `page`'s own `.context()` — never a second browser, never a second
+ * `ctx.page()` call site of its own): a step whose `run` destructures
+ * neither never calls `ctx.page()` at all, so this function itself is the
+ * one place "a step that doesn't name `page` doesn't launch a browser"
+ * actually happens, not merely something the fixture's own laziness makes
+ * true incidentally.
+ *
+ * `names` is trusted to already be validated (src/step/validate-
+ * fixtures.ts, run before execution in `nuka check`/`nuka run`/`nuka do`'s
+ * own setup phase) — every name in it is one of `StepFixtures`'s own
+ * members. The `default` branch below is defense-in-depth only: it should
+ * be unreachable in practice, and throwing plainly (not silently building a
+ * bag missing a key) is what CLAUDE.md's "nothing breaks silently" asks
+ * for if that assumption is ever wrong.
+ */
+export async function buildStepFixtures(
+  ctx: StepContext,
+  names: readonly string[],
+): Promise<StepFixtures> {
+  // `-readonly`: `StepFixtures`'s own members are `readonly` for a step
+  // reading them (this file's own header, and context.ts's), but this
+  // function is the one place that is allowed to write them, once, while
+  // building the bag it then hands back as the (readonly-again) public
+  // type.
+  const fixtures: { -readonly [K in keyof StepFixtures]?: StepFixtures[K] } = {};
+  for (const name of names) {
+    switch (name) {
+      case "page":
+        fixtures.page = await ctx.page();
+        break;
+      case "context": {
+        const page = await ctx.page();
+        fixtures.context = page.context();
+        break;
+      }
+      case "request":
+        fixtures.request = await ctx.request();
+        break;
+      case "env":
+        fixtures.env = ctx.env;
+        break;
+      case "requireEnv":
+        fixtures.requireEnv = ctx.requireEnv;
+        break;
+      case "baseURL":
+        fixtures.baseURL = ctx.baseURL;
+        break;
+      case "resultOf":
+        fixtures.resultOf = ctx.resultOf;
+        break;
+      case "section":
+        fixtures.section = ctx.section;
+        break;
+      case "poll":
+        fixtures.poll = ctx.poll;
+        break;
+      default:
+        throw new Error(
+          `internal: unknown fixture name "${name}" reached buildStepFixtures, ` +
+            "src/step/validate-fixtures.ts should have refused this before execution began",
+        );
+    }
+  }
+  return fixtures as StepFixtures;
 }

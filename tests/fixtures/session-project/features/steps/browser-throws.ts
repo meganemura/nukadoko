@@ -13,9 +13,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const page = await ctx.page();
-    await page.goto(`${ctx.baseURL}/whoami`);
+  async run({ page, baseURL }) {
+    await page.goto(`${baseURL}/whoami`);
     throw new Error("deliberate failure for the fb4-evidence-time browser-failure test");
   },
 });

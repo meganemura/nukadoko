@@ -11,7 +11,7 @@ export default defineStep({
   description: "A required args key filled by a table attachment",
   args: z.object({ rows: z.array(z.array(z.string())) }),
   returns: z.object({ count: z.number() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { count: args.rows.length };
   },
 });

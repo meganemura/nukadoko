@@ -117,8 +117,8 @@ what stays missing from that receipt too.
 When a step needs a value an earlier step produced, reach for `from` first:
 `from: { key: [otherStep, "resultKey"] }` declares it, and the value is
 filled in before the step runs — the argument stays required, and the
-scenario reads as what actually chains to what. Only fall back to
-`ctx.resultOf` inside `run` for a read `from` cannot express: the value
+scenario reads as what actually chains to what. Only fall back to the
+`resultOf` fixture inside `run` for a read `from` cannot express: the value
 needs reshaping on the way, which upstream step to read is decided at run
 time, or the whole result is wanted rather than one key of it.
 
@@ -154,8 +154,8 @@ reading the scenario, not to the code moving data between steps?
 - No — do not make it a step. Write an ordinary function under
   `features/steps/lib/` and call it from the step that needs the value.
   What is given up is that helper's own receipt; the HTTP it performs is
-  still counted in the calling step's `observed`, and `ctx.section` can
-  still mark how far execution got while running it.
+  still counted in the calling step's `observed`, and the `section` fixture
+  can still mark how far execution got while running it.
 
 Nothing upstream ever runs on nukadoko's own initiative. If a step's `from`
 key names a producer that never appears in the scenario, that is a
@@ -168,8 +168,8 @@ exists to leave.
 
 A step that writes to a system whose effect lands elsewhere asynchronously
 isn't finished when the write is accepted — it's finished once that effect
-is visible to whatever runs next. Wait for it there, with
-`ctx.poll(fn, { description, timeout, interval })`; give `description` a
+is visible to whatever runs next. Wait for it there, with the `poll`
+fixture, `poll(fn, { description, timeout, interval })`; give `description` a
 value and the receipt's `polls` carries `attempts`, `waited_ms`, and
 `outcome` beside it. That is what separates a wait that actually waited
 from one that returned on its first attempt — the second means the
@@ -295,13 +295,13 @@ jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finishe
   | sort_by(.at)[] | "\(.at)  \(.event)"' receipt.json
 ```
 
-`actions` is every Playwright call this step made through `ctx.page()`,
-`expect` waits included, each with its own duration and outcome, read
+`actions` is every Playwright call this step made through the `page`
+fixture, `expect` waits included, each with its own duration and outcome, read
 straight off the step's own trace: an `expect` that timed out shows up here
 with `outcome: "failed"` and a real `ms`, often enough to explain a failure
 without opening the trace viewer at all.
 
-If the step opened a browser (`ctx.page()`), also check `page_events` on
+If the step opened a browser (destructured `page`), also check `page_events` on
 that receipt: a console error, an uncaught page error, or a failed request
 recorded there can explain a failure nothing else on the receipt mentions,
 since it comes from the page itself rather than anything the step declared.

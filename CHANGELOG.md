@@ -96,6 +96,21 @@ just until 0.1.
   trace to that hook's own fixture and merges its `actions` into that same
   fixture's child-step timeline, matching what a step already gets.
 
+- **A typed step's `run` takes a fixture bag now, not `ctx`.** `run(ctx, args)`
+  becomes `run({ page, section }, args)`: only the names a step actually
+  destructures ever get built, so a step naming neither `page` nor `context`
+  never launches a browser, a fact `check` can now read from the source
+  text itself, before anything runs. To migrate a step, collect every
+  `ctx.foo` it reads into that first destructured argument, then drop the
+  `await` in front of `ctx.page()`/`ctx.request()` along with the call
+  parentheses; `page` and `request` are values now, not functions. A
+  destructured fixture with a default value or a rest property (`{ page =
+  null }`, `{ ...rest }`) is refused, with its own message, since neither
+  can be read statically; name every fixture a step needs explicitly
+  instead. No codemod ships for this: the reader here is an agent, and a
+  mechanical rewrite across a whole `features/steps/` tree is exactly the
+  kind of batch edit an agent already does well.
+
 ## 0.0.5 — 2026-08-05
 
 ### Changed

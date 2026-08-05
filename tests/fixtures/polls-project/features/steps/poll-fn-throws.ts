@@ -11,8 +11,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    await ctx.poll(async () => {
+  async run({ poll }) {
+    await poll(async () => {
       throw new Error("predicate exploded");
     });
     return { ok: true };

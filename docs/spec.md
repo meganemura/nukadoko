@@ -109,8 +109,8 @@ export default defineStep({
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
   mutates: true,                               // default true; see keyword semantics
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/projects", { data: args });
+  async run({ request }, args) {
+    const res = await request.post("/projects", { data: args });
     return res.json();
   },
 });
@@ -232,79 +232,108 @@ export default defineStep({
   execution, and rationale is a property of the contract that would be
   identical in every receipt for the step, not something that execution
   produced.
-- The `run` body is free TypeScript on the provided context. Composition is
-  importing another step module and calling its `run` with the same ctx.
-  Shared helpers live in ordinary modules (e.g. `features/steps/lib/`).
+- The `run` body is free TypeScript on the fixtures it destructured.
+  Composition is importing another step module and calling its `run` with
+  the same fixture bag. Shared helpers live in ordinary modules (e.g.
+  `features/steps/lib/`).
 - Semantic correctness — whether the implementation truthfully performs what
   the description and pattern claim — is guaranteed by PR review, not by the
   tool. Protect `steps/` with CODEOWNERS.
 
 ### Context API
 
-`ctx` passed to `run(ctx, args)` carries exactly what the executor must
-inject — state the tool owns and the measured chain — and nothing else.
-Pure helpers are imports, not context members; that one rule decides
-every future "does this belong on ctx?" question.
+A step's `run` takes a **fixture bag**, ordered by name in a plain
+destructuring pattern: `run({ page, section }, args)`. Only the names a
+step actually destructures are ever built: a step that never names `page`
+or `context` causes no browser to launch, at all, for that step.
 
-- `await ctx.page()` — Playwright Page; browser launches on first call,
-  restored from the session's storageState, with the configured baseURL
-  wired into the browser context so `page.goto("/path")` resolves against
-  it.
-- `await ctx.request()` — Playwright APIRequestContext with the session's
-  cookies. `baseURL` is optional here, the same as `ctx.page()` above: a
-  suite that only ever calls absolute URLs across multiple hosts has no
+That last sentence is not this section's design goal, it is a consequence
+of the real one. `run({ page }, args)` is not shorthand for "give me the
+page": it is the same object literal `check` parses without ever calling
+`run`, the same way it already parses `pattern`/`args`/`returns`/`from`
+without executing anything. Naming `page` is therefore not an action a step
+performs at run time; it is a declaration a step makes at file-write time,
+readable before any of it runs. `check` reads that declaration by parsing
+`run`'s own source text, never by calling it, and what actually gets built
+follows the same declaration, so there is no way for the two to disagree:
+a step cannot claim, at the top of its file, to need nothing the
+declaration didn't ask for, because the declaration *is* what gets built.
+This is the same shape `from` (see "Chaining steps") already established
+for a step's own *output* (a static declaration that drives execution
+instead of merely describing it after the fact), applied here to a
+*resource* instead. Playwright fixtures use the identical destructuring
+syntax, but that is not the reason for the design: to Playwright, the
+pattern is a construction instruction for its own runner; to nukadoko, it
+is first a declaration `check` reads, and a construction instruction only
+as a consequence of being one.
+
+The fixture names:
+
+- `page: Page`: Playwright Page, restored from the session's storageState,
+  with the configured baseURL wired into the browser context so
+  `page.goto("/path")` resolves against it. The browser launches when a
+  step's own bag is built, and only when `page` (or `context`, below) is
+  one of the names it destructured, never earlier, and never for a step
+  that names neither.
+- `context: BrowserContext`: the `BrowserContext` `page` already belongs
+  to (`page.context()`), never a second one. Exists for a step that needs
+  a second tab (`context.newPage()`) without reaching past the executor
+  for a `browser` it does not expose (below).
+- `request: APIRequestContext`: Playwright APIRequestContext with the
+  session's cookies. `baseURL` is optional here, the same as `page` above:
+  a suite that only ever calls absolute URLs across multiple hosts has no
   single baseURL to state, and nukadoko does not force one into config just
-  to satisfy this call. If `baseURL` is unset and a step passes a relative
-  path anyway, the resulting failure is Playwright's own — nukadoko does
-  not re-implement its URL resolution to pre-empt it.
-- `ctx.env` — environment variables from the configured envFiles
-  (read-only). Not a convenience: it is where determinism (the process
-  environment is never merged) and secrets redaction (only values nukadoko
-  itself loaded are redactable) are enforced.
-- `ctx.requireEnv(name)` — the same value as `ctx.env[name]`, minus the
-  presence check every step reading a required variable ended up writing
-  for itself; it returns `string`, never `undefined`, by throwing instead
-  of returning one. Empty string counts as missing too: an envFile's
-  `KEY=` line parses to `""`, not to "key omitted", and a step that
-  declared a variable required is exactly as broken either way. The error
-  names the key only, never a value — there is no value to show for a
-  missing one, and a shape that never carries values cannot become a
-  redaction gap later — and it cannot say which envFile to fix, because
-  `ctx` only ever sees the merged result, never `config.envFiles`'s list.
-  `ctx.env` stays for the rare step that wants every key at once. Every name
-  `requireEnv` is called with — whether that call finds a value or throws —
+  to satisfy this fixture. If `baseURL` is unset and a step passes a
+  relative path anyway, the resulting failure is Playwright's own; nukadoko
+  does not re-implement its URL resolution to pre-empt it.
+- `env`: environment variables from the configured envFiles (read-only).
+  Not a convenience: it is where determinism (the process environment is
+  never merged) and secrets redaction (only values nukadoko itself loaded
+  are redactable) are enforced.
+- `requireEnv(name)`: the same value as `env[name]`, minus the presence
+  check every step reading a required variable ended up writing for
+  itself; it returns `string`, never `undefined`, by throwing instead of
+  returning one. Empty string counts as missing too: an envFile's `KEY=`
+  line parses to `""`, not to "key omitted", and a step that declared a
+  variable required is exactly as broken either way. The error names the
+  key only, never a value (there is no value to show for a missing one,
+  and a shape that never carries values cannot become a redaction gap
+  later), and it cannot say which envFile to fix, because this fixture
+  only ever sees the merged result, never `config.envFiles`'s list. `env`
+  stays for the rare step that wants every key at once. Every name
+  `requireEnv` is called with, whether that call finds a value or throws,
   is recorded on the receipt's `required_env` (see "Receipts"), in read
-  order, deduplicated. Reading the same value straight off `ctx.env` leaves
-  no trace: that path is a plain object, and the library never sees it.
-- `ctx.baseURL` — the configured baseURL, for the occasional URL assembled
-  by hand; the common paths get it wired in above. `undefined` when
-  `config.baseURL` is unset — legitimate for an absolute-URL-only suite,
+  order, deduplicated. Reading the same value straight off `env` leaves no
+  trace: that path is a plain object, and the library never sees it.
+- `baseURL`: the configured baseURL, for the occasional URL assembled by
+  hand; the common paths get it wired in above. `undefined` when
+  `config.baseURL` is unset, legitimate for an absolute-URL-only suite,
   not an error state.
-- `ctx.resultOf(stepModule)` — the validated result of that step's most
-  recent successful execution in the current scenario; `undefined` under
-  `nuka do` or when the step hasn't succeeded yet. This is the scenario
-  path's data channel, and it is deliberately not a World: nothing can be
-  written to it, only results that passed their `returns` schema can be
-  read from it, and the dependency is a visible `import` of the other step
-  module — typed by that step's own schema, reviewable in the diff. A
-  feature line like "that listing is closed" is implementable exactly to
-  the extent its referent produced a validated result. `from` (see
-  "Chaining steps") is the declarative form of the same read and the one
-  to reach for first; `resultOf` is what remains for the reads a key name
-  cannot express. Passing a `Step` that discovery never registered throws
-  rather than returning `undefined` — see "Chaining steps" for the mistake
-  that rule exists to catch.
-- `ctx.section(label: string): void` — marks that execution has reached a
+- `resultOf(stepModule)`: the validated result of that step's most recent
+  successful execution in the current scenario; `undefined` under `nuka
+  do` or when the step hasn't succeeded yet. This is the scenario path's
+  data channel, and it is deliberately not a World: nothing can be written
+  to it, only results that passed their `returns` schema can be read from
+  it, and the dependency is a visible `import` of the other step module,
+  typed by that step's own schema, reviewable in the diff. A feature line
+  like "that listing is closed" is implementable exactly to the extent its
+  referent produced a validated result. `from` (see "Chaining steps") is
+  the declarative form of the same read and the one to reach for first;
+  `resultOf` is what remains for the reads a key name cannot express.
+  Passing a `Step` that discovery never registered throws rather than
+  returning `undefined`, see "Chaining steps" for the mistake that rule
+  exists to catch.
+- `section(label: string): void`: marks that execution has reached a
   named stage; synchronous, no return value, no matching "end" call. Every
   call is appended, in call order, to the receipt's `sections` (see
   "Receipts"); a step that never calls it gets no `sections` key at all,
   the same convention `used` follows. It is a bare marker rather than a
-  function that wraps a block (`ctx.section(label, fn)`) on purpose: a
+  function that wraps a block (`section(label, fn)`) on purpose: a
   wrapping form would have to decide what nesting, an early `return`, and
   an `await` crossing its boundary mean, and none of that is required to
-  answer the question it exists for — where execution stopped, not how
-  the block that stopped is shaped.
-- `await ctx.poll(fn, { description, timeout, interval })` — the
+  answer the question it exists for, where execution stopped, not how the
+  block that stopped is shaped.
+- `await poll(fn, { description, timeout, interval })`: the
   submit-poll-fetch loop for a state that has been asked for but is not
   there yet: `fn` returns `undefined` until it is, and its first defined
   value is what `poll` returns; the `timeout` budget running out first
@@ -314,27 +343,26 @@ every future "does this belong on ctx?" question.
   implementation detail: it cannot be the observed target's own presence,
   because a target whose correct passing state is absence becomes
   indistinguishable, under that condition, from one that simply has not
-  rendered yet — polling for presence makes it impossible for `fn` to ever
-  return the answer the step is there to give. Poll instead for whatever
-  makes a verdict about the target possible in the first place — a loading
+  rendered yet (polling for presence makes it impossible for `fn` to ever
+  return the answer the step is there to give). Poll instead for whatever
+  makes a verdict about the target possible in the first place, a loading
   flag going false, a count leaving `undefined`, anything the page renders
-  unconditionally once its data has arrived — and read the target itself
+  unconditionally once its data has arrived, and read the target itself
   only once that has resolved. A wait taken on the browser directly
   instead, through `page.waitForSelector` or `waitForLoadState`, waits the
-  same way but leaves nothing behind: going through `ctx.poll` is what
-  puts `at`, `attempts`, `waited_ms`, and `outcome` on the receipt, which
-  is the only way to tell "resolved on the first attempt, the wait did
-  nothing" apart from "resolved four seconds in" after the fact. That is
-  the same self-reported/measured line the Allure emitter already draws
-  with its `declared:` prefix (see "Allure emitter") — drawn here between
-  a wait the tool measured and one that happened invisibly inside
-  Playwright.
+  same way but leaves nothing behind: going through `poll` is what puts
+  `at`, `attempts`, `waited_ms`, and `outcome` on the receipt, which is the
+  only way to tell "resolved on the first attempt, the wait did nothing"
+  apart from "resolved four seconds in" after the fact. That is the same
+  self-reported/measured line the Allure emitter already draws with its
+  `declared:` prefix (see "Allure emitter"), drawn here between a wait
+  the tool measured and one that happened invisibly inside Playwright.
 
 Where a wait belongs is a contract question, not a convenience one. A step
 that writes to a system whose effect lands elsewhere asynchronously is not
 finished when the write is accepted; it is finished when the effect is
 visible to whatever the next step will look at, and the wait belongs
-inside that step — the same rule as "a contract says what the step
+inside that step, the same rule as "a contract says what the step
 demands", read forward instead of backward. Putting it in a later step
 instead appears to work, because that step waits and the scenario passes,
 but the wait is then attached to a path rather than to the operation that
@@ -342,31 +370,48 @@ needed it: another scenario reaching the same state by a route that skips
 that step waits for nothing and fails. What surfaces is one scenario going
 red while its siblings stay green, which reads like a property of that
 scenario and is not one. A green scenario is no evidence that its waits
-are placed correctly — every wait it needed could have been supplied by
+are placed correctly, every wait it needed could have been supplied by
 coincidence, further down. Only a route that does not pass through them
 can show where they actually belong.
 
-`page()` and `request()` hand back Playwright's own `Page` and
+`page` and `request` hand back Playwright's own `Page` and
 `APIRequestContext` rather than types of nukadoko's own. That is a choice
 with a cost, and it is stated as one (see "Out of scope").
 
-Helpers live as imports, and what decides the boundary is whether the call
-has to reach something the executor owns. `ctx.section` writes into a
-collector the executor owns and resets at each step boundary, the same
-lifetime `observed` and `used` already have, so it is on `ctx` by this
-section's own rule. `poll` was an import for exactly as long as it
-recorded nothing — and it got there by the same mistake, made twice. An
-earlier version of this rule withheld `ctx.section` entirely, on the
-grounds that it would do nothing until a progress-log feature recorded
-named stretches of a run live; `poll`'s own `description` was then
-documented against that same log, which was never built, so the label a
-caller wrote went nowhere at all. Both readings missed where the naming
-needed to land. The receipt was already the destination: a step's
-execution never needed a live log to say which stage it reached, and a
-wait that has already finished needs one even less to say how long it
-took — only somewhere to write it down. A wait that leaves no trace
-cannot be told apart from one that returned on its first attempt, and
-those two call for opposite fixes.
+`expect` is not a fixture. A step imports it directly, `import { expect }
+from "playwright/test"`, and asserts with it exactly as a Playwright test
+would. This follows from the same rule every other fixture answers to: a
+fixture carries only what the executor must inject, and `expect` needs
+nothing the executor owns (assertion evidence already reaches the receipt
+through the trace, `actions`, see "Receipts"), so making it a fixture would
+add a member with nothing behind it but Playwright's own already-public
+export.
+
+`browser` is not a fixture either, and this one is a refusal, not an
+omission. `context` is a fixture (the one `page` already belongs to,
+nothing new to launch), so a step that needs a second tab reaches for it
+via `context.newPage()`. `browser` itself would let a step call
+`browser.newContext()` and mint a context the executor never sees:
+unmeasured, untraced, outside every receipt the run writes. Leaving the
+name out of the bag is what keeps that path always unreachable, rather
+than a convention a step has to remember not to break.
+
+Two shapes are refused outright rather than silently mis-parsed: a
+destructured fixture with a default value (`{ page = ... }`) and one
+collected through a rest property (`{ ...rest }`). Both defeat the same
+static reading this section opened with: a default value corrupts the
+name `check` would otherwise read cleanly, and a rest property's own bound
+names are not knowable without actually running the destructuring, which
+`check` must not do. Neither loses anything a fixture legitimately needs:
+a fixture is always present once it is named, so a default value has
+nothing to default from, and every fixture a step needs can always be
+named explicitly. `check` and `nuka run`/`nuka do` share one judgment for
+all of this (the same "one judgment, two callers" shape "Chaining steps"
+already uses for `from`), so a step never passes `check` and then fails
+this refusal at run time, or the reverse. An unknown fixture name, a
+default value, or a rest property refuses execution before it begins, the
+same "never began" outcome an undefined step already gets, never a step
+failure.
 
 ### Chaining steps
 
@@ -374,8 +419,8 @@ Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
 binds into a scenario raises a question the step never faced standalone: how
 does a value an earlier step produced reach this one? Two answers that look
 obvious both give something up. Dropping the argument in favor of reading
-everything through `ctx.resultOf` loses `nuka do`'s single-step execution —
-there is nothing left to pass on the command line — and running standalone
+everything through `resultOf` loses `nuka do`'s single-step execution
+(there is nothing left to pass on the command line), and running standalone
 is exactly what makes the vocabulary useful to an agent in the first place,
 so that loss is real, not incidental. Folding the whole setup into one
 composite step avoids touching the existing steps, but flattens the Given
@@ -395,9 +440,9 @@ export default defineStep({
   args: z.object({ projectId: z.string() }),
   returns: z.object({ archived: z.boolean() }),
   from: { projectId: [createProject, "id"] },
-  async run(ctx, args) {
+  async run({ request }, args) {
     // args.projectId is present or this line was never reached.
-    const res = await (await ctx.request()).post(`/projects/${args.projectId}/archive`);
+    const res = await request.post(`/projects/${args.projectId}/archive`);
     return res.json();
   },
 });
@@ -407,7 +452,7 @@ A pattern capture still wins: `from` supplies only the keys this occurrence
 of the step did not capture, so the same step can take the value from the
 Gherkin line in one scenario and from an earlier step in another. What it
 takes is that earlier step's most recent successful result in this
-scenario — the same lifetime `ctx.resultOf` has, because it is the same
+scenario, the same lifetime `resultOf` has, because it is the same
 chain. Injection happens before args validation, which is the point: the
 key stays **required**, and `args` goes on describing what the step
 demands instead of describing how one of its callers happens to supply it.
@@ -483,7 +528,7 @@ motivated `from`: a scenario that binds the consumer before the producer
 used to be indistinguishable from a correct one until minutes of real
 browser time had been spent.
 
-`from` and `ctx.resultOf` both identify the upstream step by the `Step`
+`from` and `resultOf` both identify the upstream step by the `Step`
 object itself, never by name, so a step reached through `await import()`
 resolves to a different instance than the one discovery registered and
 matches nothing. That used to be silent — `resultOf` simply kept returning
@@ -494,7 +539,7 @@ reports it and `run`/`do` refuse to execute the step at all, while
 step that has not run yet still returns `undefined`; that is a state, not
 a mistake.
 
-What `from` cannot express stays with `ctx.resultOf`: a value that needs
+What `from` cannot express stays with `resultOf`: a value that needs
 reshaping on the way, a read whose necessity is decided at run time, or a
 whole result used as one. Reach for `resultOf` for those, and keep the argument optional
 with a fallback inside `run` if the step must also run standalone — the
@@ -518,7 +563,7 @@ and means nothing to the reader the feature was written for. When an
 operation has no value to that reader, it should not be a step at all —
 make it an ordinary function under `features/steps/lib/` and call it from
 the step that needs it. What is given up is that helper's own receipt; the
-HTTP it performs is still counted in `observed`, and `ctx.section` can
+HTTP it performs is still counted in `observed`, and `section` can
 still mark where execution went. Granularity of the record against
 legibility of the feature is a judgment the step author makes per case,
 and this is the axis to make it on.
@@ -556,8 +601,8 @@ what a declaration settles is layered:
   runs** — the one place the declaration gates execution rather than
   drawing review's attention.
 - **At run time**, the receipt records what the execution actually did:
-  every network call the tool saw (through `ctx.request()` and the page
-  alike), with non-GET/HEAD calls counted as observed writes, next to
+  every network call the tool saw (through the `request` fixture and the
+  page alike), with non-GET/HEAD calls counted as observed writes, next to
   `mutates` (declared). That count settles nothing on its own anymore —
   not Then position, not a read-only environment's own policy. A declared
   `mutates: false` is trusted, whatever `observed` says.
@@ -657,7 +702,7 @@ import { Given, When, Then } from "nukadoko/compat";
   entry (`trace`/`actions`/`truncated`, the same shape a step's own receipt
   carries, see "Receipts"), isolated from every step's own chunk and from
   its sibling hooks'. A hook invocation still carries no `sections`/`polls`,
-  since neither has a `ctx` of its own to call `ctx.section`/`ctx.poll`
+  since a hook has no fixture bag of its own to call `section`/`poll`
   from. Only `actions`, read back out of the chunk itself rather than from
   anything the hook explicitly called, is available to it. `AfterStep`
   shares that same registration surface (all three call shapes, the same
@@ -776,18 +821,19 @@ scenario record is what says "skipped"). Evidence follows its natural scope:
 each step's receipt carries that step's own http.jsonl and its own
 Playwright trace alike. The trace used to span the whole shared context and
 live in the scenario's own directory instead, one file, opened once at the
-first `ctx.page()` call and closed once at the end. It is cut at every step
-boundary now, the same window `ctx.page()` was already lazy about: a step
-that never touches the browser gets no trace chunk at all, and a step that
-does gets one holding only what it did. Opening the trace for the step that
-actually failed is faster than scrubbing through a whole scenario's
-recording for the moment things went wrong, and that is the entire reason
-for the change. What a single scenario-long trace also gave for free, a
-network view spanning every step at once, a step-scoped trace does not:
-each step's own trace still shows that step's own requests, so nothing about
-a single step's traffic is lost, only the ability to browse every request
-the whole scenario made without opening more than one file. `ctx.request()`
-traffic and the page's own traffic now share that same step-scoped view
+first step whose bag named `page` and closed once at the end. It is cut at
+every step boundary now, the same laziness a step's own fixture bag
+already has: a step that never destructures `page` gets no trace chunk at
+all, and a step that does gets one holding only what it did. Opening the
+trace for the step that actually failed is faster than scrubbing through a
+whole scenario's recording for the moment things went wrong, and that is
+the entire reason for the change. What a single scenario-long trace also
+gave for free, a network view spanning every step at once, a step-scoped
+trace does not: each step's own trace still shows that step's own
+requests, so nothing about a single step's traffic is lost, only the
+ability to browse every request the whole scenario made without opening
+more than one file. `request` fixture traffic and the page's own traffic
+now share that same step-scoped view
 instead: both land on the same http.jsonl, each entry marked `via:
 "request"` or `via: "page"` so a reader never has to guess which path a
 call took. Only a page's `document`/XHR/`fetch` requests are recorded that
@@ -900,7 +946,7 @@ shape whether the step ran inside a scenario or via `do`.
   has none to record — not `false`), sitting beside the `observed` counts
   so declared and measured can be compared without a second artifact.
 - Evidence is collected by the harness, never reported by the step: Playwright
-  tracing and screenshots when the browser is used, every `ctx.request()`
+  tracing and screenshots when the browser is used, every `request` fixture
   call and the page's own document/XHR/fetch traffic alike logged to
   http.jsonl, the receipt itself as the primary record.
 - `evidence.screenshots` is at most one entry, `{ "file": "final.png", "at":
@@ -915,7 +961,7 @@ shape whether the step ran inside a scenario or via `do`.
   for without ever stating it, and it says the real thing: how long after
   this execution's own timeline the screenshot was actually taken.
 - `observed` counts the network calls the tool itself saw the execution
-  make, through `ctx.request()` and the page alike; non-GET/HEAD counts as
+  make, through the `request` fixture and the page alike; non-GET/HEAD counts as
   a write — HTTP method as a proxy for write semantics, not semantics
   itself, so a POST-based read counts against a step that never wrote
   anything (see Keyword semantics). It settles nothing on its own: Then
@@ -924,8 +970,8 @@ shape whether the step ran inside a scenario or via `do`.
   wrong declaration is falsifiable, here and in the Allure report.
 - `evidence.http` (present only when at least one call was logged) points at
   http.jsonl, one JSON object per line: `{ "method", "url", "status",
-  "duration_ms", "via" }`. `via` is `"request"` for a call made through
-  `ctx.request()`, and `"page"` for one the page itself made (a `ctx.page()`
+  "duration_ms", "via" }`. `via` is `"request"` for a call made through the
+  `request` fixture, and `"page"` for one the page itself made (a `page`
   navigation, or an in-page `fetch`/XHR), present on every entry either path
   produces, so a reader never has to guess which one wrote a line from its
   shape alone. Only `document`, `xhr`, and `fetch` requests (Playwright's own
@@ -946,7 +992,7 @@ shape whether the step ran inside a scenario or via `do`.
   is a bug.
 - `used` (present only when non-empty) lists the earlier executions whose
   results this one drew a value from — through a `from` injection, a
-  `ctx.resultOf` call, or a `--use` receipt on `nuka do`. Every path runs
+  `resultOf` call, or a `--use` receipt on `nuka do`. Every path runs
   through library code, so the reads are measured, not declared. Each entry
   is `{ "receipt": "rcpt-…", "step": "create-project" }`: the step name is
   redundant with the cited receipt and is written down anyway, because a
@@ -975,7 +1021,7 @@ shape whether the step ran inside a scenario or via `do`.
   means this field can only carry what the upstream step's own `returns`
   schema kept in the first place: a `returns` that dropped a value drops it
   from here too.
-- `sections` (present only when non-empty) lists the `ctx.section` calls
+- `sections` (present only when non-empty) lists the `section` calls
   made during this execution, each `{ "label": "...", "at": "..." }`, in
   call order. Not deduplicated, unlike `used`: a label entered twice — a
   loop, a retry — was entered twice, and the array should read that way,
@@ -989,7 +1035,7 @@ shape whether the step ran inside a scenario or via `do`.
   showed the target still present, roughly eight seconds apart, with
   nothing on the receipt saying so — read at face value, that looks like
   the state was flickering, and it was misdiagnosed as exactly that. `at`
-  (ISO 8601, taken by the collector itself when `ctx.section` is called,
+  (ISO 8601, taken by the collector itself when `section` is called,
   never supplied by the step) puts every label on the same absolute
   timeline `started_at`/`finished_at`, `polls`' own `at`, and
   `evidence.screenshots[].at` already share, so "did the state actually
@@ -998,10 +1044,10 @@ shape whether the step ran inside a scenario or via `do`.
   holds whichever labels it reached before the failure, and that array's
   last element already answers "which stage was it in" — there is no
   separate `error.section` field putting the same fact in a second place.
-  Only a typed step's `ctx` has `section`; a compat step has no
+  Only a typed step's fixture bag has `section`; a compat step has no
   counterpart on `this`, so `sections` is simply omitted for one, the same
   way `used` is omitted for a typed step that never read from the chain.
-- `polls` (present only when non-empty) records every `ctx.poll` call that
+- `polls` (present only when non-empty) records every `poll` call that
   finished during this execution: its `description` when one was given,
   `at` — the ISO 8601 moment that call began — how many times the
   predicate ran, the milliseconds elapsed, and how it ended — `resolved`,
@@ -1018,16 +1064,16 @@ shape whether the step ran inside a scenario or via `do`.
   half — an absolute start, not just a duration — so a poll can be placed on
   the same timeline `sections` and `evidence.screenshots` now share, instead
   of read as a length with no fixed point to measure from. A compat step has
-  no `ctx` to call it on, so `polls` is simply omitted for one, the same way
-  `sections` is.
+  no fixture bag to call it on, so `polls` is simply omitted for one, the
+  same way `sections` is.
 - `required_env` (present only when non-empty) lists the names
-  `ctx.requireEnv` was called with during this execution, deduplicated, in
+  `requireEnv` was called with during this execution, deduplicated, in
   the order first read — the same measured-not-declared shape `used` and
   `sections` already have, since `requireEnv` is the one call site the
   library controls. Recorded before a missing key throws, so a
   `MissingEnvError` failure's receipt still shows what the step asked for.
   Only names are recorded, never values — a value can be a secret. A step
-  that reads `ctx.env[name]` directly leaves no trace here: this field
+  that reads `env[name]` directly leaves no trace here: this field
   counts only what passed through `requireEnv`, never a plain object read
   the library never sees.
 - `page_events` (present only when at least one category is non-empty)
@@ -1072,12 +1118,13 @@ shape whether the step ran inside a scenario or via `do`.
   error is evidence about the page, not a verdict on the step.
 - `actions` (present only when non-empty) is read out of this step's own
   trace chunk (`evidence.trace`, above): every Playwright call the step made
-  through `ctx.page()`, `expect` waits included, in the order the trace
-  recorded them finishing. Nothing about `expect` needed its own fixture or
-  wrapper to get here: a step reaches it the same way a Playwright test
-  file would (`import { expect } from "@playwright/test"`), and the trace
-  records the call underneath that wrapper, at Playwright's own layer, the
-  same place `goto`, `click`, and every other call already lands. Each entry
+  through the `page` fixture, `expect` waits included, in the order the
+  trace recorded them finishing. `expect` is deliberately not a fixture
+  either (see "Context API"): a step reaches it the same way a Playwright
+  test file would (`import { expect } from "playwright/test"`), and the
+  trace records the call underneath that wrapper, at Playwright's own
+  layer, the same place `goto`, `click`, and every other call already
+  lands. Each entry
   is `{ "method", "expression"?, "selector"?, "url"?, "is_not"?,
   "timeout_ms"?, "ms", "outcome", "at" }`: `method` and the five optional
   fields are copied straight off the trace's own call, `ms` is that call's
@@ -1095,7 +1142,7 @@ shape whether the step ran inside a scenario or via `do`.
   land in a `url` or `selector` as easily as it can anywhere else, so no
   separate redaction path exists for this field either. A trace chunk that
   cannot be read at all (corrupt, or simply never opened because the step
-  never called `ctx.page()`) costs `actions` silently, the same
+  never destructured `page`) costs `actions` silently, the same
   measurement-must-never-break-execution rule every other evidence-reading
   field on this list already follows. The one loud exception is a trace
   format version this build does not recognize: guessing at an unverified
@@ -1111,12 +1158,13 @@ shape whether the step ran inside a scenario or via `do`.
   scenario's own directory, not a receipt dir, since a hook has none),
   `actions`, and `truncated`, in exactly the shape above, present under
   exactly the same rules. A hook invocation carries no `sections`/`polls`
-  alongside them: both come from `ctx.section`/`ctx.poll`, and a hook has
-  no `ctx` of its own to call either from, only a World (`this`). `actions`,
-  read back out of the trace chunk itself rather than from anything the
-  hook explicitly called, is unaffected by that gap. A hook invocation that
-  never touched the browser opens no chunk and carries none of the three
-  fields at all, the same as a step that never called `ctx.page()`.
+  alongside them: both come from a typed step's `section`/`poll` fixtures,
+  and a hook has no fixture bag of its own to call either from, only a
+  World (`this`). `actions`, read back out of the trace chunk itself
+  rather than from anything the hook explicitly called, is unaffected by
+  that gap. A hook invocation that never touched the browser opens no
+  chunk and carries none of the three fields at all, the same as a step
+  that never destructured `page`.
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
@@ -1211,14 +1259,14 @@ read today, passed straight to `chromium.launch`; omitted, Playwright's own
 default (`headless: true`) applies.
 
 `browserContext` and `requestContext` are `newContext`'s counterpart to
-`browser`'s `launch`: `browser.newContext()` (used by `ctx.page()`) and
-`playwrightRequest.newContext()` (used by `ctx.request()`) are two separate
-Playwright calls with two separate option types, so each gets its own
-config key rather than one shared key, the same "defer to Playwright's own
-type" policy `browser` follows. This is what makes an option like
-`ignoreHTTPSErrors` reachable at all — for a self-signed-certificate local
-target, neither `ctx.page()` nor `ctx.request()` previously had a way to
-set it. Both keys reject `baseURL` and `storageState` with an error naming
+`browser`'s `launch`: `browser.newContext()` (built when a step's bag
+names `page`) and `playwrightRequest.newContext()` (built when a step's
+bag names `request`) are two separate Playwright calls with two separate
+option types, so each gets its own config key rather than one shared key,
+the same "defer to Playwright's own type" policy `browser` follows. This
+is what makes an option like `ignoreHTTPSErrors` reachable at all: for a
+self-signed-certificate local target, neither fixture previously had a way
+to set it. Both keys reject `baseURL` and `storageState` with an error naming
 the reason, rather than silently dropping them: `config.baseURL` is meant
 to be the one source of a project's base URL, and nukadoko's own session
 mechanism sets `storageState`, so accepting either again here would let
@@ -1469,12 +1517,12 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   as an attachment named `trace`, the same contentType as a step's own, and
   `actions` merged into that fixture's own child-step timeline through the
   identical mechanism the bullet above describes. A hook carries no
-  `sections`/`polls` to merge in alongside them, since it has no `ctx` to
-  call `ctx.section`/`ctx.poll` from, but its own trace-derived `actions`
+  `sections`/`polls` to merge in alongside them, since it has no fixture
+  bag to call `section`/`poll` from, but its own trace-derived `actions`
   still render the same way a step's would. A hook invocation that never
   touched `this.openPage()` gets neither: no trace attachment, no timeline
-  entries, the same "nothing to show" a step that never called `ctx.page()`
-  already gets.
+  entries, the same "nothing to show" a step that never destructured
+  `page` already gets.
 - `page_events` (see Receipts) surfaces as up to three more parameters,
   `console errors (observed)`, `page errors (observed)`, `failed requests
   (observed)`, one per category that recorded at least one entry, so a
@@ -1828,7 +1876,7 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
   Stated as a limit rather than a gap to close: the conversion is per-step
   and mechanical, and the import's reversibility exists to make adoption's
   first step cheap, not to make the typed side optional.
-- **Not driver-agnostic, deliberately.** `ctx.page()` and `ctx.request()`
+- **Not driver-agnostic, deliberately.** The `page` and `request` fixtures
   return Playwright's own `Page` and `APIRequestContext`, and the compat
   door hands migrating glue the same objects it already used. Wrapping them
   behind an interface of nukadoko's own would cost every capability the

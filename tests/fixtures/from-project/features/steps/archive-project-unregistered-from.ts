@@ -22,7 +22,7 @@ export default defineStep({
   args: z.object({ projectId: z.string() }),
   returns: z.object({ archived: z.boolean() }),
   from: { projectId: [neverDiscovered, "id"] },
-  async run(_ctx, args) {
+  async run({}, args) {
     return { archived: true };
   },
 });

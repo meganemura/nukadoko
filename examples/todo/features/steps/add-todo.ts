@@ -12,8 +12,8 @@ export default defineStep({
   args: z.object({ title: z.string() }),
   returns: z.object({ id: z.string(), title: z.string(), done: z.boolean() }),
   mutates: true,
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/todos", { data: { title: args.title } });
+  async run({ request }, args) {
+    const res = await request.post("/todos", { data: { title: args.title } });
     return res.json();
   },
 });

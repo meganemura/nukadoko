@@ -11,8 +11,7 @@ export default defineStep({
   args: z.object({ title: z.string() }),
   returns: z.object({ id: z.string(), title: z.string(), done: z.boolean() }),
   mutates: true,
-  async run(ctx, args) {
-    const request = await ctx.request();
+  async run({ request }, args) {
     const listRes = await request.get("/todos");
     const todos = (await listRes.json()) as Array<{ id?: string; title?: string }>;
     const match = todos.find((todo) => todo.title === args.title);

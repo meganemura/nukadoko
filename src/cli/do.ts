@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
-import { createStepContext, type DisposeResult } from "../context/create-context.js";
+import { buildStepFixtures, createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
@@ -25,6 +25,8 @@ import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
+import { fixtureParameterNames } from "../step/fixture-names.js";
+import { formatFixtureIssues, validateStepFixtures } from "../step/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "./resolve-use.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -247,6 +249,19 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
+    // The fixture-bag counterpart to the `from` structural check just above
+    // (p4a-fixture-bag task spec, scope item 3): an unknown fixture name, or
+    // a `run()` whose first argument isn't a plain object-destructuring
+    // pattern at all, refuses this step's execution before it ever begins —
+    // `nuka check` runs this exact same judgment (src/check/analyze.ts) over
+    // the whole vocabulary, so a step never passes `nuka check` and then
+    // fails this refusal, or the reverse.
+    const fixtureIssues = validateStepFixtures(name, entry.step);
+    if (fixtureIssues.length > 0) {
+      stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
+      return 1;
+    }
+
     // `--use <receipt-id>` (m6c-do-use task spec; docs/spec.md "Single steps
     // (the agent path)") — resolved fully here, in setup: an unknown id, a
     // non-`"ok"` receipt, a receipt whose step names none of this step's
@@ -420,7 +435,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // m3a-receipt-kinds task spec, decision 1: classified at each branch
     // that already knows *why* the step failed, not by inspecting the
     // message afterward. `nuka do` only ever runs a typed step (compat is
-    // refused in setup, above) — a typed step's `run(ctx, args)` never
+    // refused in setup, above) — a typed step's `run(fixtures, args)` never
     // receives `this` and has no timeout mechanism, so its own throw is
     // always `"step_error"` here, never `world_invalid`/`timeout` (those are
     // only reachable from a compat step's/hook's own execution, src/run/
@@ -434,7 +449,16 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       errorKind = "args_invalid";
     } else {
       try {
-        const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
+        // Bag construction happens inside this try, same as the `run()`
+        // call itself below (p4a-fixture-bag task spec): a step that names
+        // `page` only launches the browser here, never earlier, and a
+        // launch failure is a step failure ("step_error"), the same outcome
+        // a step's own `ctx.page()` throwing used to produce when that call
+        // lived inside `run()`. `fixtureParameterNames` is memoized and
+        // already validated in setup above, so it is not expected to throw
+        // here.
+        const fixtures = await buildStepFixtures(contextHandle.ctx, fixtureParameterNames(entry.step.run));
+        const runResult = await entry.step.run(fixtures, argsResult.data);
         const returnsResult = entry.step.returns.safeParse(runResult);
         if (!returnsResult.success) {
           status = "failed";

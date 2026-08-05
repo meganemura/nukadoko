@@ -10,8 +10,7 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const page = await ctx.page();
+  async run({ page }) {
     await page.setContent("<html><body>quiet</body></html>");
     return { ok: true };
   },

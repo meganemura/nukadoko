@@ -83,8 +83,8 @@ export default defineStep({
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
   mutates: true,                               // default true; see keyword semantics
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/projects", { data: args });
+  async run({ request }, args) {
+    const res = await request.post("/projects", { data: args });
     return res.json();
   },
 });
@@ -166,42 +166,60 @@ export default defineStep({
   `nuka steps` の一覧には決して現れず、表示するのは `nuka describe` だけです。
   receipt にも現れません。
   receipt は 1 回の実行を記録するものであり、rationale はその step のどの receipt でも同一になる契約の属性であって、実行が生み出したものではないからです。
-- `run` の本体は、渡された context の上で自由に書ける TypeScript です。
-  合成とは、別の step モジュールをインポートし、同じ ctx でその `run` を呼び出すことです。
+- `run` の本体は、自分が分割代入した fixture の上で自由に書ける TypeScript です。
+  合成とは、別の step モジュールをインポートし、同じ fixture bag でその `run` を呼び出すことです。
   共有ヘルパーは通常のモジュール(例: `features/steps/lib/`)に置きます。
 - 意味的な正しさ(実装が description と pattern の主張どおりに動くかどうか)は、ツールではなく PR レビューによって保証されます。
   `steps/` は CODEOWNERS で保護してください。
 
 ### Context API
 
-`run(ctx, args)` に渡される `ctx` は、executor が注入しなければ存在し得ないもの(ツールが所有する状態と、計測された連鎖)だけを運び、それ以外は何も運びません。
-純粋なヘルパーは context のメンバーではなく import です。
-この 1 つの規則が、今後のあらゆる「これは ctx に置くべきか」という問いを決めます。
+step の `run` は **fixture bag** を受け取ります。
+プレーンな分割代入パターンで名前を並べたものです: `run({ page, section }, args)`。
+実際に分割代入された名前だけが構築されます。
+`page` も `context` も名指さない step は、その step に関する限りブラウザを一切起動しません。
 
-- `await ctx.page()`(Playwright の Page。初回呼び出しでブラウザが起動し、session の storageState から復元され、設定された baseURL が browser context に渡されるため `page.goto("/path")` はそれを基準に解決されます)
-- `await ctx.request()`(session の cookie を持つ Playwright の APIRequestContext)。
-  baseURL はここでは任意です。上の `ctx.page()` と同じです。
-  複数のホストへ絶対 URL だけで話すスイートには述べるべき単一の baseURL がなく、nukadoko はこの呼び出しのためだけに意味のない baseURL を config に書かせません。
+この最後の一文はこの節の設計目標ではなく、本当の目標から導かれる結果です。
+`run({ page }, args)` は「page をください」の省略形ではありません。
+`check` が `run` を一度も呼ばずにそのまま読む、同じオブジェクトリテラルです。
+`pattern`/`args`/`returns`/`from` を実行せずに読んでいるのとまったく同じです。
+したがって `page` を名指すことは step が実行時に行う動作ではなく、ファイルを書く時点で行う宣言であり、実行されるより前から読めます。
+`check` はその宣言を、呼び出すのではなく `run` 自身のソーステキストを解析することで読み、実際に構築されるものは同じ宣言に従うので、両者が食い違う余地がありません。
+step はファイルの冒頭で「宣言していない何かが要る」と主張することができません。
+なぜなら宣言こそが実際に構築されるものだからです。
+これは `from`(「step の連鎖」を参照)がすでに step 自身の *出力* について確立した形(実行を事後に説明するのではなく駆動する静的な宣言)を、ここでは *資源* に対して適用したものです。
+Playwright の fixture も同じ分割代入の構文を使いますが、それはこの設計の理由ではありません。
+Playwright にとってこのパターンはそれ自身の runner への構築命令ですが、nukadoko にとってはまず `check` が読む宣言であり、構築命令であることはその結果にすぎません。
+
+fixture の名前:
+
+- `page: Page`: session の storageState から復元された Playwright の Page で、設定された baseURL が browser context に渡されるため `page.goto("/path")` はそれを基準に解決されます。
+  ブラウザが起動するのは step 自身の bag が構築される時点で、しかも `page`(または後述の `context`)がその step が分割代入した名前のひとつであるときだけです。
+  それより早く起動することはなく、どちらも名指さない step では起動しません。
+- `context: BrowserContext`: `page` がすでに属している `BrowserContext` そのもので(`page.context()`)、2 つ目が作られることはありません。
+  2 枚目のタブが要る step のために存在し、executor が公開していない `browser`(後述)に手を伸ばさずに済みます。
+- `request: APIRequestContext`: session の cookie を持つ Playwright の APIRequestContext です。
+  baseURL はここでも任意で、上の `page` と同じです。
+  複数のホストへ絶対 URL だけで話すスイートには述べるべき単一の baseURL がなく、nukadoko はこの fixture のためだけに意味のない baseURL を config に書かせません。
   baseURL が未設定のまま step が相対パスを渡した場合、その失敗は Playwright 自身のものです。
   nukadoko はそれを先回りして防ぐために URL 解決規則を自前で実装しません。
-- `ctx.env`(設定された envFiles から得られる環境変数、読み取り専用)。
+- `env`: 設定された envFiles から得られる環境変数です(読み取り専用)。
   これは便利機能ではなく、決定論(プロセス環境は決してマージされない)と secrets の赤塗り(redact できるのは nukadoko 自身がロードした値だけ)が強制される場所です。
-- `ctx.requireEnv(name)` は `ctx.env[name]` と同じ値を返しますが、必須の変数を読む step がそれぞれ自前で書く羽目になっていた存在チェックを肩代わりします。
+- `requireEnv(name)`: `env[name]` と同じ値を返しますが、必須の変数を読む step がそれぞれ自前で書く羽目になっていた存在チェックを肩代わりします。
   `undefined` を返すことは決してなく、代わりに投げることで常に `string` を返します。
   空文字列も欠落として扱われます。
   envFile の `KEY=` という行は「キーが省略された」ではなく `""` にパースされ、その変数を必須と宣言した step にとってはどちらの場合も等しく壊れているからです。
-  エラーはキー名だけを名指しし、値は決して含みません。
-  欠落した値には示すべき値がなく、値を一切運ばない形は後になって redaction の抜け穴にもなり得ません。
+  エラーはキー名だけを名指しし、値は決して含みません(欠落した値には示すべき値がなく、値を一切運ばない形は後になって redaction の抜け穴にもなり得ません)。
   そしてどの envFile を直せばよいかは言えません。
-  `ctx` が見るのは常にマージ済みの結果だけで、`config.envFiles` のリストを見ることは決してないからです。
-  すべてのキーを一度に欲しい稀な step のために `ctx.env` は残ります。
+  この fixture が見るのは常にマージ済みの結果だけで、`config.envFiles` のリストを見ることは決してないからです。
+  すべてのキーを一度に欲しい稀な step のために `env` は残ります。
   `requireEnv` に渡した名前は、その呼び出しが値を見つけた場合も投げた場合も、読み取った順に重複なく receipt の `required_env`(「Receipt」を参照)に記録されます。
-  同じ値を `ctx.env` から直接読んだ場合はそこには残りません。
+  同じ値を `env` から直接読んだ場合はそこには残りません。
   そちらはプレーンなオブジェクトであり、ライブラリはそこに一切関与しないからです。
-- `ctx.baseURL`(設定された baseURL。自分で URL を組み立てる、まれな場合のためのものです。よくある経路には上記のとおり最初から通してあります)
-  `config.baseURL` が未設定のときは `undefined` になります。
-  絶対 URL だけのスイートにとってそれは正当な状態であり、エラー状態ではありません。
-- `ctx.resultOf(stepModule)` は、現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
+- `baseURL`: 設定された baseURL です。
+  自分で URL を組み立てる、まれな場合のためのもので、よくある経路には上記のとおり最初から通してあります。
+  `config.baseURL` が未設定のときは `undefined` になり、絶対 URL だけのスイートにとってそれは正当な状態であって、エラー状態ではありません。
+- `resultOf(stepModule)`: 現在の scenario 内でその step が直近で成功した実行の、バリデーション済みの result です。
   `nuka do` の下では、あるいはその step がまだ成功していない場合は `undefined` になります。
   これは scenario 経路のデータチャネルであり、意図的に World ではありません。
   そこには何も書き込めず、読み取れるのは `returns` のスキーマを通過した結果だけで、依存関係は他の step モジュールへの目に見える `import` になります(その step 自身のスキーマによって型付けられ、diff の中でレビューできます)。
@@ -210,24 +228,23 @@ export default defineStep({
   `resultOf` に残るのは、キー名では表せない読み取りです。
   discovery が登録しなかった `Step` を渡すと、`undefined` を返す代わりに投げます。
   その規則がどんな間違いを捕まえるためのものかは「step の連鎖」を参照してください。
-- `ctx.section(label: string): void` は、実行がその名前の段階に到達したことを記録します。
+- `section(label: string): void`: 実行がその名前の段階に到達したことを記録します。
   同期的で、返り値はなく、対になる「終了」呼び出しもありません。
   呼び出しはすべて、呼ばれた順で receipt の `sections`(「Receipt」を参照)に追加され、一度も呼ばない step には `sections` キー自体が現れません。
   これは `used` と同じ慣習です。
-  区間を囲む形の関数(`ctx.section(label, fn)`)ではなく裸のマーカーにしてあるのは意図的です。
+  区間を囲む形の関数(`section(label, fn)`)ではなく裸のマーカーにしてあるのは意図的です。
   区間を囲む形にすると、入れ子や早期 `return`、その境界をまたぐ `await` が何を意味するかをすべて決めなければならなくなりますが、それはこの API が答えようとする問い(実行がどこで止まったか。止まったブロックがどんな形をしているかではなく)には要りません。
-- `await ctx.poll(fn, { description, timeout, interval })` は、求められてはいるがまだ存在しない状態のための submit-poll-fetch ループです。
+- `await poll(fn, { description, timeout, interval })`: 求められてはいるがまだ存在しない状態のための submit-poll-fetch ループです。
   `fn` はその状態になるまで `undefined` を返し続け、`undefined` でなくなった最初の値を `poll` が返します。
   `timeout` の予算が先に尽きた場合は、代わりに `PollTimeoutError` を投げます。
   完了した呼び出しはすべて、何回試したか、どれだけ待ったか、どう終わったかとともに receipt の `polls`(「Receipt」を参照)に記録されます。
   `fn` が何を poll するかは実装の詳細ではなく契約上の選択です。
   観測対象自身の存在であってはなりません。
-  正しい合格状態が不在であるような対象は、その条件の下では、単にまだ描画されていないだけの対象と見分けが付かなくなるからです。
-  存在を poll してしまうと、`fn` がその step の存在意義である答えを返すことが原理的に不可能になります。
+  正しい合格状態が不在であるような対象は、その条件の下では、単にまだ描画されていないだけの対象と見分けが付かなくなり、存在を poll してしまうと `fn` がその step の存在意義である答えを返すことが原理的に不可能になるからです。
   代わりに poll すべきは、対象についての判定をそもそも可能にする何かです(ローディングフラグが false になる、カウントが `undefined` でなくなる、データが届き次第ページが無条件に描画する何か、など)。
   そして対象自体を読むのは、それが解決してからにします。
   `page.waitForSelector` や `waitForLoadState` を通じてブラウザに対して直接取る待ちは、同じように待ちますが、あとに何も残しません。
-  `ctx.poll` を通すことで初めて `at`、`attempts`、`waited_ms`、`outcome` が receipt に載り、それが事後になって「最初の試行で解決し待ちは何もしなかった」のか「4 秒かけて解決した」のかを見分ける唯一の方法になります。
+  `poll` を通すことで初めて `at`、`attempts`、`waited_ms`、`outcome` が receipt に載り、それが事後になって「最初の試行で解決し待ちは何もしなかった」のか「4 秒かけて解決した」のかを見分ける唯一の方法になります。
   これは、Allure emitter がすでにその `declared:` という接頭辞で引いている、自己申告か計測かという同じ線引きです(「Allure emitter」を参照)。
   ここでは、ツールが計測した待ちと、Playwright の内部で見えないまま起きた待ちとの間に、その線が引かれています。
 
@@ -235,31 +252,49 @@ export default defineStep({
 効果が非同期に別の場所へ現れるシステムに書き込む step は、その書き込みが受理された時点ではまだ終わっていません。
 終わるのは、その効果が次の step が見ることになるものに対して見えるようになった時点であり、待ちはその step の内側に属します。
 これは「契約はその step が何を要求するかを言う」という同じ規則を、後ろ向きではなく前向きに読んだものです。
-代わりに待ちを後続の step に置くと、うまくいっているように見えます —— その step が待ち、scenario が通るからです。
+代わりに待ちを後続の step に置くと、うまくいっているように見えます。
+その step が待ち、scenario が通るからです。
 けれどもその待ちは、それを必要としていた操作にではなく、経路の側に付いてしまいます。
 同じ状態に、その step を経由しない経路で到達する別の scenario は、何も待たずに失敗します。
 表に出てくるのは、その scenario だけが red になり兄弟の scenario は green のままという事態であり、これはその scenario 固有の性質のように読めますが、そうではありません。
-green な scenario は、その待ちが正しく置かれている証拠にはなりません —— 必要だった待ちはすべて、たまたまさらに下流で供給されていただけかもしれないからです。
+green な scenario は、その待ちが正しく置かれている証拠にはなりません。
+必要だった待ちはすべて、たまたまさらに下流で供給されていただけかもしれないからです。
 それらを通らない経路だけが、待ちが本来どこに属するかを示せます。
 
-`page()` と `request()` は、nukadoko 自身の型ではなく Playwright 自身の `Page` と `APIRequestContext` をそのまま返します。
+`page` と `request` は、nukadoko 自身の型ではなく Playwright 自身の `Page` と `APIRequestContext` をそのまま返します。
 これは代償を伴う選択であり、その代償ごと「Out of scope」に明記してあります。
 
-ヘルパーは import として存在し、その境界を決めるのはその呼び出しが executor の所有するものに手を伸ばす必要があるかどうかです。
-`ctx.section` が書き込むのは executor が所有し step の境界ごとにリセットするコレクタであり、`observed` や `used` がすでに持っているのと同じ寿命なので、この節自身の規則によって `ctx` に属します。
-`poll` が import だったのは、それが何も記録していなかった間だけでした —— しかも、それは同じ間違いが二度なされた結果でした。
-この規則の以前のバージョンは `ctx.section` を丸ごと保留していました —— progress log の機能が run の中の名前付きの区間をライブで記録するようになるまでは、それは何もしないはずだという理由からです。
-`poll` 自身の `description` は、その同じ log に対して文書化されていましたが、その log は一度も作られなかったため、呼び出し元が書いたラベルはどこにも行き着きませんでした。
-どちらの読みも、名前を付ける先が実際にはどこに必要だったのかを見誤っていました。
-receipt こそがすでにその行き先であり、step の実行がどの段階に達したかを言うのに、生きた log は一度も必要なかった一方、すでに終わった待ちがどれだけ時間がかかったかを言うのには、それはなおさら必要ありません —— 必要だったのは、それをどこかに書き留めることだけでした。
-痕跡を残さない待ちは、最初の試行で返ってきた待ちと見分けが付きません —— そしてこの 2 つは正反対の直し方を求めます。
+`expect` は fixture ではありません。
+step は `import { expect } from "playwright/test"` で直接インポートし、Playwright のテストとまったく同じやり方でアサーションします。
+これは他のあらゆる fixture が従っているのと同じ規則から来ています。
+fixture が運ぶのは executor が注入しなければならないものだけであり、`expect` は executor が所有するものを何一つ必要としません(アサーションの証跡はすでに trace(`actions`、「Receipt」を参照)を通じて receipt に届いています)。
+fixture にしてしまうと、Playwright 自身がすでに公開している export の裏に何もない、ただのメンバーが増えるだけです。
+
+`browser` も fixture ではありませんが、こちらは省略ではなく拒否です。
+`context` は fixture です(`page` がすでに属しているものであり、新たに起動するものは何もありません)。
+2 枚目のタブが要る step はこれを介して `context.newPage()` に手を伸ばします。
+`browser` そのものを渡してしまうと、step は `browser.newContext()` を呼んで executor が一切見ていない context を作れてしまいます。
+計測されず、trace も残らず、その run が書くどの receipt の外側にもなります。
+この名前を bag から外しておくことが、そこへの経路を常に到達不能に保つ方法であり、step が忘れないよう気を付ける慣習ではありません。
+
+2 つの形は、誤って部分的に解析されるのではなく、そのまま拒否されます。
+デフォルト値を持つ分割代入された fixture(`{ page = ... }`)と、rest プロパティを通じて集められたもの(`{ ...rest }`)です。
+どちらもこの節の冒頭で述べた静的な読み取りを台無しにします。
+デフォルト値は `check` が本来きれいに読めるはずの名前を壊しますし、rest プロパティが実際に束縛する名前は、分割代入を実際に実行してみない限りわかりません。
+そして `check` はそれをしてはいけません。
+どちらも fixture が正当に必要とするものを何も失いません。
+fixture は名指された時点で必ず存在するので、デフォルト値にはそもそもデフォルトを取る対象がなく、step が必要とする fixture はすべて必ず明示的に名指せます。
+`check` と `nuka run`/`nuka do` はこの判定をひとつ共有します(「step の連鎖」ですでに `from` に使われているのと同じ「ひとつの判定を 2 つの呼び出し元が共有する」形です)。
+そのため、step が `check` を通過したのに実行時にこの拒否で落ちる、あるいはその逆が起きることはありません。
+未知の fixture 名、デフォルト値、rest プロパティのいずれも、実行が始まる前に実行そのものを拒否します。
+未定義の step がすでに得ているのと同じ「開始しなかった」という結末であり、step の失敗では決してありません。
 
 ### step の連鎖
 
 CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` を与えて scenario に束ねると、その step が単体では直面しなかった問いが立ち上がります。
 以前の step が生成した値は、どうやってこの step まで届くのか、という問いです。
 一見もっともらしい 2 つの答えは、どちらも何かを失います。
-引数を捨てて `ctx.resultOf` だけで読むようにすると `nuka do` の単体実行を失います。
+引数を捨てて `resultOf` だけで読むようにすると `nuka do` の単体実行を失います。
 コマンドラインに渡すものが何も残らないからです。
 そして単体で走ることこそが、その語彙を agent にとって有用にしている当のものなので、この損失は付随的なものではなく実質的なものです。
 setup 全体を 1 つの複合 step にまとめれば既存の step には触れずに済みますが、Given の行が粗くなります。
@@ -278,9 +313,9 @@ export default defineStep({
   args: z.object({ projectId: z.string() }),
   returns: z.object({ archived: z.boolean() }),
   from: { projectId: [createProject, "id"] },
-  async run(ctx, args) {
+  async run({ request }, args) {
     // args.projectId is present or this line was never reached.
-    const res = await (await ctx.request()).post(`/projects/${args.projectId}/archive`);
+    const res = await request.post(`/projects/${args.projectId}/archive`);
     return res.json();
   },
 });
@@ -289,7 +324,7 @@ export default defineStep({
 pattern の capture は今も優先されます。
 `from` が補うのはこの step のこの出現がキャプチャしなかったキーだけなので、同じ step が、ある scenario では Gherkin の行から値を取り、別の scenario では以前の step から値を取ることができます。
 そこで取られるのは、その以前の step がこの scenario 内で直近に成功した実行の結果です。
-これは `ctx.resultOf` が持つのと同じ寿命です。
+これは `resultOf` が持つのと同じ寿命です。
 同じ chain だからです。
 注入は args のバリデーションより前に起こります。
 それこそが要点です。
@@ -350,7 +385,7 @@ scenario には 2 つあるのに、1 つのものを求めているからです
 これは `from` を動機づけたケースを閉じます。
 消費者を生産者より前に束ねる scenario は、実際のブラウザ時間で数分が費やされるまで、正しい scenario と見分けがつきませんでした。
 
-`from` と `ctx.resultOf` はどちらも、上流の step を名前ではなく `Step` オブジェクトそのもので識別します。
+`from` と `resultOf` はどちらも、上流の step を名前ではなく `Step` オブジェクトそのもので識別します。
 そのため `await import()` を経由して届いた step は discovery が登録したものとは別のインスタンスに解決され、何にもマッチしません。
 これはかつては無音でした。
 `resultOf` はただずっと `undefined` を返し続けるだけでした。
@@ -361,7 +396,7 @@ scenario には 2 つあるのに、1 つのものを求めているからです
 登録済みだがまだ実行されていない step は今も `undefined` を返します。
 それは間違いではなく状態です。
 
-`from` が表現できないものは `ctx.resultOf` に残ります。
+`from` が表現できないものは `resultOf` に残ります。
 途中で形を変える必要がある値、必要かどうかが実行時にしか決まらない読み取り、あるいは result 全体をまるごと使う場合です。
 そうした場合は `resultOf` に手を伸ばし、その step が単体でも走らなければならないなら、引数を optional にして `run` の中でフォールバックするという、以前からの形を使います。
 この形はもう既定のやり方ではなく、例外です。
@@ -378,7 +413,7 @@ scenario には 2 つあるのに、1 つのものを求めているからです
 連鎖する値は必ずどこかの step から来なければならず、その step は feature の中に現れなければならないため、scenario には id を運ぶためだけに存在し(`And the project's billing page is fetched`)、その feature が書かれた対象の読み手には何も意味しない行が残ることがあります。
 ある操作がその読み手にとって価値を持たないなら、それはそもそも step であるべきではありません。
 `features/steps/lib/` の下に普通の関数として置き、それを必要とする step から呼び出します。
-そこで手放すのはそのヘルパー自身の receipt であり、それが行う HTTP は今も `observed` に数えられ、`ctx.section` も実行がどこまで進んだかを記録し続けられます。
+そこで手放すのはそのヘルパー自身の receipt であり、それが行う HTTP は今も `observed` に数えられ、`section` も実行がどこまで進んだかを記録し続けられます。
 記録の粒度と feature の読みやすさは、step の書き手が場合ごとに下す判断であり、これがその判断を下す軸です。
 
 step の連鎖は宣言と計測が出会う場所であり、`mutates` の場合(「キーワードの意味論」を参照)とは違う出会い方をします。
@@ -404,7 +439,7 @@ step ごとの boolean は出現ごとの事実を運べないため、宣言が
 - **読み取り専用の environment は、宣言上 mutate する step を実行前に拒否します。**
   宣言がレビューの目を引くのではなく、実行そのものをゲートする唯一の場所です。
 - **実行時には**、receipt がその実行が実際に行ったことを記録します。
-  ツールが見たすべてのネットワーク呼び出しが対象であり(`ctx.request()` と page の両方を通じたもの)、GET/HEAD 以外の呼び出しはすべて観測された書き込みとして数えられ、`mutates`(宣言)の隣に置かれます。
+  ツールが見たすべてのネットワーク呼び出しが対象であり(`request` fixture と page の両方を通じたもの)、GET/HEAD 以外の呼び出しはすべて観測された書き込みとして数えられ、`mutates`(宣言)の隣に置かれます。
   この回数はもはやそれ単独では何も決めません。
   Then の位置も、読み取り専用の environment 自身のポリシーもです。
   宣言された `mutates: false` は、`observed` が何を示していようと信頼されます。
@@ -477,7 +512,7 @@ import { Given, When, Then } from "nukadoko/compat";
   `this.openPage()` に触れた Before/After/AfterStep の個々の呼び出しは、それぞれ自分自身の trace chunk と `actions` のリストを持ち、同じ `hooks` 配列のエントリ上に記録されます(`trace`/`actions`/`truncated` は step 自身の receipt と同じ形です。「Receipt」を参照してください)。
   これは各 step 自身の chunk からも、他の hook からも独立しています。
   hook の呼び出しには、依然として `sections`/`polls` はありません。
-  `ctx.section`/`ctx.poll` を呼ぶための `ctx` を hook が持たないからです。
+  `section`/`poll` を呼ぶための fixture bag を hook が持たないからです。
   hook 自身が明示的に呼んだものではなく trace chunk 自体から読み出される `actions` だけは、この制約の影響を受けません。
   `AfterStep` はこれと同じ登録面(3 通りの呼び出し形、同じ `@tag` / `not @tag` のフィルタ)を共有しますが、Before/After が scenario 全体を挟み込むのに対し、`AfterStep` は実際に実行された pickle step ごとに 1 回走ります。
   この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` にとっての「後」はそこには存在せず、その step については何も現れません。
@@ -549,12 +584,12 @@ feature のフル実行はすべての scenario の分数を消費し、その�
 失敗した step は scenario の残りをスキップし、スキップされた step には receipt が作られません(始まってすらいない実行が引用可能であってはならず、「skipped」と言うのは scenario record の役目です)。
 Evidence は自然なスコープに従います。
 各 step の receipt は、その step 自身の http.jsonl と、その step 自身の Playwright trace の両方を持ちます。
-trace はかつて、共有された context 全体にまたがる 1 本のファイルとして scenario 自身のディレクトリに置かれ、最初の `ctx.page()` 呼び出しで一度だけ開かれ、最後に一度だけ閉じられていました。
-今は step の境界ごとに切られ、ブラウザに一度も触れない step にはそもそも trace の chunk が無く、触れた step にはその step 自身の操作だけが入った chunk があります(これは `ctx.page()` がすでに持っていた「初回呼び出しで開く」という性質と同じ切り方です)。
+trace はかつて、共有された context 全体にまたがる 1 本のファイルとして scenario 自身のディレクトリに置かれ、`page` を bag に名指した最初の step で一度だけ開かれ、最後に一度だけ閉じられていました。
+今は step の境界ごとに切られ、ブラウザに一度も触れない step にはそもそも trace の chunk が無く、触れた step にはその step 自身の操作だけが入った chunk があります(これは step 自身の fixture bag がすでに持っていた「必要な名前だけ構築する」という性質と同じ切り方です)。
 落ちた step の trace を直接開けるほうが、何が起きたかを scenario 全体の録画からスクラブして探すより速く、それがこの変更の理由のすべてです。
 シナリオ全体の 1 本の trace がついでに与えていたもの、つまり全 step をまたいだネットワークの通し view は、step ごとの trace には無くなります。
 各 step 自身の trace にはその step 自身の通信は変わらず入っているので、1 つの step 単体の通信について失われるものは無く、失われるのは scenario 全体の通信を 1 つのファイルだけ開いて眺められるという点だけです。
-`ctx.request()` の通信と page 自身の通信は、いまや同じ step ごとの view を共有します。
+`request` fixture の通信と page 自身の通信は、いまや同じ step ごとの view を共有します。
 どちらも同じ http.jsonl に載り、各エントリには `via: "request"` か `via: "page"` の印が付くため、読み手はどちらの経路が通ったかを推測せずに済みます。
 http.jsonl に載る page 由来のリクエストは `document`/XHR/`fetch` の 3 種類だけです(1 回のページ読み込みは画像やスタイルシート、スクリプトの束を何十件も引き込みうるため、それを全部保持しようとするファイルは読み手が開けるものではなくなってしまいます)。
 ただし落とされたことが黙って消えるわけではありません。
@@ -643,7 +678,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   scenario record の中の hook record も同じフィールドを持ちます。
 - `mutates` は step 自身の宣言であり(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)、`observed` のカウントと並んで置かれることで、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
-  ブラウザが使われるときは Playwright の trace とスクリーンショット、`ctx.request()` の呼び出しと page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、receipt 自体が一次記録になります。
+  ブラウザが使われるときは Playwright の trace とスクリーンショット、`request` fixture の呼び出しと page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、receipt 自体が一次記録になります。
 - `evidence.screenshots` はエントリ 1 つまでで、`{ "file": "final.png", "at": "..." }` という形を取ります。
   ブラウザを使う実行の evidence は以前は 2 つのファイルで、step が失敗するたびに同じバッファを別名でもう 1 つ保存していました。
   それを書くこと自体にコストは無かったものの、ツールが一度も計測していないことを暗に主張していました。
@@ -652,7 +687,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   スクリーンショットは `run` がすでに返るか投げたあとに一度しか撮られないため、その 2 つ目のコピーは、それが名指す失敗に対してすでに古びている可能性がありました。
   `at`(ISO 8601。`started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
-- `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`ctx.request()` と page の両方を通じたもの)。
+- `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture と page の両方を通じたもの)。
   GET/HEAD 以外はすべて書き込みとして数えられます。
   これは書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります(キーワードの意味論を参照してください)。
   この回数はそれ単独では何も決めません。
@@ -660,7 +695,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
 - `evidence.http`(少なくとも 1 回の呼び出しが記録されたときだけ現れます)は http.jsonl を指します。
   1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via" }` です。
-  `via` は `ctx.request()` を通した呼び出しなら `"request"`、page 自身が行ったもの(`ctx.page()` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
+  `via` は `request` fixture を通した呼び出しなら `"request"`、page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
   どちらの経路のエントリにも必ず付くため、読み手はその行がどちらの経路から来たかを形だけから推測せずに済みます。
   page の通信のうち http.jsonl に届くのは `document`、`xhr`、`fetch`(Playwright 自身の `request.resourceType()`)のリクエストだけです。
   実際のページ読み込みは画像やスタイルシート、スクリプトを何十件も引き込みますが、それを受け入れ確認の目的で読み手が 1 つずつ追うことはなく、そのすべてを保持しようとするファイルはそもそも読み手が開けるものではなくなってしまいます。
@@ -672,7 +707,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   それは http.jsonl とは違う問い(実際に何回の読み取り・書き込みが起きたか)に答えているのに対し、http.jsonl が答えるのは(そのうちどれが 1 つずつ読む価値があるか)という別の問いだからです。
   2 つの数は互いに一致することを期待されておらず、どちらかがもう一方より小さくてもバグではありません。
 - `used`(空でないときだけ現れます)は、この実行が値を引き出した以前の実行の一覧です。
-  `from` による注入、`ctx.resultOf` の呼び出し、あるいは `nuka do` での `--use` の receipt のいずれかを通じたものです。
+  `from` による注入、`resultOf` の呼び出し、あるいは `nuka do` での `--use` の receipt のいずれかを通じたものです。
   どの経路もライブラリのコードを通るため、読み取りは計測されるのであって宣言されるのではありません。
   各エントリは `{ "receipt": "rcpt-…", "step": "create-project" }` の形です。
   step 名は引用元の receipt と重複していますが、それでも書き留めます。
@@ -692,7 +727,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   それは「後続の step が参照するものを返す」という、参照だけに頼る罠であり、「型付き step」ですでに戒められているものです。
   これはまた、このフィールドが運べるのは上流の step 自身の `returns` スキーマがそもそも保持していたものだけだということも意味します。
   値を落とす `returns` は、ここからもその値を落とします。
-- `sections`(空でないときだけ現れます)は、この実行中に行われた `ctx.section` の呼び出しを、`{ "label": "...", "at": "..." }` の形でそれぞれ、呼ばれた順に並べたものです。
+- `sections`(空でないときだけ現れます)は、この実行中に行われた `section` の呼び出しを、`{ "label": "...", "at": "..." }` の形でそれぞれ、呼ばれた順に並べたものです。
   `used` と違って重複は除きません。
   ループやリトライで 2 回入ったラベルは 2 回入ったのであり、配列はそのとおりに読めるべきです。
   一方 `used` が receipt id を 1 回しか名指ししないのは、id が一連の中の一点ではなく、1 回引用する価値のある identity だからです。
@@ -702,12 +737,12 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   実際の run がまさにその隙間を露呈させました。
   `status: "failed"` の隣に、対象がまだ存在していることを示す `final.png` が、およそ 8 秒違いで並んでいたにもかかわらず、receipt にはそれを言うものが何もありませんでした。
   額面どおりに読めば状態が点滅していたように見え、実際にそう誤診断されました。
-  `at`(ISO 8601。`ctx.section` が呼ばれた時点でコレクタ自身が取得し、step が渡すことはありません)は、すべてのラベルを、`started_at`/`finished_at`、`polls` 自身の `at`、`evidence.screenshots[].at` がすでに共有している同じ絶対的なタイムラインに乗せます。
+  `at`(ISO 8601。`section` が呼ばれた時点でコレクタ自身が取得し、step が渡すことはありません)は、すべてのラベルを、`started_at`/`finished_at`、`polls` 自身の `at`、`evidence.screenshots[].at` がすでに共有している同じ絶対的なタイムラインに乗せます。
   これにより、「状態が実際に変化したのか」と「その読み取りは状態が落ち着く前に行われたのか」が、receipt 単体からは見分けが付かない状態でなくなります。
   失敗した step の `sections` も、失敗するまでに到達したラベルをそのまま保持しており、その配列の最後の要素がすでに「どの段階にいたか」に答えているため、同じ事実の置き場所をもう 1 つ作る `error.section` フィールドは別途ありません。
-  `section` を持つのは typed step の `ctx` だけで、compat step には `this` 上に対応するものがないため、`sections` は単に省略されます。
+  `section` を持つのは typed step の fixture bag だけで、compat step には `this` 上に対応するものがないため、`sections` は単に省略されます。
   これは、typed step が一度も chain から読み取らなかったときに `used` が省略されるのと同じです。
-- `polls`(空でないときだけ現れます)は、この実行中に完了したすべての `ctx.poll` 呼び出しを記録します: `description` が渡されていればそれ、`at`(その呼び出しが始まった ISO 8601 の時刻)、predicate が実行された回数、経過したミリ秒、そしてどう終わったか(`resolved`、`timed_out`、あるいは predicate 自身が投げた場合の `failed`)です。
+- `polls`(空でないときだけ現れます)は、この実行中に完了したすべての `poll` 呼び出しを記録します: `description` が渡されていればそれ、`at`(その呼び出しが始まった ISO 8601 の時刻)、predicate が実行された回数、経過したミリ秒、そしてどう終わったか(`resolved`、`timed_out`、あるいは predicate 自身が投げた場合の `failed`)です。
   呼び出し順ではなく完了順です。
   入れ子になった poll は、それを内包する poll より先に完了し、完了した poll だけが述べるべき件数を持つからです。
   timeout した poll も他と同じように記録されます。
@@ -716,15 +751,15 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   それが存在する理由がタイミングの問いだからです: 0ms での 1 回の試行は、条件がすでに真だったこと、つまり待ちが no-op だったことを述べ、20 秒かけての 40 回の試行は、それが本当に遅かったことを述べます。
   この 2 つは step の外からは同じに見えながら、正反対の直し方を求めます。
   `at` は欠けていた半分、すなわち長さだけではない絶対的な開始点を加えるものであり、これにより poll は、測る基準点を持たない長さとして読まれる代わりに、`sections` と `evidence.screenshots` がいま共有しているのと同じタイムラインに置けるようになります。
-  compat step にはそれを呼び出す `ctx` がなく、`polls` は単に省略されます。
+  compat step にはそれを呼び出す fixture bag がなく、`polls` は単に省略されます。
   これは `sections` が省略されるのと同じです。
-- `required_env`(空でないときだけ現れます)は、この実行中に `ctx.requireEnv` が呼ばれた名前を、初めて読まれた順に重複なく並べたものです。
+- `required_env`(空でないときだけ現れます)は、この実行中に `requireEnv` が呼ばれた名前を、初めて読まれた順に重複なく並べたものです。
   `used` や `sections` がすでに持っているのと同じ、宣言ではなく計測という形です。
   `requireEnv` はライブラリが制御できる唯一の呼び出し口だからです。
   キーが見つからず投げる前に記録されるため、`MissingEnvError` で失敗した実行の receipt にも、その step が何を要求したかが残ります。
   記録されるのは名前だけで、値は決して記録されません。
   値は secret になり得るからです。
-  `ctx.env[name]` を直接読んだ場合はここには残りません。
+  `env[name]` を直接読んだ場合はここには残りません。
   このフィールドが数えるのは `requireEnv` を通った読み取りだけで、ライブラリが関知しないプレーンなオブジェクトの読み取りは含まれません。
 - `page_events`(少なくとも 1 つの種類が空でないときだけ現れます)は、step が動いている間に browser context 自身が見たものを記録します。
   console error(`console.error` の呼び出しだけを対象とし、warning は対象外です。
@@ -754,9 +789,9 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   成功した step の receipt にも失敗した step の receipt にも、同じように現れます。
   page のエラーは page についての証跡であり、step についての判定ではないからです。
 - `actions`(空でないときだけ現れます)は、この step 自身の trace chunk(上の `evidence.trace`)から読み出されます。
-  この step が `ctx.page()` を通して行った Playwright の呼び出しすべてで、`expect` の待ちも含み、trace が完了を記録した順に並びます。
-  `expect` のためだけの fixture やラッパーは何も要りません。
-  step は Playwright のテストファイルと同じやり方(`import { expect } from "@playwright/test"`)でそこにたどり着き、trace はそのラッパーの下、Playwright 自身の層でその呼び出しを記録します。
+  この step が `page` fixture を通して行った Playwright の呼び出しすべてで、`expect` の待ちも含み、trace が完了を記録した順に並びます。
+  `expect` も fixture ではありません(「Context API」を参照)。
+  step は Playwright のテストファイルと同じやり方(`import { expect } from "playwright/test"`)でそこにたどり着き、trace はそのラッパーの下、Playwright 自身の層でその呼び出しを記録します。
   `goto`、`click`、その他すべての呼び出しがすでに同じ場所に載っているのと同じです。
   各エントリは `{ "method", "expression"?, "selector"?, "url"?, "is_not"?, "timeout_ms"?, "ms", "outcome", "at" }` です。
   `method` と 5 つの任意フィールドは trace 自身の呼び出しからそのまま写され、`ms` はその呼び出し自身の所要時間を trace 自身の時計で測ったもの、`outcome` は trace がその呼び出しに error を記録していれば `"failed"`、そうでなければ `"passed"` です。
@@ -766,7 +801,7 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   上限は 100 件で `page_events` と同じ規約であり、上限に達したときに真の総数を報告する兄弟フィールド `truncated` も同じです: `"truncated": { "actions": 214 }`。
   他のどのフィールドとも同じ 1 回の redact で覆われます。
   secret は `url` や `selector` にも、他のどこにと同じくらい容易に載りうるため、このフィールドにも専用の別の redact 経路はありません。
-  trace chunk がそもそも読めないとき(壊れている、あるいは step が `ctx.page()` を一度も呼ばずそもそも開かれなかったとき)は `actions` は黙って失われます。
+  trace chunk がそもそも読めないとき(壊れている、あるいは step が `page` を一度も分割代入せずそもそも開かれなかったとき)は `actions` は黙って失われます。
   このリストにある他のどの evidence 読み取りフィールドもすでに従っている、計測が実行を壊してはならないという同じ規則です。
   唯一の声を上げる例外は、この build が認識しない trace format のバージョンです。
   検証していない形を推測することは、何も報告しないことより悪いため、`actions` はやはり省かれますが、`nuka run`/`nuka do` は stderr にも一度だけ警告します(`warning: trace format version <n> is not readable by this build; step actions were not recorded`)。
@@ -775,10 +810,10 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   そのため、その呼び出し自身の trace 証跡は代わりに scenario record の `hooks` 配列にあるその呼び出し自身のエントリに載ります。
   `trace`(receipt dir ではなく scenario 自身の directory からの相対パスです。hook には receipt dir 自体がありません)、`actions`、`truncated` は、上と全く同じ形で、全く同じ規則のもとで現れます。
   hook の呼び出しには `sections`/`polls` は並びません。
-  どちらも `ctx.section`/`ctx.poll` から来るものであり、hook はどちらを呼ぶための `ctx` も持たず、持つのは World(`this`)だけだからです。
+  どちらも typed step の `section`/`poll` fixture から来るものであり、hook はどちらを呼ぶための fixture bag も持たず、持つのは World(`this`)だけだからです。
   hook 自身が明示的に呼んだものではなく trace chunk 自体から読み出される `actions` は、この gap の影響を受けません。
   ブラウザに一度も触れなかった hook の呼び出しは chunk を開かず、この 3 つのフィールドのどれも運びません。
-  `ctx.page()` を一度も呼ばなかった step と同じです。
+  `page` を一度も分割代入しなかった step と同じです。
 - receipt は state directory(`.nukadoko/`、gitignore 対象)の下に置かれます。
   それらはローカルな作業記録であり、耐久性のある成果物は sign-off です。
 
@@ -851,10 +886,10 @@ Playwright のオプションを zod で列挙し直すと、Playwright が 1 �
 省略した場合は Playwright 自身の既定値(`headless: true`)が適用されます。
 
 `browserContext` と `requestContext` は、`browser` の `launch` に対応する `newContext` 側のキーです。
-`browser.newContext()`(`ctx.page()` が使います)と `playwrightRequest.newContext()`(`ctx.request()` が使います)は別々の Playwright 呼び出しであり、オプションの型も別々なので、1 つの共有キーではなくそれぞれに専用のキーを用意しています。
+`browser.newContext()`(step の bag が `page` を名指すと構築されます)と `playwrightRequest.newContext()`(step の bag が `request` を名指すと構築されます)は別々の Playwright 呼び出しであり、オプションの型も別々なので、1 つの共有キーではなくそれぞれに専用のキーを用意しています。
 これは `browser` が従っているのと同じ「Playwright 自身の型に委ねる」方針です。
 これにより `ignoreHTTPSErrors` のようなオプションに初めて手が届くようになります。
-自己署名証明書を使うローカルの接続先では、`ctx.page()` にも `ctx.request()` にもそれを設定する手段がこれまでありませんでした。
+自己署名証明書を使うローカルの接続先では、どちらの fixture にもそれを設定する手段がこれまでありませんでした。
 どちらのキーも `baseURL` と `storageState` は理由を述べたエラーで拒否し、黙って無視することはしません。
 `config.baseURL` はプロジェクトの base URL の唯一の出所であるべきであり、`storageState` は nukadoko 自身の session 機構が設定するものなので、ここでも受け付けてしまうと config が自分自身と静かに食い違う値を持つことになるからです。
 
@@ -1025,10 +1060,10 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   trace は `trace` という名前の attachment として、step 自身のものと同じ contentType で付きます。
   `actions` は、上のブロックが説明したのと同じ仕組みで、その fixture 自身の child step タイムラインにマージされます。
   hook には合流させる `sections`/`polls` がありません。
-  `ctx.section`/`ctx.poll` を呼ぶための `ctx` を持たないからです。
+  `section`/`poll` を呼ぶための fixture bag を持たないからです。
   それでも trace から読み出された `actions` は、step のときと同じようにレンダリングされます。
   `this.openPage()` に一度も触れなかった hook の呼び出しは、trace の attachment もタイムラインの entry もどちらも持ちません。
-  `ctx.page()` を一度も呼ばなかった step が「何も表示するものがない」のと同じです。
+  `page` を一度も分割代入しなかった step が「何も表示するものがない」のと同じです。
 - `page_events`(「Receipt」を参照)は、最大で 3 つの parameter として表に出ます: `console errors (observed)`、`page errors (observed)`、`failed requests (observed)` です。
   それぞれ、少なくとも 1 件記録された種類だけに現れます。
   こうすることで、すべての entry を全文運んでいる `receipt.json` という attachment を開かなくても、読み手は件数を見られます。
@@ -1273,7 +1308,7 @@ nuka skill path               where the bundled skill lives, for a project
   `defineStep` には、切り替えて戻す import がありません。
   昇格させた step の body は移ります — `run` は Playwright 自身のオブジェクトに対して書かれており、それは下で述べているのと同じ選択によるものです — けれどもそのスキーマ、receipt の `result`、`from` とそれを読む束縛順序のチェック、そしてそれらの上に組まれたあらゆる契約チェックは移らず、ここには元に戻す手段は何もありません。
   埋めるべき欠落としてではなく、限界として述べます: 変換は step ごとの機械的な作業であり、import の可逆性があるのは採用の最初の一歩を安くするためであって、型付き側を選択制にするためではありません。
-- **意図的に driver-agnostic ではない。** `ctx.page()` と `ctx.request()` は Playwright 自身の `Page` と `APIRequestContext` を返し、compat の扉は移行中の glue に、それがすでに使っていたのと同じオブジェクトを渡します。
+- **意図的に driver-agnostic ではない。** `page` と `request` の fixture は Playwright 自身の `Page` と `APIRequestContext` を返し、compat の扉は移行中の glue に、それがすでに使っていたのと同じオブジェクトを渡します。
   それらを nukadoko 自身のインターフェースの背後にラップすれば、そのラッパーが公開し忘れたあらゆる能力を犠牲にし、ユーザーがすでに知っている語彙を、このツールだけが話す語彙に置き換えることになります。
   それは公式の SDK を通して書くことの正反対です。
   引き換えに、別の driver へ後から差し替えるときは public API と compat の扉が同時に壊れます。

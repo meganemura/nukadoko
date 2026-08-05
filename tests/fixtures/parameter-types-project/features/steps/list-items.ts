@@ -15,7 +15,7 @@ export default defineStep({
   args: z.object({ dir: z.string().optional() }),
   returns: z.object({ items: z.array(z.string()), dir: z.string().optional() }),
   mutates: false,
-  async run(_ctx, args) {
+  async run({}, args) {
     const items = args.dir ? [`item-in-${args.dir}`] : ["item-1", "item-2"];
     return { items, dir: args.dir };
   },

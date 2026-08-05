@@ -72,7 +72,7 @@ one is:
 | Output | discarded — the receipt's `result` is `null` | validated against a `returns` schema and stored in the receipt |
 | Dependencies | side effects on the World, invisible in the function signature | declared with `from`, named in an import, checked by `nuka check` before anything runs, and recorded as `used` in the receipt |
 | Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the receipt's `observed` counts |
-| Running alone | not possible — the World is empty outside a scenario | `nuka do <step>` runs it directly, receipt printed to stdout — a `from` key comes from `--args` like any other, or from `--use <receipt-id>` for one drawn from an earlier execution; a `ctx.resultOf` call inside `run` still finds nothing, since there is no scenario for it to walk |
+| Running alone | not possible (the World is empty outside a scenario) | `nuka do <step>` runs it directly, receipt printed to stdout; a `from` key comes from `--args` like any other, or from `--use <receipt-id>` for one drawn from an earlier execution; a `resultOf` fixture call inside `run` still finds nothing, since there is no scenario for it to walk |
 
 That last row is a separate fact from the "Dependencies" row above it, not a
 consequence of it: a compat step can't run alone because what it needs lives
@@ -84,7 +84,7 @@ dependencies are named as `from` entries, visible in an import, so a
 upstream step's own name never has to appear on the command line, because
 the cited receipt already carries it. A step whose every key arrives that
 way needs no `--args` at all: `--use` on its own is a complete invocation. What still finds nothing outside a
-scenario is a dependency read through `ctx.resultOf` from inside `run`: that
+scenario is a dependency read through the `resultOf` fixture from inside `run`: that
 call has no chain to walk when there was no scenario to build one,
 `--use` or not.
 
@@ -122,8 +122,8 @@ export default defineStep({
     id: z.string().describe("the created project's id, for later steps to cite"),
   }),
   mutates: true,
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/projects", { data: args });
+  async run({ request }, args) {
+    const res = await request.post("/projects", { data: args });
     return res.json();
   },
 });
@@ -134,8 +134,9 @@ What changed:
 - `this.projectId` is gone; the id comes back through `returns` instead. A
   later step declares `from: { projectId: [createProjectStep, "id"] }` to
   read it by key — `nuka check` verifies the binding order before anything
-  runs, and the read shows up in that later step's own receipt (`ctx.resultOf`
-  stays available for the rarer read a key name can't express).
+  runs, and the read shows up in that later step's own receipt (the
+  `resultOf` fixture stays available for the rarer read a key name can't
+  express).
 - The argument is a named capture bound to a schema key
   (`{name:string}` → `args.name`), so the pattern alone shows which text
   becomes which field.
@@ -144,8 +145,10 @@ What changed:
   and a read-only environment refuses to run it at all. The receipt still
   records what the run actually sent, for review, but that count doesn't
   get the step rejected.
-- `this.request` becomes `ctx.request()`: only what the executor actually
-  injects is on `ctx`, nothing implicit.
+- `this.request` becomes the `request` fixture, named by destructuring the
+  first argument: only what the executor actually injects can be named
+  there, nothing implicit, and only the names actually named get built.
+  A step naming neither `page` nor `context` never launches a browser.
 
 This is the only worked example here. It's not a catalog of every gap
 between compat and typed — if another pattern comes up often enough to

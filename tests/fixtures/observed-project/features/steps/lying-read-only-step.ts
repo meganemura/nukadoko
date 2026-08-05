@@ -15,8 +15,7 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const request = await ctx.request();
+  async run({ request }) {
     await request.post("/ok");
     return { ok: true };
   },

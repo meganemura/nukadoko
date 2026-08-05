@@ -14,7 +14,7 @@ export default defineStep({
   args: z.object({ sourceId: z.string() }),
   returns: z.object({ sourceId: z.string() }),
   from: { sourceId: [fromSource, "id"] },
-  async run(_ctx, args) {
+  async run({}, args) {
     return { sourceId: args.sourceId };
   },
 });

@@ -15,8 +15,8 @@ export default defineStep({
   args: z.object({ projectId: z.string() }),
   returns: z.object({ closed: z.boolean(), projectId: z.string(), projectName: z.string().nullable() }),
   from: { projectId: [createProject, "id"] },
-  async run(ctx, args) {
-    const project = ctx.resultOf(createProject);
+  async run({ resultOf }, args) {
+    const project = resultOf(createProject);
     return { closed: true, projectId: args.projectId, projectName: project?.name ?? null };
   },
 });

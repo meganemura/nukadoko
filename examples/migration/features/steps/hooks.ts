@@ -6,7 +6,7 @@ import type { MigrationWorld } from "../support/world.js";
 // bootstrap its own Playwright APIRequestContext by hand (its own baseURL,
 // its own disposal); `this.openRequest()` replaces that bootstrapping with
 // the harness's own lazily-launched, memoized request context -- the exact
-// same object a typed step's `ctx.request()` reaches (docs/spec.md "Compat
+// same object a typed step's `request` fixture reaches (docs/spec.md "Compat
 // steps") -- so this hook and every step in the same pickle, compat or
 // typed, share one Playwright context, cookies included, instead of each
 // piece of glue launching (and measuring nothing about) its own.

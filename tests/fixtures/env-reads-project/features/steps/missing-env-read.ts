@@ -12,8 +12,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.requireEnv("MISSING_KEY");
+  async run({ requireEnv }) {
+    requireEnv("MISSING_KEY");
     return { ok: true };
   },
 });

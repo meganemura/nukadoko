@@ -12,7 +12,7 @@ export default defineStep({
   args: z.object({ name: z.string().describe("the widget's name") }),
   returns: z.object({ state: z.string().describe("the widget's current state") }),
   mutates: false,
-  async run(_ctx, args) {
+  async run({}, args) {
     return { state: `inspected:${args.name}` };
   },
 });

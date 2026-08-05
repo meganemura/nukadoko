@@ -11,8 +11,7 @@ export default defineStep({
   args: z.object({ todos: z.array(z.array(z.string())) }),
   returns: z.object({ created: z.array(z.string()) }),
   mutates: true,
-  async run(ctx, args) {
-    const request = await ctx.request();
+  async run({ request }, args) {
     const created: string[] = [];
     for (const row of args.todos) {
       const res = await request.post("/todos", { data: { title: row[0] } });

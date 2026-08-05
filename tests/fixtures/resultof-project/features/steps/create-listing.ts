@@ -12,7 +12,7 @@ export default defineStep({
   description: "Create a listing and return its id and name",
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     if (args.name === "boom") {
       throw new Error("listing creation failed on purpose");
     }

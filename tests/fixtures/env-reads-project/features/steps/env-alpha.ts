@@ -12,8 +12,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.requireEnv("ALPHA_ONLY");
+  async run({ requireEnv }) {
+    requireEnv("ALPHA_ONLY");
     return { ok: true };
   },
 });

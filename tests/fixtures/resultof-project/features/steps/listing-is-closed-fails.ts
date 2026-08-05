@@ -12,8 +12,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ closed: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.resultOf(createListing);
+  async run({ resultOf }) {
+    resultOf(createListing);
     throw new Error("closing exploded on purpose");
   },
 });

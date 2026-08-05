@@ -10,7 +10,7 @@ export default defineStep({
   description: "Create an owner and return its id",
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { id: `o_${args.name}` };
   },
 });

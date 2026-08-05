@@ -106,7 +106,7 @@
     {
       "en": ["collector"],
       "ja": "コレクタ",
-      "note": "executor が所有し step の境界ごとにリセットする、ctx.section や ctx.poll の呼び出しを集める内部の収集役"
+      "note": "executor が所有し step の境界ごとにリセットする、section や poll(fixture)の呼び出しを集める内部の収集役"
     },
     {
       "en": ["from-order violation", "from-order"],
@@ -137,6 +137,11 @@
       "en": ["upgrade", "upgrading"],
       "ja": "アップグレード",
       "note": "npm パッケージのバージョンを上げること。「更新」と訳さない。README の Upgrading 節は npm update では版が動かないことを説明する章で、「更新」だと npm update と読めて章の主張と衝突する"
+    },
+    {
+      "en": ["destructure", "destructures", "destructured", "destructuring"],
+      "ja": "分割代入",
+      "note": "p4a-fixture-bag task spec で run() の第一引数の話に使うようになった、TS/JS の標準用語。動詞化するときは「分割代入する / された」"
     }
   ],
   "keep_english": [
@@ -177,11 +182,15 @@
     { "term": "schema", "why": "zod schema、args / returns の schema と直接対応する" },
     {
       "term": "poll",
-      "why": "ctx.poll と receipt の polls フィールドに直接対応する API 名。散文の「待つ / 待ち」とは書き分ける —— 待ちという行為の話か、その API の話かを読み手が区別できる必要がある"
+      "why": "poll fixture と receipt の polls フィールドに直接対応する API 名。散文の「待つ / 待ち」とは書き分ける(待ちという行為の話か、その API の話かを読み手が区別できる必要がある)"
     },
     {
       "term": "readiness",
       "why": "ページが読み取り可能な状態(unrendered の反対)に達していたことを示す証拠を指す語。「準備」等に訳すと一般語に埋もれて曖昧になるため英語のまま残す"
+    },
+    {
+      "term": "fixture",
+      "why": "p4a-fixture-bag task spec で入った run() の第一引数(page/context/request/env/requireEnv/baseURL/resultOf/section/poll)を指す語。StepFixtures 型名、fixture bag という言い回しと直接対応し、Playwright 自身の fixture とも語根を共有する。訳すと両方の結び付きが失われる"
     }
   ],
   "identifiers": {

@@ -10,7 +10,7 @@ export default defineStep({
     id: z.string().describe("the created project's id"),
     name: z.string().describe("echoes the given name"),
   }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { id: "p_0001", name: args.name };
   },
 });

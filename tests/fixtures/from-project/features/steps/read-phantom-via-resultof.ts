@@ -19,8 +19,8 @@ export default defineStep({
   description: "Calls ctx.resultOf on a Step object discovery never registered, on purpose",
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
-  async run(ctx) {
-    ctx.resultOf(neverDiscovered);
+  async run({ resultOf }) {
+    resultOf(neverDiscovered);
     return { ok: true };
   },
 });

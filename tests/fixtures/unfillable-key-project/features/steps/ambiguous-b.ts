@@ -7,7 +7,7 @@ export default defineStep({
   description: "The other half of an ambiguous match, with its own unfillable required key",
   args: z.object({ serialB: z.string() }),
   returns: z.object({ serialB: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { serialB: args.serialB };
   },
 });

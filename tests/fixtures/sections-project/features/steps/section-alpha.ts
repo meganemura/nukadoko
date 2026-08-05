@@ -12,8 +12,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.section("alpha-only");
+  async run({ section }) {
+    section("alpha-only");
     return { ok: true };
   },
 });

@@ -96,7 +96,7 @@
 // deduplicated, in access order, both arrays omitted together (`used`'s own
 // convention) when a step never touched `this` at all. Never present on a
 // typed step's receipt: a typed step has no World to read or write (its
-// `run(ctx, args)` never receives `this`), so its own tally is always empty
+// `run(fixtures, args)` never receives `this`), so its own tally is always empty
 // and this field is always omitted for it — no separate "kind" check is
 // needed to enforce that.
 //

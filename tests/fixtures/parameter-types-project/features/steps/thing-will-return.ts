@@ -13,7 +13,7 @@ export default defineStep({
   args: z.object({ negated: z.boolean() }),
   returns: z.object({ negated: z.boolean() }),
   mutates: false,
-  async run(_ctx, args) {
+  async run({}, args) {
     return { negated: args.negated };
   },
 });

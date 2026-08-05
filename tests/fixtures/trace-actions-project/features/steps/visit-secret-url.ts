@@ -14,10 +14,9 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const token = ctx.requireEnv("URL_TOKEN");
-    const page = await ctx.page();
-    const response = await page.goto(`${ctx.baseURL}/?token=${token}`);
+  async run({ page, requireEnv, baseURL }) {
+    const token = requireEnv("URL_TOKEN");
+    const response = await page.goto(`${baseURL}/?token=${token}`);
     return { ok: response !== null && response.ok() };
   },
 });

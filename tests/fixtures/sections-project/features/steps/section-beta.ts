@@ -8,8 +8,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.section("beta-only");
+  async run({ section }) {
+    section("beta-only");
     return { ok: true };
   },
 });

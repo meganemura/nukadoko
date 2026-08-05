@@ -12,7 +12,7 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({}),
   mutates: true,
-  async run(ctx) {
-    throw new Error(`token leaked: ${ctx.env.API_TOKEN ?? "(missing)"}`);
+  async run({ env }) {
+    throw new Error(`token leaked: ${env.API_TOKEN ?? "(missing)"}`);
   },
 });

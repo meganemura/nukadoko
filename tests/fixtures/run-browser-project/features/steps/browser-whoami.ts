@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Then-position step (mutates: false, legal there): navigates ctx.page() to
+// Then-position step (mutates: false, legal there): navigates page to
 // /whoami and reads back the JSON body the server rendered into the page,
 // proving this step's browser context is the *same* one browser-login.ts (a
 // Background step) opened earlier in this same scenario.
@@ -11,9 +11,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ cookie: z.string().nullable() }),
   mutates: false,
-  async run(ctx) {
-    const page = await ctx.page();
-    await page.goto(`${ctx.baseURL}/whoami`);
+  async run({ page, baseURL }) {
+    await page.goto(`${baseURL}/whoami`);
     const text = await page.textContent("body");
     return JSON.parse(text ?? "null") as { cookie: string | null };
   },

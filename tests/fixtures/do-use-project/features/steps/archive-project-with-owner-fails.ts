@@ -13,7 +13,7 @@ export default defineStep({
   args: z.object({ projectId: z.string(), ownerId: z.string() }),
   returns: z.object({ archived: z.boolean() }),
   from: { projectId: [createProject, "id"], ownerId: [createOwner, "id"] },
-  async run(_ctx, args) {
+  async run({}, args) {
     throw new Error(`archiving project ${args.projectId} for owner ${args.ownerId} exploded on purpose`);
   },
 });

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { StepContext } from "../context.js";
+import type { StepFixtures } from "../context.js";
 import { STEP_BRAND } from "./brand.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
@@ -220,8 +220,19 @@ export interface StepDefinitionInput<
    * stays one-line-per-step); shown in `nuka describe`. No default — omit it
    * and `Step.rationale` is `undefined`, same as omitting `pattern`. */
   rationale?: string;
+  /** `fixtures` is a `StepFixtures` bag, named by destructuring
+   * (`run({ page, section }, args) => ...`, p4a-fixture-bag task spec) —
+   * only the names actually destructured get built at all (docs/spec.md
+   * "Context API"): a step that never destructures `page`/`context` never
+   * causes a browser to launch. The destructuring pattern is read
+   * statically (src/step/fixture-names.ts) before this function is ever
+   * called, so it must be a plain object pattern — no default values, no
+   * `...rest` (src/step/validate-fixtures.ts refuses both, and an
+   * un-destructured positional parameter, before execution). A step that
+   * needs no fixtures at all writes `run({}, args)`, or, needing neither
+   * fixtures nor args, `run()`. */
   run(
-    ctx: StepContext,
+    fixtures: StepFixtures,
     args: z.infer<TArgs>,
   ): Promise<z.infer<TReturns>> | z.infer<TReturns>;
 }
@@ -243,7 +254,7 @@ export interface Step<
   readonly from: StepFromMap;
   readonly rationale: string | undefined;
   readonly run: (
-    ctx: StepContext,
+    fixtures: StepFixtures,
     args: z.infer<TArgs>,
   ) => Promise<z.infer<TReturns>> | z.infer<TReturns>;
   readonly [STEP_BRAND]: true;

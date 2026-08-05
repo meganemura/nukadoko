@@ -11,10 +11,10 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.section("one");
-    ctx.section("two");
-    ctx.section("three");
+  async run({ section }) {
+    section("one");
+    section("two");
+    section("three");
     return { ok: true };
   },
 });

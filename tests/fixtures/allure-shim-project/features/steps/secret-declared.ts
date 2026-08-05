@@ -11,8 +11,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({}),
   mutates: false,
-  async run(ctx) {
-    await label("token", ctx.env.SHIM_SECRET ?? "missing");
+  async run({ env }) {
+    await label("token", env.SHIM_SECRET ?? "missing");
     return {};
   },
 });

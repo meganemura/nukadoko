@@ -13,7 +13,7 @@ export default defineStep({
   args: z.object({ total: z.string() }),
   returns: z.object({ total: z.string() }),
   mutates: false,
-  async run(_ctx, args) {
+  async run({}, args) {
     return { total: args.total };
   },
 });

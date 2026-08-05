@@ -18,7 +18,7 @@ export default defineStep({
     id: z.string().describe("the created widget's id"),
     name: z.string().describe("echoes the given name"),
   }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { id: "w_0001", name: args.name };
   },
 });

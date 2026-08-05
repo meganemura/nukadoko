@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Browser-path counterpart to whoami.ts: navigates ctx.page() to /whoami and
+// Browser-path counterpart to whoami.ts: navigates page to /whoami and
 // reads the JSON body chromium renders into the page (wrapped in <pre> for a
 // JSON response) back out via page.textContent(), rather than
 // page.evaluate(() => document...): this project's tsconfig has no `dom`
@@ -12,9 +12,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ cookie: z.string().nullable() }),
   mutates: false,
-  async run(ctx) {
-    const page = await ctx.page();
-    await page.goto(`${ctx.baseURL}/whoami`);
+  async run({ page, baseURL }) {
+    await page.goto(`${baseURL}/whoami`);
     const text = await page.textContent("body");
     return JSON.parse(text ?? "null") as { cookie: string | null };
   },

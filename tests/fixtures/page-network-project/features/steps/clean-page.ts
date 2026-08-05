@@ -11,8 +11,7 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const page = await ctx.page();
+  async run({ page }) {
     await page.goto("/clean");
     return { ok: true };
   },

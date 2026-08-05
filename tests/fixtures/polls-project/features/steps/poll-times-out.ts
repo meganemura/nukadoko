@@ -12,8 +12,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    await ctx.poll(async () => undefined, { interval: 5, timeout: 20 });
+  async run({ poll }) {
+    await poll(async () => undefined, { interval: 5, timeout: 20 });
     return { ok: true };
   },
 });

@@ -11,8 +11,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    await ctx.poll(async () => "ready", { interval: 5, timeout: 200, description: "alpha-only" });
+  async run({ poll }) {
+    await poll(async () => "ready", { interval: 5, timeout: 200, description: "alpha-only" });
     return { ok: true };
   },
 });

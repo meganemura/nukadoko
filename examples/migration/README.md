@@ -15,7 +15,7 @@ demonstration. It is not "before" or "after"; it is the messy, realistic
 middle: some glue is still cucumber-js-shaped compat code, one World key has
 been promoted to a validated, declared field while another is still a plain
 undeclared stash, and one producer/consumer pair has already been promoted
-all the way to typed steps wired through `ctx.resultOf`. The four stages
+all the way to typed steps wired through the `resultOf` fixture. The four stages
 below walk through how a project actually gets to a state that looks like
 this one, in order, each with its own real command and its own real output.
 
@@ -81,7 +81,7 @@ terminal, in this same directory.
   respectively.
 - `features/steps/create-todo.ts` / `features/steps/read-created-todo-
   id.ts` -- the one promoted producer/consumer pair (Stage 2), wired
-  through `ctx.resultOf` instead of a World write.
+  through the `resultOf` fixture instead of a World write.
 
 `nuka steps --json` lists the whole mixed vocabulary, typed and compat side
 by side (real captured output, `description`/`mutates` only present for the
@@ -115,7 +115,7 @@ by side (real captured output, `description`/`mutates` only present for the
     "name": "read-created-todo-id",
     "kind": "typed",
     "patterns": ["the created todo id is read back via resultOf"],
-    "description": "Read the previous step's validated result through ctx.resultOf",
+    "description": "Read the previous step's validated result through resultOf",
     "mutates": false
   },
   {
@@ -323,7 +323,7 @@ either.
 
 The full promotion: a step that used to be compat glue producing data onto
 `this`, and a second step reading it back off `this`, become a typed
-producer and a typed consumer wired through `ctx.resultOf` --
+producer and a typed consumer wired through the `resultOf` fixture --
 [`features/steps/create-todo.ts`](features/steps/create-todo.ts):
 
 ```ts
@@ -332,8 +332,8 @@ export default defineStep({
   args: z.object({ title: z.string() }),
   returns: z.object({ id: z.string(), title: z.string(), done: z.boolean() }),
   mutates: true,
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/todos", { data: { title: args.title } });
+  async run({ request }, args) {
+    const res = await request.post("/todos", { data: { title: args.title } });
     return res.json();
   },
 });
@@ -349,8 +349,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ id: z.string() }),
   mutates: false,
-  run(ctx) {
-    const created = ctx.resultOf(createTodo);
+  run({ resultOf }) {
+    const created = resultOf(createTodo);
     if (!created) {
       throw new Error('expected a prior "a todo titled ... is created" result to read via resultOf');
     }
@@ -387,11 +387,11 @@ and `rcpt-...-9x9l`), trimmed the same way:
 
 `used` is the proof: the consumer made no network call of its own
 (`observed` is all zeros) and never touched a World -- there is no World
-field here at all, for either receipt, because a typed step's `run(ctx,
-args)` never receives `this` -- it read the producer's own validated `id`
-straight through `ctx.resultOf`, and that read is recorded by the tool, not
-declared by either step. This pair is this suite's fully-migrated end
-state: no stash, no compat glue, no `this` at all.
+field here at all, for either receipt, because a typed step's `run`
+never receives `this` -- it read the producer's own validated `id`
+straight through the `resultOf` fixture, and that read is recorded by the
+tool, not declared by either step. This pair is this suite's fully-migrated
+end state: no stash, no compat glue, no `this` at all.
 
 ## Going back
 

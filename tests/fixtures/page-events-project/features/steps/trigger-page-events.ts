@@ -24,9 +24,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const token = ctx.requireEnv("PAGE_TOKEN");
-    const page = await ctx.page();
+  async run({ page, requireEnv }) {
+    const token = requireEnv("PAGE_TOKEN");
     const context = page.context();
 
     const consoleErrorSeen = context.waitForEvent("console", {

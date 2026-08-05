@@ -10,7 +10,7 @@ export default defineStep({
   description: "Create a project and return its id and name",
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { id: `p_${args.name}`, name: args.name };
   },
 });

@@ -7,8 +7,8 @@ export default defineStep({
   args: z.object({ id: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
   mutates: false,
-  async run(ctx, args) {
-    const res = await (await ctx.request()).get(`/projects/${args.id}`);
+  async run({ request }, args) {
+    const res = await request.get(`/projects/${args.id}`);
     return res.json();
   },
 });

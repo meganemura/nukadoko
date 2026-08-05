@@ -32,6 +32,7 @@ import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
+import { formatFixtureIssues, validateStepFixtures } from "../step/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
@@ -341,6 +342,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     );
     if (fromIssues.length > 0) {
       stderr.write(`${formatFromIssues(fromIssues)}\n`);
+      return 1;
+    }
+
+    // The fixture-bag counterpart to the `from` structural check just above
+    // (p4a-fixture-bag task spec, scope item 3) — same "scenario-independent,
+    // scoped to the steps this invocation actually binds to" shape, checked
+    // once per step name rather than once per pickle.
+    const fixtureIssues = [...vocabulary.values()].flatMap((entry) =>
+      entry.kind === "typed" && usedStepNames.has(entry.name) ? validateStepFixtures(entry.name, entry.step) : [],
+    );
+    if (fixtureIssues.length > 0) {
+      stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
       return 1;
     }
 

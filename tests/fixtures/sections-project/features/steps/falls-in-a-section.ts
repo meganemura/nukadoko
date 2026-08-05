@@ -12,9 +12,9 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    ctx.section("setup");
-    ctx.section("working");
+  async run({ section }) {
+    section("setup");
+    section("working");
     throw new Error("boom mid-section");
   },
 });

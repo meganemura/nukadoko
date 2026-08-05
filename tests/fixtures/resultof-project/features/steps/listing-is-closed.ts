@@ -22,8 +22,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ closed: z.boolean(), name: z.string().nullable() }),
   mutates: false,
-  async run(ctx) {
-    const listing = ctx.resultOf(createListing);
+  async run({ resultOf }) {
+    const listing = resultOf(createListing);
     return { closed: listing !== undefined, name: listing?.name ?? null };
   },
 });

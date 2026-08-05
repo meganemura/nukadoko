@@ -16,9 +16,8 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    const page = await ctx.page();
-    await page.goto(`${ctx.baseURL}`);
+  async run({ page, baseURL }) {
+    await page.goto(`${baseURL}`);
     await expect(page.locator("#late")).toBeVisible({ timeout: 5000 });
     return { ok: true };
   },

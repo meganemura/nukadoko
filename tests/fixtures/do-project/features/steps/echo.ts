@@ -9,7 +9,7 @@ export default defineStep({
   args: z.object({ value: z.string() }),
   returns: z.object({ value: z.string() }),
   mutates: false,
-  async run(_ctx, args) {
+  async run({}, args) {
     return { value: args.value };
   },
 });

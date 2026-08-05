@@ -5,6 +5,7 @@ import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { loadFeaturesFromDirs, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
+import { validateStepFixtures } from "../step/validate-fixtures.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
@@ -184,6 +185,26 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
         // CompatParameterTypeEntry.filePath) — unlike that field,
         // TypedVocabularyEntry.filePath is stored absolute, so it needs the
         // same relativizing importFailures/compatParameterTypes already get.
+        file: path.relative(rootDir, entry.filePath),
+        step: issue.step,
+      });
+    }
+  }
+
+  // The fixture-bag counterpart to the `from` structural check just above
+  // (p4a-fixture-bag task spec, scope item 3: "nuka check と nuka run が同じ
+  // 検査を共有する形") — an unknown fixture name, or a `run()` whose first
+  // argument isn't a plain object-destructuring pattern, reported once per
+  // typed step (src/step/validate-fixtures.ts's own `validateStepFixtures`),
+  // same "once per declaration, not once per occurrence" reasoning as above.
+  for (const entry of vocabulary.values()) {
+    if (entry.kind !== "typed") {
+      continue; // Compat steps have no fixture bag at all (no typed `run`).
+    }
+    for (const issue of validateStepFixtures(entry.name, entry.step)) {
+      errors.push({
+        code: "fixture-structural-violation",
+        message: issue.message,
         file: path.relative(rootDir, entry.filePath),
         step: issue.step,
       });

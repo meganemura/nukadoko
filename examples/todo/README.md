@@ -174,8 +174,7 @@ export default defineStep({
   args: z.object({ title: z.string() }),
   returns: z.object({ id: z.string(), title: z.string(), done: z.boolean() }),
   mutates: true,
-  async run(ctx, args) {
-    const request = await ctx.request();
+  async run({ request }, args) {
     const listRes = await request.get("/todos");
     const todos = (await listRes.json()) as Array<{ id?: string; title?: string }>;
     const match = todos.find((todo) => todo.title === args.title);
@@ -276,9 +275,9 @@ schema, same feature-file prose — only the one line each uses to talk to
 `/todos` changes. In `add-todo.ts`:
 
 ```diff
--    const res = await (await ctx.request()).post("/todos", { data: { title: args.title } });
+-    const res = await request.post("/todos", { data: { title: args.title } });
 -    return res.json();
-+    const res = await (await ctx.request()).post("/todos", { data: { name: args.title } });
++    const res = await request.post("/todos", { data: { name: args.title } });
 +    const todo = await res.json();
 +    return { id: todo.id, title: todo.name, done: todo.done };
 ```

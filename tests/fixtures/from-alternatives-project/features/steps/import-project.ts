@@ -12,7 +12,7 @@ export default defineStep({
   description: "Import an existing project and return its id and name",
   args: z.object({ name: z.string() }),
   returns: z.object({ projectId: z.string(), name: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { projectId: `p_${args.name}`, name: args.name };
   },
 });

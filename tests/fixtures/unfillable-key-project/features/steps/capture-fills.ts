@@ -10,7 +10,7 @@ export default defineStep({
   description: "A required args key filled by a pattern capture",
   args: z.object({ name: z.string() }),
   returns: z.object({ name: z.string() }),
-  async run(_ctx, args) {
+  async run({}, args) {
     return { name: args.name };
   },
 });

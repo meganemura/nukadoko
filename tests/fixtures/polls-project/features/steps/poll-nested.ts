@@ -13,10 +13,10 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
-    await ctx.poll(
+  async run({ poll }) {
+    await poll(
       async () => {
-        await ctx.poll(async () => "inner-ready", { interval: 5, timeout: 200, description: "inner" });
+        await poll(async () => "inner-ready", { interval: 5, timeout: 200, description: "inner" });
         return "outer-ready";
       },
       { interval: 5, timeout: 200, description: "outer" },

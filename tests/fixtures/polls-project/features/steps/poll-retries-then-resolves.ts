@@ -10,9 +10,9 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,
-  async run(ctx) {
+  async run({ poll }) {
     let calls = 0;
-    await ctx.poll(
+    await poll(
       async () => {
         calls += 1;
         return calls >= 3 ? "ready" : undefined;

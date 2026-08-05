@@ -7,7 +7,7 @@ export default defineStep({
   args: z.object({ count: z.string() }),
   returns: z.object({ items: z.string() }),
   mutates: true,
-  async run(_ctx, args) {
+  async run({}, args) {
     return { items: args.count };
   },
 });

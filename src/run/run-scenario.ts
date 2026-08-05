@@ -24,7 +24,7 @@ import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
-import { createStepContext } from "../context/create-context.js";
+import { buildStepFixtures, createStepContext } from "../context/create-context.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
@@ -36,6 +36,7 @@ import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
 import { fromCandidates, type Step } from "../step/define-step.js";
+import { fixtureParameterNames } from "../step/fixture-names.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
@@ -117,10 +118,12 @@ import { writeScenarioRecord } from "./write-record.js";
 // already match through compat entries; this file is where a *matched*
 // compat entry now actually executes instead of being skipped). One World
 // is constructed per pickle (item 4: "1 pickle = 1 World = 1 ctx"), shared
-// by every compat step and hook in it, wrapping the exact same `ctx` a typed
-// step's `run(ctx, args)` receives — so a typed step's `ctx.request()` and a
-// compat step's `this.request` (after `await this.openRequest()`) are the
-// identical Playwright object, cookies and all. A compat step's own
+// by every compat step and hook in it, wrapping the exact same `ctx`
+// (`contextHandle.ctx`) a typed step's own `request`/`page` fixtures are
+// resolved from (`buildStepFixtures`, p4a-fixture-bag task spec) — so a
+// typed step's `request` fixture and a compat step's `this.request` (after
+// `await this.openRequest()`) are the identical Playwright object, cookies
+// and all. A compat step's own
 // execution is much simpler than a typed step's: no args/returns schema,
 // so no binding-failure branch and no `chain` entry ever gets written for
 // one (`result: null` always, per docs/spec.md "Receipts": "Compat steps
@@ -158,8 +161,8 @@ import { writeScenarioRecord } from "./write-record.js";
 // item 3), and a string return of `"pending"`/`"skipped"` or an apparent
 // `done`-callback arity both fail loudly instead of silently passing (items
 // 4-5) — all four checks apply only to compat steps and hooks, never to a
-// typed step, whose fixed `run(ctx, args)` arity and zod-validated `returns`
-// make none of cucumber-js's own conventions here relevant to it.
+// typed step, whose fixed `run(fixtures, args)` arity and zod-validated
+// `returns` make none of cucumber-js's own conventions here relevant to it.
 //
 // m22-compat-run-scope task spec, item 1: `defaultTimeoutMs` (this run's own
 // `setDefaultTimeout` value, or `undefined`) is threaded in from cli/run.ts
@@ -513,7 +516,7 @@ function fromInjectionHint(
 // --- m21b-compat-execution task spec, items 2, 4, 5: compat step/hook
 // execution honesty (only compat entries and Before/After hooks — the audit
 // this task closes is entirely about hand-written, cucumber-js-style glue;
-// a typed step's `run(ctx, args)` has a fixed arity and a zod-validated
+// a typed step's `run(fixtures, args)` has a fixed arity and a zod-validated
 // return, so none of these three checks apply to one). ---
 
 /** Item 2's failure message: names which timeout fired (a step's own
@@ -1464,7 +1467,22 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             errorKind = "args_invalid";
           } else {
             try {
-              const runResult = await entry.step.run(contextHandle.ctx, argsResult.data);
+              // Bag construction sits inside this same try (p4a-fixture-bag
+              // task spec) — a step whose `run` destructures `page` opens
+              // the browser (and this step's own trace chunk, already
+              // pending from `beginStep` above) right here, not before args
+              // validated and not lazily from inside the step's own body
+              // any more; a launch failure is a step failure
+              // ("step_error"), the same outcome a step's own `ctx.page()`
+              // throwing used to produce when that call lived inside
+              // `run()`. `fixtureParameterNames` is memoized and already
+              // validated by `nuka run`'s own setup phase (cli/run.ts), so
+              // it is not expected to throw here.
+              const fixtures = await buildStepFixtures(
+                contextHandle.ctx,
+                fixtureParameterNames(entry.step.run),
+              );
+              const runResult = await entry.step.run(fixtures, argsResult.data);
               const returnsResult = entry.step.returns.safeParse(runResult);
               if (!returnsResult.success) {
                 status = "failed";
@@ -1477,7 +1495,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             } catch (error) {
               // Always "step_error", never routed through
               // `classifyCaughtError` (this file's own header, m3a-receipt-
-              // kinds task spec): a typed step's `run(ctx, args)` never
+              // kinds task spec): a typed step's `run(fixtures, args)` never
               // receives `this` and has no timeout mechanism, so neither a
               // `WorldWriteValidationError` nor a `CompatTimeoutError` can
               // ever reach this catch.
