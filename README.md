@@ -316,6 +316,20 @@ and version, including one no report-side effort could ever add, because
 classic Cucumber discards step return values: the validated per-step
 result.
 
+Under each step sits a timeline of what happened inside it, built from
+absolute timestamps: the stages it reached, every wait with its real
+duration and how many attempts it took, and every Playwright call it made
+including the assertions. One attempt and forty attempts ask for opposite
+fixes, and nothing else in a report tells them apart. Counts of what the
+page itself said (console errors, uncaught errors, failed requests) sit
+beside the step, so a step that passed while the page threw three
+uncaught errors says so without anyone opening an attachment. The trace
+attached is that step's own, not the whole scenario's, so the failing
+step opens directly instead of being scrubbed for. The receipt is
+attached whole as well, which is what keeps this list from going stale:
+anything a receipt gains later arrives in the report without a second
+mapping to remember.
+
 A cucumber-messages (NDJSON) emitter ships alongside it so a migrating
 team's existing formatters and JUnit-based CI keep working: confirmed by
 running our own stream through `@cucumber/junit-xml-formatter`, not just
@@ -450,11 +464,23 @@ where nothing in their glue is rejected. The other six still need a short
 mechanical pass first, and every blocker fails loudly at the import or the
 first run rather than quietly changing what the suite does.
 
+Three of those suites have since been run rather than read, in
+[nukadoko-compat-lab](https://github.com/meganemura/nukadoko-compat-lab),
+which copies a pinned corpus, rewrites the one import, and runs `nuka run`
+against the result. One passed on the import alone. The two that did not
+failed for reasons on nukadoko's side rather than theirs, and both are
+fixed now, though the lab has not been re-run since. Reading glue as text
+found the blockers that are visible in glue; executing it found two that
+were not.
+
 One blocker deserves naming up front, because it is a go/no-go rather than
 a pass: **a CommonJS suite cannot use the door at all.**
 `require("nukadoko/compat")` fails outright (nukadoko is ESM-only), so a
 CommonJS suite needs a module-format change before anything else. Two of
-the eight audited suites were CommonJS throughout.
+the eight audited suites were CommonJS throughout. This is about the
+module format, not the file extension: glue in `.js` or `.mjs` is read
+like any other, and a `.cjs` file is named by `nuka check` rather than
+turning up later as a step nothing defined.
 
 See [docs/migration.md](docs/migration.md) for the step-by-step guide with
 the audit's findings, and

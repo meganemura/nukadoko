@@ -292,6 +292,14 @@ emitter は、何も仕込まずに、あらゆる receipt からレポートを
 その中の 1 つ(バリデーション済みの per-step result)は、レポート側のどんな努力を積んでも足せません。
 従来型の Cucumber は step の返り値を捨ててしまうからです。
 
+各 step の下には、絶対時刻から組み立てられた、その内部で何が起きたかのタイムラインが置かれます。
+到達した段階、それぞれの待ちの実際の所要時間と試行回数、そして assertion を含めて実行された Playwright の呼び出しのすべてです。
+1 回の試行と 40 回の試行では直し方が正反対になりますが、それを見分けられるのはレポートの中でここだけです。
+ページ自身が述べたこと(console error、捕捉されないエラー、失敗したリクエスト)の件数が step のそばに置かれるので、ページが 3 件の捕捉されないエラーを投げながら通った step は、誰も attachment を開かなくてもそれを語ります。
+添付される trace はその step 自身のものであり scenario 全体のものではないため、失敗した step はさがし回らずに直接開けます。
+receipt も全文がそのまま添付され、それがこの一覧を古びさせずにいる理由です。
+receipt が後から何を得ても、2 つ目の対応表を覚える必要なくレポートに届きます。
+
 あわせて cucumber-messages(NDJSON)の emitter も同梱されており、移行するチームの既存フォーマッタと JUnit ベースの CI をそのまま動かし続けます。
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 [Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
@@ -405,12 +413,22 @@ import を元に戻せば、ただの cucumber-js スイートに戻ります。
 監査が見つけた障害をふさいだことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
 残る 6 本は、先に短い機械的な準備が必要で、どの障害も、スイートの振る舞いを静かに変えるのではなく、import の時点か最初の実行でうるさく失敗します。
 
+それらのスイートのうち 3 本は、その後 [nukadoko-compat-lab](https://github.com/meganemura/nukadoko-compat-lab) で、読むのではなく実際に走らせました。
+これは固定された corpus を複製し、import を 1 つ書き換え、その結果に対して `nuka run` を実行するものです。
+1 本は import だけで通りました。
+通らなかった 2 本は、スイート側ではなく nukadoko 側の理由で失敗しており、どちらもいまは直っています。
+ただし lab はそれ以来まだ再実行していません。
+glue をテキストとして読むことは、glue の中に見える障害を見つけました。
+それを実行することは、見えていなかった障害を 2 つ見つけました。
+
 障害の 1 つは先に名指ししておく価値があります。
 それは通過ではなく go/no-go だからです。
 **CommonJS のスイートは、この扉をまったく使えません。**
 `require("nukadoko/compat")` は、nukadoko が ESM 専用であるため、端的に失敗します。
 つまり CommonJS のスイートには、他の何より先にモジュール形式の変更が必要です。
 監査した 8 本のうち 2 本は、全体が CommonJS でした。
+これはファイル拡張子の話ではなく、モジュール形式の話です。
+`.js` や `.mjs` の glue は他と同じように読まれ、`.cjs` のファイルは、後になって何も定義していない step として現れる代わりに、`nuka check` がそれを名指しします。
 
 手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
