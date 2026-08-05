@@ -142,6 +142,16 @@
       "en": ["destructure", "destructures", "destructured", "destructuring"],
       "ja": "分割代入",
       "note": "p4a-fixture-bag task spec で run() の第一引数の話に使うようになった、TS/JS の標準用語。動詞化するときは「分割代入する / された」"
+    },
+    {
+      "en": ["scope"],
+      "ja": "スコープ",
+      "note": "P5 task spec (fixture の scenario/run scope) で入った。config の options.scope や receipt の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
+    },
+    {
+      "en": ["outcome"],
+      "ja": "成否",
+      "note": "P5 task spec で fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す。.claude-team/playwright-native-design.md 5 節がすでにこの訳語を使っていたので合わせた"
     }
   ],
   "keep_english": [

@@ -197,4 +197,17 @@ export interface ScenarioRecord {
     readonly clean: boolean;
   };
   readonly evidence: ScenarioEvidence;
+  /** A `"scenario"`-scope fixture's own teardown failure (P5 task spec,
+   * scope item 6) — teardown runs *after* every step's own receipt for this
+   * scenario is already written (src/receipt/types.ts's own header), so it
+   * has nowhere else to land. Never changes `status` above: "teardown の
+   * throw は step / シナリオの成否を変えない" — a broken cleanup routine
+   * must not turn an otherwise-passing scenario red for a reason unrelated
+   * to its own acceptance criteria. Present only when non-empty; `nuka run`
+   * still announces each entry on stderr (exit code unaffected) so it is
+   * never silent even though it costs nothing here. A `"run"`-scope
+   * fixture's own teardown failure — torn down once, after every scenario
+   * in the invocation, not attributable to any single one — is reported the
+   * same way, on stderr, but never lands on any one `ScenarioRecord`. */
+  readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
 }

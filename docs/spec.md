@@ -420,6 +420,173 @@ is one of them). An agent picking a scenario can therefore see which ones
 never open a browser at all before running any of them; a browser-using
 scenario costs minutes and a real target that an API-only one does not.
 
+### Fixtures
+
+The bag "Context API" describes is closed: `page`, `context`, `request`,
+`env`, `requireEnv`, `baseURL`, `resultOf`, `section`, `poll`, nothing else.
+A step that needs a project's own resource, a tenant, a seeded database, an
+uploaded fixture file, has had nowhere to put the cleanup for it: writing it
+into the step itself makes the feature file name something that is not an
+acceptance condition, and skipping cleanup leaks it. `nukadoko.config.ts`
+closes that gap:
+
+```ts
+export default defineConfig({
+  fixtures: {
+    tenant: async ({ request }, use) => {
+      const t = await createTenant(request);
+      await use(t);
+      await destroyTenant(request, t);
+    },
+    seededDb: [async ({}, use) => { await use(await seedDb()); }, { scope: "run" }],
+  },
+});
+```
+
+A fixture is a bare function, or a `[function, options]` tuple: the same
+two shapes Playwright's own fixture definitions take, so a fixture whose own
+dependencies stay inside `page`/`context`/`request`/`baseURL` can be passed
+to `base.extend()` unchanged. That shared subset is a fact about the shape,
+not a promise this package makes: a fixture that destructures `env`,
+`section`, `poll`, `resultOf`, or another nukadoko-only name means nothing
+to Playwright's own runner, and `auto: true` (the option that would let
+Playwright build a fixture nothing asked for) is refused outright, with a
+message naming why: the feature file names everything that ran, and a
+fixture nothing destructured is exactly the thing that principle forbids
+building. "Accepts the same definition shape" is the whole of what this
+package claims; it does not claim "Playwright fixture compatible" beyond
+that shape, and putting one shared `fixtures.ts` behind both runners is not
+the way to use this: TypeScript's own contextual typing only reaches an
+inline object literal, so a fixture map factored out into a plain `export
+const` loses it and fails to compile under `strict`. `defineFixtures`, from
+the `nukadoko` package itself, is the fix for nukadoko's own half of that:
+passing the exact same object literal through it keeps it inline from
+TypeScript's point of view, so `request` and `use` both come out fully
+typed with no annotation to write by hand. A fixture that depends on
+*another* user-defined fixture still types that dependency as `unknown`,
+since giving it the other fixture's own declared type would need the same
+self-referencing inference this package deliberately does not implement
+(measured to only work by an undocumented compiler quirk, not something
+worth depending on).
+
+A fixture's own first argument is destructured exactly like a step's own,
+the same static reading "Context API" opened with, extended one layer:
+`check` reads a fixture's own dependency names from its source text without
+calling it, the same way it already reads a step's. Naming a builtin
+(`page`, `context`, `request`, `env`, `requireEnv`, `baseURL`) as a
+dependency works the ordinary way; naming *another* `config.fixtures` entry
+resolves the same way Playwright's own `extend()` does: later layers can
+depend on earlier ones, so a fixture is free to depend on another fixture,
+which is free to depend on a builtin. Overriding a builtin is allowed the
+same way: a `page` fixture wrapping the executor's own launch
+(`page: async ({ page }, use) => { page.setDefaultTimeout(10_000); await
+use(page); }`) reads `page` as the builtin underneath it, never as itself
+(the one case where a same-named dependency is not a cycle). An override of
+`page` that destructures neither `page` nor `context` has no way to hand
+back a page the executor still owns and measures, so `check` refuses it
+(`page-override-unowned`).
+
+Two scopes exist: `scenario` (default) rebuilds per scenario, or per `nuka
+do` execution, and tears down at that scenario's own end; `run` builds once
+(the first time any step in the whole `nuka run` invocation names it,
+directly or through another fixture) and tears down once, after every
+scenario in that invocation has finished. `worker` does not exist:
+nukadoko has no parallel execution yet, so a `worker` scope would be a
+second name for exactly what `run` already means, spent before the
+distinction between the two exists to be worth naming. Under `nuka do`, one
+execution is the whole of both lifetimes, so the two scopes collapse: a
+`run`-scope fixture behaves exactly like a `scenario`-scope one there. A
+`run`-scope fixture may only depend on other `run`-scope fixtures and on
+`env`/`requireEnv`/`baseURL`, the three builtins whose value never depends
+on which scenario's context happens to read them; depending on `page`,
+`context`, `request`, `resultOf`, `section`, `poll`, or a `scenario`-scope
+fixture is refused (`fixture-scope-violation`), since a `run`-scope
+fixture's own build can outlive the very scenario that would have supplied
+any of those.
+
+Teardown runs in reverse build order, whether the step that named the
+fixture passed or failed: a fixture's own cleanup code is not optional
+just because the step it served already failed for its own reason. This
+reversal is only correct because nukadoko builds and tears fixtures down
+*serially*: folding teardown over the exact opposite of construction order
+guarantees every dependency outlives its own dependents only as long as
+nothing runs two fixtures' setup or teardown at once. The day nukadoko
+parallelizes, this stops being true and breaks silently: a fixture's own
+teardown reaching for a dependency another parallel scenario has already
+torn down is exactly the kind of race `check` can never catch, because it
+is a property of *when*, not of the fixture graph's own shape. Whoever adds
+parallel execution has to come back to this reversal first.
+
+A fixture's own outcome, whether the step (or, for `run` scope, the run
+itself) that named it passed or failed, is not known at setup time, so it
+is not a second argument to the fixture function: it is the *return value*
+of `use()`:
+
+```ts
+tenant: async ({ request }, use) => {
+  const t = await createTenant(request);
+  const outcome = await use(t);          // "passed" | "failed"
+  if (outcome === "passed") await destroyTenant(request, t);
+},
+```
+
+"Keep a failed tenant around to inspect it, destroy a passed one" is
+standard QA practice: Playwright's own `afterEach` reads `testInfo.status`
+for the same reason. A teardown failure never changes the step's or
+scenario's own status: a broken cleanup routine must not turn an otherwise-
+green run red for a reason unrelated to its own acceptance criteria. It is
+never silent either: it lands on the scenario record's `teardown_errors`
+(a `scenario`-scope fixture's own failure) or on stderr (a `run`-scope
+fixture's own failure, torn down once, after every scenario, with no single
+scenario record of its own to carry it), and `nuka run`/`nuka do` announce
+it either way; the exit code is unaffected.
+
+A fixture must call `use(value)` exactly once. Forgetting to call it at all
+is detected and thrown as soon as the fixture's own function settles
+without having called it, naming the fixture; calling it twice is thrown
+the same way, naming the fixture, the moment the second call happens. Both
+close a hole `ctx.page()` never had before fixtures existed: a step's own
+body calling (or not calling) a function was never something a caller
+outside it had to wait on, where a fixture is a coroutine nukadoko itself
+suspends at `use()` and resumes at teardown. A fixture that never reaches
+that suspension point at all would otherwise hang the run forever. Setup
+and teardown each get their own timeout budget, `config.fixtureTimeout`
+(default 60 seconds), overridable per fixture via that fixture's own
+`options.timeout`; whichever phase times out is reported by name, fixture
+and phase both, since a hang with no name attached is worse than a failure
+with one.
+
+`check` reports three fixture-specific findings, all decided without ever
+running a fixture: `fixture-cycle` (a dependency cycle among
+`config.fixtures` entries), `fixture-scope-violation` (a `run`-scope
+fixture depending on a `scenario`-scope one), and `page-override-unowned`
+(above). `tend` adds two, both a fact rather than a verdict:
+`fixture-unused` (a `config.fixtures` entry no typed step requires,
+directly or through another fixture, still reachable through `nuka do`)
+and `fixture-touches-app` (a fixture that reaches `page`/`context`,
+directly or through another fixture). The second exists because a fixture
+can let a scenario go green with a precondition the feature file never
+named: logging a user in before any step asks for it is the same mistake
+as a step doing work its own Given never described, one layer removed. It
+is not a rule against fixtures touching the browser: generating
+`storageState` is the standard, legitimate reason one does, and `tend`
+never says otherwise. It only ever names which fixtures do, so a reader
+decides whether a given one belongs on that list.
+
+An execution's own receipt carries `fixtures` (present only when non-
+empty): every `config.fixtures` entry that execution's own bag resolution
+actually touched, `{ "name", "scope", "setup_ms"?, "at"?, "reused" }`.
+`setup_ms`/`at` are present only when this call actually built the
+instance; their absence on a `reused: true` entry is what tells "already
+built, hence fast" apart from "measured 0ms": without that distinction,
+`setup_ms`'s own absence would be unreadable.
+
+`nuka steps --json`'s `needs`/`needs_browser` (see "Context API") close
+over the fixture graph the same way execution does: a step that only
+destructures a fixture which itself reaches `page` still reads
+`needs_browser: true`, even though the step's own `needs` array names only
+the fixture, never `page` directly.
+
 ### Chaining steps
 
 Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
@@ -1172,6 +1339,14 @@ shape whether the step ran inside a scenario or via `do`.
   that gap. A hook invocation that never touched the browser opens no
   chunk and carries none of the three fields at all, the same as a step
   that never destructured `page`.
+- `fixtures` (present only when non-empty) lists every `config.fixtures`
+  entry this step's own bag resolution actually touched, `{ "name",
+  "scope", "setup_ms"?, "at"?, "reused" }` (see "Fixtures" for the full
+  shape and why `setup_ms`/`at` are only present on a freshly built entry).
+  Teardown itself is not on this list: it runs after this receipt is
+  already closed, so a `scenario`-scope fixture's own teardown failure
+  lands on the scenario record's `teardown_errors` instead (see
+  "Fixtures").
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
@@ -1233,9 +1408,9 @@ Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
 (default `features`; feature files and step code both live under it,
 Cucumber-style), `additionalFeatureDirs`, `baseURL`, `envFiles`,
 `environments`, `stateDir` (default `.nukadoko`), `browser`,
-`browserContext`, `requestContext`, `secrets`, `parameterTypes`, `allure`
-(only `resultsDir`, see "Allure emitter"), `messages` (only `output`, see
-"Messages emitter").
+`browserContext`, `requestContext`, `secrets`, `parameterTypes`, `fixtures`,
+`fixtureTimeout` (see "Fixtures"), `allure` (only `resultsDir`, see "Allure
+emitter"), `messages` (only `output`, see "Messages emitter").
 
 `additionalFeatureDirs` (default `[]`) answers a different question than
 `featuresDir` does. `featuresDir` is the set that *runs* unattended: `nuka
@@ -1822,14 +1997,17 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               required `from` key whose producer is absent,
                               bound later in the scenario, or ambiguous
                               between two producers, a `from` naming a step
-                              discovery never registered, config
-                              coherence, unreadable step files (reported,
-                              not fatal — the rest of the project is still
-                              checked), unsupported hook tag expressions;
-                              with no argument, scans featuresDir plus
-                              additionalFeatureDirs; a feature argument
-                              checks that one file instead, for a feature
-                              living outside both
+                              discovery never registered, a fixture
+                              dependency cycle, a run-scope fixture
+                              depending on a scenario-scope one, a page
+                              override that owns neither page nor context,
+                              config coherence, unreadable step files
+                              (reported, not fatal, the rest of the project
+                              is still checked), unsupported hook tag
+                              expressions; with no argument, scans
+                              featuresDir plus additionalFeatureDirs; a
+                              feature argument checks that one file instead,
+                              for a feature living outside both
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
@@ -1849,7 +2027,8 @@ nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
                               envFile defines, a configured
                               additionalFeatureDirs entry absent from disk,
                               an accepted feature outside every scanned
-                              directory
+                              directory, a fixture no typed step requires,
+                              a fixture reaching page/context
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
@@ -1941,6 +2120,13 @@ Text output (no `--json`) is formatted for a human reading a terminal; `--json` 
 - **M7 — tending**: `nuka tend`, the findings that are about rot rather
   than breakage (see "Tending"). Kept off `nuka check` on purpose: `check`
   is read before every run and has to stay worth stopping for.
+- **M8 (fixtures)**: user-defined resources declared under
+  `nukadoko.config.ts`'s own `fixtures` (see "Fixtures"), `defineFixtures`
+  for full typing, scope, `use()`-based teardown carrying the step's or
+  scenario's own outcome, a fixture-specific timeout, and the `check`/`tend`
+  findings that come with them. Closes the one gap the typed side had that
+  compat's After hooks did not: a place to put cleanup that is not itself an
+  acceptance condition.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs

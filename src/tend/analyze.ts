@@ -1,8 +1,11 @@
 import { checkBindings } from "../check/binding-check.js";
 import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
+import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missing.js";
+import { findFixturesTouchingApp } from "./fixture-touches-app.js";
+import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
 import { analyzeFieldDescriptions } from "./missing-describe.js";
 import { findMissingRationale } from "./missing-rationale.js";
@@ -18,11 +21,16 @@ import type { TendIssue, TendReport } from "./types.js";
 
 // Responsibility: the one function `nuka tend` runs — load the project the
 // same way `nuka check` does (loadConfig, discoverSteps, loadFeaturesFromDirs)
-// and run this task's now-nine note-only findings, in the fixed order below
-// so a human reading text output sees findings grouped by kind without this
-// module needing to sort anything after the fact (this task's spec: text
-// output "種類ごとにまとまっていること" — src/cli/tend.ts pushes each
-// category's array through in one block rather than interleaving). Two of
+// and run every note-only finding, in the fixed order below so a human
+// reading text output sees findings grouped by kind without this module
+// needing to sort anything after the fact (this task's spec: text output
+// "種類ごとにまとまっていること" — src/cli/tend.ts pushes each category's
+// array through in one block rather than interleaving). `findUnusedFixtures`/
+// `findFixturesTouchingApp` are P5's own two additions (task spec, scope
+// item 9) — `fixtureGraph` (`buildFixtureGraph`, src/fixture/graph.ts) is
+// built once, here, and passed to both, the same "never a second computation
+// path" rule `patterns` just below already follows for `checkBindings`. Two
+// of
 // the nine — `findSupportOriginParameterTypes` and `findUnknownSecretsKeys`
 // — did not start here: they were `nuka check` warnings
 // (`parameter-type-support-origin`, `secrets-public-key-unknown`/
@@ -97,6 +105,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   // "二度数えないこと") — never re-walked a second time just to count.
   const rationaleIssues = findMissingRationale(vocabulary);
   const fieldDescriptions = analyzeFieldDescriptions(vocabulary);
+  const fixtureGraph = buildFixtureGraph(config);
 
   const notes: TendIssue[] = [
     ...findUnusedFromDeclarations(vocabulary, occurrences),
@@ -108,6 +117,8 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnknownSecretsKeys(rootDir, config),
     ...findMissingAdditionalFeatureDirs(missingAdditionalDirs),
     ...findSignedFeatureUnscanned(rootDir, scannedFeatureDirs),
+    ...findUnusedFixtures(vocabulary, fixtureGraph),
+    ...findFixturesTouchingApp(fixtureGraph),
   ];
 
   const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);

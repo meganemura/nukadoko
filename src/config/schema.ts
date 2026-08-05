@@ -1,5 +1,6 @@
 import type { APIRequest, BrowserContextOptions, LaunchOptions } from "playwright";
 import { z } from "zod";
+import type { FixtureDefinition } from "../fixture/types.js";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
 // export, per docs/spec.md's config section (featuresDir, baseURL, envFiles,
@@ -105,6 +106,76 @@ export type ParameterTypeConfig = z.infer<typeof parameterTypeConfigSchema>;
  * missing upstream, not the type itself. */
 type RequestContextOptions = NonNullable<Parameters<APIRequest["newContext"]>[0]>;
 
+// Same character set requirement as an environment/parameter-type name
+// (`ENVIRONMENT_NAME_PATTERN`/`PARAMETER_TYPE_NAME_PATTERN` above), but
+// stricter still: a fixture name is destructured directly (`{ tenant }`,
+// src/step/fixture-names.ts), so it must be a legal JS identifier, not just
+// an unambiguous, easy-to-diff string — a leading digit or a hyphen would
+// make the very destructuring pattern this key exists to be named by a
+// syntax error.
+const FIXTURE_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function isFixtureFunction(value: unknown): value is (...args: never[]) => unknown {
+  return typeof value === "function";
+}
+
+/** `config.fixtures.<name>`'s own shape (P5 task spec, scope items 1, 4) —
+ * zod's job here stops at "is this a function, or a `[function, options]`
+ * tuple, and is `options` itself well-formed" (the same shallow "is this an
+ * object" contract `browser`/`browserContext`/`requestContext` above keep
+ * for their own Playwright-deferred types); a fixture's own *dependency
+ * names* (unknown name, default value, `...rest`, not destructured at all)
+ * are not zod's concern — those are read from the function's own source
+ * text and validated by src/step/validate-fixtures.ts, run over the
+ * *resolved* config (loadConfig's own caller), the same split defineConfig/
+ * loadConfig already keep for the rest of this file.
+ *
+ * `auto: true` is refused right here, at config-load time, with a message
+ * naming *why* (P5 task spec, scope item 4) — the one option this schema
+ * does treat as a hard, structural mistake rather than deferring to a later
+ * check: accepting it would be the first claim this package would be
+ * breaking about its own fixture support (`.claude-team/
+ * playwright-native-design.md` 3 節: "「Playwright fixture 互換」とは名乗
+ * らない" — engine-constructed-without-being-named is exactly what CLAUDE.md's
+ * "the feature file names everything that ran" principle exists to forbid). */
+const fixtureDefinitionSchema: z.ZodType<FixtureDefinition> = z
+  .custom<FixtureDefinition>(
+    (value) => isFixtureFunction(value) || (Array.isArray(value) && value.length === 2 && isFixtureFunction(value[0])),
+    { message: "must be a function, or a [function, options] tuple (the same shape Playwright's own fixture definitions take)" },
+  )
+  .superRefine((value, ctx) => {
+    if (isFixtureFunction(value)) {
+      return; // Bare function: no options to validate.
+    }
+    const [, options] = value;
+    if (typeof options !== "object" || options === null || Array.isArray(options)) {
+      ctx.addIssue("fixture options (the tuple's second element) must be an object");
+      return;
+    }
+    const obj = options as Record<string, unknown>;
+    if ("auto" in obj) {
+      ctx.addIssue(
+        'fixture options cannot set "auto": nukadoko never builds a fixture that nothing named (docs/spec.md ' +
+          '"the feature file names everything that ran"). This package accepts the same fixture *definition* ' +
+          'shape Playwright does, but does not claim "Playwright fixture compatible" beyond that shape, and ' +
+          '"auto" is exactly the claim it would be breaking',
+      );
+    }
+    if (obj.scope !== undefined && obj.scope !== "scenario" && obj.scope !== "run") {
+      ctx.addIssue(
+        `fixture options.scope must be "scenario" or "run" (got ${JSON.stringify(obj.scope)}); "worker" does ` +
+          'not exist yet: there is no parallel execution for it to mean anything different from "run"',
+      );
+    }
+    if (obj.timeout !== undefined && (typeof obj.timeout !== "number" || !(obj.timeout > 0))) {
+      ctx.addIssue("fixture options.timeout must be a positive number of milliseconds");
+    }
+    const unknownKeys = Object.keys(obj).filter((key) => key !== "scope" && key !== "timeout" && key !== "auto");
+    if (unknownKeys.length > 0) {
+      ctx.addIssue(`unknown fixture option key(s): ${unknownKeys.join(", ")}`);
+    }
+  });
+
 export const configSchema = z
   .object({
     featuresDir: z.string().default("features"),
@@ -134,6 +205,21 @@ export const configSchema = z
     // types" as its own no-op default, so this mirrors that rather than
     // making every call site handle `undefined` separately.
     parameterTypes: z.array(parameterTypeConfigSchema).default([]),
+    /** User-defined fixtures (P5 task spec, scope items 1, 3) — layered
+     * *after* the builtin set (`page`/`context`/`request`/... —
+     * src/context.ts's `BUILTIN_FIXTURE_NAMES`), so a key here with the
+     * same name as a builtin overrides it (src/fixture/graph.ts's own
+     * layering rule). Default `{}`: no user fixtures unless named, the
+     * same "nothing extra unless named" convention `parameterTypes` above
+     * and `additionalFeatureDirs` below both already follow. */
+    fixtures: z.record(z.string().regex(FIXTURE_NAME_PATTERN), fixtureDefinitionSchema).default({}),
+    /** The default setup/teardown timeout every fixture instance gets
+     * (milliseconds), overridable per fixture via that fixture's own
+     * `options.timeout` (P5 task spec, scope item 7) — without a default,
+     * a fixture that forgets to call `use(...)` would leave `nuka run`
+     * hanging indefinitely instead of failing with a named cause
+     * (src/fixture/lifecycle.ts's own `FixtureTimeoutError`). */
+    fixtureTimeout: z.number().positive().default(60_000),
     /** Playwright's own `LaunchOptions` type, taken as-is (t6-config-browser
      * task spec, decision 1): coupling to Playwright is an accepted design
      * choice (docs/spec.md "Out of scope"), so there is no vocabulary of our

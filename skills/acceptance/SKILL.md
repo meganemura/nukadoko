@@ -166,6 +166,41 @@ something nukadoko inserts quietly to make the run succeed. A feature that
 doesn't name everything that ran stops being the record this whole loop
 exists to leave.
 
+## A resource that needs its own cleanup
+
+When a scenario needs a project resource a step merely borrows, a tenant,
+a seeded database row, an uploaded file, don't write its teardown inside
+the step: that puts something in the feature file that is not itself an
+acceptance condition. Declare it as a fixture instead, under
+`nukadoko.config.ts`'s own `fixtures`, using `defineFixtures` (from the
+`nukadoko` package) so the fixture's own dependencies stay fully typed:
+
+```ts
+export default defineConfig({
+  fixtures: {
+    tenant: async ({ request }, use) => {
+      const t = await createTenant(request);
+      await use(t);
+      await destroyTenant(request, t);
+    },
+  },
+});
+```
+
+A step reaches it the same way it reaches `page` or `request`, by
+destructuring the name: `async ({ tenant }, args) => {...}`. Setup runs the
+first time a step names it; teardown runs after that step's scenario
+finishes, in reverse build order, whether the scenario passed or failed.
+`use()`'s own return value tells the fixture which, so it can decide for
+itself whether to keep what it built (for inspection) or tear it down;
+`{ scope: "run" }` in a second, options element of the tuple form builds it
+once for the whole `nuka run` invocation instead of once per scenario, for
+something genuinely shared across scenarios rather than owned by one. A
+fixture that forgets to call `use()`, or calls it twice, fails loudly by
+name rather than hanging the run; `nuka check` catches a dependency cycle
+among fixtures and a `run`-scope fixture depending on a `scenario`-scope
+one before anything runs.
+
 ## Waiting for an external effect
 
 A step that writes to a system whose effect lands elsewhere asynchronously

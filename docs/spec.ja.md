@@ -294,6 +294,129 @@ fixture は名指された時点で必ず存在するので、デフォルト値
 agent は scenario を選ぶとき、何ひとつ実行する前に、どれがブラウザを一切開かないかを見て取れます。
 ブラウザを使う scenario は、API だけの scenario にはない分単位の時間と実物のターゲットを費やすからです。
 
+### Fixtures
+
+「Context API」が説明する bag は閉じています。
+`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`section`、`poll`、それだけです。
+プロジェクト自身の資源、テナント、シードされたデータベース、アップロードされたファイルを必要とする step には、その片付けを置く場所がこれまでありませんでした。
+片付けを step 自身に書けば、feature ファイルが受け入れ条件ではない何かを名指すことになり、片付けを省けば漏れます。
+`nukadoko.config.ts` はこの隙間を埋めます。
+
+```ts
+export default defineConfig({
+  fixtures: {
+    tenant: async ({ request }, use) => {
+      const t = await createTenant(request);
+      await use(t);
+      await destroyTenant(request, t);
+    },
+    seededDb: [async ({}, use) => { await use(await seedDb()); }, { scope: "run" }],
+  },
+});
+```
+
+fixture は素の関数か、`[関数, options]` のタプルです。
+Playwright 自身の fixture 定義が取るのと同じ 2 つの形であり、依存が `page`/`context`/`request`/`baseURL` の内側に収まる fixture なら、そのまま `base.extend()` に渡せます。
+この共有できる部分集合は形についての事実であり、このパッケージが交わす約束ではありません。
+`env`、`section`、`poll`、`resultOf`、あるいはほかの nukadoko 固有の名前を分割代入する fixture は、Playwright 自身の runner には何も意味しません。
+そして `auto: true`(Playwright に、何も名指していない fixture を構築させるオプション)は、理由を名指したうえで丸ごと拒否されます。
+feature ファイルが実行されたすべてを名指すという原則があり、何にも名指されていない fixture を構築することは、まさにその原則が禁じることだからです。
+「同じ定義の形を受け取る」がこのパッケージの主張のすべてであり、その形を超えて「Playwright fixture 互換」を名乗ることはありません。
+共有された 1 つの `fixtures.ts` を両方の runner の裏に置くのは、この機能の使い方として想定されていません。
+TypeScript 自身の文脈型付けはインラインのオブジェクトリテラルにしか届かないので、fixture の集まりを素の `export const` に切り出すとそれが失われ、`strict` の下でコンパイルが通らなくなります。
+`nukadoko` パッケージ自身が出す `defineFixtures` は、nukadoko 側のこの半分を直す手段です。
+同じオブジェクトリテラルをそこに通すことで、TypeScript の見かけ上インラインのままにし、`request` と `use` の両方に、手で書く注釈なしで完全な型が付きます。
+別のユーザー定義 fixture に依存する fixture は、その依存を `unknown` として型付けます。
+その fixture 自身が宣言した型を与えるには、このパッケージが意図的に実装していない自己参照的な型推論が要るからです(実測では、ドキュメント化されていないコンパイラの挙動でしか動かず、頼るに値するものではありませんでした)。
+
+fixture 自身の第一引数も、step の第一引数とまったく同じように分割代入されます。
+「Context API」の冒頭で述べた静的な読み取りを、1 段階広げたものです。
+`check` は fixture 自身の依存名をそのソーステキストから読み取り、決して呼び出しません。
+step からの読み取りとまったく同じやり方です。
+builtin(`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`)を依存として名指すのは通常どおり動きます。
+別の `config.fixtures` エントリを名指すのは、Playwright 自身の `extend()` と同じやり方で解決されます。
+あとの層は前の層に依存でき、fixture は別の fixture に依存でき、その fixture はさらに builtin に依存できます。
+builtin の上書きも同じやり方で許されます。
+executor 自身の起動を包む `page` fixture(`page: async ({ page }, use) => { page.setDefaultTimeout(10_000); await use(page); }`)は、`page` をその下にある builtin として読み、自分自身としては読みません。
+同名の依存が循環にならない唯一のケースです。
+`page` も `context` も分割代入しない `page` の上書きは、executor が今も所有し計測しているページを返しようがないため、`check` がそれを拒否します(`page-override-unowned`)。
+
+スコープは 2 つだけ存在します。
+`scenario`(既定)は scenario ごとに、あるいは `nuka do` の実行ごとに再構築され、その scenario 自身の終わりに teardown されます。
+`run` は 1 度だけ構築されます(`nuka run` のその実行全体を通じて、最初にどこかの step がそれを名指した時点、直接でも別の fixture 経由でも)。
+そして、その実行のすべての scenario が終わったあとに、1 度だけ teardown されます。
+`worker` は存在しません。
+nukadoko にはまだ並列実行がなく、`worker` スコープはいまの `run` とまったく同じ意味を持つ 2 つ目の名前にしかならず、その区別が実際に存在するようになる前にその名前を使い切ってしまうことになるからです。
+`nuka do` の下では、1 回の実行が両方の寿命のすべてなので、この 2 つのスコープは 1 つに畳まれます。
+`run` スコープの fixture は、そこでは `scenario` スコープの fixture とまったく同じにふるまいます。
+`run` スコープの fixture が依存してよいのは、ほかの `run` スコープの fixture と、`env`/`requireEnv`/`baseURL` だけです。
+この 3 つの builtin だけは、どの scenario の context がそれを読むかによって値が変わりません。
+`page`、`context`、`request`、`resultOf`、`section`、`poll`、あるいは `scenario` スコープの fixture への依存は拒否されます(`fixture-scope-violation`)。
+`run` スコープの fixture は自分自身の構築を、それを供給したはずのその scenario より長く生き延びさせうるからです。
+
+teardown は構築の逆順で走ります。
+その fixture を名指した step が通ったか落ちたかにかかわらずです。
+fixture 自身の片付けコードは、それが仕えた step がすでに自分の理由で失敗したからといって省略してよいものではありません。
+この逆順が正しいのは、nukadoko が fixture の構築と teardown を**直列に**行っているときだけです。
+teardown を構築の正確な逆順で畳むと、あらゆる依存がその依存先より長生きすることが保証されますが、それはどの fixture の setup も teardown も同時に 2 つ走らせない限りにおいてです。
+nukadoko が並列化される日、この前提は静かに崩れます。
+ある fixture 自身の teardown が、別の並列な scenario がすでに片付けてしまった依存に手を伸ばすことは、まさに `check` が決して捕まえられない種類のレースです。
+それは fixture グラフ自身の形についての事実ではなく、**いつ**についての事実だからです。
+並列実行を足す人は、まずこの逆順に戻ってくる必要があります。
+
+fixture 自身の成否、つまりそれを名指した step(`run` スコープなら run 自身)が通ったか落ちたかは、setup の時点ではまだ存在しません。
+そのため fixture 関数の第二引数ではなく、`use()` の**戻り値**になります。
+
+```ts
+tenant: async ({ request }, use) => {
+  const t = await createTenant(request);
+  const outcome = await use(t);          // "passed" | "failed"
+  if (outcome === "passed") await destroyTenant(request, t);
+},
+```
+
+「失敗したテナントは調べるために残し、通ったテナントは壊す」は QA の標準的な運用です。
+Playwright 自身の `afterEach` も同じ理由で `testInfo.status` を読みます。
+teardown の失敗は step や scenario 自身の成否を決して変えません。
+壊れた片付けのコードが、それ自身の受け入れ基準とは関係ない理由で、そうでなければ green だった run を red にしてはならないからです。
+それでいて黙って消えることもありません。
+`scenario` スコープの fixture の失敗は scenario record の `teardown_errors` に載り、`run` スコープの fixture の失敗(すべての scenario のあとに 1 度だけ teardown され、それを載せる 1 つの scenario record を持たない)は stderr に出ます。
+`nuka run`/`nuka do` はどちらの場合も告知しますが、exit code は変わりません。
+
+fixture は `use(value)` をちょうど 1 回呼ばなければなりません。
+呼ばずに終えることは、その fixture 自身の関数が呼ばないまま決着した時点で検出され、fixture を名指したうえで throw されます。
+2 回呼ぶことも同じように検出され、fixture を名指したうえで、2 回目の呼び出しが起きた瞬間に throw されます。
+どちらも、fixture が存在する前には `ctx.page()` になかった穴を塞ぎます。
+step 自身の本体が関数を呼ぶかどうかは、それまでその外側の呼び出し元が待つようなことではありませんでした。
+fixture は違います。
+fixture は nukadoko 自身が `use()` で中断させ、teardown で再開させるコルーチンであり、その中断点にまったく到達しない fixture は、そうでなければ run を永遠にハングさせてしまいます。
+setup と teardown はそれぞれ自分自身のタイムアウト予算を持ちます。
+`config.fixtureTimeout`(既定 60 秒)で、fixture 自身の `options.timeout` によって個別に上書きできます。
+どちらの局面がタイムアウトしても、fixture と局面の両方を名指して報告されます。
+名前のないハングより、名前の付いた失敗のほうが常にましだからです。
+
+`check` は 3 つの fixture 固有の所見を報告します。
+どれも fixture を一度も実行せずに決着します。
+`fixture-cycle`(`config.fixtures` エントリのあいだの依存の循環)、`fixture-scope-violation`(`run` スコープの fixture が `scenario` スコープの fixture に依存している)、そして `page-override-unowned`(前述)です。
+`tend` はさらに 2 つを足します。
+どちらも verdict ではなく事実です。
+`fixture-unused`(`config.fixtures` エントリのうち、どの typed step も直接にも別の fixture 経由でも要求していない、`nuka do` からはなお到達可能なもの)と、`fixture-touches-app`(`page`/`context` に、直接にも別の fixture 経由でも到達する fixture)です。
+後者が存在するのは、fixture が feature ファイルの一度も名指していない前提のもとで scenario を green にしうるからです。
+どの step も求めていないのにユーザーをログインさせておくのは、step 自身の Given が一度も書いていない作業を step がやってしまうのと同じ間違いを、1 段階離れたところでやっているにすぎません。
+これは fixture がブラウザに触れることそのものへの規則ではありません。
+`storageState` の生成は、fixture がそれを行う標準的で正当な理由であり、`tend` はそれを否定しません。
+どの fixture がそうしているかを名指すだけで、それがそのリストにふさわしいかどうかは読み手が決めます。
+
+実行自身の receipt は `fixtures` を運びます(空でないときだけ存在します)。
+その実行自身の bag 解決が実際に触れた `config.fixtures` エントリすべてで、それぞれ `{ "name", "scope", "setup_ms"?, "at"?, "reused" }` です。
+`setup_ms`/`at` は、その呼び出しが実際にそのインスタンスを構築したときだけ存在します。
+`reused: true` のエントリでそれらが存在しないことこそが、「すでに構築済みだから速い」のか「0ms で計測された」のかを見分ける手段です。
+この区別がなければ、`setup_ms` の不在は読み取れません。
+
+`nuka steps --json` の `needs`/`needs_browser`(「Context API」を参照)は、実行と同じやり方で fixture グラフを閉じます。
+`page` に到達する fixture だけを分割代入した step も、`needs_browser: true` と読めます。
+その step 自身の `needs` 配列が名指すのは fixture の名前だけで、`page` を直接には一度も名指していなくてもです。
+
 ### step の連鎖
 
 CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` を与えて scenario に束ねると、その step が単体では直面しなかった問いが立ち上がります。
@@ -819,6 +942,10 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   hook 自身が明示的に呼んだものではなく trace chunk 自体から読み出される `actions` は、この gap の影響を受けません。
   ブラウザに一度も触れなかった hook の呼び出しは chunk を開かず、この 3 つのフィールドのどれも運びません。
   `page` を一度も分割代入しなかった step と同じです。
+- `fixtures`(空でないときだけ存在します)は、その step 自身の bag 解決が実際に触れた `config.fixtures` エントリすべてを列挙します。
+  `{ "name", "scope", "setup_ms"?, "at"?, "reused" }` です(完全な形と、`setup_ms`/`at` が新しく構築されたエントリにしか存在しない理由は「Fixtures」を参照)。
+  teardown 自体はこのリストに含まれません。
+  teardown はこの receipt がすでに閉じたあとに走るので、`scenario` scope の fixture 自身の teardown 失敗は scenario record の `teardown_errors` に載ります(「Fixtures」を参照)。
 - receipt は state directory(`.nukadoko/`、gitignore 対象)の下に置かれます。
   それらはローカルな作業記録であり、耐久性のある成果物は sign-off です。
 
@@ -868,7 +995,7 @@ Cucumber が持ったことのない実行インフラです:
   名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
   それを決めるのは git の追跡/未追跡の分類と `secrets.redact` だけです。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`additionalFeatureDirs`、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`additionalFeatureDirs`、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`fixtures`、`fixtureTimeout`(「Fixtures」を参照)、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
 
 `additionalFeatureDirs`(デフォルトは `[]`)は、`featuresDir` とは違う問いに答えます。
 `featuresDir` は無人で *実行される* 集合です。
@@ -1262,14 +1389,17 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               required `from` key whose producer is absent,
                               bound later in the scenario, or ambiguous
                               between two producers, a `from` naming a step
-                              discovery never registered, config
-                              coherence, unreadable step files (reported,
-                              not fatal — the rest of the project is still
-                              checked), unsupported hook tag expressions;
-                              with no argument, scans featuresDir plus
-                              additionalFeatureDirs; a feature argument
-                              checks that one file instead, for a feature
-                              living outside both
+                              discovery never registered, a fixture
+                              dependency cycle, a run-scope fixture
+                              depending on a scenario-scope one, a page
+                              override that owns neither page nor context,
+                              config coherence, unreadable step files
+                              (reported, not fatal, the rest of the project
+                              is still checked), unsupported hook tag
+                              expressions; with no argument, scans
+                              featuresDir plus additionalFeatureDirs; a
+                              feature argument checks that one file instead,
+                              for a feature living outside both
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
@@ -1289,7 +1419,8 @@ nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
                               envFile defines, a configured
                               additionalFeatureDirs entry absent from disk,
                               an accepted feature outside every scanned
-                              directory
+                              directory, a fixture no typed step requires,
+                              a fixture reaching page/context
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
@@ -1353,6 +1484,10 @@ nuka skill path               where the bundled skill lives, for a project
   step の入力がどこから来るかは、`run` の本体の中の散文であることをやめ、ツールが読む宣言になります(「step の連鎖」を参照)。
 - **M7(tending)**: `nuka tend`、壊れることではなく腐ることについての所見です(「Tending(手入れ)」を参照)。
   意図的に `nuka check` には含めていません: `check` はあらゆる run の前に読まれるものであり、立ち止まる価値があり続けなければならないからです。
+- **M8(fixtures)**: `nukadoko.config.ts` 自身の `fixtures` の下に宣言するユーザー定義の資源です(「Fixtures」を参照)。
+  完全な型付けのための `defineFixtures`、scope、step や scenario 自身の成否を運ぶ `use()` ベースの teardown、fixture ごとのタイムアウト、そしてそれらに付随する `check`/`tend` の所見です。
+  typed 側にあった、compat の After hook にはなかった 1 つの gap を塞ぎます。
+  受け入れ条件そのものではない片付けを置く場所です。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート

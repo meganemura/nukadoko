@@ -7,6 +7,8 @@ import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps } from "../discover/discover-steps.js";
+import { buildFixtureGraph } from "../fixture/graph.js";
+import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { probeVersion } from "../environment/probe-version.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
@@ -32,7 +34,13 @@ import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
-import { formatFixtureIssues, validateStepFixtures } from "../step/validate-fixtures.js";
+import {
+  formatFixtureDefinitionIssues,
+  formatFixtureIssues,
+  knownFixtureNames,
+  validateFixtureDefinitions,
+  validateStepFixtures,
+} from "../step/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
@@ -348,12 +356,34 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // The fixture-bag counterpart to the `from` structural check just above
     // (p4a-fixture-bag task spec, scope item 3) — same "scenario-independent,
     // scoped to the steps this invocation actually binds to" shape, checked
-    // once per step name rather than once per pickle.
+    // once per step name rather than once per pickle. `knownNames` widens
+    // the closed builtin-only set to builtins ∪ `config.fixtures` (P5 task
+    // spec, scope item 5) — the same set `nuka check` validates a step's
+    // own usage against (src/check/analyze.ts).
+    const fixtureGraph = buildFixtureGraph(config);
+    const knownNames = knownFixtureNames(config);
     const fixtureIssues = [...vocabulary.values()].flatMap((entry) =>
-      entry.kind === "typed" && usedStepNames.has(entry.name) ? validateStepFixtures(entry.name, entry.step) : [],
+      entry.kind === "typed" && usedStepNames.has(entry.name)
+        ? validateStepFixtures(entry.name, entry.step, knownNames)
+        : [],
     );
     if (fixtureIssues.length > 0) {
       stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
+      return 1;
+    }
+
+    // The `config.fixtures` *definitions* themselves (P5 task spec, scope
+    // item 8) — cycles, `"run"`-scope-depends-on-`"scenario"`-scope, and an
+    // unowned `page` override — the same three findings `nuka check`
+    // reports, refused here before execution the same way `fixtureIssues`
+    // above already is. Unconditional, unlike `fixtureIssues`: these are
+    // properties of `config.fixtures` itself, not of any one step's own
+    // usage, so they are not scoped to `usedStepNames` — the same
+    // "validate the whole config regardless of what this run happens to
+    // touch" convention src/check/config-check.ts already follows.
+    const fixtureDefinitionIssues = validateFixtureDefinitions(config);
+    if (fixtureDefinitionIssues.length > 0) {
+      stderr.write(`${formatFixtureDefinitionIssues(fixtureDefinitionIssues)}\n`);
       return 1;
     }
 
@@ -441,6 +471,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // spec: no pickle selected means BeforeAll/AfterAll never run) —
       // `hasPickles` gates every step below, including AfterAll.
       const hasPickles = selected.pickles.length > 0;
+
+      // This whole invocation's own `"run"`-scope fixture cache (P5 task
+      // spec, scope item 3) — one instance, shared by every `runScenario`
+      // call below, so a `"run"`-scope fixture named by more than one
+      // scenario is built exactly once (this task's own completion
+      // condition 5) and torn down exactly once, after the pickle loop
+      // (below, near AfterAll). Cheap to create even for a zero-pickle run
+      // — an empty cache's own teardown is a no-op.
+      const fixtureRunCache = createFixtureCache();
 
       // See this file's own header (m3b-allure-emitter spec-b2 task spec,
       // item 2) for why this is gated on `hasPickles`, why construction and
@@ -568,12 +607,24 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             compatHooks,
             defaultTimeoutMs,
             onUnknownTraceVersion,
+            fixtureGraph,
+            fixtureRunCache,
           });
 
           // One JSON line per completed scenario record, streamed as it
           // finishes (this task's spec, decision 7); everything else about
           // this run goes to stderr, never stdout.
           stdout.write(`${JSON.stringify(record)}\n`);
+          // A `"scenario"`-scope fixture's own teardown failure (P5 task
+          // spec, scope item 6) — already recorded on `record.teardown_
+          // errors` (src/run/run-scenario.ts); announced here too, on
+          // stderr, so it is never silent even though it never changes
+          // `record.status` or this run's own exit code.
+          for (const teardownError of record.teardown_errors ?? []) {
+            stderr.write(
+              `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`,
+            );
+          }
           // After the stdout line, always (m3b-allure-emitter spec-b2 task
           // spec, item 2) — see this file's own header. `allureEmitter` is
           // `null` when this run selected zero pickles or its own setup
@@ -605,6 +656,24 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             allPassed = false;
           }
         }
+      }
+
+      // `"run"`-scope fixture teardown (P5 task spec, scope items 3, 6) —
+      // once, after every scenario in this invocation has finished
+      // (`.claude-team/playwright-native-design.md` 5 節: "run の最後、全
+      // シナリオの後"), after AfterAll (a `"run"`-scope fixture is
+      // nukadoko's own machinery, not a compat hook's teardown target, so it
+      // has no ordering promise relative to AfterAll beyond "after every
+      // scenario"). Never changes `allPassed` — same "teardown の throw は
+      // 成否を変えない" rule as scenario-scope teardown — and, unlike a
+      // scenario-scope failure, has no single `ScenarioRecord` of its own to
+      // land on (this run-scope cache spans every scenario in the
+      // invocation, not one), so it is announced on stderr only.
+      const runFixtureTeardownErrors = await teardownFixtureCache(fixtureRunCache, allPassed ? "passed" : "failed");
+      for (const teardownError of runFixtureTeardownErrors) {
+        stderr.write(
+          `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`,
+        );
       }
 
       // See this file's own header (m3c-messages-emitter spec-b task spec,

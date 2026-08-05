@@ -5,6 +5,7 @@ import yargs from "yargs";
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
+import { buildFixtureGraph } from "../fixture/graph.js";
 import { readOwnVersion } from "../version.js";
 import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
@@ -173,9 +174,10 @@ export async function runCli(
     handler: async (args: Arguments<StepsArgs>) => {
       if (argsFailed) return;
       try {
-        const vocabulary = await loadVocabulary(rootDir);
+        const { vocabulary, config } = await loadVocabulary(rootDir);
         const stepNames = buildStepNames(vocabulary);
-        const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames));
+        const graph = buildFixtureGraph(config);
+        const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, graph));
         if (args.json) {
           stdout.write(`${JSON.stringify(summaries, null, 2)}\n`);
         } else {
@@ -205,7 +207,7 @@ export async function runCli(
     handler: async (args: Arguments<DescribeArgs>) => {
       if (argsFailed) return;
       try {
-        const vocabulary = await loadVocabulary(rootDir);
+        const { vocabulary } = await loadVocabulary(rootDir);
         const entry = vocabulary.get(args.name);
         if (!entry) {
           exitCode = 1;

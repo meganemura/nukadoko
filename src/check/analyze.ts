@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
-import { loadConfig } from "../config/load-config.js";
+import { CONFIG_FILE_NAME, loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { loadFeaturesFromDirs, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
-import { validateStepFixtures } from "../step/validate-fixtures.js";
+import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../step/validate-fixtures.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
@@ -197,11 +197,15 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // argument isn't a plain object-destructuring pattern, reported once per
   // typed step (src/step/validate-fixtures.ts's own `validateStepFixtures`),
   // same "once per declaration, not once per occurrence" reasoning as above.
+  // `knownNames` widens the closed builtin-only set P4a checked against to
+  // builtins ∪ `config.fixtures` (P5 task spec, scope item 5) — a step
+  // naming a real user fixture is no longer reported as unknown.
+  const knownNames = knownFixtureNames(config);
   for (const entry of vocabulary.values()) {
     if (entry.kind !== "typed") {
       continue; // Compat steps have no fixture bag at all (no typed `run`).
     }
-    for (const issue of validateStepFixtures(entry.name, entry.step)) {
+    for (const issue of validateStepFixtures(entry.name, entry.step, knownNames)) {
       errors.push({
         code: "fixture-structural-violation",
         message: issue.message,
@@ -209,6 +213,24 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
         step: issue.step,
       });
     }
+  }
+
+  // The `config.fixtures` *definitions* themselves (P5 task spec, scope
+  // item 8) — a fixture destructuring an unknown name (same judgment as
+  // above, applied to a fixture's own body), a dependency cycle, a
+  // `"run"`-scope fixture depending on a `"scenario"`-scope one, and `page`
+  // overridden by a fixture that owns neither `page` nor `context`
+  // (src/fixture/graph.ts does the actual graph-shape work; this file only
+  // turns its findings into a `CheckIssue`, the same shape every other
+  // category here already produces). `file` names `nukadoko.config.ts`
+  // itself — that is where every `config.fixtures` entry actually lives,
+  // the same "file" field src/check/config-check.ts's own config-level
+  // findings already use — and the fixture's own name is already part of
+  // each issue's `message` (src/step/validate-fixtures.ts), so `step` is
+  // left unset rather than repurposed for a subject it was never meant to
+  // carry.
+  for (const issue of validateFixtureDefinitions(config)) {
+    errors.push({ code: issue.code, message: issue.message, file: CONFIG_FILE_NAME });
   }
 
   const { features, parseErrors } =

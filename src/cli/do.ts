@@ -2,12 +2,19 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
-import { buildStepFixtures, createStepContext, type DisposeResult } from "../context/create-context.js";
+import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { probeVersion } from "../environment/probe-version.js";
+import { buildFixtureGraph } from "../fixture/graph.js";
+import {
+  createFixtureCache,
+  resolveFixtures,
+  teardownFixtureCache,
+  type FixtureUsageEntry,
+} from "../fixture/resolver.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
   resolveEnvironment,
@@ -26,7 +33,13 @@ import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
-import { formatFixtureIssues, validateStepFixtures } from "../step/validate-fixtures.js";
+import {
+  formatFixtureDefinitionIssues,
+  formatFixtureIssues,
+  knownFixtureNames,
+  validateFixtureDefinitions,
+  validateStepFixtures,
+} from "../step/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "./resolve-use.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -255,10 +268,24 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // pattern at all, refuses this step's execution before it ever begins —
     // `nuka check` runs this exact same judgment (src/check/analyze.ts) over
     // the whole vocabulary, so a step never passes `nuka check` and then
-    // fails this refusal, or the reverse.
-    const fixtureIssues = validateStepFixtures(name, entry.step);
+    // fails this refusal, or the reverse. `knownFixtureNames(config)`
+    // widens the closed builtin-only set to builtins ∪ `config.fixtures`
+    // (P5 task spec, scope item 5).
+    const fixtureGraph = buildFixtureGraph(config);
+    const fixtureIssues = validateStepFixtures(name, entry.step, knownFixtureNames(config));
     if (fixtureIssues.length > 0) {
       stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
+      return 1;
+    }
+
+    // The `config.fixtures` *definitions* themselves (P5 task spec, scope
+    // item 8) — same three findings `nuka check` reports (cycles, a
+    // `"run"`-scope fixture depending on a `"scenario"`-scope one, an
+    // unowned `page` override), refused here before execution the same way
+    // `fixtureIssues` above already is.
+    const fixtureDefinitionIssues = validateFixtureDefinitions(config);
+    if (fixtureDefinitionIssues.length > 0) {
+      stderr.write(`${formatFixtureDefinitionIssues(fixtureDefinitionIssues)}\n`);
       return 1;
     }
 
@@ -397,6 +424,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // only title its chunk (if `ctx.page()` is ever called) will use.
       stepTitle: name,
     });
+    // `nuka do` is one execution, so `"scenario"` and `"run"` scope both
+    // collapse to this one call's own lifetime (P5 task spec, scope item
+    // 3; `.claude-team/playwright-native-design.md` 6 節): two separate,
+    // freshly created caches (never shared across `nuka do` invocations),
+    // each torn down once, below, after this step's own `run()` returns.
+    const fixtureScenarioCache = createFixtureCache();
+    const fixtureRunCache = createFixtureCache();
     const startedAt = new Date();
 
     // `--use`'s actual effect (m6c-do-use task spec) — applied here, not in
@@ -441,6 +475,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // only reachable from a compat step's/hook's own execution, src/run/
     // run-scenario.ts).
     let errorKind: ErrorKind | undefined;
+    // Every `config.fixtures` entry this step's own bag actually resolved
+    // (P5 task spec, scope item 10) — `[]` (hence omitted on the receipt)
+    // when args validation failed before fixture resolution ever ran.
+    let fixtureUsage: FixtureUsageEntry[] = [];
 
     const argsResult = entry.step.args.safeParse(parsedArgs);
     if (!argsResult.success) {
@@ -450,14 +488,25 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     } else {
       try {
         // Bag construction happens inside this try, same as the `run()`
-        // call itself below (p4a-fixture-bag task spec): a step that names
-        // `page` only launches the browser here, never earlier, and a
-        // launch failure is a step failure ("step_error"), the same outcome
-        // a step's own `ctx.page()` throwing used to produce when that call
-        // lived inside `run()`. `fixtureParameterNames` is memoized and
-        // already validated in setup above, so it is not expected to throw
-        // here.
-        const fixtures = await buildStepFixtures(contextHandle.ctx, fixtureParameterNames(entry.step.run));
+        // call itself below (p4a-fixture-bag task spec, widened by P5 to
+        // also resolve `config.fixtures` entries): a step that names `page`
+        // only launches the browser here, never earlier, and a launch
+        // failure, a fixture setup failure, or a fixture use()-contract
+        // violation are all a step failure ("step_error") this same way,
+        // the same outcome a step's own `ctx.page()` throwing used to
+        // produce when that call lived inside `run()`. `fixtureParameterNames`
+        // is memoized and already validated in setup above, so it is not
+        // expected to throw here.
+        const resolved = await resolveFixtures({
+          names: fixtureParameterNames(entry.step.run),
+          graph: fixtureGraph,
+          ctx: contextHandle.ctx,
+          scenarioCache: fixtureScenarioCache,
+          runCache: fixtureRunCache,
+          defaultTimeoutMs: config.fixtureTimeout,
+        });
+        fixtureUsage = resolved.usage;
+        const fixtures = resolved.fixtures;
         const runResult = await entry.step.run(fixtures, argsResult.data);
         const returnsResult = entry.step.returns.safeParse(runResult);
         if (!returnsResult.success) {
@@ -518,6 +567,27 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const httpOmitted = contextHandle.httpOmittedSnapshot();
 
     const finishedAt = new Date();
+
+    // Fixture teardown (P5 task spec, scope items 3, 6) — *before*
+    // `contextHandle.dispose()` just below: a fixture built off `page`/
+    // `context`/`request` needs those still open while its own teardown
+    // code runs. `"scenario"` scope tears down before `"run"` scope only
+    // for symmetry with `nuka run`'s own ordering (src/run/run-scenario.ts,
+    // cli/run.ts) — under `nuka do` both caches hold this one execution's
+    // own fixtures, so there is no cross-cache dependency either order
+    // could get wrong. Never changes `status` — see src/fixture/resolver.ts's
+    // own `teardownFixtureCache`; a failure is announced on stderr below
+    // instead (`nuka do` writes no `ScenarioRecord` to carry a `teardown_
+    // errors` field on).
+    const fixtureOutcome = status === "ok" ? "passed" : "failed";
+    const fixtureTeardownErrors = [
+      ...(await teardownFixtureCache(fixtureScenarioCache, fixtureOutcome)),
+      ...(await teardownFixtureCache(fixtureRunCache, fixtureOutcome)),
+    ];
+    for (const teardownError of fixtureTeardownErrors) {
+      stderr.write(`Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`);
+    }
+
     let disposeResult: DisposeResult;
     try {
       // No status argument (fb4-evidence-time task spec, item 1) — see
@@ -589,6 +659,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
             receipt_id: receiptId,
@@ -624,6 +695,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           };
 
     // Redacted once, as one object — args/result/error.message and every

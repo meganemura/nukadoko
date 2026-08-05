@@ -53,6 +53,8 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],
+    fixtures: {},
+    fixtureTimeout: 60_000,
     secrets: { public: [], redact: [] },
     ...overrides,
   };

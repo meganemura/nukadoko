@@ -195,6 +195,15 @@
 // only when non-empty, `page_events`/`sections`' own convention; capped at
 // 100 entries, `truncated: { actions: <true total> }` reporting the same way
 // `page_events`'s own per-category `truncated` does when the cap is hit.
+//
+// `fixtures` is added now (P5 task spec, scope item 10): what a step's own
+// bag actually cost to assemble, once user-defined fixtures
+// (`config.fixtures`) exist to cost anything. Teardown is deliberately not
+// here — it runs *after* a step's own receipt is already closed (this
+// file's own header convention: a receipt is what happened during this one
+// execution), so a teardown failure lands on `ScenarioRecord.teardown_errors`
+// (src/run/record-types.ts) instead, the scenario-level counterpart to this
+// field.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { HttpOmittedCounts } from "../context/http-omitted.js";
@@ -202,6 +211,9 @@ import type { ObservedCounts } from "../context/observed.js";
 import type { PageEventsSnapshot } from "../context/page-events.js";
 import type { ActionEntry } from "../context/trace-actions.js";
 import type { UsedEntry, UsedEntryWithResult } from "../context/used.js";
+import type { FixtureUsageEntry } from "../fixture/resolver.js";
+
+export type { FixtureUsageEntry } from "../fixture/resolver.js";
 
 /** The closed set of machine-readable failure causes a receipt's `error` can
  * carry (m3a-receipt-kinds task spec, decision 1) — see this file's own
@@ -417,6 +429,20 @@ interface ReceiptBase {
    * probe's absence or failure is metadata about the target, never a reason
    * to fail the run itself (this task's spec, decision 5). */
   target_version?: string;
+  /** Every `config.fixtures` entry actually resolved while assembling this
+   * step's own bag (P5 task spec, scope item 10) — src/fixture/resolver.ts's
+   * own `resolveFixtures`, called once per step by src/run/run-scenario.ts
+   * and src/cli/do.ts alike. Present only when non-empty: a step whose own
+   * `run()` destructures only builtins (or none at all) never reaches a
+   * user fixture, so this field is simply omitted for one, the same
+   * "absence is the normal case" convention `used`/`sections`/`polls`
+   * already follow. Builtins themselves never appear here — resolving one
+   * is unchanged from before P5, and was never measured this way either.
+   * `setup_ms`/`at` are present only for an entry this call actually built
+   * (`reused: false`); their absence on a `reused: true` entry is what
+   * lets a reader tell "reused, hence fast" apart from "measured 0ms" —
+   * see `FixtureUsageEntry`'s own doc comment (src/fixture/resolver.ts). */
+  fixtures?: FixtureUsageEntry[];
 }
 
 export interface ReceiptOk extends ReceiptBase {

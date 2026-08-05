@@ -155,6 +155,21 @@ between compat and typed — if another pattern comes up often enough to
 deserve one, that's a separate addition, not something to improvise from
 this single case.
 
+### When a global `After` hook was the cleanup
+
+A cucumber-js suite often leans on a global `After` hook to clean up
+whatever a step created, a tenant, a seeded row, a temp file. That is
+worth revisiting once the step that created it is promoted: declare the
+resource as a fixture under `nukadoko.config.ts`'s own `fixtures` instead,
+with the cleanup written right after `await use(...)` in the same function
+that built it, rather than left in a hook that has to guess, from tags
+alone, which scenarios actually need it. `defineFixtures` (from the
+`nukadoko` package) keeps the fixture fully typed; any typed step reaches
+it the same way it reaches `page` or `request`, by destructuring the name.
+This is additive, not required: an `After` hook that cleans up something
+no typed step has claimed yet is still exactly as valid as it was in
+Stage 1.
+
 ## Coming from a typed-step-shaped DSL
 
 If there are no feature files and no cucumber glue, the compat door in

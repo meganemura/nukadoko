@@ -1,3 +1,4 @@
+import { fixtureReachesBrowser, type FixtureGraph } from "../fixture/graph.js";
 import { fixtureParameterNames } from "./fixture-names.js";
 import type { Step } from "./define-step.js";
 
@@ -28,16 +29,12 @@ export interface StepNeeds {
 }
 
 /**
- * Whether destructuring `names` opens a browser. Today this is a direct
- * membership check, `page` or `context`, because those are the only two
- * fixtures that open one, and no fixture can itself depend on another
- * fixture (P5, not yet implemented). Once a user-defined fixture can
- * destructure `page`/`context` from *another* fixture, "needs a browser"
- * stops being a direct check and becomes a transitive closure over the
- * fixture dependency graph — a step that only names a fixture which itself
- * reaches for `page` must still read as `needs_browser: true`. This
- * function is written as the one place that closure will have to be taken,
- * so a caller never has to repeat the membership check by hand.
+ * Whether destructuring `names` opens a browser — a direct membership
+ * check, `page` or `context`, the only two fixtures that open one. This is
+ * `stepNeeds`'s own fallback for a caller with no fixture graph at all
+ * (below): a step whose bag can only ever contain builtins has no
+ * transitive path to walk, so the direct check already gives the right
+ * answer without needing one.
  */
 function opensBrowser(names: readonly string[]): boolean {
   return names.includes("page") || names.includes("context");
@@ -46,11 +43,26 @@ function opensBrowser(names: readonly string[]): boolean {
 /** `step`'s own fixture needs, read the same way `check` already reads them,
  * for a caller outside `check` (`nuka steps --json`, this task's spec).
  *
+ * `graph` (P5 task spec, scope item 11) is the fixture dependency graph a
+ * caller who has loaded a project's config can pass in
+ * (src/fixture/graph.ts's `buildFixtureGraph`) — once a user-defined
+ * fixture can itself destructure `page`/`context` from *another* fixture,
+ * "needs a browser" stops being a direct membership check and becomes a
+ * transitive closure over that graph (`fixtureReachesBrowser`): a step that
+ * only names a fixture which itself reaches for `page` must still read as
+ * `needs_browser: true`. Omitted, this falls back to the direct check
+ * above — the exact P4b behavior every pre-P5 call site (and this file's
+ * own tests) already depends on, unchanged.
+ *
  * @throws whatever `fixtureParameterNames` throws for a `run()` whose first
  * argument can't be read as fixture names at all (not destructured, a
  * default value, a rest property) — see that function's own doc comment.
  */
-export function stepNeeds(step: Step): StepNeeds {
+export function stepNeeds(step: Step, graph?: FixtureGraph): StepNeeds {
   const needs = [...fixtureParameterNames(step.run)].sort();
-  return { needs, needsBrowser: opensBrowser(needs) };
+  const needsBrowser =
+    graph !== undefined
+      ? needs.some((name) => fixtureReachesBrowser(name, graph))
+      : opensBrowser(needs);
+  return { needs, needsBrowser };
 }

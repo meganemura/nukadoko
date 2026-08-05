@@ -24,10 +24,18 @@ import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../context.js";
-import { buildStepFixtures, createStepContext } from "../context/create-context.js";
+import { createStepContext } from "../context/create-context.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
+import type { FixtureGraph } from "../fixture/graph.js";
+import {
+  createFixtureCache,
+  resolveFixtures,
+  teardownFixtureCache,
+  type FixtureCache,
+  type FixtureUsageEntry,
+} from "../fixture/resolver.js";
 import { generateReceiptId } from "../receipt/receipt-id.js";
 import type { ErrorKind, Receipt } from "../receipt/types.js";
 import { writeReceipt } from "../receipt/write-receipt.js";
@@ -299,6 +307,23 @@ export interface RunScenarioOptions {
    * `runScenario` call for that invocation), so a run whose several steps
    * each hit this still only ever writes the stderr warning once. */
   readonly onUnknownTraceVersion: (version: number) => void;
+  /** The fixture dependency graph for this run (P5 task spec, scope item 5)
+   * — builtins ∪ `config.fixtures`, built once by cli/run.ts's own setup
+   * phase (`src/fixture/graph.ts`'s `buildFixtureGraph`) and passed
+   * unchanged into every `runScenario` call, so every pickle in this
+   * invocation resolves fixtures against the exact same graph `nuka check`
+   * already validated before any of them ran. */
+  readonly fixtureGraph: FixtureGraph;
+  /** This whole `nuka run` invocation's own `"run"`-scope fixture cache
+   * (P5 task spec, scope item 3) — created once by cli/run.ts, before the
+   * first pickle, and passed unchanged into every `runScenario` call, so a
+   * `"run"`-scope fixture named by more than one scenario is built exactly
+   * once, by whichever scenario names it first, and reused by every
+   * scenario after that (this task's own completion condition 5). Torn
+   * down once by cli/run.ts, after every scenario in the invocation has
+   * finished — never here, since this function has no way to know it is
+   * looking at the invocation's *last* pickle. */
+  readonly fixtureRunCache: FixtureCache;
 }
 
 function undefinedStepMessage(text: string): string {
@@ -682,7 +707,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     compatHooks,
     defaultTimeoutMs,
     onUnknownTraceVersion,
+    fixtureGraph,
+    fixtureRunCache,
   } = options;
+
+  // This pickle's own `"scenario"`-scope fixture cache (P5 task spec,
+  // scope item 3) — fresh per pickle, unlike `fixtureRunCache` above, and
+  // torn down at this pickle's own end (below, before `contextHandle.
+  // dispose()` — a scenario-scope fixture may itself hold `page`/`context`/
+  // `request` and needs them still open during its own teardown code).
+  const fixtureScenarioCache = createFixtureCache();
 
   const scenarioId = generateScenarioId();
   const relativeScenarioDir = path.join(config.stateDir, "scenarios", scenarioId);
@@ -846,6 +880,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // This step's own declared `mutates` (typed) or `null` (compat, which
     // has no declaration at all) — this task's spec, decision 3.
     mutates: boolean | null,
+    // Every `config.fixtures` entry this step's own bag actually resolved
+    // (P5 task spec, scope item 10) — `[]` for a compat step, which has no
+    // fixture bag at all.
+    fixtureUsage: FixtureUsageEntry[],
   ): Promise<void> {
     const status = initialStatus;
     const errorMessage = initialErrorMessage;
@@ -964,6 +1002,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
             receipt_id: begun.receiptId,
@@ -1009,6 +1048,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+            ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           };
 
     // Redacted once, as one object, same as `nuka do` (this task's spec,
@@ -1341,6 +1381,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       readonly mutates: boolean | null;
       rawArgs: unknown;
     } | null = null;
+    // Every `config.fixtures` entry this step's own bag actually resolved
+    // (P5 task spec, scope item 10) — hoisted to this scope, alongside
+    // `began`, so the general backstop catch below can still put it on the
+    // receipt it writes for an unexpected throw that happens *after*
+    // fixture resolution succeeded but before `finishExecutedStep` runs.
+    // `[]` (hence omitted on the receipt) for a compat step, or a typed
+    // step whose own fixture resolution never ran at all (undefined/
+    // ambiguous/binding failure/args validation failure).
+    let fixtureUsage: FixtureUsageEntry[] = [];
 
     try {
       const outcome = matchPickleStep(pickleStep.text, bindings);
@@ -1468,20 +1517,28 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           } else {
             try {
               // Bag construction sits inside this same try (p4a-fixture-bag
-              // task spec) — a step whose `run` destructures `page` opens
-              // the browser (and this step's own trace chunk, already
-              // pending from `beginStep` above) right here, not before args
+              // task spec, widened by P5 to also resolve `config.fixtures`
+              // entries) — a step whose `run` destructures `page` opens the
+              // browser (and this step's own trace chunk, already pending
+              // from `beginStep` above) right here, not before args
               // validated and not lazily from inside the step's own body
-              // any more; a launch failure is a step failure
-              // ("step_error"), the same outcome a step's own `ctx.page()`
-              // throwing used to produce when that call lived inside
-              // `run()`. `fixtureParameterNames` is memoized and already
-              // validated by `nuka run`'s own setup phase (cli/run.ts), so
-              // it is not expected to throw here.
-              const fixtures = await buildStepFixtures(
-                contextHandle.ctx,
-                fixtureParameterNames(entry.step.run),
-              );
+              // any more; a launch failure, a fixture setup failure, or a
+              // fixture use()-contract violation are all a step failure
+              // ("step_error") this same way, the same outcome a step's own
+              // `ctx.page()` throwing used to produce when that call lived
+              // inside `run()`. `fixtureParameterNames` is memoized and
+              // already validated by `nuka run`'s own setup phase (cli/
+              // run.ts), so it is not expected to throw here.
+              const resolved = await resolveFixtures({
+                names: fixtureParameterNames(entry.step.run),
+                graph: fixtureGraph,
+                ctx: contextHandle.ctx,
+                scenarioCache: fixtureScenarioCache,
+                runCache: fixtureRunCache,
+                defaultTimeoutMs: config.fixtureTimeout,
+              });
+              fixtureUsage = resolved.usage;
+              const fixtures = resolved.fixtures;
               const runResult = await entry.step.run(fixtures, argsResult.data);
               const returnsResult = entry.step.returns.safeParse(runResult);
               if (!returnsResult.success) {
@@ -1518,6 +1575,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           rawArgs,
           entry.step,
           entry.step.mutates,
+          fixtureUsage,
         );
         await runAfterStepHooks(stepIndex, status);
       } else {
@@ -1634,6 +1692,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           rawArgsList,
           undefined,
           null,
+          [],
         );
         await runAfterStepHooks(stepIndex, status);
       }
@@ -1726,6 +1785,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
           ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
           ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
+          // `fixtureUsage` (hoisted above, alongside `began`): whatever this
+          // step's own bag had already resolved before the uncaught throw
+          // this backstop exists for still belongs on its receipt.
+          ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
         };
         const redactedReceipt = redact(receipt, secrets) as Receipt;
         await writeReceipt(began.receiptDir, redactedReceipt);
@@ -1834,6 +1897,22 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const finishedAt = new Date();
 
+  // `"scenario"`-scope fixture teardown (P5 task spec, scope items 3, 6) —
+  // *before* `contextHandle.dispose()` just below: a fixture built off
+  // `page`/`context`/`request` needs those still open while its own
+  // teardown code runs. Reverse build order (src/fixture/resolver.ts's own
+  // `teardownFixtureCache`), passed this scenario's own final outcome —
+  // every step and hook has already had its chance to set `scenarioFailed`
+  // by this point, so "passed"/"failed" here is the scenario's real,
+  // settled outcome, never a provisional one. A teardown failure never
+  // changes `scenarioFailed` itself (this task's spec: "teardown の throw
+  // は step / シナリオの成否を変えない") — it only ever lands on
+  // `ScenarioRecord.teardown_errors`, below.
+  const fixtureTeardownErrors = await teardownFixtureCache(
+    fixtureScenarioCache,
+    scenarioFailed ? "failed" : "passed",
+  );
+
   let disposeResult;
   try {
     // No status argument (fb4-evidence-time task spec, item 1) — `dispose`'s
@@ -1881,6 +1960,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // as optional for src/report/**'s own sake (out of this task's
       // scope), but this executor never sets it any more.
     },
+    ...(fixtureTeardownErrors.length > 0 ? { teardown_errors: fixtureTeardownErrors } : {}),
   };
 
   const redactedRecord = redact(record, secrets) as ScenarioRecord;

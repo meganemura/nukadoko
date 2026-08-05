@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { ConfigError } from "../config/errors.js";
 import { loadConfig } from "../config/load-config.js";
+import type { NukadokoConfig } from "../config/schema.js";
 import {
   discoverSteps,
   type Vocabulary,
   type VocabularyEntry,
 } from "../discover/discover-steps.js";
 import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
+import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { fromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { stepNeeds } from "../step/step-needs.js";
 
@@ -22,10 +24,17 @@ import { stepNeeds } from "../step/step-needs.js";
 // "how wide is the terminal", so the width this function wraps to is
 // resolved by the caller and passed in as a plain number.
 //
-export async function loadVocabulary(rootDir: string): Promise<Vocabulary> {
+/** Also returns `config` (P5 task spec, scope item 11) — `nuka steps
+ * --json`'s own `needs_browser` now needs the fixture dependency graph
+ * (`buildFixtureGraph(config)`) to compute its transitive closure through
+ * `config.fixtures`, and building that graph needs `config` itself.
+ * `describe`'s own handler simply ignores this second field, unchanged. */
+export async function loadVocabulary(
+  rootDir: string,
+): Promise<{ readonly vocabulary: Vocabulary; readonly config: NukadokoConfig }> {
   const config = await loadConfig(rootDir);
   const { vocabulary } = await discoverSteps(rootDir, config.featuresDir);
-  return vocabulary;
+  return { vocabulary, config };
 }
 
 // `StepNames` (m6a-from-core task spec, item 7): a step's own `from` field
@@ -185,7 +194,12 @@ export interface StepSummary {
   readonly from?: Record<string, { step: string; key: string } | ReadonlyArray<{ step: string; key: string }>>;
 }
 
-export function summarize(entry: VocabularyEntry, stepNames: StepNames): StepSummary {
+/** `graph` (P5 task spec, scope item 11) is optional so every call site
+ * that has no config-derived fixture graph handy keeps working unchanged
+ * (`needs_browser` falls back to `stepNeeds`'s own direct membership
+ * check) — `nuka steps --json`'s own handler (run-cli.ts) is the one
+ * caller that builds and passes one. */
+export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: FixtureGraph): StepSummary {
   if (entry.kind === "compat") {
     return {
       name: entry.name,
@@ -193,7 +207,7 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames): StepSum
       patterns: [entry.compat.patternSource],
     };
   }
-  const { needs, needsBrowser } = stepNeeds(entry.step);
+  const { needs, needsBrowser } = stepNeeds(entry.step, graph);
   return {
     name: entry.name,
     kind: "typed",

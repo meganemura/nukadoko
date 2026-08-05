@@ -82,6 +82,52 @@ just until 0.1.
   marks a browser-needing step with a single word rather than repeating the
   full `needs` list, which stays a `--json` concern.
 
+- **Steps can now order a project's own resources by name, not just
+  Playwright's.** `nukadoko.config.ts` gains `fixtures`: a name mapped to a
+  bare function, or a `[function, options]` tuple, the same two shapes
+  Playwright's own fixture definitions take. This is the place a step's own
+  tenant, seeded database, or uploaded file finally has somewhere to put its
+  cleanup, without writing that cleanup into the step itself (which would
+  make the feature file name something that is not an acceptance
+  condition). `defineFixtures`, exported from the `nukadoko` package, keeps
+  a fixture map fully typed under `strict`: a plain `export const fixtures =
+  {...}` loses TypeScript's own contextual typing the moment it leaves an
+  inline call and fails to compile with implicit `any`. A fixture may depend
+  on a builtin, on another fixture, or override a builtin outright (`page:
+  async ({ page }, use) => {...}` reads `page` as the builtin underneath it,
+  never as itself); `auto: true`, Playwright's own "build this even if
+  nothing asked for it" option, is refused outright, with a message naming
+  why. Two scopes exist: `scenario` (default, rebuilt per scenario or per
+  `nuka do` execution) and `run` (built once for the whole `nuka run`
+  invocation, the first time any step names it, reused after that); there is
+  no `worker` scope, since nukadoko has no parallel execution yet for that
+  name to mean anything different from `run`. Teardown runs in reverse build
+  order regardless of whether the step passed or failed, and `use()`'s own
+  return value (`"passed"` or `"failed"`) is how a fixture learns which, so
+  it can decide for itself whether to keep or discard what it built (a QA
+  team's standard "keep the failed one to inspect, destroy the passed one"
+  now has somewhere to live). A teardown failure never changes a step's or
+  scenario's own status; it lands on the scenario record's new
+  `teardown_errors` (a `scenario`-scope fixture) or on stderr (a `run`-scope
+  fixture, torn down once with no single scenario record to carry it), and
+  `nuka run`/`nuka do` announce it either way without touching the exit
+  code. Setup and teardown each get their own timeout (`config.fixtureTimeout`,
+  default 60 seconds, overridable per fixture), and a fixture that forgets
+  to call `use()`, or calls it twice, is detected and thrown by name rather
+  than left to hang the run forever. `nuka check` gains three findings, all
+  decided without running a fixture: `fixture-cycle`, `fixture-scope-
+  violation` (a `run`-scope fixture depending on a `scenario`-scope one),
+  and `page-override-unowned` (a `page` override that owns neither `page`
+  nor `context`). `nuka tend` gains two more, both a fact rather than a
+  verdict: `fixture-unused` and `fixture-touches-app` (a fixture that
+  reaches `page`/`context`, the standing answer to a fixture quietly logging
+  a user in before any step asks for it). A receipt now carries `fixtures`,
+  one entry per `config.fixtures` entry that step's own bag actually
+  touched, `reused: true` telling "already built" apart from "built in
+  0ms". `nuka steps --json`'s `needs_browser` now closes over this same
+  graph: a step that only destructures a fixture which itself reaches
+  `page` reads `needs_browser: true` too.
+
 ### Changed
 
 - **`evidence.trace` is a step's own trace now, not the whole scenario's.**

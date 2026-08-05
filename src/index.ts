@@ -8,6 +8,16 @@ export { defineConfig } from "./config/define-config.js";
 export { ConfigError } from "./config/errors.js";
 export type { StepFixtures } from "./context.js";
 export { MissingEnvError } from "./context/errors.js";
+export { defineFixtures } from "./fixture/define-fixtures.js";
+export type {
+  FixtureDefinition,
+  FixtureDeps,
+  FixtureFn,
+  FixtureOptions,
+  FixtureOutcome,
+  FixtureScope,
+  UseFn,
+} from "./fixture/types.js";
 // `poll` itself is not exported: it moved onto `ctx.poll` (ctx-poll-receipt
 // task spec) — see src/context.ts's own header for why a runnable `poll`
 // stayed importable for exactly as long as it recorded nothing.

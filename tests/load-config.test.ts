@@ -398,3 +398,95 @@ describe("configSchema: messages", () => {
     expect(result.success).toBe(false);
   });
 });
+
+// Responsibility: schema-level unit tests for P5's own `fixtures`/
+// `fixtureTimeout` fields (src/config/schema.ts) — the shape checks
+// (function or [function, options] tuple, `auto: true` refused with its
+// own dedicated message, `scope`/`timeout` validated) that never reach a
+// real `nuka check`/`nuka run` invocation in the fixture-project-level
+// tests (tests/check-fixture-definitions.test.ts). A fixture's own
+// dependency *names* (unknown name, cycle, scope violation) are
+// deliberately not this schema's job — those are src/step/validate-
+// fixtures.ts's, exercised there and in tests/fixture-graph.test.ts.
+describe("configSchema: fixtures", () => {
+  it("defaults fixtures to {} and fixtureTimeout to 60000", () => {
+    const result = configSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fixtures).toEqual({});
+      expect(result.data.fixtureTimeout).toBe(60_000);
+    }
+  });
+
+  it("accepts a bare function fixture", () => {
+    const result = configSchema.safeParse({
+      fixtures: { tenant: async (_deps: unknown, use: (v: unknown) => Promise<unknown>) => use(1) },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a [function, options] tuple fixture", () => {
+    const result = configSchema.safeParse({
+      fixtures: {
+        seededDb: [
+          async (_deps: unknown, use: (v: unknown) => Promise<unknown>) => use(1),
+          { scope: "run", timeout: 5_000 },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-function, non-tuple value", () => {
+    const result = configSchema.safeParse({ fixtures: { tenant: "not a function" } });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a fixture name that isn't a valid identifier", () => {
+    const result = configSchema.safeParse({
+      fixtures: { "not-an-identifier": async () => {} },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects auto: true, naming why in the message", () => {
+    const result = configSchema.safeParse({
+      fixtures: { seededDb: [async () => {}, { auto: true }] },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = JSON.stringify(result.error.issues);
+      expect(message).toContain("auto");
+      expect(message).toMatch(/names everything that ran|Playwright fixture/);
+    }
+  });
+
+  it('rejects scope: "worker" (does not exist yet)', () => {
+    const result = configSchema.safeParse({
+      fixtures: { seededDb: [async () => {}, { scope: "worker" }] },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(JSON.stringify(result.error.issues)).toContain("worker");
+    }
+  });
+
+  it("rejects a non-numeric timeout", () => {
+    const result = configSchema.safeParse({
+      fixtures: { seededDb: [async () => {}, { timeout: "soon" }] },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown option key", () => {
+    const result = configSchema.safeParse({
+      fixtures: { seededDb: [async () => {}, { retries: 3 }] },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a fixtureTimeout of zero or a negative number", () => {
+    expect(configSchema.safeParse({ fixtureTimeout: 0 }).success).toBe(false);
+    expect(configSchema.safeParse({ fixtureTimeout: -1 }).success).toBe(false);
+  });
+});
