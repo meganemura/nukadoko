@@ -69,7 +69,9 @@ ships a small vocabulary already built; one entry from its output:
   "kind": "typed",
   "patterns": ["a todo titled {title:string} is added"],
   "description": "Create a todo via POST /todos and return the created record",
-  "mutates": true
+  "mutates": true,
+  "needs": ["request"],
+  "needs_browser": false
 }
 ```
 
@@ -253,8 +255,8 @@ export default defineStep({
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
   mutates: true,
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/projects", { data: args });
+  async run({ request }, args) {
+    const res = await request.post("/projects", { data: args });
     return res.json();
   },
 });
@@ -267,10 +269,12 @@ export default defineStep({
 - `args` and `returns` are zod schemas validated at the run boundary.
   `result` in the receipt is something the tool validated, not just
   whatever the step handed back.
-- `ctx.request()` above (and `ctx.page()` for browser steps) hand back
-  Playwright's own `APIRequestContext` and `Page` objects, not a nukadoko
-  wrapper, so existing Playwright knowledge and helpers carry over
-  directly.
+- `request` above (and `page` for browser steps) is destructured straight
+  out of `run`'s first argument, the fixture bag; only the names a step
+  actually destructures ever get built, so a step that never names `page`
+  never launches a browser. Both hand back Playwright's own
+  `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
+  existing Playwright knowledge and helpers carry over directly.
 - `nuka do create-project --args '{"name":"acme"}'` runs this one step
   alone and prints its receipt: the unit an agent's explore loop is built
   on, with nothing to stand up first.

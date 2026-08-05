@@ -72,7 +72,9 @@ agent 自身の探索ループが最初に呼ぶのと同じ呼び出しです�
   "kind": "typed",
   "patterns": ["a todo titled {title:string} is added"],
   "description": "Create a todo via POST /todos and return the created record",
-  "mutates": true
+  "mutates": true,
+  "needs": ["request"],
+  "needs_browser": false
 }
 ```
 
@@ -241,8 +243,8 @@ export default defineStep({
   args: z.object({ name: z.string() }),
   returns: z.object({ id: z.string(), name: z.string() }),
   mutates: true,
-  async run(ctx, args) {
-    const res = await (await ctx.request()).post("/projects", { data: args });
+  async run({ request }, args) {
+    const res = await request.post("/projects", { data: args });
     return res.json();
   },
 });
@@ -250,7 +252,10 @@ export default defineStep({
 
 - named capture(`{name:string}`)は、値を名前で `args.name` に結び付けます。位置キャプチャでは、同じ型の値 2 つを pattern 内で入れ替えると、どちらの値がどこに入るかが黙って入れ替わります。`nuka check` は、それが起きる前に、裸の `{string}` もエラーとして検出します。
 - `args` と `returns` は、実行境界でバリデーションされる zod のスキーマです。receipt の `result` は、step が返しただけのものではなく、ツールがバリデーション済みのものです。
-- 上の `ctx.request()`(そして browser の step 向けの `ctx.page()`)が返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
+- 上の `request`(そして browser の step 向けの `page`)は、`run` の第一引数である fixture bag から直接分割代入されたものです。
+  step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません。
+  どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
+  そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
 - `nuka do create-project --args '{"name":"acme"}'` は、この 1 step だけを実行して receipt を出力します。agent の探索ループが成り立つ最小単位で、他に何も用意する必要がありません。
 
 ## What it fixes
