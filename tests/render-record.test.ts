@@ -47,6 +47,7 @@ function baseOptions(hooks: readonly ScenarioHookRecord[]): RenderAcceptanceReco
     acceptedAt: "2026-08-01T00:00:05.000Z",
     environment: "default",
     targetVersion: undefined,
+    browser: undefined,
     scenarios: [{ record, receipts: new Map() }],
   };
 }
@@ -145,6 +146,7 @@ function optionsFor(scenarios: readonly AcceptedScenario[]): RenderAcceptanceRec
     acceptedAt: "2026-08-01T00:00:05.000Z",
     environment: "default",
     targetVersion: undefined,
+    browser: undefined,
     scenarios,
   };
 }

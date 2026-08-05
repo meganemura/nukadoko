@@ -306,7 +306,15 @@ there outright, regardless of what `--env` was given.
    but the run this step ends on must cover the whole feature — `accept`
    never treats a partial run as a candidate, however green it was.
 3. `nuka accept <feature>` — freezes the newest all-green run of that
-   feature as a record beside it.
+   feature as a record beside it, restricted to runs matching the current
+   condition: whatever `config.browserType` says right now, matched
+   against what each candidate run actually measured, never a declaration.
+   A run that never opened a browser is a candidate regardless of
+   `browserType` (there is no `--browserType`/`--env` flag on `accept`
+   itself, on purpose). Every record's filename bakes its own condition in
+   (environment, then browser or `no-browser`), so accepting this feature
+   again later under a different measured condition writes a separate
+   record instead of overwriting this one.
 4. Commit the record `accept` wrote.
 
 ## When a run fails
@@ -375,7 +383,12 @@ call, would already have told you.
 in stderr, along with the next command to run. Read that message and act on
 it — don't guess, and don't look up the list elsewhere first; stderr is the
 source of truth here and anything written in this file would just go stale
-next to it.
+next to it. One of the seven, "no run to freeze", now includes a fourth
+shape: a green full run of the feature exists, just not under the current
+condition. That refusal names the condition it looked for and lists every
+condition that does have a run, so the next move is either `nuka run
+<feature>` again under the current condition or pointing `browserType` in
+the config at one of the ones already listed, never a guess between them.
 
 ## Keeping records honest over time
 
@@ -395,6 +408,13 @@ vocabulary and its records are healthy, not whether this run can proceed.
 When it reports a stale record, the fix is to run the feature again and
 `nuka accept` it again, or to undo the change that invalidated it. Never
 by editing the record.
+
+`nuka tend` also reports a note, `signoff-condition-mismatch`, when a
+feature's most recent sign-off recorded a browser the config no longer
+declares. This one never exits non-zero: nothing about that sign-off is
+wrong yet, and a project accepted under chromium is not required to also
+accept under firefox. A record accepted before this note existed reports
+nothing here at all; there is no condition on it to compare.
 
 ## What not to do
 

@@ -186,6 +186,30 @@ just until 0.1.
   mechanical rewrite across a whole `features/steps/` tree is exactly the
   kind of batch edit an agent already does well.
 
+- **A sign-off is now scoped to a condition, not just a feature and a
+  commit.** "Chromium accepted, firefox not yet" is a normal state: the
+  condition, `(environment, browser)`, is read off what a run actually
+  measured, never a declaration, so `nuka accept` now selects among runs
+  whose own measured `browser.type` matches the current `config.
+  browserType`, and a run that never launched a browser at all stays a
+  candidate no matter what `browserType` currently says, since an
+  unmeasured axis was never part of what that run confirmed. This is the
+  breaking part: the record's own filename now carries the condition too,
+  `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` in place of
+  the old `<feature-basename>.<date>-<sha>.md` (`<browser>` reads
+  `no-browser` for a run that launched none; never a version, which stays
+  in the record body only), so two conditions never collide and silently
+  overwrite one another. A record's own body gains a "Condition" section
+  stating both, explicitly, even when no browser was launched. When no
+  run matches the current condition, the refusal now says so and lists
+  which conditions do have a green full run, instead of reading as "no run
+  exists" when one does, just under a different condition. `nuka tend`
+  gains one more note, `signoff-condition-mismatch`: the most recent
+  sign-off for a feature naming a browser the current config no longer
+  declares, never an error, since nothing about it is wrong yet. A record
+  accepted before this shipped carries no condition at all; `nuka tend`
+  reads it fine and leaves it out of this one note rather than guessing.
+
 ## 0.0.5 — 2026-08-05
 
 ### Changed

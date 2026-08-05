@@ -4,12 +4,25 @@ import path from "node:path";
 // Responsibility: the read side of src/accept/render-record.ts — that file
 // is the only writer of acceptance records, so this module exists to walk a
 // project for candidate record files and turn one record's raw text back
-// into the fields signoff-rot.ts needs to judge (docs/spec.md "Tending"'s
-// first finding). Boundary: this module never touches the vocabulary,
-// feature files, or current step contracts — it only knows how to find and
-// decode a record file's own text. Judging whether what it decoded is still
-// true is signoff-rot.ts's job, kept separate so a parsing bug and a
-// judgment bug are never the same diff.
+// into the fields a tend finding needs to judge (docs/spec.md "Tending").
+// Boundary: this module never touches the vocabulary, feature files, or
+// current step contracts — it only knows how to find and decode a record
+// file's own text. Judging whether what it decoded is still true, or still
+// matches, is each finding module's own job (src/tend/signoff-rot.ts and
+// src/tend/signoff-condition-mismatch.ts both walk this module's own output
+// independently, each doing its own `discoverMarkdownFiles` +
+// `parseAcceptanceRecord`, per this file's own header just below — a
+// parsing bug and a judgment bug are never the same diff, and a judgment bug
+// in one finding is never the same diff as a judgment bug in the other).
+//
+// `condition`/`acceptedAt` are added now (accept-condition task spec, item
+// 6/7) — `render-record.ts`'s own new `browser:` frontmatter line and its
+// already-existing `environment:`/`accepted_at:` ones, read back the same
+// line-oriented way `feature:` already is. `condition` is `undefined`
+// whenever the `browser:` line itself is absent, which is exactly every
+// record accepted before this task shipped (task spec item 6: "このタスク
+// 以前に作られた記録には条件の節が無い" — never guessed at, never defaulted
+// to "no browser" for an old record that simply never had an opinion).
 //
 // Discovery walks the whole project, not just featuresDir (src/cli/
 // accept.ts's own header: an acceptance feature is recommended to live
@@ -141,6 +154,17 @@ function extractReceiptLikeBlocks(body: string): { ok: true; receipts: RecordRec
   return { ok: true, receipts };
 }
 
+/** A record's own recorded condition (accept-condition task spec, item 1) —
+ * `browserType` is `undefined` when the record's own `browser:` frontmatter
+ * line reads the literal `none` (this file's own header: a *known* "no
+ * browser was launched", never the same thing as `ParsedAcceptanceRecord.
+ * condition` itself being `undefined`, which means "unknown, no line at
+ * all"). */
+export interface RecordCondition {
+  readonly environment: string;
+  readonly browserType: string | undefined;
+}
+
 export interface ParsedAcceptanceRecord {
   /** rootDir-relative path to the record file itself. */
   readonly relativePath: string;
@@ -154,6 +178,19 @@ export interface ParsedAcceptanceRecord {
   readonly featureSource: string;
   /** Every step-shaped receipt this record embeds, in document order. */
   readonly receipts: readonly RecordReceiptLike[];
+  /** This record's own condition (accept-condition task spec, item 6) —
+   * `undefined` when the frontmatter has no `browser:` line at all, which is
+   * every record accepted before this task shipped (this file's own
+   * header). Never guessed at: a caller that needs "is this record's
+   * condition known" checks this field, not `environment`'s own presence
+   * (which every record, old and new, already carries). */
+  readonly condition: RecordCondition | undefined;
+  /** This record's own `accepted_at`, parsed as a `Date` — `undefined` when
+   * the frontmatter's own line is missing or unparsable (defensive: every
+   * record `render-record.ts` ever wrote has one). Used only to find "the
+   * latest sign-off" for one feature (src/tend/signoff-condition-
+   * mismatch.ts) — never compared against anything else here. */
+  readonly acceptedAt: Date | undefined;
 }
 
 export type RecordParseResult =
@@ -205,8 +242,29 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
     return { kind: "malformed", reason: receiptsResult.reason };
   }
 
+  // `condition`/`acceptedAt` (accept-condition task spec, item 6/7) — read
+  // leniently, never `"malformed"` on their own absence: an old record
+  // (no `browser:` line) is a legitimate, common case (this file's own
+  // header), not a broken one, and a missing/unparsable `accepted_at:`
+  // simply drops out of "the latest sign-off" comparison rather than
+  // failing the whole record (defensive; every record this tool ever wrote
+  // has one).
+  const environmentLineMatch = /^environment: (.*)$/m.exec(frontmatterBody);
+  const browserLineMatch = /^browser: (.*)$/m.exec(frontmatterBody);
+  const condition: RecordCondition | undefined =
+    environmentLineMatch && browserLineMatch
+      ? {
+          environment: environmentLineMatch[1]!,
+          browserType: browserLineMatch[1] === "none" ? undefined : browserLineMatch[1],
+        }
+      : undefined;
+
+  const acceptedAtLineMatch = /^accepted_at: (.*)$/m.exec(frontmatterBody);
+  const acceptedAtDate = acceptedAtLineMatch ? new Date(acceptedAtLineMatch[1]!) : undefined;
+  const acceptedAt = acceptedAtDate !== undefined && !Number.isNaN(acceptedAtDate.getTime()) ? acceptedAtDate : undefined;
+
   return {
     kind: "ok",
-    record: { relativePath, featurePath, featureSource, receipts: receiptsResult.receipts },
+    record: { relativePath, featurePath, featureSource, receipts: receiptsResult.receipts, condition, acceptedAt },
   };
 }

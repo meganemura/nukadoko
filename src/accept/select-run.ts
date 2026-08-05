@@ -51,10 +51,125 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // spec.md "Sign-off". "partial-only" carries the most recent group of any
 // kind, which in this branch is guaranteed partial: every group here failed
 // full coverage, or "red" would have won instead.
+//
+// `RunCondition`/`browserConditionMatches`/`listConditionsWithGreenRun` are
+// added now (accept-condition task spec, item 1/3/4) — sign-off's own
+// condition, "what confirmed this", is (environment, browser), both read off
+// the measured `ScenarioRecord` fields, never a config declaration
+// (`config.browserType` is a target to filter *for*, not the thing recorded
+// — see cli/accept.ts's own use of `browserConditionMatches`). `environment`
+// is uniform across one run_id group already (m4a-run-provenance: measured
+// once per run, same as `git`), so a group's own condition reads it off any
+// one record; `browser` is not (p6-browser-type: a step can override `page`
+// per scenario), so a group's own condition is only defined once its own
+// records agree closely enough to have one — see `conditionOfGroup`'s own
+// comment. `selectAcceptableRun` itself stays condition-agnostic on purpose:
+// cli/accept.ts filters `featureRecords` *before* calling it (never a second
+// grouping/coverage implementation here) to answer "is there a green full
+// run under the current condition", and calls the same function unfiltered
+// to answer "does one exist under any condition at all" — one selection
+// algorithm, two different inputs, not two algorithms.
 
 export interface RunStartedAt {
   readonly runId: string;
   readonly startedAt: Date;
+}
+
+/** Sign-off's own condition (accept-condition task spec, item 1) — what
+ * confirmed an accepted run, as measured, never as declared.
+ * `browserType` is `undefined` when no record the condition was read from
+ * launched a browser at all ("no browser" is itself a condition, distinct
+ * from "chromium" — task spec item 3's own third bullet). Version is
+ * deliberately not part of this type: the task spec's own item 2 states the
+ * engine's *type* is enough for acceptance/matching purposes; a browser's
+ * measured version lands only in the record body (render-record.ts), never
+ * compared here. */
+export interface RunCondition {
+  readonly environment: string;
+  readonly browserType: string | undefined;
+}
+
+/** One run_id's worth of records, keyed by that id — the same grouping
+ * `selectAcceptableRun` needs internally and `listConditionsWithGreenRun`
+ * below needs again, factored out once rather than duplicated (this file's
+ * own header: one computation path). */
+function groupByRunId(records: readonly ScenarioRecord[]): Map<string, ScenarioRecord[]> {
+  const groups = new Map<string, ScenarioRecord[]>();
+  for (const record of records) {
+    const existing = groups.get(record.run_id);
+    if (existing) {
+      existing.push(record);
+    } else {
+      groups.set(record.run_id, [record]);
+    }
+  }
+  return groups;
+}
+
+/** A group's own condition: `environment` off any one record (uniform
+ * across the group, this file's own header), `browserType` off the first
+ * record that measured launching one at all — group members that never
+ * touched a browser carry no opinion of their own to disagree with the
+ * ones that did (the same asymmetry `browserConditionMatches` below
+ * applies per record). A group whose own browser-launching records
+ * disagree with each other (a mixed-engine run, not achievable through
+ * `nuka run` today, since `browserType` is one config value per invocation)
+ * is not specially detected — the first one found wins, the same
+ * "anyRecord" simplification this file's own header already uses for
+ * `environment`. */
+function conditionOfGroup(group: readonly ScenarioRecord[]): RunCondition {
+  const withBrowser = group.find((record) => record.browser !== undefined);
+  return { environment: group[0]!.environment, browserType: withBrowser?.browser?.type };
+}
+
+/** Whether `record`'s own measured browser (if any) is compatible with
+ * `targetBrowserType` (accept-condition task spec, item 3, second/third
+ * bullets). A record that never launched a browser carries no browser
+ * condition to disagree with, so it is compatible with every target — the
+ * same reason an API-only scenario's acceptance never depends on engine
+ * choice. A record that did launch one must match exactly: matching against
+ * `config.browserType` (a *current* declaration) rather than anything
+ * stored on the record itself is what keeps this "measured vs measured"
+ * rather than "declared vs declared" (this file's own header) — the record
+ * carries only what it measured, and the caller supplies today's target. */
+export function browserConditionMatches(record: ScenarioRecord, targetBrowserType: string): boolean {
+  return record.browser === undefined || record.browser.type === targetBrowserType;
+}
+
+/** Whether `group` alone would be a qualifying ("ok") run, and if so, under
+ * which condition — the same full-coverage-and-all-passed test
+ * `selectAcceptableRun` applies per group internally, evaluated directly
+ * here (not by re-invoking that function per group) since there is no
+ * three-way "no" to distinguish and no cross-group "most recent" to settle;
+ * both of those, not this per-group boolean, are the part of that function
+ * this module means not to duplicate (this file's own header). */
+function groupCondition(group: readonly ScenarioRecord[], featureLines: ReadonlySet<number>): RunCondition | undefined {
+  const lines = new Set(group.map((record) => record.line));
+  const fullCoverage = lines.size === featureLines.size && [...featureLines].every((line) => lines.has(line));
+  const allPassed = group.every((record) => record.status === "passed");
+  return fullCoverage && allPassed ? conditionOfGroup(group) : undefined;
+}
+
+/** Every distinct condition among `featureRecords` that has its own
+ * qualifying green, full-coverage run — used only to enumerate an
+ * alternative in cli/accept.ts's refusal message once the *current*
+ * condition has none (accept-condition task spec, item 4: "run のある条件
+ * を列挙する"). This module still has no opinion on wording (this file's own
+ * header) — it hands back data, never a sentence. */
+export function listConditionsWithGreenRun(
+  featureRecords: readonly ScenarioRecord[],
+  featureLines: ReadonlySet<number>,
+): RunCondition[] {
+  const seen = new Map<string, RunCondition>();
+  for (const group of groupByRunId(featureRecords).values()) {
+    const condition = groupCondition(group, featureLines);
+    if (condition === undefined) continue;
+    const key = `${condition.environment} ${condition.browserType ?? ""}`;
+    if (!seen.has(key)) {
+      seen.set(key, condition);
+    }
+  }
+  return [...seen.values()];
 }
 
 /** Reads every `record.json` this project has ever written, across every
@@ -116,15 +231,7 @@ export function selectAcceptableRun(
     return { kind: "none-ever" };
   }
 
-  const groups = new Map<string, ScenarioRecord[]>();
-  for (const record of featureRecords) {
-    const existing = groups.get(record.run_id);
-    if (existing) {
-      existing.push(record);
-    } else {
-      groups.set(record.run_id, [record]);
-    }
-  }
+  const groups = groupByRunId(featureRecords);
 
   let sawFullCoverage = false;
   let best: { group: ScenarioRecord[]; startedAt: Date } | null = null;

@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { loadAllScenarioRecords, selectAcceptableRun } from "../accept/select-run.js";
+import {
+  browserConditionMatches,
+  listConditionsWithGreenRun,
+  loadAllScenarioRecords,
+  selectAcceptableRun,
+  type RunCondition,
+} from "../accept/select-run.js";
 import { MissingReceiptError, renderAcceptanceRecord, type AcceptedScenario } from "../accept/render-record.js";
 import { loadConfig } from "../config/load-config.js";
 import { parseFeatureSource } from "../feature/load-features.js";
@@ -24,7 +30,8 @@ import type { WritableSink } from "./writable-sink.js";
 // feature itself doesn't exist or doesn't parse, (2) there is no git
 // repository (or no commit yet) to name, (3) the *current* working tree is
 // dirty, (4) no run of this feature qualifies — src/accept/select-run.ts's
-// own job, three-way distinguished (never run at all / red / partial-only), (5)
+// own job, four-way distinguished (never run at all / red / partial-only /
+// wrong condition), (5)
 // the run that would be frozen recorded no git state of its own, (6) that
 // run's own commit no longer matches HEAD, (7) that run's own working tree
 // was dirty when it started. Conditions 5-7 read the *selected run's own*
@@ -33,6 +40,25 @@ import type { WritableSink } from "./writable-sink.js";
 // trustworthy") that only happen to share a probe function
 // (src/run/probe-git.ts, reused rather than re-implemented per the spec's
 // own list of things this task must not touch).
+//
+// Condition 4's fourth way (accept-condition task spec, item 3/4): a
+// candidate must have run under the *current* condition — `config.
+// browserType` matched against each record's own measured `browser.type`
+// (never a declaration stored on the record; there isn't one, p6-browser-
+// type task spec) via `browserConditionMatches`. `environment` is not
+// filtered here at all — unlike `browserType`, there is no "the config's own
+// environment" without a `--env` flag this command never takes (`nuka
+// accept` has no such flag, on purpose: "同じ config で受け入れる" needs no
+// flag only because `browserType` alone is fully config-derived). The
+// winning group's own `environment` is simply whatever it is, same as
+// before this task; a green run under a different environment is still a
+// candidate, exactly as it always was. When the browser-filtered selection
+// isn't "ok", `featureRecords` (unfiltered) is checked once more before
+// falling back to the three condition-blind refusals: if a green full run
+// exists *somewhere*, just not under this condition, that is a materially
+// different situation ("run again under this condition, or point
+// `browserType` at one that already has one") from "nothing has ever run" —
+// see the "no run under the current condition" branch below.
 //
 // Feature-path normalization (spec decision on identifying the target run, item 1) is
 // applied to *both* sides of the comparison, not just the argument. A
@@ -75,6 +101,17 @@ function formatFailedScenarios(group: readonly ScenarioRecord[]): string {
     parts.push(`(+${omitted} more)`);
   }
   return parts.join("; ");
+}
+
+// accept-condition task spec, item 4: naming the alternatives a "wrong
+// condition" refusal enumerates. `browserType: undefined` reads as "no
+// browser launched" rather than an empty string, matching how the record
+// body and the filename itself both say the same thing explicitly rather
+// than leaving a blank (item 5's own "空欄にしない").
+function formatCondition(condition: RunCondition): string {
+  return condition.browserType === undefined
+    ? `environment ${condition.environment} (no browser launched)`
+    : `environment ${condition.environment}, browser ${condition.browserType}`;
 }
 
 function localDateStamp(iso: string): string {
@@ -166,41 +203,74 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     return 1;
   }
 
-  // --- Refusal condition 4: is there a run to freeze at all? ---
+  // --- Refusal condition 4: is there a run to freeze, under the current
+  // condition? ---
   const allRecords = loadAllScenarioRecords(rootDir, config.stateDir);
   const featureRecords = allRecords.filter(
     (record: ScenarioRecord) => normalizeFeaturePath(rootDir, record.feature) === featurePath,
   );
-  const outcome = selectAcceptableRun(featureRecords, featureLines);
+  // "Measured vs measured" (accept-condition task spec, item 3): every
+  // candidate must either have launched no browser at all, or have launched
+  // the one the *current* config declares — never a value stored on the
+  // record itself.
+  const conditionRecords = featureRecords.filter((record) =>
+    browserConditionMatches(record, config.browserType),
+  );
+  const outcome = selectAcceptableRun(conditionRecords, featureLines);
 
-  if (outcome.kind === "none-ever") {
-    stderr.write(
-      `nuka accept: no run has ever executed ${featurePath}. Run \`nuka run ${featurePath}\` first.\n`,
-    );
-    return 1;
-  }
-  if (outcome.kind === "red") {
-    const runId = outcome.group[0]!.run_id;
-    stderr.write(
-      `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${outcome.startedAt.toISOString()}) was not all green: ${formatFailedScenarios(outcome.group)}. Fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
-    );
-    return 1;
-  }
-  if (outcome.kind === "partial-only") {
-    // Every record in this group shares the run that produced it, so its
-    // own `line` set is exactly the scenario(s) that run touched — usually
-    // one, since `:line` is `selectPickles`'s only way to produce a partial
-    // group at all (src/run/select-pickles.ts).
-    const touchedLines = [...new Set(outcome.group.map((record) => record.line))].sort((a, b) => a - b);
+  if (outcome.kind !== "ok") {
+    // The current condition has no qualifying run. Before falling back to
+    // the three condition-blind refusals below (unchanged from m4b-accept),
+    // check whether a green full run exists at all, just under some other
+    // condition — a materially different situation from "nothing has ever
+    // run" (accept-condition task spec, item 4).
+    const anyConditionOutcome = selectAcceptableRun(featureRecords, featureLines);
+
+    if (anyConditionOutcome.kind === "ok") {
+      const otherConditions = [...listConditionsWithGreenRun(featureRecords, featureLines)].sort(
+        (a, b) => a.environment.localeCompare(b.environment) || (a.browserType ?? "").localeCompare(b.browserType ?? ""),
+      );
+      stderr.write(
+        `nuka accept: no green full run of ${featurePath} exists under the current condition (browser: ${config.browserType}). ` +
+          `Runs exist for: ${otherConditions.map(formatCondition).join("; ")}. ` +
+          `Run \`nuka run ${featurePath}\` under this condition, or point browserType in the config at one of those, then accept again.\n`,
+      );
+      return 1;
+    }
+    if (anyConditionOutcome.kind === "none-ever") {
+      stderr.write(
+        `nuka accept: no run has ever executed ${featurePath}. Run \`nuka run ${featurePath}\` first.\n`,
+      );
+      return 1;
+    }
+    if (anyConditionOutcome.kind === "red") {
+      const runId = anyConditionOutcome.group[0]!.run_id;
+      stderr.write(
+        `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${anyConditionOutcome.startedAt.toISOString()}) was not all green: ${formatFailedScenarios(anyConditionOutcome.group)}. Fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
+      );
+      return 1;
+    }
+    // anyConditionOutcome.kind === "partial-only". Every record in this
+    // group shares the run that produced it, so its own `line` set is
+    // exactly the scenario(s) that run touched — usually one, since `:line`
+    // is `selectPickles`'s only way to produce a partial group at all
+    // (src/run/select-pickles.ts).
+    const touchedLines = [...new Set(anyConditionOutcome.group.map((record) => record.line))].sort((a, b) => a - b);
     const lineWord = touchedLines.length === 1 ? "line" : "lines";
     stderr.write(
-      `nuka accept: only partial runs of ${featurePath} exist (most recent covered ${lineWord} ${touchedLines.join(", ")} of ${featureLines.size} scenarios, started ${outcome.startedAt.toISOString()}). Run the whole feature with \`nuka run ${featurePath}\` before accepting.\n`,
+      `nuka accept: only partial runs of ${featurePath} exist (most recent covered ${lineWord} ${touchedLines.join(", ")} of ${featureLines.size} scenarios, started ${anyConditionOutcome.startedAt.toISOString()}). Run the whole feature with \`nuka run ${featurePath}\` before accepting.\n`,
     );
     return 1;
   }
 
   const { group, startedAt } = outcome;
   const anyRecord = group[0]!;
+  // The group's own recorded browser condition (accept-condition task spec,
+  // item 2/5) — every record in `group` already satisfies
+  // `browserConditionMatches`, so any one that launched a browser at all
+  // measured the same `config.browserType` this run was filtered against;
+  // `undefined` when none of them did.
+  const browserRecord = group.find((record) => record.browser !== undefined)?.browser;
 
   // --- Refusal conditions 5-7: the *selected run's own* git state. ---
   if (anyRecord.git === undefined) {
@@ -242,6 +312,7 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
       acceptedAt: localIsoWithOffset(new Date().toISOString()),
       environment: anyRecord.environment,
       targetVersion: anyRecord.target_version,
+      browser: browserRecord,
       scenarios,
     });
   } catch (error) {
@@ -252,10 +323,24 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     throw error;
   }
 
+  // The filename bakes the condition in (accept-condition task spec, item
+  // 2) — a different condition must never collide with, and silently
+  // overwrite, another one's own record. `<date>-<sha>` stays exactly where
+  // it was so an existing reader looking for that substring still finds it;
+  // `environment` and the browser segment are appended after. The browser
+  // segment is the literal `no-browser` when nothing in `group` launched
+  // one, never an omitted segment — an omitted segment would make "browser
+  // not part of this filename" indistinguishable from "happened not to need
+  // one this time" at a glance, and never a version (item 2: the engine's
+  // type is enough for acceptance; the version lives in the record body).
   const basename = path.basename(featurePath, ".feature");
   const dateStamp = localDateStamp(startedAt.toISOString());
   const sha7 = runGit.commit.slice(0, 7);
-  const outputPath = path.join(path.dirname(absoluteFeaturePath), `${basename}.${dateStamp}-${sha7}.md`);
+  const browserSegment = browserRecord === undefined ? "no-browser" : browserRecord.type;
+  const outputPath = path.join(
+    path.dirname(absoluteFeaturePath),
+    `${basename}.${dateStamp}-${sha7}.${anyRecord.environment}.${browserSegment}.md`,
+  );
 
   await writeFile(outputPath, content);
 

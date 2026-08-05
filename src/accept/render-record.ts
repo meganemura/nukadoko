@@ -35,6 +35,21 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // making a write. It never changes whether `nuka accept` refuses (that stays
 // cli/accept.ts's seven conditions, untouched) and never asserts the step is
 // wrong — see renderDeclaredVsObserved's own comment for why.
+//
+// A "Condition" section, and a frontmatter `browser:` line beside the
+// existing `environment:` one, are added now (accept-condition task spec,
+// item 5) — what confirmed this run, stated once near the top rather than
+// left implicit in the filename alone. `browser` is the accepted group's own
+// measured engine (`browserRecord` in cli/accept.ts, never `config.
+// browserType`): the literal string `"none"` in frontmatter, and an explicit
+// "no browser was launched" sentence in the body, when nothing in the group
+// launched one — never a blank line, so "condition unknown" (an older
+// record, no `browser:` line at all — src/tend/record-parse.ts's own read
+// side) stays distinguishable from "condition known: no browser" (task spec
+// item 6's own distinction). The body section carries the browser's
+// *version* too, which frontmatter and the filename both deliberately don't
+// (item 2: the engine's type is enough for acceptance; the version is
+// informational only).
 
 function needsYamlQuoting(value: string): boolean {
   if (value.length === 0) return true;
@@ -85,6 +100,13 @@ export interface RenderAcceptanceRecordOptions {
   readonly acceptedAt: string;
   readonly environment: string;
   readonly targetVersion: string | undefined;
+  /** The accepted group's own measured browser condition (accept-condition
+   * task spec, item 1/5) — `undefined` when no scenario in the group
+   * launched one at all. Never `config.browserType` itself (docs/spec.md
+   * "Declaration and measurement answer different questions"): this is what
+   * the group's own records measured, already filtered to match today's
+   * config by cli/accept.ts before this function is ever called. */
+  readonly browser: { readonly type: string; readonly version: string } | undefined;
   /** In the order they should appear in the record — cli/accept.ts sorts
    * ascending by `line` before calling this (this module does not
    * re-sort). */
@@ -126,6 +148,14 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
   if (options.targetVersion !== undefined) {
     lines.push(`target_version: ${JSON.stringify(options.targetVersion)}`);
   }
+  // Never omitted, unlike `target_version` just above (this file's own
+  // header, accept-condition task spec) — the literal `"none"` is what lets
+  // src/tend/record-parse.ts's read side tell "this record predates the
+  // condition concept" (line absent) apart from "this record's own
+  // condition measured no browser" (line present, value `none`). The engine
+  // name is always a bare, unquotable identifier (`BROWSER_ENGINES`'s own
+  // keys), so `yamlScalar` is not needed here.
+  lines.push(`browser: ${options.browser === undefined ? "none" : options.browser.type}`);
   lines.push("scenarios:");
   for (const { record } of options.scenarios) {
     lines.push(`  - name: ${yamlScalar(record.scenario)}`);
@@ -276,6 +306,24 @@ function renderDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): strin
   return lines;
 }
 
+// Near the top, ahead of the scenario/receipt detail (accept-condition task
+// spec, item 5) — what confirmed this run is context a reader needs before
+// the detail, not a footnote after it, the same reasoning that keeps
+// "Declared vs observed" at the tail instead: that section is a roll-up
+// computed *from* the detail above it, while this one is read *before* the
+// detail to make sense of it at all. `environment` restates the frontmatter
+// value in prose, deliberately: a reader of the rendered body should not
+// have to open the frontmatter block to answer "what confirmed this".
+function renderCondition(options: RenderAcceptanceRecordOptions): string[] {
+  const lines: string[] = ["", "## Condition", "", `- environment: ${options.environment}`];
+  lines.push(
+    options.browser === undefined
+      ? "- browser: not launched (no step in this run destructured page/context)"
+      : `- browser: ${options.browser.type} ${options.browser.version}`,
+  );
+  return lines;
+}
+
 export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): string {
   const frontmatter = renderFrontmatter(options);
 
@@ -283,6 +331,7 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
   const body: string[] = [
     "",
     `# ${title}: green at ${options.commit.slice(0, 7)}`,
+    ...renderCondition(options),
     "",
     "## The scenario as it ran",
     "",

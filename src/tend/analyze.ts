@@ -13,6 +13,7 @@ import { findSupportOriginParameterTypes } from "./parameter-type-support-origin
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { findSignedFeatureUnscanned } from "./signed-feature-unscanned.js";
+import { findSignoffConditionMismatch } from "./signoff-condition-mismatch.js";
 import { findSignoffRot } from "./signoff-rot.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
@@ -82,6 +83,16 @@ import type { TendIssue, TendReport } from "./types.js";
 // was called with) — it is where the bed currently is, not a finding, so it
 // never feeds `errors` or `notes` and never changes the caller's exit code
 // (src/cli/tend.ts still derives that from `errors` alone).
+//
+// `findSignoffConditionMismatch` is accept-condition's own addition (task
+// spec, item 7) — a note, not an error, unlike `findSignoffRot` just above:
+// nothing about a sign-off's own claim has gone stale (that is still
+// `findSignoffRot`'s exclusive question), only that a *different* condition
+// is what `nuka accept` would now pick for this feature. It shares
+// `findSignoffRot`'s own record-walking source (src/tend/record-parse.ts)
+// but does its own independent walk of it (that file's own header) rather
+// than being folded into `findSignoffRot`'s loop, since one produces
+// `errors` and the other `notes` — never the same collection.
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
@@ -119,6 +130,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findSignedFeatureUnscanned(rootDir, scannedFeatureDirs),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
+    ...findSignoffConditionMismatch(rootDir, config.browserType),
   ];
 
   const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);

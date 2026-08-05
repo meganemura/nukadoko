@@ -1552,13 +1552,34 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   exist for machines reading `nuka run`'s output, not for humans to type.
 - The run it freezes has to cover the whole feature. A run selected with
   `<feature>:<line>` covered one scenario, so it is not a candidate however
-  green it was — freezing it would leave a record beside a feature most of
-  which that run never reached. The three ways this can come out are
+  green it was: freezing it would leave a record beside a feature most of
+  which that run never reached. The four ways this can come out are
   different situations for whoever is reading, and are reported as
   different ones: no run of this feature has ever existed, the last full
-  run was red, or only partial runs exist. A refusal names what it read to
-  decide — which run, when it started, which of its scenarios failed — so
-  the next command is chosen against the record rather than guessed at.
+  run was red, only partial runs exist, or a green full run exists but not
+  under the current condition (below). A refusal names what it read to
+  decide (which run, when it started, which of its scenarios failed, or
+  which conditions do have a run), so the next command is chosen against
+  the record rather than guessed at.
+- A sign-off is scoped to a condition: `(environment, browser)`, both read
+  off the run's own measurement, never a declaration. `environment` is
+  `nuka run`'s own `--env` (or the implicit `default`); `browser` is the
+  engine `ScenarioRecord.browser` measured, present only for a run that
+  launched one at all (see "Running"). "Chromium accepted, firefox not
+  yet" is a normal state, not a stale one: a sign-off is a claim about one
+  specific measured condition, and freezing two of them is two separate
+  claims, not one claim updated. `nuka accept` selects among runs that
+  match the *current* condition, `config.browserType`, matched against
+  each candidate's own measured `browser.type` (the same measured-vs-
+  measured comparison every other declaration/measurement question in this
+  spec makes, never the other way, and never against anything a candidate
+  merely declared). A run that never launched a browser at all is a
+  candidate regardless of `browserType`: an unmeasured axis is not part of
+  what that run actually confirmed, which is why an API-only scenario's
+  acceptance never depends on engine choice. There is no equivalent
+  narrowing by `environment`, since `nuka accept` takes no `--env` flag, on
+  purpose, so there is nothing to narrow by beyond whatever
+  `config.browserType` alone already determines.
 - It refuses unless the working tree is completely clean, untracked files
   included, and the run it is freezing happened at the current HEAD. The
   record's whole claim is "this scenario was green at commit X"; an
@@ -1570,10 +1591,24 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   failure: a scenario that did not pass gets fixed and re-run, and what is
   worth keeping is the outcome, not the attempts.
 - The record is written beside the feature it came from, named
-  `<feature-basename>.<date>-<sha>.md`. nukadoko does not choose a
-  directory — where acceptance work lives is the project's decision. A
+  `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, the
+  accepted run's own condition folded into the name (`<browser>` is the
+  literal `no-browser` when the run launched none) so two conditions never
+  collide, silently overwriting one another, at the same commit on the
+  same day. The browser's *version* is never in the filename: the engine's
+  type is enough to identify which condition a record is for, and the
+  version lives in the record body only (below). nukadoko does not choose
+  a directory (where acceptance work lives is the project's decision); a
   project that wants these out of its regression suite puts the feature
   outside `featuresDir`, and the record follows it there.
+- The record's own body carries a "Condition" section, near the top: the
+  `environment` and, when the accepted run launched a browser, its measured
+  engine and version; when it did not, the section says so explicitly
+  rather than leaving anything blank, so "no browser was launched" stays
+  distinguishable from a field a reader forgot to check. A record accepted
+  before this existed carries no such section: `nuka tend` treats that as
+  "condition unknown", never guesses at one, and never lets a note compare
+  it against anything (see "Tending").
 - It carries the feature's full text, the scenario record, and each step's
   receipt with evidence stripped — traces and screenshots stay in
   `.nukadoko/`, and a CI artifact is where they belong when they are
@@ -1935,6 +1970,14 @@ What it looks at, and why each one is rot rather than style:
   is the one finding here that is an error rather than a note: a sign-off
   that has quietly stopped meaning what it says is worse than no sign-off,
   because it is still being counted.
+- **A sign-off's own recorded condition drifting from the config.** A
+  sign-off is scoped to a condition (see "Sign-off"): `(environment,
+  browser)`, both measured, never declared. If the most recent sign-off for
+  a feature recorded a browser the project's config no longer declares,
+  nothing about that sign-off is wrong right now, which is why this is a
+  note rather than an error, unlike the finding above. A record accepted
+  before this note existed carries no condition to compare against at all,
+  so it is left out of this finding entirely rather than guessed at.
 - **A `from` declaration nothing exercises.** Every occurrence of the step
   across every feature captures that key from the line, so the declared
   producer never supplies anything. Reported as the fact it is — the
