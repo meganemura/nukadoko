@@ -73,6 +73,15 @@ nukadoko はその両方を閉じ、操作の語彙はコミットされ型付�
 nukadoko は Cucumber のレイアウト規約に従い、feature ファイルとそれを支えるコードは `features/` の下に一緒に置かれるため、移行するチームは自分たちのメンタルモデルとディレクトリ構成をそのまま保てます。
 型付き step の置き場所として推奨されるのは `features/steps/` で、1 step = 1 file です: `features/steps/<name>.ts`(kebab-case、ファイル名が step 名になります)。
 
+discovery は `featuresDir` を歩き、`.ts` / `.mts` / `.js` / `.mjs` のすべてのファイルを対象にします(ファイルがどの拡張子であっても、step 名はその拡張子を取り除いた名前になります)。
+`node_modules` とドットディレクトリ(`.git`、`.nukadoko`、エディタ自身の `.vscode` など)はどの深さでもスキップし、`.d.ts` / `.d.mts` も除外します。
+これらは型宣言であって step 定義ではないためです。
+`.cjs` ファイルは名指しできる程度には歩きますが、インポートはしません。
+nukadoko は ESM-only であるため(同じ CommonJS の go/no-go については後述の「Compat steps」を参照)、`nuka check` はそれを `step-file-unsupported-extension` として報告し、そこで定義されていたかもしれないものが説明のつかない `undefined-step` として現れることを防ぎます。
+`featuresDir` を広く設定する(たとえばリポジトリのルートなど)と、この歩く範囲も同じだけ広がります。
+その木の中のどこかにあるビルド成果物であっても、名前が上記 4 つの拡張子のいずれかで終わっていれば glue として読み込まれる可能性があります。
+`node_modules` とすべてのドットディレクトリは、`featuresDir` をどれだけ広く設定していても除外され続けます。
+
 ```ts
 import { defineStep } from "nukadoko";
 import { z } from "zod";
@@ -692,6 +701,10 @@ import { Given, When, Then } from "nukadoko/compat";
 - 大きな声の失敗は、静的な検査ですでに言えることと、step を実際に実行して初めて分かることに分かれ、`nuka check` が報告するのはちょうど前半です。
   **`nuka check` が言えること**: import が例外を投げる step ファイル(`nukadoko/compat` が export していない名前を値として使っている、ESM glue の中の CommonJS `require`、深い subpath の import)は `step-file-import-failed` エラーになり、単一の `@tag` / `not @tag` を超える hook のタグ式は `unsupported-hook-tag-expression` エラーになります。
   どちらも、何かが実行される前に、そのファイルのテキストだけから分かります。
+  その隣にはさらに 2 つの所見があり、どちらも 1 つのファイルの中身についてではなく discovery 自身が歩く範囲についてのものです。
+  `.cjs` ファイルが `featuresDir` の下にあるときの `step-file-unsupported-extension`(nukadoko がそれを import しない理由は前述の「型付き step」を参照)と、歩いた結果として試せるものが何もなかったときの `no-step-files-found` です。
+  どちらも、実際に何を見た結果なのかを名指しします。
+  これは、`nuka tend` 自身の `scanned:` 行が従っているのと同じ「所見が嘘のとき、それに気づけるように」という論拠です。
   **`nuka run` で初めて見つかること**: step や hook が `"pending"` / `"skipped"` を返すこと、そして done コールバックの glue は、その step が実際に実行されたときに何をするかの性質であり、ファイルの import のされ方の性質ではないため、その step 自身の実行より前には何も指摘できません。
   **どちらでもない(gap ではない)こと**: 型注釈にしか使われていない、あるいは import はされたが一度も参照されない名前は、nukadoko がそのファイルを import するより前に esbuild によってコンパイル済み出力から取り除かれるため、その import は実行時には実際には一度も起きません。
   glue は書かれたとおりに実行されます。
@@ -1474,8 +1487,10 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               override that owns neither page nor context,
                               config coherence, unreadable step files
                               (reported, not fatal, the rest of the project
-                              is still checked), unsupported hook tag
-                              expressions; with no argument, scans
+                              is still checked), a `.cjs` file discovery
+                              walks but never imports, a featuresDir scan
+                              that found nothing loadable, unsupported hook
+                              tag expressions; with no argument, scans
                               featuresDir plus additionalFeatureDirs; a
                               feature argument checks that one file instead,
                               for a feature living outside both

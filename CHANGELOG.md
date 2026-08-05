@@ -171,6 +171,18 @@ just until 0.1.
   trace/screenshots/http, contentType guessed from the file's own
   extension, `application/octet-stream` when it cannot be.
 
+- **Step discovery reads `.js` and `.mjs` step files, not just `.ts` and
+  `.mts`.** A suite whose glue is plain JavaScript, cucumber-js's own
+  official ESM sample among them, used to be entirely invisible to
+  discovery: an empty vocabulary and every scenario reporting `undefined
+  step`, with nothing saying why the vocabulary came back empty. `nuka
+  check` now also says why in two new findings:
+  `step-file-unsupported-extension`, naming a `.cjs` file discovery walks
+  but never imports (`.cjs` is CommonJS regardless of `package.json`'s own
+  `"type"`, and nukadoko is ESM-only, an already-documented go/no-go), and
+  `no-step-files-found`, naming the directory a walk that found nothing
+  loadable actually scanned.
+
 ### Changed
 
 - **`evidence.trace` is a step's own trace now, not the whole scenario's.**
@@ -236,6 +248,17 @@ just until 0.1.
   declares, never an error, since nothing about it is wrong yet. A record
   accepted before this shipped carries no condition at all; `nuka tend`
   reads it fine and leaves it out of this one note rather than guessing.
+
+### Fixed
+
+- **Step discovery no longer walks `node_modules` or imports a `.d.ts`
+  file.** A project with `featuresDir` set to something wide (a repository
+  root, for instance, a real configuration observed in the wild) had
+  discovery recurse into every dependency's own files under
+  `node_modules`, type declarations included, trying to import each one as
+  though it were a step definition. `node_modules` and any dot-directory
+  (`.git`, `.nukadoko`, an editor's own `.vscode`, ...) are now skipped at
+  every depth, and `.d.ts`/`.d.mts` files are excluded outright.
 
 ## 0.0.5 — 2026-08-05
 

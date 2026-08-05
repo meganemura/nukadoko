@@ -21,8 +21,11 @@ import {
   DuplicateWorldDefinitionError,
 } from "./errors.js";
 
-// Responsibility: walk `featuresDir`, import every `.ts` file found, and
-// collect the vocabulary of typed steps by filename, plus (m2a-compat-
+// Responsibility: walk `featuresDir`, import every `.ts`/`.mts`/`.js`/`.mjs`
+// file found -- skipping `node_modules` at any depth, any dot-directory
+// (`.git`, `.nukadoko`, ...), and `.d.ts`/`.d.mts` declarations; see
+// `walkStepFiles`'s own comment for why (p10-step-discovery task spec) --
+// and collect the vocabulary of typed steps by filename, plus (m2a-compat-
 // registry task spec) every compat step and compat `defineParameterType`
 // call any of those files made along the way. Deliberately imports modules
 // to discover them (docs/spec.md "Implementation notes" accepts this:
@@ -171,13 +174,70 @@ export interface DiscoveryResult {
    * src/check/feature-check.ts's `file`). `message` is the importing error's
    * own `.message`, unmodified — see the `catch` below for why. */
   readonly importFailures: readonly { filePath: string; message: string }[];
+  /** rootDir-relative paths of every `.cjs` file this run's walk found
+   * under `featuresDir` (skipping `node_modules` and any dot-directory, the
+   * same walk every other file here goes through) and never attempted to
+   * import: nukadoko is ESM-only (docs/migration.md's own go/no-go for
+   * CommonJS glue), and `.cjs` always resolves to CommonJS regardless of
+   * the nearest `package.json`'s own `"type"`, so importing one the way a
+   * `.ts`/`.mts`/`.js`/`.mjs` file is imported below would just be a
+   * different, more confusing way to fail. `nuka check`'s
+   * `step-file-unsupported-extension` (p10-step-discovery task spec)
+   * reports each one by name instead of letting whatever it would have
+   * defined resurface as an unexplained `undefined-step`. */
+  readonly unsupportedExtensionFiles: readonly string[];
+  /** rootDir-relative paths of every `.ts`/`.mts`/`.js`/`.mjs` file this
+   * run's walk found and attempted to import -- including a file that ends
+   * up in `importFailures`, and a file that imports cleanly but defines no
+   * step or compat registration at all. `vocabulary` alone can't answer
+   * "did the walk find anything to try": an empty vocabulary is also what a
+   * project with real, cleanly-importing support-only files (no
+   * `Given`/`When`/`Then`, no `export default defineStep(...)`) produces.
+   * This list is what lets `nuka check`'s `no-step-files-found` (p10-step-
+   * discovery task spec) tell those two apart and name every directory it
+   * walked -- the same "so a reader can tell a finding isn't lying"
+   * reasoning as `nuka tend`'s own `scanned:` line (src/cli/tend.ts). */
+  readonly walkedFiles: readonly string[];
 }
 
 function compatPatternSource(pattern: string | RegExp): string {
   return typeof pattern === "string" ? pattern : pattern.toString();
 }
 
-function walkTsFiles(dir: string): string[] {
+// `.d.ts`/`.d.mts` checked (and skipped) ahead of the plain extensions below
+// since a declaration file's own name also ends in `.ts`/`.mts` -- checking
+// order matters here, the plain-extension check must never see one first.
+const DECLARATION_FILE_EXTENSIONS = [".d.ts", ".d.mts"];
+// tsx's `tsImport` reads all four directly (docs/spec.md "Implementation
+// notes"); `.cjs` is deliberately absent -- see `unsupportedExtensionFiles`
+// on `DiscoveryResult` for why it is walked and named, but never imported.
+const STEP_FILE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs"];
+const UNSUPPORTED_STEP_FILE_EXTENSION = ".cjs";
+
+interface WalkStepFilesResult {
+  /** Absolute paths, sorted, of every candidate step file found. */
+  readonly files: string[];
+  /** Absolute paths, sorted, of every `.cjs` file found alongside them. */
+  readonly unsupportedExtensionFiles: string[];
+}
+
+// Renamed from `walkTsFiles` (p10-step-discovery task spec, scope 2): the
+// old name stopped matching what this function does the moment `.mts`/
+// `.js`/`.mjs` joined `.ts` as files it walks.
+//
+// `node_modules` and any dot-directory (`.git`, `.nukadoko`, an editor's
+// own `.vscode`, ...) are skipped at every depth, not just featuresDir's
+// own immediate children -- this is a bug fix independent of the extension
+// widening above (p10-step-discovery task spec, scope 1), since a project
+// with `featuresDir: "."` (a real, observed configuration) already walked
+// `node_modules` recursively and imported every `.ts` file a dependency
+// shipped, `.d.ts` included, before this function ever considered `.js`.
+// `.d.ts`/`.d.mts` are excluded because a type declaration is never a step
+// definition: it has no runtime statements to evaluate at all (a compiler
+// error if it did), so importing one would only ever produce an empty
+// module -- something to skip outright, not something worth spending an
+// import call on.
+function walkStepFiles(dir: string): WalkStepFilesResult {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -185,19 +245,37 @@ function walkTsFiles(dir: string): string[] {
     // featuresDir (or a subdirectory) not existing is not this function's
     // problem to diagnose — an empty vocabulary is a valid, if unhelpful,
     // answer to "what steps exist".
-    return [];
+    return { files: [], unsupportedExtensionFiles: [] };
   }
 
   const files: string[] = [];
+  const unsupportedExtensionFiles: string[] = [];
   for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...walkTsFiles(fullPath));
-    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) {
+        continue;
+      }
+      const nested = walkStepFiles(fullPath);
+      files.push(...nested.files);
+      unsupportedExtensionFiles.push(...nested.unsupportedExtensionFiles);
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+    if (DECLARATION_FILE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
+      continue;
+    }
+    if (STEP_FILE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
       files.push(fullPath);
+      continue;
+    }
+    if (entry.name.endsWith(UNSUPPORTED_STEP_FILE_EXTENSION)) {
+      unsupportedExtensionFiles.push(fullPath);
     }
   }
-  return files;
+  return { files, unsupportedExtensionFiles };
 }
 
 export interface DiscoverStepsOptions {
@@ -223,7 +301,7 @@ export async function discoverSteps(
 ): Promise<DiscoveryResult> {
   const { tolerateImportFailures = false } = options;
   const featuresRoot = path.join(rootDir, featuresDir);
-  const files = walkTsFiles(featuresRoot);
+  const { files, unsupportedExtensionFiles } = walkStepFiles(featuresRoot);
 
   // One namespace per discovery run (random, not a counter or timestamp:
   // this can run concurrently with other discovery runs, e.g. across test
@@ -340,7 +418,11 @@ export async function discoverSteps(
 
       const candidate = mod.default;
       if (isStep(candidate)) {
-        const name = path.basename(filePath, ".ts");
+        // `path.extname` rather than a hardcoded `".ts"` (p10-step-discovery
+        // task spec, scope 2): `walkStepFiles` now hands this loop a mix of
+        // `.ts`/`.mts`/`.js`/`.mjs` files, and each one's own extension is
+        // exactly what should come off its name, whichever one it is.
+        const name = path.basename(filePath, path.extname(filePath));
         const existing = vocabulary.get(name);
         if (existing) {
           throw new DuplicateStepError(name, existing.filePath, filePath);
@@ -413,6 +495,10 @@ export async function discoverSteps(
       // module (see registry.ts's own header for why).
       defaultTimeoutMs: compatRegistry.getDefaultTimeoutMs(),
       importFailures,
+      unsupportedExtensionFiles: unsupportedExtensionFiles.map((filePath) =>
+        path.relative(rootDir, filePath),
+      ),
+      walkedFiles: files.map((filePath) => path.relative(rootDir, filePath)),
     };
   } finally {
     await scoped.unregister();

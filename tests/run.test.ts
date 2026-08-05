@@ -326,3 +326,36 @@ describe("nuka run", () => {
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
   });
 });
+
+// p10-step-discovery task spec, scope 5: a project whose step definitions
+// are plain .js/.mjs, not .ts -- discovery only walked .ts before this
+// task, so a suite like this one was invisible to it and every scenario
+// failed as "undefined step" instead of naming the real cause. Its own
+// fixture (js-steps-project), not run-project above, since run-project's
+// step files are relied on as .ts by other tests in this file.
+describe("nuka run: .js and .mjs step files (p10-step-discovery)", () => {
+  it("discovers and executes a .js Given step and a .mjs Then step", async () => {
+    const rootDir = await copyFixtureToTempDir("js-steps-project");
+    try {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["run", "features/passing.feature"], {
+        rootDir,
+        stdout,
+        stderr,
+      });
+
+      expect(stderr.text()).toBe("");
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      expect(record.status).toBe("passed");
+      expect(record.steps).toHaveLength(2);
+      for (const step of record.steps) {
+        expect(step.status).toBe("passed");
+        expect(typeof step.receipt).toBe("string");
+      }
+      expect(exitCode).toBe(0);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+});

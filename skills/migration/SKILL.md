@@ -50,6 +50,17 @@ Change the one import each glue file uses:
 import { Given, When, Then } from "nukadoko/compat";
 ```
 
+Extension decides what discovery reads, not the suite's own history: `.ts`,
+`.mts`, `.js`, and `.mjs` glue are all read the same way, so a suite that
+was always plain JavaScript needs no rewrite to TypeScript just to start
+this stage. A `.cjs` file is the one exception: nukadoko is ESM-only, so
+discovery never imports one; `nuka check` names it instead
+(`step-file-unsupported-extension`) rather than letting it disappear as an
+unexplained `undefined-step`. Renaming it to `.js` only helps if the file's
+own code is already ES module syntax; if it still calls `require(...)`,
+that fails at the same import for the same ESM-only reason, and `nuka
+check` says so as `step-file-import-failed`.
+
 Then run `nuka check <feature>` and `nuka run <feature>` and read what they
 say. Fix whatever they point at, and run them again. Repeat until the
 existing suite is green — that is Stage 1's completion condition, nothing

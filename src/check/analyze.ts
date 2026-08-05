@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
@@ -106,11 +106,14 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // becomes a report entry (`importFailures`, handled below) instead of
   // rejecting this whole call the way `run`/`do`/`steps`/`init` still do via
   // their own plain `discoverSteps(rootDir, config.featuresDir)` calls.
-  const { vocabulary, compatParameterTypes, compatHooks, importFailures } = await discoverSteps(
-    rootDir,
-    config.featuresDir,
-    { tolerateImportFailures: true },
-  );
+  const {
+    vocabulary,
+    compatParameterTypes,
+    compatHooks,
+    importFailures,
+    unsupportedExtensionFiles,
+    walkedFiles,
+  } = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true });
 
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -124,6 +127,37 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       code: "step-file-import-failed",
       message: failure.message,
       file: failure.filePath,
+    });
+  }
+
+  // p10-step-discovery task spec, scope 3: both findings below are
+  // decidable from the walk alone (an extension check, a length check),
+  // never a guess about a file's contents — and both are things a run needs
+  // known beforehand, the same "yes" this task's spec asks before sorting a
+  // finding into `check` rather than `tend`. Errors, not warnings: a `.cjs`
+  // file is nukadoko's one already-documented go/no-go (docs/migration.md
+  // "CommonJS glue"), the same certainty `step-file-import-failed` above
+  // already gets error severity for, and a featuresDir with nothing loadable
+  // in it guarantees every scenario fails as `undefined-step` — strictly
+  // worse than the single broken file that finding already covers.
+  for (const filePath of unsupportedExtensionFiles) {
+    errors.push({
+      code: "step-file-unsupported-extension",
+      message: `discovery found "${filePath}", which is CommonJS (.cjs extension); nukadoko is ESM-only and never imports it, so any step it defines never reaches the vocabulary`,
+      file: filePath,
+    });
+  }
+
+  // Skipped when featuresDir itself doesn't exist on disk: config-check.ts's
+  // own `features-dir-missing` already names that exact fact, and repeating
+  // it here under a second code would be the same root cause reported
+  // twice, not two distinct pieces of information for a reader to act on.
+  const featuresRoot = path.join(rootDir, config.featuresDir);
+  if (walkedFiles.length === 0 && existsSync(featuresRoot)) {
+    errors.push({
+      code: "no-step-files-found",
+      message: `no .ts/.mts/.js/.mjs step file was found while scanning "${config.featuresDir}" (resolved to ${featuresRoot}); no step can ever be registered`,
+      file: config.featuresDir,
     });
   }
 

@@ -85,6 +85,56 @@ describe("discoverSteps", () => {
   });
 });
 
+// p10-step-discovery task spec: discovery now walks .ts/.mts/.js/.mjs
+// (previously .ts only), skips node_modules and any dot-directory at every
+// depth, excludes .d.ts/.d.mts declarations, and never imports a .cjs file
+// (it names it instead, via unsupportedExtensionFiles, for nuka check to
+// report). discover-extensions-project's own step files throw if
+// discoverSteps ever imports one it shouldn't -- see each fixture file's
+// own comment.
+describe("discoverSteps: extensions, node_modules, dot-directories (p10-step-discovery)", () => {
+  it("finds .ts, .mts, .js, and .mjs step files under featuresDir", async () => {
+    const { vocabulary } = await discoverSteps(fixture("discover-extensions-project"), "features");
+    expect([...vocabulary.keys()].sort()).toEqual([
+      "js-step",
+      "mjs-step",
+      "mts-step",
+      "ts-step",
+    ]);
+  });
+
+  it("excludes .d.ts and .d.mts from the files it walks", async () => {
+    const { walkedFiles } = await discoverSteps(fixture("discover-extensions-project"), "features");
+    expect(walkedFiles.some((file) => file.endsWith("types.d.ts"))).toBe(false);
+    expect(walkedFiles.some((file) => file.endsWith("types.d.mts"))).toBe(false);
+  });
+
+  it("never walks into node_modules, at any depth", async () => {
+    // discover-extensions-project/features/steps/node_modules/malicious-
+    // package/index.ts throws if imported -- reaching this line at all (the
+    // await above resolving instead of rejecting) is the proof.
+    const { walkedFiles } = await discoverSteps(fixture("discover-extensions-project"), "features");
+    expect(walkedFiles.some((file) => file.includes("node_modules"))).toBe(false);
+  });
+
+  it("never walks into a dot-directory", async () => {
+    // discover-extensions-project/features/.hidden/malicious.ts throws if
+    // imported, the same instrumentation as the node_modules case above.
+    const { walkedFiles } = await discoverSteps(fixture("discover-extensions-project"), "features");
+    expect(walkedFiles.some((file) => file.includes(".hidden"))).toBe(false);
+  });
+
+  it("never imports a .cjs file, and names it in unsupportedExtensionFiles instead", async () => {
+    const { unsupportedExtensionFiles, walkedFiles, vocabulary } = await discoverSteps(
+      fixture("discover-extensions-project"),
+      "features",
+    );
+    expect(unsupportedExtensionFiles).toEqual([path.join("features", "steps", "unsupported.cjs")]);
+    expect(walkedFiles.some((file) => file.endsWith("unsupported.cjs"))).toBe(false);
+    expect(vocabulary.has("unsupported")).toBe(false);
+  });
+});
+
 // m21a-compat-gap-detect task spec: `{ tolerateImportFailures: true }` lets
 // discovery survive a broken glue file instead of rejecting the whole call
 // — the mode `nuka check` (src/check/analyze.ts) uses so one broken file

@@ -99,6 +99,21 @@ mental model and its directory tree. The suggested home for typed steps is
 `features/steps/`, 1 step = 1 file: `features/steps/<name>.ts` (kebab-case;
 the file name is the step name).
 
+Discovery walks `featuresDir` for every `.ts`, `.mts`, `.js`, and `.mjs`
+file (whichever extension a file has, the step's name comes off that same
+extension), skipping `node_modules` and any dot-directory (`.git`,
+`.nukadoko`, an editor's own `.vscode`) at every depth, and excluding
+`.d.ts`/`.d.mts`: a type declaration, not a step definition. A `.cjs` file
+is walked far enough to be named, never imported: nukadoko is ESM-only (see
+"Compat steps" below for the same CommonJS go/no-go), so `nuka check`
+reports it as `step-file-unsupported-extension` instead of letting whatever
+it defines resurface as an unexplained `undefined-step`. Setting
+`featuresDir` to something wide (a repository root, for instance) widens
+this same walk, so a build artifact sitting anywhere in that tree can be
+read as glue if its own name happens to end in one of the four extensions
+above; `node_modules` and every dot-directory stay excluded regardless of
+how wide `featuresDir` is set.
+
 ```ts
 import { defineStep } from "nukadoko";
 import { z } from "zod";
@@ -970,7 +985,14 @@ import { Given, When, Then } from "nukadoko/compat";
   ESM glue; a deep subpath import) becomes a `step-file-import-failed`
   error, and a hook's tag expression beyond a single `@tag` / `not @tag`
   becomes `unsupported-hook-tag-expression`; both are known from the file's
-  own text, before anything executes. **Only `nuka run` finds it**: a step
+  own text, before anything executes. Two more findings sit beside them,
+  both about discovery's own walk rather than one file's content:
+  `step-file-unsupported-extension`, when a `.cjs` file sits under
+  `featuresDir` (see "Typed steps" above for why nukadoko never imports
+  one), and `no-step-files-found`, when the walk found nothing at all to
+  try. Each names exactly what it looked at, the same "so a reader can tell
+  a finding isn't lying" reasoning `nuka tend`'s own `scanned:` line
+  follows. **Only `nuka run` finds it**: a step
   or hook returning `"pending"` / `"skipped"`, and done-callback glue.
   These are properties of what happens when that step actually runs, not of
   how its file imports, so nothing before the step's own execution can name
@@ -2136,8 +2158,10 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               override that owns neither page nor context,
                               config coherence, unreadable step files
                               (reported, not fatal, the rest of the project
-                              is still checked), unsupported hook tag
-                              expressions; with no argument, scans
+                              is still checked), a `.cjs` file discovery
+                              walks but never imports, a featuresDir scan
+                              that found nothing loadable, unsupported hook
+                              tag expressions; with no argument, scans
                               featuresDir plus additionalFeatureDirs; a
                               feature argument checks that one file instead,
                               for a feature living outside both
