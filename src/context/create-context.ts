@@ -12,6 +12,7 @@ import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-
 import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, UnregisteredStepError } from "./errors.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
+import { createHttpOmittedCollector, type HttpOmittedCounts } from "./http-omitted.js";
 import { createObservedCollector, type ObservedCounts } from "./observed.js";
 import { createPageEventsCollector, type PageEventsSnapshot } from "./page-events.js";
 import { pollWithRecording, type PollOptions } from "./poll.js";
@@ -91,6 +92,17 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // once, at context creation, and outlive every reset — `nuka do` never
 // calls `beginStep` at all, so its single collector simply accumulates for
 // the execution's whole lifetime, the same as `observed`'s.
+//
+// `beginStep` resets `httpOmitted` the same way again (p3b-page-network
+// task spec, scope item 2): one collector per `ctx`, created once here and
+// handed to browser-evidence.ts's launch the same way `observed`/
+// `pageEvents` already are, so a later step's receipt does not inherit an
+// earlier step's own dropped-asset counts. `ctx.page()`'s own launch call
+// (below) also now hands the browser launcher this ctx's current
+// `httpLogDir`/`secrets` — the same two values `ctx.request()` already
+// reads at call time — so page-issued document/xhr/fetch traffic lands on
+// the very same http.jsonl `ctx.request()` writes to, redacted the same
+// single way, rather than a second file or a second redaction pass.
 //
 // `env` arrives already loaded and merged (m1-secrets task spec, decision
 // 2): the executor is the one place that knows the full envFiles list *and*
@@ -249,15 +261,23 @@ export interface StepContextHandle {
    * on `ctx` — same rule as `observedCounts()`/`sectionsSnapshot()`/
    * `pollsSnapshot()`. */
   pageEventsSnapshot(): PageEventsSnapshot | undefined;
+  /** Executor-only: how many page-issued requests since the current step
+   * boundary began were left out of http.jsonl, by resourceType (p3b-page-
+   * network task spec, scope item 2), or `undefined` when nothing was ever
+   * left out this step — whether because `ctx.page()` was never called, or
+   * because every request it made was a document/xhr/fetch and none were
+   * dropped. Never exposed on `ctx` — same rule as
+   * `observedCounts()`/`pageEventsSnapshot()`. */
+  httpOmittedSnapshot(): HttpOmittedCounts | undefined;
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
    * tally, the `used` log, the `sections` log, the `polls` log, the
-   * `required_env` log, and the `pageEvents` log to empty. `nuka run`'s
-   * executor calls this once per step, right before running it, so a
-   * pickle's shared ctx still logs and tallies each step's own network
-   * calls, provenance reads, section labels, finished polls, required env
-   * names, and page-origin evidence under that step's own
+   * `required_env` log, the `pageEvents` log, and the `httpOmitted` tally to
+   * empty. `nuka run`'s executor calls this once per step, right before
+   * running it, so a pickle's shared ctx still logs and tallies each step's
+   * own network calls, provenance reads, section labels, finished polls,
+   * required env names, and page-origin evidence under that step's own
    * receipt dir (m1-run task spec, decision 5; m2pre-observed task spec,
    * decision 2; t3-sections task spec, decision 4; ctx-poll-receipt task
    * spec; env-reads-and-mutates-doc task spec, item A; P0-page-events task
@@ -386,6 +406,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // created once, handed to browser-evidence.ts's launch below, and only
   // ever populated if `ctx.page()` is actually called this ctx's lifetime.
   const pageEvents = createPageEventsCollector();
+  // Same lifetime rule again, for page-issued requests left out of
+  // http.jsonl (p3b-page-network task spec, scope item 2) — created once,
+  // handed to browser-evidence.ts's launch below, and only ever populated
+  // if `ctx.page()` is actually called this ctx's lifetime.
+  const httpOmitted = createHttpOmittedCollector();
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
@@ -400,8 +425,21 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // before the next `beginStep` runs), `endStep` itself, and `dispose` (the
   // only closing point `nuka do` ever reaches, since it never calls either
   // of the other two).
+  //
+  // Also flushes page-http-log.ts's own pending http.jsonl writes now (p3b-
+  // page-network task spec) — whenever a browser exists at all, not only
+  // when `chunkOpen`: a hook boundary's own `ctx.page()` never opens a
+  // chunk (this file's own header, p3a-trace-per-step task spec) but can
+  // still have produced page-issued http.jsonl entries this boundary needs
+  // finished before anything downstream reads that file. Ordered before the
+  // chunk close below, though the order between the two does not itself
+  // matter — both are cheap, and neither depends on the other having run.
   async function closeCurrentChunk(): Promise<void> {
-    if (!browserHandle || !chunkOpen) {
+    if (!browserHandle) {
+      return;
+    }
+    await browserHandle.flushPageHttpLog();
+    if (!chunkOpen) {
       return;
     }
     chunkOpen = false;
@@ -442,6 +480,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           storageState,
           observed,
           pageEvents,
+          // Same getter/secrets pair `ctx.request()` (below) already reads
+          // at call time — page-issued traffic lands on the very same
+          // http.jsonl, redacted the very same way (this file's own header,
+          // p3b-page-network task spec).
+          logPath: () => path.join(httpLogDir, "http.jsonl"),
+          secrets,
+          httpOmitted,
           baseURL: config.baseURL,
         });
         // Opens this boundary's own chunk right at launch (this file's own
@@ -589,15 +634,22 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // written incrementally as calls happen, so it is unaffected by a
         // dispose() failure here.
       }
-      // Reflects whichever directory is *current* at dispose time. For `do`
-      // that is always `evidenceDir` (it never calls `beginStep`); for
-      // `nuka run`, dispose() only ever runs once, at the whole scenario's
-      // end, so this field is not what a step's own receipt relies on — the
-      // executor checks each step's own receipt dir directly, right after
-      // that step finishes, before the log dir advances again.
-      if (existsSync(path.join(httpLogDir, "http.jsonl"))) {
-        evidence.http = "http.jsonl";
-      }
+    }
+
+    // Checked unconditionally, not only when `requestContext` was opened
+    // (p3b-page-network task spec): http.jsonl can now exist from
+    // `ctx.page()`'s own document/xhr/fetch traffic alone, with
+    // `ctx.request()` never called at all — gating this on `requestContext`
+    // would leave `evidence.http` `undefined` for exactly that run even
+    // though the file it names is sitting right there. Reflects whichever
+    // directory is *current* at dispose time. For `do` that is always
+    // `evidenceDir` (it never calls `beginStep`); for `nuka run`, dispose()
+    // only ever runs once, at the whole scenario's end, so this field is not
+    // what a step's own receipt relies on — the executor checks each step's
+    // own receipt dir directly, right after that step finishes, before the
+    // log dir advances again.
+    if (existsSync(path.join(httpLogDir, "http.jsonl"))) {
+      evidence.http = "http.jsonl";
     }
 
     // Browser wins whenever one was opened, whether or not a request
@@ -642,6 +694,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return pageEvents.snapshot();
   }
 
+  function httpOmittedSnapshot(): HttpOmittedCounts | undefined {
+    return httpOmitted.snapshot();
+  }
+
   async function beginStep(dir: string, title?: string): Promise<void> {
     // Closes the *previous* boundary's own chunk before this boundary's own
     // `httpLogDir`/`pendingChunkTitle` overwrite the state that closing
@@ -657,6 +713,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     polls.reset();
     envReads.reset();
     pageEvents.reset();
+    httpOmitted.reset();
   }
 
   async function endStep(): Promise<void> {
@@ -673,6 +730,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     pollsSnapshot,
     envReadsSnapshot,
     pageEventsSnapshot,
+    httpOmittedSnapshot,
     beginStep,
     endStep,
   };

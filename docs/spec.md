@@ -777,9 +777,18 @@ network view spanning every step at once, a step-scoped trace does not:
 each step's own trace still shows that step's own requests, so nothing about
 a single step's traffic is lost, only the ability to browse every request
 the whole scenario made without opening more than one file. `ctx.request()`
-traffic already has that whole-run view in http.jsonl; page-issued traffic
-crossing a step boundary does not yet, and closing that gap is later work,
-not this one.
+traffic and the page's own traffic now share that same step-scoped view
+instead: both land on the same http.jsonl, each entry marked `via:
+"request"` or `via: "page"` so a reader never has to guess which path a
+call took. Only a page's `document`/XHR/`fetch` requests are recorded that
+way (a single page load can pull in dozens of images, a stylesheet, and a
+script bundle, and a file trying to hold all of that would stop being
+something a reader opens), but nothing about the drop is silent: what got
+left out lands on the receipt itself, by resource type, as `http_omitted`
+(see "Receipts"). `observed` is untouched by any of this: it keeps counting
+every request the page makes, image and script traffic included, because it
+answers a different question than http.jsonl does, and the two counts are
+not expected to match.
 
 Before a pickle runs, its steps' `from` declarations are checked against
 its own step order: a required chained key whose producer is absent or
@@ -882,7 +891,8 @@ shape whether the step ran inside a scenario or via `do`.
   so declared and measured can be compared without a second artifact.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `ctx.request()`
-  call logged to http.jsonl, the receipt itself as the primary record.
+  call and the page's own document/XHR/fetch traffic alike logged to
+  http.jsonl, the receipt itself as the primary record.
 - `evidence.screenshots` is at most one entry, `{ "file": "final.png", "at":
   "..." }` — a browser-using execution's evidence used to be two files, the
   same buffer saved under a second name whenever the step failed. That cost
@@ -902,6 +912,28 @@ shape whether the step ran inside a scenario or via `do`.
   position and read-only environments act on the `mutates` declaration,
   never on this count. `observed` sits beside `mutates` (declared) so a
   wrong declaration is falsifiable, here and in the Allure report.
+- `evidence.http` (present only when at least one call was logged) points at
+  http.jsonl, one JSON object per line: `{ "method", "url", "status",
+  "duration_ms", "via" }`. `via` is `"request"` for a call made through
+  `ctx.request()`, and `"page"` for one the page itself made (a `ctx.page()`
+  navigation, or an in-page `fetch`/XHR), present on every entry either path
+  produces, so a reader never has to guess which one wrote a line from its
+  shape alone. Only `document`, `xhr`, and `fetch` requests (Playwright's own
+  `request.resourceType()`) ever reach http.jsonl for page traffic; a real
+  page load can pull in dozens of images, stylesheets, and scripts that
+  nobody reading a receipt for acceptance purposes traces one by one, and a
+  file trying to hold all of them would stop being something a reader opens
+  at all.
+- `http_omitted` (present only when at least one page-issued request was
+  left out) is what keeps that drop from being silent: the count of what
+  didn't make it into http.jsonl, by resource type, e.g.
+  `{ "image": 34, "stylesheet": 5, "script": 12 }`. `observed` (above) is not
+  narrowed by any of this: it tallies every request the harness saw, image
+  and script traffic included, because it answers a different question (how
+  many reads and writes actually happened) than http.jsonl does (which of
+  those calls are worth reading one by one). The two counts are not
+  expected to add up to each other, and neither being lower than the other
+  is a bug.
 - `used` (present only when non-empty) lists the earlier executions whose
   results this one drew a value from — through a `from` injection, a
   `ctx.resultOf` call, or a `--use` receipt on `nuka do`. Every path runs

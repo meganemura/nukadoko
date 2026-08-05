@@ -844,6 +844,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `undefined` when `ctx.page()` was never called this step, or was and
     // the page stayed clean.
     const pageEvents = contextHandle.pageEventsSnapshot();
+    // How many page-issued requests since the current step boundary began
+    // were left out of http.jsonl, by resourceType, read the same "after
+    // execution, whatever the outcome" way `pageEvents` just above is (p3b-
+    // page-network task spec, scope item 2) — `undefined` when nothing was
+    // ever left out.
+    const httpOmitted = contextHandle.httpOmittedSnapshot();
     // World reads/writes tallied since the current step boundary began (m2c-
     // typed-world task spec, item 3) — always empty for a typed step (no
     // `this`), so the `world` field below is naturally omitted for one,
@@ -900,6 +906,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               : {}),
             ...(declared ? { declared } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           }
@@ -944,6 +951,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               : {}),
             ...(declared ? { declared } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           };
@@ -1568,6 +1576,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // task spec) — whatever the browser context already saw before the
         // uncaught throw still belongs on this receipt.
         const pageEvents = contextHandle.pageEventsSnapshot();
+        // Same backstop-only read again, for `http_omitted` (p3b-page-
+        // network task spec, scope item 2) — whatever the page already left
+        // out of http.jsonl before the uncaught throw still belongs on this
+        // receipt.
+        const httpOmitted = contextHandle.httpOmittedSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
         const receipt: Receipt = {
@@ -1604,6 +1617,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             : {}),
           ...(declared ? { declared } : {}),
           ...(pageEvents ? { page_events: pageEvents } : {}),
+          ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
           ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
           ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
         };

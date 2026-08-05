@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
@@ -301,9 +301,13 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
 // Responsibility: the page-side half of measured mutates (m2pre-observed
 // task spec, scope item 2 and decision 2) — a real local http server, so
 // `ctx.page()` can issue a genuine GET (navigation) and POST (in-page
-// fetch), proving `observedCounts()` tallies both and that neither ever
-// reaches http.jsonl (that file stays `ctx.request()`'s own record,
-// docs/spec.md "Receipts"). Kept in its own describe block, with its own
+// fetch), proving `observedCounts()` tallies both. Also now the page-origin
+// half of http.jsonl itself (p3b-page-network task spec, scope item 1): a
+// navigation and an in-page `fetch` are both `document`/`fetch`
+// resourceTypes, so both are expected to land on http.jsonl, each marked
+// `via: "page"` — the assertion this block used to make (that page traffic
+// never reaches http.jsonl at all) was this task's own starting point, not
+// a fact that survived it. Kept in its own describe block, with its own
 // server, rather than folded into the block above: the existing tests there
 // use `page.setContent`, deliberately with no navigation and no server.
 describe("createStepContext / ctx.page(): observed network writes", () => {
@@ -328,7 +332,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
   });
 
   it.skipIf(!chromiumAvailable)(
-    "counts a page navigation as a read and a page-issued POST as a write, without adding either to http.jsonl",
+    "counts a page navigation as a read and a page-issued POST as a write, and logs both to http.jsonl as via: page",
     async () => {
       const { ctx, dispose, observedCounts } = createStepContext({
         config: baseConfig(),
@@ -349,10 +353,21 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
       expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 1 });
 
       const { evidence } = await dispose();
-      // `ctx.request()` was never called this run — page traffic must not
-      // have been folded into http.jsonl (this task's spec, scope item 2).
-      expect(evidence.http).toBeUndefined();
-      expect(existsSync(path.join(evidenceDir, "http.jsonl"))).toBe(false);
+      // Both the navigation (`document`) and the in-page `fetch` land on
+      // http.jsonl now (this task's spec, scope item 1) — `observed` above
+      // is unchanged by that; the two fields answer different questions
+      // (this file's own header).
+      expect(evidence.http).toBe("http.jsonl");
+      const lines = (await readFile(path.join(evidenceDir, "http.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        expect(line.via).toBe("page");
+      }
+      expect(lines.some((line) => line.method === "GET")).toBe(true);
+      expect(lines.some((line) => line.method === "POST")).toBe(true);
     },
   );
 });

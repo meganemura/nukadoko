@@ -9,9 +9,12 @@ import {
   type Page,
 } from "playwright";
 import type { ScreenshotEntry } from "../receipt/types.js";
+import type { SecretSet } from "../secrets/types.js";
 import type { StorageState } from "../session/storage-state.js";
+import type { HttpOmittedCollector } from "./http-omitted.js";
 import type { ObservedCollector } from "./observed.js";
 import type { PageEventsCollector } from "./page-events.js";
+import { subscribePageHttpLogging } from "./page-http-log.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
 // calls `ctx.page()` — launch chromium, trace the whole browser context,
@@ -37,16 +40,27 @@ import type { PageEventsCollector } from "./page-events.js";
 // without ever stating it.
 //
 // The browser context's own `request` events are also tallied into
-// `observed` (this task's spec, scope item 2): every request the page
-// itself issues — navigation, fetch, XHR — is counted read/write the same
-// way http-log.ts counts `ctx.request()` calls, but deliberately never
-// appended to http.jsonl. That file is `ctx.request()`'s own record
-// (docs/spec.md "Receipts"); widening its meaning to include page traffic
-// nukadoko never asserted the shape of would be a different, larger change
-// than this task's spec asks for. The subscription is set up once, at
+// `observed` (m2pre-observed task spec, scope item 2): every request the
+// page itself issues — navigation, fetch, XHR — is counted read/write the
+// same way http-log.ts counts `ctx.request()` calls. `observed` keeps
+// counting every one of them regardless of what the second subscription
+// below goes on to do with it — the two are deliberately different tallies
+// (http-omitted.ts's own header). The subscription above is set up once, at
 // context creation, and lives for the context's whole lifetime — it is
 // `observed`'s own `reset()` (create-context.ts's `beginStep`) that advances
 // the step boundary, not resubscribing.
+//
+// A second, separate subscription — `subscribePageHttpLogging`
+// (page-http-log.ts), wired in below — is what now also appends page-issued
+// traffic to http.jsonl itself (p3b-page-network task spec): document/xhr/
+// fetch responses only, each entry marked `via: "page"` so it reads apart
+// from `ctx.request()`'s own `via: "request"` entries on the same file.
+// Everything else (image/stylesheet/script/...) is tallied into
+// `httpOmitted` instead of landing on the file at all, so a step's own
+// dropped count is never silent (create-context.ts's own
+// `httpOmittedSnapshot`). Kept in its own module rather than folded into
+// this one: it owns its own resourceType allowlist and its own start-time
+// bookkeeping, neither of which this file's other event subscriptions need.
 //
 // `console`/`weberror`/`requestfailed` are subscribed the same way, into
 // `pageEvents` (P0-page-events task spec) — a green step can still be
@@ -101,6 +115,23 @@ export interface LaunchBrowserOptions {
   /** Records console errors, uncaught page errors, and failed requests this
    * browser context's page(s) produce — see this module's header comment. */
   pageEvents: PageEventsCollector;
+  /** Where this ctx's http.jsonl currently lives — a getter, not a fixed
+   * path, for the same reason http-log.ts's own `logPath` is one: create-
+   * context.ts's `beginStep` redirects it at each step boundary, and
+   * page-http-log.ts's subscription (below) must always read whichever
+   * directory is *current* when a response actually arrives, not the one
+   * that was current when the browser was first launched (p3b-page-network
+   * task spec). */
+  logPath: () => string;
+  /** Values page-issued http.jsonl entries must redact — the same
+   * `SecretSet` http-log.ts's own `ctx.request()` wrapper already
+   * receives. */
+  secrets: SecretSet;
+  /** Tallies every page-issued request left out of http.jsonl — an
+   * image/stylesheet/script/etc, by `request.resourceType()` (p3b-page-
+   * network task spec, scope item 2; this file's own header, and
+   * http-omitted.ts's). */
+  httpOmitted: HttpOmittedCollector;
   /** `config.baseURL`, wired into the browser context so `page.goto("/path")`
    * resolves against it (docs/spec.md "Context API"). Omitted from
    * `newContext` when unset — Playwright's own default for an unset
@@ -140,6 +171,17 @@ export interface BrowserEvidenceHandle {
    * losing one step's own trace chunk must not cost that step's receipt
    * (docs/spec.md's "measurement must never break execution"). */
   endStepChunk(path: string): Promise<void>;
+  /** Waits for every page-issued http.jsonl append this handle's own
+   * `subscribePageHttpLogging` subscription has kicked off *so far* to
+   * settle (page-http-log.ts's own `PageHttpLogHandle.flush`) — each append
+   * fires from inside a `response` event handler with no caller of its own
+   * to await it, unlike `ctx.request()`'s own entries. Executor-only,
+   * called from create-context.ts's `closeCurrentChunk` at the same step
+   * boundary that already closes this step's own trace chunk, *before*
+   * anything downstream reads http.jsonl for that boundary (p3b-page-
+   * network task spec). A no-op cost, not merely a no-op call, when nothing
+   * is in flight: `Promise.all([])` resolves immediately. */
+  flushPageHttpLog(): Promise<void>;
   /** Captures the final screenshot and closes the context and browser.
    * Returns the screenshot(s) actually written — at most one, `final.png`
    * (best effort: a screenshot failure here must never mask the step's real
@@ -188,6 +230,15 @@ export async function launchBrowserWithTracing(
       ...(failure ? { failure: failure.errorText } : {}),
     });
   });
+  // A second, separate subscription (this file's own header) — appends
+  // page-issued document/xhr/fetch traffic to http.jsonl itself, and tallies
+  // everything else into `httpOmitted` instead (p3b-page-network task spec).
+  const pageHttpLog = subscribePageHttpLogging(
+    context,
+    options.logPath,
+    options.secrets,
+    options.httpOmitted,
+  );
   await context.tracing.start({ screenshots: true, snapshots: true });
   const page = await context.newPage();
 
@@ -211,6 +262,10 @@ export async function launchBrowserWithTracing(
     } catch {
       // See the interface's own doc comment above.
     }
+  }
+
+  async function flushPageHttpLog(): Promise<void> {
+    await pageHttpLog.flush();
   }
 
   async function finalize(): Promise<ScreenshotEntry[]> {
@@ -249,5 +304,12 @@ export async function launchBrowserWithTracing(
     return screenshots;
   }
 
-  return { page, collectStorageState, beginStepChunk, endStepChunk, finalize };
+  return {
+    page,
+    collectStorageState,
+    beginStepChunk,
+    endStepChunk,
+    flushPageHttpLog,
+    finalize,
+  };
 }

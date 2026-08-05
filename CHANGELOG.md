@@ -55,6 +55,20 @@ just until 0.1.
   receipt. A trace format version this build does not recognize costs
   `actions` and gets one stderr warning, never a guess.
 
+- **http.jsonl now records the page's own traffic too, not just
+  `ctx.request()`.** A step's `ctx.page()` calls used to leave no trace in
+  http.jsonl at all: `observed` counted them, but the URL they hit was
+  nowhere on the receipt. Every response for a `document`, `xhr`, or
+  `fetch` request now lands there beside `ctx.request()`'s own entries,
+  each line marked `via: "request"` or `via: "page"`, so neither reads as a
+  guess. Images, stylesheets, and scripts are left out on purpose, since a
+  single page load can pull in dozens, but never silently: what didn't
+  make it in is counted by resource type on the receipt's new
+  `http_omitted` field. `observed` is untouched by any of this; it still
+  tallies every request the page made, image and script traffic included,
+  because it answers a different question than http.jsonl does, and the
+  two numbers were never meant to match.
+
 ### Changed
 
 - **`evidence.trace` is a step's own trace now, not the whole scenario's.**
@@ -69,9 +83,8 @@ just until 0.1.
   is gone with it: what a single scenario-long trace also gave for free, a
   network view spanning every step at once, a step-scoped trace does not.
   Each step's own trace still shows that step's own requests in full;
-  `ctx.request()` traffic already has a whole-run view in http.jsonl,
-  page-issued traffic crossing a step boundary does not yet, and closing
-  that gap is later work, not this one.
+  `ctx.request()` traffic keeps its own record in http.jsonl, and (see
+  below) page-issued traffic now shares that same file.
 
 ## 0.0.5 — 2026-08-05
 

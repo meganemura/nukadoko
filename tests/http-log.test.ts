@@ -65,6 +65,23 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0 });
   });
 
+  // p3b-page-network task spec, scope item 1 and its own completion
+  // condition 2 ("ctx.request() の分に via: "request" が付くこと"): every
+  // ctx.request() entry carries `via: "request"` explicitly, the same as
+  // page-http-log.ts's own entries carry `via: "page"` — never left absent
+  // for a reader to infer from its shape alone (this file's own module
+  // header).
+  it('every entry carries via: "request", explicitly', async () => {
+    const observed = createObservedCollector();
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+
+    await wrapped.fetch("https://example.com/items");
+
+    const lines = await readLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.via).toBe("request");
+  });
+
   it('fetch(url string, { method: "post" }): method is upper-cased to POST', async () => {
     const observed = createObservedCollector();
     const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);

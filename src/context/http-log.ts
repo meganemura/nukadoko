@@ -6,14 +6,23 @@ import type { ObservedCollector } from "./observed.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
-// http.jsonl — one JSON object per line, method/url/status/duration_ms only
-// (never request/response bodies: docs/spec.md "Receipts" says evidence is
-// collected by the harness, not asserted by the step). `url` is the one
-// field that can carry a secret (e.g. a token in a query string, per the
-// step in this task's spec's integration test): it is redacted at the same
-// point the line is built, before it ever reaches disk — one of the three
-// exits docs/spec.md "Secrets" requires redaction at, alongside receipt.json
-// and `do`'s stdout copy (both handled by cli/do.ts).
+// http.jsonl — one JSON object per line, method/url/status/duration_ms/via
+// only (never request/response bodies: docs/spec.md "Receipts" says
+// evidence is collected by the harness, not asserted by the step). `url` is
+// the one field that can carry a secret (e.g. a token in a query string, per
+// the step in this task's spec's integration test): it is redacted at the
+// same point the line is built, before it ever reaches disk — one of the
+// three exits docs/spec.md "Secrets" requires redaction at, alongside
+// receipt.json and `do`'s stdout copy (both handled by cli/do.ts).
+//
+// `via` is added now (p3b-page-network task spec, scope item 1): a page's
+// own document/xhr/fetch traffic now lands on the same http.jsonl, appended
+// by page-http-log.ts rather than this module, and `via` is what tells the
+// two apart — `"request"` for every entry this module builds, `"page"` for
+// page-http-log.ts's own. `appendHttpLogEntry` below is exported for that
+// module to call: one redact-and-append call site for both paths, so
+// neither can drift into redacting differently than the other (that task's
+// spec, scope item 3: "新しい redaction 経路を作らない").
 //
 // Every call is also tallied into `observed` (an `ObservedCollector` this
 // module never creates, only writes to — create-context.ts owns and resets
@@ -36,6 +45,34 @@ import type { ObservedCollector } from "./observed.js";
 // dir (this task's spec, decision 5) — the executor advances the getter's
 // target at each step boundary; this module just reads it at call time.
 
+/** One http.jsonl line (docs/spec.md "Receipts"). `via` names which path
+ * produced it (p3b-page-network task spec, scope item 1) — `"request"` for
+ * a call made through `ctx.request()`, `"page"` for one the page itself
+ * made (page-http-log.ts). Always present, on every entry either path
+ * builds: a field only one of the two ever set would leave a reader
+ * guessing "absent means page" instead of reading it, the mistake that
+ * task's spec explicitly rules out. */
+export interface HttpLogEntry {
+  method: string;
+  url: string;
+  status: number;
+  duration_ms: number;
+  via: "request" | "page";
+}
+
+/** Redacts `entry` and appends it to whatever `logPath()` currently points
+ * at, one JSON object per line — the single redact-and-append call site
+ * both this module's own `logCall` and page-http-log.ts's page-origin path
+ * go through (this file's own header). */
+export async function appendHttpLogEntry(
+  logPath: () => string,
+  entry: HttpLogEntry,
+  secrets: SecretSet,
+): Promise<void> {
+  const redacted = redact(entry, secrets);
+  await appendFile(logPath(), `${JSON.stringify(redacted)}\n`);
+}
+
 async function logCall(
   logPath: () => string,
   method: string,
@@ -52,11 +89,11 @@ async function logCall(
   const startedAt = performance.now();
   const response = await send();
   const durationMs = Math.round(performance.now() - startedAt);
-  const entry = redact(
-    { method, url, status: response.status(), duration_ms: durationMs },
+  await appendHttpLogEntry(
+    logPath,
+    { method, url, status: response.status(), duration_ms: durationMs, via: "request" },
     secrets,
   );
-  await appendFile(logPath(), `${JSON.stringify(entry)}\n`);
   return response;
 }
 

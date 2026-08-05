@@ -166,6 +166,23 @@
 // `declared` already means something else on this exact interface (self-
 // reported allure-js data, directly above) — reusing it here would collide.
 //
+// `http_omitted` is added now (p3b-page-network task spec, scope item 2):
+// http.jsonl now also carries page-issued document/xhr/fetch traffic (each
+// entry's new `via: "page"`, alongside `ctx.request()`'s own `via:
+// "request"` — see http-log.ts's own `HttpLogEntry`), but a page load's
+// image/stylesheet/script/etc traffic is deliberately left off that file —
+// a single load can pull in dozens, and a file holding all of it would stop
+// being something a reader opens. What gets left out is never silently
+// dropped: this field counts it by resourceType, e.g.
+// `{ "image": 34, "stylesheet": 5, "script": 12 }` (CLAUDE.md "Nothing
+// breaks silently"). Present only when at least one request was left out,
+// `page_events`/`sections`' own convention. `observed` (above) is not
+// narrowed by any of this — it keeps counting every request the harness
+// saw, dropped or not, because it answers a different question than
+// http.jsonl does; the two counts are not expected to add up to each
+// other. Measured by `HttpOmittedCollector` (src/context/http-omitted.ts),
+// tallied by page-http-log.ts's own `response` subscription.
+//
 // `actions` and its sibling `truncated` are added now (p3a-trace-per-step
 // task spec, scope B): every Playwright call the step made through
 // `ctx.page()`, read back out of that step's own trace chunk
@@ -180,6 +197,7 @@
 // `page_events`'s own per-category `truncated` does when the cap is hit.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
+import type { HttpOmittedCounts } from "../context/http-omitted.js";
 import type { ObservedCounts } from "../context/observed.js";
 import type { PageEventsSnapshot } from "../context/page-events.js";
 import type { ActionEntry } from "../context/trace-actions.js";
@@ -361,6 +379,11 @@ interface ReceiptBase {
    * absent when `ctx.page()` was never called this execution, or was and
    * the page stayed clean. */
   page_events?: PageEventsSnapshot;
+  /** How many page-issued requests this execution made were left out of
+   * http.jsonl, by resourceType — `{ "image": 34, "stylesheet": 5 }` (p3b-
+   * page-network task spec, scope item 2; this file's own header). Present
+   * only when at least one request was left out. */
+  http_omitted?: HttpOmittedCounts;
   /** Every Playwright call this step made through `ctx.page()`, read back
    * out of this step's own trace chunk (p3a-trace-per-step task spec, scope
    * B; this file's own header) — `expect` waits included, with their own

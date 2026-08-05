@@ -487,6 +487,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // are (P0-page-events task spec) — `undefined` when `ctx.page()` was
     // never called, or was and the page stayed clean.
     const pageEvents = contextHandle.pageEventsSnapshot();
+    // How many page-issued requests this execution made were left out of
+    // http.jsonl, by resourceType, read the same "after execution, whatever
+    // its outcome" way `pageEvents` just above is (p3b-page-network task
+    // spec, scope item 2) — `undefined` when nothing was ever left out.
+    const httpOmitted = contextHandle.httpOmittedSnapshot();
 
     const finishedAt = new Date();
     let disposeResult: DisposeResult;
@@ -557,6 +562,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           }
@@ -591,6 +597,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
+            ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(traceEvidence.truncated !== undefined ? { truncated: traceEvidence.truncated } : {}),
           };
