@@ -124,6 +124,7 @@ interface TendArgs {
 
 interface AcceptArgs {
   feature: string;
+  env?: string;
 }
 
 type SkillPathArgs = Record<string, never>;
@@ -468,16 +469,22 @@ export async function runCli(
     command: "accept <feature>",
     describe: "freeze that feature's last green run as a committed acceptance record beside it",
     builder: (y: Argv) =>
-      y.positional("feature", {
-        type: "string",
-        demandOption: true,
-        describe: "feature file path (no :line; only a whole-feature run can be accepted)",
-      }) as Argv<AcceptArgs>,
+      y
+        .positional("feature", {
+          type: "string",
+          demandOption: true,
+          describe: "feature file path (no :line; only a whole-feature run can be accepted)",
+        })
+        .option("env", {
+          type: "string",
+          describe: 'target a named environment (omit for the "default" environment)',
+        }) as Argv<AcceptArgs>,
     handler: async (args: Arguments<AcceptArgs>) => {
       if (argsFailed) return;
       exitCode = await runAccept({
         rootDir,
         featureArg: args.feature,
+        env: args.env ?? null,
         stdout,
         stderr,
       });

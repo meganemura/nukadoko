@@ -44,19 +44,20 @@ import type { StepFixtures } from "../context.js";
 // says Playwright's runtime cannot be borrowed to get for free).
 
 /** Passed to whatever `use()`'s own promise resolves with, once the step
- * (or, for `scope: "run"`, the run itself) that named this fixture has
- * finished — a fixture's only way to know whether to keep what it built or
- * discard it (`.claude-team/playwright-native-design.md` 5 節 "teardown に
- * 成否を渡す"). Never available at setup time: an outcome doesn't exist yet
- * when `use()` is first called, only once whatever named this fixture is
- * itself done — see `UseFn`'s own doc comment for why this is the *return*
- * value of `use()`, not a second argument to the fixture function. */
+ * (or, for `scope: "process"`, the process itself) that named this fixture
+ * has finished — a fixture's only way to know whether to keep what it built
+ * or discard it (`.claude-team/playwright-native-design.md` 5 節 "teardown
+ * に成否を渡す"). Never available at setup time: an outcome doesn't exist
+ * yet when `use()` is first called, only once whatever named this fixture
+ * is itself done — see `UseFn`'s own doc comment for why this is the
+ * *return* value of `use()`, not a second argument to the fixture
+ * function. */
 export type FixtureOutcome = "passed" | "failed";
 
 /**
  * `use(value)` hands `value` to whatever named this fixture and suspends
- * the fixture function until that step (or, for `scope: "run"`, the run
- * itself) has finished — the same await-a-continuation shape Playwright's
+ * the fixture function until that step (or, for `scope: "process"`, the
+ * process itself) has finished — the same await-a-continuation shape Playwright's
  * own fixtures use, reimplemented here (src/fixture/lifecycle.ts) since
  * Playwright's own fixture runtime cannot be borrowed (this task's spec,
  * "前提": `Symbol(testType)` is not `Symbol.for`, and `lib/worker/*` is
@@ -88,7 +89,7 @@ export type FixtureDeps = StepFixtures & Record<string, unknown>;
 export type FixtureFn = (deps: FixtureDeps, use: UseFn) => Promise<void> | void;
 
 /** `"scenario"` (default) rebuilds per scenario (or per `nuka do`
- * execution) and tears down at that scenario's own end; `"run"` builds
+ * execution) and tears down at that scenario's own end; `"process"` builds
  * once — the first time any step in the whole `nuka run` invocation names
  * it (or its own dependents do) — and tears down once, after every
  * scenario has finished. Under `nuka do` the two collapse to the same
@@ -96,10 +97,22 @@ export type FixtureFn = (deps: FixtureDeps, use: UseFn) => Promise<void> | void;
  * `.claude-team/playwright-native-design.md` 3 節/6 節).
  *
  * `"worker"` is deliberately not a member: there is no parallel execution
- * yet, so it would be a synonym for `"run"` with none of the meaning a
+ * yet, so it would be a synonym for `"process"` with none of the meaning a
  * name should only be spent on once that distinction actually exists (same
- * spec section: "無い物の名前を先に取ると意味が固まる前に固まる"). */
-export type FixtureScope = "scenario" | "run";
+ * spec section: "無い物の名前を先に取ると意味が固まる前に固まる").
+ *
+ * `"process"` names one address space, not one `nuka run` invocation
+ * (p8-scope-rename task spec): a fixture's own value is a plain JS object
+ * and cannot cross into another process, so this scope can only ever mean
+ * "once per process" no matter how many times anything is invoked against
+ * it. Today one `nuka run` invocation is one process, so the two happen to
+ * coincide, but that coincidence is not a guarantee this scope makes.
+ * Something that has to happen exactly once in the world, no matter how
+ * many processes ever run against it — seeding a database, running a
+ * migration, starting a mock server that owns a port — does not belong in
+ * a `"process"`-scope fixture: run more than one process and it happens
+ * again. */
+export type FixtureScope = "scenario" | "process";
 
 export interface FixtureOptions {
   readonly scope?: FixtureScope;

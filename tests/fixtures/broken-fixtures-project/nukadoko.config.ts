@@ -18,14 +18,14 @@ export default defineConfig({
       void aValue;
       await use(2);
     },
-    // A "run"-scope fixture depending on a "scenario"-scope builtin —
+    // A "process"-scope fixture depending on a "scenario"-scope builtin —
     // fixture-scope-violation.
     seededDb: [
       async ({ page }: any, use) => {
         void page;
         await use(3);
       },
-      { scope: "run" },
+      { scope: "process" },
     ],
     // page overridden by a fixture that owns neither page nor context —
     // page-override-unowned.

@@ -43,7 +43,7 @@ describe("defineFixtures", () => {
         async ({}, use) => {
           await use(2);
         },
-        { scope: "run" },
+        { scope: "process" },
       ],
     });
     expect(Array.isArray(fixtures.seededDb)).toBe(true);

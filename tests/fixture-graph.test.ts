@@ -33,9 +33,9 @@ describe("buildFixtureGraph", () => {
     expect(graph.nodes.get("resultOf")).toMatchObject({ isBuiltin: true, scope: "scenario" });
     expect(graph.nodes.get("section")).toMatchObject({ isBuiltin: true, scope: "scenario" });
     expect(graph.nodes.get("poll")).toMatchObject({ isBuiltin: true, scope: "scenario" });
-    expect(graph.nodes.get("env")).toMatchObject({ isBuiltin: true, scope: "run" });
-    expect(graph.nodes.get("requireEnv")).toMatchObject({ isBuiltin: true, scope: "run" });
-    expect(graph.nodes.get("baseURL")).toMatchObject({ isBuiltin: true, scope: "run" });
+    expect(graph.nodes.get("env")).toMatchObject({ isBuiltin: true, scope: "process" });
+    expect(graph.nodes.get("requireEnv")).toMatchObject({ isBuiltin: true, scope: "process" });
+    expect(graph.nodes.get("baseURL")).toMatchObject({ isBuiltin: true, scope: "process" });
   });
 
   it("adds a user fixture, scope defaulting to scenario", () => {
@@ -53,10 +53,10 @@ describe("buildFixtureGraph", () => {
       async ({}, use) => {
         await use(42);
       },
-      { scope: "run", timeout: 5_000 },
+      { scope: "process", timeout: 5_000 },
     ];
     const graph = buildFixtureGraph(configWithFixtures({ seededDb }));
-    expect(graph.nodes.get("seededDb")).toMatchObject({ scope: "run", timeoutMs: 5_000, dependencies: [] });
+    expect(graph.nodes.get("seededDb")).toMatchObject({ scope: "process", timeoutMs: 5_000, dependencies: [] });
   });
 
   it("a same-named entry overrides the builtin in `nodes`, but `builtins` keeps the raw one", () => {
@@ -170,13 +170,13 @@ describe("findFixtureCycles", () => {
 });
 
 describe("findFixtureScopeViolations", () => {
-  it("flags a run-scope fixture depending on a scenario-scope builtin (page)", () => {
+  it("flags a process-scope fixture depending on a scenario-scope builtin (page)", () => {
     const seededDb: FixtureDefinition = [
       async ({ page }: any, use) => {
         void page;
         await use(1);
       },
-      { scope: "run" },
+      { scope: "process" },
     ];
     const graph = buildFixtureGraph(configWithFixtures({ seededDb }));
     const issues = findFixtureScopeViolations(graph);
@@ -185,7 +185,7 @@ describe("findFixtureScopeViolations", () => {
     expect(issues[0]?.message).toContain("page");
   });
 
-  it("flags a run-scope fixture depending on a scenario-scope user fixture", () => {
+  it("flags a process-scope fixture depending on a scenario-scope user fixture", () => {
     const tenant: FixtureDefinition = async ({ request }, use) => {
       void request;
       await use({});
@@ -195,7 +195,7 @@ describe("findFixtureScopeViolations", () => {
         void t;
         await use(1);
       },
-      { scope: "run" },
+      { scope: "process" },
     ];
     const graph = buildFixtureGraph(configWithFixtures({ tenant, seededDb }));
     const issues = findFixtureScopeViolations(graph);
@@ -203,7 +203,7 @@ describe("findFixtureScopeViolations", () => {
     expect(issues[0]?.fixture).toBe("seededDb");
   });
 
-  it("allows a run-scope fixture to depend on env/requireEnv/baseURL", () => {
+  it("allows a process-scope fixture to depend on env/requireEnv/baseURL", () => {
     const seededDb: FixtureDefinition = [
       async ({ env, requireEnv, baseURL }, use) => {
         void env;
@@ -211,25 +211,25 @@ describe("findFixtureScopeViolations", () => {
         void baseURL;
         await use(1);
       },
-      { scope: "run" },
+      { scope: "process" },
     ];
     const graph = buildFixtureGraph(configWithFixtures({ seededDb }));
     expect(findFixtureScopeViolations(graph)).toEqual([]);
   });
 
-  it("allows a run-scope fixture to depend on another run-scope fixture", () => {
+  it("allows a process-scope fixture to depend on another process-scope fixture", () => {
     const a: FixtureDefinition = [
       async ({}, use) => {
         await use(1);
       },
-      { scope: "run" },
+      { scope: "process" },
     ];
     const b: FixtureDefinition = [
       async ({ a: aValue }: any, use) => {
         void aValue;
         await use(2);
       },
-      { scope: "run" },
+      { scope: "process" },
     ];
     const graph = buildFixtureGraph(configWithFixtures({ a, b }));
     expect(findFixtureScopeViolations(graph)).toEqual([]);

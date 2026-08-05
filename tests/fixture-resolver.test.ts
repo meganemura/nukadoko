@@ -14,7 +14,7 @@ import type { FixtureDefinition } from "../src/fixture/types.js";
 // fast and independent of chromium availability) rather than a hand-rolled
 // StepContext double, so a real `ctx.request()`/`ctx.env` is what a fixture's
 // own `deps` actually receives. Covers this task's own completion conditions
-// 5 (a "run"-scope fixture built once across two callers) and the resolver's
+// 5 (a "process"-scope fixture built once across two callers) and the resolver's
 // own contract: only the step's own requested names come back on the bag,
 // `reused` is accurate, teardown runs LIFO, and a builtin override is
 // resolved the same way for every *other* consumer while still handing the
@@ -47,13 +47,13 @@ describe("resolveFixtures", () => {
     });
 
     const scenarioCache = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
     const { fixtures, usage } = await resolveFixtures({
       names: ["tenant"],
       graph,
       ctx,
       scenarioCache,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 
@@ -76,13 +76,13 @@ describe("resolveFixtures", () => {
       env: {},
     });
     const scenarioCache = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
     const { fixtures, usage } = await resolveFixtures({
       names: ["b"],
       graph,
       ctx,
       scenarioCache,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 
@@ -93,14 +93,14 @@ describe("resolveFixtures", () => {
     expect(usage.map((u) => u.name)).toEqual(["a", "b"]);
   });
 
-  it("a run-scope fixture is built once across two resolveFixtures calls, reused the second time", async () => {
+  it("a process-scope fixture is built once across two resolveFixtures calls, reused the second time", async () => {
     let buildCount = 0;
     const seededDb: FixtureDefinition = [
       async ({}, use) => {
         buildCount += 1;
         await use(42);
       },
-      { scope: "run" },
+      { scope: "process" },
     ];
     const graph = buildFixtureGraph(config({ seededDb }));
     const { ctx } = createStepContext({
@@ -110,14 +110,14 @@ describe("resolveFixtures", () => {
     });
     const scenarioCacheA = createFixtureCache();
     const scenarioCacheB = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
 
     const first = await resolveFixtures({
       names: ["seededDb"],
       graph,
       ctx,
       scenarioCache: scenarioCacheA,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
     const second = await resolveFixtures({
@@ -125,15 +125,15 @@ describe("resolveFixtures", () => {
       graph,
       ctx,
       scenarioCache: scenarioCacheB,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 
     expect(buildCount).toBe(1);
     expect((first.fixtures as any).seededDb).toBe(42);
     expect((second.fixtures as any).seededDb).toBe(42);
-    expect(first.usage).toEqual([{ name: "seededDb", scope: "run", reused: false, setup_ms: expect.any(Number), at: expect.any(String) }]);
-    expect(second.usage).toEqual([{ name: "seededDb", scope: "run", reused: true }]);
+    expect(first.usage).toEqual([{ name: "seededDb", scope: "process", reused: false, setup_ms: expect.any(Number), at: expect.any(String) }]);
+    expect(second.usage).toEqual([{ name: "seededDb", scope: "process", reused: true }]);
   });
 
   it("a page-override's own self-reference dependency reads the raw builtin, while other consumers read the override", async () => {
@@ -149,13 +149,13 @@ describe("resolveFixtures", () => {
       env: {},
     });
     const scenarioCache = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
     const { fixtures } = await resolveFixtures({
       names: ["request"],
       graph,
       ctx,
       scenarioCache,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 
@@ -198,13 +198,13 @@ describe("teardownFixtureCache", () => {
       env: {},
     });
     const scenarioCache = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
     await resolveFixtures({
       names: ["b"],
       graph,
       ctx,
       scenarioCache,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 
@@ -233,13 +233,13 @@ describe("teardownFixtureCache", () => {
       env: {},
     });
     const scenarioCache = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
     await resolveFixtures({
       names: ["broken", "fine"],
       graph,
       ctx,
       scenarioCache,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 
@@ -259,13 +259,13 @@ describe("teardownFixtureCache", () => {
       env: {},
     });
     const scenarioCache = createFixtureCache();
-    const runCache = createFixtureCache();
+    const processCache = createFixtureCache();
     await resolveFixtures({
       names: ["a"],
       graph,
       ctx,
       scenarioCache,
-      runCache,
+      processCache,
       defaultTimeoutMs: 5_000,
     });
 

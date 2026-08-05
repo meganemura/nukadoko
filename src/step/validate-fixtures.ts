@@ -41,8 +41,8 @@ import type { Step } from "./define-step.js";
 //   2. `validateFixtureDefinitions` is new: the *fixture graph's own*
 //      structural findings — a definition destructuring an unknown name
 //      (the same judgment as (1), applied to a fixture's own body instead
-//      of a step's), a dependency cycle, a `"run"`-scope fixture depending
-//      on a `"scenario"`-scope one, and `page` overridden by a fixture that
+//      of a step's), a dependency cycle, a `"process"`-scope fixture
+//      depending on a `"scenario"`-scope one, and `page` overridden by a fixture that
 //      owns neither `page` nor `context` (src/fixture/graph.ts does the
 //      actual graph-shape work; this file only turns its findings into the
 //      same kind of issue `nuka check`/`nuka run`/`nuka do` already share).

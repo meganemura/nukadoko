@@ -98,26 +98,31 @@ just until 0.1.
   never as itself); `auto: true`, Playwright's own "build this even if
   nothing asked for it" option, is refused outright, with a message naming
   why. Two scopes exist: `scenario` (default, rebuilt per scenario or per
-  `nuka do` execution) and `run` (built once for the whole `nuka run`
+  `nuka do` execution) and `process` (built once for the whole `nuka run`
   invocation, the first time any step names it, reused after that); there is
   no `worker` scope, since nukadoko has no parallel execution yet for that
-  name to mean anything different from `run`. Teardown runs in reverse build
-  order regardless of whether the step passed or failed, and `use()`'s own
-  return value (`"passed"` or `"failed"`) is how a fixture learns which, so
-  it can decide for itself whether to keep or discard what it built (a QA
-  team's standard "keep the failed one to inspect, destroy the passed one"
-  now has somewhere to live). A teardown failure never changes a step's or
-  scenario's own status; it lands on the scenario record's new
-  `teardown_errors` (a `scenario`-scope fixture) or on stderr (a `run`-scope
-  fixture, torn down once with no single scenario record to carry it), and
-  `nuka run`/`nuka do` announce it either way without touching the exit
-  code. Setup and teardown each get their own timeout (`config.fixtureTimeout`,
+  name to mean anything different from `process`. `process` names one
+  address space, not one `nuka run` invocation: the two happen to coincide
+  today, but that is not a guarantee, and something that must happen exactly
+  once in the world (seeding a database, running a migration, starting a
+  mock server that owns a port) does not belong in a `process`-scope
+  fixture. Teardown runs in reverse build order regardless of whether the
+  step passed or failed, and `use()`'s own return value (`"passed"` or
+  `"failed"`) is how a fixture learns which, so it can decide for itself
+  whether to keep or discard what it built (a QA team's standard "keep the
+  failed one to inspect, destroy the passed one" now has somewhere to
+  live). A teardown failure never changes a step's or scenario's own
+  status; it lands on the scenario record's new `teardown_errors` (a
+  `scenario`-scope fixture) or on stderr (a `process`-scope fixture, torn
+  down once with no single scenario record to carry it), and `nuka
+  run`/`nuka do` announce it either way without touching the exit code.
+  Setup and teardown each get their own timeout (`config.fixtureTimeout`,
   default 60 seconds, overridable per fixture), and a fixture that forgets
   to call `use()`, or calls it twice, is detected and thrown by name rather
   than left to hang the run forever. `nuka check` gains three findings, all
   decided without running a fixture: `fixture-cycle`, `fixture-scope-
-  violation` (a `run`-scope fixture depending on a `scenario`-scope one),
-  and `page-override-unowned` (a `page` override that owns neither `page`
+  violation` (a `process`-scope fixture depending on a `scenario`-scope
+  one), and `page-override-unowned` (a `page` override that owns neither `page`
   nor `context`). `nuka tend` gains two more, both a fact rather than a
   verdict: `fixture-unused` and `fixture-touches-app` (a fixture that
   reaches `page`/`context`, the standing answer to a fixture quietly logging

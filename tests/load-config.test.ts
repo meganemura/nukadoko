@@ -461,7 +461,7 @@ describe("configSchema: fixtures", () => {
       fixtures: {
         seededDb: [
           async (_deps: unknown, use: (v: unknown) => Promise<unknown>) => use(1),
-          { scope: "run", timeout: 5_000 },
+          { scope: "process", timeout: 5_000 },
         ],
       },
     });
@@ -499,6 +499,20 @@ describe("configSchema: fixtures", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(JSON.stringify(result.error.issues)).toContain("worker");
+    }
+  });
+
+  // p8-scope-rename task spec: `"run"` was the pre-rename spelling of what
+  // is now `"process"` — since this package is still unpublished, there is
+  // no backward-compat door left open for it, on purpose (two names for the
+  // same scope is exactly the ambiguity the rename exists to remove).
+  it('rejects scope: "run" (renamed to "process")', () => {
+    const result = configSchema.safeParse({
+      fixtures: { seededDb: [async () => {}, { scope: "run" }] },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(JSON.stringify(result.error.issues)).toContain("process");
     }
   });
 

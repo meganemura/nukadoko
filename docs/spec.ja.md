@@ -310,7 +310,7 @@ export default defineConfig({
       await use(t);
       await destroyTenant(request, t);
     },
-    seededDb: [async ({}, use) => { await use(await seedDb()); }, { scope: "run" }],
+    seededDb: [async ({}, use) => { await use(await seedDb()); }, { scope: "process" }],
   },
 });
 ```
@@ -343,16 +343,23 @@ executor 自身の起動を包む `page` fixture(`page: async ({ page }, use) =>
 
 スコープは 2 つだけ存在します。
 `scenario`(既定)は scenario ごとに、あるいは `nuka do` の実行ごとに再構築され、その scenario 自身の終わりに teardown されます。
-`run` は 1 度だけ構築されます(`nuka run` のその実行全体を通じて、最初にどこかの step がそれを名指した時点、直接でも別の fixture 経由でも)。
+`process` は 1 度だけ構築されます(`nuka run` のその実行全体を通じて、最初にどこかの step がそれを名指した時点、直接でも別の fixture 経由でも)。
 そして、その実行のすべての scenario が終わったあとに、1 度だけ teardown されます。
 `worker` は存在しません。
-nukadoko にはまだ並列実行がなく、`worker` スコープはいまの `run` とまったく同じ意味を持つ 2 つ目の名前にしかならず、その区別が実際に存在するようになる前にその名前を使い切ってしまうことになるからです。
+nukadoko にはまだ並列実行がなく、`worker` スコープはいまの `process` とまったく同じ意味を持つ 2 つ目の名前にしかならず、その区別が実際に存在するようになる前にその名前を使い切ってしまうことになるからです。
 `nuka do` の下では、1 回の実行が両方の寿命のすべてなので、この 2 つのスコープは 1 つに畳まれます。
-`run` スコープの fixture は、そこでは `scenario` スコープの fixture とまったく同じにふるまいます。
-`run` スコープの fixture が依存してよいのは、ほかの `run` スコープの fixture と、`env`/`requireEnv`/`baseURL` だけです。
+`process` スコープの fixture は、そこでは `scenario` スコープの fixture とまったく同じにふるまいます。
+`process` スコープの fixture が依存してよいのは、ほかの `process` スコープの fixture と、`env`/`requireEnv`/`baseURL` だけです。
 この 3 つの builtin だけは、どの scenario の context がそれを読むかによって値が変わりません。
 `page`、`context`、`request`、`resultOf`、`section`、`poll`、あるいは `scenario` スコープの fixture への依存は拒否されます(`fixture-scope-violation`)。
-`run` スコープの fixture は自分自身の構築を、それを供給したはずのその scenario より長く生き延びさせうるからです。
+`process` スコープの fixture は自分自身の構築を、それを供給したはずのその scenario より長く生き延びさせうるからです。
+
+`process` は 1 つの `nuka run` 実行のことではなく、1 つのアドレス空間のことを名指します。
+fixture 自身の値は素の JS オブジェクトであり、別のプロセスを越えて運べません。
+だからこのスコープは、何回呼び出されようと「プロセスごとに 1 度」以外の意味を持ちようがありません。
+今日は 1 回の `nuka run` 実行が 1 つのプロセスなので両者はたまたま一致していますが、その一致はこのスコープが約束しているものではありません。
+世界の中で正確に 1 度だけ起きてほしい処理(データベースのシード、マイグレーションの実行、ポートを 1 つ占有するモックサーバの起動)は、それが何プロセス走ろうと起きてほしい処理であり、`process` スコープの fixture には置けません。
+プロセスを複数走らせれば、また起きてしまいます。
 
 teardown は構築の逆順で走ります。
 その fixture を名指した step が通ったか落ちたかにかかわらずです。
@@ -364,7 +371,7 @@ nukadoko が並列化される日、この前提は静かに崩れます。
 それは fixture グラフ自身の形についての事実ではなく、**いつ**についての事実だからです。
 並列実行を足す人は、まずこの逆順に戻ってくる必要があります。
 
-fixture 自身の成否、つまりそれを名指した step(`run` スコープなら run 自身)が通ったか落ちたかは、setup の時点ではまだ存在しません。
+fixture 自身の成否、つまりそれを名指した step(`process` スコープなら run 自身)が通ったか落ちたかは、setup の時点ではまだ存在しません。
 そのため fixture 関数の第二引数ではなく、`use()` の**戻り値**になります。
 
 ```ts
@@ -380,7 +387,7 @@ Playwright 自身の `afterEach` も同じ理由で `testInfo.status` を読み�
 teardown の失敗は step や scenario 自身の成否を決して変えません。
 壊れた片付けのコードが、それ自身の受け入れ基準とは関係ない理由で、そうでなければ green だった run を red にしてはならないからです。
 それでいて黙って消えることもありません。
-`scenario` スコープの fixture の失敗は scenario record の `teardown_errors` に載り、`run` スコープの fixture の失敗(すべての scenario のあとに 1 度だけ teardown され、それを載せる 1 つの scenario record を持たない)は stderr に出ます。
+`scenario` スコープの fixture の失敗は scenario record の `teardown_errors` に載り、`process` スコープの fixture の失敗(すべての scenario のあとに 1 度だけ teardown され、それを載せる 1 つの scenario record を持たない)は stderr に出ます。
 `nuka run`/`nuka do` はどちらの場合も告知しますが、exit code は変わりません。
 
 fixture は `use(value)` をちょうど 1 回呼ばなければなりません。
@@ -397,7 +404,7 @@ setup と teardown はそれぞれ自分自身のタイムアウト予算を持�
 
 `check` は 3 つの fixture 固有の所見を報告します。
 どれも fixture を一度も実行せずに決着します。
-`fixture-cycle`(`config.fixtures` エントリのあいだの依存の循環)、`fixture-scope-violation`(`run` スコープの fixture が `scenario` スコープの fixture に依存している)、そして `page-override-unowned`(前述)です。
+`fixture-cycle`(`config.fixtures` エントリのあいだの依存の循環)、`fixture-scope-violation`(`process` スコープの fixture が `scenario` スコープの fixture に依存している)、そして `page-override-unowned`(前述)です。
 `tend` はさらに 2 つを足します。
 どちらも verdict ではなく事実です。
 `fixture-unused`(`config.fixtures` エントリのうち、どの typed step も直接にも別の fixture 経由でも要求していない、`nuka do` からはなお到達可能なもの)と、`fixture-touches-app`(`page`/`context` に、直接にも別の fixture 経由でも到達する fixture)です。
@@ -1110,11 +1117,11 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   `browser` は run が実際に起動したエンジンを計測した `ScenarioRecord.browser` で、ブラウザを起動した run にだけ存在します(「実行」を参照)。
   「chromium では受け入れたが firefox ではまだ」は正常な状態であり、古びた状態ではありません。
   sign-off は 1 つの特定の計測済み条件についての主張であり、その 2 つを凍結することは 2 つの別々の主張であって、1 つの主張の更新ではないからです。
-  `nuka accept` は、現在の条件である `config.browserType` と、各候補自身が計測した `browser.type` とを照合し、一致する run だけを候補にします(この仕様の他のあらゆる宣言/計測の問いと同じ「計測 vs 計測」の比較であり、逆向きではなく、候補が単に宣言しただけの値と照合することも決してありません)。
+  `nuka accept` は自分自身の `--env` を取り、`nuka run` 自身のそれとまったく同じやり方で解決したうえで、両方の軸で現在の条件に一致する run だけを候補にします。
+  `environment` は各候補自身が計測した `environment` と照合し、`browser` は現在の条件である `config.browserType` と、各候補自身が計測した `browser.type` とを照合します(この仕様の他のあらゆる宣言/計測の問いと同じ「計測 vs 計測」の比較であり、逆向きではなく、候補が単に宣言しただけの値と照合することも決してありません)。
   ブラウザを一度も起動しなかった run は、`browserType` に関係なく候補になります。
   計測されていない軸は、その run が実際に確認したものの一部ではなく、これが API だけの scenario の受け入れがエンジンの選択に依存しない理由です。
-  `environment` による同様の絞り込みはありません。
-  `nuka accept` は意図的に `--env` フラグを取らないため、`config.browserType` だけが既に決めているもの以外に絞り込む先が無いからです。
+  一致する run が 1 つもないとき、拒否は green なフル run が存在するすべての `(environment, browser)` の組を代わりに列挙します。
 - working tree が完全にクリーンで(untracked file を含む)、かつ凍結しようとしている run が現在の HEAD で行われたのでなければ拒否します。
   記録の主張はまるごと「この scenario は commit X で green だった」というものです。
   discovery が読み込んだはずの untracked な step ファイルや、run と sign-off の間に行われたコミットは、その主張を偽にします。
@@ -1433,7 +1440,7 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               bound later in the scenario, or ambiguous
                               between two producers, a `from` naming a step
                               discovery never registered, a fixture
-                              dependency cycle, a run-scope fixture
+                              dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page
                               override that owns neither page nor context,
                               config coherence, unreadable step files

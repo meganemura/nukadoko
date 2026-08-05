@@ -225,7 +225,7 @@ export interface ScenarioRecord {
    * must not turn an otherwise-passing scenario red for a reason unrelated
    * to its own acceptance criteria. Present only when non-empty; `nuka run`
    * still announces each entry on stderr (exit code unaffected) so it is
-   * never silent even though it costs nothing here. A `"run"`-scope
+   * never silent even though it costs nothing here. A `"process"`-scope
    * fixture's own teardown failure — torn down once, after every scenario
    * in the invocation, not attributable to any single one — is reported the
    * same way, on stderr, but never lands on any one `ScenarioRecord`. */

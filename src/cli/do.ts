@@ -280,7 +280,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     // The `config.fixtures` *definitions* themselves (P5 task spec, scope
     // item 8) — same three findings `nuka check` reports (cycles, a
-    // `"run"`-scope fixture depending on a `"scenario"`-scope one, an
+    // `"process"`-scope fixture depending on a `"scenario"`-scope one, an
     // unowned `page` override), refused here before execution the same way
     // `fixtureIssues` above already is.
     const fixtureDefinitionIssues = validateFixtureDefinitions(config);
@@ -424,13 +424,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // only title its chunk (if `ctx.page()` is ever called) will use.
       stepTitle: name,
     });
-    // `nuka do` is one execution, so `"scenario"` and `"run"` scope both
+    // `nuka do` is one execution, so `"scenario"` and `"process"` scope both
     // collapse to this one call's own lifetime (P5 task spec, scope item
     // 3; `.claude-team/playwright-native-design.md` 6 節): two separate,
     // freshly created caches (never shared across `nuka do` invocations),
     // each torn down once, below, after this step's own `run()` returns.
     const fixtureScenarioCache = createFixtureCache();
-    const fixtureRunCache = createFixtureCache();
+    const fixtureProcessCache = createFixtureCache();
     const startedAt = new Date();
 
     // `--use`'s actual effect (m6c-do-use task spec) — applied here, not in
@@ -502,7 +502,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
           graph: fixtureGraph,
           ctx: contextHandle.ctx,
           scenarioCache: fixtureScenarioCache,
-          runCache: fixtureRunCache,
+          processCache: fixtureProcessCache,
           defaultTimeoutMs: config.fixtureTimeout,
         });
         fixtureUsage = resolved.usage;
@@ -571,18 +571,18 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // Fixture teardown (P5 task spec, scope items 3, 6) — *before*
     // `contextHandle.dispose()` just below: a fixture built off `page`/
     // `context`/`request` needs those still open while its own teardown
-    // code runs. `"scenario"` scope tears down before `"run"` scope only
-    // for symmetry with `nuka run`'s own ordering (src/run/run-scenario.ts,
-    // cli/run.ts) — under `nuka do` both caches hold this one execution's
-    // own fixtures, so there is no cross-cache dependency either order
-    // could get wrong. Never changes `status` — see src/fixture/resolver.ts's
-    // own `teardownFixtureCache`; a failure is announced on stderr below
-    // instead (`nuka do` writes no `ScenarioRecord` to carry a `teardown_
-    // errors` field on).
+    // code runs. `"scenario"` scope tears down before `"process"` scope
+    // only for symmetry with `nuka run`'s own ordering (src/run/
+    // run-scenario.ts, cli/run.ts) — under `nuka do` both caches hold this
+    // one execution's own fixtures, so there is no cross-cache dependency
+    // either order could get wrong. Never changes `status` — see src/
+    // fixture/resolver.ts's own `teardownFixtureCache`; a failure is
+    // announced on stderr below instead (`nuka do` writes no
+    // `ScenarioRecord` to carry a `teardown_errors` field on).
     const fixtureOutcome = status === "ok" ? "passed" : "failed";
     const fixtureTeardownErrors = [
       ...(await teardownFixtureCache(fixtureScenarioCache, fixtureOutcome)),
-      ...(await teardownFixtureCache(fixtureRunCache, fixtureOutcome)),
+      ...(await teardownFixtureCache(fixtureProcessCache, fixtureOutcome)),
     ];
     for (const teardownError of fixtureTeardownErrors) {
       stderr.write(`Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`);

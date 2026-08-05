@@ -11,9 +11,9 @@ import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "./types.js";
 //
 // Nothing here knows about the fixture *graph*, scope, or caching — src/
 // fixture/resolver.ts owns those and calls `startFixture` exactly once per
-// fixture *instance* actually being built (never once per name: a `"run"`-
-// scope fixture reused by a later scenario never reaches this module a
-// second time).
+// fixture *instance* actually being built (never once per name: a
+// `"process"`-scope fixture reused by a later scenario never reaches this
+// module a second time).
 //
 // The timeout/misuse contract (this task's spec, item 7) exists because the
 // previous `ctx.page()` had no call-contract of its own to violate — a

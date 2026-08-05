@@ -373,7 +373,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     // The `config.fixtures` *definitions* themselves (P5 task spec, scope
-    // item 8) — cycles, `"run"`-scope-depends-on-`"scenario"`-scope, and an
+    // item 8) — cycles, `"process"`-scope-depends-on-`"scenario"`-scope, and an
     // unowned `page` override — the same three findings `nuka check`
     // reports, refused here before execution the same way `fixtureIssues`
     // above already is. Unconditional, unlike `fixtureIssues`: these are
@@ -472,14 +472,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // `hasPickles` gates every step below, including AfterAll.
       const hasPickles = selected.pickles.length > 0;
 
-      // This whole invocation's own `"run"`-scope fixture cache (P5 task
+      // This whole invocation's own `"process"`-scope fixture cache (P5 task
       // spec, scope item 3) — one instance, shared by every `runScenario`
-      // call below, so a `"run"`-scope fixture named by more than one
+      // call below, so a `"process"`-scope fixture named by more than one
       // scenario is built exactly once (this task's own completion
       // condition 5) and torn down exactly once, after the pickle loop
       // (below, near AfterAll). Cheap to create even for a zero-pickle run
       // — an empty cache's own teardown is a no-op.
-      const fixtureRunCache = createFixtureCache();
+      const fixtureProcessCache = createFixtureCache();
 
       // See this file's own header (m3b-allure-emitter spec-b2 task spec,
       // item 2) for why this is gated on `hasPickles`, why construction and
@@ -608,7 +608,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             defaultTimeoutMs,
             onUnknownTraceVersion,
             fixtureGraph,
-            fixtureRunCache,
+            fixtureProcessCache,
           });
 
           // One JSON line per completed scenario record, streamed as it
@@ -658,19 +658,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
 
-      // `"run"`-scope fixture teardown (P5 task spec, scope items 3, 6) —
-      // once, after every scenario in this invocation has finished
+      // `"process"`-scope fixture teardown (P5 task spec, scope items 3, 6)
+      // — once, after every scenario in this invocation has finished
       // (`.claude-team/playwright-native-design.md` 5 節: "run の最後、全
-      // シナリオの後"), after AfterAll (a `"run"`-scope fixture is
+      // シナリオの後"), after AfterAll (a `"process"`-scope fixture is
       // nukadoko's own machinery, not a compat hook's teardown target, so it
       // has no ordering promise relative to AfterAll beyond "after every
       // scenario"). Never changes `allPassed` — same "teardown の throw は
       // 成否を変えない" rule as scenario-scope teardown — and, unlike a
       // scenario-scope failure, has no single `ScenarioRecord` of its own to
-      // land on (this run-scope cache spans every scenario in the
+      // land on (this process-scope cache spans every scenario in the
       // invocation, not one), so it is announced on stderr only.
-      const runFixtureTeardownErrors = await teardownFixtureCache(fixtureRunCache, allPassed ? "passed" : "failed");
-      for (const teardownError of runFixtureTeardownErrors) {
+      const processFixtureTeardownErrors = await teardownFixtureCache(
+        fixtureProcessCache,
+        allPassed ? "passed" : "failed",
+      );
+      for (const teardownError of processFixtureTeardownErrors) {
         stderr.write(
           `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`,
         );

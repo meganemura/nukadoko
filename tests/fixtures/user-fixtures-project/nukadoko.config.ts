@@ -39,7 +39,7 @@ export default defineConfig({
         log({ fixture: "tenant", phase: "cleanup", id });
       }
     },
-    // `"run"` scope: built once for the whole `nuka run` invocation, the
+    // `"process"` scope: built once for the whole `nuka run` invocation, the
     // first time any step names it; reused by every scenario after that.
     seededDb: [
       async ({}, use) => {
@@ -49,7 +49,7 @@ export default defineConfig({
         const outcome = await use({ count });
         log({ fixture: "seededDb", phase: "teardown", count, outcome });
       },
-      { scope: "run" },
+      { scope: "process" },
     ],
     // Never calls use() at all — P5 task spec, scope item 7's own "use() を
     // 呼び忘れた" case: `nuka do`/`nuka run` must refuse loudly, naming this

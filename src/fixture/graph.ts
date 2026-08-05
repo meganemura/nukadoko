@@ -8,7 +8,7 @@ import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from
 // `.claude-team/playwright-native-design.md` 5 節 "層"), and every purely
 // structural judgment over it that does not need to actually run anything:
 // which name a dependency edge resolves to (honoring "a same-named override
-// depends on the previous layer, not on itself"), a cycle, a `run`-scope
+// depends on the previous layer, not on itself"), a cycle, a `process`-scope
 // fixture depending on a `scenario`-scope one, `page` overridden by a
 // fixture that owns neither `page` nor `context`, and the reachable subgraph
 // + build order a step's own requested names close over. src/step/
@@ -66,13 +66,13 @@ export interface FixtureGraph {
 
 /** `page`/`context`/`request`/`resultOf`/`section`/`poll` all need this
  * run's *current scenario's* `ctx` to build (a browser, a request context,
- * this scenario's own result chain) — a `run`-scope fixture, built once
+ * this scenario's own result chain) — a `process`-scope fixture, built once
  * before any one scenario's own resources are guaranteed to still exist by
  * the time a later scenario tears them down, must never depend on one of
  * these (`findFixtureScopeViolations` below). `env`/`requireEnv`/`baseURL`
  * are the same values regardless of which scenario's `ctx` happens to read
- * them off, so a `run`-scope fixture may depend on any of the three. */
-const RUN_SAFE_BUILTIN_NAMES = new Set(["env", "requireEnv", "baseURL"]);
+ * them off, so a `process`-scope fixture may depend on any of the three. */
+const PROCESS_SAFE_BUILTIN_NAMES = new Set(["env", "requireEnv", "baseURL"]);
 
 const BUILTIN_NAME_SET = new Set(BUILTIN_FIXTURE_NAMES);
 
@@ -81,7 +81,7 @@ export function isBuiltinFixtureName(name: string): boolean {
 }
 
 function builtinScope(name: string): FixtureScope {
-  return RUN_SAFE_BUILTIN_NAMES.has(name) ? "run" : "scenario";
+  return PROCESS_SAFE_BUILTIN_NAMES.has(name) ? "process" : "scenario";
 }
 
 /** Assembles the two-layer graph this file's own header describes —
@@ -229,16 +229,16 @@ export function findFixtureCycles(graph: FixtureGraph): FixtureDefinitionIssue[]
   return issues;
 }
 
-/** A `scope: "run"` fixture depending — directly or through a same-named
+/** A `scope: "process"` fixture depending — directly or through a same-named
  * builtin self-reference — on anything `scope: "scenario"` (a scenario-only
- * builtin, or a `config.fixtures` entry that didn't set `scope: "run"`
- * itself). `env`/`requireEnv`/`baseURL` (`RUN_SAFE_BUILTIN_NAMES` above)
+ * builtin, or a `config.fixtures` entry that didn't set `scope: "process"`
+ * itself). `env`/`requireEnv`/`baseURL` (`PROCESS_SAFE_BUILTIN_NAMES` above)
  * are the one builtin exception: their own value never depends on which
  * scenario's `ctx` happens to read them. */
 export function findFixtureScopeViolations(graph: FixtureGraph): FixtureDefinitionIssue[] {
   const issues: FixtureDefinitionIssue[] = [];
   for (const node of graph.nodes.values()) {
-    if (node.isBuiltin || node.scope !== "run") {
+    if (node.isBuiltin || node.scope !== "process") {
       continue;
     }
     for (const dep of node.dependencies) {
@@ -252,8 +252,8 @@ export function findFixtureScopeViolations(graph: FixtureGraph): FixtureDefiniti
           code: "fixture-scope-violation",
           fixture: node.name,
           message:
-            `fixture "${node.name}" has scope "run" but depends on "${edge.name}", which is scope ` +
-            '"scenario": a "run"-scope fixture is built once for the whole run and can outlive any single ' +
+            `fixture "${node.name}" has scope "process" but depends on "${edge.name}", which is scope ` +
+            '"scenario": a "process"-scope fixture is built once for the whole run and can outlive any single ' +
             'scenario\'s own resources, so it cannot depend on something rebuilt per scenario',
         });
       }

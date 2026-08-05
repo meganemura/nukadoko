@@ -218,7 +218,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // The `config.fixtures` *definitions* themselves (P5 task spec, scope
   // item 8) — a fixture destructuring an unknown name (same judgment as
   // above, applied to a fixture's own body), a dependency cycle, a
-  // `"run"`-scope fixture depending on a `"scenario"`-scope one, and `page`
+  // `"process"`-scope fixture depending on a `"scenario"`-scope one, and `page`
   // overridden by a fixture that owns neither `page` nor `context`
   // (src/fixture/graph.ts does the actual graph-shape work; this file only
   // turns its findings into a `CheckIssue`, the same shape every other

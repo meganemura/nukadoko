@@ -17,7 +17,7 @@ import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 //
 // A `FixtureCache` is the one piece of state this module owns: one per
 // scope-lifetime (a fresh one per pickle for `"scenario"` scope, one shared
-// across a whole `nuka run` invocation for `"run"` scope — `nuka do`
+// across a whole `nuka run` invocation for `"process"` scope — `nuka do`
 // creates one of each, both discarded after that single execution, per
 // `.claude-team/playwright-native-design.md` 6 節). `resolveFixtures` below
 // is the one place both caches are read from and written to; nothing else
@@ -26,10 +26,10 @@ import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 // **Builtin resolution never changes**: `buildStepFixtures` (src/context/
 // create-context.ts, unmodified) still resolves every builtin name this
 // closure needs, in one call, off whichever `ctx` the caller is currently
-// executing under — including for a `"run"`-scope fixture being built
+// executing under — including for a `"process"`-scope fixture being built
 // lazily during some later scenario's own `ctx`, which is safe precisely
 // because `findFixtureScopeViolations` (src/fixture/graph.ts) already
-// refused any `"run"`-scope fixture that depends on anything but `env`/
+// refused any `"process"`-scope fixture that depends on anything but `env`/
 // `requireEnv`/`baseURL` (scenario-independent values) before execution
 // ever began.
 
@@ -55,7 +55,7 @@ export interface FixtureUsageEntry {
    * rule as `setup_ms`. */
   readonly at?: string;
   /** `true` when this fixture was already built (by an earlier step in
-   * this scenario, or — for `scope: "run"` — by an earlier scenario in
+   * this scenario, or — for `scope: "process"` — by an earlier scenario in
    * this same `nuka run` invocation) and this call simply received the
    * cached value. */
   readonly reused: boolean;
@@ -117,7 +117,7 @@ export interface ResolveFixturesOptions {
    * closure needs is actually resolved from (this file's own header). */
   readonly ctx: StepContext;
   readonly scenarioCache: FixtureCache;
-  readonly runCache: FixtureCache;
+  readonly processCache: FixtureCache;
   /** `config.fixtureTimeout` — the default every fixture instance's own
    * `options.timeout` (if any) overrides. */
   readonly defaultTimeoutMs: number;
@@ -140,7 +140,7 @@ export interface ResolveFixturesOptions {
 export async function resolveFixtures(
   options: ResolveFixturesOptions,
 ): Promise<{ readonly fixtures: StepFixtures; readonly usage: FixtureUsageEntry[] }> {
-  const { names, graph, ctx, scenarioCache, runCache, defaultTimeoutMs } = options;
+  const { names, graph, ctx, scenarioCache, processCache, defaultTimeoutMs } = options;
   const closure = closeFixtureNames(names, graph);
 
   const builtinValues = (await buildStepFixtures(ctx, closure.builtinNames)) as unknown as Record<string, unknown>;
@@ -161,7 +161,7 @@ export async function resolveFixtures(
     }
 
     const timeoutMs = node.timeoutMs ?? defaultTimeoutMs;
-    const cache = node.scope === "run" ? runCache : scenarioCache;
+    const cache = node.scope === "process" ? processCache : scenarioCache;
     const built = await getOrBuild(cache, name, node, deps as FixtureDeps, timeoutMs);
     resolvedValues[name] = built.value;
     usage.push({

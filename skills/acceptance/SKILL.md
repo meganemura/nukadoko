@@ -193,13 +193,15 @@ first time a step names it; teardown runs after that step's scenario
 finishes, in reverse build order, whether the scenario passed or failed.
 `use()`'s own return value tells the fixture which, so it can decide for
 itself whether to keep what it built (for inspection) or tear it down;
-`{ scope: "run" }` in a second, options element of the tuple form builds it
-once for the whole `nuka run` invocation instead of once per scenario, for
-something genuinely shared across scenarios rather than owned by one. A
-fixture that forgets to call `use()`, or calls it twice, fails loudly by
-name rather than hanging the run; `nuka check` catches a dependency cycle
-among fixtures and a `run`-scope fixture depending on a `scenario`-scope
-one before anything runs.
+`{ scope: "process" }` in a second, options element of the tuple form builds
+it once for the whole `nuka run` invocation instead of once per scenario,
+for something genuinely shared across scenarios rather than owned by one
+(not for something that must happen exactly once in the world regardless of
+process count, like seeding a database: `process` is one address space, not
+one invocation). A fixture that forgets to call `use()`, or calls it twice,
+fails loudly by name rather than hanging the run; `nuka check` catches a
+dependency cycle among fixtures and a `process`-scope fixture depending on
+a `scenario`-scope one before anything runs.
 
 ## Waiting for an external effect
 
@@ -307,14 +309,16 @@ there outright, regardless of what `--env` was given.
    never treats a partial run as a candidate, however green it was.
 3. `nuka accept <feature>` — freezes the newest all-green run of that
    feature as a record beside it, restricted to runs matching the current
-   condition: whatever `config.browserType` says right now, matched
-   against what each candidate run actually measured, never a declaration.
-   A run that never opened a browser is a candidate regardless of
-   `browserType` (there is no `--browserType`/`--env` flag on `accept`
-   itself, on purpose). Every record's filename bakes its own condition in
-   (environment, then browser or `no-browser`), so accepting this feature
-   again later under a different measured condition writes a separate
-   record instead of overwriting this one.
+   condition: `--env` (resolved the same way `nuka run`'s is; omit for the
+   default environment) and whatever `config.browserType` says right now,
+   both matched against what each candidate run actually measured, never a
+   declaration. A run that never opened a browser is a candidate regardless
+   of `browserType` (there is no `--browserType` flag on `accept`, since it
+   is fully config-derived). Every record's filename bakes its own
+   condition in (environment, then browser or `no-browser`), so accepting
+   this feature again later under a different measured condition writes a
+   separate record instead of overwriting this one; when two runs differ
+   only by environment, `--env` is what picks which one gets frozen.
 4. Commit the record `accept` wrote.
 
 ## When a run fails
@@ -387,8 +391,9 @@ next to it. One of the seven, "no run to freeze", now includes a fourth
 shape: a green full run of the feature exists, just not under the current
 condition. That refusal names the condition it looked for and lists every
 condition that does have a run, so the next move is either `nuka run
-<feature>` again under the current condition or pointing `browserType` in
-the config at one of the ones already listed, never a guess between them.
+<feature>` again under the current condition or pointing `accept`'s own
+`--env` and/or `browserType` in the config at one of the ones already
+listed, never a guess between them.
 
 ## Keeping records honest over time
 

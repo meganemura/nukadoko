@@ -314,16 +314,16 @@ export interface RunScenarioOptions {
    * invocation resolves fixtures against the exact same graph `nuka check`
    * already validated before any of them ran. */
   readonly fixtureGraph: FixtureGraph;
-  /** This whole `nuka run` invocation's own `"run"`-scope fixture cache
+  /** This whole `nuka run` invocation's own `"process"`-scope fixture cache
    * (P5 task spec, scope item 3) — created once by cli/run.ts, before the
    * first pickle, and passed unchanged into every `runScenario` call, so a
-   * `"run"`-scope fixture named by more than one scenario is built exactly
-   * once, by whichever scenario names it first, and reused by every
+   * `"process"`-scope fixture named by more than one scenario is built
+   * exactly once, by whichever scenario names it first, and reused by every
    * scenario after that (this task's own completion condition 5). Torn
    * down once by cli/run.ts, after every scenario in the invocation has
    * finished — never here, since this function has no way to know it is
    * looking at the invocation's *last* pickle. */
-  readonly fixtureRunCache: FixtureCache;
+  readonly fixtureProcessCache: FixtureCache;
 }
 
 function undefinedStepMessage(text: string): string {
@@ -708,11 +708,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     defaultTimeoutMs,
     onUnknownTraceVersion,
     fixtureGraph,
-    fixtureRunCache,
+    fixtureProcessCache,
   } = options;
 
   // This pickle's own `"scenario"`-scope fixture cache (P5 task spec,
-  // scope item 3) — fresh per pickle, unlike `fixtureRunCache` above, and
+  // scope item 3) — fresh per pickle, unlike `fixtureProcessCache` above, and
   // torn down at this pickle's own end (below, before `contextHandle.
   // dispose()` — a scenario-scope fixture may itself hold `page`/`context`/
   // `request` and needs them still open during its own teardown code).
@@ -1534,7 +1534,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
                 graph: fixtureGraph,
                 ctx: contextHandle.ctx,
                 scenarioCache: fixtureScenarioCache,
-                runCache: fixtureRunCache,
+                processCache: fixtureProcessCache,
                 defaultTimeoutMs: config.fixtureTimeout,
               });
               fixtureUsage = resolved.usage;

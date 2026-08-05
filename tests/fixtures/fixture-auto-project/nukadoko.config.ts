@@ -17,7 +17,7 @@ export default defineConfig({
       async ({}, use: any) => {
         await use(1);
       },
-      { scope: "run", auto: true } as any,
+      { scope: "process", auto: true } as any,
     ],
   },
 });

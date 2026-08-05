@@ -161,10 +161,10 @@ const fixtureDefinitionSchema: z.ZodType<FixtureDefinition> = z
           '"auto" is exactly the claim it would be breaking',
       );
     }
-    if (obj.scope !== undefined && obj.scope !== "scenario" && obj.scope !== "run") {
+    if (obj.scope !== undefined && obj.scope !== "scenario" && obj.scope !== "process") {
       ctx.addIssue(
-        `fixture options.scope must be "scenario" or "run" (got ${JSON.stringify(obj.scope)}); "worker" does ` +
-          'not exist yet: there is no parallel execution for it to mean anything different from "run"',
+        `fixture options.scope must be "scenario" or "process" (got ${JSON.stringify(obj.scope)}); "worker" does ` +
+          'not exist yet: there is no parallel execution for it to mean anything different from "process"',
       );
     }
     if (obj.timeout !== undefined && (typeof obj.timeout !== "number" || !(obj.timeout > 0))) {

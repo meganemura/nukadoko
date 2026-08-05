@@ -146,7 +146,7 @@
     {
       "en": ["scope"],
       "ja": "スコープ",
-      "note": "P5 task spec (fixture の scenario/run scope) で入った。config の options.scope や receipt の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
+      "note": "P5 task spec (fixture の scenario/process scope) で入った。config の options.scope や receipt の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
     },
     {
       "en": ["outcome"],

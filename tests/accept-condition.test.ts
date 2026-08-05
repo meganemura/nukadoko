@@ -44,9 +44,17 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
     await removeTempDir(rootDir);
   });
 
-  it("accepts the same feature at the same commit under two different conditions without either record overwriting the other", async () => {
+  it("accepts the same feature at the same commit under two different conditions without either record overwriting the other, --env choosing which", async () => {
     await initGitRepo(rootDir);
 
+    // A real delay between the two runs (this fixture project's own default
+    // environment first, then staging) so the second run's own `started_at`
+    // is unambiguously later than the first's — the same reasoning
+    // tests/accept.test.ts's own overwrite-semantics test already uses. The
+    // point of this test (p8-scope-rename-and-accept-env task spec, part B)
+    // is that `--env` picks the wanted one directly, not that recency alone
+    // would happen to: accepting the default environment below still finds
+    // the older run even after a newer, staging one exists.
     const run1Exit = await runCli(["run", "features/greeting.feature"], {
       rootDir,
       stdout: createCaptureSink(),
@@ -54,20 +62,6 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
     });
     expect(run1Exit).toBe(0);
 
-    const accept1Stdout = createCaptureSink();
-    const accept1Exit = await runCli(["accept", "features/greeting.feature"], {
-      rootDir,
-      stdout: accept1Stdout,
-      stderr: createCaptureSink(),
-    });
-    expect(accept1Exit).toBe(0);
-    const path1 = accept1Stdout.text().trim();
-    expect(path1).toMatch(/\.default\.no-browser\.md$/);
-
-    // A real delay so the second run's own `started_at` is unambiguously
-    // later than the first's (src/accept/select-run.ts picks the most
-    // recent full green run) — the same reasoning tests/accept.test.ts's
-    // own overwrite-semantics test already uses.
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     const run2Exit = await runCli(["run", "features/greeting.feature", "--env", "staging"], {
@@ -77,9 +71,23 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
     });
     expect(run2Exit).toBe(0);
 
+    // No `--env` (implicit default), even though a newer (staging) run
+    // exists — selection is by condition, never merely by recency.
+    const accept1Stdout = createCaptureSink();
+    const accept1Stderr = createCaptureSink();
+    const accept1Exit = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: accept1Stdout,
+      stderr: accept1Stderr,
+    });
+    expect(accept1Exit).toBe(0);
+    expect(accept1Stderr.text()).toBe("");
+    const path1 = accept1Stdout.text().trim();
+    expect(path1).toMatch(/\.default\.no-browser\.md$/);
+
     const accept2Stdout = createCaptureSink();
     const accept2Stderr = createCaptureSink();
-    const accept2Exit = await runCli(["accept", "features/greeting.feature"], {
+    const accept2Exit = await runCli(["accept", "features/greeting.feature", "--env", "staging"], {
       rootDir,
       stdout: accept2Stdout,
       stderr: accept2Stderr,
@@ -161,8 +169,39 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stderr.text()).toContain("no green full run of features/browser.feature exists under the current condition (browser: firefox)");
+    expect(stderr.text()).toContain(
+      "no green full run of features/browser.feature exists under the current condition (environment: default, browser: firefox)",
+    );
     expect(stderr.text()).toContain("Runs exist for: environment default, browser chromium");
+  });
+
+  it("refuses under the default condition when the only green run measured a different environment, naming it as an alternative", async () => {
+    await initGitRepo(rootDir);
+
+    // The only green full run of greeting.feature measured `staging`, never
+    // the implicit `default` this `accept` call (no `--env`) resolves to —
+    // p8-scope-rename-and-accept-env task spec, part B: candidate selection
+    // is narrowed by `environment` too, not only by `browserType`, so this
+    // run is not a candidate here even though it is the only green one.
+    const runExit = await runCli(["run", "features/greeting.feature", "--env", "staging"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(0);
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain(
+      "no green full run of features/greeting.feature exists under the current condition (environment: default, browser: chromium)",
+    );
+    expect(stderr.text()).toContain("Runs exist for: environment staging (no browser launched)");
   });
 
   it("writes the accepted run's own condition into the record body, stating explicitly when no browser was launched", async () => {

@@ -10,6 +10,7 @@ import {
 } from "../accept/select-run.js";
 import { MissingReceiptError, renderAcceptanceRecord, type AcceptedScenario } from "../accept/render-record.js";
 import { loadConfig } from "../config/load-config.js";
+import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment, type ResolvedEnvironment } from "../environment/resolve-environment.js";
 import { parseFeatureSource } from "../feature/load-features.js";
 import { readReceiptsForRecord } from "../report/receipts.js";
 import { probeGitState } from "../run/probe-git.js";
@@ -41,24 +42,27 @@ import type { WritableSink } from "./writable-sink.js";
 // (src/run/probe-git.ts, reused rather than re-implemented per the spec's
 // own list of things this task must not touch).
 //
-// Condition 4's fourth way (accept-condition task spec, item 3/4): a
-// candidate must have run under the *current* condition — `config.
+// Condition 4's fourth way (accept-condition task spec, item 3/4;
+// p8-scope-rename-and-accept-env task spec, part B): a candidate must have
+// run under the *current* condition, both axes — `environment` (this
+// command's own `--env`, resolved through `resolveEnvironment`, the exact
+// same path `nuka run` uses, no separate default of its own) matched
+// against each record's own measured `environment` field, and `config.
 // browserType` matched against each record's own measured `browser.type`
 // (never a declaration stored on the record; there isn't one, p6-browser-
-// type task spec) via `browserConditionMatches`. `environment` is not
-// filtered here at all — unlike `browserType`, there is no "the config's own
-// environment" without a `--env` flag this command never takes (`nuka
-// accept` has no such flag, on purpose: "同じ config で受け入れる" needs no
-// flag only because `browserType` alone is fully config-derived). The
-// winning group's own `environment` is simply whatever it is, same as
-// before this task; a green run under a different environment is still a
-// candidate, exactly as it always was. When the browser-filtered selection
-// isn't "ok", `featureRecords` (unfiltered) is checked once more before
-// falling back to the three condition-blind refusals: if a green full run
-// exists *somewhere*, just not under this condition, that is a materially
-// different situation ("run again under this condition, or point
-// `browserType` at one that already has one") from "nothing has ever run" —
-// see the "no run under the current condition" branch below.
+// type task spec) via `browserConditionMatches`. Filenames already carry
+// the condition (below), so a candidate selected under the wrong
+// environment would freeze a record whose own name lies about what it was
+// confirmed under — `--env` closes that gap: without it, two green runs of
+// the same feature under different environments could only ever be
+// resolved by accepting whichever is newer, never by naming the one that
+// is wanted. When the (environment, browser)-filtered selection isn't
+// "ok", `featureRecords` (unfiltered) is checked once more before falling
+// back to the three condition-blind refusals: if a green full run exists
+// *somewhere*, just not under this condition, that is a materially
+// different situation ("run again under this condition, or point `--env`/
+// `browserType` at one that already has one") from "nothing has ever run"
+// — see the "no run under the current condition" branch below.
 //
 // Feature-path normalization (spec decision on identifying the target run, item 1) is
 // applied to *both* sides of the comparison, not just the argument. A
@@ -75,6 +79,11 @@ import type { WritableSink } from "./writable-sink.js";
 export interface RunAcceptOptions {
   rootDir: string;
   featureArg: string;
+  /** `--env`, resolved the exact same way `nuka run`'s is (`null` means the
+   * flag was omitted, resolving to `DEFAULT_ENVIRONMENT_NAME` without
+   * requiring a matching `environments` entry — see resolve-environment.ts's
+   * own header). */
+  env: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -148,7 +157,7 @@ function localIsoWithOffset(iso: string): string {
 }
 
 export async function runAccept(options: RunAcceptOptions): Promise<number> {
-  const { rootDir, featureArg, stdout, stderr } = options;
+  const { rootDir, featureArg, env, stdout, stderr } = options;
   const featurePath = normalizeFeaturePath(rootDir, featureArg);
 
   let config;
@@ -156,6 +165,17 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     config = await loadConfig(rootDir);
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
+    return 1;
+  }
+
+  // Same path `nuka run` resolves `--env` through (this file's own header)
+  // — an unknown explicit name is a setup failure here too, before any of
+  // the seven refusal conditions below are even checked.
+  let resolvedEnv: ResolvedEnvironment;
+  try {
+    resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+  } catch (error) {
+    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }
 
@@ -209,12 +229,14 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   const featureRecords = allRecords.filter(
     (record: ScenarioRecord) => normalizeFeaturePath(rootDir, record.feature) === featurePath,
   );
-  // "Measured vs measured" (accept-condition task spec, item 3): every
-  // candidate must either have launched no browser at all, or have launched
-  // the one the *current* config declares — never a value stored on the
-  // record itself.
-  const conditionRecords = featureRecords.filter((record) =>
-    browserConditionMatches(record, config.browserType),
+  // "Measured vs measured" (accept-condition task spec, item 3;
+  // p8-scope-rename-and-accept-env task spec, part B): every candidate must
+  // match on both axes — `environment` against each record's own measured
+  // `environment` field, and browser: either the record launched none at
+  // all, or it launched the one the *current* config declares (never a
+  // value stored on the record itself).
+  const conditionRecords = featureRecords.filter(
+    (record) => record.environment === resolvedEnv.name && browserConditionMatches(record, config.browserType),
   );
   const outcome = selectAcceptableRun(conditionRecords, featureLines);
 
@@ -231,9 +253,9 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
         (a, b) => a.environment.localeCompare(b.environment) || (a.browserType ?? "").localeCompare(b.browserType ?? ""),
       );
       stderr.write(
-        `nuka accept: no green full run of ${featurePath} exists under the current condition (browser: ${config.browserType}). ` +
+        `nuka accept: no green full run of ${featurePath} exists under the current condition (environment: ${resolvedEnv.name}, browser: ${config.browserType}). ` +
           `Runs exist for: ${otherConditions.map(formatCondition).join("; ")}. ` +
-          `Run \`nuka run ${featurePath}\` under this condition, or point browserType in the config at one of those, then accept again.\n`,
+          `Run \`nuka run ${featurePath}\` under this condition, or point --env/browserType at one of those, then accept again.\n`,
       );
       return 1;
     }

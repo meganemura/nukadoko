@@ -438,7 +438,7 @@ export default defineConfig({
       await use(t);
       await destroyTenant(request, t);
     },
-    seededDb: [async ({}, use) => { await use(await seedDb()); }, { scope: "run" }],
+    seededDb: [async ({}, use) => { await use(await seedDb()); }, { scope: "process" }],
   },
 });
 ```
@@ -487,22 +487,33 @@ back a page the executor still owns and measures, so `check` refuses it
 (`page-override-unowned`).
 
 Two scopes exist: `scenario` (default) rebuilds per scenario, or per `nuka
-do` execution, and tears down at that scenario's own end; `run` builds once
-(the first time any step in the whole `nuka run` invocation names it,
+do` execution, and tears down at that scenario's own end; `process` builds
+once (the first time any step in the whole `nuka run` invocation names it,
 directly or through another fixture) and tears down once, after every
 scenario in that invocation has finished. `worker` does not exist:
 nukadoko has no parallel execution yet, so a `worker` scope would be a
-second name for exactly what `run` already means, spent before the
+second name for exactly what `process` already means, spent before the
 distinction between the two exists to be worth naming. Under `nuka do`, one
 execution is the whole of both lifetimes, so the two scopes collapse: a
-`run`-scope fixture behaves exactly like a `scenario`-scope one there. A
-`run`-scope fixture may only depend on other `run`-scope fixtures and on
-`env`/`requireEnv`/`baseURL`, the three builtins whose value never depends
-on which scenario's context happens to read them; depending on `page`,
-`context`, `request`, `resultOf`, `section`, `poll`, or a `scenario`-scope
-fixture is refused (`fixture-scope-violation`), since a `run`-scope
-fixture's own build can outlive the very scenario that would have supplied
-any of those.
+`process`-scope fixture behaves exactly like a `scenario`-scope one there. A
+`process`-scope fixture may only depend on other `process`-scope fixtures
+and on `env`/`requireEnv`/`baseURL`, the three builtins whose value never
+depends on which scenario's context happens to read them; depending on
+`page`, `context`, `request`, `resultOf`, `section`, `poll`, or a
+`scenario`-scope fixture is refused (`fixture-scope-violation`), since a
+`process`-scope fixture's own build can outlive the very scenario that
+would have supplied any of those.
+
+`process` names one address space, not one `nuka run` invocation: a
+fixture's own value is a plain JS object and cannot cross into another
+process, so this scope can only ever mean "once per process", no matter how
+many times anything is invoked against it. Today one `nuka run` invocation
+is one process, so the two happen to coincide, but that coincidence is not
+a guarantee this scope makes. Something that has to happen exactly once in
+the world, no matter how many processes ever run against it (seeding a
+database, running a migration, starting a mock server that owns a port),
+does not belong in a `process`-scope fixture: run more than one process
+and it happens again.
 
 Teardown runs in reverse build order, whether the step that named the
 fixture passed or failed: a fixture's own cleanup code is not optional
@@ -517,7 +528,7 @@ torn down is exactly the kind of race `check` can never catch, because it
 is a property of *when*, not of the fixture graph's own shape. Whoever adds
 parallel execution has to come back to this reversal first.
 
-A fixture's own outcome, whether the step (or, for `run` scope, the run
+A fixture's own outcome, whether the step (or, for `process` scope, the run
 itself) that named it passed or failed, is not known at setup time, so it
 is not a second argument to the fixture function: it is the *return value*
 of `use()`:
@@ -536,7 +547,7 @@ for the same reason. A teardown failure never changes the step's or
 scenario's own status: a broken cleanup routine must not turn an otherwise-
 green run red for a reason unrelated to its own acceptance criteria. It is
 never silent either: it lands on the scenario record's `teardown_errors`
-(a `scenario`-scope fixture's own failure) or on stderr (a `run`-scope
+(a `scenario`-scope fixture's own failure) or on stderr (a `process`-scope
 fixture's own failure, torn down once, after every scenario, with no single
 scenario record of its own to carry it), and `nuka run`/`nuka do` announce
 it either way; the exit code is unaffected.
@@ -558,7 +569,7 @@ with one.
 
 `check` reports three fixture-specific findings, all decided without ever
 running a fixture: `fixture-cycle` (a dependency cycle among
-`config.fixtures` entries), `fixture-scope-violation` (a `run`-scope
+`config.fixtures` entries), `fixture-scope-violation` (a `process`-scope
 fixture depending on a `scenario`-scope one), and `page-override-unowned`
 (above). `tend` adds two, both a fact rather than a verdict:
 `fixture-unused` (a `config.fixtures` entry no typed step requires,
@@ -1568,18 +1579,19 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   launched one at all (see "Running"). "Chromium accepted, firefox not
   yet" is a normal state, not a stale one: a sign-off is a claim about one
   specific measured condition, and freezing two of them is two separate
-  claims, not one claim updated. `nuka accept` selects among runs that
-  match the *current* condition, `config.browserType`, matched against
-  each candidate's own measured `browser.type` (the same measured-vs-
-  measured comparison every other declaration/measurement question in this
-  spec makes, never the other way, and never against anything a candidate
-  merely declared). A run that never launched a browser at all is a
-  candidate regardless of `browserType`: an unmeasured axis is not part of
-  what that run actually confirmed, which is why an API-only scenario's
-  acceptance never depends on engine choice. There is no equivalent
-  narrowing by `environment`, since `nuka accept` takes no `--env` flag, on
-  purpose, so there is nothing to narrow by beyond whatever
-  `config.browserType` alone already determines.
+  claims, not one claim updated. `nuka accept` takes its own `--env`,
+  resolved the exact same way `nuka run`'s is, and selects among runs that
+  match the *current* condition on both axes: `environment`, matched
+  against each candidate's own measured `environment`, and `browser`,
+  `config.browserType`, matched against each candidate's own measured
+  `browser.type` (the same measured-vs-measured comparison every other
+  declaration/measurement question in this spec makes, never the other
+  way, and never against anything a candidate merely declared). A run that
+  never launched a browser at all is a candidate regardless of
+  `browserType`: an unmeasured axis is not part of what that run actually
+  confirmed, which is why an API-only scenario's acceptance never depends
+  on engine choice. When nothing matches, the refusal lists every
+  `(environment, browser)` pair that does have a green full run instead.
 - It refuses unless the working tree is completely clean, untracked files
   included, and the run it is freezing happened at the current HEAD. The
   record's whole claim is "this scenario was green at commit X"; an
@@ -2067,7 +2079,7 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               bound later in the scenario, or ambiguous
                               between two producers, a `from` naming a step
                               discovery never registered, a fixture
-                              dependency cycle, a run-scope fixture
+                              dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page
                               override that owns neither page nor context,
                               config coherence, unreadable step files
