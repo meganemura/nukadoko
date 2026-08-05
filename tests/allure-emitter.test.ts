@@ -236,6 +236,55 @@ describe("createAllureEmitter", () => {
     });
   });
 
+  it("writes a hook's own trace as a real attachment on its fixture, and its actions as a real child step (p3d-hook-trace task spec)", () => {
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    const pickle = pickles[0]!;
+
+    const scenarioDir = path.join(rootDir, ".nukadoko", "scenarios", "scn-hook-trace-1");
+    mkdirSync(scenarioDir, { recursive: true });
+    writeFileSync(path.join(scenarioDir, "hook-before-0.zip"), "hook trace bytes");
+
+    const beforeHook: ScenarioHookRecord = {
+      type: "before",
+      status: "ok",
+      trace: "hook-before-0.zip",
+      actions: [
+        { method: "goto", url: "data:text/html,before-hook", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" },
+      ],
+    };
+    const record: ScenarioRecord = {
+      scenario_id: "scn-hook-trace-1",
+      run_id: "run-1",
+      feature: "features/checkout.feature",
+      scenario: "a customer checks out",
+      line: 3,
+      status: "passed",
+      environment: "staging",
+      session: null,
+      started_at: "2026-08-01T00:00:00.000Z",
+      finished_at: "2026-08-01T00:00:00.500Z",
+      steps: [],
+      hooks: [beforeHook],
+      evidence: { dir: ".nukadoko/scenarios/scn-hook-trace-1", screenshots: [] },
+    };
+
+    emitter.emitScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+    const containers = readContainerFiles(resultsDir) as {
+      befores: { name: string; status: string; attachments: { name: string; type: string; source: string }[]; steps: { name: string }[] }[];
+    }[];
+    const beforeContainer = containers.find((c) => c.befores.length > 0)!;
+    expect(beforeContainer).toBeDefined();
+    const fixture = beforeContainer.befores[0]!;
+
+    const traceAttachment = fixture.attachments.find((a) => a.name === "trace")!;
+    expect(traceAttachment).toBeDefined();
+    expect(traceAttachment.type).toBe("application/vnd.allure.playwright-trace");
+    expect(readFileSync(path.join(resultsDir, traceAttachment.source), "utf8")).toBe("hook trace bytes");
+
+    expect(fixture.steps.map((s) => s.name)).toEqual(["goto data:text/html,before-hook"]);
+  });
+
   it("gives two Scenario Outline rows the same testCaseId and different historyId", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const outlineRows = pickles.filter((p) => p.name.startsWith("checkout as"));

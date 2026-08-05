@@ -584,14 +584,30 @@ function actionName(action: ActionEntry): string {
  * `truncated` field exists, this file's own `pageEventCount` below). Placed
  * at the tail on purpose: it names a fact about the receipt as a whole, not
  * a moment inside the step, so it is appended to the array rather than
- * merged into the `at`-ordered sort above. */
-function mapTimelineChildSteps(receipt: Receipt): MappedChildStep[] {
+ * merged into the `at`-ordered sort above.
+ *
+ * `source` is narrowed to just the four fields this function actually reads
+ * (p3d-hook-trace task spec) rather than the full `Receipt`, so `mapHooks`
+ * below can hand this the exact same function a `ScenarioHookRecord` — which
+ * has `actions`/`truncated` but no `sections`/`polls`/`started_at` of its
+ * own (record-types.ts's own header explains why a hook has no `ctx` to call
+ * `ctx.section`/`ctx.poll` from) — without a second merge function or a
+ * fake `Receipt` shim. `fallbackAnchorMs` replaces the old direct read of
+ * `receipt.started_at` for that same reason: a hook invocation has no
+ * `started_at` of its own either, so the caller passes whichever timestamp
+ * is the right anchor for it (a step's own `receipt.started_at`, or a
+ * hook's own collapsed `timestampMs` — `mapHooks`' own doc comment on that
+ * "documented limit"). */
+function mapTimelineChildSteps(
+  source: Pick<Receipt, "sections" | "polls" | "actions" | "truncated">,
+  fallbackAnchorMs: number,
+): MappedChildStep[] {
   const entries: TimelineEntry[] = [];
-  for (const section of receipt.sections ?? []) {
+  for (const section of source.sections ?? []) {
     const at = Date.parse(section.at);
     entries.push({ at: section.at, childStep: { name: section.label, startMs: at, stopMs: at, status: "passed" } });
   }
-  for (const poll of receipt.polls ?? []) {
+  for (const poll of source.polls ?? []) {
     const startMs = Date.parse(poll.at);
     entries.push({
       at: poll.at,
@@ -603,7 +619,7 @@ function mapTimelineChildSteps(receipt: Receipt): MappedChildStep[] {
       },
     });
   }
-  for (const action of receipt.actions ?? []) {
+  for (const action of source.actions ?? []) {
     const startMs = Date.parse(action.at);
     entries.push({
       at: action.at,
@@ -621,18 +637,18 @@ function mapTimelineChildSteps(receipt: Receipt): MappedChildStep[] {
   entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
   const childSteps = entries.map((entry) => entry.childStep);
 
-  if (receipt.truncated?.actions !== undefined) {
-    const shownCount = receipt.actions?.length ?? 0;
-    const notShownCount = receipt.truncated.actions - shownCount;
-    // Anchored to the last real entry's own `stopMs` (falling back to the
-    // step's own start when the timeline is otherwise empty, which cannot
+  if (source.truncated?.actions !== undefined) {
+    const shownCount = source.actions?.length ?? 0;
+    const notShownCount = source.truncated.actions - shownCount;
+    // Anchored to the last real entry's own `stopMs` (falling back to
+    // `fallbackAnchorMs` when the timeline is otherwise empty, which cannot
     // happen in practice — `truncated.actions` is only ever present
     // alongside a full 100-entry `actions` array — but is not a type-level
-    // guarantee `receipt` itself carries) so this marker reads as "right
+    // guarantee `source` itself carries) so this marker reads as "right
     // after everything already shown" on both axes: last in the array
     // (`writeChildSteps`, emitter.ts, renders children in array order) and
     // latest in time.
-    const lastStopMs = childSteps.length > 0 ? childSteps[childSteps.length - 1]!.stopMs : Date.parse(receipt.started_at);
+    const lastStopMs = childSteps.length > 0 ? childSteps[childSteps.length - 1]!.stopMs : fallbackAnchorMs;
     childSteps.push({
       name: `... ${notShownCount} more actions not shown`,
       startMs: lastStopMs,
@@ -801,7 +817,7 @@ function mapSteps(
 
       declared = mapDeclared(receipt.declared, receipt.evidence.dir, startMs);
       attachments.push(...declared.attachments);
-      timelineChildSteps = mapTimelineChildSteps(receipt);
+      timelineChildSteps = mapTimelineChildSteps(receipt, Date.parse(receipt.started_at));
     }
 
     // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
@@ -852,7 +868,11 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
     // restated on emitter.ts): every before-hook collapses to the
     // scenario's own `started_at`, every after-hook — `"after"` and
     // `"after_step"` alike (t7-compat-status-afterstep task spec) — to its
-    // `finished_at`, both zero-width.
+    // `finished_at`, both zero-width. This is the same reason `hook.trace`'s
+    // own child-step timeline below has no `started_at` of its own to
+    // anchor a truncation marker to (mapTimelineChildSteps's own doc
+    // comment) — `timestampMs` is exactly what a step's own
+    // `Date.parse(receipt.started_at)` would have been if a hook had one.
     const timestampMs = hook.type === "before" ? scenarioStartMs : scenarioStopMs;
     const declared = mapDeclared(hook.declared, record.evidence.dir, timestampMs);
     // `"after_step"` folds onto Allure's own `"after"` fixture type (this
@@ -864,6 +884,26 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
     const fixtureType: "before" | "after" = hook.type === "before" ? "before" : "after";
     const name =
       hook.type === "before" ? "Before" : hook.type === "after" ? "After" : `AfterStep[${hook.step_index}]`;
+    // p3d-hook-trace task spec: a hook invocation's own trace attachment and
+    // `actions` timeline, mapped exactly the way a step's own
+    // `receipt.evidence.trace`/`receipt.actions` already are (`mapSteps`,
+    // above) — same contentType, same `mapTimelineChildSteps` merge/
+    // truncation-marker function, no separate rule for a hook. `hook.trace`
+    // is relative to the *scenario's* own evidence dir (record-types.ts's
+    // own header), unlike a step's `receipt.evidence.trace`, which is
+    // relative to that step's own receipt dir — `joinRelative` takes
+    // whichever dir actually matches its second argument, so this only
+    // changes which dir is passed in, not how the path is built.
+    const attachments = [...declared.attachments];
+    if (hook.trace) {
+      attachments.push({
+        kind: "path",
+        name: "trace",
+        contentType: "application/vnd.allure.playwright-trace",
+        path: joinRelative(record.evidence.dir, hook.trace),
+      });
+    }
+    const timelineChildSteps = mapTimelineChildSteps(hook, timestampMs);
     return {
       hook: {
         type: fixtureType,
@@ -872,8 +912,11 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
         message: outcome.message,
         startMs: timestampMs,
         stopMs: timestampMs,
-        attachments: declared.attachments,
-        childSteps: declared.childSteps,
+        attachments,
+        // Declared log lines first (same order `mapSteps` already uses for
+        // a step's own declared.childSteps + timeline), the actions
+        // timeline after.
+        childSteps: [...declared.childSteps, ...timelineChildSteps],
       },
       declaredLinks: declared.links,
       declaredLabels: declared.labels,

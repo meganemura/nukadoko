@@ -349,4 +349,41 @@ describe("collectTraceEvidence", () => {
     });
     expect(result.actions).toHaveLength(1);
   });
+
+  // p3d-hook-trace task spec: several hook invocations can share one
+  // scenario evidence dir, so a hook call site names its own chunk file
+  // rather than relying on the "trace.zip" default every step call site
+  // still uses.
+  it("reads a differently-named chunk file when fileName is given, and reports that same name back as trace", async () => {
+    const traceTrace = [headerLine(8), JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join(
+      "\n",
+    );
+    await writeFile(path.join(dir, "hook-before-0.zip"), buildSingleEntryZip("trace.trace", traceTrace));
+    const result = await collectTraceEvidence(
+      dir,
+      () => {
+        throw new Error("must not be called");
+      },
+      "hook-before-0.zip",
+    );
+    expect(result.trace).toBe("hook-before-0.zip");
+    expect(result.actions).toHaveLength(1);
+  });
+
+  it("does not see a same-directory trace.zip when a different fileName was asked for", async () => {
+    const traceTrace = [headerLine(8), JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join(
+      "\n",
+    );
+    // A step's own chunk, if one happened to share this directory — must
+    // never be picked up by a hook call site asking for its own file name.
+    await writeFile(path.join(dir, "trace.zip"), buildSingleEntryZip("trace.trace", traceTrace));
+    const result = await collectTraceEvidence(
+      dir,
+      () => {
+        throw new Error("must not be called");
+      },
+      "hook-after-0.zip",
+    );
+    expect(result).toEqual({});
+  });
 });

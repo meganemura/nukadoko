@@ -126,12 +126,17 @@ import { writeScenarioRecord } from "./write-record.js";
 // one (`result: null` always, per docs/spec.md "Receipts": "Compat steps
 // record result: null" — regardless of what the glue function itself
 // returned). Before/After hooks run against that same World, outside any
-// step's own receipt boundary — `contextHandle.beginStep(scenarioDir)`
-// before each hook phase redirects http.jsonl logging and the `observed`
-// tally away from any step's own receipt dir (this task's spec, item 5: a
-// hook's own network activity stays outside any step boundary, a documented
-// v1 limit rather than a bug: it is neither measured on any step's
-// receipt nor visible in the scenario record at all).
+// step's own receipt boundary — `contextHandle.beginStep(scenarioDir, ...)`
+// before each individual hook invocation redirects http.jsonl logging and
+// the `observed` tally away from any step's own receipt dir (this task's
+// spec, item 5). http.jsonl and `observed` stay scenario-wide and
+// un-attributed to any one hook invocation, a documented v1 limit rather
+// than a bug (neither is measured on, or visible from, any single
+// `ScenarioHookRecord` entry) — but a hook invocation's own trace chunk and
+// `actions` are not: p3d-hook-trace closed that half of the gap, giving
+// each individual Before/After/AfterStep call that touches the browser its
+// own isolated trace, the same per-invocation boundary `declaredCollector`
+// (below) already had.
 //
 // m2d-allure-shim task spec: this file also owns `declaredCollector` (src/
 // compat/declared.ts) — one per pickle, repointed as "the currently active
@@ -342,6 +347,53 @@ function stepChunkTitle(stepKeywords: ReadonlyMap<string, string>, pickleStep: P
   const astNodeId = pickleStep.astNodeIds[0];
   const keyword = astNodeId !== undefined ? stepKeywords.get(astNodeId) : undefined;
   return keyword !== undefined ? `${keyword}${pickleStep.text}` : pickleStep.text;
+}
+
+// --- p3d-hook-trace task spec, scope 1: one trace chunk per individual
+// Before/After/AfterStep *invocation*, isolated from every step's own chunk
+// and from every sibling hook's — titled/named so a trace viewer (and a
+// reader of the scenario evidence dir's own file listing) can tell one
+// hook's chunk apart from a step's chunk and from another hook invocation's,
+// the same way `stepChunkTitle` above already lets a step's chunk name
+// itself. Matches `src/accept/render-record.ts`'s own `hookLabel` wording
+// ("Before hook" / "After hook" / "AfterStep hook (step N)") so the same
+// invocation reads the same way in a trace viewer and in an accepted
+// record. ---
+
+function hookChunkTitle(type: "before" | "after" | "after_step", stepIndex?: number): string {
+  switch (type) {
+    case "before":
+      return "Before hook";
+    case "after":
+      return "After hook";
+    case "after_step":
+      return `AfterStep hook (step ${stepIndex})`;
+  }
+}
+
+/** Unique within one scenario's own evidence dir (this task's spec: "同じ
+ * type の hook が複数登録されていても衝突しないこと") — built from
+ * `HookRegistration.registrationOrder` (src/compat/hooks.ts), which discovery
+ * assigns once, globally, in registration order, so two hooks of the same
+ * `type` can never collide even though neither carries a name of its own.
+ * `stepIndex` is folded in for `"after_step"` only (mirroring
+ * `ScenarioHookRecord.step_index`'s own "present only when `type` is
+ * `after_step`" rule) — without it, the *same* AfterStep hook running after
+ * two different steps would try to write two different chunks to the one
+ * file name its own `registrationOrder` alone would produce. */
+function hookChunkFileName(
+  type: "before" | "after" | "after_step",
+  registrationOrder: number,
+  stepIndex?: number,
+): string {
+  switch (type) {
+    case "before":
+      return `hook-before-${registrationOrder}.zip`;
+    case "after":
+      return `hook-after-${registrationOrder}.zip`;
+    case "after_step":
+      return `hook-after_step-${stepIndex}-${registrationOrder}.zip`;
+  }
 }
 
 // --- m6a-from-core task spec, item 4: `from` injection (scenario path
@@ -1021,29 +1073,29 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   // Hooks get their own boundary, never a step's own receipt dir (this
   // task's spec, item 5: a hook's own network stays outside any step
-  // boundary) — redirected
-  // to the scenario dir itself, the same place `httpLogDir` already starts
-  // out pointed at before any step's own `beginStep()` call ever runs. No
-  // title is given (p3a-trace-per-step task spec) — a hook boundary never
-  // opens a trace chunk of its own (see create-context.ts's own header for
-  // why hooks are kept out of this task's scope).
-  await contextHandle.beginStep(scenarioDir);
-  // Same step-boundary point for the World's own instrumentation (m2c-typed-
-  // world task spec, item 1's reconcile + item 3's per-boundary reset) — a
-  // Before hook's own World reads/writes get tallied here but are discarded
-  // by the very next `beginStep()` call (before step 1), so they are never
-  // attributed to any step's receipt, the same isolation `observed`/`used`
-  // already give hooks.
-  worldInstrumentation.beginStep();
+  // boundary) — redirected to the scenario dir itself, the same place
+  // `httpLogDir` already starts out pointed at before any step's own
+  // `beginStep()` call ever runs. Since p3d-hook-trace, that boundary opens
+  // once per *individual* hook invocation, inside the loop below, each with
+  // its own title/chunk file (`hookChunkTitle`/`hookChunkFileName`) — the
+  // same per-invocation granularity `declaredCollector.beginStep` already
+  // had (m2d-allure-shim task spec, item 4), now shared by the trace chunk
+  // too, so a Before hook that touches `ctx.page()` gets a chunk isolated
+  // from its sibling Before hooks and from every step's own chunk.
   for (const hook of beforeHooks) {
+    const chunkFileName = hookChunkFileName("before", hook.registrationOrder);
+    await contextHandle.beginStep(scenarioDir, hookChunkTitle("before"), chunkFileName);
+    // Same per-boundary point for the World's own instrumentation (m2c-typed-
+    // world task spec, item 1's reconcile + item 3's per-boundary reset) — a
+    // Before hook's own World reads/writes get tallied here but are
+    // discarded by the next `beginStep()` call (the next Before hook, or
+    // step 1's own), so they are never attributed to any step's receipt,
+    // the same isolation `observed`/`used` already give hooks.
+    worldInstrumentation.beginStep();
     // m2d-allure-shim task spec, item 4: each hook gets its own declared
     // boundary — reset right before it runs, read right after — so one
     // hook's own facade/World-channel calls land on exactly that hook's own
     // `hookRecords` entry, never smeared across its sibling Before hooks.
-    // Independent of `contextHandle`/`worldInstrumentation`'s own
-    // once-per-phase boundary above (observed/world stay a documented v1
-    // limit for hooks, unchanged by this task — see this file's own
-    // header).
     declaredCollector.beginStep(scenarioDir);
     // Item 3: `HookParameter.result` is absent for a Before hook (cucumber-js
     // never sets it there either — a scenario's outcome isn't known yet).
@@ -1085,14 +1137,31 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         hookErrorKind = classifyCaughtError(error);
       }
     }
+    // Closes this hook's own trace chunk, if one is open, *before* its own
+    // `hookRecords` entry is built (p3d-hook-trace task spec) — the same
+    // "close, then read" order `finishExecutedStep` already follows for a
+    // step's own chunk, so `trace` is never set on a record whose chunk
+    // hasn't actually finished writing yet.
+    await contextHandle.endStep();
+    const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
     const declared = declaredCollector.snapshot();
     if (hookStatus === "ok") {
-      hookRecords.push({ type: "before", status: "ok", ...(declared ? { declared } : {}) });
+      hookRecords.push({
+        type: "before",
+        status: "ok",
+        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
+        ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
+        ...(declared ? { declared } : {}),
+      });
     } else {
       hookRecords.push({
         type: "before",
         status: "failed",
         error: { message: hookErrorMessage, kind: hookErrorKind },
+        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
+        ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;
@@ -1136,17 +1205,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     if (afterStepHooks.length === 0) {
       return;
     }
-    // Same boundary redirect as the Before/After loops (this file's own
-    // header, m2b-compat-execution task spec, item 5): a hook's own network
-    // activity stays outside any step's own receipt boundary. Without this,
-    // an AfterStep hook's own requests would keep writing into the step it
-    // just ran after's own http.jsonl, even though that step's receipt (and
-    // its `observed` tally) was already built and written by
-    // `finishExecutedStep` before this function is ever called. No title
-    // (p3a-trace-per-step task spec) — same hook-boundary reasoning as the
-    // Before/After loops.
-    await contextHandle.beginStep(scenarioDir);
-    worldInstrumentation.beginStep();
     const hookParameter = buildHookParameter(
       gherkinDocument,
       pickle,
@@ -1154,6 +1212,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       stepStatus === "ok" ? "PASSED" : "FAILED",
     );
     for (const hook of afterStepHooks) {
+      // Same boundary redirect as the Before/After loops (this file's own
+      // header, m2b-compat-execution task spec, item 5): a hook's own
+      // network activity stays outside any step's own receipt boundary.
+      // Without this, an AfterStep hook's own requests would keep writing
+      // into the step it just ran after's own http.jsonl, even though that
+      // step's receipt (and its `observed` tally) was already built and
+      // written by `finishExecutedStep` before this function is ever
+      // called. `stepIndex` is folded into both the title and the chunk
+      // file name (p3d-hook-trace task spec) — this same hook can run again
+      // after a *later* step in this same scenario, and each of those
+      // invocations needs its own chunk, never overwriting the previous
+      // one's.
+      const chunkFileName = hookChunkFileName("after_step", hook.registrationOrder, stepIndex);
+      await contextHandle.beginStep(scenarioDir, hookChunkTitle("after_step", stepIndex), chunkFileName);
+      worldInstrumentation.beginStep();
       // Same per-hook declared boundary as the Before/After loops (m2d-
       // allure-shim task spec, item 4) — reset right before, read right
       // after, so one AfterStep hook's own declared data never bleeds into a
@@ -1185,15 +1258,30 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           hookErrorKind = classifyCaughtError(error);
         }
       }
+      // Same "close, then read" order as the Before loop above (p3d-
+      // hook-trace task spec).
+      await contextHandle.endStep();
+      const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
       const declared = declaredCollector.snapshot();
       if (hookStatus === "ok") {
-        hookRecords.push({ type: "after_step", step_index: stepIndex, status: "ok", ...(declared ? { declared } : {}) });
+        hookRecords.push({
+          type: "after_step",
+          step_index: stepIndex,
+          status: "ok",
+          ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+          ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
+          ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
+          ...(declared ? { declared } : {}),
+        });
       } else {
         hookRecords.push({
           type: "after_step",
           step_index: stepIndex,
           status: "failed",
           error: { message: hookErrorMessage, kind: hookErrorKind },
+          ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+          ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
+          ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
           ...(declared ? { declared } : {}),
         });
         // No `break` — see this function's own header (item 2-5: same
@@ -1644,11 +1732,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // `this.page`/`this.request` while the browser/request context is open —
   // redirected to the scenario's own boundary for the same reason Before
   // hooks are, above, rather than left pointed at whichever step happened
-  // to run last. No title (p3a-trace-per-step task spec) — same hook-
-  // boundary reasoning as the Before loop.
-  await contextHandle.beginStep(scenarioDir);
-  worldInstrumentation.beginStep();
+  // to run last. Since p3d-hook-trace, each individual After hook opens its
+  // own boundary (title + chunk file), inside the loop below, the same
+  // per-invocation shape the Before loop above now has.
   for (const hook of afterHooks) {
+    const chunkFileName = hookChunkFileName("after", hook.registrationOrder);
+    await contextHandle.beginStep(scenarioDir, hookChunkTitle("after"), chunkFileName);
+    worldInstrumentation.beginStep();
     // Same per-hook declared boundary as the Before loop above (this task's
     // spec, item 4) — reset right before, read right after, so one After
     // hook's own declared data never bleeds into a sibling's.
@@ -1694,14 +1784,30 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         hookErrorKind = classifyCaughtError(error);
       }
     }
+    // Same "close, then read" order as the Before loop above (p3d-
+    // hook-trace task spec) — this hook's own chunk (if any) is written to
+    // disk, and read back, *before* `dispose()` closes the browser context
+    // for good just below this loop.
+    await contextHandle.endStep();
+    const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
     const declared = declaredCollector.snapshot();
     if (hookStatus === "ok") {
-      hookRecords.push({ type: "after", status: "ok", ...(declared ? { declared } : {}) });
+      hookRecords.push({
+        type: "after",
+        status: "ok",
+        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
+        ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
+        ...(declared ? { declared } : {}),
+      });
     } else {
       hookRecords.push({
         type: "after",
         status: "failed",
         error: { message: hookErrorMessage, kind: hookErrorKind },
+        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
+        ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;

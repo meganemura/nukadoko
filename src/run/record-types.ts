@@ -60,8 +60,31 @@
 // `target_version`'s probe already uses
 // (src/environment/probe-version.ts): the run itself never fails over
 // either field.
+//
+// `ScenarioHookRecord.trace`/`.actions`/`.truncated` are added now
+// (p3d-hook-trace task spec) — closing a gap p3a-trace-per-step opened:
+// once the Playwright trace became one chunk per step, a Before/After/
+// AfterStep hook's own `ctx.page()` calls stopped landing in any chunk at
+// all, since a chunk only ever opened for a step's own boundary. A hook has
+// no receipt of its own (same "no args/returns/binding concept" reasoning
+// as `.error.kind` above), so, like `.declared`, its own trace evidence lands
+// here instead — one chunk per *individual* hook invocation (never one
+// shared across every Before hook, say), read back into the same shape a
+// step's own receipt already carries (src/context/trace-actions.ts's
+// `TraceEvidence`; src/receipt/types.ts's own `actions`/`truncated` doc
+// comments explain the 100-entry cap and the five-key params allowlist —
+// unchanged here, no separate convention). `trace` is present only when
+// that invocation actually opened a chunk (touched `ctx.page()`/
+// `this.openPage()`); `actions`/`truncated` follow the receipt's own
+// "present only when non-empty"/"present only when capped" rules. A hook
+// has no `sections`/`polls` field, unlike a step's receipt: both come from
+// `ctx.section`/`ctx.poll`, and a hook has no `ctx` of its own to call
+// either from (only a World, `this`) — `actions`, read out of the trace
+// chunk itself rather than from anything the hook explicitly called, is
+// unaffected by that gap.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
+import type { ActionEntry } from "../context/trace-actions.js";
 import type { ErrorKind, ScreenshotEntry } from "../receipt/types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
@@ -99,6 +122,25 @@ export interface ScenarioHookRecord {
    * t7-compat-status-afterstep task spec) — the 0-based index into this
    * record's own `steps` array that this AfterStep hook ran after. */
   readonly step_index?: number;
+  /** This hook invocation's own trace chunk, relative to the *scenario's*
+   * evidence dir (p3d-hook-trace task spec, this file's own header) —
+   * unlike `ScenarioStepRecord`, a hook has no receipt dir of its own, so
+   * its chunk lands beside its sibling hooks' in the scenario's own dir
+   * instead, each under a name unique to that one invocation (src/run/
+   * run-scenario.ts's `hookChunkFileName`). Present only when this
+   * invocation actually opened a chunk — a hook that never called
+   * `ctx.page()`/`this.openPage()` carries no `trace` at all. */
+  readonly trace?: string;
+  /** Every Playwright call this hook invocation made through `ctx.page()`/
+   * `this.openPage()`, read back out of its own trace chunk — same shape,
+   * same 100-entry cap, same five-key params allowlist as a step's own
+   * `receipt.actions` (src/receipt/types.ts's own header; this file's own
+   * header). Present only when non-empty. */
+  readonly actions?: readonly ActionEntry[];
+  /** Present only when `actions` above hit its own 100-entry cap — same
+   * `{ actions: <true total> }` shape as a step's own `receipt.truncated`
+   * (src/receipt/types.ts). */
+  readonly truncated?: { readonly actions: number };
 }
 
 export interface ScenarioEvidence {

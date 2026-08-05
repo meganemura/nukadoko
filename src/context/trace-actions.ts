@@ -12,6 +12,16 @@ import type { WritableSink } from "../cli/writable-sink.js";
 // trace records a call at Playwright's own layer, underneath whichever
 // wrapper — `@playwright/test`'s `expect`, a step's own code — called it).
 //
+// `collectTraceEvidence`'s own `fileName` parameter (p3d-hook-trace task
+// spec) is what lets this same function read a *hook* invocation's own
+// chunk too, not only a step's: several hook chunks can land in the same
+// scenario evidence dir (run-scenario.ts names each one uniquely, since a
+// scenario can register more than one hook of the same type, and AfterStep
+// runs once per executed step), so "trace.zip" can no longer be assumed —
+// the caller now says which file. Defaults to `"trace.zip"` so every
+// existing step call site (which never named one) keeps reading exactly the
+// file it always has.
+//
 // Reads `trace.trace` only, the one entry inside trace.zip this task's spec
 // already measured the shape of ("前提", not re-verified here):
 // `trace.stacks` carries local absolute paths (never worth reading, and a
@@ -351,19 +361,25 @@ export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseRe
   };
 }
 
-/** Reads `receiptDir/trace.zip` (when present) and turns it into this step's
- * own `trace`/`actions`/`truncated` receipt fields. Called only after the
- * file is known to already be fully written — create-context.ts's
- * `endStep()`/`dispose()` close a step's own trace chunk before its receipt
- * is ever built, exactly so this read never races that write. `undefined`
- * result fields, never thrown errors: a missing or unreadable trace.zip
- * costs `actions` (and `trace` itself, when the file plain doesn't exist),
- * never a step's own receipt (this file's own header). */
+/** Reads `receiptDir/fileName` (when present) and turns it into this step's
+ * (or hook invocation's — p3d-hook-trace task spec) own
+ * `trace`/`actions`/`truncated` fields. Called only after the file is known
+ * to already be fully written — create-context.ts's `endStep()`/`dispose()`
+ * close the current chunk before its receipt/hook record is ever built,
+ * exactly so this read never races that write. `undefined` result fields,
+ * never thrown errors: a missing or unreadable trace file costs `actions`
+ * (and `trace` itself, when the file plain doesn't exist), never the
+ * receipt or hook record it belongs to (this file's own header).
+ * `fileName` defaults to `"trace.zip"` — every step call site relies on
+ * that default; a hook call site (run-scenario.ts) always names its own
+ * file explicitly, since more than one can share a scenario's evidence
+ * dir. */
 export async function collectTraceEvidence(
   receiptDir: string,
   onUnknownVersion: (version: number) => void,
+  fileName = "trace.zip",
 ): Promise<TraceEvidence> {
-  const traceZipPath = path.join(receiptDir, "trace.zip");
+  const traceZipPath = path.join(receiptDir, fileName);
   if (!existsSync(traceZipPath)) {
     return {};
   }
@@ -371,12 +387,12 @@ export async function collectTraceEvidence(
     const zipBuffer = await readFile(traceZipPath);
     const traceTraceBuffer = readZipEntry(zipBuffer, "trace.trace");
     if (traceTraceBuffer === undefined) {
-      return { trace: "trace.zip" };
+      return { trace: fileName };
     }
     const result = parseTraceActions(traceTraceBuffer);
     if (result.kind === "ok") {
       return {
-        trace: "trace.zip",
+        trace: fileName,
         ...(result.actions.length > 0 ? { actions: result.actions } : {}),
         ...(result.truncatedCount !== undefined ? { truncated: { actions: result.truncatedCount } } : {}),
       };
@@ -384,13 +400,13 @@ export async function collectTraceEvidence(
     if (result.kind === "unknown-version") {
       onUnknownVersion(result.version);
     }
-    return { trace: "trace.zip" };
+    return { trace: fileName };
   } catch {
-    // Same "trace.zip exists, but nothing further could be read from it"
+    // Same "the file exists, but nothing further could be read from it"
     // fallback as the `undefined` branch above — a corrupt zip, a read
     // error mid-file, or anything else this file did not specifically
     // anticipate.
-    return { trace: "trace.zip" };
+    return { trace: fileName };
   }
 }
 

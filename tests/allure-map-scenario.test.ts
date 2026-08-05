@@ -1214,6 +1214,117 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
   });
 });
 
+describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
+  it("attaches a hook's own trace with the playwright-trace contentType, relative to the scenario's evidence dir", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const hook: ScenarioHookRecord = { type: "before", status: "ok", trace: "hook-before-0.zip" };
+    const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] } });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.hooks[0]!.attachments).toContainEqual({
+      kind: "path",
+      name: "trace",
+      contentType: "application/vnd.allure.playwright-trace",
+      path: ".nukadoko/scenarios/scn-1/hook-before-0.zip",
+    });
+  });
+
+  it("omits any trace attachment when the hook never opened a chunk", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const hook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const record = baseRecord({ hooks: [hook] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.hooks[0]!.attachments.some((a) => a.name === "trace")).toBe(false);
+  });
+
+  it("maps a hook's own actions into child steps via the same mapTimelineChildSteps merge a step's receipt uses", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const hook: ScenarioHookRecord = {
+      type: "before",
+      status: "ok",
+      actions: [{ method: "goto", url: "data:text/html,before-hook", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
+    };
+    const record = baseRecord({ hooks: [hook], started_at: "2026-08-01T00:00:00.000Z" });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.hooks[0]!.childSteps.map((c) => c.name)).toEqual(["goto data:text/html,before-hook"]);
+  });
+
+  it("anchors a hook's own truncation marker to its collapsed timestamp, the same fallback a step anchors to its receipt's started_at", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    // No `actions` array at all alongside `truncated` — an edge case
+    // record-types.ts's own type does not forbid, exercising the fallback
+    // branch mapTimelineChildSteps takes when its own childSteps array is
+    // still empty by the time it reaches the truncation marker.
+    const hook: ScenarioHookRecord = { type: "before", status: "ok", truncated: { actions: 5 } };
+    const record = baseRecord({ hooks: [hook], started_at: "2026-08-01T00:00:00.000Z" });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    const marker = mapped.hooks[0]!.childSteps[0]!;
+    expect(marker.name).toBe("... 5 more actions not shown");
+    // The before hook's own collapsed timestamp is the scenario's own
+    // started_at (mapHooks's own doc comment) — same value this record's
+    // `started_at` carries.
+    expect(marker.startMs).toBe(Date.parse("2026-08-01T00:00:00.000Z"));
+    expect(marker.stopMs).toBe(marker.startMs);
+  });
+
+  it("keeps a hook's own declared child steps ahead of its actions timeline, same order as a step's", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const hook: ScenarioHookRecord = {
+      type: "before",
+      status: "ok",
+      declared: { logs: ["did the thing"] },
+      actions: [{ method: "goto", url: "/x", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
+    };
+    const record = baseRecord({ hooks: [hook] });
+
+    const mapped = mapScenario({
+      record,
+      receipts: new Map(),
+      gherkinDocument,
+      pickle,
+      posixPath: "features/checkout.feature",
+    });
+
+    expect(mapped.hooks[0]!.childSteps.map((c) => c.name)).toEqual(["did the thing", "goto /x"]);
+  });
+});
+
 describe("mapScenario: page_events as step parameters", () => {
   function consoleErrorEntry(index: number) {
     return {

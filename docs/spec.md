@@ -649,7 +649,17 @@ import { Given, When, Then } from "nukadoko/compat";
   receive cucumber's own hook parameter, filter on `@tag` / `not @tag`
   only — anything fancier fails loudly rather than mismatching silently —
   appear in the scenario record's `hooks` array rather than as receipts,
-  and their network traffic sits outside any step's boundary. `AfterStep`
+  and their network traffic sits outside any step's boundary: http.jsonl
+  and the observed read/write tally stay scenario-wide, never attributed to
+  one hook invocation. The Playwright trace does not, though. Every
+  individual Before/After/AfterStep call that touches `this.openPage()`
+  gets its own trace chunk and `actions` list, on that same `hooks` array
+  entry (`trace`/`actions`/`truncated`, the same shape a step's own receipt
+  carries, see "Receipts"), isolated from every step's own chunk and from
+  its sibling hooks'. A hook invocation still carries no `sections`/`polls`,
+  since neither has a `ctx` of its own to call `ctx.section`/`ctx.poll`
+  from. Only `actions`, read back out of the chunk itself rather than from
+  anything the hook explicitly called, is available to it. `AfterStep`
   shares that same registration surface (all three call shapes, the same
   `@tag` / `not @tag` filter), but where Before/After bracket the whole
   scenario, it runs once per pickle step that actually executed. A step
@@ -1095,6 +1105,18 @@ shape whether the step ran inside a scenario or via `do`.
   recorded`), because a silently empty `actions` sitting next to a
   `evidence.trace` that plainly exists would otherwise read as "nothing
   happened" rather than "this build could not read it".
+- A Before/After/AfterStep hook has no receipt of its own (see "Compat steps"), so
+  its own trace evidence lands on that invocation's own entry in the
+  scenario record's `hooks` array instead: `trace` (relative to the
+  scenario's own directory, not a receipt dir, since a hook has none),
+  `actions`, and `truncated`, in exactly the shape above, present under
+  exactly the same rules. A hook invocation carries no `sections`/`polls`
+  alongside them: both come from `ctx.section`/`ctx.poll`, and a hook has
+  no `ctx` of its own to call either from, only a World (`this`). `actions`,
+  read back out of the trace chunk itself rather than from anything the
+  hook explicitly called, is unaffected by that gap. A hook invocation that
+  never touched the browser opens no chunk and carries none of the three
+  fields at all, the same as a step that never called `ctx.page()`.
 - Receipts live under the state directory (`.nukadoko/`, gitignored). They are
   local working records; the durable artifacts are sign-offs.
 
@@ -1232,11 +1254,15 @@ Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
 
 - `receipts/<id>/` — one directory per receipt: the receipt JSON and its
   evidence files (trace.zip, screenshots, http.jsonl)
-- `scenarios/<id>/` — one directory per scenario run: `record.json` plus
-  the scenario's own final screenshot, mirroring Playwright's own per-test
-  `test-results/` convention one level up. No trace.zip here any more: each
-  step's own trace lives under that step's own `receipts/<id>/` instead
-  (see "Running")
+- `scenarios/<id>/` — one directory per scenario run: `record.json`, the
+  scenario's own final screenshot, and one trace chunk per Before/After/
+  AfterStep hook invocation that touched the browser (named uniquely per
+  invocation, e.g. `hook-before-0.zip`, `hook-after_step-1-2.zip`, since
+  more than one hook can share this one directory, unlike a step, which
+  never shares its own `receipts/<id>/`), mirroring Playwright's own
+  per-test `test-results/` convention one level up. No whole-scenario
+  trace.zip here: each step's own trace lives under that step's own
+  `receipts/<id>/` instead (see "Running")
 - `sessions/<env>/<name>.json` — storageState; live credentials in
   plaintext, created with restricted permissions
 - `allure-results/` — the emitter's output, appended to across runs and
@@ -1438,6 +1464,17 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   to the parent step's own start/stop range: a timeline entry outside that
   range already happened, and hiding it would make it unreadable rather
   than making it not true.
+- A hook invocation's own trace and `actions` (see "Compat steps", above) attach
+  to that same hook's own fixture, not to the test result itself: the trace
+  as an attachment named `trace`, the same contentType as a step's own, and
+  `actions` merged into that fixture's own child-step timeline through the
+  identical mechanism the bullet above describes. A hook carries no
+  `sections`/`polls` to merge in alongside them, since it has no `ctx` to
+  call `ctx.section`/`ctx.poll` from, but its own trace-derived `actions`
+  still render the same way a step's would. A hook invocation that never
+  touched `this.openPage()` gets neither: no trace attachment, no timeline
+  entries, the same "nothing to show" a step that never called `ctx.page()`
+  already gets.
 - `page_events` (see Receipts) surfaces as up to three more parameters,
   `console errors (observed)`, `page errors (observed)`, `failed requests
   (observed)`, one per category that recorded at least one entry, so a

@@ -84,7 +84,17 @@ just until 0.1.
   network view spanning every step at once, a step-scoped trace does not.
   Each step's own trace still shows that step's own requests in full;
   `ctx.request()` traffic keeps its own record in http.jsonl, and (see
-  below) page-issued traffic now shares that same file.
+  below) page-issued traffic now shares that same file. A Before/After/
+  AfterStep hook that touched the browser used to fall through this cut
+  entirely: its own `ctx.page()` calls landed in no chunk at all, since a
+  chunk only ever opened for a step's own boundary. Every individual hook
+  invocation now gets the same treatment a step does, its own isolated
+  trace and `actions`, recorded on that invocation's own entry in the
+  scenario record's `hooks` array (`trace`, relative to the scenario's own
+  directory, since a hook has no receipt dir of its own) rather than
+  disappearing the way it used to. The Allure emitter attaches a hook's
+  trace to that hook's own fixture and merges its `actions` into that same
+  fixture's child-step timeline, matching what a step already gets.
 
 ## 0.0.5 — 2026-08-05
 

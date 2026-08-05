@@ -472,6 +472,13 @@ import { Given, When, Then } from "nukadoko/compat";
   Before / After フックは、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、`Before("@tag", fn)`)のどれでも書け、cucumber 自身のフック引数を受け取ります。
   タグ絞り込みは `@tag` と `not @tag` のみで、それ以上の式は黙って誤マッチする代わりに大きな声で失敗します。
   フックは receipt ではなく scenario record の `hooks` 配列に現れ、フック中のネットワークはどの step の境界にも属しません。
+  http.jsonl と observed の読み書きカウントは scenario 全体で共有され続け、個々の hook 呼び出しに紐付けられることはありません。
+  ただし Playwright の trace は違います。
+  `this.openPage()` に触れた Before/After/AfterStep の個々の呼び出しは、それぞれ自分自身の trace chunk と `actions` のリストを持ち、同じ `hooks` 配列のエントリ上に記録されます(`trace`/`actions`/`truncated` は step 自身の receipt と同じ形です。「Receipt」を参照してください)。
+  これは各 step 自身の chunk からも、他の hook からも独立しています。
+  hook の呼び出しには、依然として `sections`/`polls` はありません。
+  `ctx.section`/`ctx.poll` を呼ぶための `ctx` を hook が持たないからです。
+  hook 自身が明示的に呼んだものではなく trace chunk 自体から読み出される `actions` だけは、この制約の影響を受けません。
   `AfterStep` はこれと同じ登録面(3 通りの呼び出し形、同じ `@tag` / `not @tag` のフィルタ)を共有しますが、Before/After が scenario 全体を挟み込むのに対し、`AfterStep` は実際に実行された pickle step ごとに 1 回走ります。
   この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` にとっての「後」はそこには存在せず、その step については何も現れません。
   これはタグが一致しなかった hook がすでに従っている慣習と同じです。
@@ -764,6 +771,14 @@ receipt とは、1 つの step の実行に対するツール自身の計測で�
   唯一の声を上げる例外は、この build が認識しない trace format のバージョンです。
   検証していない形を推測することは、何も報告しないことより悪いため、`actions` はやはり省かれますが、`nuka run`/`nuka do` は stderr にも一度だけ警告します(`warning: trace format version <n> is not readable by this build; step actions were not recorded`)。
   `evidence.trace` は確かに存在するのに `actions` だけが黙って空になっていると、それは「この build が読めなかった」ではなく「何も起きなかった」と読めてしまうからです。
+- Before/After/AfterStep フックには自分自身の receipt がありません(「Compat steps」を参照してください)。
+  そのため、その呼び出し自身の trace 証跡は代わりに scenario record の `hooks` 配列にあるその呼び出し自身のエントリに載ります。
+  `trace`(receipt dir ではなく scenario 自身の directory からの相対パスです。hook には receipt dir 自体がありません)、`actions`、`truncated` は、上と全く同じ形で、全く同じ規則のもとで現れます。
+  hook の呼び出しには `sections`/`polls` は並びません。
+  どちらも `ctx.section`/`ctx.poll` から来るものであり、hook はどちらを呼ぶための `ctx` も持たず、持つのは World(`this`)だけだからです。
+  hook 自身が明示的に呼んだものではなく trace chunk 自体から読み出される `actions` は、この gap の影響を受けません。
+  ブラウザに一度も触れなかった hook の呼び出しは chunk を開かず、この 3 つのフィールドのどれも運びません。
+  `ctx.page()` を一度も呼ばなかった step と同じです。
 - receipt は state directory(`.nukadoko/`、gitignore 対象)の下に置かれます。
   それらはローカルな作業記録であり、耐久性のある成果物は sign-off です。
 
@@ -865,9 +880,12 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置かれ(`init` によって gitignore されます)、そのどれもコミットされることを意図していません:
 
 - `receipts/<id>/`(receipt ごとに 1 つのディレクトリ: receipt の JSON とその evidence ファイル(trace.zip、screenshots、http.jsonl))
-- `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json` と、scenario 自身の最終スクリーンショット)。
+- `scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json`、scenario 自身の最終スクリーンショット、そしてブラウザに触れた Before/After/AfterStep フックの呼び出しごとの trace chunk)。
+  各呼び出しに一意な名前が付きます(例えば `hook-before-0.zip`、`hook-after_step-1-2.zip`)。
+  複数の hook がこの 1 つのディレクトリを共有しうるからです。
+  自分自身の `receipts/<id>/` を決して共有しない step とは違います。
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
-  ここにはもう trace.zip はありません。
+  scenario 全体をまたぐ trace.zip はここにはありません。
   各 step 自身の trace は、その step 自身の `receipts/<id>/` の下に置かれます(「実行」を参照)。
 - `sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)。
@@ -1003,6 +1021,14 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   これは `page_events` 自身の `truncated` フィールドが存在するのと同じ理由です: タイムラインだけを見た読み手が、打ち切られたリストを全部だと取り違えることが決してないようにするためです。
   親 step 自身の start/stop の範囲にクランプすることは決してありません。
   その範囲の外に出た timeline entry は実際に起きたことであり、隠せば読めなくなるだけで、起きなかったことにはなりません。
+- hook の呼び出し自身の trace と `actions`(上の「Compat steps」を参照)は、test result 自身にではなく、その hook 自身の fixture に付きます。
+  trace は `trace` という名前の attachment として、step 自身のものと同じ contentType で付きます。
+  `actions` は、上のブロックが説明したのと同じ仕組みで、その fixture 自身の child step タイムラインにマージされます。
+  hook には合流させる `sections`/`polls` がありません。
+  `ctx.section`/`ctx.poll` を呼ぶための `ctx` を持たないからです。
+  それでも trace から読み出された `actions` は、step のときと同じようにレンダリングされます。
+  `this.openPage()` に一度も触れなかった hook の呼び出しは、trace の attachment もタイムラインの entry もどちらも持ちません。
+  `ctx.page()` を一度も呼ばなかった step が「何も表示するものがない」のと同じです。
 - `page_events`(「Receipt」を参照)は、最大で 3 つの parameter として表に出ます: `console errors (observed)`、`page errors (observed)`、`failed requests (observed)` です。
   それぞれ、少なくとも 1 件記録された種類だけに現れます。
   こうすることで、すべての entry を全文運んでいる `receipt.json` という attachment を開かなくても、読み手は件数を見られます。

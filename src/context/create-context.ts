@@ -160,30 +160,55 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 //
 // `beginStep` now also carries a chunk title, and `endStep` is new (p3a-
 // trace-per-step task spec): the Playwright trace used to be one recording
-// for this whole ctx's lifetime; it is now one chunk per step, opened
-// lazily on that step's own first `ctx.page()` call and closed right after
-// that step's own execution finishes — before its receipt is built, so
-// `evidence.trace` can say whether that step's own chunk actually exists.
-// `pendingChunkTitle`/`chunkOpen` below are the bookkeeping that makes that
-// lazy-open-eager-close shape work without a step ever seeing it: `endStep`
-// is called once per step (run-scenario.ts, right after that step's own
-// `run`/glue call returns or throws, before `finishExecutedStep`), and
-// `dispose` calls the same `closeCurrentChunk` helper as a catch-all, which
-// is the *only* closing point `nuka do` ever reaches (it never calls
-// `beginStep`/`endStep` at all — one execution is one chunk, per this
-// task's spec item 4, titled from `CreateStepContextOptions.stepTitle`
-// rather than from any `beginStep` call). A `beginStep` call with no title
-// (run-scenario.ts's own hook boundaries) disables chunk-opening entirely
-// until the next titled call: hooks are deliberately kept out of this
-// task's scope (docs/spec.md's step-boundary evidence is about steps, not
-// Before/After/AfterStep), so `ctx.page()` during a hook still works, it
-// just produces no trace chunk of its own — the same "documented v1 limit"
-// this file already carries for a hook's own `observed`/`http.jsonl`
-// (this file's own header, m2b-compat-execution task spec, item 5). A step
-// that never calls `ctx.page()` never opens a chunk at all — `chunkOpen`
-// stays `false` end to end — so `endStep` has nothing to close and that
-// step's `evidence.trace` is correctly absent (this task's spec: "ブラウザ
-// に触れない step には chunk が無い").
+// for this whole ctx's lifetime; it is now one chunk per *trace-recorded
+// boundary*, opened lazily on that boundary's own first `ctx.page()` call
+// and closed right after that boundary's own execution finishes — before
+// its receipt/hook record is built, so `evidence.trace`/`ScenarioHookRecord.
+// trace` can say whether that boundary's own chunk actually exists.
+// `pendingChunkTitle`/`pendingChunkFileName`/`chunkOpen` below are the
+// bookkeeping that makes that lazy-open-eager-close shape work without a
+// step or hook ever seeing it: `endStep` is called once per boundary
+// (run-scenario.ts, right after that boundary's own step/hook call returns
+// or throws, before its own record is written), and `dispose` calls the
+// same `closeCurrentChunk` helper as a catch-all, which is the *only*
+// closing point `nuka do` ever reaches (it never calls `beginStep`/
+// `endStep` at all — one execution is one chunk, per this task's spec item
+// 4, titled from `CreateStepContextOptions.stepTitle` rather than from any
+// `beginStep` call).
+//
+// A `beginStep` call with no `title` disables chunk-opening entirely until
+// the next titled call — the general escape hatch a caller with nothing
+// worth tracing can use. Before p3d-hook-trace, run-scenario.ts's own
+// Before/After/AfterStep boundaries always took that path: hooks were kept
+// out of p3a-trace-per-step's own scope on purpose, so `ctx.page()` during a
+// hook still worked, it just produced no trace chunk of its own. p3d-
+// hook-trace closes that gap — a hook boundary now gets a real `title` (and
+// its own `chunkFileName`, below) for every individual Before/After/
+// AfterStep *invocation*, not once per phase, so each hook call that
+// actually touches the browser gets a trace/`actions` of its own, isolated
+// from its sibling hooks and from every step's own chunk. A hook boundary
+// that never calls `ctx.page()` still opens nothing, the same lazy rule a
+// step already follows (below) — `title`/`chunkFileName` being set is not
+// itself enough to open a chunk, only a first `ctx.page()` call is.
+//
+// `pendingChunkFileName` (p3d-hook-trace task spec) is the second half of
+// that same per-boundary state, alongside `pendingChunkTitle` — needed
+// because a step's own chunk always writes to `"trace.zip"` inside that
+// step's own receipt dir (a directory no other chunk ever shares), while
+// several hook invocations can share one scenario evidence dir (a scenario
+// can register more than one Before/After hook, and AfterStep runs once per
+// executed step), so `"trace.zip"` alone would let a later hook invocation
+// silently overwrite an earlier one's file. `beginStep`'s own `chunkFileName`
+// parameter defaults to `"trace.zip"` when omitted, so every step call site
+// (and `nuka do`, via `CreateStepContextOptions.stepTitle`) is unaffected;
+// only run-scenario.ts's own hook call sites ever pass a different name.
+//
+// A step (or hook boundary) that never calls `ctx.page()` never opens a
+// chunk at all — `chunkOpen` stays `false` end to end — so `endStep` has
+// nothing to close and that boundary's own `trace` field is correctly
+// absent (this task's spec: "ブラウザに触れない step には chunk が無い",
+// extended by p3d-hook-trace to "ブラウザに触れない hook には chunk を作ら
+// ない").
 
 export interface EvidenceResult {
   trace?: string;
@@ -283,23 +308,33 @@ export interface StepContextHandle {
    * spec; env-reads-and-mutates-doc task spec, item A; P0-page-events task
    * spec). Also closes whatever trace chunk the *previous* boundary had open
    * (this file's own header, p3a-trace-per-step task spec) and, when `title`
-   * is given, remembers it as the new boundary's own chunk title for the
-   * next `ctx.page()` call to open lazily. `title` is `undefined` for a
-   * hook boundary (run-scenario.ts's own Before/After/AfterStep calls),
-   * which disables chunk-opening for that boundary entirely — see this
-   * file's own header for why hooks are excluded. Never exposed on `ctx` —
-   * same executor-only rule as `dispose`. */
-  beginStep(dir: string, title?: string): Promise<void>;
-  /** Executor-only (p3a-trace-per-step task spec): closes the current step's
-   * own trace chunk, if one is open, writing it to this step's own
-   * directory (the `dir` its own `beginStep` call was given) *before* that
-   * step's receipt is built — the reason this exists as its own call rather
-   * than folding into the *next* `beginStep` (this file's own header: a
-   * receipt is built and written well before the next step's `beginStep`
-   * ever runs, so waiting for that call would mean `evidence.trace` could
-   * never truthfully be set on the receipt that chunk actually belongs to).
-   * A no-op when no chunk is open (no browser was ever launched this step,
-   * or this ctx has no browser handle at all). Never exposed on `ctx`. */
+   * is given, remembers it (and `chunkFileName`) as the new boundary's own
+   * chunk title/output file for the next `ctx.page()` call to open lazily.
+   * `title` is `undefined` for a boundary with nothing worth tracing, which
+   * disables chunk-opening for that boundary entirely — see this file's own
+   * header. Since p3d-hook-trace, run-scenario.ts's own Before/After/
+   * AfterStep boundaries pass a real `title` (and `chunkFileName`) for every
+   * individual hook invocation, the same as a step already does; only a
+   * caller that genuinely wants no chunk at all leaves `title` unset now.
+   * `chunkFileName` defaults to `"trace.zip"` when omitted (this file's own
+   * header) — a step call site never needs to pass one; a hook call site
+   * always does, since several hook invocations can share one scenario
+   * evidence dir. Never exposed on `ctx` — same executor-only rule as
+   * `dispose`. */
+  beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void>;
+  /** Executor-only (p3a-trace-per-step task spec, extended by p3d-hook-trace
+   * to hook boundaries too): closes the current boundary's own trace chunk,
+   * if one is open, writing it to the current boundary's own directory (the
+   * `dir` its own `beginStep` call was given, joined with `chunkFileName`)
+   * *before* that step's receipt (or that hook invocation's own record) is
+   * built — the reason this exists as its own call rather than folding into
+   * the *next* `beginStep` (this file's own header: a receipt/record is
+   * built and written well before the next boundary's `beginStep` ever
+   * runs, so waiting for that call would mean `trace` could never
+   * truthfully be set on the receipt/record that chunk actually belongs
+   * to). A no-op when no chunk is open (no browser was ever launched this
+   * boundary, or this ctx has no browser handle at all). Never exposed on
+   * `ctx`. */
   endStep(): Promise<void>;
 }
 
@@ -375,11 +410,20 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // `do`'s http.jsonl stays exactly where it always has.
   let httpLogDir = evidenceDir;
   // This boundary's own trace chunk title (p3a-trace-per-step task spec) —
-  // `undefined` means no chunk should open for this boundary at all (a hook
-  // boundary, or before any `stepTitle`/`beginStep` has ever set one).
-  // `ctx.page()` reads this lazily, on its own first call within a
-  // boundary; `beginStep` is the only thing that ever changes it.
+  // `undefined` means no chunk should open for this boundary at all (before
+  // any `stepTitle`/`beginStep` has ever set one, or a boundary that
+  // deliberately wants no chunk). `ctx.page()` reads this lazily, on its own
+  // first call within a boundary; `beginStep` is the only thing that ever
+  // changes it.
   let pendingChunkTitle: string | undefined = options.stepTitle;
+  // This boundary's own chunk output file name, relative to `httpLogDir`
+  // (p3d-hook-trace task spec) — always `"trace.zip"` until a hook boundary
+  // (run-scenario.ts) names its own, since several hook invocations can
+  // share one scenario evidence dir where a step's own chunk never shares
+  // its receipt dir with anything else (this file's own header). Only
+  // meaningful when `pendingChunkTitle !== undefined`; `beginStep` is the
+  // only thing that ever changes it.
+  let pendingChunkFileName = "trace.zip";
   // Whether a chunk is currently open for the *current* boundary — reset to
   // `false` by `closeCurrentChunk` (never set back to `false` anywhere
   // else), and only ever `true` between a successful `ctx.page()`-triggered
@@ -428,12 +472,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   //
   // Also flushes page-http-log.ts's own pending http.jsonl writes now (p3b-
   // page-network task spec) — whenever a browser exists at all, not only
-  // when `chunkOpen`: a hook boundary's own `ctx.page()` never opens a
-  // chunk (this file's own header, p3a-trace-per-step task spec) but can
-  // still have produced page-issued http.jsonl entries this boundary needs
-  // finished before anything downstream reads that file. Ordered before the
-  // chunk close below, though the order between the two does not itself
-  // matter — both are cheap, and neither depends on the other having run.
+  // when `chunkOpen`: a boundary with no `pendingChunkTitle` (or one that
+  // never called `ctx.page()`) never opens a chunk (this file's own header)
+  // but can still have produced page-issued http.jsonl entries this
+  // boundary needs finished before anything downstream reads that file.
+  // Ordered before the chunk close below, though the order between the two
+  // does not itself matter — both are cheap, and neither depends on the
+  // other having run.
   async function closeCurrentChunk(): Promise<void> {
     if (!browserHandle) {
       return;
@@ -443,7 +488,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       return;
     }
     chunkOpen = false;
-    await browserHandle.endStepChunk(path.join(httpLogDir, "trace.zip"));
+    await browserHandle.endStepChunk(path.join(httpLogDir, pendingChunkFileName));
   }
 
   const ctx: StepContext = {
@@ -491,10 +536,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         });
         // Opens this boundary's own chunk right at launch (this file's own
         // header: "起動した時点で「今の step」の chunk を開き始める") when a
-        // title is already pending — `undefined` here means a hook boundary
-        // (or, in principle, a caller with no `stepTitle` that also never
-        // calls `beginStep` before its first `ctx.page()`), which simply
-        // gets a browser with no chunk at all, on purpose.
+        // title is already pending — `undefined` here means a boundary with
+        // nothing worth tracing (a caller with no `stepTitle` that also
+        // never calls `beginStep` before its first `ctx.page()`), which
+        // simply gets a browser with no chunk at all, on purpose.
         if (pendingChunkTitle !== undefined) {
           await browserHandle.beginStepChunk(pendingChunkTitle);
           chunkOpen = true;
@@ -589,27 +634,28 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       browserStorageState = await browserHandle.collectStorageState();
       // Closes whatever chunk the *current* boundary still has open (this
       // file's own header) — the only closing point `nuka do` ever reaches
-      // (it calls neither `beginStep` nor `endStep`), and, for `nuka run`,
-      // a defense-in-depth no-op: every step's own chunk is already closed
-      // by its own `endStep()` call well before `dispose()` ever runs, and
-      // hook boundaries never open one at all (this file's own header). Must
-      // run before finalize() below for the same reason `collectStorageState`
-      // above does — `endStepChunk` needs a still-open context.
+      // (it calls neither `beginStep` nor `endStep`), and, for `nuka run`, a
+      // defense-in-depth no-op: every step's and hook's own chunk is already
+      // closed by its own `endStep()` call well before `dispose()` ever
+      // runs. Must run before finalize() below for the same reason
+      // `collectStorageState` above does — `endStepChunk` needs a
+      // still-open context.
       await closeCurrentChunk();
       evidence.screenshots = await browserHandle.finalize();
-      // Only claim trace.zip exists if `closeCurrentChunk` actually got to
-      // write it: `endStepChunk` swallows its own failure (the browser/
+      // Only claim the chunk file exists if `closeCurrentChunk` actually got
+      // to write it: `endStepChunk` swallows its own failure (the browser/
       // context can be gone by the time it runs), so this must be checked
       // the same way http.jsonl is below rather than assumed (docs/spec.md
-      // "Receipts": evidence lists only files that exist). `httpLogDir`,
-      // not `evidenceDir`: the same directory `closeCurrentChunk` just
-      // wrote to, which for `nuka run`'s own scenario-level `dispose()` is
-      // back to `evidenceDir` anyway (the last `beginStep` before teardown
-      // always repoints it there) — using the same variable here keeps that
-      // equality a fact this code relies on by construction, not by
-      // coincidence of call order.
-      if (existsSync(path.join(httpLogDir, "trace.zip"))) {
-        evidence.trace = "trace.zip";
+      // "Receipts": evidence lists only files that exist). `httpLogDir`/
+      // `pendingChunkFileName`, not `evidenceDir`/`"trace.zip"`: the same
+      // directory and file name `closeCurrentChunk` just wrote to, which for
+      // `nuka run`'s own scenario-level `dispose()` this field is not
+      // actually read from (run-scenario.ts builds `ScenarioRecord.evidence`
+      // from `screenshots` alone) — kept accurate anyway, since `nuka do`'s
+      // own receipt does read it, and `pendingChunkFileName` stays
+      // `"trace.zip"` for `nuka do` regardless (it never calls `beginStep`).
+      if (existsSync(path.join(httpLogDir, pendingChunkFileName))) {
+        evidence.trace = pendingChunkFileName;
       }
     }
 
@@ -698,15 +744,17 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return httpOmitted.snapshot();
   }
 
-  async function beginStep(dir: string, title?: string): Promise<void> {
+  async function beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void> {
     // Closes the *previous* boundary's own chunk before this boundary's own
-    // `httpLogDir`/`pendingChunkTitle` overwrite the state that closing
-    // needs (this file's own header) — a no-op in normal operation, since
-    // `endStep()` already closed a step's own chunk before this ever runs;
-    // real insurance only for a hook boundary that somehow left one open.
+    // `httpLogDir`/`pendingChunkTitle`/`pendingChunkFileName` overwrite the
+    // state that closing needs (this file's own header) — a no-op in normal
+    // operation, since `endStep()` already closed the previous boundary's
+    // own chunk before this ever runs; real insurance only for a boundary
+    // that somehow left one open.
     await closeCurrentChunk();
     httpLogDir = dir;
     pendingChunkTitle = title;
+    pendingChunkFileName = chunkFileName ?? "trace.zip";
     observed.reset();
     used.reset();
     sections.reset();
