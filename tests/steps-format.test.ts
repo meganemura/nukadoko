@@ -136,4 +136,32 @@ describe("formatVocabulary", () => {
   it("returns an empty string for an empty vocabulary", () => {
     expect(formatVocabulary([], 80)).toBe("");
   });
+
+  it("appends a 'browser' marker to the heading when needs_browser is true (p4b-steps-needs task spec)", () => {
+    const summaries: StepSummary[] = [
+      {
+        name: "opens-a-tab",
+        kind: "typed",
+        patterns: ["p"],
+        mutates: true,
+        needs: ["context"],
+        needs_browser: true,
+      },
+    ];
+    expect(formatVocabulary(summaries, 80)).toBe("opens-a-tab  typed  mutates  browser\n  p\n");
+  });
+
+  it("adds no marker, and never lists needs, when needs_browser is false", () => {
+    const summaries: StepSummary[] = [
+      {
+        name: "api-only",
+        kind: "typed",
+        patterns: ["p"],
+        mutates: true,
+        needs: ["request"],
+        needs_browser: false,
+      },
+    ];
+    expect(formatVocabulary(summaries, 80)).toBe("api-only  typed  mutates\n  p\n");
+  });
 });

@@ -413,6 +413,13 @@ default value, or a rest property refuses execution before it begins, the
 same "never began" outcome an undefined step already gets, never a step
 failure.
 
+That reading is exposed outside `check` too: `nuka steps --json` reports
+each typed step's own destructured names as `needs` (alphabetized, `[]`
+when the step needs none) and `needs_browser` (whether `page` or `context`
+is one of them). An agent picking a scenario can therefore see which ones
+never open a browser at all before running any of them; a browser-using
+scenario costs minutes and a real target that an API-only one does not.
+
 ### Chaining steps
 
 Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
@@ -1800,8 +1807,10 @@ nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               every key; --use fills its `from` keys
                               from an earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates, and
-                              where each chained args key comes from
+                              name, patterns, description, mutates, which
+                              fixtures each step needs (needs,
+                              needs_browser), and where each chained args
+                              key comes from
 nuka describe <step>          full contract, schemas as JSON Schema, plus
                               rationale when the step declared one
 nuka scaffold <name>          typed step template that fails until implemented

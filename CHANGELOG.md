@@ -69,6 +69,19 @@ just until 0.1.
   because it answers a different question than http.jsonl does, and the
   two numbers were never meant to match.
 
+- **`nuka steps --json` now reports each typed step's own fixture needs.**
+  Two new fields per step: `needs` (the names its `run()` destructures,
+  alphabetized) and `needs_browser` (whether `page` or `context` is one of
+  them). Both were already readable, `check` parses the same destructuring
+  to catch an unknown fixture name before anything runs; this just exposes
+  that same static reading outside `check`, so an agent can tell, before
+  running anything, which scenarios never open a browser at all. `needs` is
+  never omitted for a typed step, even when it is `[]`, so "this step needs
+  nothing" reads differently from a compat entry, which has neither field
+  at all (no `run()` exists to read). The non-JSON listing stays terse: it
+  marks a browser-needing step with a single word rather than repeating the
+  full `needs` list, which stays a `--json` concern.
+
 ### Changed
 
 - **`evidence.trace` is a step's own trace now, not the whole scenario's.**

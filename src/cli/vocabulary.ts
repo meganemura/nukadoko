@@ -8,6 +8,7 @@ import {
 } from "../discover/discover-steps.js";
 import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
 import { fromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
+import { stepNeeds } from "../step/step-needs.js";
 
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
 // load the project's config, then discover its vocabulary. Kept out of
@@ -152,6 +153,25 @@ export interface StepSummary {
   readonly patterns: readonly string[];
   readonly description?: string;
   readonly mutates?: boolean;
+  /** The fixture names this step's own `run()` destructures, alphabetized
+   * (p4b-steps-needs task spec, `src/step/step-needs.ts`'s `stepNeeds`) —
+   * present and possibly `[]` for a typed entry (a step that needs no
+   * fixtures still gets the key, so "no needs" reads differently from "not
+   * a typed entry", which omits it, the same convention `mutates` already
+   * follows), absent entirely for a compat entry (no `run()` exists to
+   * read). Not repeated in `formatVocabulary`'s text rendering below (this
+   * task's spec: the full list is a `--json` concern, the text output only
+   * marks `needsBrowser`). */
+  readonly needs?: readonly string[];
+  /** Whether this step's own fixture needs open a browser (`page` or
+   * `context` among `needs`, `stepNeeds`'s own doc comment explains why
+   * that check will need to widen once a user-defined fixture exists) —
+   * lets an agent see, before running anything, which scenarios never open
+   * one at all. Same presence rule as `needs`: present for every typed
+   * entry, absent for a compat one. JSON key is `needs_browser`, not
+   * `needsBrowser` (this project's own snake_case convention for a
+   * `--json` field, matching `receipt.json`'s `waited_ms`/`http_reads`). */
+  readonly needs_browser?: boolean;
   /** Where each declared args key not left to a pattern capture comes from
    * (m6a-from-core task spec, item 7) — key → `{ step, key }`, the upstream
    * step's own name and the `returns` key read from it, or (m7a-from-
@@ -173,12 +193,15 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames): StepSum
       patterns: [entry.compat.patternSource],
     };
   }
+  const { needs, needsBrowser } = stepNeeds(entry.step);
   return {
     name: entry.name,
     kind: "typed",
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
+    needs,
+    needs_browser: needsBrowser,
     from: fromSummary(entry.step.from, stepNames),
   };
 }
@@ -214,7 +237,14 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
     return `${s.name}  compat`;
   }
   const mutatesLabel = s.mutates ? "mutates" : "read-only";
-  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}`];
+  // `needs` itself (the full destructured-name list) stays out of this text
+  // rendering on purpose (this task's spec: "needs の全列挙はテキスト側に
+  // 出さない", `--json` is where a reader gets the list); `needs_browser`
+  // gets a single word, appended only when true, the same "mark the fact,
+  // say nothing when there's nothing to say" choice `compat` above already
+  // makes for a step with no declaration at all.
+  const browserLabel = s.needs_browser ? "  browser" : "";
+  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}`];
   const patterns = s.patterns.length > 0 ? s.patterns : ["(no pattern)"];
   for (const pattern of patterns) {
     lines.push(...wrapIndented(pattern, width));

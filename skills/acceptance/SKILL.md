@@ -45,9 +45,11 @@ just produces a scenario that proves the wrong thing.
 ## Reading the vocabulary
 
 - `nuka steps --json` — every step, typed and compat: name, patterns,
-  description, mutates, and where each chained args key comes from. That
-  last one is how to tell, without opening a file, which steps have to run
-  before which.
+  description, mutates, which fixtures it needs (`needs`, `needs_browser`),
+  and where each chained args key comes from. `needs_browser` is how to
+  tell, without opening a file, which steps never open a browser at all;
+  the chained-args field is how to tell which steps have to run before
+  which.
 - `nuka describe <step>` — its full contract: args/returns as JSON Schema.
 - Prefer what already exists. If an acceptance condition can be expressed
   with an existing step, use it — do not scaffold a new one just because a

@@ -289,6 +289,11 @@ fixture は名指された時点で必ず存在するので、デフォルト値
 未知の fixture 名、デフォルト値、rest プロパティのいずれも、実行が始まる前に実行そのものを拒否します。
 未定義の step がすでに得ているのと同じ「開始しなかった」という結末であり、step の失敗では決してありません。
 
+この読み取りは `check` の外にも露出しています。
+`nuka steps --json` は、各 typed step 自身が分割代入した名前を `needs`(アルファベット順。何も要らない step では `[]`)として、そして `page` または `context` がそこに含まれるかどうかを `needs_browser` として報告します。
+agent は scenario を選ぶとき、何ひとつ実行する前に、どれがブラウザを一切開かないかを見て取れます。
+ブラウザを使う scenario は、API だけの scenario にはない分単位の時間と実物のターゲットを費やすからです。
+
 ### step の連鎖
 
 CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` を与えて scenario に束ねると、その step が単体では直面しなかった問いが立ち上がります。
@@ -1242,8 +1247,10 @@ nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               every key; --use fills its `from` keys
                               from an earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates, and
-                              where each chained args key comes from
+                              name, patterns, description, mutates, which
+                              fixtures each step needs (needs,
+                              needs_browser), and where each chained args
+                              key comes from
 nuka describe <step>          full contract, schemas as JSON Schema, plus
                               rationale when the step declared one
 nuka scaffold <name>          typed step template that fails until implemented
