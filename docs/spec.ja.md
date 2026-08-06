@@ -319,6 +319,18 @@ agent は scenario を選ぶとき、何ひとつ実行する前に、どれが�
 この呼び出し自身のトップレベルは、steps のベタな配列ではなく `{ steps, import_failures }` です。
 `import_failures`(`{ file, message }`)は import に失敗したあらゆる step ファイルを名指しし、常に存在し、何も失敗しなければ `[]` です(下の「報告は寛容に、実行は速く失敗する」を参照)。
 
+その中でただ 1 つ、移行前の形である `run(ctx, args)` の裸の、分割代入されていない第一引数については、同じ呼び出しが `needs_inferred` も報告します。
+これはその step の fixture 要求についての字句上の推測であり、`run` 自身のソーステキストをその引数のメンバアクセス(`ctx.page`)について走査し、既知の fixture 名まで絞り込んで得られます。
+これは独立したフィールドであり、`needs` に混ぜることは決してありません。
+`needs` は分割代入パターンから読み取った、executor が step の実行前に実際に構築する対象であるのに対し、`needs_inferred` はまだ実行できない step についての推測であり、両者を一つにまとめてしまうと、この読み取りが裏付けられないものまで断定したことになります。
+`needs_browser` はこれと一緒には推測されません。
+上で `needs: null` がすでに得ているのと同じ不在です。
+この走査は意図的に網羅的ではありません。
+エイリアス(`const c = ctx; c.page()`)は一切追わないため、読み手はこれを完成した一覧ではなく、あくまで手掛かりの一覧として扱う必要があります。
+これが現れるのは、throw が走査の手掛かりとなる識別子を運んでいたときだけです。
+デフォルト値や rest プロパティによる throw は走査できる手掛かりを何も残さないため、`needs_inferred` はそれらでは単に省かれます。
+これは、そもそもエラーが無く推測すべきものもない step でこのフィールドが省かれるのとまったく同じです。
+
 ローカル変数が fixture と同じ名前を持つと、その fixture を覆います。
 この間違いのうち、実行前に捕まる形はひとつだけです。
 `run` 自身の関数直下でその名前を再宣言すると、分割代入されたパラメータそのものと衝突し、esbuild がファイルの transform を丸ごと拒否します(`The symbol "page" has already been declared`)。
@@ -465,6 +477,8 @@ setup と teardown はそれぞれ自分自身のタイムアウト予算を持�
 その step 自身の `needs` 配列が名指すのは fixture の名前だけで、`page` を直接には一度も名指していなくてもです。
 自分自身の `needs` が `null` として返ってきた唯一の step については、閉じる対象が何もありません(理由は「Context API」を参照)。
 そのエントリには `needs_browser` もありません。
+それでも `needs_inferred`(「Context API」を参照)は持つことがあります。
+ただしこのフィールドは契約ではなく字句上の推測であり、`needs`/`needs_browser` のようには fixture グラフを閉じません。
 
 ### step の連鎖
 
@@ -747,13 +761,27 @@ import { Given, When, Then } from "nukadoko/compat";
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>]
+nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--quiet]
 ```
 
 `@cucumber/gherkin` はファイルを pickle にコンパイルします(Background がマージされ、Scenario Outline が展開され、table が結び付いた、フラットで自己完結な scenario)。
 nukadoko は各 pickle の step をコミットされた pattern と照合し、step を順番に実行します。
 step ごとに 1 つの receipt。
 pickle ごとに 1 つの scenario record(feature のパス、scenario 名、順序付けられた receipt id、step ごとの status)。
+
+各 run は読み手の違う 2 つのチャネルに書き込みます。
+stdout は NDJSON 専用のままで、1 行に scenario record が 1 つ載るだけであり、スクリプトが読むためのものであって、それ以外は一切書き込まれません。
+run を見ている人間向けのものはすべて代わりに stderr に載ります。
+各 pickle が始まる直前の境界の行、step が終わるごとの 1 行、run が終わった時点でこの run が実際に書き込んだ場所、そして 1 行のサマリです。
+`--quiet` は step ごとと scenario ごとの、この 2 種類の進捗行だけを止めます。
+書き込み先の行とサマリはどちらにしても出ます。
+出力先を告げることは、より静かな端末を目的としたフラグのために抑制する価値があるものでは決してないからです。
+
+書き込み先の行は、何も設定していないときにこそ効きます。
+`allure` と `messages` の出力はすでにゼロ設定で動いており、それぞれの config キーは書き込み先を移動させるだけです。
+config ファイルに載っているキーは、設定して初めて有効になるものだと読まれがちです。
+その誤読を、実際に書き込んだ場所を毎回すべて出力することが取り除きます。
+この行のおかげで、プロジェクトは最初から出力を持っていたことに気付かないまま出力先だけを動かしてしまう、ということがなくなります。
 
 scenario record 自身の `browser` フィールド(`{ "type": "firefox", "version": "133.0" }`)には、この run が実際に起動したエンジンとバージョンが入ります。
 これは Playwright が返す実際の `Browser` オブジェクトから読んだ値であり、`config.browserType` から読んだ値ではありません。
@@ -1489,8 +1517,13 @@ npm パッケージは `nukadoko` で、それがインストールするただ 
 
 ```
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results.
-                              :line runs one scenario, for iteration only —
-                              a partial run can never be accepted
+                              :line runs one scenario, for iteration only — a
+                              partial run can never be accepted. stderr gets
+                              per-step/per-scenario progress as it runs, then
+                              every location this run wrote and a summary
+                              line; --quiet drops the progress lines only.
+                              stdout stays NDJSON, one record per scenario,
+                              always
 nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               execute one typed step; receipt to stdout.
                               --args is required unless --use supplies

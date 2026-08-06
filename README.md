@@ -556,6 +556,9 @@ anything runs. Put `nuka run` on the gate that actually has to be true,
 merge or deploy, since that is the one that executes and leaves a receipt
 trail behind.
 
+`nuka run` also prints its own progress and where it wrote to stderr as it
+goes (`--quiet` quiets the progress only); stdout stays NDJSON either way.
+
 **A retry that replaces the record is out of scope permanently, not "not
 yet".** A green scenario is no evidence that its waits are placed
 correctly: every wait a scenario needed could have been supplied by

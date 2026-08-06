@@ -501,6 +501,9 @@ access to a document you need, say so rather than assuming.
 `nuka run` は、実際に真でなければならないゲート、すなわち merge や deploy の側に置いてください。
 実行して receipt の証跡を残すのはこちらだからです。
 
+`nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
+stdout はどちらの場合も NDJSON のままです。
+
 **記録を置き換える retry は恒久的にスコープ外であり、「いまはまだ」ではありません。**
 green な scenario は、その待ちが正しい場所に置かれている証拠には一切なりません。
 scenario が必要としたあらゆる待ちは、もっと下流のどこかに偶然置かれていても供給され得たものであり、それらを一切通らない経路だけが、待ちが本来どこに属するかを示せます([Design](#design) を参照)。

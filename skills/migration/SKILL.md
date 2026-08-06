@@ -113,6 +113,16 @@ suite in one pass. How to rewrite any given piece of glue is a judgment
 call for the moment you're making it; nukadoko doesn't prescribe one
 recipe, and this skill won't either.
 
+Drafting a typed step's `run` sometimes lands on the un-migrated
+`run(ctx, args)` shape before it's fully destructured. `nuka steps --json`
+already names which fixtures that draft touches, as `needs_inferred`: a
+lexical guess read from `ctx`'s own member accesses, alongside `needs: null`
+and a `needs_error` explaining why the real contract can't be read yet. It
+saves rereading the whole body by hand to know what to add to the
+destructured signature, but it is a guess, not the contract: it misses an
+alias (`const c = ctx`) and never names `needs_browser`, so finish
+destructuring rather than treating it as done.
+
 ### What a promoted step looks like
 
 One example. Before, compat glue:

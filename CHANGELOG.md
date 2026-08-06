@@ -31,6 +31,15 @@ just until 0.1.
   `needs_error` string beside it, instead of throwing the step, and every
   other step, out of `nuka steps` entirely; human output marks the entry
   `needs unreadable` and prints why.
+- **That same unreadable `run()` also gets `needs_inferred` for one shape:
+  a bare, un-destructured first argument (`run(ctx, args)`, the shape 0.1.0
+  replaced with a fixture bag).** A lexical guess at the step's fixture
+  needs, read from that argument's own member accesses and filtered to
+  known fixture names; a field of its own, never merged into `needs`, and
+  never producing `needs_browser`. It misses an alias (`const c = ctx`), so
+  it is a starting inventory, not a finished one, and it is simply omitted
+  for the other unreadable shapes (a default value, a rest property),
+  which carry no identifier to scan by in the first place.
 - **`nuka check`'s human output groups a `step-file-import-failed` message
   shared by more than one file.** The message prints once, followed by the
   sorted file list, instead of once per file; a single broken file still
@@ -39,6 +48,13 @@ just until 0.1.
   could not be imported.** Its own counts and findings were already
   shrinking around a broken file with nothing here saying so; this names
   how many files went unseen and points at `nuka check` for detail.
+- **`nuka run` no longer runs silent.** stderr now carries a boundary line
+  before each scenario, one line per step as it finishes, every path the
+  run actually wrote once it ends, and a one-line summary; a new `--quiet`
+  flag drops the two progress lines only, since naming where output landed
+  is never worth suppressing for a flag whose whole point is a quieter
+  terminal, not a silent one. stdout is unchanged: still NDJSON only, one
+  scenario record per line.
 
 ## 0.1.0 — 2026-08-06
 

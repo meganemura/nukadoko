@@ -466,6 +466,24 @@ not take the rest of the listing down with it. The call's own top level is
 present, `[]` when nothing did (see "Tolerant reporting, fail-fast
 execution" below).
 
+For the one un-migrated shape among those, `run(ctx, args)`'s own bare,
+un-destructured first argument, the same call also reports `needs_inferred`: a
+lexical guess at that step's fixture needs, read by scanning `run`'s own
+source text for that argument's member accesses (`ctx.page`) and filtered
+down to known fixture names. It is a field of its own, never merged into
+`needs`: `needs` is read from a destructuring pattern and is what the
+executor actually builds before a step runs, while `needs_inferred` is a
+guess about a step that cannot run yet, and folding the two together would
+state something as certain that this reading cannot back. `needs_browser` is
+never inferred alongside it, the same absence `needs: null` already gets
+above. The scan is not exhaustive on purpose: it never follows an alias
+(`const c = ctx; c.page()` goes unseen), so a reader must take it as a
+starting inventory, not a finished one. It is present only when the throw
+carried an identifier to scan by at all; a default-value or rest-property
+throw leaves nothing to key a scan on, so `needs_inferred` is simply omitted
+for those, exactly as it is for a step with no error to infer from in the
+first place.
+
 A local variable that happens to share a name with a fixture shadows it,
 and only one shape of that mistake is caught before anything runs:
 declared directly in `run`'s own top-level body, it collides with the
@@ -671,7 +689,9 @@ destructures a fixture which itself reaches `page` still reads
 `needs_browser: true`, even though the step's own `needs` array names only
 the fixture, never `page` directly. There is nothing to close over for the
 one step whose own `needs` came back `null` (see "Context API" for why);
-that entry has no `needs_browser` either.
+that entry has no `needs_browser` either. It may still carry `needs_inferred`
+(see "Context API"), but that field is a lexical guess, not a contract, and
+is never closed over the fixture graph the way `needs`/`needs_browser` are.
 
 ### Chaining steps
 
@@ -1062,7 +1082,7 @@ import { Given, When, Then } from "nukadoko/compat";
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>]
+nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--quiet]
 ```
 
 `@cucumber/gherkin` compiles the file into pickles: flat, self-contained
@@ -1071,6 +1091,24 @@ attached. nukadoko matches each pickle step against the committed patterns and
 executes the steps in order. One receipt per step; one scenario record
 (feature path, scenario name, ordered receipt ids, per-step status) per
 pickle.
+
+Every run writes to two channels for different readers. stdout stays NDJSON
+only, one scenario record per line, meant for a script to parse, and nothing
+else is ever written there. Everything meant for a person watching the run
+lands on stderr instead: a boundary line before each pickle begins, one line
+per step as it finishes, the paths this run actually wrote once it ends, and a
+one-line summary. `--quiet` drops the two per-step and per-scenario progress
+lines; the paths and the summary print either way, since naming where output
+landed is never worth suppressing for a flag whose point is a quieter
+terminal, not a silent one.
+
+The paths line matters even when nothing was configured: `allure` and
+`messages` output already exist with zero configuration, and their config
+keys only relocate where each writes. A key sitting in a config file reads as
+something switched on, not something already running by default, and that
+misreading is exactly what printing every actual location, every time,
+removes: a project can move its output without ever discovering it already
+had some.
 
 A scenario record's own `browser` field (`{ "type": "firefox", "version":
 "133.0" }`) names the engine and version this particular run actually
@@ -2177,8 +2215,13 @@ The npm package is `nukadoko`; the one command it installs is `nuka`.
 
 ```
 nuka run <feature[:line]>     execute scenarios; receipts + allure-results.
-                              :line runs one scenario, for iteration only —
-                              a partial run can never be accepted
+                              :line runs one scenario, for iteration only — a
+                              partial run can never be accepted. stderr gets
+                              per-step/per-scenario progress as it runs, then
+                              every location this run wrote and a summary
+                              line; --quiet drops the progress lines only.
+                              stdout stays NDJSON, one record per scenario,
+                              always
 nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               execute one typed step; receipt to stdout.
                               --args is required unless --use supplies

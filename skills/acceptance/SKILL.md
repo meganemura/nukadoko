@@ -52,11 +52,15 @@ just produces a scenario that proves the wrong thing.
   to tell which steps have to run before which. `needs` is `null`, with a
   `needs_error` string beside it, for the one step whose own fixture needs
   this call could not read; treat that entry's contract as unknown rather
-  than guessing at it. `import_failures` (`{ file, message }`) names any
-  step file that failed to import, always present, `[]` when nothing did.
-  The command exits 1 whenever either is non-empty, but still prints
-  everything it could read, so a broken step file elsewhere never hides
-  the rest of the vocabulary.
+  than guessing at it. That same entry may also carry `needs_inferred`: a
+  lexical guess at its fixture needs, read from an un-migrated
+  `run(ctx, args)`'s own member accesses. Treat it as a starting inventory
+  only, useful while promoting the step, since it can miss an alias and
+  never states `needs_browser`. `import_failures` (`{ file, message }`)
+  names any step file that failed to import, always present, `[]` when
+  nothing did. The command exits 1 whenever either is non-empty, but still
+  prints everything it could read, so a broken step file elsewhere never
+  hides the rest of the vocabulary.
 - `nuka describe <step>` — its full contract: args/returns as JSON Schema,
   plus the same `import_failures` beside it.
 - Prefer what already exists. If an acceptance condition can be expressed
@@ -342,7 +346,12 @@ there outright, regardless of what `--env` was given.
 1. Commit. A dirty working tree can never be accepted, so get everything
    the run needs — including any step files from "When an operation is
    missing" above — into a commit first.
-2. `nuka run <feature>` — repeat until every scenario is green. When a
+2. `nuka run <feature>` — repeat until every scenario is green. stderr
+   prints a boundary line per scenario, one line per step as it finishes,
+   and, once the run ends, every path it actually wrote plus a summary
+   line; pass `--quiet` to drop the two progress lines if the terminal
+   gets noisy (the paths and the summary still print). stdout stays
+   NDJSON, one scenario record per line, unaffected either way. When a
    scenario fails, diagnose it before repeating the whole run (see "When a
    run fails") rather than treating a full re-run as the default first
    move. `<feature>:<line>` is fine for narrowing this while iterating,
