@@ -121,6 +121,17 @@ is a list you can work through, not a hunt.
   `ITestCaseHookParameter`, the audit's own examples of this category, are
   now exported, aliases for `WorldConstructorParams`/`HookParameter`, and
   typecheck the same as any other compat name.)
+
+The same split runs the other way too. Glue can stay completely type-valid
+and still be rejected by `nuka check`: a step that still takes its first
+argument under the old name, and only calls members off that object,
+typechecks cleanly under `tsc`. What actually fails is narrower: only the
+shape that calls, as a function, a member that is now a value, and a step
+that never touches the browser hits that shape less often, so the side that
+looks least urgent to migrate is the same side `tsc` cannot see either. The
+completion condition for a migration is `nuka check` reporting green, not
+`tsc`.
+
 - **CommonJS glue**: nukadoko is ESM-only. Extension decides how discovery
   treats a file: `.ts`, `.mts`, `.js`, and `.mjs` are all walked and
   imported now (a suite written entirely in plain `.js`, not just `.ts`, is

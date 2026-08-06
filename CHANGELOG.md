@@ -5,7 +5,62 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Breaking
+
+- **`nuka steps --json`'s top level changed from a bare array to `{ steps,
+  import_failures }`.** Anything reading the old bare array needs to read
+  `.steps` now; `import_failures` (`{ file, message }`) is new alongside
+  it, always present, `[]` when nothing failed.
+
+### Added
+
+- **`nuka steps` and `nuka describe` now read the vocabulary per file,
+  tolerant of a broken glue file.** One step file that failed to import
+  used to take the whole call down with it, which meant the one moment a
+  suite mid-migration most needed to read its own vocabulary was exactly
+  when these two commands went blind. Now the rest of what discovery could
+  read still comes through: the broken file is named on stderr and in
+  `import_failures`, and the command still exits 1, since output is not
+  withheld but "this succeeded" is not claimed either. `nuka run`, `nuka
+  do`, and `nuka init` are unchanged: they are about to execute, or set up
+  a project that is about to, so they stay fail-fast on purpose.
+- **A typed step's `run()` that this same static reading cannot parse no
+  longer empties the whole listing.** `needs` is `null`, with a
+  `needs_error` string beside it, instead of throwing the step, and every
+  other step, out of `nuka steps` entirely; human output marks the entry
+  `needs unreadable` and prints why.
+- **`nuka check`'s human output groups a `step-file-import-failed` message
+  shared by more than one file.** The message prints once, followed by the
+  sorted file list, instead of once per file; a single broken file still
+  renders exactly as before, and `--json` is unchanged.
+- **`nuka tend` adds one `import-failures-unseen` note when a step file
+  could not be imported.** Its own counts and findings were already
+  shrinking around a broken file with nothing here saying so; this names
+  how many files went unseen and points at `nuka check` for detail.
+
 ## 0.1.0 — 2026-08-06
+
+### Breaking
+
+- **A typed step's `run` now takes a fixture bag, not `ctx`.** Collect what a
+  step read off `ctx` into a destructured first argument (`run({ page,
+  section }, args)`), and drop the `await` and call parentheses on `page`/
+  `request`: they are values now, not functions. No codemod ships for this.
+  See "A typed step's `run` takes a fixture bag now, not `ctx`" under Changed
+  below.
+- **`evidence.trace` moved off the scenario record onto each step's own
+  receipt.** Anything reading the scenario record's `evidence.trace` needs
+  to read the receipt of the step that opened a page instead; there is no
+  longer a single trace spanning the whole scenario. See "`evidence.trace`
+  is a step's own trace now, not the whole scenario's" under Changed below.
+- **A sign-off record's filename now carries its condition.** The old
+  `<feature-basename>.<date>-<sha>.md` is
+  `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` now; anything
+  reading the old filename shape needs to read the new one. See "A sign-off
+  is now scoped to a condition, not just a feature and a commit" under
+  Changed below.
 
 ### Added
 

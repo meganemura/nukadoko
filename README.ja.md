@@ -78,6 +78,10 @@ agent 自身の探索ループが最初に呼ぶのと同じ呼び出しです�
 }
 ```
 
+この 1 件は `steps` の下にあります。
+`{ steps, import_failures }` の一方のフィールドです。
+`import_failures` は、この呼び出しが import できなかった step ファイルを名指しし、常に存在し、何も失敗しなければ空です。
+
 何かが実行される前に、`nuka check` があらゆる feature ファイルとあらゆる step ファイルを読み、何が間違っているかを報告します。
 未定義の step はその中でも浅いケースです: どの step 定義もその行のテキストに一致せず、run がその行にたどり着くよりも前に、`check` がその行そのものを名指しします。
 
@@ -120,7 +124,7 @@ scenario なしで 1 step だけを単独で実行すると、実際にその後
 
 `check` は安価な静的ゲートであり、`run` は receipt の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
-その accept の記録は Markdown ファイルで、`<feature-basename>.<date>-<sha>.md` という名前で feature の隣に書かれます: feature の全文、scenario の記録、そして各 step の receipt(evidence は取り除かれたもの)です。
+その accept の記録は Markdown ファイルで、`<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で feature の隣に書かれます: feature の全文、scenario の記録、そして各 step の receipt(evidence は取り除かれたもの)です。
 
 ## Why this exists now
 
@@ -312,6 +316,9 @@ npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a
 npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
+
+`allurerc.mjs` をプロジェクトの root に置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、7 個の `error.kind` のどれにも分類されません。
+[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を参照してください。
 
 どれにも `--output` を渡してください。
 Allure はこれを省くとカレントディレクトリの `allure-report/` を既定にし、`watch` もそこへ書き込みます。

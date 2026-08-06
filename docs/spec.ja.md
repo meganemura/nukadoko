@@ -312,6 +312,27 @@ fixture は名指された時点で必ず存在するので、デフォルト値
 `nuka steps --json` は、各 typed step 自身が分割代入した名前を `needs`(アルファベット順。何も要らない step では `[]`)として、そして `page` または `context` がそこに含まれるかどうかを `needs_browser` として報告します。
 agent は scenario を選ぶとき、何ひとつ実行する前に、どれがブラウザを一切開かないかを見て取れます。
 ブラウザを使う scenario は、API だけの scenario にはない分単位の時間と実物のターゲットを費やすからです。
+`needs` は、この同じ静的な読み取りが解析できない唯一の `run()`(デフォルト値、rest プロパティ、分割代入パターンがあるべき場所にただの識別子がある場合)については、`[]` ではなく `null` になります。
+そのエントリの `needs_error` が理由を運び、`needs_browser` もそれと一緒に存在しません。
+このファイルが導けないブラウザ要否の判定を、あえて主張しないからです。
+その step 自身の name/patterns/description はそれでも届きます: 1 つの読めない `run()` が、残りの一覧全体を道連れにすることはありません。
+この呼び出し自身のトップレベルは、steps のベタな配列ではなく `{ steps, import_failures }` です。
+`import_failures`(`{ file, message }`)は import に失敗したあらゆる step ファイルを名指しし、常に存在し、何も失敗しなければ `[]` です(下の「報告は寛容に、実行は速く失敗する」を参照)。
+
+ローカル変数が fixture と同じ名前を持つと、その fixture を覆います。
+この間違いのうち、実行前に捕まる形はひとつだけです。
+`run` 自身の関数直下でその名前を再宣言すると、分割代入されたパラメータそのものと衝突し、esbuild がファイルの transform を丸ごと拒否します(`The symbol "page" has already been declared`)。
+代わりにネストしたブロック(`if`、ループ、コールバック)の中で再宣言すると、同じ衝突は何も言わずに読み込まれます。
+`tsc` から見ればそれぞれの型で単独に整合するふつうのローカルな束縛でしかなく、指摘する材料がありません。
+`check` も `run` の第一引数の分割代入パターンしか解析せず、その裏にある本体は決して読まないので、そこにも読むものがありません。
+表に出るのは、実行が覆われた名前へたどり着いた瞬間だけで、しかもその瞬間に確実に落ちるとは限りません。
+Playwright は `click`/`fill`/`hover`/`screenshot` のようなメソッド名を `Page` と `Locator` の間で意図的にミラーしているため、`Locator` に覆われた `page` は本物に対して呼ぶはずだったのと同じ呼び出しに答え続けてしまい、例外を投げる代わりに黙って別の要素を操作しかねません。
+fixture を分割代入パターン自身のエイリアス構文で受け取れば、この衝突はそもそも起きません。
+`run({ page: pwPage, section }, args)` なら、もう衝突する相手が残っていないので、ネストしたスコープの中で `page` を自由に何にでも束縛できます。
+これは契約を何も変えません。
+`fixtureParameterNames` はコロンの左側の名前を読むので、`{ page: pwPage, section }` も `{ page, section }` も同じ `["page", "section"]` として読まれ、`needs`、`needs_browser`、fixture の解決はすべてこの同じ一覧から導かれます。
+nukadoko はこの覆いそのものを今のところ検出しません。
+上の記述を、検出しているという主張として読まないでください。
 
 ### Fixtures
 
@@ -442,6 +463,8 @@ setup と teardown はそれぞれ自分自身のタイムアウト予算を持�
 `nuka steps --json` の `needs`/`needs_browser`(「Context API」を参照)は、実行と同じやり方で fixture グラフを閉じます。
 `page` に到達する fixture だけを分割代入した step も、`needs_browser: true` と読めます。
 その step 自身の `needs` 配列が名指すのは fixture の名前だけで、`page` を直接には一度も名指していなくてもです。
+自分自身の `needs` が `null` として返ってきた唯一の step については、閉じる対象が何もありません(理由は「Context API」を参照)。
+そのエントリには `needs_browser` もありません。
 
 ### step の連鎖
 
@@ -1304,7 +1327,7 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   メッセージの接頭辞と category の rule は同じ分類を 2 つの視点から見たものであり、利用者側の設定は不要です。
 - **Allure 3** の `allure generate`/`allure report` は、結果ディレクトリの `categories.json` を一切読みません。
   そこでの category は Allure 3 自身の config だけから決まり、result の label と照合され、`nukadoko.failure` はまさにそのような label です。
-  `examples/allure/allurerc.mjs` は `error.kind` ごとに 1 つ、7 個の label-matcher rule を同梱しています。
+  [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) は `error.kind` ごとに 1 つ、7 個の label-matcher rule を同梱しています。
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
   それを置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。
 - Identity(`fullName`/`testCaseId`/`historyId`)は、公式の cucumberjs 用 Allure adapter と同じ方法で計算されます。
@@ -1425,6 +1448,10 @@ receipt の `world` と `declared` の件数は、スイートが昇格するに
   ある feature の直近の sign-off が、プロジェクトの config がもはや宣言していない browser を記録している場合、その sign-off について今この瞬間に何か間違っているわけではありません。
   だからこそ、上の所見とは違い、これはエラーではなく注記です。
   この注記ができる前に accept された記録には、そもそも比較すべき条件が記録されていないため、この所見の対象から完全に外れます(推測はしません)。
+- **import に失敗した step ファイル。** `tend` は `nuka check` と同じ寛容なやり方で step を発見します(「報告は寛容に、実行は速く失敗する」を参照)。
+  壊れた glue ファイルは run を止める代わりにスキップされるので、それが本来もたらしていたはずのものは、ここでのあらゆる件数と所見から静かに欠落します。
+  何も失敗していないから欠落しているのではありません。
+  run 全体で 1 件の note であり、ファイルごとの 1 件ではありません: 壊れたファイル自身の原因は `nuka check` 自身の所見(`step-file-import-failed`)であり、これはただ、何件の step が見えなかったかと、そのファイル名だけを述べ、exit code には触れません。
 - **何にも行使されない `from` 宣言。** その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされており、宣言された生産者が何かを供給することは一度もありません。
   それはただの事実として報告されるのであって(その宣言は `nuka do --use` を通じてなお到達可能です)、削除すべきだという断定としてではありません。
 - **どの feature からも束ねられていない pattern を持つ step。** CLI 専用のつもりの step は pattern を一切持つべきではなく、pattern を持っているなら、それは自分が占めていない scenario 上の場所を主張していることになります。
@@ -1471,11 +1498,17 @@ nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               from an earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, which
-                              fixtures each step needs (needs,
-                              needs_browser), and where each chained args
-                              key comes from
+                              fixtures each step needs (needs, needs_browser,
+                              or needs: null plus needs_error for the one it
+                              can't read), and where each chained args key
+                              comes from; --json's top level is { steps,
+                              import_failures }, the second always present,
+                              exiting 1 if either has anything in it, output
+                              printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
-                              rationale when the step declared one
+                              rationale when the step declared one, plus
+                              import_failures beside it (same shape as nuka
+                              steps' own); exits 1 when that array is non-empty
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
@@ -1507,8 +1540,9 @@ nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
                               many typed steps are read-only, and how much
                               of it declares what it could, then a sign-off
                               that no longer matches the code it froze (the
-                              one finding that exits non-zero), a `from`
-                              nothing exercises, a patterned step no
+                              one finding that exits non-zero), a step file
+                              that failed to import, a `from` nothing
+                              exercises, a patterned step no
                               feature binds, a schema field with no
                               `.describe()`, a step with no `rationale`, a
                               configured parameter type no pattern uses, a
@@ -1528,6 +1562,16 @@ nuka skill path               where the bundled skill lives, for a project
 
 テキスト出力(`--json` なし)は、端末で読む人間向けに整形されます。
 `--json` が機械可読な契約です。
+
+### 報告は寛容に、実行は速く失敗する
+
+壊れた step ファイルへの反応は、この一覧の中で 2 通りに分かれます。
+その分かれ目は 1 つの問いです: そのコマンドはこれから step を実行しようとしているのか、それとも語彙を報告するだけなのか。
+`nuka steps`、`nuka describe`、`nuka check`、`nuka tend` は報告する道具です: それぞれがファイル単位で step を発見するため、import に失敗した 1 ファイルが、プロジェクトの残り全体がまだ見せられるはずのものまで空にしてしまうことはありません。
+`nuka check` はその失敗を `step-file-import-failed` として名指しし、`nuka steps`/`nuka describe` は同じ事実を(前述の)`import_failures` として運び、`nuka tend` は読めなかったファイルの周りで静かに数を減らす代わりに `import-failures-unseen` という 1 件だけの note を足します(「Tending(手入れ)」を参照)。
+`nuka run`、`nuka do`、`nuka init` はこれから step を実行しよう、あるいはこれから実行するプロジェクトを立ち上げようとしている道具なので、fail-fast のままです: 同じ壊れたファイルは呼び出し全体をそのまま拒否します、報告するだけの場合と違い、その先へ進むことはこれから実行しようとしている何かにとって危険だからです。
+移行中のスイートにとって、glue の一部がまだ壊れているのは通常の状態であり、その状態でまったく動かなくなる報告の道具は、移行のダッシュボードとして役に立ちません。
+そのまま押し進んでしまう実行の道具は、実際には一度も読めていない glue に対して実行することになります。
 
 ## Out of scope(正直な限界)
 

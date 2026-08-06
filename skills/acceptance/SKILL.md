@@ -1,7 +1,7 @@
 ---
 name: acceptance
 description: Use when handed a ticket or story's acceptance criteria and asked to turn them into a Gherkin scenario, run it, and leave a sign-off record of that run.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka steps, nuka scaffold, nuka do, nuka check, nuka run, nuka accept).
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka accept, nuka tend).
 license: MIT
 ---
 
@@ -44,13 +44,21 @@ just produces a scenario that proves the wrong thing.
 
 ## Reading the vocabulary
 
-- `nuka steps --json` — every step, typed and compat: name, patterns,
-  description, mutates, which fixtures it needs (`needs`, `needs_browser`),
-  and where each chained args key comes from. `needs_browser` is how to
-  tell, without opening a file, which steps never open a browser at all;
-  the chained-args field is how to tell which steps have to run before
-  which.
-- `nuka describe <step>` — its full contract: args/returns as JSON Schema.
+- `nuka steps --json` — top level is `{ steps, import_failures }`. Each
+  entry in `steps` carries name, patterns, description, mutates, which
+  fixtures it needs (`needs`, `needs_browser`), and where each chained args
+  key comes from. `needs_browser` is how to tell, without opening a file,
+  which steps never open a browser at all; the chained-args field is how
+  to tell which steps have to run before which. `needs` is `null`, with a
+  `needs_error` string beside it, for the one step whose own fixture needs
+  this call could not read; treat that entry's contract as unknown rather
+  than guessing at it. `import_failures` (`{ file, message }`) names any
+  step file that failed to import, always present, `[]` when nothing did.
+  The command exits 1 whenever either is non-empty, but still prints
+  everything it could read, so a broken step file elsewhere never hides
+  the rest of the vocabulary.
+- `nuka describe <step>` — its full contract: args/returns as JSON Schema,
+  plus the same `import_failures` beside it.
 - Prefer what already exists. If an acceptance condition can be expressed
   with an existing step, use it — do not scaffold a new one just because a
   criterion's wording doesn't match a pattern verbatim.
@@ -63,6 +71,11 @@ just produces a scenario that proves the wrong thing.
    before it ever touches a feature. Fix and re-run until it does what it's
    supposed to; only move on to the feature-level `nuka run` once every new
    step in the scenario has passed this way on its own.
+
+If the step body needs a local variable with the same name as a fixture,
+destructure that fixture under an alias (`run({ page: pwPage, section },
+args)`) instead of reusing the name: a same-named local shadows the fixture
+silently rather than failing loudly.
 
 `do` gives every call its own browser; `run` shares one page across a
 scenario's steps, so a step green under `do` can still fail under `run` if
@@ -448,6 +461,12 @@ declares. This one never exits non-zero: nothing about that sign-off is
 wrong yet, and a project accepted under chromium is not required to also
 accept under firefox. A record accepted before this note existed reports
 nothing here at all; there is no condition on it to compare.
+
+`nuka tend` also notes, once per run, when a step file failed to import:
+its counts and findings only ever reflect what discovery could read, so a
+broken file elsewhere would otherwise leave them quietly short with no way
+to tell. This note never exits non-zero either; `nuka check` is where to
+fix the import itself.
 
 ## What not to do
 

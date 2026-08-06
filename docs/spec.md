@@ -454,6 +454,43 @@ when the step needs none) and `needs_browser` (whether `page` or `context`
 is one of them). An agent picking a scenario can therefore see which ones
 never open a browser at all before running any of them; a browser-using
 scenario costs minutes and a real target that an API-only one does not.
+`needs` is `null`, not `[]`, for the one `run()` this same static reading
+cannot parse (a default value, a rest property, a bare identifier where a
+destructuring pattern belongs); `needs_error` on that entry carries why,
+and `needs_browser` is absent alongside it, since a browser-need verdict
+this file cannot derive is not one it states. That step's own
+name/patterns/description still come through: one unreadable `run()` does
+not take the rest of the listing down with it. The call's own top level is
+`{ steps, import_failures }`, not a bare array of steps; `import_failures`
+(`{ file, message }`) names every step file whose own import failed, always
+present, `[]` when nothing did (see "Tolerant reporting, fail-fast
+execution" below).
+
+A local variable that happens to share a name with a fixture shadows it,
+and only one shape of that mistake is caught before anything runs:
+declared directly in `run`'s own top-level body, it collides with the
+destructured parameter itself, and esbuild refuses to transform the file
+at all (`The symbol "page" has already been declared`). Declared inside a
+nested block instead, an `if`, a loop, a callback, the same collision
+loads without complaint: `tsc` sees an ordinary local binding, typed
+consistently on its own terms, and has nothing to flag, and `check` parses
+only `run`'s first-argument pattern, never the body behind it, so it has
+nothing to read there either. What surfaces is only the moment execution
+reaches the shadowed name, and it does not reliably fail even then:
+Playwright deliberately mirrors method names like
+`click`/`fill`/`hover`/`screenshot` across `Page` and `Locator`, so a
+`page` shadowed by a `Locator` goes on answering to the same calls the
+step would have made against the real one, and can silently act on a
+different element instead of throwing. Receiving the fixture through the
+destructuring pattern's own alias syntax avoids the collision entirely:
+`run({ page: pwPage, section }, args)` leaves `page` free to bind to
+anything inside a nested scope, because there is nothing left for it to
+collide with. This changes nothing about the contract: `fixtureParameterNames`
+reads the name to the left of the colon, so `{ page: pwPage, section }` and
+`{ page, section }` both read as `["page", "section"]`, and `needs`,
+`needs_browser`, and fixture resolution all follow from that same list.
+nukadoko does not detect the shadowing itself today; nothing above should
+be read as a claim that it does.
 
 ### Fixtures
 
@@ -632,7 +669,9 @@ built, hence fast" apart from "measured 0ms": without that distinction,
 over the fixture graph the same way execution does: a step that only
 destructures a fixture which itself reaches `page` still reads
 `needs_browser: true`, even though the step's own `needs` array names only
-the fixture, never `page` directly.
+the fixture, never `page` directly. There is nothing to close over for the
+one step whose own `needs` came back `null` (see "Context API" for why);
+that entry has no `needs_browser` either.
 
 ### Chaining steps
 
@@ -1885,7 +1924,7 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
 - **Allure 3**'s `allure generate`/`allure report` never read a results
   directory's `categories.json`: categories there come only from Allure 3's
   own config, matched against a result's labels, and `nukadoko.failure` is
-  exactly such a label. `examples/allure/allurerc.mjs` ships seven
+  exactly such a label. [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) ships seven
   label-matcher rules, one per `error.kind`; dropped at a project's root it
   is picked up automatically (Allure 3 auto-detects
   `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory,
@@ -2064,6 +2103,15 @@ What it looks at, and why each one is rot rather than style:
   note rather than an error, unlike the finding above. A record accepted
   before this note existed carries no condition to compare against at all,
   so it is left out of this finding entirely rather than guessed at.
+- **A step file that failed to import.** `tend` discovers steps the same
+  tolerant way `nuka check` does (see "Tolerant reporting, fail-fast
+  execution"): a broken glue file is skipped rather than stopping the run,
+  so whatever it would have contributed is silently missing from every
+  count and finding here, not absent because nothing failed. One note for
+  the whole run, not one per file: a broken file's own cause is `nuka
+  check`'s own finding (`step-file-import-failed`), so this one only says
+  how many steps went unseen and names the files, and does not touch the
+  exit code.
 - **A `from` declaration nothing exercises.** Every occurrence of the step
   across every feature captures that key from the line, so the declared
   producer never supplies anything. Reported as the fact it is (the
@@ -2138,11 +2186,17 @@ nuka do <step> [--args '<json>'] [--use <receipt-id>]
                               from an earlier execution's result
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, which
-                              fixtures each step needs (needs,
-                              needs_browser), and where each chained args
-                              key comes from
+                              fixtures each step needs (needs, needs_browser,
+                              or needs: null plus needs_error for the one it
+                              can't read), and where each chained args key
+                              comes from; --json's top level is { steps,
+                              import_failures }, the second always present,
+                              exiting 1 if either has anything in it, output
+                              printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
-                              rationale when the step declared one
+                              rationale when the step declared one, plus
+                              import_failures beside it (same shape as nuka
+                              steps' own); exits 1 when that array is non-empty
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
@@ -2174,8 +2228,9 @@ nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
                               many typed steps are read-only, and how much
                               of it declares what it could, then a sign-off
                               that no longer matches the code it froze (the
-                              one finding that exits non-zero), a `from`
-                              nothing exercises, a patterned step no
+                              one finding that exits non-zero), a step file
+                              that failed to import, a `from` nothing
+                              exercises, a patterned step no
                               feature binds, a schema field with no
                               `.describe()`, a step with no `rationale`, a
                               configured parameter type no pattern uses, a
@@ -2194,6 +2249,26 @@ nuka skill path               where the bundled skill lives, for a project
 ```
 
 Text output (no `--json`) is formatted for a human reading a terminal; `--json` is the machine-readable contract.
+
+### Tolerant reporting, fail-fast execution
+
+A broken step file gets two different responses across this list, and the
+split follows one question: is the command about to execute a step, or
+only report on the vocabulary. `nuka steps`, `nuka describe`, `nuka check`,
+and `nuka tend` are reporting tools: each discovers steps per file, so one
+file whose import fails does not empty what the rest of the project could
+still show. `nuka check` names the failure as `step-file-import-failed`;
+`nuka steps`/`nuka describe` carry the same fact as `import_failures`
+(above); `nuka tend` adds a single `import-failures-unseen` note instead of
+silently under-counting around the file it never read (see "Tending").
+`nuka run`, `nuka do`, and `nuka init` are about to execute a step, or set
+up a project that is about to, so they stay fail-fast: the same broken file
+rejects the whole call outright, since continuing past it is dangerous for
+anything about to run, not merely report on. A migrating suite's normal
+state is some glue still broken, and a reporting tool that refused to run
+at all in that state would not be a useful migration dashboard; an
+execution tool that pressed on anyway would be running against glue it
+never actually read.
 
 ## Out of scope (honest limits)
 

@@ -64,7 +64,16 @@ check` says so as `step-file-import-failed`.
 Then run `nuka check <feature>` and `nuka run <feature>` and read what they
 say. Fix whatever they point at, and run them again. Repeat until the
 existing suite is green — that is Stage 1's completion condition, nothing
-more.
+more. That condition is `nuka check` and `nuka run` going green, not `tsc`
+typechecking cleanly; the two can disagree in either direction.
+
+`nuka steps` and `nuka describe` stay usable throughout Stage 1, even while
+some glue files still fail to import: both read step files one at a time,
+so a file still failing to import is named (`import_failures` on `--json`,
+stderr otherwise) instead of emptying the whole vocabulary. Read the
+vocabulary as you go rather than waiting for every file to import cleanly
+first; `nuka run <feature>` and `nuka do <step>` still refuse outright on
+an unreadable glue file, on purpose, since they are about to execute.
 
 Do not go looking for a list of what compat doesn't support before you
 start. Whatever will not work fails loudly, either at the import or on the

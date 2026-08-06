@@ -75,6 +75,10 @@ ships a small vocabulary already built; one entry from its output:
 }
 ```
 
+That entry lives under `steps`, one field of `{ steps, import_failures }`;
+`import_failures` names any step file this call couldn't import, always
+present, empty when nothing failed.
+
 Before any of it runs, `nuka check` reads every feature file and every step
 file and reports what is wrong. An undefined step is the shallow case: no
 step definition matches a line's text, and `check` names the exact line
@@ -126,9 +130,10 @@ freezes one green run as a committed record beside its feature; `tend` is
 the periodic one, and the only one you are meant to *not* run before every
 change.
 
-That accept record is a Markdown file, `<feature-basename>.<date>-<sha>.md`,
-written beside the feature: the feature's full text, the scenario record,
-and each step's receipt with its evidence stripped.
+That accept record is a Markdown file,
+`<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, written beside
+the feature: the feature's full text, the scenario record, and each step's
+receipt with its evidence stripped.
 
 ## Why this exists now
 
@@ -345,6 +350,11 @@ npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a
 npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
+
+Without `allurerc.mjs` at the project root, every nukadoko failure lands in
+Allure 3's one built-in "Product errors" category instead of one of the
+seven `error.kind` ones; see
+[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs).
 
 Pass `--output` on every one of them. Allure defaults it to `allure-report/`
 in the current directory, and `watch` writes there too, so the default
