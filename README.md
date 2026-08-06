@@ -343,6 +343,11 @@ running our own stream through `@cucumber/junit-xml-formatter`, not just
 asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
 [Messages emitter](docs/spec.md#messages-emitter).
 
+Both emitters run with zero configuration; there is no flag to turn
+either on. The `allure` and `messages` keys in `nukadoko.config.ts`
+only move where their output lands, from the defaults
+`.nukadoko/allure-results` and `.nukadoko/messages.ndjson`.
+
 Since nukadoko writes results and never HTML, rendering them is Allure 3's
 CLI (`npm i -g allure`, or `npx allure` as below):
 

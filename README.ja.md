@@ -309,6 +309,9 @@ receipt が後から何を得ても、2 つ目の対応表を覚える必要な�
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 [Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
 
+どちらの emitter も設定ゼロで動き、有効化するためのフラグはありません。
+`nukadoko.config.ts` の `allure` と `messages` は、出力先を既定の `.nukadoko/allure-results` と `.nukadoko/messages.ndjson` から移すだけのキーです。
+
 nukadoko が書くのは結果であって HTML ではないため、それを描画するのは Allure 3 の CLI です(`npm i -g allure`、または以下のように `npx allure`)。
 
 ```sh
