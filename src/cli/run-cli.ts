@@ -19,10 +19,12 @@ import { runTend } from "./tend.js";
 import {
   buildStepNames,
   describeContract,
+  formatImportFailuresStderr,
   formatVocabulary,
   formatVocabularyError,
   loadVocabulary,
   summarize,
+  toImportFailureSummaries,
 } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -175,12 +177,29 @@ export async function runCli(
     handler: async (args: Arguments<StepsArgs>) => {
       if (argsFailed) return;
       try {
-        const { vocabulary, config } = await loadVocabulary(rootDir);
+        // Tolerant (fb5-loader-visibility task spec, decision 1): `steps` is
+        // a reporting tool, not something about to execute a step, so one
+        // broken glue file elsewhere must not empty everything else it could
+        // still read — the same migrating-suite reasoning `nuka check`/
+        // `nuka tend` already act on. `run`/`do`/`init` deliberately do not
+        // pass this (they stay fail-fast).
+        const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
+          tolerateImportFailures: true,
+        });
         const stepNames = buildStepNames(vocabulary);
         const graph = buildFixtureGraph(config);
         const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, graph));
+        const importFailureSummaries = toImportFailureSummaries(importFailures);
         if (args.json) {
-          stdout.write(`${JSON.stringify(summaries, null, 2)}\n`);
+          // Top-level shape change from a bare array to `{ steps,
+          // import_failures }` (fb5-loader-visibility task spec, decision 1)
+          // — 0.x accepts the break; the alternative, silently dropping
+          // `import_failures` off a bare array, is exactly the "machine
+          // reader treats an incomplete list as complete" failure this field
+          // exists to prevent.
+          stdout.write(
+            `${JSON.stringify({ steps: summaries, import_failures: importFailureSummaries }, null, 2)}\n`,
+          );
         } else {
           // `stdout` here is the injected `WritableSink` (real process
           // stdout by default, a capture sink in tests), which has no
@@ -188,6 +207,15 @@ export async function runCli(
           // directly instead, falling back to 80 for a non-TTY or a test run
           // (steps-human-output task spec).
           stdout.write(formatVocabulary(summaries, process.stdout.columns ?? 80));
+        }
+        stderr.write(formatImportFailuresStderr(importFailureSummaries));
+        // Exit 1 whenever the output is incomplete in a way this command
+        // still went ahead and printed anyway (fb5-loader-visibility task
+        // spec, decisions 1 and 2): an import failure, or a step whose own
+        // `needs` this run couldn't read (`summarize`'s own `needs_error`).
+        // Output is not withheld either way — only "this succeeded" is.
+        if (importFailures.length > 0 || summaries.some((s) => s.needs_error !== undefined)) {
+          exitCode = 1;
         }
       } catch (error) {
         exitCode = 1;
@@ -208,14 +236,30 @@ export async function runCli(
     handler: async (args: Arguments<DescribeArgs>) => {
       if (argsFailed) return;
       try {
-        const { vocabulary } = await loadVocabulary(rootDir);
+        // Same tolerant mode as `steps` above, same reasoning (fb5-loader-
+        // visibility task spec, decision 1) — also the one case where it
+        // matters most: the step this call is asking about may be exactly
+        // the one whose own file failed to import, so "Unknown step" alone
+        // would misdiagnose a migration problem as a typo.
+        const { vocabulary, importFailures } = await loadVocabulary(rootDir, {
+          tolerateImportFailures: true,
+        });
+        const importFailureSummaries = toImportFailureSummaries(importFailures);
         const entry = vocabulary.get(args.name);
         if (!entry) {
           exitCode = 1;
           stderr.write(`Unknown step: ${args.name}\n`);
+          stderr.write(formatImportFailuresStderr(importFailureSummaries));
           return;
         }
-        stdout.write(`${JSON.stringify(describeContract(entry, buildStepNames(vocabulary)), null, 2)}\n`);
+        const contract = describeContract(entry, buildStepNames(vocabulary));
+        stdout.write(
+          `${JSON.stringify({ ...contract, import_failures: importFailureSummaries }, null, 2)}\n`,
+        );
+        stderr.write(formatImportFailuresStderr(importFailureSummaries));
+        if (importFailures.length > 0) {
+          exitCode = 1;
+        }
       } catch (error) {
         exitCode = 1;
         stderr.write(`${formatVocabularyError(error)}\n`);

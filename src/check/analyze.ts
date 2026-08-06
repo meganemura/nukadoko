@@ -100,6 +100,45 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
   }
 }
 
+// esbuild's own transform-error format, measured directly rather than
+// guessed (fb5-import-error-line task spec: "推測で正規表現を書かないこと"):
+// "Transform failed with N error(s):\n<path>:<line>:<col>: ERROR: <msg>",
+// one line per error. Matched against the *start* of a line (`^` + `m`) so
+// this never fires on a colon that happens to sit inside the error text
+// itself. Node's own ESM-loader errors (a missing named export, `require`
+// called from an ES module) carry no such prefix at all, so this simply
+// finds nothing on those and `line` is left unset — same as before this
+// task (CheckIssue.line already optional, src/check/types.ts).
+const IMPORT_FAILURE_LOCATION = /^(.+):(\d+):(\d+): ERROR: /m;
+
+// A module that fails to import can drag another file's failure into its
+// own message: Node's ESM loader caches a module that failed to load and
+// rethrows the identical error object to every later importer (the same
+// behavior tests/check-import-failure-grouping.test.ts exercises for a
+// location-less message). When that happens here, the location named in
+// the message is the file that actually failed to transform, not the file
+// this `importFailures` entry is attributed to — attaching it would point
+// a reader at the wrong file, so this returns `undefined` instead.
+// `path.resolve` against `rootDir` on both sides absorbs the absolute/
+// relative difference between them (this task's spec, decision 1): the
+// message always carries the absolute path esbuild was given, while
+// `issueFile` is rootDir-relative (discover-steps.ts's own
+// `importFailures[].filePath`).
+function extractImportFailureLine(message: string, rootDir: string, issueFile: string): number | undefined {
+  const match = IMPORT_FAILURE_LOCATION.exec(message);
+  if (match === null) {
+    return undefined;
+  }
+  const [, rawPath, rawLine] = match;
+  if (rawPath === undefined || rawLine === undefined) {
+    return undefined;
+  }
+  if (path.resolve(rootDir, rawPath) !== path.resolve(rootDir, issueFile)) {
+    return undefined;
+  }
+  return Number(rawLine);
+}
+
 export async function analyzeProject(rootDir: string, featureArg?: string): Promise<CheckReport> {
   const config = await loadConfig(rootDir);
   // Tolerant mode (this task's spec, decision 1) — a broken step file
@@ -127,6 +166,10 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       code: "step-file-import-failed",
       message: failure.message,
       file: failure.filePath,
+      // Extracted from the message above, never re-derived some other way
+      // (this task's spec, decision 1) — the message itself stays verbatim
+      // either way.
+      line: extractImportFailureLine(failure.message, rootDir, failure.filePath),
     });
   }
 

@@ -27,8 +27,12 @@ describe("nuka steps", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    const summaries = JSON.parse(stdout.text());
-    expect(summaries).toEqual(
+    // Top-level `{ steps, import_failures }`, not a bare array
+    // (fb5-loader-visibility task spec, decision 1) — `import_failures` is
+    // always present, `[]` here since this fixture has nothing broken.
+    const report = JSON.parse(stdout.text());
+    expect(report.import_failures).toEqual([]);
+    expect(report.steps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           name: "create-project",
@@ -43,7 +47,7 @@ describe("nuka steps", () => {
         }),
       ]),
     );
-    expect(summaries).toHaveLength(3);
+    expect(report.steps).toHaveLength(3);
   });
 
   it("never includes rationale, even for a step that declares one", async () => {
@@ -56,8 +60,8 @@ describe("nuka steps", () => {
     });
 
     expect(exitCode).toBe(0);
-    const summaries = JSON.parse(stdout.text());
-    for (const summary of summaries) {
+    const report = JSON.parse(stdout.text());
+    for (const summary of report.steps) {
       expect(summary).not.toHaveProperty("rationale");
     }
   });
@@ -372,8 +376,8 @@ describe("nuka (process)", () => {
     });
 
     expect(stderr).toBe("");
-    const summaries = JSON.parse(stdout);
-    expect(summaries.map((s: { name: string }) => s.name).sort()).toEqual([
+    const report = JSON.parse(stdout);
+    expect(report.steps.map((s: { name: string }) => s.name).sort()).toEqual([
       "create-project",
       "get-project",
       "list-projects",

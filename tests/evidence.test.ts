@@ -250,8 +250,8 @@ describe("nuka steps --json: evidence's needs/needs_browser", () => {
     });
 
     expect(exitCode).toBe(0);
-    const summaries = JSON.parse(stdout.text()) as StepSummary[];
-    const attachOrders = summaries.find((s) => s.name === "attach-orders");
+    const report = JSON.parse(stdout.text()) as { steps: StepSummary[] };
+    const attachOrders = report.steps.find((s) => s.name === "attach-orders");
     expect(attachOrders?.needs).toEqual(["evidence"]);
     expect(attachOrders?.needs_browser).toBe(false);
   });

@@ -133,8 +133,8 @@ describe("discoverSteps: compat registration", () => {
       );
 
       expect(stderr).toBe("");
-      const summaries = JSON.parse(stdout) as Array<Record<string, unknown>>;
-      expect(summaries).toEqual([
+      const report = JSON.parse(stdout) as { steps: Array<Record<string, unknown>> };
+      expect(report.steps).toEqual([
         expect.objectContaining({
           name: "compat: a bare-imported compat step exists",
           kind: "compat",

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ConfigError } from "../config/errors.js";
 import { loadConfig } from "../config/load-config.js";
 import type { NukadokoConfig } from "../config/schema.js";
+import { BUILTIN_FIXTURE_NAMES } from "../context.js";
 import {
   discoverSteps,
   type Vocabulary,
@@ -10,6 +11,8 @@ import {
 import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { fromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
+import { FixtureNotDestructuredError } from "../step/fixture-names.js";
+import { inferNeeds } from "../step/infer-needs.js";
 import { stepNeeds } from "../step/step-needs.js";
 
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
@@ -24,17 +27,79 @@ import { stepNeeds } from "../step/step-needs.js";
 // "how wide is the terminal", so the width this function wraps to is
 // resolved by the caller and passed in as a plain number.
 //
+/** One `discoverSteps`-style import failure, before this module renames its
+ * `filePath` field to `file` for `--json` (`toImportFailureSummaries`
+ * below) — kept structural rather than importing `DiscoveryResult`'s own
+ * field type, since the only thing this module needs from it is the shape. */
+export interface RawImportFailure {
+  readonly filePath: string;
+  readonly message: string;
+}
+
+/** Default `false`, same convention as `discoverSteps`' own
+ * `tolerateImportFailures` (src/discover/discover-steps.ts) — `run`/`do`/
+ * `init` build their own vocabulary without ever passing this at all
+ * (fb5-loader-visibility task spec: those stay fail-fast, only `steps`/
+ * `describe` opt in here), so an unspecified option here still means
+ * exactly the pre-existing behavior. */
+export interface LoadVocabularyOptions {
+  readonly tolerateImportFailures?: boolean;
+}
+
 /** Also returns `config` (P5 task spec, scope item 11) — `nuka steps
  * --json`'s own `needs_browser` now needs the fixture dependency graph
  * (`buildFixtureGraph(config)`) to compute its transitive closure through
  * `config.fixtures`, and building that graph needs `config` itself.
- * `describe`'s own handler simply ignores this second field, unchanged. */
+ * `describe`'s own handler simply ignores this second field, unchanged.
+ *
+ * Also returns `importFailures` (fb5-loader-visibility task spec) — always
+ * `[]` unless the caller passes `{ tolerateImportFailures: true }`, in which
+ * case a broken step file is collected here instead of rejecting this whole
+ * call, the same tolerant mode `nuka check`/`nuka tend` already use
+ * (src/check/analyze.ts, src/tend/analyze.ts). */
 export async function loadVocabulary(
   rootDir: string,
-): Promise<{ readonly vocabulary: Vocabulary; readonly config: NukadokoConfig }> {
+  options: LoadVocabularyOptions = {},
+): Promise<{
+  readonly vocabulary: Vocabulary;
+  readonly config: NukadokoConfig;
+  readonly importFailures: readonly RawImportFailure[];
+}> {
   const config = await loadConfig(rootDir);
-  const { vocabulary } = await discoverSteps(rootDir, config.featuresDir);
-  return { vocabulary, config };
+  const { vocabulary, importFailures } = await discoverSteps(rootDir, config.featuresDir, options);
+  return { vocabulary, config, importFailures };
+}
+
+/** `{ file, message }` per import failure (fb5-loader-visibility task spec,
+ * decision 1) — `file`, not `discoverSteps`' own `filePath`, to match every
+ * other `--json` field this CLI already uses for a location
+ * (`CheckIssue.file`), rather than this one command inventing a second name
+ * for the same thing. */
+export interface ImportFailureSummary {
+  readonly file: string;
+  readonly message: string;
+}
+
+export function toImportFailureSummaries(
+  failures: readonly RawImportFailure[],
+): ImportFailureSummary[] {
+  return failures.map((failure) => ({ file: failure.filePath, message: failure.message }));
+}
+
+/** stderr's own tail listing (fb5-loader-visibility task spec, decision 1:
+ * "読めなかったファイルは stderr に末尾で列挙する" so stdout's own shape,
+ * json or text, never has to carry it). Returns `""` (nothing to write) when
+ * `failures` is empty, so a caller can call this unconditionally. Same
+ * newline-collapsing as src/cli/check.ts's own `formatIssueLine` — an
+ * import error's message can itself carry embedded newlines. */
+export function formatImportFailuresStderr(failures: readonly ImportFailureSummary[]): string {
+  if (failures.length === 0) {
+    return "";
+  }
+  const lines = failures.map(
+    (failure) => `  ${failure.file}: ${failure.message.replace(/\s*\n\s*/g, " ")}`,
+  );
+  return `${failures.length} step file${failures.length === 1 ? "" : "s"} could not be imported:\n${lines.join("\n")}\n`;
 }
 
 // `StepNames` (m6a-from-core task spec, item 7): a step's own `from` field
@@ -170,8 +235,19 @@ export interface StepSummary {
    * follows), absent entirely for a compat entry (no `run()` exists to
    * read). Not repeated in `formatVocabulary`'s text rendering below (this
    * task's spec: the full list is a `--json` concern, the text output only
-   * marks `needsBrowser`). */
-  readonly needs?: readonly string[];
+   * marks `needsBrowser`).
+   *
+   * `null` (fb5-loader-visibility task spec, decision 2), never `undefined`,
+   * when `stepNeeds` itself throws (a `run()` whose first argument can't be
+   * read as fixture names at all) — that step's name/pattern/description
+   * still came through cleanly, so it stays in the output instead of taking
+   * the whole `nuka steps` call down with it (this same throw used to
+   * propagate straight out of `summarize` and kill every other step's own
+   * entry too); `needs_error` on the same entry carries why. `null` reads as
+   * "couldn't tell", distinct from `[]`'s "asked, and there is nothing" the
+   * same way `needs`'s own presence already distinguishes typed from
+   * compat. */
+  readonly needs?: readonly string[] | null;
   /** Whether this step's own fixture needs open a browser (`page` or
    * `context` among `needs`, `stepNeeds`'s own doc comment explains why
    * that check will need to widen once a user-defined fixture exists) —
@@ -179,8 +255,31 @@ export interface StepSummary {
    * one at all. Same presence rule as `needs`: present for every typed
    * entry, absent for a compat one. JSON key is `needs_browser`, not
    * `needsBrowser` (this project's own snake_case convention for a
-   * `--json` field, matching `receipt.json`'s `waited_ms`/`http_reads`). */
+   * `--json` field, matching `receipt.json`'s `waited_ms`/`http_reads`).
+   * Also omitted, alongside `needs: null`, when `stepNeeds` throws — a
+   * browser-need verdict this file can't derive is not one it states. */
   readonly needs_browser?: boolean;
+  /** `stepNeeds`'s own thrown error message (fb5-loader-visibility task
+   * spec, decision 2), present only alongside `needs: null` — see that
+   * field's own doc comment. */
+  readonly needs_error?: string;
+  /** A best-effort guess at this step's fixture needs, read by scanning
+   * `run()`'s own source text for its first argument's member accesses
+   * (fb5-needs-inferred task spec) — present only alongside `needs: null`
+   * and only when that guess could be attempted at all (`src/step/infer-
+   * needs.ts`'s own `inferNeeds`, called only for the one throw shape it
+   * can key a scan on: `run(ctx, args)`'s own un-destructured first
+   * argument). Deliberately a field of its own, never merged into `needs`
+   * (that spec's decision 1, "推論値と契約を混ぜない"): `needs` is read
+   * from a destructuring pattern and used to decide what to build before a
+   * step runs; this is a lexical guess about a step that cannot run yet,
+   * kept for the sake of an agent tallying what a migration still owes, not
+   * for anything that decides what nukadoko does. `needs_browser` is never
+   * inferred alongside this for the same reason — see that field's own
+   * doc comment. Possibly `[]` (attempted, and nothing recognizable was
+   * touched), same "asked, and there is nothing" reading `needs: []`
+   * already carries for a typed entry. */
+  readonly needs_inferred?: readonly string[];
   /** Where each declared args key not left to a pattern capture comes from
    * (m6a-from-core task spec, item 7) — key → `{ step, key }`, the upstream
    * step's own name and the `returns` key read from it, or (m7a-from-
@@ -192,6 +291,17 @@ export interface StepSummary {
    * rendering below — `nuka steps` (non-JSON) stays one line per step, an
    * existing decision this task does not revisit. */
   readonly from?: Record<string, { step: string; key: string } | ReadonlyArray<{ step: string; key: string }>>;
+}
+
+/** The fixture names `needs_inferred` (fb5-needs-inferred task spec) is
+ * allowed to keep, mirroring `stepNeeds`'s own graph-or-builtins fallback
+ * just below: `graph.nodes` is already builtins ∪ `config.fixtures` (src/
+ * fixture/graph.ts's own `FixtureGraph` doc comment), so a caller that
+ * built one hands back exactly that; a caller with no config-derived graph
+ * at all falls back to builtins alone, same as `opensBrowser` does in src/
+ * step/step-needs.ts for the same reason. */
+function knownFixtureNamesFor(graph: FixtureGraph | undefined): ReadonlySet<string> {
+  return graph !== undefined ? new Set(graph.nodes.keys()) : new Set(BUILTIN_FIXTURE_NAMES);
 }
 
 /** `graph` (P5 task spec, scope item 11) is optional so every call site
@@ -207,17 +317,44 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
       patterns: [entry.compat.patternSource],
     };
   }
-  const { needs, needsBrowser } = stepNeeds(entry.step, graph);
-  return {
+  const base = {
     name: entry.name,
-    kind: "typed",
+    kind: "typed" as const,
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
-    needs,
-    needs_browser: needsBrowser,
     from: fromSummary(entry.step.from, stepNames),
   };
+  // `stepNeeds` throws for a `run()` it can't read fixture names from at all
+  // (src/step/step-needs.ts, via src/step/fixture-names.ts) — that used to
+  // propagate straight out of this function and take every other step's own
+  // entry down with it (fb5-loader-visibility task spec, decision 2: one
+  // unparseable `run()` should not empty the whole vocabulary a reader is
+  // trying to see). Caught here, per entry, so the rest of `nuka steps`
+  // still lists everything else it could read.
+  try {
+    const { needs, needsBrowser } = stepNeeds(entry.step, graph);
+    return { ...base, needs, needs_browser: needsBrowser };
+  } catch (error) {
+    // A guess at what `error` couldn't state as a contract (fb5-needs-
+    // inferred task spec) — attempted only for the one throw shape
+    // `inferNeeds` can key a scan on (`FixtureNotDestructuredError`'s own
+    // bare first-argument identifier, e.g. `run(ctx, args)`'s `"ctx"`); a
+    // default-value or rest-property throw leaves no such identifier to
+    // scan by, so this stays `undefined` for those and `needs_inferred`
+    // is simply omitted, same as before this task (decision 3: no
+    // guess reads as no guess, never as an empty one).
+    const inferred =
+      error instanceof FixtureNotDestructuredError
+        ? inferNeeds(entry.step.run, error.firstArgumentText, knownFixtureNamesFor(graph))
+        : undefined;
+    return {
+      ...base,
+      needs: null,
+      needs_error: error instanceof Error ? error.message : String(error),
+      ...(inferred !== undefined ? { needs_inferred: inferred } : {}),
+    };
+  }
 }
 
 /**
@@ -258,13 +395,29 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   // say nothing when there's nothing to say" choice `compat` above already
   // makes for a step with no declaration at all.
   const browserLabel = s.needs_browser ? "  browser" : "";
-  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}`];
+  // A heading marker plus its own reason line (fb5-loader-visibility task
+  // spec, decision 2: "human では needs の位置に理由つきで「引けなかった」
+  // と分かる表示を出す") — never both this and `browserLabel`, since
+  // `needs_browser` is itself only ever set when `needs_error` is not.
+  // `needs_inferred` (fb5-needs-inferred task spec, decision 3) swaps the
+  // marker word itself rather than adding a second one — a reader still
+  // sees exactly one word at this position, now saying "guessed, don't
+  // trust it" instead of "gave up" when a guess was possible. The reason
+  // line just below stays exactly as it was either way (still `needs_error`,
+  // never the guessed list itself — that stays a `--json`-only concern, same
+  // as `needs` in the successful case).
+  const needsErrorLabel =
+    s.needs_error === undefined ? "" : s.needs_inferred !== undefined ? "  needs (inferred)" : "  needs unreadable";
+  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}${needsErrorLabel}`];
   const patterns = s.patterns.length > 0 ? s.patterns : ["(no pattern)"];
   for (const pattern of patterns) {
     lines.push(...wrapIndented(pattern, width));
   }
   if (s.description !== undefined) {
     lines.push(...wrapIndented(s.description, width));
+  }
+  if (s.needs_error !== undefined) {
+    lines.push(...wrapIndented(`needs: ${s.needs_error}`, width));
   }
   return lines.join("\n");
 }

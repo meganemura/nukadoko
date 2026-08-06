@@ -19,7 +19,8 @@ describe("nuka steps: compat entries", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    const summaries = JSON.parse(stdout.text()) as Array<Record<string, unknown>>;
+    const report = JSON.parse(stdout.text()) as { steps: Array<Record<string, unknown>> };
+    const summaries = report.steps;
     expect(summaries).toHaveLength(3);
     for (const s of summaries) {
       expect(s.kind).toBe("compat");

@@ -7,6 +7,7 @@ import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missi
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
+import { findImportFailuresUnseen } from "./import-failures-unseen.js";
 import { analyzeFieldDescriptions } from "./missing-describe.js";
 import { findMissingRationale } from "./missing-rationale.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
@@ -59,10 +60,14 @@ import type { TendIssue, TendReport } from "./types.js";
 // true`, the same flag src/check/analyze.ts passes) so one unreadable step
 // file doesn't take down every other finding across the rest of the
 // project — the same migrating-suite reasoning that file's own header
-// gives, just without this module reporting the import failure itself
-// (that stays `check`'s own finding; `tend` silently has one fewer step to
-// look at). It is still called with `config.featuresDir` alone, unchanged
-// by fb3-scan-dirs: only `loadFeaturesFromDirs` below widens to include
+// gives. Per-file verdicts on *why* a file failed still stay `check`'s own
+// finding (`step-file-import-failed`); this module only says, once, that
+// some steps went unseen (`findImportFailuresUnseen` below, fb5-loader-
+// visibility task spec, decision 4) — silently having fewer steps to look
+// at, with nothing here saying so, is exactly the failure CLAUDE.md's
+// "Nothing breaks silently" rules out. It is still called with
+// `config.featuresDir` alone, unchanged by fb3-scan-dirs: only
+// `loadFeaturesFromDirs` below widens to include
 // `additionalFeatureDirs` — the vocabulary a step pattern is checked against
 // is a different question from which feature files get walked for
 // occurrences (src/check/analyze.ts's own header makes the same split).
@@ -96,9 +101,11 @@ import type { TendIssue, TendReport } from "./types.js";
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
-  const { vocabulary, compatParameterTypes } = await discoverSteps(rootDir, config.featuresDir, {
-    tolerateImportFailures: true,
-  });
+  const { vocabulary, compatParameterTypes, importFailures } = await discoverSteps(
+    rootDir,
+    config.featuresDir,
+    { tolerateImportFailures: true },
+  );
 
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   const scannedFeatureDirs = [config.featuresDir, ...config.additionalFeatureDirs];
@@ -119,6 +126,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const fixtureGraph = buildFixtureGraph(config);
 
   const notes: TendIssue[] = [
+    ...findImportFailuresUnseen(importFailures),
     ...findUnusedFromDeclarations(vocabulary, occurrences),
     ...findUnboundPatternedSteps(vocabulary, occurrences),
     ...fieldDescriptions.issues,

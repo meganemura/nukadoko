@@ -67,7 +67,7 @@ describe("nuka scaffold", () => {
       stderr: createCaptureSink(),
     });
     expect(stepsExit).toBe(0);
-    const summaries = JSON.parse(stepsStdout.text());
+    const { steps: summaries } = JSON.parse(stepsStdout.text());
     expect(summaries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

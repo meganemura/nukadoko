@@ -253,13 +253,13 @@ describe("nuka steps --json: from is exposed", () => {
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
 
     expect(exitCode).toBe(0);
-    const summaries = JSON.parse(stdout.text()) as Array<{ name: string; from?: unknown }>;
-    const archive = summaries.find((s) => s.name === "archive-project");
+    const report = JSON.parse(stdout.text()) as { steps: Array<{ name: string; from?: unknown }> };
+    const archive = report.steps.find((s) => s.name === "archive-project");
     expect(archive?.from).toEqual({ projectId: { step: "create-project", key: "id" } });
 
     // A step with no `from` at all omits the field entirely (this task's
     // spec: same "absent when empty" convention as `rationale`/`used`).
-    const create = summaries.find((s) => s.name === "create-project");
+    const create = report.steps.find((s) => s.name === "create-project");
     expect(create).not.toHaveProperty("from");
   });
 

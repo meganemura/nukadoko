@@ -20,13 +20,13 @@ describe("nuka steps --json: needs_browser through a fixture", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    const summaries = JSON.parse(stdout.text()) as StepSummary[];
+    const report = JSON.parse(stdout.text()) as { steps: StepSummary[] };
 
-    const viaLoggedIn = summaries.find((s) => s.name === "via-logged-in-step");
+    const viaLoggedIn = report.steps.find((s) => s.name === "via-logged-in-step");
     expect(viaLoggedIn?.needs).toEqual(["loggedIn"]);
     expect(viaLoggedIn?.needs_browser).toBe(true);
 
-    const plain = summaries.find((s) => s.name === "plain-step");
+    const plain = report.steps.find((s) => s.name === "plain-step");
     expect(plain?.needs).toEqual([]);
     expect(plain?.needs_browser).toBe(false);
   });

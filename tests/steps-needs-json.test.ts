@@ -18,7 +18,11 @@ async function stepsJson(rootDir: string): Promise<StepSummary[]> {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
   expect(exitCode).toBe(0);
-  return JSON.parse(stdout.text()) as StepSummary[];
+  // `{ steps, import_failures }`, not a bare array (fb5-loader-visibility
+  // task spec, decision 1) — `import_failures` is exercised by this task's
+  // own dedicated test file, unrelated to what this helper's callers check.
+  const report = JSON.parse(stdout.text()) as { steps: StepSummary[] };
+  return report.steps;
 }
 
 describe("nuka steps --json: needs / needs_browser", () => {
