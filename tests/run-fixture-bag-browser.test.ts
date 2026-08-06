@@ -3,7 +3,12 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: p4a-fixture-bag task spec's own completion condition 2 —
 // "page を名指さないシナリオがブラウザを起動しないこと" — fixed by a real
@@ -46,7 +51,7 @@ describe("nuka run: a scenario that never destructures page never launches a bro
       const stderr = createCaptureSink();
       const exitCode = await runCli(["run", "features/no-browser.feature"], { rootDir, stdout, stderr });
 
-      expect(stderr.text()).toBe("");
+      expect(stripRunProgressLines(stderr.text())).toBe("");
       expect(exitCode).toBe(0);
 
       const records = stdout

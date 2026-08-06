@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: m2d-allure-shim task spec's own coverage — the allure-js
 // runtime shim (src/compat/allure-runtime.ts) and the declared bucket it and
@@ -55,7 +60,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 

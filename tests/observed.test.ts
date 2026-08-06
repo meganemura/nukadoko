@@ -4,7 +4,12 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: measured mutates end to end against tests/fixtures/
 // observed-project — a real local http server, exercised through both
@@ -88,7 +93,11 @@ describe("measured mutates: request-side observed counts", () => {
     // expected on stderr — asserted as "one line, and it is that one"
     // rather than by its exact wording, which this test has no stake in:
     // what it is checking is that nothing *else* warned.
-    expect(stderr.text().split("\n").filter((line) => line.length > 0)).toHaveLength(1);
+    expect(
+      stripRunProgressLines(stderr.text())
+        .split("\n")
+        .filter((line) => line.length > 0),
+    ).toHaveLength(1);
     expect(stderr.text()).toContain("Partial run:");
     const record = JSON.parse(stdout.text().trim().split("\n")[0]!);
     expect(record.status).toBe("passed");

@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: P5 task spec's own completion conditions 2 and 3 — a
 // scenario-scope fixture's own teardown code runs whether the step (hence
@@ -50,7 +55,7 @@ describe("nuka run: scenario-scope fixture teardown", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/teardown.feature"], { rootDir, stdout, stderr });
 
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     // The whole run fails overall (its second scenario does), even though
     // the first scenario on its own passed — asserted from each scenario's
     // own record below.

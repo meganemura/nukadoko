@@ -5,7 +5,12 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: the Background + browser round trip this task's spec asks
 // for, rewritten for p3a-trace-per-step (trace is now per-step, not per-
@@ -94,7 +99,7 @@ describe("nuka run (Background + browser)", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
 
     const lines = stdout.text().split("\n").filter((line) => line.length > 0);
     expect(lines).toHaveLength(2);

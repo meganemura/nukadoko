@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: page_events end to end against tests/fixtures/
 // page-events-project (P0-page-events task spec) — a real chromium page
@@ -100,7 +105,7 @@ describe("page_events on the receipt", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     const lines = stdout.text().split("\n").filter((line) => line.length > 0);
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");

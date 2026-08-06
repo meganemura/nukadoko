@@ -95,6 +95,10 @@ interface RunArgs {
   feature: string;
   session?: string;
   env?: string;
+  /** Suppresses the per-step/per-scenario progress lines (fb5-run-output
+   * task spec, decision 4) — the output-location and summary lines still
+   * print; run.ts's own header explains why those two are exempt. */
+  quiet?: boolean;
 }
 
 interface SessionListArgs {
@@ -356,6 +360,11 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe: 'target a named environment (omit for the "default" environment)',
+        })
+        .option("quiet", {
+          type: "boolean",
+          default: false,
+          describe: "suppress the per-step/per-scenario progress lines (output locations and the summary still print)",
         }) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
@@ -364,6 +373,7 @@ export async function runCli(
         featureArg: args.feature,
         session: args.session ?? null,
         env: args.env ?? null,
+        quiet: args.quiet ?? false,
         stdout,
         stderr,
       });

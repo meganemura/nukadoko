@@ -7,6 +7,7 @@ import {
   createCaptureSink,
   initGitRepo,
   removeTempDir,
+  stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run`'s own `run_id`/`git` provenance fields end to
@@ -121,7 +122,7 @@ describe("nuka run: git provenance", () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(stderr.text()).toBe("");
+      expect(stripRunProgressLines(stderr.text())).toBe("");
       const [record] = records(stdout.text());
       expect(record!.git).toBeUndefined();
     } finally {

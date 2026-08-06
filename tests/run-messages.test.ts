@@ -3,7 +3,12 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run` -> messages.ndjson wiring, end to end (m3c-
 // messages-emitter spec-b task spec, test item 2). The mapping itself —
@@ -52,7 +57,7 @@ describe("nuka run: messages.ndjson wiring", () => {
     // stdout/exit code are unchanged by the emitter (this task's spec, item
     // 2) — the same one-record-line assertion run.test.ts's own "runs a
     // pure-step scenario to completion" test makes.
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     const stdoutLines = stdout.text().split("\n").filter((line) => line.length > 0);
     expect(stdoutLines).toHaveLength(1);
 
@@ -93,7 +98,7 @@ describe("nuka run: messages.ndjson wiring", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
 
     const output = path.join(rootDir, "reports", "messages.ndjson");
     expect(existsSync(output)).toBe(true);
@@ -113,7 +118,7 @@ describe("nuka run: messages.ndjson wiring", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(existsSync(path.join(rootDir, ".nukadoko", "messages.ndjson"))).toBe(false);
   });
 

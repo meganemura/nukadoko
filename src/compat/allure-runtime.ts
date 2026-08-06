@@ -26,9 +26,12 @@ import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtensi
 //   - `step_start` + `step_stop` -> one `declared.logs` entry each, paired
 //     LIFO on this instance's own stack (nesting is unlikely in practice via
 //     `logStep`, but `step(name, fn)` can nest, and this still pairs
-//     correctly either way); the future progress-log feature is the
-//     intended place these get to keep their own shape (promoted there once
-//     that feature is implemented — this task's spec, decision 3).
+//     correctly either way); `nuka run` now has its own progress log
+//     (fb5-run-output task spec, src/run/progress-log.ts), but it reports
+//     one line per pickle step, not per declared sub-step — promoting a
+//     `step_start`/`step_stop` pair onto it, preserving its own nesting,
+//     stays unimplemented rather than merely deferred to a feature that
+//     didn't exist yet (this task's spec, decision 3, unchanged).
 //   - `attachment_content` -> a file under the active collector's current
 //     boundary directory, plus a `declared.attachments` entry.
 // Ignored entirely (not mapped to anything): `step_metadata` (StepContext's

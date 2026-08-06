@@ -19,6 +19,12 @@ import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitte
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { probeGitState } from "../run/probe-git.js";
+import {
+  createStepProgressLogger,
+  writeOutputLocations,
+  writeRunSummary,
+  writeScenarioBoundary,
+} from "../run/progress-log.js";
 import { generateRunId } from "../run/run-id.js";
 import {
   doneCallbackMessage,
@@ -199,6 +205,25 @@ import type { WritableSink } from "./writable-sink.js";
 // to reveal several commands later (docs/spec.md "Scenarios (the scripted
 // path)"). stdout is untouched: its one-record-per-line contract (below)
 // is read by machines, and this notice is not part of it.
+//
+// fb5-run-output task spec: the execution phase used to run in complete
+// silence between setup and its own final `stdout.write`/exit code — no way
+// to tell a long scenario apart from a stuck one, and no way to learn where
+// a run's own output landed short of already knowing `config`. Every line
+// this task adds (src/run/progress-log.ts) goes to stderr, never stdout —
+// stdout's one-JSON-record-per-scenario contract (`stdout.write` below,
+// item 2 in this file's own earlier history) stays exactly as it was.
+// `onStepProgress` is built once here, the same "one instance per
+// invocation, threaded unchanged into every `runScenario` call" shape
+// `onUnknownTraceVersion` above already has, and is `undefined` under
+// `--quiet` (decision 4: `--quiet` suppresses only the step and scenario
+// boundary lines — `writeOutputLocations`/`writeRunSummary` near this
+// function's own `return` are unconditional, since each is written exactly
+// once and naming where output landed is never worth suppressing for a flag
+// whose point is a quieter terminal, not a silent one). No TTY check
+// anywhere in this: a CI log wants this exact progress just as much as an
+// interactive terminal does, and stderr staying busy costs nothing stdout's
+// own NDJSON readers can see.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -206,12 +231,22 @@ export interface RunRunOptions {
   featureArg: string;
   session: string | null;
   env: string | null;
+  /** Suppresses the per-step and per-scenario progress lines (fb5-run-output
+   * task spec, decision 4) — the output-location and summary lines at the
+   * end of a run are written either way; see this file's own header. */
+  quiet: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, featureArg, session, env, stdout, stderr } = options;
+  const { rootDir, featureArg, session, env, quiet, stdout, stderr } = options;
+
+  // This whole invocation's own start (fb5-run-output task spec) — read
+  // again just before the summary line is written, near this function's own
+  // `return`, so that line's own elapsed time covers the whole invocation
+  // (config load and discovery included), not just the pickle loop.
+  const invocationStartedAt = new Date();
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;
@@ -408,6 +443,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // the stderr warning once, not once per occurrence.
     const onUnknownTraceVersion = createTraceVersionWarner(stderr);
 
+    // Same "one instance, threaded unchanged into every `runScenario` call"
+    // shape as `onUnknownTraceVersion` just above (fb5-run-output task spec)
+    // — `undefined` under `--quiet` so `runScenario` never has to know that
+    // flag exists at all; it only ever sees "is there a callback to call".
+    const onStepEnd = quiet ? undefined : createStepProgressLogger(stderr);
+
     const envFiles = resolvedEnv.envFiles;
     const envVars = loadEnvFiles(rootDir, envFiles);
     const classification = await classifyEnvFiles(rootDir, envFiles);
@@ -466,6 +507,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const restoreAllureRuntime = registerAllureRuntime();
     try {
       let allPassed = true;
+      // Tallied alongside `allPassed` above, read by the summary/output-
+      // location lines near this function's own `return` (fb5-run-output
+      // task spec, decisions 2-3) — `scenariosWritten`/`scenariosPassed`
+      // count actual `stdout.write`s below, never `selected.pickles.length`:
+      // a BeforeAll failure or a mid-loop storageState read failure can
+      // leave this run with fewer scenario records than pickles selected,
+      // and the summary line must say what actually happened, not what was
+      // asked for. `receiptsWritten` sums every step across every one of
+      // those records whose own `receipt` is non-null.
+      let scenariosWritten = 0;
+      let scenariosPassed = 0;
+      let receiptsWritten = 0;
 
       // Skipped entirely for a run that selects zero pickles (this task's
       // spec: no pickle selected means BeforeAll/AfterAll never run) —
@@ -481,6 +534,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // — an empty cache's own teardown is a no-op.
       const fixtureProcessCache = createFixtureCache();
 
+      // Root-relative (src/config/schema.ts's own doc comment for each of
+      // these two keys) — computed once, ahead of `resultsDir`/`output`
+      // below, so this exact resolved value (config default already
+      // applied) is available for the output-location line near this
+      // function's own `return` too (fb5-run-output task spec, decision 2:
+      // "実際の書き込み先", the resolved value, not the config key itself),
+      // whether or not the emitter that writes there actually succeeds.
+      const allureResultsDirRel = config.allure?.resultsDir ?? path.join(config.stateDir, "allure-results");
+      const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "messages.ndjson");
+
       // See this file's own header (m3b-allure-emitter spec-b2 task spec,
       // item 2) for why this is gated on `hasPickles`, why construction and
       // `begin()` are wrapped together, and why a failure here never fails
@@ -488,10 +551,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       let allureEmitter: AllureEmitter | null = null;
       if (hasPickles) {
         try {
-          const resultsDir = path.join(
-            rootDir,
-            config.allure?.resultsDir ?? path.join(config.stateDir, "allure-results"),
-          );
+          const resultsDir = path.join(rootDir, allureResultsDirRel);
           allureEmitter = createAllureEmitter({
             resultsDir,
             rootDir,
@@ -515,10 +575,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       let messagesEmitter: MessagesEmitter | null = null;
       if (hasPickles) {
         try {
-          const output = path.join(
-            rootDir,
-            config.messages?.output ?? path.join(config.stateDir, "messages.ndjson"),
-          );
+          const output = path.join(rootDir, messagesOutputRel);
           messagesEmitter = createMessagesEmitter({ output, rootDir, stderr });
           messagesEmitter.begin({
             relativeFeaturePath: selected.relativePath,
@@ -559,7 +616,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
 
       if (hasPickles && !beforeAllFailed) {
-        for (const pickle of selected.pickles) {
+        for (const [pickleIndex, pickle] of selected.pickles.entries()) {
           let storageState: StorageState | null = null;
           if (session !== null) {
             try {
@@ -582,6 +639,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               allPassed = false;
               break;
             }
+          }
+
+          // This pickle's own boundary line (fb5-run-output task spec,
+          // decision 1) — right before its execution actually begins, not
+          // before the storageState read above: a scenario whose
+          // storageState read failed never begins at all (see that catch's
+          // own comment), so it gets no boundary line either, the same
+          // "never began" shape a missing feature file already gets.
+          if (!quiet) {
+            writeScenarioBoundary(stderr, {
+              index: pickleIndex + 1,
+              total: selected.pickles.length,
+              relativeFeaturePath: selected.relativePath,
+              line: pickle.location?.line ?? 0,
+              name: pickle.name,
+            });
           }
 
           const record = await runScenario({
@@ -607,6 +680,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             compatHooks,
             defaultTimeoutMs,
             onUnknownTraceVersion,
+            onStepEnd,
             fixtureGraph,
             fixtureProcessCache,
           });
@@ -615,6 +689,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // finishes (this task's spec, decision 7); everything else about
           // this run goes to stderr, never stdout.
           stdout.write(`${JSON.stringify(record)}\n`);
+          scenariosWritten += 1;
+          if (record.status === "passed") {
+            scenariosPassed += 1;
+          }
+          receiptsWritten += record.steps.filter((step) => step.receipt !== null).length;
           // A `"scenario"`-scope fixture's own teardown failure (P5 task
           // spec, scope item 6) — already recorded on `record.teardown_
           // errors` (src/run/run-scenario.ts); announced here too, on
@@ -684,6 +763,48 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // had their chance to flip `allPassed`, immediately before the
       // `return` below that turns it into this run's own exit code.
       messagesEmitter?.end(allPassed);
+
+      // fb5-run-output task spec, decisions 2-3: where this run actually
+      // wrote, then a one-line summary — both unconditional, `--quiet`
+      // included (see this file's own header). `receipts`/`scenarios` are
+      // gated on `scenariosWritten > 0`, not `hasPickles`: a BeforeAll
+      // failure leaves `hasPickles` true with zero scenario records ever
+      // written, and this table only ever names what this run actually
+      // wrote. `allure`/`messages` are gated on `hasPickles` itself
+      // (run.ts:530,557 above — the same condition that gates their own
+      // construction): each writes its own environment/categories or
+      // stream-header data as soon as it is constructed, before any one
+      // scenario's own record exists to write.
+      writeOutputLocations(stderr, [
+        ...(scenariosWritten > 0
+          ? [
+              {
+                label: "receipts",
+                relativePath: path.join(config.stateDir, "receipts"),
+                kind: "dir" as const,
+                count: receiptsWritten,
+              },
+              {
+                label: "scenarios",
+                relativePath: path.join(config.stateDir, "scenarios"),
+                kind: "dir" as const,
+                count: scenariosWritten,
+              },
+            ]
+          : []),
+        ...(hasPickles
+          ? [
+              { label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const },
+              { label: "messages", relativePath: messagesOutputRel, kind: "file" as const },
+            ]
+          : []),
+      ]);
+      writeRunSummary(stderr, {
+        total: scenariosWritten,
+        passed: scenariosPassed,
+        failed: scenariosWritten - scenariosPassed,
+        durationMs: Date.now() - invocationStartedAt.getTime(),
+      });
 
       return allPassed ? 0 : 1;
     } finally {

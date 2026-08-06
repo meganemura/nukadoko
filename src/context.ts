@@ -56,14 +56,17 @@ import type { Step } from "./step/define-step.js";
 //
 // `section` (t3-sections task spec) reverses m2pre-ctx-surface's original
 // call: that decision withheld it because it would have been a no-op until
-// a progress-log feature existed. Its actual destination turned out to be
-// the receipt, not a live log — `sections: string[]` (docs/spec.md
-// "Receipts", src/context/sections.ts) lets a failed step's receipt say
-// which stage it reached, which needs no progress-log feature at all. It is
-// a bare label-in, nothing-out call (no span, no timing) on purpose: a
-// function that wraps a block would have to decide what nesting, async
-// boundaries, and early `return`s inside it mean, none of which "where did
-// it fail" requires.
+// a progress-log feature existed. That feature exists now (fb5-run-output
+// task spec, src/run/progress-log.ts — `nuka run`'s own stderr progress
+// lines), but `section`'s own destination turned out to be the receipt, not
+// that live log: `sections: string[]` (docs/spec.md "Receipts",
+// src/context/sections.ts) lets a failed step's receipt say which stage it
+// reached, a fact this file's own read (accept, a report, an agent
+// re-reading a receipt later) needs regardless of whether anyone was
+// watching stderr while the step ran. It is a bare label-in, nothing-out
+// call (no span, no timing) on purpose: a function that wraps a block would
+// have to decide what nesting, async boundaries, and early `return`s inside
+// it mean, none of which "where did it fail" requires.
 //
 // `expect` is deliberately not a fixture (p4a-fixture-bag task spec): a
 // step imports it directly, `import { expect } from "playwright/test"`.

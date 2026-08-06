@@ -6,7 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
-import { copyExampleToTempDir, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, removeTempDir, repoRoot, stripRunProgressLines } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -92,7 +92,7 @@ describe("examples/migration", () => {
 
     const { stdout, stderr, exitCode } = await runNuka(["run", "features/migration.feature"], rootDir);
 
-    expect(stderr).toBe("");
+    expect(stripRunProgressLines(stderr)).toBe("");
     expect(exitCode).toBe(0);
 
     const records = stdout

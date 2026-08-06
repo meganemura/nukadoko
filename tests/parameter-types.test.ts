@@ -5,7 +5,13 @@ import { runCli } from "../src/cli/run-cli.js";
 import { loadConfig } from "../src/config/load-config.js";
 import { discoverSteps } from "../src/discover/discover-steps.js";
 import { bindStepArgs, buildStepBindings, matchPickleStep } from "../src/run/match-step.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  fixture,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: m2pre-parameter-types task spec, scope item 2's two
 // end-to-end items, both against tests/fixtures/parameter-types-project
@@ -108,7 +114,7 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(exitCode).toBe(0);
 
     const lines = stdout

@@ -48,6 +48,7 @@ import { fromCandidates, type Step } from "../step/define-step.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
+import type { StepProgressInfo } from "./progress-log.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
@@ -308,6 +309,17 @@ export interface RunScenarioOptions {
    * `runScenario` call for that invocation), so a run whose several steps
    * each hit this still only ever writes the stderr warning once. */
   readonly onUnknownTraceVersion: (version: number) => void;
+  /** Reports one pickle step's own outcome the moment it stops running
+   * (fb5-run-output task spec, decision 1) — one instance per `nuka run`
+   * invocation (src/run/progress-log.ts's `createStepProgressLogger`, built
+   * once by cli/run.ts, same "build once, thread unchanged into every
+   * runScenario call" shape `onUnknownTraceVersion` above already has).
+   * `undefined` under `--quiet` and under `nuka do` (which has no scenario,
+   * hence no `runScenario` call at all, hence nothing to wire this into).
+   * Called from exactly one place in this file, `pushStepRecord` below —
+   * see that function's own header for why every step-record append site
+   * funnels through it instead of calling this directly. */
+  readonly onStepEnd?: (info: StepProgressInfo) => void;
   /** The fixture dependency graph for this run (P5 task spec, scope item 5)
    * — builtins ∪ `config.fixtures`, built once by cli/run.ts's own setup
    * phase (`src/fixture/graph.ts`'s `buildFixtureGraph`) and passed
@@ -708,6 +720,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     compatHooks,
     defaultTimeoutMs,
     onUnknownTraceVersion,
+    onStepEnd,
     fixtureGraph,
     fixtureProcessCache,
   } = options;
@@ -844,6 +857,35 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const stepRecords: ScenarioStepRecord[] = [];
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
+
+  /**
+   * The one place this pickle's own `stepRecords` array is ever appended to
+   * (fb5-run-output task spec, decision 1) — every one of the seven places
+   * below that used to call `stepRecords.push` directly now calls this
+   * instead, so `onStepEnd` fires exactly once per step, by construction,
+   * rather than by seven separate call sites staying in sync by discipline
+   * (this task's spec: a step must never produce two progress lines, or
+   * zero). `durationMs` is `0` for a step that never actually executed
+   * (skipped by an earlier failure, undefined, ambiguous, or refused by the
+   * read-only policy) — there is no "how long did it take" for work that
+   * never started; the two backstop call sites (a step that threw before or
+   * after its own receipt began) pass whatever real elapsed time they each
+   * have. `stepIndex` is this array's own length right after the push, not
+   * the pickle's own step index — the two agree under normal operation
+   * (exactly one push per iteration of the loop below), and the array's own
+   * length is what a progress-line reader actually wants: "which line is
+   * this, out of how many so far", not a 0-based array position.
+   */
+  function pushStepRecord(record: ScenarioStepRecord, durationMs: number): void {
+    stepRecords.push(record);
+    onStepEnd?.({
+      stepIndex: stepRecords.length,
+      totalSteps: pickle.steps.length,
+      status: record.status === "passed" ? "passed" : record.status === "skipped" ? "skipped" : "failed",
+      durationMs,
+      text: record.text,
+    });
+  }
 
   /**
    * Shared by the typed and compat branches below (this task's spec, item
@@ -1075,12 +1117,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     if (status === "failed") {
       scenarioFailed = true;
     }
-    stepRecords.push({
-      text: pickleStep.text,
-      status: status === "ok" ? "passed" : "failed",
-      receipt: begun.receiptId,
-      ...(status === "failed" ? { error: { message: errorMessage } } : {}),
-    });
+    pushStepRecord(
+      {
+        text: pickleStep.text,
+        status: status === "ok" ? "passed" : "failed",
+        receipt: begun.receiptId,
+        ...(status === "failed" ? { error: { message: errorMessage } } : {}),
+      },
+      stepFinishedAt.getTime() - stepStartedAt.getTime(),
+    );
   }
 
   // --- Hooks + World (m2b-compat-execution task spec, items 4-5) ---
@@ -1355,7 +1400,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // one already failed never executes, so it never reaches any of the
       // three `runAfterStepHooks` call sites below either — this `continue`
       // is exactly where that "no after for a skipped step" boundary lives.
-      stepRecords.push({ text: pickleStep.text, status: "skipped", receipt: null });
+      pushStepRecord({ text: pickleStep.text, status: "skipped", receipt: null }, 0);
       continue;
     }
 
@@ -1383,6 +1428,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // below), while a throw at or after it still gets a receipt written,
     // exactly like any other execution-phase failure this function
     // already handles inline.
+    //
+    // fb5-run-output task spec: this iteration's own start, read by the
+    // `began === null` arm of the backstop catch below — the one step
+    // outcome with no more precise start time available (nothing "began"
+    // yet in the sense above), so its own progress line reports elapsed
+    // time since matching this step started rather than since some receipt
+    // that was never opened.
+    const stepLoopStartedAt = new Date();
     let began: {
       readonly receiptId: string;
       readonly receiptDir: string;
@@ -1411,23 +1464,29 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
       if (outcome.kind === "undefined") {
         scenarioFailed = true;
-        stepRecords.push({
-          text: pickleStep.text,
-          status: "undefined",
-          receipt: null,
-          error: { message: undefinedStepMessage(pickleStep.text) },
-        });
+        pushStepRecord(
+          {
+            text: pickleStep.text,
+            status: "undefined",
+            receipt: null,
+            error: { message: undefinedStepMessage(pickleStep.text) },
+          },
+          0,
+        );
         continue;
       }
 
       if (outcome.kind === "ambiguous") {
         scenarioFailed = true;
-        stepRecords.push({
-          text: pickleStep.text,
-          status: "ambiguous",
-          receipt: null,
-          error: { message: ambiguousStepMessage(pickleStep.text, outcome.stepNames) },
-        });
+        pushStepRecord(
+          {
+            text: pickleStep.text,
+            status: "ambiguous",
+            receipt: null,
+            error: { message: ambiguousStepMessage(pickleStep.text, outcome.stepNames) },
+          },
+          0,
+        );
         continue;
       }
 
@@ -1454,12 +1513,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // in this file checks a compat step's read-only behavior either.
         if (policy === "read-only" && entry.step.mutates) {
           scenarioFailed = true;
-          stepRecords.push({
-            text: pickleStep.text,
-            status: "failed",
-            receipt: null,
-            error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
-          });
+          pushStepRecord(
+            {
+              text: pickleStep.text,
+              status: "failed",
+              receipt: null,
+              error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
+            },
+            0,
+          );
           continue;
         }
 
@@ -1720,12 +1782,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       scenarioFailed = true;
       const message = error instanceof Error ? error.message : String(error);
       if (began === null) {
-        stepRecords.push({
-          text: pickleStep.text,
-          status: "failed",
-          receipt: null,
-          error: { message },
-        });
+        pushStepRecord(
+          {
+            text: pickleStep.text,
+            status: "failed",
+            receipt: null,
+            error: { message },
+          },
+          Date.now() - stepLoopStartedAt.getTime(),
+        );
       } else {
         // Same "close this step's own chunk before reading anything from
         // its receipt dir" call `finishExecutedStep` makes (this file's own
@@ -1813,12 +1878,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         };
         const redactedReceipt = redact(receipt, secrets) as Receipt;
         await writeReceipt(began.receiptDir, redactedReceipt);
-        stepRecords.push({
-          text: pickleStep.text,
-          status: "failed",
-          receipt: began.receiptId,
-          error: { message },
-        });
+        pushStepRecord(
+          {
+            text: pickleStep.text,
+            status: "failed",
+            receipt: began.receiptId,
+            error: { message },
+          },
+          stepFinishedAt.getTime() - began.startedAt.getTime(),
+        );
         // `began !== null`: this step's own execution had already begun (a
         // receipt was written above) before the uncaught throw this backstop
         // exists for — so, unlike the `began === null` arm just above (never

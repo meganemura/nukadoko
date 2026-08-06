@@ -1,7 +1,12 @@
 import { chromium } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: P5 task spec, scope item 5's own "page を要求しないシナ
 // リオがブラウザを起動しないことを維持すること" — extended to the fixture
@@ -29,7 +34,7 @@ describe("nuka run: a step reaching page only through a fixture still launches e
       const stderr = createCaptureSink();
       const exitCode = await runCli(["run", "features/via-logged-in.feature"], { rootDir, stdout, stderr });
 
-      expect(stderr.text()).toBe("");
+      expect(stripRunProgressLines(stderr.text())).toBe("");
       expect(exitCode).toBe(0);
 
       const records = stdout

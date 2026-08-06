@@ -171,3 +171,34 @@ export function createCaptureSink(): { write(chunk: string): boolean; text(): st
     },
   };
 }
+
+// fb5-run-output task spec: `nuka run` now always writes its own progress
+// output to stderr (a scenario boundary line, a step line per step, where
+// output landed, and a one-line summary — src/run/progress-log.ts), so a
+// pre-existing test asserting a *clean* run's stderr is empty needs to say
+// that modulo this new, expected chatter instead. Recognizing exactly the
+// four line shapes that module writes (never a partial/fuzzy match) keeps
+// this a precise complement of "no progress line here" rather than a
+// blanket swallow that could also hide a real warning.
+const SCENARIO_BOUNDARY_LINE = /^scenario \d+\/\d+  /;
+const STEP_PROGRESS_LINE = /^ {2}step \d+\/\d+  /;
+const OUTPUT_LOCATION_LINE = /^(?:receipts|scenarios|allure|messages)\b/;
+const RUN_SUMMARY_LINE = /^\d+ scenarios?: \d+ passed, \d+ failed {2}\(/;
+
+/** Strips `nuka run`'s own progress-log lines (fb5-run-output task spec)
+ * out of captured stderr text, leaving any warning/error line a test still
+ * wants to assert on. Used in place of a bare `stderr.text()` wherever a
+ * test's own point predates this feature and was really asserting "nothing
+ * unexpected happened", not "this command is silent". */
+export function stripRunProgressLines(text: string): string {
+  return text
+    .split("\n")
+    .filter(
+      (line) =>
+        !SCENARIO_BOUNDARY_LINE.test(line) &&
+        !STEP_PROGRESS_LINE.test(line) &&
+        !OUTPUT_LOCATION_LINE.test(line) &&
+        !RUN_SUMMARY_LINE.test(line),
+    )
+    .join("\n");
+}

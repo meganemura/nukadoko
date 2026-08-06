@@ -2,7 +2,12 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: p6-browser-type task spec's own end-to-end proof —
 // `config.browserType` reaching a real `nuka run`, and the measured
@@ -53,7 +58,7 @@ describe("nuka run: browserType", () => {
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(exitCode).toBe(0);
 
     const records = stdout

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { discoverSteps } from "../src/discover/discover-steps.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: m22-compat-run-scope task spec's end-to-end coverage —
 // `setDefaultTimeout` (item 1) actually reaching compat step/hook execution
@@ -174,7 +179,7 @@ describe("nuka run: BeforeAll/AfterAll run once per run, in LIFO order for After
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     const log = (globalThis as Record<string, unknown>).__nukadokoRunAllHooksLog as string[];
     expect(log).toEqual([]);
   });

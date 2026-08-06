@@ -3,7 +3,12 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run` -> allure-results wiring, end to end (m3b-
 // allure-emitter spec-b2 task spec, test item 2). The mapping itself —
@@ -45,7 +50,7 @@ describe("nuka run: allure-results wiring", () => {
     // stdout/exit code are unchanged by the emitter (this task's spec, item
     // 2) — the same one-record-line assertion run.test.ts's own "runs a
     // pure-step scenario to completion" test makes.
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     const stdoutLines = stdout.text().split("\n").filter((line) => line.length > 0);
     expect(stdoutLines).toHaveLength(1);
 
@@ -75,7 +80,7 @@ describe("nuka run: allure-results wiring", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
 
     const resultsDir = path.join(rootDir, "reports", "allure");
     expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
@@ -96,7 +101,7 @@ describe("nuka run: allure-results wiring", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(existsSync(path.join(rootDir, ".nukadoko", "allure-results"))).toBe(false);
   });
 });

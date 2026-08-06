@@ -4,7 +4,12 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: m2b-compat-execution task spec's mixed-scenario coverage
 // — a typed step and a compat step sharing one pickle's ctx (a cookie the
@@ -76,7 +81,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     const exitCode = await runCli(["run", "features/mixed.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
 
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");

@@ -10,6 +10,7 @@ import {
   createCaptureSink,
   ensureNukadokoShim,
   removeTempDir,
+  stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
 // Responsibility: anti-rot proof for examples/todo/README.md's two central,
@@ -66,7 +67,7 @@ describe("examples/todo", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/todo.feature"], { rootDir, stdout, stderr });
 
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     const records = stdout
       .text()
       .split("\n")

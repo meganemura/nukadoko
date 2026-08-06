@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: P5 task spec's own completion condition 5 — a `"process"`-
 // scope fixture is built exactly once across two scenarios in the same
@@ -29,7 +34,7 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/process-scope.feature"], { rootDir, stdout, stderr });
 
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(exitCode).toBe(0);
 
     const records = stdout

@@ -4,7 +4,12 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: m2b-compat-execution task spec's compat-only scenario e2e
 // coverage — `nuka run` actually matching and executing a compat step
@@ -76,7 +81,7 @@ describe("nuka run: compat step execution", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
 
     const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
     expect(records).toHaveLength(3);

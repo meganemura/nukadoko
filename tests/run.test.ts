@@ -3,7 +3,12 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run` end to end against run-project — a pure-step
 // fixture (no browser, no HTTP server) covering matching/skip/record
@@ -42,7 +47,7 @@ describe("nuka run", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
 
     const lines = nonEmptyLines(stdout.text());
     expect(lines).toHaveLength(1);
@@ -267,7 +272,7 @@ describe("nuka run", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
   });
 
   it("an invalid :line is a setup failure: stderr + exit 1, nothing written", async () => {
@@ -345,7 +350,7 @@ describe("nuka run: .js and .mjs step files (p10-step-discovery)", () => {
         stderr,
       });
 
-      expect(stderr.text()).toBe("");
+      expect(stripRunProgressLines(stderr.text())).toBe("");
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("passed");
       expect(record.steps).toHaveLength(2);
