@@ -33,6 +33,16 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## Unreleased
+
+One breaking change. The entry says what to fix; why is in
+[CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+
+- **`nuka steps --json`'s top level changed from a bare array to `{ steps,
+  import_failures }`.** Anything reading the old bare array needs to read
+  `.steps` now; `import_failures` (`{ file, message }`) is new alongside
+  it, always present, `[]` when nothing failed.
+
 ## 0.0.5 to 0.1.0
 
 Three breaking changes. Each entry says what to fix; why is in
