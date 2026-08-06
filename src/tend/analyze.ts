@@ -12,6 +12,7 @@ import { analyzeFieldDescriptions } from "./missing-describe.js";
 import { findMissingRationale } from "./missing-rationale.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
+import { findPostNavigationReads } from "./post-navigation-read.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { findSignedFeatureUnscanned } from "./signed-feature-unscanned.js";
 import { findSignoffConditionMismatch } from "./signoff-condition-mismatch.js";
@@ -98,6 +99,14 @@ import type { TendIssue, TendReport } from "./types.js";
 // but does its own independent walk of it (that file's own header) rather
 // than being folded into `findSignoffRot`'s loop, since one produces
 // `errors` and the other `notes` — never the same collection.
+//
+// `findPostNavigationReads` is fb5-stale-wait-note's own addition, a note,
+// the same severity call `findSignoffConditionMismatch` makes just above and
+// for the same reason: nothing here is wrong right now, only a fact worth a
+// human's attention (that module's own header explains why it is never a
+// verdict). It walks the same record source a third, independent time
+// rather than joining either existing walk, matching this file's own
+// standing rule for the other two.
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
@@ -139,6 +148,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
     ...findSignoffConditionMismatch(rootDir, config.browserType),
+    ...findPostNavigationReads(rootDir),
   ];
 
   const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);

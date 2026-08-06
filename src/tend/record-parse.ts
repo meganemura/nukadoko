@@ -114,11 +114,23 @@ function extractGherkinFence(body: string): string | undefined {
  * `renderHook` emits `{ type, status, ... }` — no `step` key — so filtering
  * on `step` being a string is what tells a step's own receipt block apart
  * from a hook's, without needing to parse the preceding heading text at
- * all). */
+ * all). `actions` is added now (fb5-stale-wait-note task spec) so
+ * src/tend/post-navigation-read.ts can read it straight off a parsed
+ * record: the field is already embedded verbatim by
+ * `extractReceiptLikeBlocks` below (a receipt's own JSON, only `evidence`
+ * ever stripped, `render-record.ts`'s own header), so this interface only
+ * needed a name for it. `polls` is added the same way (fb5-stale-wait-poll
+ * task spec), for the same module to tell a `ctx.poll`-covered read apart
+ * from one that is not. Kept as `unknown`, `result`'s own convention: this
+ * module never validates a receipt's own shape beyond "is this
+ * receipt-like"; a per-entry check of what `actions`/`polls` actually
+ * contain is that finding's own job, not this shared parser's. */
 export interface RecordReceiptLike {
   readonly step: string;
   readonly status: unknown;
   readonly result?: unknown;
+  readonly actions?: unknown;
+  readonly polls?: unknown;
 }
 
 function isReceiptLike(value: unknown): value is RecordReceiptLike {
