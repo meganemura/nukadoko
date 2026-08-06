@@ -2199,6 +2199,35 @@ What it looks at, and why each one is rot rather than style:
   missing the one still being drafted: exactly the feature a false
   `pattern-unbound` would most mislead someone about. Naming the
   directory in `additionalFeatureDirs` is what actually fixes it.
+- **A step whose own trace shows another call landing close behind a
+  navigation call.** Read from a frozen sign-off record's receipt alone,
+  never a live run's (`.nukadoko` stays out of this walk the same way it
+  does every other one here): for each `goto`, `reload`, `goBack`, or
+  `goForward` in that receipt's own `actions`, the gap to whatever call
+  the step made next. A read that lands inside the same receipt's own
+  `ctx.poll` window is left out: a step written to `poll()` the way the
+  doctrine in "Context API" already asks for is retrying by construction,
+  not the thing this note exists to tell apart from it. What is reported
+  is only the gap itself, never a verdict: how long a page takes to
+  render after a navigation is nothing this tool measures, and no table
+  of which Playwright calls auto-wait is built to guess at it, since a
+  table like that would describe a dependency's own semantics rather than
+  something this tool measured, and go stale the moment that dependency
+  changed. A receipt with no `actions` at all, the shape a record written
+  before that field existed still carries, is silently out of scope, not
+  an error.
+
+This last finding is the plainest reason the whole list above lives on
+`tend` and not `check`. The step it names already ran green, and its
+receipt already froze that pass; nothing about it is broken today, and no
+run is blocked by it. What changed is only that the tool can now see a
+fact about how that pass happened, not that the pass stopped being real.
+`check` exists to answer whether a run can proceed right now, so a step
+that already passed has nothing left for it to say; `tend` exists to
+answer whether what already passed is still healthy, and "has not yet lost
+a race it happens to be running" is exactly the kind of health that
+question is for. Reporting this as an error would treat a symptom that has
+not appeared as though it already had.
 
 Findings are `--json` like everything else. The sign-off finding exits
 non-zero so a periodic job can act on it; the rest do not, because a

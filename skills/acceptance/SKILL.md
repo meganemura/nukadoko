@@ -477,6 +477,10 @@ broken file elsewhere would otherwise leave them quietly short with no way
 to tell. This note never exits non-zero either; `nuka check` is where to
 fix the import itself.
 
+`nuka tend` also reports `post-navigation-read`: a note naming a step
+whose accepted trace shows another call landing close behind a navigation
+call, the gap itself and nothing about whether it was safe.
+
 ## What not to do
 
 - Don't put an acceptance feature inside the project's regression suite —

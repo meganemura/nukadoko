@@ -55,6 +55,14 @@ just until 0.1.
   is never worth suppressing for a flag whose whole point is a quieter
   terminal, not a silent one. stdout is unchanged: still NDJSON only, one
   scenario record per line.
+- **`nuka tend` adds a `post-navigation-read` note.** For a step whose
+  frozen sign-off record shows a call landing shortly after `goto`,
+  `reload`, `goBack`, or `goForward` finished, it reports the gap: not a
+  verdict that the gap was too short, since only the application's own
+  render time decides that and this tool has no way to know it, only the
+  fact of how much time passed. A read inside a `ctx.poll` window is
+  excluded, since a step written that way is already retrying. Never
+  changes the exit code.
 
 ## 0.1.0 — 2026-08-06
 
