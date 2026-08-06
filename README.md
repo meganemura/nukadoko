@@ -220,6 +220,8 @@ and on a `0.0.x` version a caret pins the patch as well, so `npm update`
 alone will never move you off whichever version you first installed. While
 this is 0.x, any release can change the public API, so read the
 [changelog](CHANGELOG.md) rather than trusting the range to keep you safe.
+For what to actually fix after a breaking change, see
+[docs/upgrading.md](docs/upgrading.md).
 
 ## Secrets need no manifest
 

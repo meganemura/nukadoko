@@ -1075,7 +1075,9 @@ import { Given, When, Then } from "nukadoko/compat";
   semantics-preserving so it can be taken early and safely. The door
   swings both ways: switching the import back must remain possible.
 - A step-by-step walkthrough of this door for an existing cucumber-js +
-  Playwright suite lives in [docs/migration.md](migration.md).
+  Playwright suite lives in [docs/migration.md](migration.md). Moving a
+  project already on nukadoko to a newer release is a different question,
+  answered in [docs/upgrading.md](upgrading.md).
 
 ## Running
 

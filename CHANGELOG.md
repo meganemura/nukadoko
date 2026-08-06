@@ -63,6 +63,12 @@ just until 0.1.
   fact of how much time passed. A read inside a `ctx.poll` window is
   excluded, since a step written that way is already retrying. Never
   changes the exit code.
+- **`docs/upgrading.md` (paired with `docs/upgrading.ja.md`) covers moving
+  a project already on nukadoko to a newer release.** `docs/migration.md`
+  is for a cucumber-js suite coming in; upgrading is the separate question
+  of what an existing nukadoko project has to do about a breaking change,
+  split into what stays the same every release and what changed in this
+  one.
 
 ## 0.1.0 — 2026-08-06
 

@@ -755,6 +755,7 @@ import { Given, When, Then } from "nukadoko/compat";
   ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
   扉は両方向に開きます: import を元に戻せることは維持されます。
 - 既存の cucumber-js + Playwright スイート向けに、この扉の手順を追った解説が [docs/migration.ja.md](migration.ja.md) にあります。
+  すでに nukadoko の上にあるプロジェクトを新しいリリースへ移すのは別の問いであり、[docs/upgrading.ja.md](upgrading.ja.md) で答えます。
 
 ## 実行
 

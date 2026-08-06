@@ -138,5 +138,12 @@ change against before writing it.
   itself answers — vocabulary, contracts, refusal reasons go stale the
   moment a command changes — but they must name the commands, flags, and
   checks that exist, and must not name ones that don't.
+- **A breaking change is not finished until `docs/upgrading.md` says how
+  to move across it.** The CHANGELOG records what changed and why;
+  upgrading records what a project already on nukadoko has to do about
+  it, and those are different questions from different readers.
+  `docs/migration.md` is for a cucumber-js suite coming in, not for a
+  project moving between nukadoko versions, so an upgrade note put there
+  reaches the wrong readers. Both files are paired with their `.ja.md`.
 - Code comments explain why, not what; each module opens with its
   responsibility and boundaries.

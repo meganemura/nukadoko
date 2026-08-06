@@ -202,6 +202,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 インストール時に npm が書くのはキャレット範囲であり、`0.0.x` のバージョンではキャレットは patch まで固定します。
 つまり `npm update` だけでは、最初に入れたバージョンから決して動きません。
 0.x の間はどのリリースでも public API が変わり得るので、範囲指定に守ってもらうのではなく [changelog](CHANGELOG.md) を読んでください。
+破壊的変更のあとに実際に何を直すかは、[docs/upgrading.ja.md](docs/upgrading.ja.md) を参照してください。
 
 ## Secrets need no manifest
 
