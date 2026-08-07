@@ -13,6 +13,35 @@ just until 0.1.
   import_failures }`.** Anything reading the old bare array needs to read
   `.steps` now; `import_failures` (`{ file, message }`) is new alongside
   it, always present, `[]` when nothing failed.
+- **Allure now writes one test per step, not one test per scenario.** A
+  run used to put nothing on screen until a scenario was over, so a
+  20-step scenario that takes minutes showed a blank report the whole
+  time; Allure only updates when a new result file appears and never
+  re-reads one it has already seen, and it has no way to show a test that
+  is still running, so the only unit it can update at is one finished
+  test. Mapping a step to a test was the only way to get feedback at step
+  granularity instead of scenario granularity (measured: first result
+  lands within 150-351ms of that step finishing). The scenario moves into
+  the `suite` label and the feature stays `parentSuite`, so a suite row
+  still carries the whole scenario's tally and turns red as soon as one
+  of its steps does. This costs Allure history: four ways of identifying
+  a step across runs were measured, and every one mis-links two
+  different steps as the same one (text collides with itself, position
+  shifts on any earlier edit, occurrence counting cannot tell an
+  inserted duplicate from the original), so nothing links a step's
+  `historyId` across runs any more, on purpose, via three hidden
+  parameters that change every run. A migrated suite that kept a
+  cucumber-shaped report tied to its old history would have gained
+  nothing by moving; the compat door is for getting a suite in, not for
+  where it settles, and time-over-time observation stays available
+  through `nuka tend` instead (see
+  [Allure emitter](docs/spec.md#allure-emitter)). One display
+  regression: a scenario stopped by its own Before hook now shows every
+  step `skipped` rather than one test turning red, because there is no
+  longer a scenario-level test for that failure to live on; `nuka run`'s
+  exit code and `record.json` are unaffected, and `nuka accept` is
+  unchanged, since the acceptance unit was always the scenario, never
+  the Allure report.
 
 ### Added
 

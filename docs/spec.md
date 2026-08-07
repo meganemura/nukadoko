@@ -1844,9 +1844,10 @@ mechanical, and the tool refuses rather than let them go wrong quietly.
 
 ## Allure emitter
 
-`nuka run` writes one Allure test result per scenario to the `allure-results/`
-directory (Allure 2 file format, readable by both Allure 2 and 3):
-nukadoko's only presentation layer; nukadoko itself renders nothing.
+`nuka run` writes one Allure test result per *step*, the moment that step
+finishes, to the `allure-results/` directory (Allure 2 file format, readable
+by both Allure 2 and 3): nukadoko's only presentation layer; nukadoko itself
+renders nothing.
 
 - The output location defaults to `.nukadoko/allure-results/` (the state
   directory's own `allure-results/`, above); `allure.resultsDir` in
@@ -1860,22 +1861,46 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   cleared or replaced. Whether two `nuka run` invocations count as one
   Allure launch or two is left to the caller; a user who wants a fresh
   launch removes the directory themselves.
-- `allure-results/` is safe to read while `nuka run` is still going: each
-  scenario's own result is written as soon as that scenario finishes, and
-  `categories.json`/`environment.properties` are written once, at the very
-  start of the run, before the first scenario starts. Running `allure
-  generate` against that directory mid-run reports every scenario that has
-  finished so far; nothing about the directory's own consistency depends on
-  the run having completed.
-- A scenario run maps to one Allure test result: each gherkin step becomes
-  an Allure step, and each Before/After hook becomes its own fixture
-  (Allure container).
-- Attachments: the scenario's own screenshot, and per step, its own trace,
-  HTTP log, and validated result. Separately, whatever a step declared
-  about itself (an attachment, a link, a log line) is emitted too, always
-  under a name prefixed `declared:`; that prefix is the one place where
-  provenance (measured by nukadoko vs. self-reported by the step) survives
-  once everything is sitting in the same result file.
+- `allure-results/` is safe to read while `nuka run` is still going, and
+  reading it while a run is going is the reason step became the unit: a
+  20-step scenario that takes minutes used to leave the report blank until
+  the last step finished, because a scenario was the smallest thing Allure
+  had a result for. Now each step's own result lands the moment that step
+  finishes, so a dashboard already open updates step by step rather than
+  scenario by scenario; landing latency was measured at 150-351ms. `nuka
+  init` creates `.nukadoko/allure-results/` empty up front for exactly this
+  (see "The state directory"), so `allure watch` can already be running
+  before the first `nuka run` even starts. `categories.json`/
+  `environment.properties` are written once, at the very start of the run,
+  before the first step starts. Running `allure generate` against the
+  directory mid-run reports every step that has landed so far; nothing
+  about the directory's own consistency depends on the run having
+  completed.
+- Each gherkin step becomes its own Allure test result, not an Allure step
+  nested inside a scenario's test the way it was before. The scenario
+  becomes that test's `suite` label and the feature stays its `parentSuite`
+  (unchanged); Allure's default tree already groups by exactly that pair,
+  so a suite row still carries the whole scenario's tally and turns red as
+  soon as one of its steps does, the same as before, even though the
+  `suite` slot itself was empty until now. Each Before/After hook still
+  becomes its own fixture (Allure container), unchanged.
+- A scenario stopped by its own Before hook now shows every one of its
+  steps as `skipped`, with the failure visible only inside that hook's own
+  fixture, because there is no longer a scenario-level test for a hook
+  failure to turn red the way it used to. `nuka run`'s own exit code and
+  the `record.json` it writes are unaffected either way: this is a
+  report-display limit, not a change to what failed or what nukadoko
+  decided about it.
+- Attachments: per step, its own trace, HTTP log, and validated result,
+  attached to that step's own test result. The scenario's own screenshot
+  (`final.png`, taken once at teardown) attaches instead to a synthetic
+  fixture named "Scenario evidence," since by the time it is captured every
+  step's own test has already been written to disk and there is no
+  scenario-level test left for it to attach to directly. Separately,
+  whatever a step declared about itself (an attachment, a link, a log line)
+  is emitted too, always under a name prefixed `declared:`; that prefix is
+  the one place where provenance (measured by nukadoko vs. self-reported by
+  the step) survives once everything is sitting in the same result file.
 - Every step whose receipt exists, passing or failing alike, also gets that
   whole receipt attached verbatim, as `receipt.json`. It is the same object
   that reached disk (already redacted there, so nothing here redacts it a
@@ -1887,10 +1912,13 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   keeps the report complete even where an individual mapping was never
   written.
 - A step's own `sections`, `polls`, and `actions` (see Receipts) become one
-  child-step timeline nested under that step, merged in ascending `at`
-  order; two entries that land on the exact same millisecond keep a fixed
-  order, `sections` before `polls` before `actions`, so a rerun of the same
-  receipt never reshuffles the timeline into an unreadable diff. A section
+  child-step timeline nested directly under that step's own test, one level
+  shallower than before this change (a step used to be nested inside a
+  scenario's test itself, and the timeline nested inside that). Merged in
+  ascending `at` order; two entries that land on the exact same millisecond
+  keep a fixed order, `sections` before `polls` before `actions`, so a
+  rerun of the same receipt never reshuffles the timeline into an
+  unreadable diff. A section
   renders as a zero-width marker named after its own label. A poll spans
   its own start through `waited_ms` later, named `<description>
   (<attempts> attempts)`, so a wait that resolved in one attempt reads
@@ -1951,11 +1979,16 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   (declared): false` next to a nonzero `http writes (observed)` when the
   step called a POST-based read, and that is the proxy showing through the
   table, not either number lying.
-- A failed step or test's message is prefixed `[nukadoko.failure=<kind>]`,
-  naming the same `error.kind` its receipt already carries; the same
-  `error.kind` is also written as a `nukadoko.failure` result label. The two
-  Allure generations turn that into a category by different paths, and they
-  need different things from a user.
+- Three more parameters, `nukadoko.run`, `nukadoko.scenario`, `nukadoko.step`,
+  carry that step's run id, scenario id, and position, `mode: "hidden"` so
+  none of the three ever shows up in the UI. They exist to keep every step's
+  own `historyId` apart on purpose (see below), not to surface anything to
+  a reader.
+- A failed step's message is prefixed `[nukadoko.failure=<kind>]`, naming
+  the same `error.kind` its receipt already carries; the same `error.kind`
+  is also written as a `nukadoko.failure` result label. The two Allure
+  generations turn that into a category by different paths, and they need
+  different things from a user.
 - **Allure 2** has no per-result category field, so the emitter also writes
   `categories.json` (one rule per `error.kind`, all seven, every run,
   matching the message prefix by regex): the message prefix and the
@@ -1970,14 +2003,51 @@ nukadoko's only presentation layer; nukadoko itself renders nothing.
   `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory,
   no `--config` flag needed). Without it, every nukadoko failure lands in
   Allure 3's one built-in "Product errors" category instead.
-- Identity (`fullName`/`testCaseId`/`historyId`) is computed the same way
-  the official cucumberjs Allure adapter computes it, so a team migrating
-  onto nukadoko keeps its existing Allure history and retry tracking intact.
+- **`fullName` (`<feature path>#<scenario name>#<step text>`) and
+  `testCaseId` (a hash of `fullName`) are computed the same way the official
+  cucumberjs Allure adapter computes them. `historyId` is not, on purpose,
+  and Allure's history, trend, and flaky-across-runs detection do not work
+  here.** They all key off `historyId` matching from one run to the next,
+  and a step has nothing stable to match on: unlike a scenario, a step
+  carries no id of its own anywhere in the record. Four ways of computing
+  one anyway were tried, and every one of them mis-links two different steps
+  as if they were the same one. Step text collides with itself (two steps
+  can share the exact same wording). Position (index, line number) shifts
+  whenever anything earlier in the feature file is edited. Counting
+  occurrences cannot tell an inserted duplicate from the original it landed
+  next to. The line-number scheme was the one that made the failure mode
+  concrete: adding one comment line at the top of a feature file silently
+  re-pointed every step at its neighbour's history, and the output gave no
+  hint that it had happened, not a warning, not a mismatched count, nothing
+  a reader could have caught. Given that a wrong link is worse than no link
+  and every scheme tried produces one, the only choice that does not
+  eventually lie is to make sure nothing links across runs at all: every
+  `historyId` carries the three hidden parameters above
+  (`nukadoko.run`/`nukadoko.scenario`/`nukadoko.step`), which change on
+  every run and force every `historyId` apart, deliberately. They are
+  `mode: "hidden"` rather than `excluded: true` on purpose too: Allure drops
+  an `excluded` parameter before hashing it, which would undo the whole
+  point, where `hidden` only keeps a parameter out of the UI.
+  A team migrating an existing suite onto nukadoko does not keep that
+  suite's Allure history, trend, or retry tracking, and this is a choice,
+  not a gap to file: the compat door exists to let a suite move onto
+  nukadoko, not to be where it settles, and a suite that arrives and still
+  gets a cucumber-shaped report tied to yesterday's run has not gained
+  anything by moving. Time-over-time observation has a home here instead,
+  one that does not depend on an identity nothing in this codebase actually
+  has: `nuka tend`'s sign-off rot findings and its `post-navigation-read`
+  note (see "Tending"), both read from what was actually accepted rather
+  than from a chain of report entries that would have to trust a step's
+  identity to be right.
 - Ad-hoc `do` receipts are working records, not test results, and do not
   appear on the dashboard: what an exploration proves is expressed by
   repairing or writing a scenario, and that scenario run is what Allure
   shows.
-- Viewing, history, trends, flakiness: all Allure's job. nukadoko has no web UI.
+- Viewing one run is Allure's job, and nukadoko has no web UI of its own.
+  History, trend, and flakiness are Allure features too, but, per the
+  identity bullet above, this emitter does not feed them across runs: what
+  Allure shows for any one `nuka run` invocation is complete, and nothing
+  about a later invocation's steps is linked back to this one's.
 
 Not yet built: a hook's own duration (record.json carries no per-hook
 timestamp today, so a hook's start and stop both collapse to the

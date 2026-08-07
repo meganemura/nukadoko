@@ -35,13 +35,21 @@ This part does not change release to release.
 
 ## Unreleased
 
-One breaking change. The entry says what to fix; why is in
+Two breaking changes. Each entry says what to fix; why is in
 [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
 
 - **`nuka steps --json`'s top level changed from a bare array to `{ steps,
   import_failures }`.** Anything reading the old bare array needs to read
   `.steps` now; `import_failures` (`{ file, message }`) is new alongside
   it, always present, `[]` when nothing failed.
+- **Allure now writes one test per step, not one test per scenario.** A
+  report's test count is now a step count, not a scenario count. Read a
+  scenario's own pass/fail from its `suite` row, not from a single test.
+  Allure's history, trend, and flaky-across-runs views no longer work: if
+  CI carried `history.jsonl` forward from a run's generated report into
+  the next run's `allure-results/`, that carry-forward no longer does
+  anything, since nothing in this emitter's output links a step to itself
+  in an earlier run.
 
 ## 0.0.5 to 0.1.0
 

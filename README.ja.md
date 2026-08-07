@@ -330,10 +330,12 @@ Allure はこれを省くとカレントディレクトリの `allure-report/` �
 `.nukadoko/` の下へ出せば、`nuka init` がすでに gitignore に入れた場所に収まります。
 
 反復しながら書いている間に使うのは `watch` です。
-片方の端末で走らせたまま、もう片方で `nuka run` すると、scenario が着地するたびにレポートが更新されます。
+片方の端末で走らせたまま、もう片方で `nuka run` すると、scenario 全体が終わるのを待たず、step が着地するたびにレポートが step 単位で更新されます。
+suite の行は依然として scenario 全体の集計を持つので、長い scenario でも、終わるのを待たずその step のどれかが落ちた瞬間に赤くなります。
 待ち受けるポートはランダムです(`--port` で固定できます)。
 `--open` を渡さないかぎり、ブラウザが開くことはありません。
 `nuka init` は `.nukadoko/allure-results/` をあらかじめ作るので、最初の `nuka run` より前から `watch` を起動しておけます。
+ライブ更新の仕組みと、step 単位の粒度が Allure 自身の history や trend にどう跳ね返るかは [Allure emitter](docs/spec.ja.md#allure-emitter) を参照してください。
 
 `allure-results/` は追記のみで、nukadoko がそれを消すことはありません。
 そのため、自分でディレクトリを削除するまでレポートには毎回の実行が積み重なります。

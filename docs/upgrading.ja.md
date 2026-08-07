@@ -29,13 +29,19 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## Unreleased
 
-破壊的変更は 1 つです。
-その項目は「何を直すか」だけを述べます。
+破壊的変更は 2 つです。
+各項目は「何を直すか」だけを述べます。
 なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
 
 - **`nuka steps --json` のトップレベルは、素の配列から `{ steps, import_failures }` に変わりました。**
   旧来の素の配列を読んでいたものは、いまや `.steps` を読む必要があります。
   `import_failures`(`{ file, message }`)は新しく加わったフィールドで、常に存在し、何も失敗しなければ `[]` です。
+- **Allure はいまや scenario ごとではなく、step ごとに 1 つの test を書きます。**
+  レポートの test 数は、いまや scenario 数ではなく step 数です。
+  scenario 自身の成否は、単一の test からではなく `suite` の行から読んでください。
+  Allure の history、trend、run をまたいだ flaky 検出はもう機能しません。
+  CI で、run が生成したレポートの `history.jsonl` を次の run の `allure-results/` へ引き継ぐ運用を組んでいたなら、その引き継ぎはもう何もしません。
+  この emitter の出力には、ある step を以前の run の自分自身に結び付けるものが何も無いからです。
 
 ## 0.0.5 から 0.1.0 へ
 
