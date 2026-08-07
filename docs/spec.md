@@ -1997,12 +1997,19 @@ renders nothing.
 - **Allure 3**'s `allure generate`/`allure report` never read a results
   directory's `categories.json`: categories there come only from Allure 3's
   own config, matched against a result's labels, and `nukadoko.failure` is
-  exactly such a label. [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) ships seven
-  label-matcher rules, one per `error.kind`; dropped at a project's root it
-  is picked up automatically (Allure 3 auto-detects
+  exactly such a label. `nuka init` writes `allurerc.mjs` at the project
+  root with seven label-matcher rules, one per `error.kind`, built from
+  `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never
+  drift from the ones the emitter itself uses; dropped at a project's root
+  it is picked up automatically (Allure 3 auto-detects
   `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory,
-  no `--config` flag needed). Without it, every nukadoko failure lands in
-  Allure 3's one built-in "Product errors" category instead.
+  no `--config` flag needed). `init` checks all six extensions first and
+  writes nothing, naming the file it found on stderr, when a project
+  already has one. Without any of them, every nukadoko failure lands in
+  Allure 3's one built-in "Product errors" category instead. A project not
+  using `nuka init` can still copy
+  [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs)
+  by hand.
 - **`fullName` (`<feature path>#<scenario name>#<step text>`) and
   `testCaseId` (a hash of `fullName`) are computed the same way the official
   cucumberjs Allure adapter computes them. `historyId` is not, on purpose,

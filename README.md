@@ -358,10 +358,13 @@ npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
 
-Without `allurerc.mjs` at the project root, every nukadoko failure lands in
-Allure 3's one built-in "Product errors" category instead of one of the
-seven `error.kind` ones; see
-[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs).
+`nuka init` writes `allurerc.mjs` at the project root (skipped, with a
+message, if a project already has one under any name Allure auto-detects);
+without it, every nukadoko failure lands in Allure 3's one built-in
+"Product errors" category instead of one of the seven `error.kind` ones. A
+project not using `init` can copy
+[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs)
+by hand.
 
 Pass `--output` on every one of them. Allure defaults it to `allure-report/`
 in the current directory, and `watch` writes there too, so the default

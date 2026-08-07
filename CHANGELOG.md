@@ -98,6 +98,17 @@ just until 0.1.
   of what an existing nukadoko project has to do about a breaking change,
   split into what stays the same every release and what changed in this
   one.
+- **`nuka init` now writes `allurerc.mjs`.** Allure 3's `allure generate`/
+  `allure report` read failure categories only from its own config, never
+  from a results directory's `categories.json`, so without this file every
+  nukadoko failure collapsed into Allure 3's one built-in "Product errors"
+  category instead of one of the seven `error.kind` ones. The file's seven
+  rules are built from `NAME_BY_KIND` (`src/report/allure/categories.ts`),
+  the same source `examples/allure/allurerc.mjs` has always been checked
+  against, so the two can never drift apart. `init` checks all six
+  extensions Allure auto-detects (`allurerc.{js,mjs,cjs,json,yaml,yml}`)
+  first and writes nothing, naming the file it found on stderr, when a
+  project already has one.
 
 ## 0.1.0 — 2026-08-06
 
