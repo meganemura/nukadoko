@@ -31,6 +31,7 @@ import {
   pendingOrSkippedMessage,
   runScenario,
   runWithTimeout,
+  type StepFinishedInfo,
 } from "../run/run-scenario.js";
 import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -146,27 +147,35 @@ import type { WritableSink } from "./writable-sink.js";
 // BeforeAll/AfterAll above, same reason — a run that selects nothing has
 // nothing for the emitter to have measured either, so it never creates
 // `allure-results/`). Both the construction and `begin()` are wrapped in one
-// try/catch here even though `emitScenario` already carries its own
-// (src/report/allure/emitter.ts): `createAllureEmitter` creates `resultsDir`
-// synchronously (src/report/allure/writer.ts's `createAtomicWriter`), a step
-// that can throw before any of the emitter's own internal safety net exists.
-// A failure here is a warning to stderr, never a run failure — measurement
-// must not break execution — and leaves `allureEmitter` `null`, so every
-// `emitScenario` call in the pickle loop below is skipped for the rest of
-// this run. Each scenario's own `emitScenario` call happens after this
-// loop's `stdout.write` of that scenario's record (this task's spec, item
-// 2): stdout's one-line-per-scenario contract must never be disturbed by an
-// emit failure, and it isn't, since `emitScenario` itself never throws.
-// `record.status`/the run's exit code/stdout's content are all otherwise
-// untouched by any of this.
+// try/catch here even though every one of its other methods already carries
+// its own (src/report/allure/emitter.ts): `createAllureEmitter` creates
+// `resultsDir` synchronously (src/report/allure/writer.ts's
+// `createAtomicWriter`), a step that can throw before any of the emitter's
+// own internal safety net exists. A failure here is a warning to stderr,
+// never a run failure — measurement must not break execution — and leaves
+// `allureEmitter` `null`, so every `beginScenario`/`emitStep`/`endScenario`
+// call in the pickle loop below is skipped for the rest of this run.
+//
+// allure-step-as-test task spec, decision 2: a pickle's own `emitStep` calls
+// happen live, once per step, threaded through `runScenario`'s own
+// `onStepFinished` (never gated on `--quiet`, decision 3) — well before
+// that pickle's own `stdout.write` below, which only happens once the whole
+// scenario is done. `endScenario` (hooks + scenario-level evidence + the
+// scope those steps' own tests already reference) still happens after the
+// `stdout.write`, the same position `emitScenario` used to hold: stdout's
+// one-line-per-scenario contract must never be disturbed by an emit
+// failure, and none of these three methods ever throws. `record.status`/the
+// run's exit code/stdout's content are all otherwise untouched by any of
+// this.
 //
 // m3c-messages-emitter spec-b task spec, item 2: the messages emitter is
 // built and `begin()`-ed right after the Allure emitter above — same
 // `hasPickles` gate, same one try/catch around construction+`begin()`, same
 // stderr-warning-only failure handling, for the same reasons (see the
 // paragraph above and src/report/messages/emitter.ts's own header). Its
-// `emitScenario` call sits immediately after the Allure emitter's own, both
-// still after the pickle loop's `stdout.write` of that scenario's record.
+// `emitScenario` call — unaffected by this task, out of its own scope —
+// sits immediately after the Allure emitter's own `endScenario`, both still
+// after the pickle loop's `stdout.write` of that scenario's record.
 // `end(allPassed)` is placed after the AfterAll loop below, immediately
 // before this function's own `return` (item 2, decision 4): it is the one
 // place `allPassed` has already absorbed every BeforeAll/AfterAll failure,
@@ -657,6 +666,37 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             });
           }
 
+          // Opens this scenario's own Allure scope right before its first
+          // step can possibly run (allure-step-as-test task spec, decision
+          // 2) — `emitStep` below needs it to already exist the moment the
+          // first step finishes. `undefined` — a no-op — when this run has
+          // no Allure emitter at all (setup failure or zero pickles, this
+          // file's own header).
+          allureEmitter?.beginScenario();
+
+          // One instance per pickle (allure-step-as-test task spec,
+          // decision 2), unlike `onStepEnd` above: it closes over this
+          // pickle's own `gherkinDocument`/`relativeFeaturePath`, which
+          // `run-scenario.ts`'s own `StepFinishedInfo` does not carry (that
+          // struct is per-*step*, not per-*scenario*). Built regardless of
+          // `quiet` — the report's own granularity does not follow the
+          // terminal's (this task's spec, decision 3) — and is itself a
+          // no-op when `allureEmitter` is `null`.
+          const onStepFinished: ((info: StepFinishedInfo) => void) | undefined = allureEmitter
+            ? (info) => {
+                allureEmitter?.emitStep({
+                  ...info,
+                  gherkinDocument: selected.gherkinDocument,
+                  pickle,
+                  relativeFeaturePath: selected.relativePath,
+                  environment: resolvedEnv.name,
+                  session,
+                  targetVersion,
+                  runId,
+                });
+              }
+            : undefined;
+
           const record = await runScenario({
             rootDir,
             config: runConfig,
@@ -681,6 +721,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             defaultTimeoutMs,
             onUnknownTraceVersion,
             onStepEnd,
+            onStepFinished,
             fixtureGraph,
             fixtureProcessCache,
           });
@@ -704,11 +745,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`,
             );
           }
-          // After the stdout line, always (m3b-allure-emitter spec-b2 task
-          // spec, item 2) — see this file's own header. `allureEmitter` is
-          // `null` when this run selected zero pickles or its own setup
-          // failed above; `emitScenario` itself never throws.
-          allureEmitter?.emitScenario({
+          // After the stdout line, always — see this file's own header.
+          // `allureEmitter` is `null` when this run selected zero pickles or
+          // its own setup failed above; `endScenario` itself never throws.
+          // Every one of this scenario's own steps has already had its own
+          // `emitStep` call by now (allure-step-as-test task spec, decision
+          // 2) — this call only maps hooks/scenario-level evidence into
+          // fixtures and writes the scope those steps' own tests already
+          // reference.
+          allureEmitter?.endScenario({
             record,
             gherkinDocument: selected.gherkinDocument,
             pickle,

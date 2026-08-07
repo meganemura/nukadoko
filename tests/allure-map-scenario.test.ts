@@ -1,16 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
-import { mapScenario, statusForKind } from "../src/report/allure/map-scenario.js";
-import type { Receipt } from "../src/receipt/types.js";
-import type { ErrorKind } from "../src/receipt/types.js";
+import {
+  mapHooks,
+  mapScenarioEvidence,
+  mapStep,
+  statusForKind,
+  type MapStepInput,
+} from "../src/report/allure/map-scenario.js";
+import type { ErrorKind, Receipt } from "../src/receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 
-// Responsibility: unit tests for map-scenario.ts's pure transform (this
-// task's spec, test item 1). No allure-js-commons, no filesystem: every
-// receipt is a plain object built in memory, and every GherkinDocument/
-// Pickle comes from parsing an inline feature source string with the
-// existing src/feature/load-features.ts entry point (no `.feature` file on
-// disk needed).
+// Responsibility: unit tests for map-scenario.ts's pure transform. No
+// allure-js-commons, no filesystem: every receipt is a plain object built
+// in memory, and every GherkinDocument/Pickle comes from parsing an inline
+// feature source string with the existing src/feature/load-features.ts
+// entry point (no `.feature` file on disk needed).
+//
+// allure-step-as-test task spec: rewritten around `mapStep` (one step -> one
+// Allure test, decision 1) replacing the old `mapScenario` (one scenario ->
+// one test, every step a child of it). `mapHooks`/`mapScenarioEvidence`
+// (also exported now, this task) are exercised directly rather than through
+// `mapScenario`'s own aggregation, which no longer exists.
 
 const FEATURE_SOURCE = `Feature: Checkout
   Handles the checkout flow.
@@ -78,7 +88,29 @@ function baseReceipt(overrides: Partial<Receipt> = {}): Receipt {
   } as Receipt;
 }
 
-describe("mapScenario: status mapping", () => {
+/** A minimal, valid `MapStepInput` — every test below overrides only the
+ * fields it actually cares about (the same "one baseline, spread + override"
+ * convention `baseRecord`/`baseReceipt` above already follow). */
+function callMapStep(
+  overrides: Partial<MapStepInput> & Pick<MapStepInput, "record" | "receipt" | "gherkinDocument" | "pickle">,
+) {
+  return mapStep({
+    runId: "run-1",
+    scenarioId: "scn-1",
+    environment: "default",
+    session: null,
+    index: 0,
+    finishedAt: new Date("2026-08-01T00:00:03.000Z"),
+    posixPath: "features/checkout.feature",
+    ...overrides,
+  });
+}
+
+function callMapHooks(record: ScenarioRecord) {
+  return mapHooks(record, Date.parse(record.started_at), Date.parse(record.finished_at));
+}
+
+describe("mapStep: status mapping", () => {
   const ALL_KINDS: readonly ErrorKind[] = [
     "args_invalid",
     "result_invalid",
@@ -92,24 +124,14 @@ describe("mapScenario: status mapping", () => {
   it.each(ALL_KINDS)("maps a failed receipt of kind %s to the right status with a marked message", (kind) => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
-      status: "failed",
-      error: { message: "it broke", kind },
-    });
+    const receipt = baseReceipt({ status: "failed", error: { message: "it broke", kind } });
     delete (receipt as { result?: unknown }).result;
     const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", receipt: "rcpt-1" };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.status).toBe(statusForKind(kind));
-    expect(mapped.steps[0]!.message).toBe(`[nukadoko.failure=${kind}] it broke`);
+    expect(mapped.status).toBe(statusForKind(kind));
+    expect(mapped.message).toBe(`[nukadoko.failure=${kind}] it broke`);
   });
 
   it("maps undefined to broken with the record's plain message (no marker)", () => {
@@ -121,18 +143,11 @@ describe("mapScenario: status mapping", () => {
       receipt: null,
       error: { message: "no matching step definition" },
     };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.status).toBe("broken");
-    expect(mapped.steps[0]!.message).toBe("no matching step definition");
+    expect(mapped.status).toBe("broken");
+    expect(mapped.message).toBe("no matching step definition");
   });
 
   it("maps ambiguous to broken with the record's plain message (no marker)", () => {
@@ -144,102 +159,68 @@ describe("mapScenario: status mapping", () => {
       receipt: null,
       error: { message: "matched more than one step definition" },
     };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.status).toBe("broken");
-    expect(mapped.steps[0]!.message).toBe("matched more than one step definition");
+    expect(mapped.status).toBe("broken");
+    expect(mapped.message).toBe("matched more than one step definition");
   });
 
   it("maps skipped to skipped with no message", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepRecord = { text: "a step that never ran", status: "skipped", receipt: null };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.status).toBe("skipped");
-    expect(mapped.steps[0]!.message).toBeUndefined();
+    expect(mapped.status).toBe("skipped");
+    expect(mapped.message).toBeUndefined();
+  });
+
+  it("falls back to the record's own coarse status for a 'failed' step with no usable receipt (a never-began refusal)", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = {
+      text: "the cart has items",
+      status: "failed",
+      receipt: null,
+      error: { message: "refused before it ever ran" },
+    };
+
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
+
+    expect(mapped.status).toBe("failed");
+    expect(mapped.message).toBe("refused before it ever ran");
   });
 });
 
-describe("mapScenario: test.message (M3-C spec item 1)", () => {
-  it("sets test.message to the first failure's own marked message, same as the step's own message", () => {
+describe("mapStep: statusDetails / nukadoko.failure label, per step now (M3-C spec item 1, retargeted by this task)", () => {
+  it("sets message and the nukadoko.failure label for a failed step", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({ status: "failed", error: { message: "it broke", kind: "step_error" } });
     delete (receipt as { result?: unknown }).result;
     const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", receipt: "rcpt-1" };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.test.message).toBe("[nukadoko.failure=step_error] it broke");
-    expect(mapped.test.message).toBe(mapped.steps[0]!.message);
+    expect(mapped.message).toBe("[nukadoko.failure=step_error] it broke");
+    expect(mapped.labels).toContainEqual({ name: "nukadoko.failure", value: "step_error" });
   });
 
-  it("leaves test.message undefined for a passed scenario", () => {
+  it("leaves message undefined, and adds no nukadoko.failure label, for a passed step", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({ status: "ok", result: null });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.test.message).toBeUndefined();
+    expect(mapped.message).toBeUndefined();
+    expect(mapped.labels.some((l) => l.name === "nukadoko.failure")).toBe(false);
   });
 
-  it("sets test.message from a before hook's own failure when it is the first failure", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
-    const beforeHook: ScenarioHookRecord = {
-      type: "before",
-      status: "failed",
-      error: { message: "hook blew up", kind: "step_error" },
-    };
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "skipped", receipt: null };
-    const record = baseRecord({ status: "failed", hooks: [beforeHook], steps: [step] });
-
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
-
-    expect(mapped.test.message).toBe("[nukadoko.failure=step_error] hook blew up");
-    expect(mapped.test.labels).toContainEqual({ name: "nukadoko.failure", value: "step_error" });
-  });
-
-  it("sets test.message to the plain (unmarked) message when the first failure has no resolvable kind", () => {
+  it("sets message to the plain (unmarked) message, and adds no nukadoko.failure label, when the step has no resolvable kind", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepRecord = {
@@ -248,61 +229,16 @@ describe("mapScenario: test.message (M3-C spec item 1)", () => {
       receipt: null,
       error: { message: "no matching step definition" },
     };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.test.message).toBe("no matching step definition");
-    expect(mapped.test.labels.some((l) => l.name === "nukadoko.failure")).toBe(false);
+    expect(mapped.message).toBe("no matching step definition");
+    expect(mapped.labels.some((l) => l.name === "nukadoko.failure")).toBe(false);
   });
 });
 
-describe("mapScenario: zero-width time for receiptless steps", () => {
-  it("pins a receiptless step's start/stop to the previous step's own stop", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
-    const receipt = baseReceipt({
-      status: "ok",
-      result: "ok",
-      started_at: "2026-08-01T00:00:00.500Z",
-      finished_at: "2026-08-01T00:00:01.500Z",
-    });
-    const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: "rcpt-1" },
-      { text: "the customer pays", status: "skipped", receipt: null },
-      {
-        text: "the order is confirmed",
-        status: "undefined",
-        receipt: null,
-        error: { message: "no matching step definition" },
-      },
-    ];
-    const record = baseRecord({ status: "failed", steps });
-
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
-
-    const stepTwoStopMs = Date.parse("2026-08-01T00:00:01.500Z");
-    expect(mapped.steps[1]!.startMs).toBe(stepTwoStopMs);
-    expect(mapped.steps[1]!.stopMs).toBe(stepTwoStopMs);
-    // Chained: the third (also receiptless) step pins to the second's own
-    // (already zero-width) stop, not back to the scenario's own start.
-    expect(mapped.steps[2]!.startMs).toBe(stepTwoStopMs);
-    expect(mapped.steps[2]!.stopMs).toBe(stepTwoStopMs);
-  });
-
-  it("pins the very first step, when receiptless, to the scenario's own started_at", () => {
+describe("mapStep: zero-width time for a receiptless step", () => {
+  it("pins to the caller's own finishedAt (this task's spec, decision 2 — no scenario timeline to anchor within any more)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepRecord = {
@@ -311,43 +247,70 @@ describe("mapScenario: zero-width time for receiptless steps", () => {
       receipt: null,
       error: { message: "no matching step definition" },
     };
-    const record = baseRecord({
-      status: "failed",
-      started_at: "2026-08-01T00:00:00.000Z",
-      steps: [step],
-    });
+    const finishedAt = new Date("2026-08-01T00:00:02.345Z");
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle, finishedAt });
+
+    expect(mapped.startMs).toBe(finishedAt.getTime());
+    expect(mapped.stopMs).toBe(finishedAt.getTime());
+  });
+
+  it("uses the receipt's own started_at/finished_at instead, when there is one, ignoring finishedAt entirely", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const receipt = baseReceipt({
+      status: "ok",
+      result: null,
+      started_at: "2026-08-01T00:00:00.500Z",
+      finished_at: "2026-08-01T00:00:01.000Z",
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+
+    const mapped = callMapStep({
+      record: step,
+      receipt,
       gherkinDocument,
       pickle,
-      posixPath: "features/checkout.feature",
+      finishedAt: new Date("2026-08-01T00:00:09.000Z"),
     });
 
-    const scenarioStartMs = Date.parse("2026-08-01T00:00:00.000Z");
-    expect(mapped.steps[0]!.startMs).toBe(scenarioStartMs);
-    expect(mapped.steps[0]!.stopMs).toBe(scenarioStartMs);
+    expect(mapped.startMs).toBe(Date.parse("2026-08-01T00:00:00.500Z"));
+    expect(mapped.stopMs).toBe(Date.parse("2026-08-01T00:00:01.000Z"));
   });
 });
 
-describe("mapScenario: step parameters", () => {
+describe("mapStep: identity-breaking parameters (this task's spec, decision 4)", () => {
+  it("carries nukadoko.run/nukadoko.scenario/nukadoko.step, each mode: hidden and not excluded", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+
+    const mapped = callMapStep({
+      record: step,
+      receipt: null,
+      gherkinDocument,
+      pickle,
+      runId: "run-42",
+      scenarioId: "scn-7",
+      index: 3,
+    });
+
+    expect(mapped.parameters).toContainEqual({ name: "nukadoko.run", value: "run-42", mode: "hidden" });
+    expect(mapped.parameters).toContainEqual({ name: "nukadoko.scenario", value: "scn-7", mode: "hidden" });
+    expect(mapped.parameters).toContainEqual({ name: "nukadoko.step", value: "3", mode: "hidden" });
+  });
+});
+
+describe("mapStep: step parameters", () => {
   it("reports mutates: null as 'not declared', not 'false'", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({ status: "ok", result: null, mutates: null });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.parameters).toContainEqual({ name: "mutates (declared)", value: "not declared" });
+    expect(mapped.parameters).toContainEqual({ name: "mutates (declared)", value: "not declared" });
   });
 
   it("reports mutates: true/false literally, plus observed http/world counts and used receipts", () => {
@@ -362,48 +325,29 @@ describe("mapScenario: step parameters", () => {
       used: [{ receipt: "rcpt-0", step: "create-cart" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    const params = mapped.steps[0]!.parameters;
-    expect(params).toContainEqual({ name: "receipt", value: "rcpt-1" });
-    expect(params).toContainEqual({ name: "mutates (declared)", value: "false" });
-    expect(params).toContainEqual({ name: "http reads (observed)", value: "2" });
-    expect(params).toContainEqual({ name: "http writes (observed)", value: "1" });
-    expect(params).toContainEqual({ name: "world reads (observed)", value: "a, b" });
-    expect(params).toContainEqual({ name: "world writes (observed)", value: "c" });
-    expect(params).toContainEqual({ name: "used receipts", value: "rcpt-0" });
+    expect(mapped.parameters).toContainEqual({ name: "receipt", value: "rcpt-1" });
+    expect(mapped.parameters).toContainEqual({ name: "mutates (declared)", value: "false" });
+    expect(mapped.parameters).toContainEqual({ name: "http reads (observed)", value: "2" });
+    expect(mapped.parameters).toContainEqual({ name: "http writes (observed)", value: "1" });
+    expect(mapped.parameters).toContainEqual({ name: "world reads (observed)", value: "a, b" });
+    expect(mapped.parameters).toContainEqual({ name: "world writes (observed)", value: "c" });
+    expect(mapped.parameters).toContainEqual({ name: "used receipts", value: "rcpt-0" });
   });
 });
 
-describe("mapScenario: declared attachments/links/labels/logs", () => {
+describe("mapStep: declared attachments/links/labels/logs", () => {
   it("prefixes a declared attachment's name with 'declared: ' and points at evidence.dir", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
-      status: "ok",
-      result: null,
-      declared: { attachments: ["screenshot.png"] },
-    });
+    const receipt = baseReceipt({ status: "ok", result: null, declared: { attachments: ["screenshot.png"] } });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "path",
       name: "declared: screenshot.png",
       contentType: "image/png",
@@ -411,7 +355,7 @@ describe("mapScenario: declared attachments/links/labels/logs", () => {
     });
   });
 
-  it("bubbles a step's declared.links up to the test's own links, unprefixed", () => {
+  it("puts a step's own declared.links directly onto its own test's links, unprefixed", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({
@@ -420,69 +364,40 @@ describe("mapScenario: declared attachments/links/labels/logs", () => {
       declared: { links: [{ url: "https://issues.example/1", name: "issue-1" }] },
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.test.links).toContainEqual({ url: "https://issues.example/1", name: "issue-1", type: undefined });
+    expect(mapped.links).toContainEqual({ url: "https://issues.example/1", name: "issue-1", type: undefined });
   });
 
-  it("bubbles a step's declared.labels up to the test's own labels, raw", () => {
+  it("puts a step's own declared.labels directly onto its own test's labels, raw", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
-      status: "ok",
-      result: null,
-      declared: { labels: [{ name: "custom", value: "v" }] },
-    });
+    const receipt = baseReceipt({ status: "ok", result: null, declared: { labels: [{ name: "custom", value: "v" }] } });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.test.labels).toContainEqual({ name: "custom", value: "v" });
+    expect(mapped.labels).toContainEqual({ name: "custom", value: "v" });
   });
 
   it("turns declared.logs into zero-width, passed child steps (p2-allure-measurement: unchanged regardless of MappedChildStep's own widened shape)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
-      status: "ok",
-      result: null,
-      declared: { logs: ["hello from glue"] },
-    });
+    const receipt = baseReceipt({ status: "ok", result: null, declared: { logs: ["hello from glue"] } });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
     const stepStartMs = Date.parse(receipt.started_at);
-    expect(mapped.steps[0]!.childSteps).toEqual([
+    expect(mapped.childSteps).toEqual([
       { name: "hello from glue", startMs: stepStartMs, stopMs: stepStartMs, status: "passed" },
     ]);
   });
+});
 
-  it("does the same for a hook's own declared data, sourced from the scenario's own evidence.dir", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
+describe("mapHooks: declared attachments/logs land on the hook's own fixture; links/labels are dropped", () => {
+  it("prefixes a hook's own declared attachment and sources it from the scenario's own evidence.dir", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
       status: "ok",
@@ -490,176 +405,209 @@ describe("mapScenario: declared attachments/links/labels/logs", () => {
     };
     const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] } });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapHooks(record);
 
-    expect(mapped.hooks[0]!.attachments).toContainEqual({
+    expect(mapped[0]!.hook.attachments).toContainEqual({
       kind: "path",
       name: "declared: hook-file.txt",
       contentType: "text/plain",
       path: ".nukadoko/scenarios/scn-1/hook-file.txt",
     });
     const hookTimestampMs = Date.parse(record.started_at);
-    expect(mapped.hooks[0]!.childSteps).toEqual([
+    expect(mapped[0]!.hook.childSteps).toEqual([
       { name: "hook log", startMs: hookTimestampMs, stopMs: hookTimestampMs, status: "passed" },
     ]);
-    expect(mapped.test.links).toContainEqual({ url: "https://x/1", name: undefined, type: undefined });
+  });
+
+  it("carries a hook's own declared parameter as declaredParameters, for the caller to put on that hook's own fixture", () => {
+    const hook: ScenarioHookRecord = {
+      type: "before",
+      status: "ok",
+      declared: { parameters: [{ name: "hook-param", value: "y" }] },
+    };
+    const record = baseRecord({ hooks: [hook] });
+
+    const mapped = callMapHooks(record);
+
+    expect(mapped[0]!.declaredParameters).toContainEqual({ name: "hook-param", value: "y" });
+  });
+
+  it("has no home for a hook's own declared link or label (this task's spec: a fixture has neither in the Allure model)", () => {
+    const hook: ScenarioHookRecord = {
+      type: "before",
+      status: "ok",
+      declared: { links: [{ url: "https://x/1" }], labels: [{ name: "custom", value: "v" }] },
+    };
+    const record = baseRecord({ hooks: [hook] });
+
+    const mapped = callMapHooks(record);
+
+    // Neither the hook mapping's own return shape, nor the fixture it
+    // becomes, has a `links`/`labels` field to check — this test pins that
+    // absence at the value level (`HookMapping`/`MappedHook` have no such
+    // field at the type level either, which this same assertion would fail
+    // to compile against if either type ever grew one back).
+    expect("links" in mapped[0]!).toBe(false);
+    expect("labels" in mapped[0]!).toBe(false);
+    expect("links" in mapped[0]!.hook).toBe(false);
+    expect("labels" in mapped[0]!.hook).toBe(false);
   });
 });
 
-describe("mapScenario: tag resolution", () => {
+describe("mapHooks: status/message mapping", () => {
+  it("maps an ok hook to passed, no message", () => {
+    const hook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const record = baseRecord({ hooks: [hook] });
+
+    const mapped = callMapHooks(record);
+
+    expect(mapped[0]!.hook.status).toBe("passed");
+    expect(mapped[0]!.hook.message).toBeUndefined();
+  });
+
+  it("maps a failed hook through statusForKind, with a marked message", () => {
+    const hook: ScenarioHookRecord = {
+      type: "before",
+      status: "failed",
+      error: { message: "hook blew up", kind: "step_error" },
+    };
+    const record = baseRecord({ hooks: [hook] });
+
+    const mapped = callMapHooks(record);
+
+    expect(mapped[0]!.hook.status).toBe(statusForKind("step_error"));
+    expect(mapped[0]!.hook.message).toBe("[nukadoko.failure=step_error] hook blew up");
+  });
+});
+
+describe("mapScenarioEvidence: scenario-level browser evidence -> a synthetic fixture", () => {
+  it("returns undefined when there is no trace and no screenshots", () => {
+    const record = baseRecord({ evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] } });
+
+    expect(mapScenarioEvidence(record)).toBeUndefined();
+  });
+
+  it("returns a passed 'after' fixture carrying the trace and every screenshot, anchored to finished_at", () => {
+    const record = baseRecord({
+      finished_at: "2026-08-01T00:00:05.000Z",
+      evidence: {
+        dir: ".nukadoko/scenarios/scn-1",
+        trace: "trace.zip",
+        screenshots: [{ file: "final.png", at: "2026-08-01T00:00:04.900Z" }],
+      },
+    });
+
+    const mapped = mapScenarioEvidence(record);
+
+    expect(mapped).toBeDefined();
+    expect(mapped!.type).toBe("after");
+    expect(mapped!.name).toBe("Scenario evidence");
+    expect(mapped!.status).toBe("passed");
+    const finishedMs = Date.parse("2026-08-01T00:00:05.000Z");
+    expect(mapped!.startMs).toBe(finishedMs);
+    expect(mapped!.stopMs).toBe(finishedMs);
+    expect(mapped!.attachments).toContainEqual({
+      kind: "path",
+      name: "trace",
+      contentType: "application/vnd.allure.playwright-trace",
+      path: ".nukadoko/scenarios/scn-1/trace.zip",
+    });
+    expect(mapped!.attachments).toContainEqual({
+      kind: "path",
+      name: "final.png",
+      contentType: "image/png",
+      path: ".nukadoko/scenarios/scn-1/final.png",
+    });
+  });
+});
+
+describe("mapStep: tag resolution", () => {
   it("resolves @allure.label.<name>:<value>, the = variant, and @allure.id, and passes other tags through raw", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({ steps: [] });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.test.labels).toContainEqual({ name: "severity", value: "critical" });
-    expect(mapped.test.labels).toContainEqual({ name: "owner", value: "alice" });
-    expect(mapped.test.labels).toContainEqual({ name: "ALLURE_ID", value: "42" });
-    expect(mapped.test.labels).toContainEqual({ name: "tag", value: "@smoke" });
+    expect(mapped.labels).toContainEqual({ name: "severity", value: "critical" });
+    expect(mapped.labels).toContainEqual({ name: "owner", value: "alice" });
+    expect(mapped.labels).toContainEqual({ name: "ALLURE_ID", value: "42" });
+    expect(mapped.labels).toContainEqual({ name: "tag", value: "@smoke" });
 
     // Resolved tags must never also appear as raw `tag` labels.
-    const rawTagValues = mapped.test.labels.filter((l) => l.name === "tag").map((l) => l.value);
+    const rawTagValues = mapped.labels.filter((l) => l.name === "tag").map((l) => l.value);
     expect(rawTagValues).toEqual(["@smoke"]);
   });
 });
 
-describe("mapScenario: description fallback", () => {
+describe("mapStep: description fallback", () => {
   it("uses the Scenario's own description when present", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({ steps: [] });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.test.description).toBe("A customer completes checkout successfully.");
+    expect(mapped.description).toBe("A customer completes checkout successfully.");
   });
 
   it("falls back to the Feature's own description when the Scenario has none", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles.find((p) => p.name === "no description here")!;
-    const record = baseRecord({ scenario: "no description here", steps: [] });
+    const step: ScenarioStepRecord = { text: "a plain step", status: "passed", receipt: null };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.test.description).toBe("Handles the checkout flow.");
+    expect(mapped.description).toBe("Handles the checkout flow.");
   });
 });
 
-describe("mapScenario: test-level context parameters", () => {
+describe("mapStep: execution-context parameters", () => {
   it("marks environment/session/target_version excluded, and includes each only when applicable", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({
-      steps: [],
-      environment: "staging",
-      session: "sess-1",
-      target_version: "1.2.3",
-    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
+    const mapped = callMapStep({
+      record: step,
+      receipt: null,
       gherkinDocument,
       pickle,
-      posixPath: "features/checkout.feature",
+      environment: "staging",
+      session: "sess-1",
+      targetVersion: "1.2.3",
     });
 
-    expect(mapped.test.parameters).toContainEqual({ name: "environment", value: "staging", excluded: true });
-    expect(mapped.test.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
-    expect(mapped.test.parameters).toContainEqual({ name: "target_version", value: "1.2.3", excluded: true });
+    expect(mapped.parameters).toContainEqual({ name: "environment", value: "staging", excluded: true });
+    expect(mapped.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
+    expect(mapped.parameters).toContainEqual({ name: "target_version", value: "1.2.3", excluded: true });
   });
 
   it("omits session when null and target_version when absent", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({ steps: [], session: null });
-    delete (record as { target_version?: string }).target_version;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle, session: null });
 
-    expect(mapped.test.parameters.some((p) => p.name === "session")).toBe(false);
-    expect(mapped.test.parameters.some((p) => p.name === "target_version")).toBe(false);
+    expect(mapped.parameters.some((p) => p.name === "session")).toBe(false);
+    expect(mapped.parameters.some((p) => p.name === "target_version")).toBe(false);
   });
 
-  it("puts each Examples row's own cells into test parameters, not excluded", () => {
+  it("puts each Examples row's own cells into the step's own parameters, not excluded", () => {
     const { gherkinDocument, pickles } = parse();
     const outlineRows = pickles.filter((p) => p.name.startsWith("checkout as"));
     expect(outlineRows).toHaveLength(2);
-    const record = baseRecord({ scenario: "checkout as <role>", steps: [] });
+    const pickle = outlineRows[0]!;
+    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", receipt: null };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle: outlineRows[0]!,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle });
 
-    expect(mapped.test.parameters).toContainEqual({ name: "role", value: "guest" });
-  });
-
-  it("gives both Scenario Outline rows the same templateName (the unexpanded Scenario.name)", () => {
-    const { gherkinDocument, pickles } = parse();
-    const outlineRows = pickles.filter((p) => p.name.startsWith("checkout as"));
-    const record = baseRecord({ scenario: "checkout as <role>", steps: [] });
-
-    const mappedRow1 = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle: outlineRows[0]!,
-      posixPath: "features/checkout.feature",
-    });
-    const mappedRow2 = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle: outlineRows[1]!,
-      posixPath: "features/checkout.feature",
-    });
-
-    expect(mappedRow1.test.templateName).toBe("checkout as <role>");
-    expect(mappedRow2.test.templateName).toBe("checkout as <role>");
-    // ...whereas the expanded pickle name (`test.name`) genuinely differs
-    // per row — the whole reason `testCaseId` (emitter.ts) must be built
-    // from `templateName`, not `name`.
-    expect(mappedRow1.test.name).not.toBe(mappedRow2.test.name);
+    expect(mapped.parameters).toContainEqual({ name: "role", value: "guest" });
   });
 });
 
-describe("mapScenario: step name gets a Gherkin keyword prefix", () => {
+describe("mapStep: name gets a Gherkin keyword prefix", () => {
   it("prefixes each step's name with its own keyword and trailing space", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -668,19 +616,12 @@ describe("mapScenario: step name gets a Gherkin keyword prefix", () => {
       { text: "the customer pays", status: "passed", receipt: null },
       { text: "the order is confirmed", status: "passed", receipt: null },
     ];
-    const record = baseRecord({ steps });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const names = steps.map((step, index) =>
+      callMapStep({ record: step, receipt: null, gherkinDocument, pickle, index }).name,
+    );
 
-    expect(mapped.steps[0]!.name).toBe("Given the cart has items");
-    expect(mapped.steps[1]!.name).toBe("When the customer pays");
-    expect(mapped.steps[2]!.name).toBe("Then the order is confirmed");
+    expect(names).toEqual(["Given the cart has items", "When the customer pays", "Then the order is confirmed"]);
   });
 
   it("resolves the keyword for a Background-origin pickle step too", () => {
@@ -693,51 +634,45 @@ describe("mapScenario: step name gets a Gherkin keyword prefix", () => {
 `;
     const { gherkinDocument, pickles } = parseFeatureSource(source, "features/with-background.feature");
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = [
-      { text: "a clean cart", status: "passed", receipt: null },
-      { text: "the customer pays", status: "passed", receipt: null },
-    ];
-    const record = baseRecord({ scenario: "checkout", steps });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
+    const backgroundStep = callMapStep({
+      record: { text: "a clean cart", status: "passed", receipt: null },
+      receipt: null,
       gherkinDocument,
       pickle,
-      posixPath: "features/with-background.feature",
+      index: 0,
+    });
+    const scenarioStep = callMapStep({
+      record: { text: "the customer pays", status: "passed", receipt: null },
+      receipt: null,
+      gherkinDocument,
+      pickle,
+      index: 1,
     });
 
-    expect(mapped.steps[0]!.name).toBe("Given a clean cart");
-    expect(mapped.steps[1]!.name).toBe("When the customer pays");
+    expect(backgroundStep.name).toBe("Given a clean cart");
+    expect(scenarioStep.name).toBe("When the customer pays");
   });
 
   it("falls back to the bare step text when the keyword can't be resolved", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    // Only 3 pickle steps exist for this scenario; a 4th record step has no
-    // matching pickle step to resolve a keyword from.
-    const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: null },
-      { text: "the customer pays", status: "passed", receipt: null },
-      { text: "the order is confirmed", status: "passed", receipt: null },
-      { text: "an extra step with no pickle counterpart", status: "passed", receipt: null },
-    ];
-    const record = baseRecord({ steps });
+    // Only 3 pickle steps exist for this scenario; index 3 has no matching
+    // pickle step to resolve a keyword from.
+    const step: ScenarioStepRecord = {
+      text: "an extra step with no pickle counterpart",
+      status: "passed",
+      receipt: null,
+    };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt: null, gherkinDocument, pickle, index: 3 });
 
-    expect(mapped.steps[3]!.name).toBe("an extra step with no pickle counterpart");
+    expect(mapped.name).toBe("an extra step with no pickle counterpart");
   });
 });
 
-describe("mapScenario: declared parameters", () => {
-  it("puts a step's declared parameter into the test's own parameters, not excluded, and not on the step itself", () => {
+describe("mapStep: declared parameters", () => {
+  it("puts a step's declared parameter into its own parameters, not excluded", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({
@@ -746,44 +681,15 @@ describe("mapScenario: declared parameters", () => {
       declared: { parameters: [{ name: "cart_id", value: "abc-123" }] },
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.test.parameters).toContainEqual({ name: "cart_id", value: "abc-123" });
-    const declaredParam = mapped.test.parameters.find((p) => p.name === "cart_id");
+    expect(mapped.parameters).toContainEqual({ name: "cart_id", value: "abc-123" });
+    const declaredParam = mapped.parameters.find((p) => p.name === "cart_id");
     expect(declaredParam?.excluded).toBeUndefined();
-    expect(mapped.steps[0]!.parameters.some((p) => p.name === "cart_id")).toBe(false);
   });
 
-  it("also bubbles a hook's own declared parameter into test.parameters", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
-    const hook: ScenarioHookRecord = {
-      type: "before",
-      status: "ok",
-      declared: { parameters: [{ name: "hook-param", value: "y" }] },
-    };
-    const record = baseRecord({ hooks: [hook], steps: [] });
-
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
-
-    expect(mapped.test.parameters).toContainEqual({ name: "hook-param", value: "y" });
-  });
-
-  it("orders test.parameters as Examples cells, then declared parameters, then the excluded execution-context ones", () => {
+  it("orders parameters as Examples cells, then receipt-derived ones, then declared, then excluded context, then hidden identity", () => {
     const { gherkinDocument, pickles } = parse();
     const outlineRows = pickles.filter((p) => p.name.startsWith("checkout as"));
     const receipt = baseReceipt({
@@ -791,30 +697,32 @@ describe("mapScenario: declared parameters", () => {
       result: null,
       declared: { parameters: [{ name: "declared-only", value: "x" }] },
     });
-    const step: ScenarioStepRecord = { text: "a guest customer", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({
-      scenario: "checkout as <role>",
-      steps: [step],
-      target_version: "1.2.3",
-    });
+    const pickle = outlineRows[0]!;
+    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", receipt: "rcpt-1" };
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle: outlineRows[0]!,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle, targetVersion: "1.2.3" });
 
-    const names = mapped.test.parameters.map((p) => p.name);
-    expect(names).toEqual(["role", "declared-only", "environment", "target_version"]);
+    const names = mapped.parameters.map((p) => p.name);
+    expect(names).toEqual([
+      "role",
+      "receipt",
+      "mutates (declared)",
+      "http reads (observed)",
+      "http writes (observed)",
+      "declared-only",
+      "environment",
+      "target_version",
+      "nukadoko.run",
+      "nukadoko.scenario",
+      "nukadoko.step",
+    ]);
   });
 });
 
 // --- p2-allure-measurement task spec: sections + polls timeline, page_events
 // parameters, and the full-receipt attachment ---
 
-describe("mapScenario: sections + polls merged into one child-step timeline", () => {
+describe("mapStep: sections + polls merged into one child-step timeline", () => {
   it("merges section and poll entries in ascending `at` order, regardless of each array's own order", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -831,22 +739,10 @@ describe("mapScenario: sections + polls merged into one child-step timeline", ()
       ],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual([
-      "A",
-      "B (2 attempts)",
-      "C",
-      "D (1 attempts)",
-    ]);
+    expect(mapped.childSteps.map((c) => c.name)).toEqual(["A", "B (2 attempts)", "C", "D (1 attempts)"]);
   });
 
   it("keeps declared log child steps first, ahead of the sections/polls timeline", () => {
@@ -859,17 +755,10 @@ describe("mapScenario: sections + polls merged into one child-step timeline", ()
       sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["from glue", "reached checkout"]);
+    expect(mapped.childSteps.map((c) => c.name)).toEqual(["from glue", "reached checkout"]);
   });
 
   it("gives a section a zero-width marker at its own `at`, status passed", () => {
@@ -881,22 +770,15 @@ describe("mapScenario: sections + polls merged into one child-step timeline", ()
       sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
     const at = Date.parse("2026-08-01T00:00:00.100Z");
-    expect(mapped.steps[0]!.childSteps).toEqual([{ name: "reached checkout", startMs: at, stopMs: at, status: "passed" }]);
+    expect(mapped.childSteps).toEqual([{ name: "reached checkout", startMs: at, stopMs: at, status: "passed" }]);
   });
 });
 
-describe("mapScenario: poll outcome -> status/startMs/stopMs, all three outcomes", () => {
+describe("mapStep: poll outcome -> status/startMs/stopMs, all three outcomes", () => {
   it("maps resolved/timed_out/failed to passed/failed/broken with startMs = at and stopMs = at + waited_ms", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -910,17 +792,10 @@ describe("mapScenario: poll outcome -> status/startMs/stopMs, all three outcomes
       ],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    const [resolved, timedOut, failed] = mapped.steps[0]!.childSteps;
+    const [resolved, timedOut, failed] = mapped.childSteps;
     const resolvedAt = Date.parse("2026-08-01T00:00:00.000Z");
     const timedOutAt = Date.parse("2026-08-01T00:00:01.000Z");
     const failedAt = Date.parse("2026-08-01T00:00:02.000Z");
@@ -944,17 +819,10 @@ describe("mapScenario: poll outcome -> status/startMs/stopMs, all three outcomes
       polls: [{ at: "2026-08-01T00:00:00.000Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps[0]!.name).toBe("poll (1 attempts)");
+    expect(mapped.childSteps[0]!.name).toBe("poll (1 attempts)");
   });
 
   it("never clamps a timeline entry to the parent step's own start/stop range", () => {
@@ -970,27 +838,20 @@ describe("mapScenario: poll outcome -> status/startMs/stopMs, all three outcomes
       sections: [{ label: "before the step even started", at: "2026-08-01T00:00:00.000Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
     const sectionAt = Date.parse("2026-08-01T00:00:00.000Z");
     const stepStartMs = Date.parse(receipt.started_at);
     expect(sectionAt).toBeLessThan(stepStartMs);
-    expect(mapped.steps[0]!.childSteps[0]!.startMs).toBe(sectionAt);
+    expect(mapped.childSteps[0]!.startMs).toBe(sectionAt);
   });
 });
 
 // --- p3c-allure-actions task spec: actions merged into the same
 // sections/polls timeline, plus the truncation marker ---
 
-describe("mapScenario: actions merged into the sections/polls timeline", () => {
+describe("mapStep: actions merged into the sections/polls timeline", () => {
   it("merges an action alongside sections/polls in ascending `at` order", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -999,22 +860,13 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       result: null,
       sections: [{ label: "A", at: "2026-08-01T00:00:00.100Z" }],
       polls: [{ description: "B", at: "2026-08-01T00:00:00.200Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
-      actions: [
-        { method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.300Z" },
-      ],
+      actions: [{ method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.300Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["A", "B (1 attempts)", "goto /orders"]);
+    expect(mapped.childSteps.map((c) => c.name)).toEqual(["A", "B (1 attempts)", "goto /orders"]);
   });
 
   it("names an expect action with its matcher and target, never its ms/timeout_ms", () => {
@@ -1036,18 +888,11 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       ],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
     const at = Date.parse("2026-08-01T00:00:00.100Z");
-    expect(mapped.steps[0]!.childSteps[0]).toEqual({
+    expect(mapped.childSteps[0]).toEqual({
       name: "expect #late to.be.visible",
       startMs: at,
       stopMs: at + 1234,
@@ -1074,17 +919,10 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       ],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps[0]!.name).toBe("expect #late not to.be.visible");
+    expect(mapped.childSteps[0]!.name).toBe("expect #late not to.be.visible");
   });
 
   it("names a non-expect action with its method and url when there is no selector", () => {
@@ -1096,17 +934,10 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       actions: [{ method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps[0]!.name).toBe("goto /orders");
+    expect(mapped.childSteps[0]!.name).toBe("goto /orders");
   });
 
   it("maps outcome: failed to status failed", () => {
@@ -1118,17 +949,10 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       actions: [{ method: "click", selector: "#submit", ms: 10, outcome: "failed", at: "2026-08-01T00:00:00.100Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps[0]!.status).toBe("failed");
+    expect(mapped.childSteps[0]!.status).toBe("failed");
   });
 
   it("keeps a fixed sections -> polls -> actions order when all three tie on the exact same `at`", () => {
@@ -1143,17 +967,10 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       actions: [{ method: "click", selector: "#go", ms: 0, outcome: "passed", at: sameInstant }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["section", "poll (1 attempts)", "click #go"]);
+    expect(mapped.childSteps.map((c) => c.name)).toEqual(["section", "poll (1 attempts)", "click #go"]);
   });
 
   it("appends one zero-width, passed marker naming the cut when actions was truncated", () => {
@@ -1166,24 +983,12 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       outcome: "passed" as const,
       at: `2026-08-01T00:00:00.${String(100 + index).padStart(3, "0")}Z`,
     }));
-    const receipt = baseReceipt({
-      status: "ok",
-      result: null,
-      actions,
-      truncated: { actions: 103 },
-    });
+    const receipt = baseReceipt({ status: "ok", result: null, actions, truncated: { actions: 103 } });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    const childSteps = mapped.steps[0]!.childSteps;
+    const childSteps = mapped.childSteps;
     const marker = childSteps[childSteps.length - 1]!;
     expect(marker.name).toBe("... 100 more actions not shown");
     expect(marker.status).toBe("passed");
@@ -1200,36 +1005,21 @@ describe("mapScenario: actions merged into the sections/polls timeline", () => {
       actions: [{ method: "click", selector: "#go", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.childSteps.map((c) => c.name)).toEqual(["click #go"]);
+    expect(mapped.childSteps.map((c) => c.name)).toEqual(["click #go"]);
   });
 });
 
-describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
+describe("mapHooks: hook trace/actions (p3d-hook-trace task spec)", () => {
   it("attaches a hook's own trace with the playwright-trace contentType, relative to the scenario's evidence dir", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
     const hook: ScenarioHookRecord = { type: "before", status: "ok", trace: "hook-before-0.zip" };
     const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] } });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapHooks(record);
 
-    expect(mapped.hooks[0]!.attachments).toContainEqual({
+    expect(mapped[0]!.hook.attachments).toContainEqual({
       kind: "path",
       name: "trace",
       contentType: "application/vnd.allure.playwright-trace",
@@ -1238,25 +1028,15 @@ describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
   });
 
   it("omits any trace attachment when the hook never opened a chunk", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
     const hook: ScenarioHookRecord = { type: "after", status: "ok" };
     const record = baseRecord({ hooks: [hook] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapHooks(record);
 
-    expect(mapped.hooks[0]!.attachments.some((a) => a.name === "trace")).toBe(false);
+    expect(mapped[0]!.hook.attachments.some((a) => a.name === "trace")).toBe(false);
   });
 
   it("maps a hook's own actions into child steps via the same mapTimelineChildSteps merge a step's receipt uses", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
     const hook: ScenarioHookRecord = {
       type: "before",
       status: "ok",
@@ -1264,20 +1044,12 @@ describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
     };
     const record = baseRecord({ hooks: [hook], started_at: "2026-08-01T00:00:00.000Z" });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapHooks(record);
 
-    expect(mapped.hooks[0]!.childSteps.map((c) => c.name)).toEqual(["goto data:text/html,before-hook"]);
+    expect(mapped[0]!.hook.childSteps.map((c) => c.name)).toEqual(["goto data:text/html,before-hook"]);
   });
 
   it("anchors a hook's own truncation marker to its collapsed timestamp, the same fallback a step anchors to its receipt's started_at", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
     // No `actions` array at all alongside `truncated` — an edge case
     // record-types.ts's own type does not forbid, exercising the fallback
     // branch mapTimelineChildSteps takes when its own childSteps array is
@@ -1285,15 +1057,9 @@ describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
     const hook: ScenarioHookRecord = { type: "before", status: "ok", truncated: { actions: 5 } };
     const record = baseRecord({ hooks: [hook], started_at: "2026-08-01T00:00:00.000Z" });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapHooks(record);
 
-    const marker = mapped.hooks[0]!.childSteps[0]!;
+    const marker = mapped[0]!.hook.childSteps[0]!;
     expect(marker.name).toBe("... 5 more actions not shown");
     // The before hook's own collapsed timestamp is the scenario's own
     // started_at (mapHooks's own doc comment) — same value this record's
@@ -1303,8 +1069,6 @@ describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
   });
 
   it("keeps a hook's own declared child steps ahead of its actions timeline, same order as a step's", () => {
-    const { gherkinDocument, pickles } = parse();
-    const pickle = pickles[0]!;
     const hook: ScenarioHookRecord = {
       type: "before",
       status: "ok",
@@ -1313,19 +1077,13 @@ describe("mapScenario: hook trace/actions (p3d-hook-trace task spec)", () => {
     };
     const record = baseRecord({ hooks: [hook] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map(),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapHooks(record);
 
-    expect(mapped.hooks[0]!.childSteps.map((c) => c.name)).toEqual(["did the thing", "goto /x"]);
+    expect(mapped[0]!.hook.childSteps.map((c) => c.name)).toEqual(["did the thing", "goto /x"]);
   });
 });
 
-describe("mapScenario: page_events as step parameters", () => {
+describe("mapStep: page_events as step parameters", () => {
   function consoleErrorEntry(index: number) {
     return {
       text: `error ${index}`,
@@ -1337,26 +1095,14 @@ describe("mapScenario: page_events as step parameters", () => {
   it("shows only the non-empty categories, each as an (observed) parameter", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
-      status: "ok",
-      result: null,
-      page_events: { console_errors: [consoleErrorEntry(1)] },
-    });
+    const receipt = baseReceipt({ status: "ok", result: null, page_events: { console_errors: [consoleErrorEntry(1)] } });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    const params = mapped.steps[0]!.parameters;
-    expect(params).toContainEqual({ name: "console errors (observed)", value: "1" });
-    expect(params.some((p) => p.name === "page errors (observed)")).toBe(false);
-    expect(params.some((p) => p.name === "failed requests (observed)")).toBe(false);
+    expect(mapped.parameters).toContainEqual({ name: "console errors (observed)", value: "1" });
+    expect(mapped.parameters.some((p) => p.name === "page errors (observed)")).toBe(false);
+    expect(mapped.parameters.some((p) => p.name === "failed requests (observed)")).toBe(false);
   });
 
   it("reports the true total, not the shown count, once a category was truncated", () => {
@@ -1369,21 +1115,14 @@ describe("mapScenario: page_events as step parameters", () => {
       page_events: { console_errors: shown, truncated: { console_errors: 4213 } },
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.parameters).toContainEqual({ name: "console errors (observed)", value: "100 of 4213" });
+    expect(mapped.parameters).toContainEqual({ name: "console errors (observed)", value: "100 of 4213" });
   });
 });
 
-describe("mapScenario: receipt.evidence.attachments (P9 task spec)", () => {
+describe("mapStep: receipt.evidence.attachments (P9 task spec)", () => {
   it("maps each attachment by name, guessing contentType from file's own extension, relative to evidence.dir", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -1397,17 +1136,10 @@ describe("mapScenario: receipt.evidence.attachments (P9 task spec)", () => {
       },
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "path",
       name: "orders.json",
       contentType: "application/json",
@@ -1428,17 +1160,10 @@ describe("mapScenario: receipt.evidence.attachments (P9 task spec)", () => {
       },
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "path",
       name: "dump.bin",
       contentType: "application/octet-stream",
@@ -1462,23 +1187,16 @@ describe("mapScenario: receipt.evidence.attachments (P9 task spec)", () => {
       },
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "path",
       name: "dup.txt",
       contentType: "text/plain",
       path: ".nukadoko/receipts/rcpt-1/dup.txt",
     });
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "path",
       name: "dup.txt",
       contentType: "text/plain",
@@ -1491,37 +1209,23 @@ describe("mapScenario: receipt.evidence.attachments (P9 task spec)", () => {
     const pickle = pickles[0]!;
     const receipt = baseReceipt({ status: "ok", result: null });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments.some((a) => a.name === "orders.json")).toBe(false);
+    expect(mapped.attachments.some((a) => a.name === "orders.json")).toBe(false);
   });
 });
 
-describe("mapScenario: the whole receipt as a receipt.json attachment", () => {
+describe("mapStep: the whole receipt as a receipt.json attachment", () => {
   it("attaches it to a passed step, verbatim", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const receipt = baseReceipt({ status: "ok", result: { ok: true } });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-    const record = baseRecord({ steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "buffer",
       name: "receipt.json",
       contentType: "application/json",
@@ -1536,17 +1240,10 @@ describe("mapScenario: the whole receipt as a receipt.json attachment", () => {
     const receipt = baseReceipt({ status: "failed", error: { message: "it broke", kind: "step_error" } });
     delete (receipt as { result?: unknown }).result;
     const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", receipt: "rcpt-1" };
-    const record = baseRecord({ status: "failed", steps: [step] });
 
-    const mapped = mapScenario({
-      record,
-      receipts: new Map([["rcpt-1", receipt]]),
-      gherkinDocument,
-      pickle,
-      posixPath: "features/checkout.feature",
-    });
+    const mapped = callMapStep({ record: step, receipt, gherkinDocument, pickle });
 
-    expect(mapped.steps[0]!.attachments).toContainEqual({
+    expect(mapped.attachments).toContainEqual({
       kind: "buffer",
       name: "receipt.json",
       contentType: "application/json",

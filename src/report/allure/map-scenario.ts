@@ -14,19 +14,50 @@ import type { ErrorKind, PollRecord, Receipt } from "../../receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
-// Responsibility: the pure transform at the center of this module
-// (m3b-allure-emitter task spec, decision 2's own words: keeping
-// map-scenario.ts a pure function is central to the whole design) —
-// `(record, receipts, gherkin document,
-// pickle, posixPath) -> flat description of what to attach where`. No
-// `allure-js-commons` import (not even a type-only one) and no `node:fs`:
-// every input here is already resolved by a caller (emitter.ts reads
-// receipt.json files via read-receipt.ts and resolves the project name via
-// identity.ts before calling this), so this module can be driven entirely
-// from fixture data in a test, with no real allure-results directory and no
-// disk-touching allure-js runtime anywhere in the call graph. emitter.ts is
-// the only place that turns the plain data this returns into actual
+// Responsibility: the pure transform at the center of this module (allure-
+// step-as-test task spec, decision 5: "keep the mapping decision in one
+// identifiable place") — `mapStep` turns one pickle step's own record,
+// receipt, and gherkin context into one Allure *test* (not a child of one),
+// `mapHooks` turns a scenario's own before/after hooks into fixtures, and
+// `mapScenarioEvidence` turns whatever browser evidence belongs to the
+// scenario as a whole into a synthetic fixture. No `allure-js-commons`
+// import (not even a type-only one) and no `node:fs`: every input here is
+// already resolved by a caller (emitter.ts reads/redacts receipts itself and
+// resolves the project name via identity.ts before calling any function in
+// this file), so every function here can be driven entirely from fixture
+// data in a test, with no real allure-results directory and no disk-
+// touching allure-js runtime anywhere in the call graph. emitter.ts is the
+// only place that turns the plain data these functions return into actual
 // `ReporterRuntime` calls.
+//
+// **Step = test, not scenario = test** (this task's spec, decision 1). This
+// is the one thing to change to revert that choice later: `mapStep` is the
+// function whose *output shape* ("this much data, this much status, these
+// attachments — one unit") encodes it. Reverting to scenario = test means
+// writing a new orchestrator that calls this same per-step data-gathering
+// logic once per step but folds the results into one aggregate test instead
+// of handing each to `emitter.ts`'s `emitStep` separately — the per-field
+// logic (parameters, attachments, timelines, labels) does not need to
+// change, only how many Allure tests the result becomes.
+//
+// **Why this module never fills in a `historyId`, and never will** (this
+// task's spec, decision 4 — read this before "fixing" a report that looks
+// like it has no history): a step has no identity that survives a run.
+// Text repeats (two steps can share the exact same wording), position
+// shifts (an edit anywhere earlier in the feature file moves every line
+// number after it), and occurrence count breaks under duplicate text the
+// same way text itself does — every one of those was tried and each one
+// produced a report that silently linked two *different* steps as if they
+// were the same one, with no trace of the mistake left in the output to
+// catch it later. Given that, the only choice that does not eventually lie
+// is to make sure nothing links across runs at all: `mapStep`'s own
+// `identityParameters` (three run/scenario/step-scoped values, `mode:
+// "hidden"`) exist to force every Allure test's own `historyId` apart, on
+// purpose, every time. Do not replace them with `excluded: true` (Allure
+// drops an `excluded` parameter from the hash entirely, which undoes the
+// whole point) and do not delete them because the report "should" have
+// history — it cannot, honestly, until steps carry an identity of their
+// own, which nothing in this codebase invents.
 //
 // `@cucumber/messages` is fine to import here (types and the odd runtime
 // value alike) — it is plain data with no I/O of its own, unlike the two
@@ -35,7 +66,7 @@ import { contentTypeForFileName } from "../media-type.js";
 // Owns the `[nukadoko.failure=<kind>]` marker format itself
 // (`buildFailureMarker`) and the failed/broken split (`statusForKind`) —
 // categories.ts imports both from here (not the other way around) precisely
-// so map-scenario.ts never has to import categories.ts's own allure-js
+// so this module never has to import categories.ts's own allure-js
 // `Category`/`Status` values back.
 
 export type MappedStatus = "passed" | "failed" | "broken" | "skipped";
@@ -55,6 +86,18 @@ export interface MappedParameter {
   readonly name: string;
   readonly value: string;
   readonly excluded?: boolean;
+  /** `"hidden"` only — the one `ParameterMode` value this codebase ever
+   * writes (verified against @allurereport/reader's own allure2 reader and
+   * @allurereport/core's own historyId computation: a `mode: "hidden"`
+   * parameter is hidden from the report's own UI but still folds into
+   * `historyId`, unlike `excluded: true`, which drops out of the hash
+   * entirely — this module's own header, decision 4). A plain string
+   * literal, not allure-js-commons' own `ParameterMode` enum import: that
+   * type is itself already `"hidden" | "masked" | "default"`, a plain
+   * string union, so this narrower field is directly assignable to it with
+   * no cast needed at the one call site (emitter.ts) that hands these
+   * straight to the SDK. */
+  readonly mode?: "hidden";
 }
 
 /** A child step nested under a mapped step/hook (p2-allure-measurement task
@@ -63,7 +106,10 @@ export interface MappedParameter {
  * entry of a step's own `sections`/`polls` timeline (`mapTimelineChildSteps`,
  * below), which carry their own real duration and outcome. One shape for
  * both keeps `writeChildSteps` (emitter.ts) from needing to know which kind
- * of child step it is rendering. */
+ * of child step it is rendering. Nests directly under a step's own test now
+ * (this task's spec, decision 1) — one level shallower than when a step was
+ * itself a child of the scenario's own test (this task's spec's own written
+ * facts: "child step は1段浅くなるだけで成立する"). */
 export interface MappedChildStep {
   readonly name: string;
   readonly startMs: number;
@@ -87,24 +133,17 @@ export type MappedAttachment =
       readonly fileExtension: string;
     };
 
-export interface MappedStep {
-  readonly name: string;
-  readonly status: MappedStatus;
-  readonly message?: string;
-  readonly startMs: number;
-  readonly stopMs: number;
-  readonly parameters: MappedParameter[];
-  readonly attachments: MappedAttachment[];
-  readonly childSteps: MappedChildStep[];
-}
-
 /** `type` stays the closed `"before" | "after"` pair unchanged (t7-compat-
  * status-afterstep task spec, item 2-6) even though `record.hooks[].type`
  * itself now also has `"after_step"` — allure-js-commons' own `FixtureType`
  * is that exact same closed union (no third kind exists to map onto), and
  * this task's spec is explicit that the Allure side gets no new concept: an
  * `"after_step"` record hook still becomes an `"after"` fixture, just named
- * so its own step is readable from the report (`mapHooks`, below). */
+ * so its own step is readable from the report (`mapHooks`, below). Also
+ * doubles as `mapScenarioEvidence`'s own synthetic "after" fixture shape
+ * (this task's spec) — same fields, same emitter.ts rendering path, no
+ * second type needed for a fixture that happens not to come from a real
+ * hook. */
 export interface MappedHook {
   readonly type: "before" | "after";
   readonly name: string;
@@ -116,49 +155,62 @@ export interface MappedHook {
   readonly childSteps: MappedChildStep[];
 }
 
-export interface MappedTest {
+/** One step, mapped onto everything its own Allure test needs (this task's
+ * spec, decision 1: step = test) — the union of what used to be a step (a
+ * child of the scenario's own test) and a test (the scenario's own test
+ * itself), now the same thing. `featureName`/`description` exist per step
+ * only because there is no longer a shared scenario-level test to hold them
+ * once each — every step in one scenario computes the exact same value for
+ * both, from the exact same gherkin document. */
+export interface MappedStepTest {
   readonly name: string;
-  /** The Scenario's own gherkin name, unexpanded by any Examples row —
-   * emitter.ts needs this (not the pickle's own possibly-expanded `name`)
-   * to build the `fullName` variant `testCaseId` is computed from (this
-   * task's spec, decision 5: every row of one Scenario Outline shares one
-   * `testCaseId`). */
-  readonly templateName: string;
-  readonly description?: string;
   readonly featureName: string;
+  readonly description?: string;
+  readonly status: MappedStatus;
+  readonly message?: string;
+  readonly startMs: number;
+  readonly stopMs: number;
   readonly labels: MappedLabel[];
   readonly links: MappedLink[];
   readonly parameters: MappedParameter[];
-  readonly startMs: number;
-  readonly stopMs: number;
   readonly attachments: MappedAttachment[];
-  /** The first failure's own (already `[nukadoko.failure=<kind>]`-marked, or
-   * — when no kind resolved — plain) message, `undefined` when nothing
-   * failed (M3-C spec item 1). emitter.ts sets this as `partialTest.
-   * statusDetails.message`, the field Allure 2's own categories matching
-   * (`extractErrorMatchingData`) reads at the test level — Allure 2 has no
-   * other per-result category field, so the marker has to land here. Allure
-   * 3 never reads this field at all: it categorizes the same failure by
-   * matching a project-supplied config against the `nukadoko.failure`
-   * label, which `labels` below carries out of this same `firstFailure`
-   * search (docs/spec.md, "Allure emitter"). */
-  readonly message?: string;
+  readonly childSteps: MappedChildStep[];
 }
 
-export interface MappedScenario {
-  readonly test: MappedTest;
-  readonly steps: MappedStep[];
-  readonly hooks: MappedHook[];
-}
-
-export interface MapScenarioInput {
-  readonly record: ScenarioRecord;
-  /** Already-read receipts, keyed by receipt id — `null` for an id whose
-   * receipt.json couldn't be read/parsed (this task's spec, decision 12:
-   * treat an unreadable receipt as null and keep mapping). A step whose own
-   * `record.steps[].receipt` isn't a key here at all is treated the same as
-   * one mapped to `null`. */
-  readonly receipts: ReadonlyMap<string, Receipt | null>;
+export interface MapStepInput {
+  /** This run's own id (m4a-run-provenance task spec) — folded into
+   * `identityParameters` below (this task's spec, decision 4), never into
+   * `fullName` (which stays a human-readable identifier, decision 4's own
+   * words: "run 固有の値を fullName に混ぜないこと"). */
+  readonly runId: string;
+  /** This pickle's own scenario id (src/run/scenario-id.ts) — folded into
+   * `identityParameters` below the same way `runId` is, so two scenarios
+   * sharing one run (including two rows of one Scenario Outline, which
+   * share one gherkin name) still get distinct identities. */
+  readonly scenarioId: string;
+  readonly environment: string;
+  readonly session: string | null;
+  readonly targetVersion?: string;
+  readonly record: ScenarioStepRecord;
+  /** The exact in-memory object `run-scenario.ts`'s own `writeReceipt` call
+   * just persisted for this step, or `null` for a step with no receipt of
+   * its own at all (skipped, undefined, ambiguous, or a never-began
+   * refusal) — never a receipt that exists on disk but could not be read
+   * back: this task's spec's own seam (`pushStepRecord`) hands the caller
+   * the object it already has, so there is nothing to re-read. */
+  readonly receipt: Receipt | null;
+  /** This step's own 0-based position in both `record.steps` and
+   * `pickle.steps` — folded into `identityParameters` below so two steps
+   * sharing the exact same text in one scenario still get distinct
+   * identities. */
+  readonly index: number;
+  /** The moment this step's own record was appended (run-scenario.ts's
+   * `pushStepRecord`) — the zero-width anchor for a step with no receipt of
+   * its own, replacing the old "previous step's own stop" anchor a scenario-
+   * level test's own child-step timeline used to need: with each step now
+   * its own Allure test rather than one child among a scenario's own
+   * timeline, there is no longer a parent test to stay ordered *within*. */
+  readonly finishedAt: Date;
   readonly gherkinDocument: GherkinDocument;
   readonly pickle: Pickle;
   /** The feature file's root-relative path, already POSIX-normalized
@@ -168,8 +220,7 @@ export interface MapScenarioInput {
   readonly posixPath: string;
 }
 
-// --- ErrorKind -> Allure status (m3b-allure-emitter task spec, decision 3)
-// ---
+// --- ErrorKind -> Allure status ---
 //
 // > failed = the system under test violated the contract. broken = the
 // > contract layer failed to reach a verdict.
@@ -231,7 +282,7 @@ function resolveScenario(doc: GherkinDocument, pickle: Pickle): Scenario | undef
 }
 
 // --- gherkin step id lookup (astNodeIds -> Step, for the keyword prefix
-// mapSteps below reads) — a separate walk from collectScenarios above,
+// mapStep below reads) — a separate walk from collectScenarios above,
 // because a Background's own steps (feature-level or Rule-level) never
 // appear as a Scenario, only their pickle steps do.
 
@@ -261,7 +312,7 @@ function collectGherkinSteps(doc: GherkinDocument): Map<string, Step> {
 /** The gherkin `keyword` (e.g. `"Given "`, trailing space included) for the
  * pickle step at `pickleSteps[index]`, or `undefined` when it can't be
  * resolved (index out of range, no astNodeIds, or the id isn't in
- * `stepIds` — mapSteps falls back to the bare step text in that case). */
+ * `stepIds` — `mapStep` falls back to the bare step text in that case). */
 function resolveStepKeyword(
   stepIds: ReadonlyMap<string, Step>,
   pickleSteps: readonly PickleStep[],
@@ -354,15 +405,12 @@ function dedupeLinks(links: readonly MappedLink[]): MappedLink[] {
   return result;
 }
 
-// --- declared attachments/logs/links/labels (this task's spec, decisions
-// 4, 6-7) — shared by both a step's own `receipt.declared` and a hook's own
-// `record.hooks[].declared`, same shape either way. ---
+// --- declared attachments/logs/links/labels/parameters (shared by a step's
+// own `receipt.declared` and a hook's own `record.hooks[].declared`, same
+// shape either way) ---
 //
-// `contentTypeForFileName` (and the extension table backing it) now lives in
-// src/report/media-type.ts (m3c-messages-emitter task spec, decision 2):
-// src/report/messages/map-scenario.ts needs the identical lookup, so it was
-// pulled up rather than becoming a third copy. Behavior here is unchanged —
-// only the import moved.
+// `contentTypeForFileName` (and the extension table backing it) lives in
+// src/report/media-type.ts, shared with src/report/messages/map-scenario.ts.
 
 function joinRelative(dir: string, fileName: string): string {
   return `${dir.replace(/\/+$/, "")}/${fileName}`;
@@ -388,18 +436,14 @@ function mapDeclared(
   }
   const attachments: MappedAttachment[] = (declared.attachments ?? []).map((fileName) => ({
     kind: "path",
-    // The `declared: ` prefix is the entire provenance signal (this task's
-    // spec, decision 7) — after emit, a measured and a declared attachment
-    // are otherwise indistinguishable.
+    // The `declared: ` prefix is the entire provenance signal — after emit,
+    // a measured and a declared attachment are otherwise indistinguishable.
     name: `declared: ${fileName}`,
     contentType: contentTypeForFileName(fileName),
     path: joinRelative(evidenceDir, fileName),
   }));
   // Zero-width at the caller's own `timestampMs` (the step's own start, or
-  // the hook's own collapsed timestamp) and always `"passed"` — the same
-  // rendering `writeChildSteps` (emitter.ts) produced before `MappedChildStep`
-  // grew `startMs`/`stopMs`/`status` (p2-allure-measurement task spec: a
-  // declared log line's own behavior is not to change).
+  // the hook's own collapsed timestamp) and always `"passed"`.
   const childSteps: MappedChildStep[] = (declared.logs ?? []).map((text) => ({
     name: text,
     startMs: timestampMs,
@@ -412,13 +456,16 @@ function mapDeclared(
     type: link.type,
   }));
   const labels: MappedLabel[] = (declared.labels ?? []).map((label) => ({ name: label.name, value: label.value }));
-  // `excluded` is deliberately never set here (this task's spec, decision
-  // 2): allure only folds a *non*-excluded parameter into historyId, so a
-  // declared parameter that reaches the test unmarked genuinely changes
-  // which history bucket a scenario's outcome lands in when its declared
-  // value differs run to run — the same historyId behavior classic
-  // allure-cucumberjs has for its own step parameters, carried through here
-  // rather than suppressed.
+  // `excluded` is deliberately never set here: allure only folds a *non*-
+  // excluded parameter into historyId, so a declared parameter that reaches
+  // the test unmarked genuinely changes which history bucket a scenario's
+  // outcome lands in when its declared value differs run to run — the same
+  // historyId behavior classic allure-cucumberjs has for its own step
+  // parameters, carried through here rather than suppressed. (This is
+  // already moot for a step's own test, this task's spec, decision 4: every
+  // step's own `identityParameters` already force `historyId` apart on
+  // their own — a declared parameter's participation is unchanged, not the
+  // thing doing the isolating.)
   const parameters: MappedParameter[] = (declared.parameters ?? []).map((parameter) => ({
     name: parameter.name,
     value: parameter.value,
@@ -434,7 +481,13 @@ interface Outcome {
   readonly kind?: ErrorKind;
 }
 
-function resolveStepOutcome(step: ScenarioStepRecord, receipts: ReadonlyMap<string, Receipt | null>): Outcome {
+/** `receipt` is exactly what the caller already has for this step — never a
+ * disk read (this task's spec, decision 2; `MapStepInput.receipt`'s own doc
+ * comment) — so, unlike the scenario = test design this replaced, there is
+ * no longer an "unreadable receipt.json" case to fall back for: `receipt`
+ * is `null` exactly when `step.receipt` is `null` (a step that never began
+ * at all — skipped, undefined, ambiguous, or a never-began refusal). */
+function resolveStepOutcome(step: ScenarioStepRecord, receipt: Receipt | null): Outcome {
   if (step.status === "passed") {
     return { status: "passed" };
   }
@@ -443,26 +496,18 @@ function resolveStepOutcome(step: ScenarioStepRecord, receipts: ReadonlyMap<stri
   }
   if (step.status === "undefined" || step.status === "ambiguous") {
     // A vocabulary defect, not one of the `ErrorKind`s (there is no
-    // receipt to carry one) — broken, unmarked (this task's spec, decision
-    // 3).
+    // receipt to carry one) — broken, unmarked.
     return { status: "broken", message: step.error?.message };
   }
   // step.status === "failed"
-  const receipt = step.receipt !== null ? (receipts.get(step.receipt) ?? undefined) : undefined;
   if (receipt && receipt.status === "failed") {
     const kind = receipt.error.kind;
     return { status: statusForKind(kind), message: markedMessage(kind, receipt.error.message), kind };
   }
-  // No usable receipt: either this step never began at all (e.g. a
-  // declared-mutates-true step refused up front under a read-only
-  // environment — src/run/run-scenario.ts's own "never began" family,
-  // alongside undefined/ambiguous, but reported as `status: "failed"` there
-  // rather than a status of its own) or its receipt.json exists but
-  // couldn't be read. Neither carries a `kind` to classify with, so this
-  // falls back to the record's own coarse status literally (this task's
-  // spec, decision 12: report that step using only the status the record
-  // itself carries) rather than guessing at a kind that was never actually
-  // recorded.
+  // A step that never began at all despite `status: "failed"` (a never-
+  // began refusal, e.g. the read-only declared-mutates rejection) carries
+  // no `kind` to classify with, so this falls back to the record's own
+  // coarse status literally, using only what the record itself carries.
   return { status: "failed", message: step.error?.message };
 }
 
@@ -479,22 +524,19 @@ function resolveHookOutcome(hook: ScenarioHookRecord): Outcome {
   return { status: statusForKind(kind), message: markedMessage(kind, hook.error.message), kind };
 }
 
-// --- sections + polls -> one child-step timeline (p2-allure-measurement
-// task spec, scope 2) ---
+// --- sections + polls + actions -> one child-step timeline ---
 //
 // `PollRecord.outcome` -> `MappedStatus`: this is a different mapping than
 // the existing `allureStatus` helper (emitter.ts) covers — that one goes
 // `MappedStatus -> allure-js's own Status`, not `PollRecord["outcome"] ->
-// MappedStatus` — so it cannot be reused here; this is the "local table"
-// this task's spec allows when the existing helper's own meaning doesn't
-// fit. `"resolved"` is what a poll's caller actually asked for, so
-// `"passed"`. `"timed_out"` means the condition the step waited for was
-// never met — the step is reporting its own contract failed to hold, the
-// same "failed" a step's own kind-classified receipt error gets, never
-// "broken" (this task's spec: "期待した条件が満たされなかった"). `"failed"`
-// means the poll's own `fn` threw, unrelated to whatever it was polling for
-// — the contract layer failing to reach a verdict, "broken", the same
-// bucket `statusForKind`'s own unclassified kinds fall into.
+// MappedStatus` — so it cannot be reused here. `"resolved"` is what a poll's
+// caller actually asked for, so `"passed"`. `"timed_out"` means the
+// condition the step waited for was never met — the step is reporting its
+// own contract failed to hold, the same "failed" a step's own kind-
+// classified receipt error gets, never "broken". `"failed"` means the
+// poll's own `fn` threw, unrelated to whatever it was polling for — the
+// contract layer failing to reach a verdict, "broken", the same bucket
+// `statusForKind`'s own unclassified kinds fall into.
 function pollOutcomeStatus(outcome: PollRecord["outcome"]): MappedStatus {
   switch (outcome) {
     case "resolved":
@@ -510,9 +552,7 @@ interface TimelineEntry {
   /** The original ISO 8601 string this entry's own `at` sorts by — kept
    * alongside the already-built `childStep` rather than re-derived from its
    * `startMs`, since a poll's own `startMs` is what `PollRecord.at` parses to
-   * (verified in that field's own doc comment: "this poll's own start") and
-   * comparing the source strings directly is what this task's spec asks for
-   * ("両方 ISO 8601 なので比較は素直"). */
+   * and comparing the source strings directly is simpler. */
   readonly at: string;
   readonly childStep: MappedChildStep;
 }
@@ -522,28 +562,26 @@ interface TimelineEntry {
  * trace's own `after` entry either carried an `error` or it didn't), so
  * there is no third "broken" bucket to reach for here: `"failed"` means the
  * Playwright call itself (an `expect` wait included) did not resolve the way
- * the step asked it to, the same "the system under test violated the
- * contract" the receipt's own `error.kind` already distinguishes from
- * "the contract layer failed to reach a verdict" (this file's own header on
- * `FAILED_KINDS`) — an action's failure is always the former, never the
- * latter. */
+ * the step asked it to — the system under test violated the contract, the
+ * same distinction the receipt's own `error.kind` already draws — never the
+ * contract layer failing to reach a verdict. */
 function actionOutcomeStatus(outcome: ActionEntry["outcome"]): MappedStatus {
   return outcome === "failed" ? "failed" : "passed";
 }
 
-/** A readable name for one Playwright call (p3c-allure-actions task spec,
- * scope 1) — `ms` and `timeout_ms` are deliberately never folded in here:
- * `ms` is already visible as this child step's own width (unlike a poll's
- * `attempts`, which the width alone can't reveal), and `timeout_ms` already
- * lives in the `receipt.json` attachment. `expect` needs its matcher and
- * target named explicitly (`before.params.expression`/`selector`) — neither
- * is implied by `method` alone, the way `goto`'s own target is implied by
- * `url` — so it gets its own branch; every other method falls back to
- * `method` plus whichever of `selector`/`url` the call happened to carry
- * (e.g. `goto /orders`), or bare `method` when neither was recorded.
- * `is_not` (an `expect` call's own `.not`) is folded into the matcher too —
- * an unhandled negation would render identically to its own opposite, which
- * is exactly the silent-misread this name exists to prevent. */
+/** A readable name for one Playwright call — `ms` and `timeout_ms` are
+ * deliberately never folded in here: `ms` is already visible as this child
+ * step's own width (unlike a poll's `attempts`, which the width alone can't
+ * reveal), and `timeout_ms` already lives in the `receipt.json` attachment.
+ * `expect` needs its matcher and target named explicitly
+ * (`before.params.expression`/`selector`) — neither is implied by `method`
+ * alone, the way `goto`'s own target is implied by `url` — so it gets its
+ * own branch; every other method falls back to `method` plus whichever of
+ * `selector`/`url` the call happened to carry (e.g. `goto /orders`), or bare
+ * `method` when neither was recorded. `is_not` (an `expect` call's own
+ * `.not`) is folded into the matcher too — an unhandled negation would
+ * render identically to its own opposite, which is exactly the silent-
+ * misread this name exists to prevent. */
 function actionName(action: ActionEntry): string {
   const target = action.selector ?? action.url;
   if (action.method === "expect" && action.expression !== undefined) {
@@ -554,13 +592,11 @@ function actionName(action: ActionEntry): string {
 }
 
 /** One step's own `sections`, `polls`, and `actions`, merged into one
- * child-step timeline in ascending `at` order (p2-allure-measurement task
- * spec, scope 2; widened to include `actions` by p3c-allure-actions task
- * spec, scope 1) — a section is a zero-width marker at the moment
- * `ctx.section` was called; a poll spans its own `at` through
- * `at + waited_ms`, its `attempts` folded into the name because that count
- * is the one fact only the name can carry here (`attempts: 1` means the
- * wait was a no-op; `40` means the opposite fix is needed, and duration
+ * child-step timeline in ascending `at` order — a section is a zero-width
+ * marker at the moment `ctx.section` was called; a poll spans its own `at`
+ * through `at + waited_ms`, its `attempts` folded into the name because that
+ * count is the one fact only the name can carry here (`attempts: 1` means
+ * the wait was a no-op; `40` means the opposite fix is needed, and duration
  * alone can't tell those apart); an action spans its own `at` through
  * `at + ms`, named by `actionName` above. Deliberately never clamped to the
  * parent step's own start/stop: a receipt whose own timeline runs outside
@@ -568,36 +604,29 @@ function actionName(action: ActionEntry): string {
  * clipping it.
  *
  * Same-instant order, when `sections`/`polls`/`actions` land on the exact
- * same millisecond (p3c-allure-actions task spec, scope 3): sections, then
- * polls, then actions, always — a fixed choice (nothing about "what a
- * section/poll/action *is*" makes one belong before another at the same
- * instant) rather than a discovered one, made here once so a rerun of the
- * same receipt never reorders the timeline and turns into an unreadable
- * diff. Enforced by `Array.prototype.sort`'s own stability: each category is
- * pushed to `entries` in that same order below, so two entries that tie on
- * `at` keep the order they were pushed in.
+ * same millisecond: sections, then polls, then actions, always — a fixed
+ * choice made here once so a rerun of the same receipt never reorders the
+ * timeline and turns into an unreadable diff. Enforced by
+ * `Array.prototype.sort`'s own stability: each category is pushed to
+ * `entries` in that same order below, so two entries that tie on `at` keep
+ * the order they were pushed in.
  *
  * A truncated `actions` array (`receipt.truncated.actions` present) gets one
  * more child step appended after the sort, naming the cut so a reader
  * scanning only the timeline never mistakes a capped list for the whole
- * story (this task's spec, scope 2 — the same reason `page_events`'s own
- * `truncated` field exists, this file's own `pageEventCount` below). Placed
- * at the tail on purpose: it names a fact about the receipt as a whole, not
- * a moment inside the step, so it is appended to the array rather than
- * merged into the `at`-ordered sort above.
+ * story. Placed at the tail on purpose: it names a fact about the receipt as
+ * a whole, not a moment inside the step, so it is appended to the array
+ * rather than merged into the `at`-ordered sort above.
  *
  * `source` is narrowed to just the four fields this function actually reads
- * (p3d-hook-trace task spec) rather than the full `Receipt`, so `mapHooks`
- * below can hand this the exact same function a `ScenarioHookRecord` — which
- * has `actions`/`truncated` but no `sections`/`polls`/`started_at` of its
- * own (record-types.ts's own header explains why a hook has no `ctx` to call
- * `ctx.section`/`ctx.poll` from) — without a second merge function or a
- * fake `Receipt` shim. `fallbackAnchorMs` replaces the old direct read of
- * `receipt.started_at` for that same reason: a hook invocation has no
- * `started_at` of its own either, so the caller passes whichever timestamp
- * is the right anchor for it (a step's own `receipt.started_at`, or a
- * hook's own collapsed `timestampMs` — `mapHooks`' own doc comment on that
- * "documented limit"). */
+ * rather than the full `Receipt`, so `mapHooks` below can hand this the
+ * exact same function a `ScenarioHookRecord` — which has `actions`/
+ * `truncated` but no `sections`/`polls`/`started_at` of its own (a hook has
+ * no `ctx` to call `ctx.section`/`ctx.poll` from) — without a second merge
+ * function or a fake `Receipt` shim. `fallbackAnchorMs` is whichever
+ * timestamp is the right anchor for the caller (a step's own
+ * `Date.parse(receipt.started_at)`, or a hook's own collapsed
+ * `timestampMs`). */
 function mapTimelineChildSteps(
   source: Pick<Receipt, "sections" | "polls" | "actions" | "truncated">,
   fallbackAnchorMs: number,
@@ -641,13 +670,8 @@ function mapTimelineChildSteps(
     const shownCount = source.actions?.length ?? 0;
     const notShownCount = source.truncated.actions - shownCount;
     // Anchored to the last real entry's own `stopMs` (falling back to
-    // `fallbackAnchorMs` when the timeline is otherwise empty, which cannot
-    // happen in practice — `truncated.actions` is only ever present
-    // alongside a full 100-entry `actions` array — but is not a type-level
-    // guarantee `source` itself carries) so this marker reads as "right
-    // after everything already shown" on both axes: last in the array
-    // (`writeChildSteps`, emitter.ts, renders children in array order) and
-    // latest in time.
+    // `fallbackAnchorMs` when the timeline is otherwise empty) so this
+    // marker reads as "right after everything already shown" on both axes.
     const lastStopMs = childSteps.length > 0 ? childSteps[childSteps.length - 1]!.stopMs : fallbackAnchorMs;
     childSteps.push({
       name: `... ${notShownCount} more actions not shown`,
@@ -660,13 +684,12 @@ function mapTimelineChildSteps(
   return childSteps;
 }
 
-/** `page_events`'s three categories as step parameters (p2-allure-measurement
- * task spec, scope 3) — visible without opening the `receipt.json` attachment
- * (scope 1) that already carries the same data in full. A category with no
- * entries is omitted, never shown as `0` (this task's spec). A truncated
- * category (`page_events.truncated.<category>` present) reports the *true*
- * total beside the shown count (`"100 of 4213"`) — the shown count alone
- * would understate what actually happened. */
+/** `page_events`'s three categories as step parameters — visible without
+ * opening the `receipt.json` attachment that already carries the same data
+ * in full. A category with no entries is omitted, never shown as `0`. A
+ * truncated category (`page_events.truncated.<category>` present) reports
+ * the *true* total beside the shown count (`"100 of 4213"`) — the shown
+ * count alone would understate what actually happened. */
 function pageEventCount(entries: readonly unknown[] | undefined, truncatedTotal: number | undefined): string | undefined {
   if (!entries || entries.length === 0) {
     return undefined;
@@ -674,244 +697,278 @@ function pageEventCount(entries: readonly unknown[] | undefined, truncatedTotal:
   return truncatedTotal !== undefined ? `${entries.length} of ${truncatedTotal}` : String(entries.length);
 }
 
-// --- steps ---
+// --- one step -> one Allure test (this task's spec, decision 1) ---
 
-interface StepMapping {
-  readonly step: MappedStep;
-  readonly declaredLinks: MappedLink[];
-  readonly declaredLabels: MappedLabel[];
-  readonly declaredParameters: MappedParameter[];
-  readonly kind?: ErrorKind;
-}
+export function mapStep(input: MapStepInput): MappedStepTest {
+  const {
+    runId,
+    scenarioId,
+    environment,
+    session,
+    targetVersion,
+    record,
+    receipt,
+    index,
+    finishedAt,
+    gherkinDocument,
+    pickle,
+    posixPath,
+  } = input;
 
-function mapSteps(
-  record: ScenarioRecord,
-  receipts: ReadonlyMap<string, Receipt | null>,
-  scenarioStartMs: number,
-  pickleSteps: readonly PickleStep[],
-  stepIds: ReadonlyMap<string, Step>,
-): StepMapping[] {
-  let previousStopMs = scenarioStartMs;
-  return record.steps.map((step, index): StepMapping => {
-    const outcome = resolveStepOutcome(step, receipts);
-    const receipt = step.receipt !== null ? (receipts.get(step.receipt) ?? undefined) : undefined;
+  const scenario = resolveScenario(gherkinDocument, pickle);
+  const featureName = gherkinDocument.feature?.name ?? "";
+  const stepIds = collectGherkinSteps(gherkinDocument);
 
-    let startMs: number;
-    let stopMs: number;
-    if (receipt) {
-      startMs = Date.parse(receipt.started_at);
-      stopMs = Date.parse(receipt.finished_at);
-    } else {
-      // A step with no receipt (skipped/undefined/ambiguous, or a "never
-      // began"/unreadable failure) has no time of its own to report — zero-
-      // width, pinned to the previous step's own stop so it still lands in
-      // the right place on the timeline (this task's spec, decision 8).
-      startMs = previousStopMs;
-      stopMs = previousStopMs;
+  const outcome = resolveStepOutcome(record, receipt);
+
+  let startMs: number;
+  let stopMs: number;
+  if (receipt) {
+    startMs = Date.parse(receipt.started_at);
+    stopMs = Date.parse(receipt.finished_at);
+  } else {
+    // A step with no receipt (skipped/undefined/ambiguous, or a never-began
+    // refusal) has no time of its own to report — zero-width, anchored to
+    // the moment this step's own record was appended (`MapStepInput.
+    // finishedAt`'s own doc comment).
+    const t = finishedAt.getTime();
+    startMs = t;
+    stopMs = t;
+  }
+
+  const receiptParameters: MappedParameter[] = [];
+  const attachments: MappedAttachment[] = [];
+  let declared: MappedDeclared = EMPTY_DECLARED;
+  let timelineChildSteps: MappedChildStep[] = [];
+
+  if (receipt) {
+    receiptParameters.push({ name: "receipt", value: receipt.receipt_id });
+    receiptParameters.push({
+      name: "mutates (declared)",
+      value: receipt.mutates === null ? "not declared" : receipt.mutates ? "true" : "false",
+    });
+    receiptParameters.push({ name: "http reads (observed)", value: String(receipt.observed.http_reads) });
+    receiptParameters.push({ name: "http writes (observed)", value: String(receipt.observed.http_writes) });
+    if (receipt.world) {
+      receiptParameters.push({ name: "world reads (observed)", value: receipt.world.reads.join(", ") });
+      receiptParameters.push({ name: "world writes (observed)", value: receipt.world.writes.join(", ") });
     }
-    previousStopMs = stopMs;
+    if (receipt.used && receipt.used.length > 0) {
+      receiptParameters.push({ name: "used receipts", value: receipt.used.map((entry) => entry.receipt).join(", ") });
+    }
+    if (receipt.required_env && receipt.required_env.length > 0) {
+      receiptParameters.push({ name: "required env", value: receipt.required_env.join(", ") });
+    }
+    if (receipt.page_events) {
+      const consoleErrors = pageEventCount(
+        receipt.page_events.console_errors,
+        receipt.page_events.truncated?.console_errors,
+      );
+      if (consoleErrors !== undefined) {
+        receiptParameters.push({ name: "console errors (observed)", value: consoleErrors });
+      }
+      const pageErrors = pageEventCount(receipt.page_events.page_errors, receipt.page_events.truncated?.page_errors);
+      if (pageErrors !== undefined) {
+        receiptParameters.push({ name: "page errors (observed)", value: pageErrors });
+      }
+      const failedRequests = pageEventCount(
+        receipt.page_events.failed_requests,
+        receipt.page_events.truncated?.failed_requests,
+      );
+      if (failedRequests !== undefined) {
+        receiptParameters.push({ name: "failed requests (observed)", value: failedRequests });
+      }
+    }
 
-    const parameters: MappedParameter[] = [];
-    const attachments: MappedAttachment[] = [];
-    let declared: MappedDeclared = EMPTY_DECLARED;
-    let timelineChildSteps: MappedChildStep[] = [];
+    // The whole receipt, verbatim, as one JSON attachment — every step whose
+    // receipt exists, success or failure alike, never only the fields this
+    // module happens to map individually below. Already redacted before it
+    // ever reached disk (write-receipt.ts's own callers), so no second
+    // redaction pass belongs here.
+    attachments.push({
+      kind: "buffer",
+      name: "receipt.json",
+      contentType: "application/json",
+      content: JSON.stringify(receipt, null, 2),
+      fileExtension: ".json",
+    });
 
-    if (receipt) {
-      parameters.push({ name: "receipt", value: receipt.receipt_id });
-      parameters.push({
-        name: "mutates (declared)",
-        value: receipt.mutates === null ? "not declared" : receipt.mutates ? "true" : "false",
-      });
-      parameters.push({ name: "http reads (observed)", value: String(receipt.observed.http_reads) });
-      parameters.push({ name: "http writes (observed)", value: String(receipt.observed.http_writes) });
-      if (receipt.world) {
-        parameters.push({ name: "world reads (observed)", value: receipt.world.reads.join(", ") });
-        parameters.push({ name: "world writes (observed)", value: receipt.world.writes.join(", ") });
-      }
-      if (receipt.used && receipt.used.length > 0) {
-        // `used`'s own entries widened to `{ receipt, step }` (m6a-from-core
-        // task spec, item 5); this parameter's own rendering is unchanged —
-        // still just the receipt ids, comma-joined — so this line only
-        // updates the read to match the new shape.
-        parameters.push({ name: "used receipts", value: receipt.used.map((entry) => entry.receipt).join(", ") });
-      }
-      if (receipt.required_env && receipt.required_env.length > 0) {
-        parameters.push({ name: "required env", value: receipt.required_env.join(", ") });
-      }
-      if (receipt.page_events) {
-        const consoleErrors = pageEventCount(
-          receipt.page_events.console_errors,
-          receipt.page_events.truncated?.console_errors,
-        );
-        if (consoleErrors !== undefined) {
-          parameters.push({ name: "console errors (observed)", value: consoleErrors });
-        }
-        const pageErrors = pageEventCount(receipt.page_events.page_errors, receipt.page_events.truncated?.page_errors);
-        if (pageErrors !== undefined) {
-          parameters.push({ name: "page errors (observed)", value: pageErrors });
-        }
-        const failedRequests = pageEventCount(
-          receipt.page_events.failed_requests,
-          receipt.page_events.truncated?.failed_requests,
-        );
-        if (failedRequests !== undefined) {
-          parameters.push({ name: "failed requests (observed)", value: failedRequests });
-        }
-      }
-
-      // The whole receipt, verbatim, as one JSON attachment (p2-allure-
-      // measurement task spec, scope 1) — every step whose receipt exists,
-      // success or failure alike, never only the fields this module happens
-      // to map individually below. Already redacted before it ever reached
-      // disk (write-receipt.ts's own callers), so no second redaction pass
-      // belongs here; this is the same object `readReceiptsForRecord`
-      // (emitter.ts) read back. The point is durability against drift: a new
-      // receipt field reaches this attachment automatically, with no emitter
-      // change required, where the individually-mapped fields below need one
-      // every time.
+    if (receipt.status === "ok" && receipt.result !== null) {
       attachments.push({
         kind: "buffer",
-        name: "receipt.json",
+        name: "result",
         contentType: "application/json",
-        content: JSON.stringify(receipt, null, 2),
+        content: JSON.stringify(receipt.result, null, 2),
         fileExtension: ".json",
       });
-
-      if (receipt.status === "ok" && receipt.result !== null) {
-        attachments.push({
-          kind: "buffer",
-          name: "result",
-          contentType: "application/json",
-          content: JSON.stringify(receipt.result, null, 2),
-          fileExtension: ".json",
-        });
-      }
-      if (receipt.evidence.http) {
-        attachments.push({
-          kind: "path",
-          name: "http log",
-          contentType: "text/plain",
-          path: joinRelative(receipt.evidence.dir, receipt.evidence.http),
-        });
-      }
-      if (receipt.evidence.trace) {
-        attachments.push({
-          kind: "path",
-          name: "trace",
-          contentType: "application/vnd.allure.playwright-trace",
-          path: joinRelative(receipt.evidence.dir, receipt.evidence.trace),
-        });
-      }
-      // `screenshot.at` is never surfaced here (fb4-evidence-time task spec,
-      // scope: "at は Allure には出さない") — an attachment has no field to
-      // put a timestamp on, so `file` (the only part Allure can place) is
-      // all this mapping carries forward.
-      for (const screenshot of receipt.evidence.screenshots) {
-        attachments.push({
-          kind: "path",
-          name: screenshot.file,
-          contentType: "image/png",
-          path: joinRelative(receipt.evidence.dir, screenshot.file),
-        });
-      }
-      // Application-specific evidence `evidence.attach`/`.path` produced
-      // (P9 task spec) — same path-attachment shape as trace/screenshots
-      // above, `name` kept as the step's own (not `file`, which can differ
-      // only when a name collided with an earlier use this same step —
-      // `receipt.evidence.attachments`' own doc comment, src/receipt/
-      // types.ts). `contentType` is guessed from `file`'s own extension
-      // (`contentTypeForFileName`, already imported below); an unrecognized
-      // extension falls back to `application/octet-stream` rather than a
-      // guess this module cannot verify (this task's spec: "推測して間違え
-      // るより落とす").
-      for (const attachment of receipt.evidence.attachments ?? []) {
-        attachments.push({
-          kind: "path",
-          name: attachment.name,
-          contentType: contentTypeForFileName(attachment.file),
-          path: joinRelative(receipt.evidence.dir, attachment.file),
-        });
-      }
-
-      declared = mapDeclared(receipt.declared, receipt.evidence.dir, startMs);
-      attachments.push(...declared.attachments);
-      timelineChildSteps = mapTimelineChildSteps(receipt, Date.parse(receipt.started_at));
+    }
+    if (receipt.evidence.http) {
+      attachments.push({
+        kind: "path",
+        name: "http log",
+        contentType: "text/plain",
+        path: joinRelative(receipt.evidence.dir, receipt.evidence.http),
+      });
+    }
+    if (receipt.evidence.trace) {
+      attachments.push({
+        kind: "path",
+        name: "trace",
+        contentType: "application/vnd.allure.playwright-trace",
+        path: joinRelative(receipt.evidence.dir, receipt.evidence.trace),
+      });
+    }
+    // `screenshot.at` is never surfaced here — an attachment has no field to
+    // put a timestamp on, so `file` (the only part Allure can place) is all
+    // this mapping carries forward.
+    for (const screenshot of receipt.evidence.screenshots) {
+      attachments.push({
+        kind: "path",
+        name: screenshot.file,
+        contentType: "image/png",
+        path: joinRelative(receipt.evidence.dir, screenshot.file),
+      });
+    }
+    // Application-specific evidence `evidence.attach`/`.path` produced (P9
+    // task spec) — same path-attachment shape as trace/screenshots above,
+    // `name` kept as the step's own. `contentType` is guessed from `file`'s
+    // own extension; an unrecognized extension falls back to
+    // `application/octet-stream` rather than a guess this module cannot
+    // verify.
+    for (const attachment of receipt.evidence.attachments ?? []) {
+      attachments.push({
+        kind: "path",
+        name: attachment.name,
+        contentType: contentTypeForFileName(attachment.file),
+        path: joinRelative(receipt.evidence.dir, attachment.file),
+      });
     }
 
-    // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
-    // header) — the official cucumberjs allure adapter names a step
-    // `"<keyword><text>"` (e.g. "Given a passed step"), and the gherkin
-    // `keyword` itself already carries its own trailing space, so no
-    // separator is added here. Falls back to the bare text when the
-    // keyword can't be resolved (this task's spec, decision 1).
-    const keyword = resolveStepKeyword(stepIds, pickleSteps, index);
-    const name = keyword !== undefined ? `${keyword}${step.text}` : step.text;
+    declared = mapDeclared(receipt.declared, receipt.evidence.dir, startMs);
+    attachments.push(...declared.attachments);
+    timelineChildSteps = mapTimelineChildSteps(receipt, Date.parse(receipt.started_at));
+  }
 
-    return {
-      step: {
-        name,
-        status: outcome.status,
-        message: outcome.message,
-        startMs,
-        stopMs,
-        parameters,
-        attachments,
-        // Declared log lines first (unchanged position and rendering), the
-        // step's own sections/polls timeline after (this task's spec, scope
-        // 2) — additive, never reordering what was already there.
-        childSteps: [...declared.childSteps, ...timelineChildSteps],
-      },
-      declaredLinks: declared.links,
-      declaredLabels: declared.labels,
-      declaredParameters: declared.parameters,
-      kind: outcome.kind,
-    };
-  });
+  // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
+  // header) — the official cucumberjs allure adapter names a step
+  // `"<keyword><text>"` (e.g. "Given a passed step"), and the gherkin
+  // `keyword` itself already carries its own trailing space, so no
+  // separator is added here. Falls back to the bare text when the keyword
+  // can't be resolved.
+  const keyword = resolveStepKeyword(stepIds, pickle.steps, index);
+  const name = keyword !== undefined ? `${keyword}${record.text}` : record.text;
+
+  // This test's own identity-breaking parameters — see this module's own
+  // header for the full reasoning (this task's spec, decision 4). `run`
+  // alone already keeps two `nuka run` invocations apart; `scenario` keeps
+  // two scenarios sharing one run apart (including two rows of one Scenario
+  // Outline, which share one gherkin name); `step` keeps two steps sharing
+  // the exact same text in one scenario apart. All three together, not any
+  // one alone, are what make every emitted test's own `historyId` unique by
+  // construction rather than by the accident of distinct step text.
+  const identityParameters: MappedParameter[] = [
+    { name: "nukadoko.run", value: runId, mode: "hidden" },
+    { name: "nukadoko.scenario", value: scenarioId, mode: "hidden" },
+    { name: "nukadoko.step", value: String(index), mode: "hidden" },
+  ];
+
+  const contextParameters: MappedParameter[] = [
+    { name: "environment", value: environment, excluded: true },
+    ...(session !== null ? [{ name: "session", value: session, excluded: true }] : []),
+    ...(targetVersion !== undefined ? [{ name: "target_version", value: targetVersion, excluded: true }] : []),
+  ];
+
+  const labels: MappedLabel[] = [
+    { name: "feature", value: featureName },
+    { name: "package", value: posixPath.split("/").join(".") },
+    ...resolveTagLabels(pickle),
+    { name: "env", value: environment },
+    ...declared.labels,
+    // This step's own outcome, direct — no scenario-wide "first failure"
+    // search needed any more (this task's spec, decision 1): every failing
+    // step now gets its own `nukadoko.failure` label and its own
+    // `statusDetails.message`, on its own test, where the old scenario =
+    // test design could only ever mark the first failure in the whole
+    // scenario.
+    ...(outcome.kind !== undefined ? [{ name: "nukadoko.failure", value: outcome.kind }] : []),
+  ];
+
+  return {
+    name,
+    featureName,
+    description: resolveDescription(gherkinDocument, scenario),
+    status: outcome.status,
+    message: outcome.message,
+    startMs,
+    stopMs,
+    labels,
+    links: dedupeLinks(declared.links),
+    parameters: [
+      ...buildExampleParameters(gherkinDocument, pickle),
+      ...receiptParameters,
+      ...declared.parameters,
+      ...contextParameters,
+      ...identityParameters,
+    ],
+    attachments,
+    // Declared log lines first (unchanged position and rendering), the
+    // step's own sections/polls/actions timeline after — additive, never
+    // reordering what was already there.
+    childSteps: [...declared.childSteps, ...timelineChildSteps],
+  };
 }
 
-// --- hooks ---
+// --- hooks -> fixtures (this task's spec, decision 1: unchanged from
+// before — hooks stay fixtures, mapped once the whole scenario is over) ---
 
 interface HookMapping {
   readonly hook: MappedHook;
-  readonly declaredLinks: MappedLink[];
-  readonly declaredLabels: MappedLabel[];
+  /** A hook's own declared parameters (`this.attach`/`ctx.declare`-style
+   * facade calls made from inside a Before/After body) land on that hook's
+   * own fixture (`FixtureResult.parameters` — verified against allure-js-
+   * commons' own model: a fixture carries the same `Executable` shape a
+   * step or test does). A hook's own declared links and labels, unlike
+   * parameters, have no home any more: the old scenario = test design
+   * bubbled them onto the one scenario-wide test, but by the time a hook is
+   * even mapped (this task's spec, decision 1: scenario completion, well
+   * after every step's own test is already written to disk — decision 2),
+   * there is no test left to reach, and a fixture has no `links`/`labels`
+   * field in the Allure model at all to hold them instead. Dropped, not
+   * silently miscounted: attachments and log lines a hook declares still
+   * land on that hook's own fixture exactly as before (`hook.attachments`/
+   * `hook.childSteps` below), unaffected. */
   readonly declaredParameters: MappedParameter[];
-  readonly kind?: ErrorKind;
 }
 
-function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopMs: number): HookMapping[] {
+export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopMs: number): HookMapping[] {
   return record.hooks.map((hook): HookMapping => {
     const outcome = resolveHookOutcome(hook);
-    // record.json never carries a hook's own start/stop (documented limit,
-    // restated on emitter.ts): every before-hook collapses to the
-    // scenario's own `started_at`, every after-hook — `"after"` and
-    // `"after_step"` alike (t7-compat-status-afterstep task spec) — to its
-    // `finished_at`, both zero-width. This is the same reason `hook.trace`'s
-    // own child-step timeline below has no `started_at` of its own to
-    // anchor a truncation marker to (mapTimelineChildSteps's own doc
-    // comment) — `timestampMs` is exactly what a step's own
-    // `Date.parse(receipt.started_at)` would have been if a hook had one.
+    // record.json never carries a hook's own start/stop: every before-hook
+    // collapses to the scenario's own `started_at`, every after-hook —
+    // `"after"` and `"after_step"` alike — to its `finished_at`, both zero-
+    // width. This is the same reason `hook.trace`'s own child-step timeline
+    // below has no `started_at` of its own to anchor a truncation marker to
+    // (mapTimelineChildSteps's own doc comment) — `timestampMs` is exactly
+    // what a step's own `Date.parse(receipt.started_at)` would have been if
+    // a hook had one.
     const timestampMs = hook.type === "before" ? scenarioStartMs : scenarioStopMs;
     const declared = mapDeclared(hook.declared, record.evidence.dir, timestampMs);
-    // `"after_step"` folds onto Allure's own `"after"` fixture type (this
-    // task's spec, item 2-6 — see `MappedHook.type`'s own comment for why);
-    // the step it ran after is named into the fixture instead, since that is
+    // `"after_step"` folds onto Allure's own `"after"` fixture type; the
+    // step it ran after is named into the fixture instead, since that is
     // the only place left for that fact to live without a new Allure-side
     // concept. `hook.step_index` is guaranteed present exactly when
     // `hook.type === "after_step"` (record-types.ts's own contract).
     const fixtureType: "before" | "after" = hook.type === "before" ? "before" : "after";
     const name =
       hook.type === "before" ? "Before" : hook.type === "after" ? "After" : `AfterStep[${hook.step_index}]`;
-    // p3d-hook-trace task spec: a hook invocation's own trace attachment and
-    // `actions` timeline, mapped exactly the way a step's own
-    // `receipt.evidence.trace`/`receipt.actions` already are (`mapSteps`,
-    // above) — same contentType, same `mapTimelineChildSteps` merge/
-    // truncation-marker function, no separate rule for a hook. `hook.trace`
-    // is relative to the *scenario's* own evidence dir (record-types.ts's
-    // own header), unlike a step's `receipt.evidence.trace`, which is
+    // A hook invocation's own trace attachment and `actions` timeline,
+    // mapped exactly the way a step's own `receipt.evidence.trace`/
+    // `receipt.actions` already are (`mapStep`, above) — same contentType,
+    // same `mapTimelineChildSteps` merge/truncation-marker function, no
+    // separate rule for a hook. `hook.trace` is relative to the *scenario's*
+    // own evidence dir, unlike a step's `receipt.evidence.trace`, which is
     // relative to that step's own receipt dir — `joinRelative` takes
-    // whichever dir actually matches its second argument, so this only
-    // changes which dir is passed in, not how the path is built.
+    // whichever dir actually matches its second argument.
     const attachments = [...declared.attachments];
     if (hook.trace) {
       attachments.push({
@@ -931,120 +988,36 @@ function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenarioStopM
         startMs: timestampMs,
         stopMs: timestampMs,
         attachments,
-        // Declared log lines first (same order `mapSteps` already uses for
-        // a step's own declared.childSteps + timeline), the actions
-        // timeline after.
+        // Declared log lines first (same order `mapStep` already uses for a
+        // step's own declared.childSteps + timeline), the actions timeline
+        // after.
         childSteps: [...declared.childSteps, ...timelineChildSteps],
       },
-      declaredLinks: declared.links,
-      declaredLabels: declared.labels,
       declaredParameters: declared.parameters,
-      kind: outcome.kind,
     };
   });
 }
 
-// --- first failure in execution order (before hooks -> steps -> after
-// hooks), this task's spec, decision 4, extended by M3-C spec item 1: one
-// search now returns both the `nukadoko.failure` label's kind *and* that
-// same failure's already-marked message, so the two can never drift apart
-// (the alternative — searching twice, once for kind and once for message —
-// risks picking a different failure for each if the two searches were ever
-// edited independently). `kind` is `undefined` both when nothing failed and
-// when the first failure has no resolvable kind (the same "never began"/
-// unreadable-receipt edge case `resolveStepOutcome` already falls back for)
-// — the search stops at the first failure either way rather than skipping
-// ahead to a later one that happens to have a kind, since the label's own
-// meaning is "the first failure's kind", not "the first classifiable
-// failure's kind". `message`, unlike `kind`, is populated even when `kind`
-// isn't: `resolveStepOutcome`'s own unmarked fallback (`step.error?.message`)
-// already flows into `entry.step.message`/`entry.hook.message` regardless of
-// whether a kind was resolved, so this function only has to forward
-// whichever of the two is already there (M3-C spec item 1: if there is a
-// message, include it).
+// --- scenario-level browser evidence -> a synthetic "after" fixture ---
+//
+// A browser's own final-state screenshot (`ScenarioRecord.evidence.
+// screenshots` — in practice always at most one, `final.png`, taken once at
+// `dispose()`) and the legacy `evidence.trace` field belong to the scenario
+// as a whole, not any one step. The old scenario = test design attached
+// both directly to the scenario's own test; there is no such test any more
+// (this task's spec, decision 1), and by the time this evidence is even
+// known (`dispose()` runs after every step, so this is only ever called at
+// scenario completion, the same `endScenario` moment `mapHooks` above is
+// called from) every step's own test has already been written to disk
+// (decision 2) — nothing can retroactively attach to one. A dedicated,
+// clearly-named synthetic fixture keeps this evidence visible without
+// folding it into a *real* hook's own fixture, which would misattribute
+// where it actually came from.
 
-interface FirstFailure {
-  readonly kind?: ErrorKind;
-  readonly message?: string;
-}
-
-function firstFailure(
-  beforeHooks: readonly HookMapping[],
-  steps: readonly StepMapping[],
-  afterHooks: readonly HookMapping[],
-): FirstFailure | undefined {
-  for (const entry of beforeHooks) {
-    if (entry.hook.status !== "passed") {
-      return { kind: entry.kind, message: entry.hook.message };
-    }
-  }
-  for (const entry of steps) {
-    if (entry.step.status !== "passed" && entry.step.status !== "skipped") {
-      return { kind: entry.kind, message: entry.step.message };
-    }
-  }
-  for (const entry of afterHooks) {
-    if (entry.hook.status !== "passed") {
-      return { kind: entry.kind, message: entry.hook.message };
-    }
-  }
-  return undefined;
-}
-
-export function mapScenario(input: MapScenarioInput): MappedScenario {
-  const { record, receipts, gherkinDocument, pickle, posixPath } = input;
-  const scenario = resolveScenario(gherkinDocument, pickle);
-  const featureName = gherkinDocument.feature?.name ?? "";
-
-  const scenarioStartMs = Date.parse(record.started_at);
-  const scenarioStopMs = Date.parse(record.finished_at);
-
-  const stepIds = collectGherkinSteps(gherkinDocument);
-  const stepMappings = mapSteps(record, receipts, scenarioStartMs, pickle.steps, stepIds);
-  const hookMappings = mapHooks(record, scenarioStartMs, scenarioStopMs);
-  const beforeHookMappings = hookMappings.filter((entry) => entry.hook.type === "before");
-  const afterHookMappings = hookMappings.filter((entry) => entry.hook.type === "after");
-
-  const declaredLinks = dedupeLinks([
-    ...stepMappings.flatMap((entry) => entry.declaredLinks),
-    ...hookMappings.flatMap((entry) => entry.declaredLinks),
-  ]);
-  const declaredLabels: MappedLabel[] = [
-    ...stepMappings.flatMap((entry) => entry.declaredLabels),
-    ...hookMappings.flatMap((entry) => entry.declaredLabels),
-  ];
-  // Collected from both steps and hooks, same as declaredLinks/declaredLabels
-  // above (this task's spec, decision 2) — the facade's `parameter()` is a
-  // test-result-level call, so unlike `declared.attachments` (which stays
-  // pinned to the step/hook that recorded it) there is no narrower home for
-  // these than the test itself.
-  const declaredParameters: MappedParameter[] = [
-    ...stepMappings.flatMap((entry) => entry.declaredParameters),
-    ...hookMappings.flatMap((entry) => entry.declaredParameters),
-  ];
-
-  const failure = firstFailure(beforeHookMappings, stepMappings, afterHookMappings);
-
-  const labels: MappedLabel[] = [
-    { name: "feature", value: featureName },
-    { name: "package", value: posixPath.split("/").join(".") },
-    ...resolveTagLabels(pickle),
-    { name: "env", value: record.environment },
-    ...declaredLabels,
-    ...(failure?.kind ? [{ name: "nukadoko.failure", value: failure.kind }] : []),
-  ];
-
-  const contextParameters: MappedParameter[] = [
-    { name: "environment", value: record.environment, excluded: true },
-    ...(record.session !== null ? [{ name: "session", value: record.session, excluded: true }] : []),
-    ...(record.target_version !== undefined
-      ? [{ name: "target_version", value: record.target_version, excluded: true }]
-      : []),
-  ];
-
-  const testAttachments: MappedAttachment[] = [];
+export function mapScenarioEvidence(record: ScenarioRecord): MappedHook | undefined {
+  const attachments: MappedAttachment[] = [];
   if (record.evidence.trace) {
-    testAttachments.push({
+    attachments.push({
       kind: "path",
       name: "trace",
       contentType: "application/vnd.allure.playwright-trace",
@@ -1052,29 +1025,26 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     });
   }
   for (const screenshot of record.evidence.screenshots) {
-    testAttachments.push({
+    attachments.push({
       kind: "path",
       name: screenshot.file,
       contentType: "image/png",
       path: joinRelative(record.evidence.dir, screenshot.file),
     });
   }
-
+  // Never emit a synthetic thing with nothing to say (the same convention
+  // `pageEventCount` above already follows for a page-events parameter).
+  if (attachments.length === 0) {
+    return undefined;
+  }
+  const stopMs = Date.parse(record.finished_at);
   return {
-    test: {
-      name: pickle.name,
-      templateName: scenario?.name ?? pickle.name,
-      description: resolveDescription(gherkinDocument, scenario),
-      featureName,
-      labels,
-      links: declaredLinks,
-      parameters: [...buildExampleParameters(gherkinDocument, pickle), ...declaredParameters, ...contextParameters],
-      startMs: scenarioStartMs,
-      stopMs: scenarioStopMs,
-      attachments: testAttachments,
-      message: failure?.message,
-    },
-    steps: stepMappings.map((entry) => entry.step),
-    hooks: hookMappings.map((entry) => entry.hook),
+    type: "after",
+    name: "Scenario evidence",
+    status: "passed",
+    startMs: stopMs,
+    stopMs,
+    attachments,
+    childSteps: [],
   };
 }

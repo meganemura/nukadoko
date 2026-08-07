@@ -222,6 +222,27 @@ interface ChainEntry {
   readonly stepName: string;
 }
 
+/** Everything the Allure emitter (allure-step-as-test task spec, decision 2)
+ * needs to write one step's own test the moment that step finishes — never
+ * batched to scenario end. `receipt` is the exact in-memory object
+ * `pushStepRecord`'s own caller already has (`finishExecutedStep`'s
+ * `redactedReceipt`, or the general backstop catch's own), never a second
+ * disk read; `null` for a step that never opened one at all (skipped,
+ * undefined, ambiguous, or a never-began refusal). `index` is this step's
+ * own 0-based position in `record.steps` (and, by construction, in
+ * `pickle.steps` too) — `stepRecords.length - 1` right after `pushStepRecord`
+ * appends, unlike `StepProgressInfo.stepIndex` above, which is 1-based and
+ * counts lines for a person reading them. `finishedAt` is captured inside
+ * `pushStepRecord` itself, the moment this step's own record is appended —
+ * as close to "this step actually finished" as this file can observe. */
+export interface StepFinishedInfo {
+  readonly scenarioId: string;
+  readonly record: ScenarioStepRecord;
+  readonly receipt: Receipt | null;
+  readonly index: number;
+  readonly finishedAt: Date;
+}
+
 export interface RunScenarioOptions {
   readonly rootDir: string;
   /** Already resolved for this run's target environment (baseURL swapped in,
@@ -320,6 +341,19 @@ export interface RunScenarioOptions {
    * see that function's own header for why every step-record append site
    * funnels through it instead of calling this directly. */
   readonly onStepEnd?: (info: StepProgressInfo) => void;
+  /** Reports one pickle step's own finished record, receipt, and moment
+   * (allure-step-as-test task spec, decision 2) — unlike `onStepEnd` above,
+   * never gated on `--quiet` (that flag silences only the terminal's own
+   * progress line, this task's spec, decision 3: "レポートの粒度がターミ
+   * ナルのフラグに従うのは誤り"); the caller (cli/run.ts) builds one
+   * instance per pickle, since it needs that pickle's own `gherkinDocument`/
+   * `relativeFeaturePath` to do anything with what this reports.
+   * `undefined` under `nuka do` (no scenario, no `runScenario` call) or when
+   * this run's own Allure emitter never got constructed. Called from
+   * exactly one place in this file, `pushStepRecord` below, right alongside
+   * `onStepEnd` — see that function's own header for why every step-record
+   * append site funnels through it instead of calling this directly. */
+  readonly onStepFinished?: (info: StepFinishedInfo) => void;
   /** The fixture dependency graph for this run (P5 task spec, scope item 5)
    * — builtins ∪ `config.fixtures`, built once by cli/run.ts's own setup
    * phase (`src/fixture/graph.ts`'s `buildFixtureGraph`) and passed
@@ -721,6 +755,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     defaultTimeoutMs,
     onUnknownTraceVersion,
     onStepEnd,
+    onStepFinished,
     fixtureGraph,
     fixtureProcessCache,
   } = options;
@@ -875,15 +910,31 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * (exactly one push per iteration of the loop below), and the array's own
    * length is what a progress-line reader actually wants: "which line is
    * this, out of how many so far", not a 0-based array position.
+   *
+   * `receipt` (allure-step-as-test task spec, decision 2) is the exact
+   * in-memory object the two receipt-writing call sites already redacted and
+   * wrote to disk, handed straight through to `onStepFinished` — `null` for
+   * every other call site, none of which ever opened a receipt at all.
+   * `finishedAt` is captured right here, on every call, the moment this
+   * step's own record is appended — this is what "step 完了時点" means for
+   * every step, not only the ones with a receipt.
    */
-  function pushStepRecord(record: ScenarioStepRecord, durationMs: number): void {
+  function pushStepRecord(record: ScenarioStepRecord, durationMs: number, receipt: Receipt | null = null): void {
     stepRecords.push(record);
+    const finishedAt = new Date();
     onStepEnd?.({
       stepIndex: stepRecords.length,
       totalSteps: pickle.steps.length,
       status: record.status === "passed" ? "passed" : record.status === "skipped" ? "skipped" : "failed",
       durationMs,
       text: record.text,
+    });
+    onStepFinished?.({
+      scenarioId,
+      record,
+      receipt,
+      index: stepRecords.length - 1,
+      finishedAt,
     });
   }
 
@@ -1125,6 +1176,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         ...(status === "failed" ? { error: { message: errorMessage } } : {}),
       },
       stepFinishedAt.getTime() - stepStartedAt.getTime(),
+      redactedReceipt,
     );
   }
 
@@ -1886,6 +1938,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             error: { message },
           },
           stepFinishedAt.getTime() - began.startedAt.getTime(),
+          redactedReceipt,
         );
         // `began !== null`: this step's own execution had already begun (a
         // receipt was written above) before the uncaught throw this backstop

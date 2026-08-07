@@ -1,5 +1,5 @@
 import path from "node:path";
-import { Stage, Status, type StepResult, type TestResult } from "allure-js-commons";
+import { Status, type TestResult } from "allure-js-commons";
 import type { Category, EnvironmentInfo } from "allure-js-commons/sdk";
 import {
   ReporterRuntime,
@@ -8,43 +8,75 @@ import {
   getFrameworkLabel,
   getHostLabel,
   getLanguageLabel,
-  getTestResultTestCaseId,
   getThreadLabel,
-  getWorstTestStepResult,
 } from "allure-js-commons/sdk/reporter";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../../cli/writable-sink.js";
-import type { ScenarioRecord } from "../../run/record-types.js";
-import { readReceiptsForRecord } from "../receipts.js";
+import type { Receipt } from "../../receipt/types.js";
+import type { ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { redactString } from "../../secrets/redact.js";
 import type { SecretSet } from "../../secrets/types.js";
 import { buildCategories } from "./categories.js";
 import { buildFullName, resolveProjectName, toPosixPath } from "./identity.js";
-import { mapScenario, type MappedAttachment, type MappedChildStep, type MappedStatus } from "./map-scenario.js";
+import {
+  mapHooks,
+  mapScenarioEvidence,
+  mapStep,
+  type MappedAttachment,
+  type MappedChildStep,
+  type MappedHook,
+  type MappedParameter,
+  type MappedStatus,
+} from "./map-scenario.js";
 import { createAtomicWriter } from "./writer.js";
 
 // Responsibility: the thin layer that turns map-scenario.ts's flat
-// description into actual `ReporterRuntime` calls (this task's spec,
-// decision 2) — the only module in this directory that imports
-// allure-js-commons for its running behavior (categories.ts/writer.ts also
-// import it, but only for static Category/Writer plumbing) and the only one
-// that touches the filesystem beyond what the `Writer` itself does
-// (resolving the project name, reading each step's own receipt.json).
+// description into actual `ReporterRuntime` calls — the only module in this
+// directory that imports allure-js-commons for its running behavior
+// (categories.ts/writer.ts also import it, but only for static Category/
+// Writer plumbing) and the only one that touches the filesystem beyond what
+// the `Writer` itself does (resolving the project name).
 //
-// Known limit: record.json carries no per-hook timestamp of its own, so
-// every before-hook collapses to the scenario's own `started_at` and every
-// after-hook to its `finished_at`, both zero-width — a hook's own duration
-// is not observable through this mapping today. Widening record.json to
-// carry it is a decision for outside this task (this task's spec: leaving
-// the schema unchanged takes priority).
+// Three calls per pickle, not one (allure-step-as-test task spec, decisions
+// 1-2): `beginScenario` opens this scenario's own Allure *scope* before its
+// first step runs; `emitStep` writes one step's own *test* to disk the
+// moment that step finishes — never batched to scenario end, the whole
+// point of this task — reading it straight off `ReporterRuntime.startTest`/
+// `writeTest`, which write on call, not on some later flush; `endScenario`
+// maps this scenario's own hooks into fixtures under that same scope, adds
+// a synthetic fixture for whatever browser evidence belongs to the scenario
+// as a whole (map-scenario.ts's own `mapScenarioEvidence`), and only then
+// writes the scope's own container (`writeScope`) — unchanged from before
+// this task: a hook was always mapped once the whole scenario was over, and
+// still is. This module holds exactly one piece of state across those three
+// calls, `currentScopeUuid` — safe because `nuka run` executes scenarios
+// strictly sequentially, never two at once.
 //
-// AllureEmitterOptions carries no `stateDir` of its own (this task's spec,
-// decision 12 pins its exact shape): `readReceiptsForRecord`
-// (src/report/receipts.ts, m3c-messages-emitter task spec, decision 2 —
-// pulled up from this file's own `receiptsForRecord`, now shared with
-// src/report/messages/emitter.ts) derives a step's receipt directory from
-// `record.evidence.dir` instead, keeping decision 12's own interface
-// untouched.
+// A Before hook's own failure no longer turns any single Allure *test* red
+// (it did, under the old scenario = test design, via a worst-of computation
+// across every step and hook): every step it stops from ever running is
+// reported `"skipped"`, and the failure itself is visible only inside that
+// Before fixture's own detail view. The suite tree's own group status
+// (docs/spec.md "Allure emitter") still reads correctly at the `suite`
+// level for a step failing mid-scenario; a scenario that never got past its
+// own Before hook is the one case this redesign reports less prominently
+// than before. `nuka run`'s own exit code and the written `record.json` are
+// both unaffected — this is a report-display regression only, accepted as
+// part of this task's own trade-off (step = test), not something this file
+// works around with a synthetic failing test.
+//
+// Known limit, unchanged from before this task: record.json carries no
+// per-hook timestamp of its own, so every before-hook collapses to the
+// scenario's own `started_at` and every after-hook to its `finished_at`,
+// both zero-width (map-scenario.ts's own `mapHooks`).
+//
+// AllureEmitterOptions carries no `stateDir` of its own: a step's receipt
+// is handed to `emitStep` directly by the caller (cli/run.ts, threaded from
+// run-scenario.ts's own `onStepFinished`) — this emitter never reads a
+// receipt.json off disk itself any more, unlike the messages emitter
+// (src/report/messages/emitter.ts), which still does via
+// src/report/receipts.ts's `readReceiptsForRecord` (out of this task's own
+// scope).
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -56,7 +88,26 @@ export interface AllureEmitterOptions {
   readonly stderr: WritableSink;
 }
 
-export interface EmitScenarioInput {
+export interface EmitStepInput {
+  readonly runId: string;
+  readonly scenarioId: string;
+  readonly environment: string;
+  readonly session: string | null;
+  readonly targetVersion?: string;
+  readonly record: ScenarioStepRecord;
+  /** The exact in-memory object run-scenario.ts's own `writeReceipt` call
+   * just persisted for this step, or `null` for a step with no receipt of
+   * its own at all — see map-scenario.ts's `MapStepInput.receipt` for the
+   * full reasoning (this task's spec, decision 2). */
+  readonly receipt: Receipt | null;
+  readonly index: number;
+  readonly finishedAt: Date;
+  readonly gherkinDocument: GherkinDocument;
+  readonly pickle: Pickle;
+  readonly relativeFeaturePath: string;
+}
+
+export interface EndScenarioInput {
   readonly record: ScenarioRecord;
   readonly gherkinDocument: GherkinDocument;
   readonly pickle: Pickle;
@@ -67,8 +118,16 @@ export interface AllureEmitter {
   /** Writes categories.json and environment.properties. Once, at the start
    * of a run. */
   begin(): void;
-  /** Emits one scenario. Never throws (this task's spec, decision 11). */
-  emitScenario(input: EmitScenarioInput): void;
+  /** Opens this scenario's own scope, before its first step runs. Never
+   * throws. */
+  beginScenario(): void;
+  /** Writes one step's own test, the moment that step finishes (this task's
+   * spec, decision 2). Never throws. */
+  emitStep(input: EmitStepInput): void;
+  /** Maps this scenario's own hooks (and whatever scenario-level evidence it
+   * collected) into fixtures under the scope `beginScenario` opened, then
+   * writes that scope. Never throws. */
+  endScenario(input: EndScenarioInput): void;
 }
 
 function allureStatus(status: MappedStatus): Status {
@@ -84,29 +143,27 @@ function allureStatus(status: MappedStatus): Status {
   }
 }
 
-/** A minimal, valid `StepResult` carrying only the one field
- * `getWorstTestStepResult` actually reads (`.status`) — used to fold hook
- * outcomes into the same worst-of computation as the real step results
- * without allure-js-commons ever seeing our steps and hooks as anything
- * other than what they really are (hooks are still emitted as fixtures, not
- * steps; this stub never leaves this function). */
-function stepResultStub(status: Status): StepResult {
-  return { status, statusDetails: {}, stage: Stage.FINISHED, steps: [], attachments: [], parameters: [] };
-}
-
 export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitter {
   const projectName = resolveProjectName(options.rootDir);
   const writer = createAtomicWriter(options.resultsDir);
   const environmentInfo: EnvironmentInfo = {
     environment: options.environment,
-    // `target_version` is a run-level value (this task's spec, decision 9):
-    // unlike record.json/receipt.json, nothing has redacted it yet.
+    // `target_version` is a run-level value: unlike record.json/
+    // receipt.json, nothing has redacted it yet.
     ...(options.targetVersion !== undefined
       ? { target_version: redactString(options.targetVersion, options.secrets) }
       : {}),
   };
   const categories: Category[] = buildCategories();
   const runtime = new ReporterRuntime({ writer, categories, environmentInfo });
+
+  // The one piece of state this module carries across `beginScenario`/
+  // `emitStep`/`endScenario` — safe only because `nuka run` runs one
+  // scenario at a time (this file's own header). `null` both before the
+  // first `beginScenario` and once `endScenario` has cleared it, so a stray
+  // `emitStep` call outside a scenario's own begin/end pair is a no-op
+  // rather than attaching to the *previous* scenario's own scope.
+  let currentScopeUuid: string | null = null;
 
   function toAbsolute(relativePath: string): string {
     return path.join(options.rootDir, relativePath);
@@ -127,22 +184,13 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
-  // Each child step carries its own `startMs`/`stopMs`/`status` now
-  // (p2-allure-measurement task spec, scope 2 — `MappedChildStep` widened
-  // from `{ name }` alone) — a declared log line still renders exactly as
-  // before (zero-width at the parent's own start, `PASSED`; `mapDeclared`,
-  // map-scenario.ts, produces that shape itself), and a step's own
-  // `sections`/`polls` entries now render with their real duration and
-  // outcome the same way. No `timestampMs` parameter here anymore: every
-  // child step already knows its own moment, where previously all of them
-  // (there was only ever one kind) shared the parent's.
-  function writeChildSteps(
-    rootUuid: string,
-    parentStepUuid: string | null,
-    childSteps: readonly MappedChildStep[],
-  ): void {
+  // Every child step nests directly under `rootUuid` now (`parentStepUuid`
+  // is always `null` at both call sites below) — one level shallower than
+  // when a step was itself a child of the scenario's own test (this task's
+  // spec's own written facts: "child step は1段浅くなるだけで成立する").
+  function writeChildSteps(rootUuid: string, childSteps: readonly MappedChildStep[]): void {
     for (const child of childSteps) {
-      const uuid = runtime.startStep(rootUuid, parentStepUuid, { name: child.name, start: child.startMs });
+      const uuid = runtime.startStep(rootUuid, null, { name: child.name, start: child.startMs });
       if (uuid !== undefined) {
         runtime.updateStep(uuid, (s) => {
           s.status = allureStatus(child.status);
@@ -152,12 +200,31 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
+  function emitFixture(scopeUuid: string, hook: MappedHook, declaredParameters: readonly MappedParameter[]): void {
+    const fixtureUuid = runtime.startFixture(scopeUuid, hook.type, { name: hook.name, start: hook.startMs });
+    if (fixtureUuid === undefined) {
+      return;
+    }
+    runtime.updateFixture(fixtureUuid, (f) => {
+      f.status = allureStatus(hook.status);
+      if (hook.message !== undefined) {
+        f.statusDetails = { message: hook.message };
+      }
+      if (declaredParameters.length > 0) {
+        f.parameters = [...f.parameters, ...declaredParameters];
+      }
+    });
+    for (const attachment of hook.attachments) {
+      writeMappedAttachment(fixtureUuid, null, attachment);
+    }
+    writeChildSteps(fixtureUuid, hook.childSteps);
+    runtime.stopFixture(fixtureUuid, { stop: hook.stopMs });
+  }
+
   return {
     begin(): void {
-      // Measurement must never break execution (this task's spec, decision
-      // 11) — the same principle emitScenario's own try/catch below already
-      // follows, extended here since a categories.json/environment.properties
-      // write failure would otherwise take `nuka run` itself down with it.
+      // Measurement must never break execution — the same principle every
+      // method below already follows.
       try {
         runtime.writeCategoriesDefinitions();
         runtime.writeEnvironmentInfo();
@@ -167,47 +234,50 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       }
     },
 
-    emitScenario(input: EmitScenarioInput): void {
+    beginScenario(): void {
       try {
-        const { record, gherkinDocument, pickle, relativeFeaturePath } = input;
-        const posixPath = toPosixPath(relativeFeaturePath);
-        const receipts = readReceiptsForRecord(options.rootDir, record);
-        const mapped = mapScenario({ record, receipts, gherkinDocument, pickle, posixPath });
+        currentScopeUuid = runtime.startScope();
+      } catch (error) {
+        currentScopeUuid = null;
+        const message = error instanceof Error ? error.message : String(error);
+        options.stderr.write(`warning: allure beginScenario failed: ${message}\n`);
+      }
+    },
 
-        // The scenario's own overall status is the worst of every step and
-        // every hook (this task's spec, decision 3) — computed with the
-        // official `getWorstTestStepResult` up front, before any of the
-        // runtime's own state exists, since every input it needs
-        // (`mapped.steps`/`mapped.hooks`) is already fully resolved.
-        const finalStatus =
-          getWorstTestStepResult([
-            ...mapped.steps.map((step) => stepResultStub(allureStatus(step.status))),
-            ...mapped.hooks.map((hook) => stepResultStub(allureStatus(hook.status))),
-          ])?.status ?? Status.PASSED;
+    emitStep(input: EmitStepInput): void {
+      // Captured into a local so TypeScript's own narrowing survives the
+      // calls below (`currentScopeUuid` is an outer `let`, reassigned by
+      // `beginScenario`/`endScenario`, so a bare null check on it doesn't
+      // narrow across a function call the way a local `const` does).
+      const scopeUuid = currentScopeUuid;
+      if (scopeUuid === null) {
+        // `beginScenario` never ran or itself failed — nothing to attach
+        // this step's own test to. Already warned there; silent here so one
+        // failed scenario doesn't repeat the same warning once per step.
+        return;
+      }
+      try {
+        const posixPath = toPosixPath(input.relativeFeaturePath);
+        const mapped = mapStep({
+          runId: input.runId,
+          scenarioId: input.scenarioId,
+          environment: input.environment,
+          session: input.session,
+          targetVersion: input.targetVersion,
+          record: input.record,
+          receipt: input.receipt,
+          index: input.index,
+          finishedAt: input.finishedAt,
+          gherkinDocument: input.gherkinDocument,
+          pickle: input.pickle,
+          posixPath,
+        });
 
-        const scopeUuid = runtime.startScope();
-
-        for (const hook of mapped.hooks) {
-          const fixtureUuid = runtime.startFixture(scopeUuid, hook.type, { name: hook.name, start: hook.startMs });
-          if (fixtureUuid === undefined) {
-            continue;
-          }
-          runtime.updateFixture(fixtureUuid, (f) => {
-            f.status = allureStatus(hook.status);
-            if (hook.message !== undefined) {
-              f.statusDetails = { message: hook.message };
-            }
-          });
-          for (const attachment of hook.attachments) {
-            writeMappedAttachment(fixtureUuid, null, attachment);
-          }
-          writeChildSteps(fixtureUuid, null, hook.childSteps);
-          runtime.stopFixture(fixtureUuid, { stop: hook.stopMs });
-        }
-
-        const templateFullName = buildFullName(projectName, posixPath, mapped.test.templateName);
-        const fullName = buildFullName(projectName, posixPath, mapped.test.name);
-        const testCaseId = getTestResultTestCaseId({ fullName: templateFullName } as TestResult);
+        // `{project}:{featurePath}#{scenario}#{step text}` (this task's
+        // spec, decision 4) — a human-readable identifier, unlike historyId
+        // (this module's own header, and map-scenario.ts's own header for
+        // why historyId is deliberately left to fall apart instead).
+        const fullName = buildFullName(projectName, posixPath, `${input.pickle.name}#${mapped.name}`);
 
         const environmentLabels = getEnvironmentLabels().map((label) => ({
           name: label.name,
@@ -215,71 +285,88 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
         }));
 
         const partialTest: Partial<TestResult> = {
-          name: mapped.test.name,
+          name: mapped.name,
           fullName,
-          testCaseId,
-          status: finalStatus,
-          description: mapped.test.description,
-          start: mapped.test.startMs,
+          status: allureStatus(mapped.status),
+          description: mapped.description,
+          start: mapped.startMs,
           labels: [
             getLanguageLabel(),
             getFrameworkLabel("nukadoko"),
             getHostLabel(),
             getThreadLabel(),
-            ...mapped.test.labels,
+            ...mapped.labels,
             ...environmentLabels,
           ],
-          links: mapped.test.links,
-          parameters: mapped.test.parameters,
+          links: mapped.links,
+          parameters: mapped.parameters,
           // Allure 2's own categories matching reads `error.message`/
-          // `statusDetails.message` at the *test* level, never a step's
-          // (verified against the real @allurereport/plugin-classic source)
-          // — without this, the categories.json rules this emitter
-          // also writes can never match anything, no matter how correct
-          // their own regexes are (this task's spec, M3-C item 1).
-          ...(mapped.test.message !== undefined ? { statusDetails: { message: mapped.test.message } } : {}),
+          // `statusDetails.message` at the *test* level — every failing
+          // step now has its own test to carry it (map-scenario.ts's own
+          // `mapStep`), where the old scenario = test design could only
+          // ever mark the scenario's first failure.
+          ...(mapped.message !== undefined ? { statusDetails: { message: mapped.message } } : {}),
+          // `testCaseId`/`historyId` are deliberately left unset here: the
+          // SDK's own `stopTest` fills both in from `fullName` (plus every
+          // non-excluded parameter, `mapped.parameters` already carrying
+          // this test's own `nukadoko.run`/`nukadoko.scenario`/
+          // `nukadoko.step` hidden ones) the moment it runs, below — no
+          // reason to reimplement that formula here (map-scenario.ts's own
+          // header, this task's spec, decision 4).
         };
-        // Mutates `partialTest.labels` in place, appending suite labels only
-        // when none are already present (this task's spec, decision 6: pin
-        // the test to whichever labels actually come back).
-        ensureSuiteLabels(partialTest, [mapped.test.featureName]);
+        // Mutates `partialTest.labels` in place, appending suite labels
+        // only when none are already present. `[featureName, scenario
+        // name]` fills both `parentSuite` and `suite` now (this task's
+        // spec, decision 1) — the `suite` slot was empty before this task
+        // (this task's spec's own written facts).
+        ensureSuiteLabels(partialTest, [mapped.featureName, input.pickle.name]);
 
         const testUuid = runtime.startTest(partialTest, [scopeUuid]);
 
-        for (const attachment of mapped.test.attachments) {
+        for (const attachment of mapped.attachments) {
           writeMappedAttachment(testUuid, null, attachment);
         }
+        writeChildSteps(testUuid, mapped.childSteps);
 
-        for (const step of mapped.steps) {
-          const stepUuid = runtime.startStep(testUuid, undefined, { name: step.name, start: step.startMs });
-          if (stepUuid === undefined) {
-            continue;
-          }
-          runtime.updateStep(stepUuid, (s) => {
-            s.status = allureStatus(step.status);
-            s.parameters = [...step.parameters];
-            if (step.message !== undefined) {
-              s.statusDetails = { message: step.message };
-            }
-          });
-          for (const attachment of step.attachments) {
-            writeMappedAttachment(testUuid, stepUuid, attachment);
-          }
-          writeChildSteps(testUuid, stepUuid, step.childSteps);
-          runtime.stopStep(stepUuid, { stop: step.stopMs });
+        runtime.stopTest(testUuid, { stop: mapped.stopMs });
+        runtime.writeTest(testUuid);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        options.stderr.write(
+          `warning: allure emitStep failed for scenario ${input.scenarioId} step ${input.index}: ${message}\n`,
+        );
+      }
+    },
+
+    endScenario(input: EndScenarioInput): void {
+      const scopeUuid = currentScopeUuid;
+      currentScopeUuid = null;
+      if (scopeUuid === null) {
+        return;
+      }
+      try {
+        const { record } = input;
+        const scenarioStartMs = Date.parse(record.started_at);
+        const scenarioStopMs = Date.parse(record.finished_at);
+
+        for (const entry of mapHooks(record, scenarioStartMs, scenarioStopMs)) {
+          emitFixture(scopeUuid, entry.hook, entry.declaredParameters);
         }
 
-        // Attachments before result, always (this task's spec, decision 10):
-        // every `writeAttachment` call above already landed synchronously,
-        // so `writeTest`/`writeScope` below are the only things left to
-        // write.
-        runtime.stopTest(testUuid, { stop: mapped.test.stopMs });
-        runtime.writeTest(testUuid);
+        const evidenceFixture = mapScenarioEvidence(record);
+        if (evidenceFixture !== undefined) {
+          emitFixture(scopeUuid, evidenceFixture, []);
+        }
+
+        // Attachments before the container, always: every `writeAttachment`
+        // call above (fixtures) and every `writeTest` call (`emitStep`,
+        // already done by the time this runs) already landed synchronously,
+        // so `writeScope` below is the only thing left to write.
         runtime.writeScope(scopeUuid);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(
-          `warning: allure emit failed for scenario ${input.record.scenario_id}: ${message}\n`,
+          `warning: allure endScenario failed for scenario ${input.record.scenario_id}: ${message}\n`,
         );
       }
     },
