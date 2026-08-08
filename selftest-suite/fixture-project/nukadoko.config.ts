@@ -7,7 +7,10 @@ import { defineConfig } from "nukadoko";
 // itself part of the swap (selftest-suite/nukadoko.config.ts, the OUTER
 // project, is).
 //
-// No baseURL, no browser: this stage only needs pure-step scenarios
-// (selftest-suite task spec, "ブラウザ" section), the same non-browser
-// shape as tests/fixtures/run-project.
+// No baseURL: most scenarios here (selftest-suite task spec, "ブラウザ"
+// section) only need pure-step scenarios, the same non-browser shape as
+// tests/fixtures/run-project. browser-evidence.feature is the one
+// exception (selftest-browser task spec) -- its own step and Before hook
+// do launch a browser, but only ever navigate a `data:` URL, so there is
+// still no real app for a `baseURL` to point at.
 export default defineConfig({});

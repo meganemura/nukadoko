@@ -49,3 +49,29 @@ Feature: nuka run drives a fixture project
     Then the run exits 0
     And the fixture project's allure-results has one result file per executed step
     And the live report's final result count matches the number of executed steps
+
+  # Stage 2 read a finished report and stage 3 watched one update live, but
+  # neither one ever launched a browser inside the run under test itself --
+  # every fixture step both of those exercised was a pure step. 0.1.0's own
+  # Playwright-native redesign left a browser-driven run's evidence
+  # (README, docs/spec.md) in four places a report reader can open: a trace
+  # per step and per hook, that trace's own calls as child steps
+  # ("actions"), `page_events` counts as parameters, and a hook that
+  # touches the browser showing up as its own fixture. None of the four had
+  # ever been opened on screen before this scenario (selftest-browser task
+  # spec). Kept in a feature of its own in the fixture project
+  # (browser-evidence.feature), never mixed into passing.feature/
+  # mixed.feature/slow.feature, so stage 1 through stage 3 above keep
+  # launching zero browsers and keep their existing runtime.
+  # allure-browser-evidence.ts's own header explains the two chromiums this
+  # scenario's own steps must never confuse.
+  @allure-browser
+  Scenario: a browser-driven run's trace, hook, action, and page-event evidence all show up in the report
+    Given a clean copy of the fixture project's nukadoko state
+    When nuka run runs "features/browser-evidence.feature" in the fixture project
+    Then the run exits 0
+    When the browser-evidence report is generated and opened in a browser
+    Then the step's own trace attachment downloads as a non-empty, readable zip
+    And the before hook shows up as a fixture in the report
+    And the trace's own goto action appears as a child step
+    And the page_events counts in the report match the step's own receipt

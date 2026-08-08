@@ -135,6 +135,21 @@ just until 0.1.
   or the scenario fails: that in-between reading, arriving with no
   `.goto()`/`.reload()` from the test itself, is the only evidence a
   report update actually arrived on its own.
+- **A browser-driven run's own evidence now reaches a real report too.**
+  Stage 2 above read a finished report and stage 3 watched one update live,
+  but neither ever launched a browser inside the run under test, so the
+  Playwright-native redesign's own artifacts (a trace per step and per
+  hook, that trace's own calls as child steps, `page_events` counts, a hook
+  that touches the browser as its own fixture) had never been opened on
+  screen. A new selftest scenario runs a fixture feature whose Before hook
+  and step both navigate a `data:` URL (`page.setContent()` never produces
+  a `goto` action; a real navigation does) and confirms all four: the
+  step's own trace attachment downloads as a valid, non-empty zip; the
+  Before hook renders as its own fixture; the trace's own `goto` action
+  shows up as a child step, the same locator stage 2 already uses for
+  `section:`/`poll:`; and each `page_events` category's parameter reads the
+  same count the step's own receipt recorded. Kept in a feature of its own
+  so stage 1 through stage 3 keep their existing runtime.
 
 ## 0.1.0 — 2026-08-06
 
