@@ -128,9 +128,13 @@ Given(
         // suite can never collide with it (selftest-watch task spec,
         // decision 5).
         const match = /Allure is running on (\S+)/.exec(buffered);
-        if (match !== null) {
+        // The capture group is checked rather than asserted: a regex match
+        // says nothing to the type system about group 1 existing, and a
+        // future edit to the pattern could drop it without any other signal.
+        const url = match?.[1];
+        if (url !== undefined) {
           watch.stdout?.off("data", onData);
-          resolve(match[1]);
+          resolve(url);
         }
       }
       watch.stdout?.on("data", onData);

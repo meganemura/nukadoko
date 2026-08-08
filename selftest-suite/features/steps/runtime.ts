@@ -28,7 +28,18 @@
 // the real published compat surface, exercised for real.
 const track = process.env.NUKADOKO_SELFTEST_TRACK === "swap" ? "swap" : "baseline";
 
-const impl = track === "swap" ? await import("nukadoko/compat") : await import("@cucumber/cucumber");
+// Typed as cucumber-js's own module shape rather than as a union of the two.
+// A union would make every export below a union of two callables, which
+// TypeScript refuses to call (TS2349), and picking cucumber-js as the one
+// true shape is not arbitrary: the compat door exists to present that API,
+// so cucumber-js's types are the contract and nukadoko/compat is the thing
+// being held to it.
+type CucumberApi = typeof import("@cucumber/cucumber");
+
+const impl: CucumberApi =
+  track === "swap"
+    ? ((await import("nukadoko/compat")) as unknown as CucumberApi)
+    : await import("@cucumber/cucumber");
 
 export const Given = impl.Given;
 export const When = impl.When;
