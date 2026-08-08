@@ -133,7 +133,13 @@ change.
 That accept record is a Markdown file,
 `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, written beside
 the feature: the feature's full text, the scenario record, and each step's
-receipt with its evidence stripped.
+receipt with its evidence stripped. It also carries a `Declared vs observed`
+section, listing every step whose receipt declared `mutates: false` but was
+measured making a write, so a reviewer can see where the two disagreed
+without re-deriving it. A sign-off itself is scoped to one `(environment,
+browser)` pair read off the run, never declared: Chromium accepted and
+firefox not yet accepted is a normal state, not a stale one. See
+[Sign-off](docs/spec.md#sign-off).
 
 ## Why this exists now
 
@@ -332,7 +338,9 @@ page itself said (console errors, uncaught errors, failed requests) sit
 beside the step, so a step that passed while the page threw three
 uncaught errors says so without anyone opening an attachment. The trace
 attached is that step's own, not the whole scenario's, so the failing
-step opens directly instead of being scrubbed for. The receipt is
+step opens directly instead of being scrubbed for. That same `trace.zip`
+also sits under the receipt on its own, and opens outside Allure with
+`npx playwright show-trace <evidence.dir>/trace.zip`. The receipt is
 attached whole as well, which is what keeps this list from going stale:
 anything a receipt gains later arrives in the report without a second
 mapping to remember.
@@ -357,6 +365,14 @@ npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a
 npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
+
+A generated report's `index.html` cannot be opened directly with `file://`:
+the report's own SPA fetches `widgets/*.json` on load, and `file://` cannot
+serve that at all, though the page's header and footer still render
+regardless, so a broken report can look opened at a glance. Downloading a
+report artifact from CI and double-clicking `index.html` locally hits
+exactly this: serve it instead, with `npx allure open` or `npx allure
+watch` above.
 
 `nuka init` writes `allurerc.mjs` at the project root (skipped, with a
 message, if a project already has one under any name Allure auto-detects);
@@ -655,8 +671,9 @@ a write-once asset), and it is not only a remark about the name.
 
 `nuka check` asks whether the project can run right now, and is meant to be
 read before every run. `nuka tend` asks the other question: is any of this
-rotting. A sign-off whose frozen result no longer passes its step's current
-schema, so the record is still counted while no longer meaning what it
+rotting (see [Tending](docs/spec.md#tending)). A sign-off whose frozen
+result no longer passes its step's current schema, so the record is still
+counted while no longer meaning what it
 says. A `from` declaration nothing exercises. A schema field with no
 description reads fine to a person looking at the file and tells the agent
 choosing between two steps nothing at all. None of those stop a run, which
