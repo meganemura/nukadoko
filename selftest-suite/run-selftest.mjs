@@ -6,8 +6,9 @@ import { promisify } from "node:util";
 
 // Responsibility: run this suite (selftest-suite/features/nuka-run.feature)
 // on both tracks and fail loudly if they disagree. `npm run selftest` is
-// the one command the selftest-suite task spec asks for
-// ("どうやって 2 トラックを走らせるかが、コマンド1つで分かること").
+// the one command that runs both tracks, so how to run them is discoverable
+// from a single command instead of two invocations someone has to already
+// know about.
 //
 // ## The two tracks (why there are two at all)
 //

@@ -3,8 +3,8 @@ import path from "node:path";
 import type { ScenarioRecord } from "../run/record-types.js";
 
 // Responsibility: pick the one `nuka run` invocation `nuka accept <feature>`
-// is allowed to freeze (m4b-accept task spec's own "identifying the target
-// run"/"rejection conditions" sections, items 1, 4). Reads every
+// is allowed to freeze (docs/spec.md "Sign-off" — identifying the target run
+// and the refusal conditions around it). Reads every
 // `record.json` under `<stateDir>/scenarios/*`
 // (there is no index of them anywhere else), keeps only the ones naming this
 // feature, groups by `run_id` (one `nuka run` invocation's worth), and
@@ -14,8 +14,8 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // (the commit/clean checks are cli/accept.ts's own job too, reusing
 // src/run/probe-git.ts — this module has no opinion on git at all).
 //
-// "the whole feature is covered, and every one of them passed" (spec
-// decision 4) is checked per group, independently: a group's own `line`
+// "the whole feature is covered, and every one of them passed" is checked
+// per group, independently: a group's own `line`
 // set must equal the feature's
 // pickle-line set *exactly* (not merely a superset — a partial run's lines
 // are always a subset, never a superset, but "exactly equal" is the literal
@@ -25,12 +25,12 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // records (this file's own stand-in for "when did this run begin" — no
 // single field carries that; `run_id` only names *which* records share one
 // invocation, docs/spec.md "Sign-off" / src/run/record-types.ts's own
-// header). The newest such group wins (spec decision 5); ties (same
+// header). The newest such group wins; ties (same
 // millisecond) keep whichever was seen first, an outcome this module makes
 // no promise about since two runs starting in the same millisecond is not a
 // case worth designing for.
 //
-// The three-way "no" (spec rejection item 4: "no run has ever existed", "a
+// The three-way "no" ("no run has ever existed", "a
 // run exists but was red", and "only partial runs exist" are different
 // situations from the user's point of view) is
 // resolved by tracking, alongside the winning group search, whether *any*
@@ -40,7 +40,7 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // feature was partial, so the answer is "partial-only"; and if there were no
 // groups at all, no run has ever touched this feature.
 //
-// partial-run-visibility task spec: "red" and "partial-only" now carry the
+// "red" and "partial-only" now carry the
 // group and startedAt they were decided from, not just their kind — a
 // refusal that names nothing forces the reader back to guessing which run,
 // of possibly many, is the one being talked about. This module still has no
@@ -53,14 +53,14 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // full coverage, or "red" would have won instead.
 //
 // `RunCondition`/`browserConditionMatches`/`listConditionsWithGreenRun` are
-// added now (accept-condition task spec, item 1/3/4) — sign-off's own
+// added now (docs/spec.md "Sign-off") — sign-off's own
 // condition, "what confirmed this", is (environment, browser), both read off
 // the measured `ScenarioRecord` fields, never a config declaration
 // (`config.browserType` is a target to filter *for*, not the thing recorded
 // — see cli/accept.ts's own use of `browserConditionMatches`). `environment`
-// is uniform across one run_id group already (m4a-run-provenance: measured
+// is uniform across one run_id group already (measured
 // once per run, same as `git`), so a group's own condition reads it off any
-// one record; `browser` is not (p6-browser-type: a step can override `page`
+// one record; `browser` is not (a step can override `page`
 // per scenario), so a group's own condition is only defined once its own
 // records agree closely enough to have one — see `conditionOfGroup`'s own
 // comment. `selectAcceptableRun` itself stays condition-agnostic on purpose:
@@ -75,13 +75,13 @@ export interface RunStartedAt {
   readonly startedAt: Date;
 }
 
-/** Sign-off's own condition (accept-condition task spec, item 1) — what
+/** Sign-off's own condition (docs/spec.md "Sign-off") — what
  * confirmed an accepted run, as measured, never as declared.
  * `browserType` is `undefined` when no record the condition was read from
  * launched a browser at all ("no browser" is itself a condition, distinct
- * from "chromium" — task spec item 3's own third bullet). Version is
- * deliberately not part of this type: the task spec's own item 2 states the
- * engine's *type* is enough for acceptance/matching purposes; a browser's
+ * from "chromium"). Version is
+ * deliberately not part of this type: the engine's *type* is enough for
+ * acceptance/matching purposes; a browser's
  * measured version lands only in the record body (render-record.ts), never
  * compared here. */
 export interface RunCondition {
@@ -123,8 +123,7 @@ function conditionOfGroup(group: readonly ScenarioRecord[]): RunCondition {
 }
 
 /** Whether `record`'s own measured browser (if any) is compatible with
- * `targetBrowserType` (accept-condition task spec, item 3, second/third
- * bullets). A record that never launched a browser carries no browser
+ * `targetBrowserType`. A record that never launched a browser carries no browser
  * condition to disagree with, so it is compatible with every target — the
  * same reason an API-only scenario's acceptance never depends on engine
  * choice. A record that did launch one must match exactly: matching against
@@ -153,8 +152,9 @@ function groupCondition(group: readonly ScenarioRecord[], featureLines: Readonly
 /** Every distinct condition among `featureRecords` that has its own
  * qualifying green, full-coverage run — used only to enumerate an
  * alternative in cli/accept.ts's refusal message once the *current*
- * condition has none (accept-condition task spec, item 4: "run のある条件
- * を列挙する"). This module still has no opinion on wording (this file's own
+ * condition has none (docs/spec.md "Sign-off": the refusal lists every
+ * condition that does have a green full run instead). This module still has
+ * no opinion on wording (this file's own
  * header) — it hands back data, never a sentence. */
 export function listConditionsWithGreenRun(
   featureRecords: readonly ScenarioRecord[],
@@ -220,7 +220,7 @@ export type SelectRunResult =
  * (this module never reads `record.feature` itself — cli/accept.ts owns the
  * path-normalization that comparison needs, this file's own header).
  * `featureLines` is that feature's own pickle `location.line` set, from
- * parsing the feature file fresh (spec decision 4: parse the feature with
+ * parsing the feature file fresh (parse the feature with
  * the existing loader and enumerate its pickles).
  */
 export function selectAcceptableRun(
@@ -235,10 +235,9 @@ export function selectAcceptableRun(
 
   let sawFullCoverage = false;
   let best: { group: ScenarioRecord[]; startedAt: Date } | null = null;
-  // Tracked alongside `best` (this file's own header,
-  // partial-run-visibility task spec): the data a "red"/"partial-only"
-  // refusal needs to name a run, which `best` alone can't supply once it
-  // stays `null`.
+  // Tracked alongside `best` (this file's own header): the data a
+  // "red"/"partial-only" refusal needs to name a run, which `best` alone
+  // can't supply once it stays `null`.
   let bestFullCoverage: { group: ScenarioRecord[]; startedAt: Date } | null = null;
   let mostRecent: { group: ScenarioRecord[]; startedAt: Date } | null = null;
 

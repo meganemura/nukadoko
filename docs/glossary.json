@@ -141,17 +141,17 @@
     {
       "en": ["destructure", "destructures", "destructured", "destructuring"],
       "ja": "分割代入",
-      "note": "p4a-fixture-bag task spec で run() の第一引数の話に使うようになった、TS/JS の標準用語。動詞化するときは「分割代入する / された」"
+      "note": "docs/spec.md \"Context API\" の run() の第一引数の話で使うようになった、TS/JS の標準用語。動詞化するときは「分割代入する / された」"
     },
     {
       "en": ["scope"],
       "ja": "スコープ",
-      "note": "P5 task spec (fixture の scenario/process scope) で入った。config の options.scope や receipt の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
+      "note": "docs/spec.md \"Fixtures\" の fixture の scenario/process scope で入った。config の options.scope や receipt の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
     },
     {
       "en": ["outcome"],
       "ja": "成否",
-      "note": "P5 task spec で fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す"
+      "note": "docs/spec.md \"Fixtures\" の fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す"
     },
     {
       "en": ["parser", "parsers"],
@@ -205,11 +205,11 @@
     },
     {
       "term": "fixture",
-      "why": "p4a-fixture-bag task spec で入った run() の第一引数(page/context/request/env/requireEnv/baseURL/resultOf/section/poll)を指す語。StepFixtures 型名、fixture bag という言い回しと直接対応し、Playwright 自身の fixture とも語根を共有する。訳すと両方の結び付きが失われる"
+      "why": "docs/spec.md \"Context API\" で入った run() の第一引数(page/context/request/env/requireEnv/baseURL/resultOf/section/poll)を指す語。StepFixtures 型名、fixture bag という言い回しと直接対応し、Playwright 自身の fixture とも語根を共有する。訳すと両方の結び付きが失われる"
     },
     {
       "term": "data-dependent",
-      "why": "selftest-allure task spec の file:// トラップの文脈で使う語。ページのシェル(見出しや装飾文言)はデータが届かなくても描画されるが、data-dependent な要素(件数・ツリーの行・ステータス)はデータが実際に届いたときにしか現れない、という対比を指す。「データ依存」に訳すと硬い直訳になり、シェルとの対比が伝わりにくい"
+      "why": "selftest-suite が Allure レポートを file:// で直接開いても画面が白紙にならず、見出しや装飾文言だけは描画されてしまうという罠を避ける文脈で使う語。ページのシェル(見出しや装飾文言)はデータが届かなくても描画されるが、data-dependent な要素(件数・ツリーの行・ステータス)はデータが実際に届いたときにしか現れない、という対比を指す。「データ依存」に訳すと硬い直訳になり、シェルとの対比が伝わりにくい"
     }
   ],
   "identifiers": {

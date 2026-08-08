@@ -18,8 +18,7 @@ import type { StorageState } from "./storage-state.js";
  * `MalformedSessionFileError` for existing-but-unparseable content: unlike a
  * missing file, this is data nukadoko itself is supposed to own, so silently
  * treating it as "no session" would risk running against a stale or partial
- * cookie jar without saying so (this task's spec, decision on setup-phase
- * failures).
+ * cookie jar without saying so.
  */
 export async function readSessionFile(
   filePath: string,

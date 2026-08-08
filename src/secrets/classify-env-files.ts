@@ -10,8 +10,8 @@ import { promisify } from "node:util";
 // per file. Any failure of the git call itself (no git binary on PATH,
 // rootDir outside a git repository, or anything else) falls back to
 // treating every configured file as a secret source: classification must
-// fail *safe*, and must never fail the run itself (m1-secrets task spec,
-// decision 1) — a `do` execution's own outcome does not depend on git being
+// fail *safe*, and must never fail the run itself — a `do` execution's own
+// outcome does not depend on git being
 // present or on rootDir being a repository.
 
 const execFileAsync = promisify(execFile);

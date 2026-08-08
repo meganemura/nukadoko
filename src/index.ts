@@ -18,8 +18,8 @@ export type {
   FixtureScope,
   UseFn,
 } from "./fixture/types.js";
-// `poll` itself is not exported: it moved onto `ctx.poll` (ctx-poll-receipt
-// task spec) — see src/context.ts's own header for why a runnable `poll`
+// `poll` itself is not exported: it moved onto `ctx.poll` — see
+// src/context.ts's own header for why a runnable `poll`
 // stayed importable for exactly as long as it recorded nothing.
 export { PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./context/poll.js";

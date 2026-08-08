@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 // Responsibility: the "only flag a definite mismatch" static reading of a
-// step's `args` zod schema this task's spec asks for (decision 2) — unwrap the
+// step's `args` zod schema — unwrap the
 // optional/default wrappers a schema author commonly puts around a key,
 // then answer three narrow questions: is this schema even a `z.object`
 // (pattern-bound steps must be), what does a given key's declared type
@@ -31,7 +31,7 @@ function unwrapOptionalDefault(schema: z.ZodTypeAny): z.ZodTypeAny {
 
 /**
  * `undefined` unless `schema` (after unwrapping optional/default) is a
- * `z.object`, in which case its `.shape` — per this task's spec, key
+ * `z.object`, in which case its `.shape` — key
  * inspection goes through zod 4's `.shape`.
  */
 export function asObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> | undefined {
@@ -46,7 +46,7 @@ export type PrimitiveClass = "number" | "string" | "other";
 
 /** Classifies what a schema field (after unwrapping optional/default)
  * definitely accepts, for the two coercions cucumber-expressions performs
- * that this task's spec names explicitly (`{int}`/`{float}` -> number,
+ * (`{int}`/`{float}` -> number,
  * `{string}`/`{word}` -> string). Anything else — boolean, bigint, object,
  * array, union, any, unknown, a transform, ... — is "other": not
  * necessarily wrong, just not something this narrow check can be certain

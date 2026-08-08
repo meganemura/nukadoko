@@ -7,7 +7,7 @@
 // check.ts, src/run/match-step.ts) can `instanceof` it without pulling in the
 // registry-building code itself — same convention as config/errors.ts,
 // binding/errors.ts. This is a config-authoring error, not a pattern-syntax
-// one (m2pre-parameter-types task spec, decision 3): callers that build a
+// one: callers that build a
 // registry from config are expected to treat it that way — `nuka check`
 // reports it as a `parameter-type-invalid` issue, `nuka do`/`nuka run` treat
 // it as a setup failure (stderr + exit 1, no receipt).

@@ -8,11 +8,13 @@ import { setWorldConstructor, World } from "../steps/runtime.js";
 // header comment for the inner/outer distinction), and, for the
 // @allure-report and @allure-watch scenarios, the HTTP server (or `allure
 // watch` process) and browser their own steps and hooks own.
-// selftest-allure task spec, decision 1: the suite stays vanilla
-// cucumber-js, World plus Playwright plus a cucumber-js Before/After hook,
-// nothing more. No constructor override: the base World's single-argument
-// constructor is inherited as-is, same as
-// tests/fixtures/compat-world-project's CustomWorld.
+// Staying vanilla cucumber-js -- World plus Playwright plus a cucumber-js
+// Before/After hook, nothing more, no nukadoko fixture or `ctx` -- is what
+// keeps this suite runnable on both tracks (run-selftest.mjs's own header):
+// anything nukadoko-specific here would break the baseline track, where the
+// real @cucumber/cucumber package is what actually runs it. No constructor
+// override: the base World's single-argument constructor is inherited
+// as-is, same as tests/fixtures/compat-world-project's CustomWorld.
 export class SelftestWorld extends World {
   nukaExitCode: number | null = null;
   nukaStdout = "";

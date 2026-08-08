@@ -9,8 +9,7 @@ import type { SelftestWorld } from "../support/world.js";
 const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// INNER project (selftest-suite task spec, "2 つの nukadoko、2 つの
-// allure-results" section): the nukadoko project these steps drive with
+// INNER project: the nukadoko project these steps drive with
 // `nuka run` as a subprocess. Its own `.nukadoko/allure-results/` is the
 // tree this file's own Then step asserts on, never the OUTER one this
 // suite writes for itself when the swap track runs it (that one is

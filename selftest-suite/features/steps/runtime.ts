@@ -1,9 +1,8 @@
 // The one place this whole suite's two tracks actually differ. Every step
 // and world file imports Given/When/Then/World/setWorldConstructor from
-// here rather than from either library directly, so "swap the import"
-// (selftest-suite task spec, "2 トラック" section) is one specifier change
-// in one file instead of a second, hand-kept-in-sync copy of every step
-// file.
+// here rather than from either library directly, so "swap the import" is
+// one specifier change in one file instead of a second, hand-kept-in-sync
+// copy of every step file.
 //
 // Track 1, baseline (NUKADOKO_SELFTEST_TRACK unset): binds to the real
 // `@cucumber/cucumber` package, executed by the real `cucumber-js` binary
@@ -46,7 +45,7 @@ export const When = impl.When;
 export const Then = impl.Then;
 export const World = impl.World;
 export const setWorldConstructor = impl.setWorldConstructor;
-// selftest-allure task spec, decision 2: the HTTP server that serves a
+// The HTTP server that serves a
 // generated Allure report is started/stopped by a cucumber-js Before/After
 // hook, on both tracks. Before/After go through this same swap so that
 // hook, like every step above, binds to the real @cucumber/cucumber on the

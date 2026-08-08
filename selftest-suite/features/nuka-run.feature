@@ -1,5 +1,10 @@
 Feature: nuka run drives a fixture project
 
+  # Stage 1: the scaffold itself. This scenario is the only one below with no
+  # tag and no browser -- it proves the two tracks agree on the basic case
+  # before any of the later, more specific scenarios (stage 2 = @allure-report,
+  # stage 3 = @allure-watch, stage 4 = @allure-browser, one steps file each)
+  # build on it.
   Scenario: nuka run passes and leaves one allure result file per executed step
     Given a clean copy of the fixture project's nukadoko state
     When nuka run runs "features/passing.feature" in the fixture project
@@ -33,8 +38,8 @@ Feature: nuka run drives a fixture project
   # change while that run is still going -- README and docs/spec.md already
   # say `allure watch` can be started ahead of the first run and re-renders
   # as each step finishes, and until this scenario existed that claim had
-  # only ever been checked once, by hand, in a scratch script (selftest-watch
-  # task spec). features/steps/allure-watch.ts's own header explains why no
+  # only ever been checked once, by hand, in a scratch script.
+  # features/steps/allure-watch.ts's own header explains why no
   # step here ever calls `.goto()`/`.reload()`, and why the run below is
   # spawned without being awaited.
   @allure-watch
@@ -58,8 +63,8 @@ Feature: nuka run drives a fixture project
   # per step and per hook, that trace's own calls as child steps
   # ("actions"), `page_events` counts as parameters, and a hook that
   # touches the browser showing up as its own fixture. None of the four had
-  # ever been opened on screen before this scenario (selftest-browser task
-  # spec). Kept in a feature of its own in the fixture project
+  # ever been opened on screen before this scenario. Kept in a feature of
+  # its own in the fixture project
   # (browser-evidence.feature), never mixed into passing.feature/
   # mixed.feature/slow.feature, so stage 1 through stage 3 above keep
   # launching zero browsers and keep their existing runtime.

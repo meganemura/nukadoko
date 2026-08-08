@@ -4,9 +4,9 @@ import { SessionLockConflictError } from "./errors.js";
 
 // Responsibility: the advisory lock file at sessions/default/<name>.lock —
 // `{ pid, started_at }` JSON, checked/acquired in `do`'s setup phase (before
-// any receipt is written) and always released in its `finally` (this task's
-// spec, decision 4). "Advisory" is deliberate: this is fs-only (no daemon,
-// no OS-level flock — the task's own constraint), so it stops nukadoko's own
+// any receipt is written) and always released in its `finally`.
+// "Advisory" is deliberate: this is fs-only by design (no daemon,
+// no OS-level flock), so it stops nukadoko's own
 // concurrent `do`/`session clear` calls from colliding, not an arbitrary
 // process bypassing it. A lock file whose pid is no longer alive is stale by
 // definition (the process that would still care about it is gone), so it
@@ -97,7 +97,7 @@ export async function acquireLock(lockPath: string, sessionName: string): Promis
 
 /**
  * Releases a lock this process holds. Always called from `do`'s `finally`
- * regardless of how the run ended (this task's spec, decision 4); a failure
+ * regardless of how the run ended; a failure
  * here (e.g. the file was already removed by `session clear`) must not
  * itself fail the run whose receipt (or setup error) is already decided, so
  * it is swallowed rather than thrown.

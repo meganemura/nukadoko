@@ -8,7 +8,7 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 // applied "by the executor at write time" (docs/spec.md), and threading a
 // SecretSet down to here happens only through executor-owned code paths.
 //
-// Redaction rules (m1-secrets task spec, decision 3):
+// Redaction rules:
 //   - a secret value found anywhere inside a string is replaced by
 //     `{{secret.NAME}}`;
 //   - values shorter than MIN_REDACTABLE_LENGTH are never redacted (Honest

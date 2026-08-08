@@ -4,8 +4,8 @@ import { defineStep } from "nukadoko";
 // Separate from checked-thing.ts on purpose: passing.feature (stage 1's own
 // scenario) must keep binding to a step whose receipt carries no
 // sections/polls, so its "one result file per executed step" count stays
-// exactly what it already is. This step exists only for mixed.feature (the
-// selftest-allure task spec's assertion 5): its own section/poll calls give
+// exactly what it already is. This step exists only for mixed.feature, for
+// the stage 2 child-step-nesting check: its own section/poll calls give
 // the Allure emitter's child-step timeline something to merge, so a browser
 // looking at this step's own test result finds a "section:"-named and a
 // "poll:"-named child step nested one level under it, not two (docs/spec.md

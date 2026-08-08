@@ -33,14 +33,13 @@ import { IdGenerator, type GherkinDocument, type Pickle } from "@cucumber/messag
 // module's own errors (missing file, `:line` matching nothing) are its
 // business, not this one's.
 //
-// m21b-compat-execution task spec, item 3: `parseFeatureSource` used to
+// `parseFeatureSource` used to
 // parse, then keep only `compile()`'s pickles and throw away `parser.parse`'s
 // own `GherkinDocument` — the exact document a Before/After hook's
 // `HookParameter.gherkinDocument` needs (src/compat/hooks.ts). Returning it
 // alongside the pickles, rather than reconstructing or half-populating one
 // later, is what keeps a hook's `gherkinDocument` from becoming its own new
-// "silently read something undefined/partial" gap (this task's own reason
-// for existing).
+// "silently read something undefined/partial" gap.
 
 export interface FeatureFile {
   readonly relativePath: string;
@@ -57,8 +56,8 @@ export interface LoadFeaturesResult {
   readonly parseErrors: readonly FeatureParseError[];
 }
 
-/** Exported for src/run/select-pickles.ts's own directory-target walk
- * (run-directory-target task spec) — reused rather than re-implemented so
+/** Exported for src/run/select-pickles.ts's own directory-target walk —
+ * reused rather than re-implemented so
  * there is exactly one function that knows how to find every `.feature`
  * file under a directory. That caller re-sorts what this returns by
  * rootDir-relative path in plain byte order of its own (see that file's own

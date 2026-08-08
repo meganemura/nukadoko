@@ -1,8 +1,8 @@
 import { InvalidSessionNameError } from "./errors.js";
 
 // Responsibility: the one validity check on a session name, shared by
-// `nuka do --session` and `nuka session clear <name>` (this task's spec,
-// decision 5). Names map directly onto file names under
+// `nuka do --session` and `nuka session clear <name>`. Names map directly
+// onto file names under
 // sessions/default/<name>.{json,lock}, so anything outside
 // `[a-z0-9_-]+` — most importantly `.`/`/` — could escape that directory
 // (e.g. `--session ../../etc`); rejecting it here in setup, before any path

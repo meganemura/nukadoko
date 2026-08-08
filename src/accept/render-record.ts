@@ -1,9 +1,9 @@
 import type { Receipt } from "../receipt/types.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 
-// Responsibility: render the acceptance record's markdown text (m4b-accept
-// task spec's own "record file" section — the exact shape is that section's
-// own worked example, reproduced here field for field). Pure string building
+// Responsibility: render the acceptance record's markdown text (docs/spec.md
+// "Sign-off" — the exact shape mirrors that section's own worked example,
+// reproduced here field for field). Pure string building
 // only: every value this module needs (feature source, parsed feature name,
 // the winning run's scenarios, each step's own receipt) is handed in
 // already resolved — cli/accept.ts owns picking the run, checking git, and
@@ -28,28 +28,28 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // redact a second time (redaction already happened once, when the receipt
 // was first written, src/cli/run.ts's own scenario/receipt pipeline).
 //
-// A "Declared vs observed" section is added now (accept-declared-vs-observed
-// task spec) — every scenario's own receipts already carry both `mutates`
-// (declared) and `observed` (measured), so the record can say, in one place
-// at its own tail, which steps declared `mutates: false` but were measured
-// making a write. It never changes whether `nuka accept` refuses (that stays
-// cli/accept.ts's seven conditions, untouched) and never asserts the step is
-// wrong — see renderDeclaredVsObserved's own comment for why.
+// A "Declared vs observed" section (docs/spec.md "Sign-off") gives sign-off
+// its own record of what the two receipt fields, `mutates` (declared) and
+// `observed` (measured), agree or disagree about — the reconciliation used
+// to be entirely on a human reading raw receipts, with no note anywhere of
+// whether the two were ever even compared. It never changes whether `nuka
+// accept` refuses (that stays cli/accept.ts's seven conditions, untouched)
+// and never asserts the step is wrong — see renderDeclaredVsObserved's own
+// comment for why.
 //
 // A "Condition" section, and a frontmatter `browser:` line beside the
-// existing `environment:` one, are added now (accept-condition task spec,
-// item 5) — what confirmed this run, stated once near the top rather than
+// existing `environment:` one, are added now (docs/spec.md "Sign-off") —
+// what confirmed this run, stated once near the top rather than
 // left implicit in the filename alone. `browser` is the accepted group's own
 // measured engine (`browserRecord` in cli/accept.ts, never `config.
 // browserType`): the literal string `"none"` in frontmatter, and an explicit
 // "no browser was launched" sentence in the body, when nothing in the group
 // launched one — never a blank line, so "condition unknown" (an older
 // record, no `browser:` line at all — src/tend/record-parse.ts's own read
-// side) stays distinguishable from "condition known: no browser" (task spec
-// item 6's own distinction). The body section carries the browser's
-// *version* too, which frontmatter and the filename both deliberately don't
-// (item 2: the engine's type is enough for acceptance; the version is
-// informational only).
+// side) stays distinguishable from "condition known: no browser". The body
+// section carries the browser's *version* too, which frontmatter and the
+// filename both deliberately don't: the engine's type is enough for
+// acceptance, and the version is informational only.
 
 function needsYamlQuoting(value: string): boolean {
   if (value.length === 0) return true;
@@ -100,8 +100,8 @@ export interface RenderAcceptanceRecordOptions {
   readonly acceptedAt: string;
   readonly environment: string;
   readonly targetVersion: string | undefined;
-  /** The accepted group's own measured browser condition (accept-condition
-   * task spec, item 1/5) — `undefined` when no scenario in the group
+  /** The accepted group's own measured browser condition (docs/spec.md
+   * "Sign-off") — `undefined` when no scenario in the group
    * launched one at all. Never `config.browserType` itself (docs/spec.md
    * "Declaration and measurement answer different questions"): this is what
    * the group's own records measured, already filtered to match today's
@@ -149,7 +149,7 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
     lines.push(`target_version: ${JSON.stringify(options.targetVersion)}`);
   }
   // Never omitted, unlike `target_version` just above (this file's own
-  // header, accept-condition task spec) — the literal `"none"` is what lets
+  // header) — the literal `"none"` is what lets
   // src/tend/record-parse.ts's read side tell "this record predates the
   // condition concept" (line absent) apart from "this record's own
   // condition measured no browser" (line present, value `none`). The engine
@@ -167,9 +167,8 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
 }
 
 // A non-exhaustive ternary (`hook.type === "before" ? ... : ...`) is what
-// let `"after_step"` silently render as "After hook" in the first place
-// (t7-afterstep-consumers task spec, item 2's own bug report) — `switch` +
-// a `never`-typed default is the fix: if `ScenarioHookRecord["type"]` ever
+// let `"after_step"` silently render as "After hook" in the first place —
+// `switch` + a `never`-typed default is the fix: if `ScenarioHookRecord["type"]` ever
 // grows a fourth value, this stops compiling instead of quietly mislabeling
 // it the way the ternary did. `step_index` is folded into the label itself,
 // not left to the JSON body below to explain, since a JSON body's own key
@@ -231,7 +230,7 @@ function renderScenarioSection(scenario: AcceptedScenario): string[] {
 }
 
 /** One step whose own receipt declared `mutates: false` but was measured
- * making at least one write (accept-declared-vs-observed task spec, scope). */
+ * making at least one write. */
 interface DeclaredVsObservedMismatch {
   readonly scenarioName: string;
   readonly stepText: string;
@@ -242,10 +241,9 @@ interface DeclaredVsObservedMismatch {
  * three buckets a receipt's own `mutates` already answers: declared true
  * (never interesting here, matches its own claim), declared false and
  * observed writes (a mismatch), or `mutates: null` (a compat step, which has
- * no declaration to compare against at all — reconcile-declared-vs-measured
- * design doc's own "recommended" section, unresolved point 2: kept out of
- * the mismatch count rather than folded into "no mismatch", since "nothing
- * to compare" and "compared and matched" are different facts). */
+ * no declaration to compare against at all, kept out of the mismatch count
+ * rather than folded into "no mismatch" — "nothing to compare" and "compared
+ * and matched" are different facts). */
 function collectDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): {
   mismatches: DeclaredVsObservedMismatch[];
   compatStepCount: number;
@@ -306,8 +304,8 @@ function renderDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): strin
   return lines;
 }
 
-// Near the top, ahead of the scenario/receipt detail (accept-condition task
-// spec, item 5) — what confirmed this run is context a reader needs before
+// Near the top, ahead of the scenario/receipt detail (docs/spec.md
+// "Sign-off") — what confirmed this run is context a reader needs before
 // the detail, not a footnote after it, the same reasoning that keeps
 // "Declared vs observed" at the tail instead: that section is a roll-up
 // computed *from* the detail above it, while this one is read *before* the

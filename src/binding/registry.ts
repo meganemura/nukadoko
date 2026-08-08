@@ -9,7 +9,7 @@ import { ParameterTypeCollisionError } from "./parameter-type-errors.js";
 // `config.parameterTypes` (docs/spec.md config section) on top of that,
 // registering each entry as a `ParameterType` with cucumber-expressions
 // itself — the transformer is coercion, the registry does no interpretation
-// of its own (m2pre-parameter-types task spec, decision 1).
+// of its own.
 //
 // A name collision is checked before anything is registered with a name
 // that collides with a built-in type — this project's own choice, not
@@ -19,9 +19,9 @@ import { ParameterTypeCollisionError } from "./parameter-type-errors.js";
 // author, and no stable type to `instanceof` on. Checking here first, before
 // any entry is defined, means every collision — against a built-in name or
 // against an earlier entry in this same list — raises the same
-// `ParameterTypeCollisionError` (decision 2), regardless of which happens to
+// `ParameterTypeCollisionError`, regardless of which happens to
 // come first in a given `parameterTypes` array. Every caller of this factory
-// is expected to treat that error as config-originated (decision 3): `nuka
+// is expected to treat that error as config-originated: `nuka
 // check` catches it and reports a `parameter-type-invalid` issue (src/check/
 // binding-check.ts); `nuka do`/`nuka run` let it propagate as a setup
 // failure. An unregistered type name used in a pattern is a different

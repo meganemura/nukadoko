@@ -8,7 +8,7 @@ import { chromium, type Page } from "playwright";
 import { After, Before, Then, When } from "./runtime.js";
 import type { SelftestWorld } from "../support/world.js";
 
-// Responsibility: selftest-browser task spec (stage 4) -- 0.1.0's own
+// Responsibility: stage 4 of this suite -- 0.1.0's own
 // Playwright-native redesign left four kinds of evidence behind a
 // browser-driven run: a trace per step/hook, that trace's own calls as
 // child steps ("actions"), `page_events` counts as parameters, and a hook
@@ -104,8 +104,8 @@ function allSteps(records: readonly RunScenarioRecord[]): RunStepRecord[] {
 // allure-report.ts's own `serveDirectory`/`stopServer` rather than shared,
 // same self-containment precedent allure-watch.ts already set for its own
 // port-reading logic. See allure-report.ts's own header for why the port is
-// never fixed (decision 2 there: a fixed port collides with a concurrent or
-// leftover run). ---
+// never fixed: a fixed port collides with a concurrent or
+// leftover run. ---
 
 interface ServedReport {
   readonly process: ChildProcess;
@@ -165,8 +165,8 @@ Before({ tags: "@allure-browser", timeout: 30_000 }, async function (this: Selft
 
 After({ tags: "@allure-browser", timeout: 30_000 }, async function (this: SelftestWorld) {
   // Attempted regardless of what ran before: a failed step must never leak
-  // the OUTER browser or a listening server (selftest-browser task spec:
-  // "内側の chromium も外側の chromium も残らない").
+  // the OUTER browser or a listening server (the INNER one is already gone
+  // once its own subprocess exits, per this file's own header).
   await this.page?.close().catch(() => undefined);
   await this.browser?.close().catch(() => undefined);
   await stopServer(this.httpServer);
@@ -227,9 +227,10 @@ function theExecutedStep(nukaStdout: string): RunStepRecord {
   return step;
 }
 
-// --- zip validity (selftest-browser task spec, decision 1: "中身の完全な
-// 検証はしない" -- confirm the attachment reads back as a real zip, never
-// what its own trace.trace entry says happened) ---
+// --- zip validity (deliberate scope: confirm the attachment reads back as
+// a real zip, never what its own trace.trace entry says happened -- proving
+// the trace survived the trip through Allure intact is enough; full content
+// verification is not attempted) ---
 
 const ZIP_EOCD_SIGNATURE = 0x06054b50;
 const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50;
@@ -243,8 +244,7 @@ const ZIP_MAX_COMMENT_LENGTH = 65535;
 
 /** A fresh, narrower reimplementation of the same "walk the zip's own
  * structure by hand, no new dependency" approach
- * src/context/trace-actions.ts's own zip reader already uses (this task's
- * spec points at it as reference) -- not a reuse of that file, which reads
+ * src/context/trace-actions.ts's own zip reader already uses -- not a reuse of that file, which reads
  * one *named* entry (`trace.trace`) and returns its decompressed bytes.
  * This function never inspects what any entry contains: it decompresses
  * the *first* entry only (`inflateRawSync`, catching a throw) and checks
@@ -308,7 +308,7 @@ function isReadableZip(buffer: Buffer): boolean {
   }
 }
 
-// --- the 4 checks the selftest-browser task spec asks for ---
+// --- the 4 checks this stage verifies ---
 
 When(
   "the browser-evidence report is generated and opened in a browser",

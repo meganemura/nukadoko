@@ -5,13 +5,13 @@ import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types
 
 // Responsibility: turn secret-source envFiles (every value they define,
 // minus `secrets.public`) plus any tracked-envFile key `secrets.redact`
-// names anyway (secrets-redact-and-warning task spec, decision A1: origin
+// names anyway (origin
 // and handling are separate questions — see config/schema.ts's `secrets`
 // doc comment for the full reasoning) into the flat SecretSet redact.ts
 // consumes — later files winning, same merge order as context/env.ts's
 // loadEnvFiles — minus values shorter than MIN_REDACTABLE_LENGTH (excluded
-// here rather than only in redact.ts — this task's spec scope leaves the
-// choice open; doing it here means a value that will never be redacted
+// here rather than only in redact.ts: doing it here means a value that will
+// never be redacted
 // also never becomes part of the SecretSet redact.ts has to scan). The
 // length floor applies identically to a `redact`-named key: a short value
 // still can't be redacted without wrecking ordinary receipt text, whether
@@ -26,8 +26,8 @@ import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types
 // module's header) — so the two merges are kept independent instead of
 // forcing them through one shared pass.
 //
-// Options object rather than positional args (secrets-redact-and-warning
-// task spec): four same-shaped `readonly string[]` parameters are easy to
+// Options object rather than positional args: four same-shaped
+// `readonly string[]` parameters are easy to
 // pass in the wrong order silently — an options object makes every call
 // site name what it's passing.
 

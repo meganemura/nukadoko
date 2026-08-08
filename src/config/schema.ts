@@ -7,18 +7,18 @@ import type { FixtureDefinition } from "../fixture/types.js";
 // environments, stateDir, browser, browserContext, requestContext, secrets,
 // parameterTypes). `.strict()` is
 // what makes an unknown key an error instead of a silent no-op. `environments`
-// is now typed exactly (m1-environments task spec, decision 1): baseURL/
+// is now typed exactly: baseURL/
 // envFiles per environment layer on top of the top-level values (resolution
 // lives in src/environment/resolve-environment.ts, not here), `policy:
 // "read-only"` and `version` exist only per-environment. `browser` takes
-// Playwright's own `LaunchOptions` type directly (t6-config-browser task
-// spec, decision 1) rather than a bespoke enumeration — see the field's own
+// Playwright's own `LaunchOptions` type directly rather than a bespoke
+// enumeration — see the field's own
 // doc comment for why zod does not re-validate its shape. `secrets` is
-// typed differently again (m1-secrets task spec, scope item 2): its one
+// typed differently again: its one
 // field is small and fully designed by docs/spec.md today, so it is typed
 // exactly, the same as `environments` above but for the opposite reason
 // `browser` is not — there is no upstream type to defer to for it.
-// `parameterTypes` (m2pre-parameter-types task spec, decision 1) is typed
+// `parameterTypes` is typed
 // exactly for the same reason `secrets` is: docs/spec.md fully designs its
 // one shape today, `{ name, regexp, transformer? }`. Registering it — and
 // rejecting a name that collides with a built-in type or another entry in
@@ -34,8 +34,8 @@ const ENVIRONMENT_NAME_PATTERN = /^[a-z0-9_-]+$/;
  * secrets"). `version` is a function rather than a URL+jsonPath DSL:
  * nukadoko.config.ts is already executable TypeScript (loaded via tsx's
  * tsImport), so a config author can call HTTP or exec directly instead of
- * learning a bespoke schema for the same thing (this task's spec, decision
- * 1). zod has no schema shape for "a function with this signature", so
+ * learning a bespoke schema for the same thing. zod has no schema shape for
+ * "a function with this signature", so
  * `z.custom` with a `typeof` check stands in here; the probe's actual return
  * value is only checked when it runs (src/environment/probe-version.ts). */
 const environmentConfigSchema = z
@@ -73,10 +73,10 @@ const PARAMETER_TYPE_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
  * stands in for "a RegExp or a string" and "a function": zod has no built-in
  * schema for either, the same reason `environments.*.version` above uses it.
  * `transformer` is intentionally typed as accepting/returning `unknown` —
- * its return value is not statically checked (this task's spec, decision 4:
- * a custom type's captured value skips check's capture-type-mismatch
+ * its return value is not statically checked: a custom type's captured
+ * value skips check's capture-type-mismatch
  * comparison entirely, since `capture.type` for a custom type never equals
- * "int"/"float"/"string"/"word" — see src/check/binding-check.ts); the args
+ * "int"/"float"/"string"/"word" (see src/check/binding-check.ts); the args
  * zod schema is the real, run-time contract for it (docs/spec.md: "the
  * transformer is coercion; the args schema remains the contract"). */
 const parameterTypeConfigSchema = z
@@ -119,7 +119,7 @@ function isFixtureFunction(value: unknown): value is (...args: never[]) => unkno
   return typeof value === "function";
 }
 
-/** `config.fixtures.<name>`'s own shape (P5 task spec, scope items 1, 4) —
+/** `config.fixtures.<name>`'s own shape (docs/spec.md "Fixtures") —
  * zod's job here stops at "is this a function, or a `[function, options]`
  * tuple, and is `options` itself well-formed" (the same shallow "is this an
  * object" contract `browser`/`browserContext`/`requestContext` above keep
@@ -131,7 +131,7 @@ function isFixtureFunction(value: unknown): value is (...args: never[]) => unkno
  * loadConfig already keep for the rest of this file.
  *
  * `auto: true` is refused right here, at config-load time, with a message
- * naming *why* (P5 task spec, scope item 4) — the one option this schema
+ * naming *why* — the one option this schema
  * does treat as a hard, structural mistake rather than deferring to a later
  * check: accepting it would be the first claim this package would be
  * breaking about its own fixture support. nukadoko accepts the *shape* of a
@@ -185,8 +185,8 @@ export const configSchema = z
      * `nuka check`, `nuka tend` all default to it); `additionalFeatureDirs`
      * is a second, disjoint set that never runs on its own but still binds
      * vocabulary — a step's pattern is bound or unbound as a property of the
-     * whole project, not just of what `nuka run` would execute today
-     * (fb3-scan-dirs task spec, decision 1). This is why an acceptance
+     * whole project, not just of what `nuka run` would execute today. This
+     * is why an acceptance
      * feature — recommended to live outside `featuresDir` precisely so it is
      * never picked up as a regression (skills/acceptance/SKILL.md) — belongs
      * here: it must never run unattended, but a static check that doesn't
@@ -207,7 +207,7 @@ export const configSchema = z
     // types" as its own no-op default, so this mirrors that rather than
     // making every call site handle `undefined` separately.
     parameterTypes: z.array(parameterTypeConfigSchema).default([]),
-    /** User-defined fixtures (P5 task spec, scope items 1, 3) — layered
+    /** User-defined fixtures (docs/spec.md "Fixtures") — layered
      * *after* the builtin set (`page`/`context`/`request`/... —
      * src/context.ts's `BUILTIN_FIXTURE_NAMES`), so a key here with the
      * same name as a builtin overrides it (src/fixture/graph.ts's own
@@ -217,13 +217,13 @@ export const configSchema = z
     fixtures: z.record(z.string().regex(FIXTURE_NAME_PATTERN), fixtureDefinitionSchema).default({}),
     /** The default setup/teardown timeout every fixture instance gets
      * (milliseconds), overridable per fixture via that fixture's own
-     * `options.timeout` (P5 task spec, scope item 7) — without a default,
+     * `options.timeout` — without a default,
      * a fixture that forgets to call `use(...)` would leave `nuka run`
      * hanging indefinitely instead of failing with a named cause
      * (src/fixture/lifecycle.ts's own `FixtureTimeoutError`). */
     fixtureTimeout: z.number().positive().default(60_000),
-    /** Which Playwright browser engine `ctx.page()` launches (p6-browser-type
-     * task spec) — deliberately a separate key from `browser` below, never a
+    /** Which Playwright browser engine `ctx.page()` launches —
+     * deliberately a separate key from `browser` below, never a
      * field mixed into it: `LaunchOptions` (`browser`'s own type) has no key
      * that selects an engine at all, because Playwright picks one by which
      * of `chromium`/`firefox`/`webkit`'s own `launch` gets called, not by an
@@ -240,8 +240,8 @@ export const configSchema = z
      * fact) and a missing binary surfaces as Playwright's own error at
      * launch time, unmodified. */
     browserType: z.enum(["chromium", "firefox", "webkit"]).default("chromium"),
-    /** Playwright's own `LaunchOptions` type, taken as-is (t6-config-browser
-     * task spec, decision 1): coupling to Playwright is an accepted design
+    /** Playwright's own `LaunchOptions` type, taken as-is: coupling to
+     * Playwright is an accepted design
      * choice (docs/spec.md "Out of scope"), so there is no vocabulary of our
      * own to translate its option names through, and no need to widen this
      * schema every time Playwright adds one. zod here checks only "is this
@@ -322,8 +322,8 @@ export const configSchema = z
       })
       .optional(),
     /** `public` and `redact` answer two different questions about the same
-     * key, not opposite claims about the same fact (secrets-redact-and-
-     * warning task spec, decision A1): git's tracked/untracked state is
+     * key, not opposite claims about the same fact: git's tracked/untracked
+     * state is
      * still the only thing that decides *origin* — whether a value is
      * already reachable by anyone with repo access — and neither field
      * disputes that. What they control is *handling*: `public` demotes an
@@ -367,16 +367,16 @@ export const configSchema = z
      * `<stateDir>/allure-results` (docs/spec.md "The state directory") —
      * that default is applied where `stateDir` is resolved (src/cli/run.ts),
      * not here, since this schema alone doesn't know `stateDir`'s final
-     * value. No `enabled` key (m3b-allure-emitter spec-b2 task spec: the
+     * value. No `enabled` key: the
      * emitter is always on — zero configuration already gets a full report,
-     * so there is nothing to opt into). No CLI flag either. */
+     * so there is nothing to opt into. No CLI flag either. */
     allure: z.object({ resultsDir: z.string().optional() }).strict().optional(),
     /** `output` is root-relative; omitted, it defaults to
      * `<stateDir>/messages.ndjson` — that default is applied where
      * `stateDir` is resolved (src/cli/run.ts), not here, same split as
-     * `allure.resultsDir` above. No `enabled` key (m3c-messages-emitter
-     * spec-b task spec: the emitter is always on, same reason as `allure`
-     * above — zero configuration already gets a full stream). No CLI flag
+     * `allure.resultsDir` above. No `enabled` key: the emitter is always
+     * on, same reason as `allure`
+     * above — zero configuration already gets a full stream. No CLI flag
      * either. */
     messages: z.object({ output: z.string().optional() }).strict().optional(),
   })

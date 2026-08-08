@@ -7,8 +7,9 @@ import { expect } from "playwright/test";
 import { After, Given, Then, When } from "./runtime.js";
 import type { SelftestWorld } from "../support/world.js";
 
-// Responsibility: selftest-watch task spec's stage 3 -- proves `allure
-// watch` (README, docs/spec.md: "step ごとに更新される") actually pushes an
+// Responsibility: stage 3 of this suite -- proves `allure
+// watch` (docs/spec.md "Allure emitter": "a dashboard already open updates
+// step by step") actually pushes an
 // update to an already-open browser tab WHILE a run is still executing,
 // not only that a finished report reads correctly (allure-report.ts's own
 // stage 2 already covers that, by reading a report only after `nuka run`
@@ -21,8 +22,8 @@ import type { SelftestWorld } from "../support/world.js";
 // ## Why no `.goto()` or `.reload()` anywhere below
 //
 // `allure watch` pushes updates over SSE (`/__live_reload`); the browser's
-// own listener does `window.location.reload()` on receipt (measured fact,
-// selftest-watch task spec). If a step here called `.goto()` or `.reload()`
+// own listener does `window.location.reload()` on receipt (measured fact).
+// If a step here called `.goto()` or `.reload()`
 // itself, a rising count would no longer distinguish "the watch pushed an
 // update" from "this test just reloaded the page and saw whatever was on
 // disk at that moment" -- the whole point of this scenario. The report
@@ -76,8 +77,7 @@ function parseStepTotal(stdout: string): number {
 After({ tags: "@allure-watch" }, async function (this: SelftestWorld) {
   // Attempted regardless of how far the scenario got: a failed assertion
   // partway through must never leave a browser, an `allure watch` process,
-  // or a still-running `nuka run` child behind (selftest-watch task spec:
-  // "watch のプロセスも run の子プロセスも残らない").
+  // or a still-running `nuka run` child behind.
   await this.page?.close().catch(() => undefined);
   await this.browser?.close().catch(() => undefined);
   this.browser = null;
@@ -102,8 +102,8 @@ Given(
   { timeout: 30_000 },
   async function (this: SelftestWorld) {
     // `allure watch` refuses to start against a missing results directory
-    // but accepts an empty one (measured fact, selftest-watch task spec --
-    // the same constraint `nuka init` already works around, see
+    // but accepts an empty one (measured fact -- the same constraint
+    // `nuka init` already works around, see
     // src/cli/init.ts's own comment). The preceding "a clean copy of the
     // fixture project's nukadoko state" step removed `.nukadoko` outright,
     // so this has to exist again before watch can start, and it has to be
@@ -125,8 +125,7 @@ Given(
         // Same pattern allure-report.ts's own HTTP server already uses:
         // read the real port back out of the process's own startup line
         // rather than picking one, so a concurrent or leftover run of this
-        // suite can never collide with it (selftest-watch task spec,
-        // decision 5).
+        // suite can never collide with it.
         const match = /Allure is running on (\S+)/.exec(buffered);
         // The capture group is checked rather than asserted: a regex match
         // says nothing to the type system about group 1 existing, and a
@@ -167,7 +166,7 @@ Then("the live report shows 0 results before any run starts", async function (th
   if (this.page === null) {
     throw new Error("no page: the live-report Given step did not run first");
   }
-  // Decision 6 of the selftest-watch task spec: checked, not assumed. With
+  // Checked, not assumed. With
   // zero result files, Allure's own Awesome plugin still renders
   // `tab-all` (confirmed empirically against a genuinely empty
   // allure-results directory), reading "Total 0" rather than omitting the
@@ -197,8 +196,7 @@ When(
       proc.once("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
     });
     // No `await` above: returning immediately, with the child still
-    // running, is the entire mechanism (selftest-watch task spec, decision
-    // 3) -- awaiting here would mean the run is already over by the time
+    // running, is the entire mechanism -- awaiting here would mean the run is already over by the time
     // any step after this one runs, identical to stage 2.
   },
 );
@@ -211,8 +209,7 @@ Then(
       throw new Error("no page or run process: earlier steps did not run first");
     }
     // The one assertion this whole scenario exists for. `expect(...)`'s own
-    // auto-retry (never a manual poll loop -- selftest-watch task spec,
-    // decision 2) waits for the SSE-pushed reload to land; reading the
+    // auto-retry (never a manual poll loop) waits for the SSE-pushed reload to land; reading the
     // count immediately afterward, then confirming the child process has
     // not exited yet, is what tells a report that updated *during* the run
     // apart from one that only happened to update by the time this step
@@ -263,10 +260,10 @@ Then(
     // succeed.
     await expect(this.page.getByTestId("tab-all")).toHaveText(`Total ${totalSteps}`, { timeout: 15_000 });
 
-    // Decision 6's other half, and the actual proof this scenario exists to
-    // deliver (selftest-watch task spec: "途中の観測が 0 でも総数でもない
-    // ことが、ライブであることの証拠"). Only checkable now that totalSteps
-    // is known: a mid-run reading of 0 would mean nothing had rendered yet,
+    // The other half of the zero-results check above, and the actual proof
+    // this scenario exists to deliver: the mid-run observation being
+    // neither 0 nor the total is what proves liveness. Only checkable now
+    // that totalSteps is known: a mid-run reading of 0 would mean nothing had rendered yet,
     // and a reading equal to totalSteps would mean the run had already
     // finished by the time it was taken -- either way this scenario would
     // not have shown anything a finished-report read (stage 2) doesn't

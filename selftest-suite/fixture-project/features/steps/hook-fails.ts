@@ -8,8 +8,8 @@ import { Before } from "nukadoko/compat";
 // has no hook registration of its own).
 //
 // Scoped to @hook-fails so it never touches mixed.feature's other two
-// scenarios. Its only job is the selftest-allure task spec's decision 5, a
-// known constraint pinned rather than hidden: a scenario a Before hook
+// scenarios. Its only job is to pin a known constraint rather than hide it:
+// a scenario a Before hook
 // stops shows every one of its steps as "skipped" in the Allure report, not
 // red, because step became the test-result unit and there is no longer a
 // scenario-level test for the hook's own failure to turn red instead

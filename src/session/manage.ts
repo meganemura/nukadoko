@@ -5,13 +5,11 @@ import { SessionLockConflictError, SessionNotFoundError } from "./errors.js";
 import { liveLockOwner } from "./lock.js";
 import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "./paths.js";
 
-// Responsibility: `nuka session list`/`clear`'s actual work (this task's
-// spec, item 4) — enumerate and delete session files under sessions/<env>/ —
+// Responsibility: `nuka session list`/`clear`'s actual work — enumerate and
+// delete session files under sessions/<env>/ —
 // kept out of cli/session.ts so it's unit-testable without going through
 // yargs (same split as cli/do.ts vs cli/run-cli.ts). `listSessions` walks
-// every environment's subdirectory (m1-environments task spec, decision 7:
-// list enumerates by scanning every environment's subdirectory);
-// `clearSession`/
+// every environment's subdirectory; `clearSession`/
 // `clearAllSessions` are scoped to one environment at a time — there is no
 // all-environments clear, on purpose (accidental-deletion risk with no real
 // use case). A session's existence is defined by its .json file; a .lock
@@ -75,7 +73,7 @@ export async function listSessions(rootDir: string, stateDir: string): Promise<S
 
 /**
  * Deletes one session's file and its lock file (stale lock only — a live
- * one refuses the whole operation, per this task's spec). Throws
+ * one refuses the whole operation). Throws
  * `SessionNotFoundError` when no session file exists under `name` in
  * `environment`, and `SessionLockConflictError` when a live process still
  * holds its lock.
@@ -103,12 +101,12 @@ export async function clearSession(
 
 /**
  * Deletes every session (and lock) file under one environment. All-or-
- * nothing: if even one lock is live, nothing is deleted (this task's spec:
- * no partial deletion) and `SessionLockConflictError` is thrown naming that
+ * nothing: if even one lock is live, nothing is deleted (no partial
+ * deletion) and `SessionLockConflictError` is thrown naming that
  * session. A lock file with no matching session file still counts — it
  * represents a `do` run that is (or claims to be) in progress. Scoped to
  * `environment` only: clearing every environment at once is deliberately not
- * offered (m1-environments task spec, decision 7).
+ * offered.
  */
 export async function clearAllSessions(
   rootDir: string,

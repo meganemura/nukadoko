@@ -4,7 +4,6 @@ import { createTodoApp } from "../../todo/app/server.js";
 // This walkthrough is about glue code evolving -- cucumber-js-shaped compat
 // steps, one producer/consumer pair already promoted to typed steps -- not
 // about the app underneath it. Reusing examples/todo's own todo API outright
-// (task spec, deliverable 1: "examples/todo の server をそのまま流用してよい")
 // keeps this example's only files worth reading its migration-shaped glue,
 // not a second bespoke app duplicating examples/todo/app/server.ts's own
 // header comment for nothing.

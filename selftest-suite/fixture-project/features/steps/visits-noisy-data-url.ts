@@ -2,8 +2,8 @@ import { z } from "zod";
 import { defineStep } from "nukadoko";
 
 // `page.goto("data:...")`, never `page.setContent(...)`: only `goto`
-// produces an action the trace records (selftest-browser task spec,
-// decision 2 -- measured, not assumed). `setContent` leaves no trace of its
+// produces an action the trace records (measured, not assumed).
+// `setContent` leaves no trace of its
 // own, which is exactly why tests/fixtures/page-events-project's own
 // quiet-page.ts (a different project) can use it for a step that only
 // needs a quiet page; this step needs a `goto` action on top of the same

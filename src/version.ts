@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 // package.json — the project under test — and stays that way; this module
 // is not a generalization of it).
 //
-// The bug this module exists to fix (own task spec): `nuka --version` used
+// The bug this module exists to fix: `nuka --version` used
 // to fall through to yargs' own default version resolution, which walks up
 // from `process.cwd()` and reads whichever project's package.json happens
 // to be running the CLI — not nukadoko's own. `process.cwd()` is exactly

@@ -2,8 +2,8 @@ import { z } from "zod";
 import { defineStep } from "nukadoko";
 
 // Exists only so selftest-suite/features/steps/allure-watch.ts's mid-run
-// assertion has something to observe (selftest-watch task spec, decision
-// 4). `allure watch` reflects a written result file 150-351ms after it
+// assertion has something to observe.
+// `allure watch` reflects a written result file 150-351ms after it
 // lands and polls its own results directory every 300ms (both measured
 // facts, not re-derived here); every other step in this fixture project
 // runs in a few milliseconds, so a run of them writes every result file

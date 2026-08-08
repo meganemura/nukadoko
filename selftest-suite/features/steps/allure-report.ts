@@ -7,7 +7,7 @@ import { chromium, type Locator, type Page } from "playwright";
 import { After, Before, Given, Then, When } from "./runtime.js";
 import type { SelftestWorld } from "../support/world.js";
 
-// Responsibility: the selftest-allure task spec's stage 2 -- opens the
+// Responsibility: stage 2 of this suite -- opens the
 // Allure report `nuka run` writes for selftest-suite/fixture-project's own
 // mixed.feature run in a real, headless browser and reads back only
 // data-dependent content (a count, a tree row, a status). docs/spec.md's
@@ -42,7 +42,7 @@ import type { SelftestWorld } from "../support/world.js";
 //
 // ## Why the HTTP server's port is never fixed
 //
-// selftest-allure task spec, decision 2: a fixed port collides with a
+// A fixed port collides with a
 // concurrent run of this same suite or a leftover process from a killed
 // one. `python3 -m http.server 0` asks the OS for whichever port is free
 // right now; `-u` (unbuffered) makes its own "Serving HTTP on ... port N
@@ -67,8 +67,9 @@ const allureBin = path.join(repoRoot, "node_modules", "allure", "cli.js");
 // --- NDJSON scenario records (the same "scenario name -> status" shape
 // run-selftest.mjs's own swap track already parses `nuka run`'s stdout
 // into), read here for each step's own text/status/receipt rather than
-// just its scenario-level status -- assertion 1 needs a per-step tally, and
-// assertion 3 needs a specific step's own receipt id. ---
+// just its scenario-level status -- the tab-count check needs a per-step
+// tally, and the receipt-attachment check needs a specific step's own
+// receipt id. ---
 
 interface RunStepRecord {
   readonly text: string;
@@ -92,8 +93,7 @@ function allSteps(records: readonly RunScenarioRecord[]): RunStepRecord[] {
   return records.flatMap((record) => record.steps);
 }
 
-// --- HTTP server lifecycle (Before/After hook, selftest-allure task spec
-// decision 2) ---
+// --- HTTP server lifecycle (Before/After hook) ---
 
 interface ServedReport {
   readonly process: ChildProcess;
@@ -304,8 +304,8 @@ async function openStepDetail(world: SelftestWorld, stepText: string): Promise<P
   return page;
 }
 
-// --- the 5 checks the selftest-allure task spec asks for, plus its
-// decision-5 pin (a 6th, deliberately kept separate from "the 5") ---
+// --- the 5 checks this stage verifies, plus a pin for a known display
+// limit (a 6th, deliberately kept separate from "the 5") ---
 
 Then("the tab counts match the step statuses nuka run reported", async function (this: SelftestWorld) {
   const page = await openReportPage(this);
@@ -363,9 +363,9 @@ Then(
     await page.getByTestId("test-result-attachment-header").filter({ hasText: "receipt.json" }).click();
 
     // Not "an attachment named receipt.json exists" -- its own rendered
-    // content must actually name the receipt this run wrote (selftest-allure
-    // task spec, assertion 3: nukadoko's central artifact must survive the
-    // trip to a browser, not merely appear in a file listing).
+    // content must actually name the receipt this run wrote: nukadoko's
+    // central artifact must survive the
+    // trip to a browser, not merely appear in a file listing.
     const content = await page.getByTestId("code-attachment-content").innerText();
     if (!content.includes(failingStep.receipt)) {
       throw new Error(
@@ -420,8 +420,8 @@ Then("the before-hook-stopped scenario's step shows skipped, not failed", async 
   const page = await openReportPage(this);
   await expandAllTreeSections(page);
 
-  // Known, accepted limit, pinned rather than hidden (selftest-allure task
-  // spec, decision 5; docs/spec.md "Allure emitter"): step became the
+  // Known, accepted limit, pinned rather than hidden (docs/spec.md "Allure
+  // emitter"): step became the
   // Allure test-result unit, so a scenario a Before hook stops has no
   // scenario-level test left for that hook's own failure to turn red --
   // every one of its steps shows skipped instead. `nuka run`'s own exit
