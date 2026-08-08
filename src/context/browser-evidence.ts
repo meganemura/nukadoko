@@ -28,8 +28,8 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // create-context.ts's `dispose` (executor-only) calls it, after `run` has
 // already returned or thrown.
 //
-// `finalize` takes no `status` argument (fb4-evidence-time task spec, item
-// 1) — it used to write the same screenshot buffer a second time, under a
+// `finalize` takes no `status` argument — it used to write the same
+// screenshot buffer a second time, under a
 // second name, whenever `status === "failed"`. That second file carried no
 // information `receipt.status` didn't already carry, and because `finalize`
 // only ever runs after `run` has returned or thrown, it could be seconds
@@ -43,8 +43,8 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // without ever stating it.
 //
 // The browser context's own `request` events are also tallied into
-// `observed` (m2pre-observed task spec, scope item 2): every request the
-// page itself issues — navigation, fetch, XHR — is counted read/write the
+// `observed`: every request the page itself issues — navigation, fetch,
+// XHR — is counted read/write the
 // same way http-log.ts counts `ctx.request()` calls. `observed` keeps
 // counting every one of them regardless of what the second subscription
 // below goes on to do with it — the two are deliberately different tallies
@@ -55,8 +55,8 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 //
 // A second, separate subscription — `subscribePageHttpLogging`
 // (page-http-log.ts), wired in below — is what now also appends page-issued
-// traffic to http.jsonl itself (p3b-page-network task spec): document/xhr/
-// fetch responses only, each entry marked `via: "page"` so it reads apart
+// traffic to http.jsonl itself: document/xhr/fetch responses only, each
+// entry marked `via: "page"` so it reads apart
 // from `ctx.request()`'s own `via: "request"` entries on the same file.
 // Everything else (image/stylesheet/script/...) is tallied into
 // `httpOmitted` instead of landing on the file at all, so a step's own
@@ -66,33 +66,33 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // bookkeeping, neither of which this file's other event subscriptions need.
 //
 // `console`/`weberror`/`requestfailed` are subscribed the same way, into
-// `pageEvents` (P0-page-events task spec) — a green step can still be
-// sitting on top of a broken page, and cucumber-js has no browser context of
-// its own to have ever recorded that from. Subscribed on `context`, not
+// `pageEvents` — a green step can still be sitting on top of a broken
+// page, and cucumber-js has no browser context of its own to have ever
+// recorded that from. Subscribed on `context`, not
 // `page`, for the same "outlives a future page-fixture override" reason
 // `observed`'s own `request` subscription is (src/context/page-events.ts's
 // own header). `console` is filtered to `msg.type() === "error"` right here
 // — a warning is routine SPA noise, not evidence — the other two categories
 // have no such filter: every `weberror`/`requestfailed` is worth recording.
 //
-// `beginStepChunk`/`endStepChunk` (p3a-trace-per-step task spec) replace the
-// former "one trace.zip per context" shape: `tracing.start()` below still
-// opens one tracing session for this handle's whole lifetime (a chunk needs
-// a started session to begin from), but nothing is ever written from it
-// directly any more. create-context.ts opens and closes a chunk at each
-// step boundary instead, so `evidence.trace` on a receipt is that step's own
-// window, not the whole scenario's — a step that failed can be opened
-// directly instead of scrubbed for out of one long recording (the "前提" this
-// task's spec measured: `tracing.stop()` throws once a chunk has been used
-// at all, so the two shapes cannot coexist; the single scenario-long trace
-// is retired, not merely supplemented). `startChunk({ title })`'s own
+// `beginStepChunk`/`endStepChunk` replace the former "one trace.zip per
+// context" shape: `tracing.start()` below still opens one tracing session
+// for this handle's whole lifetime (a chunk needs a started session to
+// begin from), but nothing is ever written from it directly any more.
+// create-context.ts opens and closes a chunk at each step boundary
+// instead, so `evidence.trace` on a receipt is that step's own window, not
+// the whole scenario's — a step that failed can be opened directly instead
+// of scrubbed for out of one long recording (measured directly:
+// `tracing.stop()` throws once a chunk has been used at all, so the two
+// shapes cannot coexist; the single scenario-long trace is retired, not
+// merely supplemented). `startChunk({ title })`'s own
 // `title` lands on the trace's `context-options` entry (also measured), so
 // each chunk names the step it came from without create-context.ts writing
 // that anywhere else.
 //
-// `BROWSER_ENGINES` and `LaunchBrowserOptions.browserType` (p6-browser-type
-// task spec) are what let a project pick firefox or webkit instead of
-// chromium: `chromium`/`firefox`/`webkit` are three separate namespaces
+// `BROWSER_ENGINES` and `LaunchBrowserOptions.browserType` are what let a
+// project pick firefox or webkit instead of chromium: `chromium`/`firefox`/
+// `webkit` are three separate namespaces
 // Playwright exports, each with its own `launch`, so "which engine" is
 // answered by which namespace's `launch` gets called here, not by an option
 // passed to it (`LaunchOptions` itself has no such key; see config/
@@ -114,15 +114,14 @@ export type BrowserEngineName = keyof typeof BROWSER_ENGINES;
 
 export interface LaunchBrowserOptions {
   /** `config.browserType` (config/schema.ts), naming which of `chromium`/
-   * `firefox`/`webkit` to launch (p6-browser-type task spec). `undefined`
-   * behaves exactly like `"chromium"` — the pre-this-task default — so a
-   * caller that never wires this in (existing tests, `nuka do`'s own
+   * `firefox`/`webkit` to launch. `undefined` behaves exactly like
+   * `"chromium"` — the previous default, before this option existed — so
+   * a caller that never wires this in (existing tests, `nuka do`'s own
    * defaults) keeps launching what it always has. */
   browserType?: BrowserEngineName;
   /** `config.browser` (config/schema.ts) as a config author wrote it,
    * passed straight through to the selected engine's own `launch`
-   * (t6-config-browser task spec, decision 4; p6-browser-type task spec
-   * widens this from always-chromium to whichever `browserType` above
+   * (widened from always-chromium to whichever `browserType` above
    * names) — this module no longer picks `headless` out of it itself.
    * `undefined` when a project sets no `browser` at all; passing `undefined`
    * to `launch` is the same as omitting the argument, so Playwright's own
@@ -130,8 +129,8 @@ export interface LaunchBrowserOptions {
    * in between. */
   browser?: LaunchOptions;
   /** `config.browserContext` (config/schema.ts), passed straight through to
-   * `browser.newContext` (context-options task spec). `storageState` and
-   * `baseURL` below are spread in *after* this, not before: schema.ts
+   * `browser.newContext`. `storageState` and `baseURL` below are spread in
+   * *after* this, not before: schema.ts
    * already rejects a `browserContext` that sets either key, so the two
    * never actually collide, but keeping nukadoko's own values last is a
    * cheap second line of defense against that invariant ever slipping. */
@@ -153,17 +152,15 @@ export interface LaunchBrowserOptions {
    * context.ts's `beginStep` redirects it at each step boundary, and
    * page-http-log.ts's subscription (below) must always read whichever
    * directory is *current* when a response actually arrives, not the one
-   * that was current when the browser was first launched (p3b-page-network
-   * task spec). */
+   * that was current when the browser was first launched. */
   logPath: () => string;
   /** Values page-issued http.jsonl entries must redact — the same
    * `SecretSet` http-log.ts's own `ctx.request()` wrapper already
    * receives. */
   secrets: SecretSet;
   /** Tallies every page-issued request left out of http.jsonl — an
-   * image/stylesheet/script/etc, by `request.resourceType()` (p3b-page-
-   * network task spec, scope item 2; this file's own header, and
-   * http-omitted.ts's). */
+   * image/stylesheet/script/etc, by `request.resourceType()` (this file's
+   * own header, and http-omitted.ts's). */
   httpOmitted: HttpOmittedCollector;
   /** `config.baseURL`, wired into the browser context so `page.goto("/path")`
    * resolves against it (docs/spec.md "Context API"). Omitted from
@@ -175,9 +172,9 @@ export interface LaunchBrowserOptions {
 
 export interface BrowserEvidenceHandle {
   readonly page: Page;
-  /** The engine and version this handle actually launched (p6-browser-type
-   * task spec) — read once, from the real `Browser` object, right after
-   * `launch` resolved (this file's own header). create-context.ts's
+  /** The engine and version this handle actually launched — read once,
+   * from the real `Browser` object, right after `launch` resolved (this
+   * file's own header). create-context.ts's
    * `dispose()` hands this straight to `ScenarioRecord.browser` when this
    * handle exists at all; it is never derived from `options.browserType`,
    * which only says what was *asked* for. */
@@ -218,9 +215,9 @@ export interface BrowserEvidenceHandle {
    * to await it, unlike `ctx.request()`'s own entries. Executor-only,
    * called from create-context.ts's `closeCurrentChunk` at the same step
    * boundary that already closes this step's own trace chunk, *before*
-   * anything downstream reads http.jsonl for that boundary (p3b-page-
-   * network task spec). A no-op cost, not merely a no-op call, when nothing
-   * is in flight: `Promise.all([])` resolves immediately. */
+   * anything downstream reads http.jsonl for that boundary. A no-op cost,
+   * not merely a no-op call, when nothing is in flight: `Promise.all([])`
+   * resolves immediately. */
   flushPageHttpLog(): Promise<void>;
   /** Captures the final screenshot and closes the context and browser.
    * Returns the screenshot(s) actually written — at most one, `final.png`
@@ -279,7 +276,7 @@ export async function launchBrowserWithTracing(
   });
   // A second, separate subscription (this file's own header) — appends
   // page-issued document/xhr/fetch traffic to http.jsonl itself, and tallies
-  // everything else into `httpOmitted` instead (p3b-page-network task spec).
+  // everything else into `httpOmitted` instead.
   const pageHttpLog = subscribePageHttpLogging(
     context,
     options.logPath,

@@ -9,26 +9,25 @@ import type { ObservedCollector } from "./observed.js";
 // http.jsonl — one JSON object per line, method/url/status/duration_ms/via
 // only (never request/response bodies: docs/spec.md "Receipts" says
 // evidence is collected by the harness, not asserted by the step). `url` is
-// the one field that can carry a secret (e.g. a token in a query string, per
-// the step in this task's spec's integration test): it is redacted at the
-// same point the line is built, before it ever reaches disk — one of the
-// three exits docs/spec.md "Secrets" requires redaction at, alongside
-// receipt.json and `do`'s stdout copy (both handled by cli/do.ts).
+// the one field that can carry a secret (e.g. a token in a query string): it
+// is redacted at the same point the line is built, before it ever reaches
+// disk — one of the three exits docs/spec.md "Secrets" requires redaction
+// at, alongside receipt.json and `do`'s stdout copy (both handled by
+// cli/do.ts).
 //
-// `via` is added now (p3b-page-network task spec, scope item 1): a page's
-// own document/xhr/fetch traffic now lands on the same http.jsonl, appended
-// by page-http-log.ts rather than this module, and `via` is what tells the
-// two apart — `"request"` for every entry this module builds, `"page"` for
-// page-http-log.ts's own. `appendHttpLogEntry` below is exported for that
-// module to call: one redact-and-append call site for both paths, so
-// neither can drift into redacting differently than the other (that task's
-// spec, scope item 3: "新しい redaction 経路を作らない").
+// `via` is added now: a page's own document/xhr/fetch traffic now lands on
+// the same http.jsonl, appended by page-http-log.ts rather than this
+// module, and `via` is what tells the two apart — `"request"` for every
+// entry this module builds, `"page"` for page-http-log.ts's own.
+// `appendHttpLogEntry` below is exported for that module to call: one
+// redact-and-append call site for both paths, so neither can drift into
+// redacting differently than the other.
 //
 // Every call is also tallied into `observed` (an `ObservedCollector` this
 // module never creates, only writes to — create-context.ts owns and resets
-// it, this task's spec's m2pre-observed spec, scope item 1): GET/HEAD counts
-// as a read, anything else as a write, the same measured-not-declared fact
-// docs/spec.md "Keyword semantics" and "Receipts" (`observed`) describe.
+// it): GET/HEAD counts as a read, anything else as a write, the same
+// measured-not-declared fact docs/spec.md "Keyword semantics" and
+// "Receipts" (`observed`) describe.
 //
 // A manual per-method wrapper, not a Proxy: Playwright's client classes are
 // plain JS objects/prototypes as far as this package can see, but a Proxy
@@ -42,16 +41,15 @@ import type { ObservedCollector } from "./observed.js";
 // lands without recreating the wrapped context itself: a pickle's steps
 // share one ctx (and therefore one memoized request context, cookies
 // intact), but each step's http.jsonl must land in that step's own receipt
-// dir (this task's spec, decision 5) — the executor advances the getter's
-// target at each step boundary; this module just reads it at call time.
+// dir — the executor advances the getter's target at each step boundary;
+// this module just reads it at call time.
 
 /** One http.jsonl line (docs/spec.md "Receipts"). `via` names which path
- * produced it (p3b-page-network task spec, scope item 1) — `"request"` for
- * a call made through `ctx.request()`, `"page"` for one the page itself
+ * produced it — `"request"` for a call made through `ctx.request()`,
+ * `"page"` for one the page itself
  * made (page-http-log.ts). Always present, on every entry either path
  * builds: a field only one of the two ever set would leave a reader
- * guessing "absent means page" instead of reading it, the mistake that
- * task's spec explicitly rules out. */
+ * guessing "absent means page" instead of reading it. */
 export interface HttpLogEntry {
   method: string;
   url: string;

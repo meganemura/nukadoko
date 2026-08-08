@@ -6,8 +6,8 @@
 
 /** Thrown by `ctx.requireEnv(name)` (docs/spec.md "Context API") when `name`
  * has no value in `ctx.env`, or its value is the empty string. Empty string
- * is treated the same as "not set", not merely `undefined` (t2-require-env
- * task spec, decision 1): an envFile line like `KEY=` (no value after `=`)
+ * is treated the same as "not set", not merely `undefined`: an envFile
+ * line like `KEY=` (no value after `=`)
  * parses to `""`, not "key omitted" (context/env.ts's `parseEnvFile`), and a
  * step that got `""` back from a key it declared required is exactly as
  * broken as one that got `undefined` — silently proceeding with an empty
@@ -15,8 +15,8 @@
  *
  * The message names the key only, never a value: there is no value to show
  * for a missing key, and keeping the shape value-free means this error can
- * never become a future redaction gap (t2-require-env task spec, decision
- * 3). It also cannot name which envFile to edit — `ctx` itself has no
+ * never become a future redaction gap. It also cannot name which envFile to
+ * edit — `ctx` itself has no
  * visibility into `config.envFiles` (create-context.ts never receives the
  * list, only the already-merged result) — so the message points at
  * `nukadoko.config.ts`'s `envFiles` setting in general rather than guessing
@@ -34,8 +34,8 @@ export class MissingEnvError extends Error {
 }
 
 /** Thrown by `ctx.resultOf(step)` (docs/spec.md "Context API"/"Chaining
- * steps") when `step` is a `Step` object discovery never registered — m6a-
- * from-core task spec, item 6. Unlike `from` (whose own unregistered-Step
+ * steps") when `step` is a `Step` object discovery never registered.
+ * Unlike `from` (whose own unregistered-Step
  * mistake is caught statically, before any step runs — src/step/
  * validate-from.ts), `resultOf` names its upstream only at the call site
  * inside `run()`, so this is the one place that mistake can be caught at
@@ -71,9 +71,8 @@ export class UnregisteredStepError extends Error {
 /** Thrown by `ctx.evidence.attach(name, body)`/`ctx.evidence.path(name)`
  * (docs/spec.md "Context API") when `name` could resolve outside this
  * execution's own evidence directory — a path separator (`/` or `\`), the
- * bare segments `"."`/`".."`, or the empty string. P9 task spec's own
- * decision: refused, never sanitized ("サニタイズするか refuse するか決め、
- * docs に書くこと... 黙って書き換えない") — a name silently rewritten to
+ * bare segments `"."`/`".."`, or the empty string. Refused, never
+ * sanitized — a name silently rewritten to
  * something else would leave a step trusting a file it never actually
  * asked for, and a step naming a path it should not have named is exactly
  * the kind of mistake CLAUDE.md's "nothing breaks silently" asks to fail

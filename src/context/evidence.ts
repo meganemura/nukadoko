@@ -4,7 +4,7 @@ import path from "node:path";
 import type { EvidenceAttachmentEntry } from "../receipt/types.js";
 import { InvalidEvidenceNameError } from "./errors.js";
 
-// Responsibility: `ctx.evidence`'s own `attach`/`path` (P9 task spec) — the
+// Responsibility: `ctx.evidence`'s own `attach`/`path` — the
 // step-facing counterpart to Playwright's `testInfo.attach()`/
 // `outputPath()`, shaped to nukadoko's own trust model rather than copying
 // theirs. The evidence *directory* stays executor-only knowledge (docs/
@@ -25,7 +25,7 @@ import { InvalidEvidenceNameError } from "./errors.js";
 // decides what's on the receipt" rule `evidence.http`/`evidence.trace`
 // already follow (create-context.ts's own `dispose`).
 //
-// Collision-free naming (P9 task spec, scope item 3): one registry backs
+// Collision-free naming: one registry backs
 // both `attach` and `path`, so calling either twice with the same `name` —
 // in any order — never reuses a file name; the first use keeps `name`
 // as-is, every later use of the same base name gets `-2`, `-3`, ... inserted
@@ -170,8 +170,7 @@ export function createEvidenceCollector(dirOf: () => string): EvidenceCollector 
  * own `{ actions }` truncation record into the receipt's single top-level
  * `truncated` sibling field (`ReceiptBase.truncated`, src/receipt/types.ts)
  * — the same object `actions` alone used to be the only member of, now also
- * carrying `evidence` when this collector's own cap was hit too (P9 task
- * spec, scope item 3: "既存の 100 件 + 兄弟 truncated と同じ規約に揃える").
+ * carrying `evidence` when this collector's own cap was hit too.
  * `undefined` when neither happened, so a caller spreads this in with the
  * same `...(truncated !== undefined ? { truncated } : {})` pattern every
  * other optional receipt field already uses (cli/do.ts, run/run-scenario.ts)

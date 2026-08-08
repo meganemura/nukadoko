@@ -1,7 +1,7 @@
 import type { StepFixtures } from "../context.js";
 
-// Responsibility: the *types* a user-defined fixture is shaped by (P5 task
-// spec, scope items 1-2) — no execution logic here (src/fixture/lifecycle.ts
+// Responsibility: the *types* a user-defined fixture is shaped by — no
+// execution logic here (src/fixture/lifecycle.ts
 // owns the setup/teardown coroutine, src/fixture/graph.ts owns dependency/
 // scope analysis, src/fixture/resolver.ts owns caching + the per-step entry
 // point) and no config parsing (src/config/schema.ts imports
@@ -40,10 +40,10 @@ import type { StepFixtures } from "../context.js";
 // than that other fixture's own declared value type. Losing that one
 // cross-reference is what buys "every legitimate `defineFixtures({...})`
 // compiles under `strict`, with no implicit `any`" — the actual, narrower
-// promise this task's spec makes ("素の `export const fixtures = {...}` で
-// は型が壊れる" is the failure this exists to fix, not full Playwright-style
-// fixture-to-fixture type inference, which this package's own "前提" already
-// says Playwright's runtime cannot be borrowed to get for free).
+// promise this design makes: fixing the way a bare `export const fixtures =
+// {...}` loses its own types (define-fixtures.ts's own header) is the goal,
+// not full Playwright-style fixture-to-fixture type inference, which this
+// file's own header already explains this package cannot get for free.
 
 /** Passed to whatever `use()`'s own promise resolves with, once the step
  * (or, for `scope: "process"`, the process itself) that named this fixture
@@ -60,14 +60,13 @@ export type FixtureOutcome = "passed" | "failed";
  * the fixture function until that step (or, for `scope: "process"`, the
  * process itself) has finished — the same await-a-continuation shape Playwright's
  * own fixtures use, reimplemented here (src/fixture/lifecycle.ts) since
- * Playwright's own fixture runtime cannot be borrowed (this task's spec,
- * "前提": `Symbol(testType)` is not `Symbol.for`, and `lib/worker/*` is
+ * Playwright's own fixture runtime cannot be borrowed (`Symbol(testType)`
+ * is not `Symbol.for`, and `lib/worker/*` is
  * blocked by `exports`). Resolves to the outcome once the caller decides
  * teardown may proceed — never before, and never left unresolved: a
  * `use()` call that never resolves would leave a fixture's own `await
  * use(...)` line hanging forever, which is exactly the class of bug src/
- * fixture/lifecycle.ts's own timeout turns into a named failure instead
- * (this task's spec, item 7).
+ * fixture/lifecycle.ts's own timeout turns into a named failure instead.
  *
  * Generic per call (`<V>`), not tied to any outer map of fixture names to
  * value types — see this file's own header for why. */
@@ -94,15 +93,14 @@ export type FixtureFn = (deps: FixtureDeps, use: UseFn) => Promise<void> | void;
  * once — the first time any step in the whole `nuka run` invocation names
  * it (or its own dependents do) — and tears down once, after every
  * scenario has finished. Under `nuka do` the two collapse to the same
- * single-execution lifetime (this task's spec, scope item 3).
+ * single-execution lifetime.
  *
  * `"worker"` is deliberately not a member: there is no parallel execution
  * yet, so it would be a synonym for `"process"` with none of the meaning a
- * name should only be spent on once that distinction actually exists (same
- * spec section: "無い物の名前を先に取ると意味が固まる前に固まる").
+ * name should only be spent on once that distinction actually exists.
  *
- * `"process"` names one address space, not one `nuka run` invocation
- * (p8-scope-rename task spec): a fixture's own value is a plain JS object
+ * `"process"` names one address space, not one `nuka run` invocation:
+ * a fixture's own value is a plain JS object
  * and cannot cross into another process, so this scope can only ever mean
  * "once per process" no matter how many times anything is invoked against
  * it. Today one `nuka run` invocation is one process, so the two happen to
@@ -124,8 +122,8 @@ export interface FixtureOptions {
 
 /** The shape a `nukadoko.config.ts`'s `fixtures.<name>` entry takes —
  * deliberately the same shape (a bare function, or a `[function, options]`
- * tuple) Playwright's own fixture definitions take (this task's spec,
- * scope item 1), so a config author who also shares a fixture with
+ * tuple) Playwright's own fixture definitions take, so a config author who
+ * also shares a fixture with
  * `base.extend()` — only when its own dependencies stay inside `page`/
  * `context`/`request`/`baseURL`, docs/spec.md's own fixtures section
  * explains the boundary — can pass the identical object literal to both,

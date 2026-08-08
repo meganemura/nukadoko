@@ -6,12 +6,11 @@
 // executor-owned, never reachable from a step's own `run`): browser-
 // evidence.ts subscribes this collector to `BrowserContext`'s `console`/
 // `weberror`/`requestfailed` events once, at context creation, the same
-// place it already subscribes `observed` to `request` (P0-page-events task
-// spec, "前提"); create-context.ts resets it at each `beginStep` boundary
+// place it already subscribes `observed` to `request`; create-context.ts
+// resets it at each `beginStep` boundary
 // the same way it resets `observed`/`sections`/`polls`.
 //
-// Subscribed on `BrowserContext`, not `Page` (P0-page-events task spec,
-// "前提"): overriding a builtin fixture is legitimate in this design (a
+// Subscribed on `BrowserContext`, not `Page`: overriding a builtin fixture is legitimate in this design (a
 // config author is free to wrap the `page` this module hands back later,
 // e.g. to set a default timeout), and a context-level subscription keeps
 // recording through that wrap, where a page-level one would silently stop
@@ -30,13 +29,13 @@
 // supplied by a caller — the same measured-not-declared rule every other
 // evidence-collecting piece of `ctx` already follows (sections.ts, polls.ts).
 //
-// Capped at 100 entries per category (P0-page-events task spec, item 3): a
+// Capped at 100 entries per category: a
 // redirect loop or a chatty page can emit thousands of these in one step,
 // and a receipt that tried to hold all of them would stop being something a
 // reader (or an agent) can open. Silently dropping the rest would violate
 // "nothing breaks silently" (CLAUDE.md), so a truncated category's true
-// count is still reported, but never by changing that category's own type
-// (fix-union task spec): an earlier version reported it by turning the
+// count is still reported, but never by changing that category's own type:
+// an earlier version reported it by turning the
 // category from a bare array into `{ entries, total, truncated: true }`
 // once the cap was hit, which meant a receipt's own type for
 // `console_errors`/`page_errors`/`failed_requests` depended on how many
@@ -65,8 +64,8 @@
 
 const MAX_ENTRIES_PER_CATEGORY = 100;
 
-/** One `console.error` call, error type only (P0-page-events task spec, item
- * 1: warning is excluded as noise). */
+/** One `console.error` call, error type only (warning is excluded as
+ * noise). */
 export interface ConsoleErrorEntry {
   readonly text: string;
   readonly location: {
@@ -102,8 +101,8 @@ export interface FailedRequestEntry {
 /** Which of `page_events`'s three categories were truncated, each mapped to
  * its *true* total (how many were actually recorded), never to the number
  * of entries the receipt shows (always <= `MAX_ENTRIES_PER_CATEGORY`).
- * Present on the snapshot only when at least one category was truncated
- * (fix-union task spec) — a category that was not is simply absent here,
+ * Present on the snapshot only when at least one category was truncated —
+ * a category that was not is simply absent here,
  * never present with its own entry count or `false`. */
 export interface PageEventsTruncated {
   console_errors?: number;
@@ -115,7 +114,7 @@ export interface PageEventsTruncated {
  * category is always a bare array (never the truncated entry count, and
  * never conditionally shaped some other way; see this file's own header),
  * present only when at least one entry of that kind was recorded. `truncated`
- * is the one place a cap being hit is reported (fix-union task spec, item 1).
+ * is the one place a cap being hit is reported.
  * The whole field is omitted from the receipt when all three categories are
  * empty (same convention as `declared`/`sections`/`used`). */
 export interface PageEventsSnapshot {
@@ -164,7 +163,7 @@ function record<T>(tally: CategoryTally<T>, entry: T): void {
 
 // Always a bare array, capped at `MAX_ENTRIES_PER_CATEGORY` by `record()`
 // itself; a category's own type never changes with how many entries came in
-// (this file's own header, fix-union task spec). Whether it was truncated is
+// (this file's own header). Whether it was truncated is
 // reported separately, in `snapshot()` below, from `tally.total`.
 function snapshotCategory<T>(tally: CategoryTally<T>): T[] | undefined {
   if (tally.total === 0) {
@@ -201,8 +200,8 @@ export function createPageEventsCollector(): PageEventsCollector {
       }
       // `truncated` names only the categories that actually hit the cap,
       // each mapped to its true total, never the (always <= 100) entry
-      // count already visible on the category's own array (fix-union task
-      // spec, item 1). Present on the snapshot only when non-empty, the
+      // count already visible on the category's own array. Present on the
+      // snapshot only when non-empty, the
       // same "whole thing omitted, not merely empty" convention every other
       // optional field on this snapshot already follows.
       const truncated: PageEventsTruncated = {

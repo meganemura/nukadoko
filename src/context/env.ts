@@ -14,8 +14,7 @@ import path from "node:path";
 // `parseEnvFile` is exported so src/secrets/build-secret-set.ts can reuse the
 // exact same KEY=VALUE parsing when it merges only the secret-source subset
 // of envFiles into a SecretSet, without either module re-implementing the
-// format or this module taking on any secrets-specific knowledge itself
-// (m1-secrets task spec, decision 2).
+// format or this module taking on any secrets-specific knowledge itself.
 
 export function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};

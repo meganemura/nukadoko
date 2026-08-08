@@ -22,13 +22,12 @@ import { createSectionsCollector } from "./sections.js";
 import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution builds
-// a typed step's fixture bag from (`buildStepFixtures`, p4a-fixture-bag task
-// spec, below) — env, baseURL (also wired into the browser
+// a typed step's fixture bag from (`buildStepFixtures`, below) — env,
+// baseURL (also wired into the browser
 // context so `page.goto("/path")` resolves against it), lazy browser, lazy
 // logged HTTP context — plus a `dispose` the executor calls *after* `run`
 // returns, never itself reachable from `ctx`. `ctx.section` and `ctx.poll`
-// are both assembled here for the same reason (t3-sections task spec,
-// decision 4; ctx-poll-receipt task spec): each only writes into a
+// are both assembled here for the same reason: each only writes into a
 // collector below (`sections`, `polls` — same shape as `observed`/`used`),
 // so the read side (`sectionsSnapshot()`/`pollsSnapshot()`) and the reset
 // (`beginStep`) stay executor-only, the same trust-model rule as everything
@@ -46,13 +45,13 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // The same split applies to sessions: this module restores a loaded
 // storageState into whichever context(s) a step opens and hands back
 // whichever one *should* be persisted, but never writes it to disk itself —
-// that stays the executor's job too (this task's spec, item 2).
+// that stays the executor's job too.
 //
 // `nuka run` shares one `ctx` across every step of a pickle (docs/spec.md
 // "Running": "Steps in one pickle share one context"), but each step's
 // http.jsonl still belongs to that step's own receipt dir, while a browser's
-// trace/screenshots belong to the scenario as a whole (m1-run task spec,
-// decision 5). `beginStep` on the handle (never on `ctx` itself — sink
+// trace/screenshots belong to the scenario as a whole. `beginStep` on the
+// handle (never on `ctx` itself — sink
 // switching stays executor-only, same rule as `dispose`) is the minimal seam
 // that split needs: `evidenceDir` still anchors the browser's trace/
 // screenshots for this ctx's whole lifetime, while the http log's directory
@@ -61,8 +60,8 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // dir for both, one observed tally spanning the whole execution — is
 // unchanged.
 //
-// `beginStep` also resets the `observed` tally (m2pre-observed task spec,
-// decision 2): the http.jsonl sink and the observed collector share one
+// `beginStep` also resets the `observed` tally: the http.jsonl sink and the
+// observed collector share one
 // step-boundary concept, so one call advances both rather than risking a
 // caller that redirects the log dir but forgets to reset the tally (or vice
 // versa). The collector itself is created once, here, and handed to both
@@ -71,22 +70,20 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // (same trust-model rule as `dispose`/`beginStep`: a step cannot see or
 // reset its own observation).
 //
-// `beginStep` resets `sections` the same way (t3-sections task spec,
-// decision 4): `nuka run` shares one `ctx`, hence one `sections` collector,
+// `beginStep` resets `sections` the same way: `nuka run` shares one `ctx`, hence one `sections` collector,
 // across every step of a pickle, so without this reset a later step's
 // receipt would start out already carrying whichever labels an earlier
 // step called `ctx.section` with — the same bleed-across-steps bug this
 // reset already prevents for `observed`/`used`.
 //
-// `beginStep` resets `polls` the same way (ctx-poll-receipt task spec): one
+// `beginStep` resets `polls` the same way: one
 // `ctx.poll` collector per `ctx`, shared across every step of a pickle just
 // like `sections`, so without this reset a later step's receipt would start
 // out already carrying whichever polls an earlier step made — the same
 // bleed-across-steps bug this reset already prevents for
 // `observed`/`used`/`sections`.
 //
-// `beginStep` resets `pageEvents` the same way again (P0-page-events task
-// spec): one collector per `ctx`, created once here and handed to
+// `beginStep` resets `pageEvents` the same way again: one collector per `ctx`, created once here and handed to
 // browser-evidence.ts's launch the same way `observed` is, so a later
 // step's receipt does not inherit console/uncaught/failed-request evidence
 // an earlier step's page already produced. The context's own `console`/
@@ -95,8 +92,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // calls `beginStep` at all, so its single collector simply accumulates for
 // the execution's whole lifetime, the same as `observed`'s.
 //
-// `beginStep` resets `httpOmitted` the same way again (p3b-page-network
-// task spec, scope item 2): one collector per `ctx`, created once here and
+// `beginStep` resets `httpOmitted` the same way again: one collector per `ctx`, created once here and
 // handed to browser-evidence.ts's launch the same way `observed`/
 // `pageEvents` already are, so a later step's receipt does not inherit an
 // earlier step's own dropped-asset counts. `ctx.page()`'s own launch call
@@ -106,8 +102,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // the very same http.jsonl `ctx.request()` writes to, redacted the same
 // single way, rather than a second file or a second redaction pass.
 //
-// `env` arrives already loaded and merged (m1-secrets task spec, decision
-// 2): the executor is the one place that knows the full envFiles list *and*
+// `env` arrives already loaded and merged: the executor is the one place that knows the full envFiles list *and*
 // which of them are secret sources, so it loads env and builds the run's
 // SecretSet itself, once, and hands both down — this module never reads an
 // envFile and never decides what is secret. `secrets` only ever reaches
@@ -115,20 +110,20 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // docs/spec.md "Secrets": redaction is applied by the executor, never
 // controllable from a step's `run`.
 //
-// `resultOf` (m2pre-resultof task spec, decisions 1-2): the *lookup* — "does
+// `resultOf`: the *lookup* — "does
 // this Step object have a most-recent successful result, and under which
 // receipt id" — is the executor's own knowledge (run-scenario.ts's chain, or
 // `nuka do`'s always-`undefined` reader), passed in here as `options.resultOf`
 // and never computed by this module. What this module owns is the *wrapper*:
 // `ctx.resultOf` calls that lookup and, only when it actually returns a
-// value, records the receipt id (and the step name that receipt records —
-// m6a-from-core task spec, item 5) on the `used` collector below — the same
+// value, records the receipt id (and the step name that receipt records) on
+// the `used` collector below — the same
 // "step cannot see or reset its own observation" trust rule as `observed`,
 // applied to provenance instead of network calls. `usedSnapshot()` (the
 // handle's read side) and `beginStep`'s reset mirror `observedCounts()`/its
 // own reset exactly, for the same reason: one step boundary, two tallies.
 //
-// `isRegisteredStep` (m6a-from-core task spec, item 6): before even
+// `isRegisteredStep`: before even
 // attempting the lookup above, `ctx.resultOf` now checks that `step` is one
 // discovery actually registered — the executor's own knowledge again (built
 // from whichever vocabulary it already has: run-scenario.ts's per-pickle
@@ -151,17 +146,19 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // down to one deduplicated list rather than two.
 //
 // `requireEnv` records the name it was given on the `envReads` collector
-// below *before* throwing `MissingEnvError` (env-reads-and-mutates-doc task
-// spec, item A) — a step whose execution failed for a missing key still
+// below *before* throwing `MissingEnvError` — a step whose execution failed
+// for a missing key still
 // gets a receipt showing what it asked for, which matters most exactly
 // when a step fails this way. Only `requireEnv` writes to this collector:
 // a step that reads `ctx.env[name]` directly never passes through any call
-// this module owns, so that read leaves no trace here, on purpose (same
-// spec, scope: no `ctx.env` Proxy). Same lifetime and reset rule as
+// this module owns, so that read leaves no trace here, on purpose —
+// wrapping `ctx.env` itself in a Proxy to catch direct reads too would make
+// the fixture heavier for what it would gain, diluting the measurement's
+// meaning from "this was required" to merely "this was touched". Same
+// lifetime and reset rule as
 // `used`/`sections` — one collector per ctx, zeroed by `beginStep`.
 //
-// `beginStep` now also carries a chunk title, and `endStep` is new (p3a-
-// trace-per-step task spec): the Playwright trace used to be one recording
+// `beginStep` now also carries a chunk title, and `endStep` is new: the Playwright trace used to be one recording
 // for this whole ctx's lifetime; it is now one chunk per *trace-recorded
 // boundary*, opened lazily on that boundary's own first `ctx.page()` call
 // and closed right after that boundary's own execution finishes — before
@@ -174,17 +171,18 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // or throws, before its own record is written), and `dispose` calls the
 // same `closeCurrentChunk` helper as a catch-all, which is the *only*
 // closing point `nuka do` ever reaches (it never calls `beginStep`/
-// `endStep` at all — one execution is one chunk, per this task's spec item
-// 4, titled from `CreateStepContextOptions.stepTitle` rather than from any
+// `endStep` at all — one execution is one chunk, titled from
+// `CreateStepContextOptions.stepTitle` rather than from any
 // `beginStep` call).
 //
 // A `beginStep` call with no `title` disables chunk-opening entirely until
 // the next titled call — the general escape hatch a caller with nothing
-// worth tracing can use. Before p3d-hook-trace, run-scenario.ts's own
-// Before/After/AfterStep boundaries always took that path: hooks were kept
-// out of p3a-trace-per-step's own scope on purpose, so `ctx.page()` during a
-// hook still worked, it just produced no trace chunk of its own. p3d-
-// hook-trace closes that gap — a hook boundary now gets a real `title` (and
+// worth tracing can use. run-scenario.ts's own
+// Before/After/AfterStep boundaries used to always take that path: hooks
+// were deliberately left out of per-step tracing at first, so `ctx.page()`
+// during a
+// hook still worked, it just produced no trace chunk of its own. That gap
+// is closed now — a hook boundary gets a real `title` (and
 // its own `chunkFileName`, below) for every individual Before/After/
 // AfterStep *invocation*, not once per phase, so each hook call that
 // actually touches the browser gets a trace/`actions` of its own, isolated
@@ -193,7 +191,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // step already follows (below) — `title`/`chunkFileName` being set is not
 // itself enough to open a chunk, only a first `ctx.page()` call is.
 //
-// `pendingChunkFileName` (p3d-hook-trace task spec) is the second half of
+// `pendingChunkFileName` is the second half of
 // that same per-boundary state, alongside `pendingChunkTitle` — needed
 // because a step's own chunk always writes to `"trace.zip"` inside that
 // step's own receipt dir (a directory no other chunk ever shares), while
@@ -208,11 +206,9 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // A step (or hook boundary) that never calls `ctx.page()` never opens a
 // chunk at all — `chunkOpen` stays `false` end to end — so `endStep` has
 // nothing to close and that boundary's own `trace` field is correctly
-// absent (this task's spec: "ブラウザに触れない step には chunk が無い",
-// extended by p3d-hook-trace to "ブラウザに触れない hook には chunk を作ら
-// ない").
+// absent, the same rule for a hook invocation as for a step.
 //
-// `buildStepFixtures` (below, p4a-fixture-bag task spec) is this module's
+// `buildStepFixtures` (below) is this module's
 // second export now, alongside `createStepContext` — a typed step no longer
 // receives the `StepContext` this file still builds; it receives a
 // `StepFixtures` bag resolved from exactly the names its own `run` function
@@ -248,11 +244,11 @@ export interface DisposeResult {
    * because neither `ctx.page()` nor `ctx.request()` was ever called this
    * run, or because collecting it failed (see browser-evidence.ts's
    * `collectStorageState`). `undefined` must not be read as "clear the
-   * session": the executor's own contract (this task's spec, item 2) is to
+   * session": the executor's own contract is to
    * leave an existing session file untouched when this is `undefined`. */
   storageState: StorageState | undefined;
-  /** The engine and version this execution actually launched (p6-browser-
-   * type task spec), lifted straight from `browserHandle.browserInfo`
+  /** The engine and version this execution actually launched, lifted
+   * straight from `browserHandle.browserInfo`
    * (browser-evidence.ts) — measured, never `config.browserType` itself.
    * `undefined` whenever `ctx.page()` was never called this ctx's lifetime,
    * the same "no browser, no field" convention `evidence.trace` already
@@ -267,7 +263,7 @@ export interface StepContextHandle {
    * reports which evidence files it actually produced (docs/spec.md
    * "Receipts": only files that exist), and hands back the storageState (if
    * any) the executor should persist for this run's session. Takes no
-   * `status` (fb4-evidence-time task spec, item 1): its only past use was
+   * `status`: its only past use was
    * passing it on to `browserHandle.finalize`, which no longer takes one
    * either — see browser-evidence.ts's own header for why keeping an unused
    * `status` parameter here would itself be a misleading residue, implying
@@ -276,58 +272,54 @@ export interface StepContextHandle {
   /** Executor-only: the network calls tallied since the current step
    * boundary began (this execution's whole lifetime for `nuka do`, since
    * `nuka run` since the last `beginStep`) — GET/HEAD as reads, anything
-   * else as writes, through `ctx.request()` and the page alike (m2pre-
-   * observed task spec, decisions 1-2). Never exposed on `ctx`. */
+   * else as writes, through `ctx.request()` and the page alike. Never exposed on `ctx`. */
   observedCounts(): ObservedCounts;
   /** Executor-only: every receipt this execution actually read a value from
    * since the current step boundary began — through `ctx.resultOf` or a
-   * `from` injection alike (m2pre-resultof task spec, decision 2; m6a-from-
-   * core task spec, item 5) — deduplicated by receipt id, in read order.
+   * `from` injection alike — deduplicated by receipt id, in read order.
    * Never exposed on `ctx` — same rule as `observedCounts()`. */
   usedSnapshot(): UsedEntryWithResult[];
   /** Executor-only: records one provenance read the same `used` collector
    * `ctx.resultOf`'s own wrapper writes into, for a read that happens
-   * *outside* `ctx.resultOf` entirely — a `from` injection (m6a-from-core
-   * task spec, items 4-5), which fills an args key before the step's `run()`
+   * *outside* `ctx.resultOf` entirely — a `from` injection, which fills an
+   * args key before the step's `run()`
    * is ever called, so there is no `ctx.resultOf` call for it to ride along
    * with. Never exposed on `ctx`; only the executor (run-scenario.ts) calls
    * this, immediately after actually reading the value it names. `result`
-   * (fb3-used-result task spec) is the upstream's own full validated result
+   * is the upstream's own full validated result
    * — carried the same way `ctx.resultOf`'s own wrapper below already does. */
   recordUsed(receiptId: string, stepName: string, result: unknown): void;
   /** Executor-only: the `ctx.section` calls made since the current step
-   * boundary began, in call order (t3-sections task spec, decisions 1-2;
-   * `at` added by fb4-evidence-time task spec, item 3). Never exposed on
+   * boundary began, in call order, each entry carrying `at`. Never exposed on
    * `ctx` — same rule as `observedCounts()`/`usedSnapshot()`. */
   sectionsSnapshot(): SectionEntry[];
   /** Executor-only: every `ctx.poll` call that finished since the current
-   * step boundary began, in completion order (ctx-poll-receipt task spec).
+   * step boundary began, in completion order.
    * Never exposed on `ctx` — same rule as `observedCounts()`/
    * `sectionsSnapshot()`. */
   pollsSnapshot(): PollRecord[];
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
-   * even for a call that went on to throw `MissingEnvError` (env-reads-and-
-   * mutates-doc task spec, item A). Never exposed on `ctx` — same rule as
+   * even for a call that went on to throw `MissingEnvError`. Never exposed on `ctx` — same rule as
    * `observedCounts()`/`usedSnapshot()`/`sectionsSnapshot()`. */
   envReadsSnapshot(): string[];
   /** Executor-only: console errors, uncaught page errors, and failed
-   * requests the browser context saw since the current step boundary began
-   * (P0-page-events task spec), or `undefined` when none of the three
+   * requests the browser context saw since the current step boundary began,
+   * or `undefined` when none of the three
    * happened at all — whether because `ctx.page()` was never called this
    * step, or because it was and the page simply stayed clean. Never exposed
    * on `ctx` — same rule as `observedCounts()`/`sectionsSnapshot()`/
    * `pollsSnapshot()`. */
   pageEventsSnapshot(): PageEventsSnapshot | undefined;
   /** Executor-only: how many page-issued requests since the current step
-   * boundary began were left out of http.jsonl, by resourceType (p3b-page-
-   * network task spec, scope item 2), or `undefined` when nothing was ever
+   * boundary began were left out of http.jsonl, by resourceType, or
+   * `undefined` when nothing was ever
    * left out this step — whether because `ctx.page()` was never called, or
    * because every request it made was a document/xhr/fetch and none were
    * dropped. Never exposed on `ctx` — same rule as
    * `observedCounts()`/`pageEventsSnapshot()`. */
   httpOmittedSnapshot(): HttpOmittedCounts | undefined;
-  /** Executor-only (P9 task spec): every `ctx.evidence.attach`/`.path`
+  /** Executor-only: every `ctx.evidence.attach`/`.path`
    * result confirmed to exist since the current step boundary began — see
    * src/context/evidence.ts's own `EvidenceCollector.snapshot` doc comment.
    * `async`, unlike every other snapshot on this handle, because confirming
@@ -343,16 +335,13 @@ export interface StepContextHandle {
    * running it, so a pickle's shared ctx still logs and tallies each step's
    * own network calls, provenance reads, section labels, finished polls,
    * required env names, and page-origin evidence under that step's own
-   * receipt dir (m1-run task spec, decision 5; m2pre-observed task spec,
-   * decision 2; t3-sections task spec, decision 4; ctx-poll-receipt task
-   * spec; env-reads-and-mutates-doc task spec, item A; P0-page-events task
-   * spec). Also closes whatever trace chunk the *previous* boundary had open
-   * (this file's own header, p3a-trace-per-step task spec) and, when `title`
+   * receipt dir. Also closes whatever trace chunk the *previous* boundary
+   * had open (this file's own header) and, when `title`
    * is given, remembers it (and `chunkFileName`) as the new boundary's own
    * chunk title/output file for the next `ctx.page()` call to open lazily.
    * `title` is `undefined` for a boundary with nothing worth tracing, which
    * disables chunk-opening for that boundary entirely — see this file's own
-   * header. Since p3d-hook-trace, run-scenario.ts's own Before/After/
+   * header. run-scenario.ts's own Before/After/
    * AfterStep boundaries pass a real `title` (and `chunkFileName`) for every
    * individual hook invocation, the same as a step already does; only a
    * caller that genuinely wants no chunk at all leaves `title` unset now.
@@ -362,8 +351,8 @@ export interface StepContextHandle {
    * evidence dir. Never exposed on `ctx` — same executor-only rule as
    * `dispose`. */
   beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void>;
-  /** Executor-only (p3a-trace-per-step task spec, extended by p3d-hook-trace
-   * to hook boundaries too): closes the current boundary's own trace chunk,
+  /** Executor-only (covering hook boundaries too): closes the current
+   * boundary's own trace chunk,
    * if one is open, writing it to the current boundary's own directory (the
    * `dir` its own `beginStep` call was given, joined with `chunkFileName`)
    * *before* that step's receipt (or that hook invocation's own record) is
@@ -385,7 +374,7 @@ export interface CreateStepContextOptions {
    * already exist. */
   evidenceDir: string;
   /** `ctx.env`'s value, already loaded and merged by the executor from every
-   * configured envFile (this task's spec, decision 2) — this module never
+   * configured envFile — this module never
    * reads an envFile itself, so a run's env files are parsed exactly once no
    * matter how many contexts get created from them. */
   env: Readonly<Record<string, string>>;
@@ -399,20 +388,20 @@ export interface CreateStepContextOptions {
    * `ctx.request()` the step actually opens — never both eagerly, since
    * neither is created until first use. */
   storageState?: StorageState;
-  /** Looks up `step`'s most recent successful result by object identity
-   * (m2pre-resultof task spec, decision 1) — the executor's own connection
+  /** Looks up `step`'s most recent successful result by object identity —
+   * the executor's own connection
    * to `ctx.resultOf`. Defaults to a reader that always returns `undefined`,
    * matching `nuka do`'s contract (docs/spec.md "Context API": "undefined
    * under `nuka do`") without every caller that doesn't care about chaining
    * having to say so. `nuka run`'s executor (run-scenario.ts) passes one
-   * backed by the current pickle's own chain instead. `stepName` (m6a-from-
-   * core task spec, item 5) is the step name that receipt itself records —
+   * backed by the current pickle's own chain instead. `stepName` is the
+   * step name that receipt itself records —
    * carried alongside `receiptId` so `used` can cite it without a second
    * lookup, per docs/spec.md "Receipts": each `used` entry is
    * `{ "receipt": ..., "step": ... }`. */
   resultOf?: (step: Step) => { result: unknown; receiptId: string; stepName: string } | undefined;
-  /** Whether `step` is one discovery actually registered (m6a-from-core task
-   * spec, item 6) — checked by `ctx.resultOf` before even attempting the
+  /** Whether `step` is one discovery actually registered — checked by
+   * `ctx.resultOf` before even attempting the
    * `resultOf` lookup above; a `Step` this rejects throws
    * `UnregisteredStepError` instead of the lookup running at all. Defaults to
    * "everything is registered" (`() => true`), matching this option's own
@@ -423,9 +412,9 @@ export interface CreateStepContextOptions {
    * discovered. */
   isRegisteredStep?: (step: Step) => boolean;
   /** This ctx's own trace chunk title, for a caller that never calls
-   * `beginStep` at all (p3a-trace-per-step task spec) — `nuka do`'s own
-   * "one execution is one chunk" shape (this task's spec, item 4: "`nuka
-   * do` では step 名"), where the step's name is known once, here, and
+   * `beginStep` at all — `nuka do`'s own
+   * "one execution is one chunk" shape, titled by the step's name, which is
+   * known once, here, and
    * never needs to change again. `undefined` when omitted: no chunk opens
    * until some `title` is set, whether from here or from a later
    * `beginStep(dir, title)` call. `nuka run`'s executor (run-scenario.ts)
@@ -449,15 +438,15 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // (below) is the only way this ever changes, and `do` never calls it, so
   // `do`'s http.jsonl stays exactly where it always has.
   let httpLogDir = evidenceDir;
-  // This boundary's own trace chunk title (p3a-trace-per-step task spec) —
+  // This boundary's own trace chunk title —
   // `undefined` means no chunk should open for this boundary at all (before
   // any `stepTitle`/`beginStep` has ever set one, or a boundary that
   // deliberately wants no chunk). `ctx.page()` reads this lazily, on its own
   // first call within a boundary; `beginStep` is the only thing that ever
   // changes it.
   let pendingChunkTitle: string | undefined = options.stepTitle;
-  // This boundary's own chunk output file name, relative to `httpLogDir`
-  // (p3d-hook-trace task spec) — always `"trace.zip"` until a hook boundary
+  // This boundary's own chunk output file name, relative to `httpLogDir` —
+  // always `"trace.zip"` until a hook boundary
   // (run-scenario.ts) names its own, since several hook invocations can
   // share one scenario evidence dir where a step's own chunk never shares
   // its receipt dir with anything else (this file's own header). Only
@@ -474,29 +463,26 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // opened before or after a reset still tallies into the same instance.
   const observed = createObservedCollector();
   // Same lifetime rule as `observed`, for provenance instead of network
-  // calls (m2pre-resultof task spec, decision 2).
+  // calls.
   const used = createUsedCollector();
-  // Same lifetime rule again, for `ctx.section`'s call log (t3-sections
-  // task spec, decision 4).
+  // Same lifetime rule again, for `ctx.section`'s call log.
   const sections = createSectionsCollector();
-  // Same lifetime rule again, for `ctx.poll`'s own finished-call log
-  // (ctx-poll-receipt task spec).
+  // Same lifetime rule again, for `ctx.poll`'s own finished-call log.
   const polls = createPollsCollector();
-  // Same lifetime rule again, for `ctx.requireEnv`'s name log (env-reads-
-  // and-mutates-doc task spec, item A).
+  // Same lifetime rule again, for `ctx.requireEnv`'s name log.
   const envReads = createEnvReadsCollector();
   // Same lifetime rule again, for console errors/uncaught page errors/
-  // failed requests the browser context saw (P0-page-events task spec) —
+  // failed requests the browser context saw —
   // created once, handed to browser-evidence.ts's launch below, and only
   // ever populated if `ctx.page()` is actually called this ctx's lifetime.
   const pageEvents = createPageEventsCollector();
   // Same lifetime rule again, for page-issued requests left out of
-  // http.jsonl (p3b-page-network task spec, scope item 2) — created once,
+  // http.jsonl — created once,
   // handed to browser-evidence.ts's launch below, and only ever populated
   // if `ctx.page()` is actually called this ctx's lifetime.
   const httpOmitted = createHttpOmittedCollector();
-  // Same lifetime rule again, for `ctx.evidence.attach`/`.path` (P9 task
-  // spec) — `() => httpLogDir` is the exact same moving-pointer getter
+  // Same lifetime rule again, for `ctx.evidence.attach`/`.path` —
+  // `() => httpLogDir` is the exact same moving-pointer getter
   // `ctx.request()`'s own http.jsonl logging already reads (this file's own
   // header): `beginStep` below redirects both at once, so an attachment
   // always lands beside that step's own http.jsonl, trace.zip, and
@@ -517,8 +503,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // only closing point `nuka do` ever reaches, since it never calls either
   // of the other two).
   //
-  // Also flushes page-http-log.ts's own pending http.jsonl writes now (p3b-
-  // page-network task spec) — whenever a browser exists at all, not only
+  // Also flushes page-http-log.ts's own pending http.jsonl writes now —
+  // whenever a browser exists at all, not only
   // when `chunkOpen`: a boundary with no `pendingChunkTitle` (or one that
   // never called `ctx.page()`) never opens a chunk (this file's own header)
   // but can still have produced page-issued http.jsonl entries this
@@ -541,9 +527,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const ctx: StepContext = {
     env,
     requireEnv(name: string): string {
-      // Recorded first, before the presence check below can throw (env-
-      // reads-and-mutates-doc task spec, item A): a run that fails for a
-      // missing key still gets a receipt showing what it asked for, and
+      // Recorded first, before the presence check below can throw: a run
+      // that fails for a missing key still gets a receipt showing what it
+      // asked for, and
       // this is the one call site the library controls, so a name recorded
       // here is a real measurement, not a claim. Name only, never the
       // value — a value can be a secret.
@@ -562,12 +548,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     async page(): Promise<Page> {
       if (!browserHandle) {
         browserHandle = await launchBrowserWithTracing({
-          // `config.browserType` (p6-browser-type task spec) — which of
+          // `config.browserType` — which of
           // chromium/firefox/webkit to launch; `undefined` behaves like
           // `"chromium"` (browser-evidence.ts's own default).
           browserType: config.browserType,
           browser: config.browser,
-          // `config.browserContext` (context-options task spec) — schema.ts
+          // `config.browserContext` — schema.ts
           // already rejects a `browserContext` that sets `baseURL`/
           // `storageState`, so the two args below can never collide with
           // it; browser-evidence.ts still spreads them in last anyway.
@@ -578,15 +564,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           pageEvents,
           // Same getter/secrets pair `ctx.request()` (below) already reads
           // at call time — page-issued traffic lands on the very same
-          // http.jsonl, redacted the very same way (this file's own header,
-          // p3b-page-network task spec).
+          // http.jsonl, redacted the very same way (this file's own header).
           logPath: () => path.join(httpLogDir, "http.jsonl"),
           secrets,
           httpOmitted,
           baseURL: config.baseURL,
         });
-        // Opens this boundary's own chunk right at launch (this file's own
-        // header: "起動した時点で「今の step」の chunk を開き始める") when a
+        // Opens this boundary's own chunk right at launch when a
         // title is already pending — `undefined` here means a boundary with
         // nothing worth tracing (a caller with no `stepTitle` that also
         // never calls `beginStep` before its first `ctx.page()`), which
@@ -609,7 +593,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       if (!requestContext) {
         // No `baseURL` requirement here, matching `ctx.page()` above, which
         // already passes `config.baseURL` through as `undefined` without
-        // complaint (baseurl-and-chaining-doc task spec, item A) — a suite
+        // complaint — a suite
         // that only ever talks to absolute URLs across several hosts has no
         // single baseURL to state, and forcing one into config would make
         // config assert something untrue. If a step written against a
@@ -618,7 +602,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // module does not duplicate Playwright's URL-resolution rules to
         // pre-empt that with its own error.
         //
-        // `config.requestContext` (context-options task spec) is spread in
+        // `config.requestContext` is spread in
         // first, `baseURL`/`storageState` after: schema.ts already rejects
         // a `requestContext` that sets either key, so this ordering never
         // actually resolves a real collision, only guards the invariant.
@@ -637,10 +621,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       return requestContext;
     },
     resultOf<S extends Step>(step: S) {
-      // Checked before the lookup even runs (m6a-from-core task spec, item
-      // 6): a Step object discovery never registered has nothing legitimate
+      // Checked before the lookup even runs: a Step object discovery never
+      // registered has nothing legitimate
       // to look up at all, and silently returning `undefined` for it (the
-      // pre-this-task behavior) is indistinguishable from "registered, just
+      // old behavior, before this check existed) is indistinguishable from
+      // "registered, just
       // hasn't run yet" — exactly the mistake this throw exists to surface
       // instead (see UnregisteredStepError's own doc comment).
       if (!isRegisteredStep(step)) {
@@ -650,10 +635,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       if (entry === undefined) {
         return undefined;
       }
-      // Recorded only on an actual read (m2pre-resultof task spec, decision
-      // 2: omit when empty — a call that returned `undefined` leaves no
-      // trace). `entry.result` is carried alongside (fb3-used-result task
-      // spec) the same way a `from` injection's own `recordUsed` call does.
+      // Recorded only on an actual read (omit when empty — a call that
+      // returned `undefined` leaves no
+      // trace). `entry.result` is carried alongside the same way a `from`
+      // injection's own `recordUsed` call does.
       used.record(entry.receiptId, entry.stepName, entry.result);
       return entry.result as z.infer<S["returns"]>;
     },
@@ -671,7 +656,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         });
       });
     },
-    // P9 task spec: `attach`/`path` handed straight through from the
+    // `attach`/`path` handed straight through from the
     // collector above — this object literal is what both `StepContext.
     // evidence` and (via `buildStepFixtures`, below) `StepFixtures.evidence`
     // actually are; `snapshot`/`reset` are deliberately left off, the same
@@ -739,8 +724,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       }
     }
 
-    // Checked unconditionally, not only when `requestContext` was opened
-    // (p3b-page-network task spec): http.jsonl can now exist from
+    // Checked unconditionally, not only when `requestContext` was opened:
+    // http.jsonl can now exist from
     // `ctx.page()`'s own document/xhr/fetch traffic alone, with
     // `ctx.request()` never called at all — gating this on `requestContext`
     // would leave `evidence.http` `undefined` for exactly that run even
@@ -756,14 +741,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     }
 
     // Browser wins whenever one was opened, whether or not a request
-    // context was *also* opened (this task's spec, decision 3): it carries
+    // context was *also* opened: it carries
     // cookies + localStorage where the request context only carries
     // cookies, and Playwright's two cookie jars are independent, so merging
     // them would synthesize a state that never actually existed. This also
     // covers the case where `browserStorageState` itself is `undefined`
     // (collection failed) — falling back to the request context's value
     // there would contradict "collection failing means skip the save, keep
-    // the existing file" (this task's spec, decision 2).
+    // the existing file".
     const storageStateToPersist = browserHandle ? browserStorageState : requestStorageState;
 
     return {
@@ -858,7 +843,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
  * Resolves `names` (a typed step's own `fixtureParameterNames(step.run)`,
  * src/step/fixture-names.ts) into a `StepFixtures` bag, reading each named
  * fixture off `ctx` (this file's own `createStepContext` output) — the
- * "build only what was named" half of p4a-fixture-bag task spec's design:
+ * "build only what was named" half of the fixture bag's design:
  * a step's requested names are closed over the reachable part of the
  * fixture graph and built in topological order, so a fixture nothing
  * reaches is never built. `page`/`context` are the only two names that can

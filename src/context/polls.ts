@@ -5,7 +5,7 @@ import type { PollRecord } from "../receipt/types.js";
 // (record/snapshot/reset), owned and reset by the executor's step boundary
 // (create-context.ts's `beginStep`), never reachable from a step's own `run`
 // beyond the single write-only path `ctx.poll` drives through poll.ts's own
-// internal loop (ctx-poll-receipt task spec).
+// internal loop.
 //
 // Not deduplicated, the same reasoning sections.ts already gives: each
 // completed poll is a point in this execution's own sequence, not an

@@ -6,7 +6,7 @@ import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "./types.js";
 // `teardown()`. Playwright's own fixture engine is runner machinery keyed on
 // `testInfo` (which test, which retry) that only Playwright's own test
 // runner owns; nukadoko is its own runner, not Playwright's, so that engine
-// cannot be borrowed (this task's spec, "前提") — the same "a function
+// cannot be borrowed. The same "a function
 // suspended on `use()`, resumed by teardown" shape is reimplemented here,
 // from scratch, over a plain `Promise`.
 //
@@ -16,13 +16,13 @@ import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "./types.js";
 // `"process"`-scope fixture reused by a later scenario never reaches this
 // module a second time).
 //
-// The timeout/misuse contract (this task's spec, item 7) exists because the
+// The timeout/misuse contract exists because the
 // previous `ctx.page()` had no call-contract of its own to violate — a
 // step's own body called it, or didn't; there was nothing to await twice or
 // forget to resolve. A fixture function is different: it is a coroutine
 // this module resumes from the *outside*, so a fixture that never calls
-// `use()`, or calls it twice, is a new way to hang or misbehave that this
-// task's own P5-only slice introduces — and a named, thrown failure is
+// `use()`, or calls it twice, is a new way to hang or misbehave that
+// fixtures introduce — and a named, thrown failure is
 // always better than a `nuka run` that never returns.
 
 export class FixtureUseNotCalledError extends Error {
@@ -51,9 +51,8 @@ export class FixtureUseCalledTwiceError extends Error {
 /** Fired when a fixture's own setup or teardown phase does not finish
  * within its timeout budget (`config.fixtureTimeout`, or the fixture's own
  * `options.timeout` override) — always names both the fixture and which
- * phase timed out (this task's spec, item 7: "どの fixture で止まったかを
- * 名指す"), so a `nuka run` that would otherwise hang forever fails loudly
- * and pointed at the exact line to look at instead. */
+ * phase timed out, so a `nuka run` that would otherwise hang forever fails
+ * loudly and pointed at the exact line to look at instead. */
 export class FixtureTimeoutError extends Error {
   readonly fixture: string;
   readonly phase: "setup" | "teardown";
@@ -113,8 +112,7 @@ export interface FixtureInstance {
   readonly value: unknown;
   /** Resumes the fixture past its own `await use(...)`, passing `outcome`,
    * and waits (up to `timeoutMs`) for whatever teardown code follows to
-   * finish. Never throws (P5 task spec, scope item 6: "teardown の throw
-   * は step / シナリオの成否を変えない") — a teardown failure is caught
+   * finish. Never throws — a teardown failure is caught
    * and its message returned instead, for the caller to record without
    * letting it change any step's or scenario's own outcome. `undefined`
    * means teardown finished cleanly. */

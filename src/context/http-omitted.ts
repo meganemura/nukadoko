@@ -1,7 +1,7 @@
 // Responsibility: the "what got left out of http.jsonl" tally docs/spec.md's
-// "Receipts" (`http_omitted`) describes (p3b-page-network task spec, scope
-// item 2). A page load's own image/stylesheet/script/etc requests are
-// deliberately never written to http.jsonl — only document/xhr/fetch are
+// "Receipts" (`http_omitted`) describes. A page load's own
+// image/stylesheet/script/etc requests are deliberately never written to
+// http.jsonl — only document/xhr/fetch are
 // (page-http-log.ts owns that allowlist) — and this collector is what keeps
 // that omission from being silent: every request left out is tallied here,
 // by Playwright's own `request.resourceType()`, so a step's receipt can say

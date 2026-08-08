@@ -4,8 +4,9 @@ import { closeFixtureNames, resolveDependencyEdge, type FixtureGraph, type Fixtu
 import { startFixture, type FixtureInstance } from "./lifecycle.js";
 import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 
-// Responsibility: the *runtime* half of P5 — actually building a step's own
-// requested fixture bag through the graph (src/fixture/graph.ts), and
+// Responsibility: the *runtime* counterpart to src/fixture/graph.ts's
+// structural judgments — actually building a step's own
+// requested fixture bag through the graph, and
 // tearing a scope's own built fixtures down again, LIFO, once that scope's
 // own lifetime ends. Everything here trusts its input is already validated
 // (src/step/validate-fixtures.ts, run before execution in `nuka run`/`nuka
@@ -34,22 +35,24 @@ import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 // ever began.
 
 /** Every fixture actually resolved while assembling one step's bag —
- * receipt-facing (docs/spec.md "Receipts", P5 task spec, scope item 10).
+ * receipt-facing (docs/spec.md "Receipts").
  * Includes every `config.fixtures` entry touched, not only the names the
  * step itself destructured: a fixture built as a side effect of resolving
  * another one is real, measured setup cost, and hiding it would make
- * `setup_ms`'s own absence unreadable the same way P5's own spec warns
- * about ("`setup_ms` の不在が「速かった」なのか「使い回した」なのか読めな
- * い" generalizes to "…or a dependency nobody told you about"). Builtins
+ * `setup_ms`'s own absence unreadable: normally its absence already has to
+ * mean either "this call reused an existing instance" or "this fixture is
+ * simply fast", and a hidden, transitively-built dependency would add a
+ * third, indistinguishable reading ("a dependency nobody told you about")
+ * to those same two. Builtins
  * never appear here — they are not `config.fixtures` entries, and their own
- * resolution is unchanged, already unmeasured the same way before P5. */
+ * resolution is unchanged, already unmeasured the same way it always was. */
 export interface FixtureUsageEntry {
   readonly name: string;
   readonly scope: FixtureScope;
   /** Present only when this call actually built the fixture (`reused:
    * false`) — omitted, not `0`, for a reused instance, so a reader can
    * tell "this call built it in Nms" from "this call didn't build it at
-   * all" without a sentinel value (P5 task spec, scope item 10). */
+   * all" without a sentinel value. */
   readonly setup_ms?: number;
   /** ISO 8601, the moment this call's own build started — same presence
    * rule as `setup_ms`. */
@@ -182,7 +185,7 @@ export async function resolveFixtures(
 
 /**
  * Tears down every fixture instance currently in `cache`, in reverse build
- * order (P5 task spec, scope item 6) — folding teardown over the exact
+ * order — folding teardown over the exact
  * reverse of construction order only guarantees every dependency outlives
  * its own dependents because nukadoko runs everything in this cache's own
  * scope *serially*; the day any of it parallelizes, this ordering guarantee

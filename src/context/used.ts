@@ -1,7 +1,7 @@
 // Responsibility: the provenance tally docs/spec.md's "Receipts" (`used`)
 // describes — which earlier steps' validated results this execution actually
-// read, whether through `ctx.resultOf` (m2pre-resultof task spec, decision 2)
-// or through a `from` injection (m6a-from-core task spec, item 5). Its own
+// read, whether through `ctx.resultOf`
+// or through a `from` injection. Its own
 // file for the same reason observed.ts is its own file: create-context.ts is
 // the one module that wires `ctx.resultOf` and owns the step boundary, and
 // src/run/run-scenario.ts is the one place a `from` injection happens — both
@@ -12,19 +12,19 @@
 // list, not two independent ones.
 //
 // `record`'s shape changed from a bare receipt id to `{ receiptId, stepName }`
-// now (m6a-from-core task spec, item 5; docs/spec.md "Receipts": each `used`
+// now (docs/spec.md "Receipts": each `used`
 // entry is `{ "receipt": "rcpt-…", "step": "create-project" }`) — a receipt
 // that has to be resolved against other files to be read is a worse
 // acceptance record than one that is legible alone, and the file it would be
 // resolved against (another receipt) is a local working record a sign-off
 // long outlives. Breaking change, no shim: 0.1 hasn't shipped yet.
 //
-// Deduplicated and in read order (m2pre-resultof task spec, decision 2: dedupe,
-// then order by first read) — a step that reads the same earlier step's
+// Deduplicated and in read order (dedupe, then order by first read) — a
+// step that reads the same earlier step's
 // result more than once (whether via `resultOf`, `from`, or a mix of both)
 // must not cite that receipt id twice in `used`.
 //
-// `result` (fb3-used-result task spec, decisions 1-3): the upstream's own
+// `result`: the upstream's own
 // validated result, carried alongside the id/step pointer `used` already
 // had — added so a *failed* step's receipt can be read alone instead of
 // requiring a second receipt.json to be opened just to see what it read.
@@ -32,15 +32,14 @@
 // collector has no idea yet whether the step reading it will end up "ok" or
 // "failed") — it is the receipt-construction site (run-scenario.ts's
 // `finishExecutedStep`, cli/do.ts) that strips it back off for an "ok"
-// receipt (decision 2: success is redundant — the value is already sitting
+// receipt (success is redundant — the value is already sitting
 // on that step's own `args`/upstream receipt). The full result, not the one
-// key a `from` injection happened to read (decision 3): a diagnosis needs
+// key a `from` injection happened to read: a diagnosis needs
 // "why did this value come out this way", and narrowing to the cited key
 // would recreate, on the receipt side, the same citation-only trap
 // `skills/acceptance/SKILL.md`'s `returns` guidance already warns against.
 //
-// `UsedEntry` vs `UsedEntryWithResult` (fb3-used-result task spec, "type
-// hardening" follow-up): a bare optional `result?: unknown` let a new
+// `UsedEntry` vs `UsedEntryWithResult`: a bare optional `result?: unknown` let a new
 // receipt-construction site forget to strip it and still compile — the same
 // shape of trap this repo already hit once with a non-exhaustive ternary
 // silently swallowing a new variant. What has to hold is narrower than
@@ -107,13 +106,13 @@ export interface UsedCollector {
   /** The reads recorded since the last `reset()` (or since creation),
    * deduplicated by receipt id, in the order first read. Every entry
    * carries `result` unconditionally — a caller building an "ok" receipt
-   * must strip it itself (fb3-used-result task spec, decision 2). */
+   * must strip it itself. */
   snapshot(): UsedEntryWithResult[];
   /** Executor-only: zeroes the tally at a step boundary. */
   reset(): void;
 }
 
-/** Strips `result` from every entry (fb3-used-result task spec, decision 2)
+/** Strips `result` from every entry
  * — the shared helper both `nuka run` (run-scenario.ts) and `nuka do`
  * (cli/do.ts) call when building an "ok" receipt, so a successful
  * execution's `used` keeps the `{ receipt, step }` shape it always has and

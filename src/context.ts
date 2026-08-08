@@ -8,9 +8,9 @@ import type { Step } from "./step/define-step.js";
 // and logs requests belongs to the execution slice, `nuka do` / `nuka
 // run`'s src/context/create-context.ts, not this one).
 //
-// `StepFixtures` (p4a-fixture-bag task spec) is the public one: the bag a
-// step's `run(fixtures, args)` destructures by name, per docs/spec.md
-// "Context API". The destructuring is a static, readable declaration before
+// `StepFixtures` is the public one: the bag a step's `run(fixtures, args)`
+// destructures by name, per docs/spec.md "Context API". The destructuring
+// is a static, readable declaration before
 // it is a construction instruction — `page`/`context`/`request` are values,
 // not functions, precisely so that a step never has an *action* to reach
 // for the browser, only a *name* to have already asked for. `check` (and
@@ -39,27 +39,25 @@ import type { Step } from "./step/define-step.js";
 // `resultOf` imports `Step` from step/define-step.ts, which itself imports
 // `StepFixtures` from here for its own `run` signature — a type-only cycle
 // (both sides use `import type`), which TypeScript resolves fine since
-// neither import survives to a runtime value (m2pre-resultof task spec,
-// decision 1).
+// neither import survives to a runtime value.
 //
 // The boundary rule (docs/spec.md "Context API"): a fixture carries only
 // what the executor must inject; a helper that needs nothing the executor
 // owns stays a plain import instead of a member here. `poll` used to be
-// exactly that (`import { poll } from "nukadoko"`, pre-ctx-poll-receipt) —
-// until the same mistake `section` made once already (see below) showed up
-// again from the other direction: a wait that finishes without being
-// recorded cannot be told apart, from a receipt, from one that returned on
-// its first attempt, and those two call for opposite fixes (ctx-poll-
-// receipt task spec). `poll` therefore became a fixture too; see
-// `PollRecord`/`polls` (src/receipt/types.ts) for where a finished call now
-// lands.
+// exactly that (`import { poll } from "nukadoko"`) — until the same
+// mistake `section` made once already (see below) showed up again from the
+// other direction: a wait that finishes without being recorded cannot be
+// told apart, from a receipt, from one that returned on its first attempt,
+// and those two call for opposite fixes. `poll` therefore became a fixture
+// too; see `PollRecord`/`polls` (src/receipt/types.ts) for where a finished
+// call now lands.
 //
-// `section` (t3-sections task spec) reverses m2pre-ctx-surface's original
-// call: that decision withheld it because it would have been a no-op until
-// a progress-log feature existed. That feature exists now (fb5-run-output
-// task spec, src/run/progress-log.ts — `nuka run`'s own stderr progress
-// lines), but `section`'s own destination turned out to be the receipt, not
-// that live log: `sections: string[]` (docs/spec.md "Receipts",
+// `section` reverses an earlier decision that left it out: that decision
+// withheld it because it would have been a no-op until a progress-log
+// feature existed. That feature exists now (src/run/progress-log.ts —
+// `nuka run`'s own stderr progress lines), but `section`'s own destination
+// turned out to be the receipt, not that live log: `sections: string[]`
+// (docs/spec.md "Receipts",
 // src/context/sections.ts) lets a failed step's receipt say which stage it
 // reached, a fact this file's own read (accept, a report, an agent
 // re-reading a receipt later) needs regardless of whether anyone was
@@ -68,10 +66,10 @@ import type { Step } from "./step/define-step.js";
 // have to decide what nesting, async boundaries, and early `return`s inside
 // it mean, none of which "where did it fail" requires.
 //
-// `expect` is deliberately not a fixture (p4a-fixture-bag task spec): a
-// step imports it directly, `import { expect } from "playwright/test"`.
+// `expect` is deliberately not a fixture: a step imports it directly,
+// `import { expect } from "playwright/test"`.
 // Assertion evidence already reaches the receipt through the trace
-// (`actions`, src/context/trace-actions.ts — P3a), so `expect` needs
+// (`actions`, src/context/trace-actions.ts), so `expect` needs
 // nothing the executor injects; adding it here would be a member with
 // nothing behind it but Playwright's own already-public export, violating
 // the same boundary rule above.
@@ -86,8 +84,8 @@ import type { Step } from "./step/define-step.js";
 // exporting the name is what keeps that always unreachable through the bag,
 // rather than a rule a step has to remember not to break.
 //
-// `evidence` (P9 task spec) is the fixture-shaped counterpart to Playwright's
-// own `testInfo.attach()`/`testInfo.outputPath()`: every automatic evidence
+// `evidence` is the fixture-shaped counterpart to Playwright's own
+// `testInfo.attach()`/`testInfo.outputPath()`: every automatic evidence
 // field on a receipt (trace, screenshots, http.jsonl, page_events, ...) is
 // something the harness collects on its own, and nothing existed for the
 // application-specific evidence only a step can produce — an API response
@@ -122,8 +120,8 @@ export interface StepFixtures {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Reads a required env var: same source as `env[name]`, minus the
    * presence check every step calling `env[name]` ended up writing for
-   * itself (t2-require-env task spec — real migrations kept re-deriving the
-   * same `need()` helper, with a different error message each time). Throws
+   * itself (real migrations kept re-deriving the same `need()` helper, with
+   * a different error message each time). Throws
    * `MissingEnvError` (src/context/errors.ts) when `name` is unset *or* set
    * to the empty string — an envFile's `KEY=` line sets no value, so an
    * empty string is treated as "not set", not as a deliberately-chosen empty
@@ -137,17 +135,17 @@ export interface StepFixtures {
   readonly baseURL: string | undefined;
   /** The validated `result` of `step`'s most recent successful execution in
    * the current scenario, matched by the Step object's own identity — not
-   * by name (docs/spec.md "Context API", m2pre-resultof task spec, decision
-   * 1). `undefined` under `nuka do`, or when `step` hasn't succeeded yet in
-   * this scenario; a step that failed never becomes readable, since only a
+   * by name (docs/spec.md "Context API"). `undefined` under `nuka do`, or
+   * when `step` hasn't succeeded yet in this scenario; a step that failed
+   * never becomes readable, since only a
    * validated (`returns`-schema-passing) result ever enters the chain. Every
    * read that returns a value is measured: the executor records it as
    * provenance on this execution's own receipt (`used`), so the dependency
    * is visible twice — as a static `import` of `step`, and at run time in
    * the receipt chain (docs/spec.md "Receipts"). */
   readonly resultOf: <S extends Step>(step: S) => z.infer<S["returns"]> | undefined;
-  /** Marks that execution has reached stage `label` — this task's spec,
-   * decision 1. Synchronous and void: there is no matching "end" call and
+  /** Marks that execution has reached stage `label`. Synchronous and void:
+   * there is no matching "end" call and
    * no return value, so calling it costs nothing to place before an
    * `await`, inside a loop, or right before a step throws. Every call is
    * appended, in call order, to this execution's receipt under
@@ -162,7 +160,7 @@ export interface StepFixtures {
    * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
    * attempts it took, how long it waited, and how it ended. */
   readonly poll: <T>(fn: () => Promise<T | undefined>, options?: PollOptions) => Promise<T>;
-  /** The application-specific evidence fixture (P9 task spec; this file's
+  /** The application-specific evidence fixture (this file's
    * own header) — `attach(name, body)` writes `body` (`string | Uint8Array`)
    * to this execution's own evidence directory and records
    * `{ name, file, at }` on the receipt's `evidence.attachments` (docs/
@@ -184,8 +182,8 @@ export interface StepFixtures {
 }
 
 /** Every name `StepFixtures` carries, kept in sync with that interface by
- * construction rather than by hand (p4a-fixture-bag task spec): the object
- * literal below is typed as `Record<keyof StepFixtures, true>`, so a member
+ * construction rather than by hand: the object literal below is typed as
+ * `Record<keyof StepFixtures, true>`, so a member
  * added to (or removed from) `StepFixtures` without a matching edit here
  * fails to compile. This is the one, closed set src/step/validate-
  * fixtures.ts checks a step's own destructured names against, and the one
@@ -219,8 +217,8 @@ export interface StepContext {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Reads a required env var: same source as `ctx.env[name]`, minus the
    * presence check every step calling `ctx.env[name]` ended up writing for
-   * itself (t2-require-env task spec — real migrations kept re-deriving the
-   * same `need()` helper, with a different error message each time). Throws
+   * itself (real migrations kept re-deriving the same `need()` helper, with
+   * a different error message each time). Throws
    * `MissingEnvError` (src/context/errors.ts) when `name` is unset *or* set
    * to the empty string — an envFile's `KEY=` line sets no value, so an
    * empty string is treated as "not set", not as a deliberately-chosen empty
@@ -233,17 +231,17 @@ export interface StepContext {
   readonly baseURL: string | undefined;
   /** The validated `result` of `step`'s most recent successful execution in
    * the current scenario, matched by the Step object's own identity — not
-   * by name (docs/spec.md "Context API", m2pre-resultof task spec, decision
-   * 1). `undefined` under `nuka do`, or when `step` hasn't succeeded yet in
-   * this scenario; a step that failed never becomes readable, since only a
+   * by name (docs/spec.md "Context API"). `undefined` under `nuka do`, or
+   * when `step` hasn't succeeded yet in this scenario; a step that failed
+   * never becomes readable, since only a
    * validated (`returns`-schema-passing) result ever enters the chain. Every
    * read that returns a value is measured: the executor records it as
    * provenance on this execution's own receipt (`used`), so the dependency
    * is visible twice — as a static `import` of `step`, and at run time in
    * the receipt chain (docs/spec.md "Receipts"). */
   resultOf<S extends Step>(step: S): z.infer<S["returns"]> | undefined;
-  /** Marks that execution has reached stage `label` — this task's spec,
-   * decision 1. Synchronous and void: there is no matching "end" call and
+  /** Marks that execution has reached stage `label`. Synchronous and void:
+   * there is no matching "end" call and
    * no return value, so calling it costs nothing to place before an
    * `await`, inside a loop, or right before a step throws. Every call is
    * appended, in call order, to this execution's receipt under
@@ -258,7 +256,7 @@ export interface StepContext {
    * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
    * attempts it took, how long it waited, and how it ended. */
   poll<T>(fn: () => Promise<T | undefined>, options?: PollOptions): Promise<T>;
-  /** The application-specific evidence fixture (P9 task spec) — see
+  /** The application-specific evidence fixture — see
    * `StepFixtures.evidence`'s own doc comment above for the full contract;
    * this is the same object, reached the older, function-based way every
    * other member of this interface is. */

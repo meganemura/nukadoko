@@ -2,7 +2,7 @@
 // the submit-poll-fetch wait for a value that has been asked for but is not
 // there yet. This module no longer exports a runnable `poll`: that was a
 // pure import for exactly as long as it recorded nothing (`import { poll }
-// from "nukadoko"`, src/index.ts, pre-ctx-poll-receipt), and a wait that
+// from "nukadoko"`, src/index.ts), and a wait that
 // leaves no trace cannot be told apart, from a receipt, from one that
 // returned on its first attempt — the two call for opposite fixes (see
 // docs/spec.md's own "Helpers live as imports..." paragraph: this was the
@@ -53,7 +53,7 @@ export interface PollOutcome {
   readonly attempts: number;
   readonly waitedMs: number;
   readonly outcome: "resolved" | "timed_out" | "failed";
-  /** ISO 8601 — this poll's own start (fb4-evidence-time task spec, item 4),
+  /** ISO 8601 — this poll's own start,
    * derived from the same `startedAt` epoch-ms value already used to compute
    * `waitedMs` below, so the two can never disagree about when this poll
    * began. Exposed so `PollRecord.at` (src/receipt/types.ts) can place this
@@ -64,10 +64,11 @@ export interface PollOutcome {
 
 /**
  * Runs the submit-poll-fetch loop and hands the result to `onFinish` exactly
- * once, however the loop ends (ctx-poll-receipt task spec: "timed_out も
- * failed も必ず記録される" — a `try`/`finally` around the whole loop is what
- * guarantees that, rather than calling `onFinish` at each individual exit
- * point, which a future change to this function could otherwise miss). The
+ * once, however the loop ends — a timeout and a `fn` throw must be recorded
+ * too, not only a resolved value, which is why a `try`/`finally` around the
+ * whole loop guarantees that, rather than calling `onFinish` at each
+ * individual exit point, which a future change to this function could
+ * otherwise miss. The
  * outcome defaults to `"resolved"`: the only two paths that override it
  * (`fn` throwing, the timeout firing) each set it just before their own
  * `throw`, and `finally` always runs before that `throw` actually leaves

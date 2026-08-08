@@ -1,8 +1,8 @@
 // Responsibility: the required-env tally docs/spec.md's "Receipts"
 // (`required_env`) and "Context API" (`ctx.requireEnv`) describe — which
 // env var names an execution actually asked for through `ctx.requireEnv`,
-// the one call site the library controls (env-reads-and-mutates-doc task
-// spec, item A). Its own file for the same reason used.ts is its own file:
+// the one call site the library controls. Its own file for the same reason
+// used.ts is its own file:
 // create-context.ts is the one module that both wires `requireEnv` and owns
 // the step boundary, so it is the only caller of both `record` (inside the
 // `requireEnv` wrapper, never itself exposed on `ctx`) and `reset`

@@ -6,14 +6,14 @@ import type { WritableSink } from "../cli/writable-sink.js";
 
 // Responsibility: turn one step's own trace.zip (browser-evidence.ts's
 // per-step chunk, opened/closed by create-context.ts) into the receipt's
-// `actions` field (p3a-trace-per-step task spec) — every Playwright call
+// `actions` field — every Playwright call
 // that step made through `ctx.page()`, `expect` waits included, without a
 // step ever needing an `expect` fixture of its own (docs/spec.md's design:
 // trace records a call at Playwright's own layer, underneath whichever
 // wrapper — `@playwright/test`'s `expect`, a step's own code — called it).
 //
-// `collectTraceEvidence`'s own `fileName` parameter (p3d-hook-trace task
-// spec) is what lets this same function read a *hook* invocation's own
+// `collectTraceEvidence`'s own `fileName` parameter is what lets this same
+// function read a *hook* invocation's own
 // chunk too, not only a step's: several hook chunks can land in the same
 // scenario evidence dir (run-scenario.ts names each one uniquely, since a
 // scenario can register more than one hook of the same type, and AfterStep
@@ -22,16 +22,16 @@ import type { WritableSink } from "../cli/writable-sink.js";
 // existing step call site (which never named one) keeps reading exactly the
 // file it always has.
 //
-// Reads `trace.trace` only, the one entry inside trace.zip this task's spec
-// already measured the shape of ("前提", not re-verified here):
+// Reads `trace.trace` only, the one entry inside trace.zip whose shape was
+// already measured (not re-verified here):
 // `trace.stacks` carries local absolute paths (never worth reading, and a
 // portability/redaction risk if it were), `resources/*` is the recorded
 // page's own assets (irrelevant to "what did this step do"). The zip reader
 // below (`readZipEntry`) uses only `node:zlib`'s `inflateRawSync` — no new
-// dependency, per this task's spec — walking the zip's own end-of-central-
+// dependency — walking the zip's own end-of-central-
 // directory record, then its central directory, then the one local file
-// header it points at for `trace.trace`, exactly the path this task's spec
-// already measured works.
+// header it points at for `trace.trace`, exactly the path already measured
+// to work.
 //
 // Any parse failure here (corrupt zip, a missing `trace.trace` entry, a
 // malformed JSON line, a header missing `wallTime`/`monotonicTime`) means
@@ -49,8 +49,8 @@ import type { WritableSink } from "../cli/writable-sink.js";
 // checked against is exactly that), so nothing is inferred; the version is
 // simply read and compared against the closed list below.
 
-/** Trace format versions this build knows how to read (this task's spec,
- * "前提": entries measured against version 8). Extend this list, never
+/** Trace format versions this build knows how to read (measured against
+ * version 8). Extend this list, never
  * relax the check itself, when a newer Playwright's own trace format is
  * measured and found compatible — guessing that an unmeasured version is
  * "probably fine" is exactly what this file's own header rules out. */
@@ -105,8 +105,8 @@ export type TraceActionsParseResult =
 
 /** The receipt-shaped result of reading one step's own trace.zip — `trace`
  * mirrors `EvidenceMeta.trace` (src/receipt/types.ts), `actions`/`truncated`
- * are new top-level receipt fields (this task's spec, scope B item 3),
- * never nested under `evidence`: `evidence` names files on disk, `actions`
+ * are new top-level receipt fields, never nested under `evidence`:
+ * `evidence` names files on disk, `actions`
  * is data derived from one of them. All three are omitted, never present-
  * but-empty, matching every other optional receipt field's own convention. */
 export interface TraceEvidence {
@@ -147,7 +147,7 @@ function findEndOfCentralDirectory(buffer: Buffer): number {
  * it when the central directory said `compressionMethod` was deflate (8,
  * the zip default) and returning it as-is when it said "stored" (0, no
  * compression) — `inflateRawSync` is the one decompression call this file
- * makes, per this task's spec (no new dependency). */
+ * makes (no new dependency). */
 function readLocalFileEntry(
   buffer: Buffer,
   localHeaderOffset: number,
@@ -252,8 +252,8 @@ function readAfter(entry: Record<string, unknown>): TraceAfter | undefined {
   return undefined;
 }
 
-/** `before.params`, narrowed to the five keys a receipt is allowed to carry
- * (this task's spec, scope B item 3) — every other key (a `setContent`
+/** `before.params`, narrowed to the five keys a receipt is allowed to
+ * carry — every other key (a `setContent`
  * call's own HTML body, for one) is dropped here, not merely left off the
  * `ActionEntry` type, so nothing beyond this list ever exists in memory as
  * part of a receipt-bound value. `timeout` on the trace side becomes
@@ -285,8 +285,8 @@ function buildActionEntry(before: TraceBefore, after: TraceAfter, header: TraceH
   };
 }
 
-/** Parses `trace.trace`'s own newline-delimited JSON (this task's spec,
- * "前提") into `actions` — matching `before`/`after` entries by `callId`,
+/** Parses `trace.trace`'s own newline-delimited JSON into `actions` —
+ * matching `before`/`after` entries by `callId`,
  * capping the result at `MAX_ACTIONS`, and refusing to guess at a trace
  * format version this build has never verified (`KNOWN_TRACE_VERSIONS`
  * above). Exported directly (rather than only through `collectTraceEvidence`
@@ -362,7 +362,7 @@ export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseRe
 }
 
 /** Reads `receiptDir/fileName` (when present) and turns it into this step's
- * (or hook invocation's — p3d-hook-trace task spec) own
+ * (or hook invocation's) own
  * `trace`/`actions`/`truncated` fields. Called only after the file is known
  * to already be fully written — create-context.ts's `endStep()`/`dispose()`
  * close the current chunk before its receipt/hook record is ever built,
@@ -416,7 +416,7 @@ function unknownTraceVersionWarning(version: number): string {
 
 /** Builds the "print this exactly once" stderr warning `collectTraceEvidence`
  * calls into when a trace's own header names a version this build does not
- * know how to read (this task's spec, scope B item 2) — one instance per
+ * know how to read — one instance per
  * `nuka run`/`nuka do` invocation (created once by the caller, cli/run.ts or
  * cli/do.ts, and threaded through every scenario/step that invocation
  * executes), so a run that hits this on several steps still only ever

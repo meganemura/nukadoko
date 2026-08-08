@@ -3,8 +3,8 @@ import type { SecretSet } from "../secrets/types.js";
 import { appendHttpLogEntry } from "./http-log.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 
-// Responsibility: the page-origin half of http.jsonl (p3b-page-network task
-// spec) — everything a step's `ctx.page()` itself sends, as opposed to
+// Responsibility: the page-origin half of http.jsonl — everything a step's
+// `ctx.page()` itself sends, as opposed to
 // http-log.ts's `ctx.request()` half. Subscribed once, at browser-context
 // creation (browser-evidence.ts), the same place `observed`'s own `request`
 // listener and page-events.ts's `console`/`weberror`/`requestfailed`
@@ -12,7 +12,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // one, so a popup (`window.open`) is covered without a second listener
 // (browser-evidence.ts's own header).
 //
-// Subscribes to `response`, not `request` (this task's spec, scope item 1):
+// Subscribes to `response`, not `request`:
 // a request that never got a response at all (`requestfailed` — DNS,
 // connection refused, aborted) is already `page_events.failed_requests`'
 // own record (page-events.ts). Playwright fires exactly one of
@@ -22,7 +22,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // needed for that case.
 //
 // Only `document`/`xhr`/`fetch` (`request.resourceType()`) are ever written
-// to http.jsonl (this task's spec, scope item 2): a single page load can
+// to http.jsonl: a single page load can
 // pull in dozens of images, a stylesheet, and a script bundle, and a file
 // that tried to hold all of that would stop being something a reader opens.
 // Everything else is tallied into `httpOmitted` instead of being silently

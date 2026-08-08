@@ -1,8 +1,8 @@
 import type { FixtureDefinition } from "./types.js";
 
 // Responsibility: the one identity helper that gives a config author's
-// fixture object literal full type inference under `strict` TypeScript
-// (P5 task spec, scope item 2) — the same "give a literal a name, validate
+// fixture object literal full type inference under `strict` TypeScript —
+// the same "give a literal a name, validate
 // nothing" role src/config/define-config.ts's own `defineConfig` plays for
 // the whole config object. Validation (`auto: true`, an unknown fixture
 // name, a cycle, a scope violation, `page-override-unowned`, ...) all

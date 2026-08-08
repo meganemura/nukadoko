@@ -4,7 +4,7 @@ import { fixtureParameterNames } from "../step/fixture-names.js";
 import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from "./types.js";
 
 // Responsibility: the fixture *dependency graph* — layering builtin and
-// `config.fixtures` names into one structure (P5 task spec, scope item 5),
+// `config.fixtures` names into one structure,
 // and every purely structural judgment over it that does not need to
 // actually run anything: which name a dependency edge resolves to (honoring
 // "a same-named override depends on the previous layer, not on itself"), a
@@ -25,7 +25,7 @@ import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from
 // launch a browser or make a network call before a `run` has even begun,
 // which is exactly what a check meant to decide things *before* execution
 // must not do, matching this project's own "check never executes a
-// fixture" rule (this task's spec, "前提").
+// fixture" rule.
 //
 // The override rule (Playwright's own `extend()` semantics, deliberately
 // mirrored): a fixture defined under `config.fixtures` with the same name
@@ -69,7 +69,7 @@ export interface FixtureGraph {
 /** `page`/`context`/`request`/`resultOf`/`section`/`poll`/`evidence` all
  * need this run's *current scenario's* `ctx` to build (a browser, a request
  * context, this scenario's own result chain, this step's own moving
- * evidence directory — P9 task spec) — a `process`-scope fixture, built once
+ * evidence directory) — a `process`-scope fixture, built once
  * before any one scenario's own resources are guaranteed to still exist by
  * the time a later scenario tears them down, must never depend on one of
  * these (`findFixtureScopeViolations` below). `env`/`requireEnv`/`baseURL`
@@ -166,8 +166,8 @@ export function resolveDependencyEdge(
 
 /** One finding about a `config.fixtures` *definition* itself (as opposed
  * to `FixtureIssue` in src/step/validate-fixtures.ts, about a *step's own
- * usage* of one) — `nuka check`'s new fixture-* codes (P5 task spec, scope
- * item 8). All three "guess zero": each one is a fact about the graph's own
+ * usage* of one) — `nuka check`'s fixture-* codes. All three "guess zero":
+ * each one is a fact about the graph's own
  * shape, decided without ever running a fixture. */
 export interface FixtureDefinitionIssue {
   readonly code: "fixture-cycle" | "fixture-scope-violation" | "page-override-unowned";
@@ -292,8 +292,8 @@ export function findPageOverrideUnowned(graph: FixtureGraph): FixtureDefinitionI
 
 /** `true` when `name` reaches `page`/`context`, directly or through a
  * chain of `config.fixtures` dependencies — `nuka steps --json`'s
- * `needs_browser` transitive closure (P5 task spec, scope item 11) and
- * `nuka tend`'s `fixture-touches-app` finding (scope item 9) both read
+ * `needs_browser` transitive closure and
+ * `nuka tend`'s `fixture-touches-app` finding both read
  * this, never re-deriving the traversal. `visited` guards against a cycle
  * (defense in depth only — `findFixtureCycles` already refuses a cyclic
  * config before either caller runs). */
@@ -326,8 +326,7 @@ export function fixtureReachesBrowser(
 }
 
 /** The reachable subgraph + build order `names` (a step's own destructured
- * fixture list) closes over (P5 task spec, scope item 5: "到達可能な部分
- * グラフだけを topological に構築する") — `builtinNames` is every builtin
+ * fixture list) closes over — `builtinNames` is every builtin
  * (possibly overridden) this closure needs, resolved in one
  * `buildStepFixtures` call by src/fixture/resolver.ts; `userOrder` is every
  * `config.fixtures` entry this closure needs, dependencies-first, ready to
