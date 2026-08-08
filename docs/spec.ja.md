@@ -770,6 +770,15 @@ nukadoko は各 pickle の step をコミットされた pattern と照合し、
 step ごとに 1 つの receipt。
 pickle ごとに 1 つの scenario record(feature のパス、scenario 名、順序付けられた receipt id、step ごとの status)。
 
+`nuka run` は 1 つの feature ファイルの代わりにディレクトリも受け取ります。
+`nuka run features/` はそれを再帰的に歩いてすべての `.feature` ファイルを見つけ、それらの pickle をすべて上記と同じ 1 つの invocation に畳み込みます: 1 つの run_id、1 つのサマリ、1 つの exit code、1 つの messages ストリーム、1 つの Allure results ツリーです。
+ファイルはリポジトリ相対パスをロケールではなくバイトごとに比較した、決まった順序で処理されます。
+そのため、どの scenario が何番目に実行されたかは run をまたいで安定し、ある record やレポートを別の run のものと比較できます。
+ディレクトリに `:line` を付けると拒否されます。
+`:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
+配下のどこにも `.feature` ファイルを持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
+何もしなかった run は、exit 0 で何もしなかったことにするのではなく、それを大声で言わなければならないからです。
+
 各 run は読み手の違う 2 つのチャネルに書き込みます。
 stdout は NDJSON 専用のままで、1 行に scenario record が 1 つ載るだけであり、スクリプトが読むためのものであって、それ以外は一切書き込まれません。
 run を見ている人間向けのものはすべて代わりに stderr に載ります。
@@ -1586,11 +1595,19 @@ sign-off の所見は非ゼロの exit code で終了し、定期実行される
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
 
 ```
-nuka run <feature[:line]>     execute scenarios; receipts + allure-results.
+nuka run <feature[:line]|dir>
+                              execute scenarios; receipts + allure-results.
                               :line runs one scenario, for iteration only — a
-                              partial run can never be accepted. stderr gets
-                              per-step/per-scenario progress as it runs, then
-                              every location this run wrote and a summary
+                              partial run can never be accepted. A directory
+                              is walked recursively for .feature files, in
+                              deterministic byte order, folded into this one
+                              invocation: one run_id, one summary, one exit
+                              code, one messages stream, one Allure results
+                              tree. :line on a directory is refused, and a
+                              directory with no .feature file anywhere under
+                              it fails setup, naming what it walked. stderr
+                              gets per-step/per-scenario progress as it runs,
+                              then every location this run wrote and a summary
                               line; --quiet drops the progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always
