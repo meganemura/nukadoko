@@ -152,6 +152,11 @@
       "en": ["outcome"],
       "ja": "成否",
       "note": "P5 task spec で fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す。.claude-team/playwright-native-design.md 5 節がすでにこの訳語を使っていたので合わせた"
+    },
+    {
+      "en": ["parser", "parsers"],
+      "ja": "パーサ",
+      "note": "長音を付けない。docs/spec.ja.md が @cucumber/gherkin を指してすでにこう書いており、ブラウザ・フォーマッタと同じ扱い。README.ja.md にだけ パーサー が 1 件あって割れていたのを 2026-08-08 に揃えた。長音の扱いは語ごとに違う(ユーザー は付ける)ので、規則ではなくこの語の決定として読むこと"
     }
   ],
   "keep_english": [
