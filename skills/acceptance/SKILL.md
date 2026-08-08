@@ -1,7 +1,7 @@
 ---
 name: acceptance
 description: Use when handed a ticket or story's acceptance criteria and asked to turn them into a Gherkin scenario, run it, and leave a sign-off record of that run.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka accept, nuka tend).
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka accept, nuka tend).
 license: MIT
 ---
 
@@ -20,6 +20,9 @@ hand. If the prompt already states them, or a ticket you've read gives them,
 there's nothing to confirm — proceed. If neither is true, ask the user what
 this is supposed to do; starting a scenario without knowing what it proves
 just produces a scenario that proves the wrong thing.
+
+Everything below assumes the project is already initialized. If it isn't yet
+(no `nukadoko.config.ts`), run `nuka init` first.
 
 ## The loop
 

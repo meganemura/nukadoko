@@ -1,7 +1,7 @@
 ---
 name: migration
 description: Use when moving an existing test suite onto nukadoko, whether from cucumber-js (typically driving Playwright) or from another DSL already shaped as typed steps. Covers the two-stage discipline that keeps every failure traceable to one change, the `nukadoko/compat` door, and promoting steps to typed `defineStep`s at your own pace.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka check, nuka run, nuka steps, nuka describe, nuka do).
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do).
 license: MIT
 ---
 
@@ -20,6 +20,9 @@ Where it starts differs:
 
 Either way, the move happens in stages, never all at once; the rest of this
 skill explains why, then walks through each starting point in turn.
+
+Everything below assumes the project is already initialized. If it isn't yet
+(no `nukadoko.config.ts`), run `nuka init` first.
 
 ## Two stages, never at once
 
