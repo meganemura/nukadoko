@@ -80,6 +80,31 @@ describe("nuka scaffold", () => {
     );
   });
 
+  it("explains rationale in the generated template: why nuka tend wants it, and how it differs from description", async () => {
+    // cli-messages-name-the-cause task spec, item 3: `nuka tend` flags a
+    // scaffolded step's missing rationale (`step-rationale-missing`,
+    // src/tend/missing-rationale.ts) the moment it exists, but the template
+    // that generated it never said the field existed at all. A guide
+    // comment, matching the density of the existing `args`/`returns` ones,
+    // is the fix — not filling `rationale` in with a placeholder value.
+    await runCli(["scaffold", "send-invite"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+
+    const filePath = path.join(rootDir, "features", "steps", "send-invite.ts");
+    const content = await readFile(filePath, "utf8");
+
+    expect(content).toContain("rationale");
+    expect(content).toContain("nuka tend");
+    expect(content).toContain("step-rationale-missing");
+    // Must read as distinct from `description` ("what"), not a restatement
+    // of it.
+    expect(content).toMatch(/description/);
+    expect(content).toMatch(/why/i);
+  });
+
   it("fails until implemented: `nuka do` exits 1 with a failed receipt", async () => {
     await runCli(["scaffold", "send-invite"], {
       rootDir,

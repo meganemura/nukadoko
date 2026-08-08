@@ -174,6 +174,23 @@ just until 0.1.
   under it fails setup, naming what it walked, the same tone `nuka check`'s
   own `no-step-files-found` uses. README's own CI example
   (`npx nuka run features/`) now runs as written.
+- **An unknown parameter type now names the ones this project has.**
+  `{count:number}` is a natural thing to write and cucumber-expressions
+  answers it with "Undefined parameter type 'number'", which says what is
+  wrong without saying what would be right. The message now carries the
+  names actually registered for this project, read from the live registry
+  rather than a fixed list, so the ones a project added through
+  `config.parameterTypes` or a compat `defineParameterType` appear beside
+  the built-in ones. A list written into a document could not have done
+  that, and would have been wrong for exactly the projects that extended
+  the vocabulary furthest.
+- **`nuka scaffold`'s template now explains `rationale`.** The template
+  guided every other field and said nothing about this one, while
+  `nuka tend` flags a step that lacks it (`step-rationale-missing`), so a
+  step written the way scaffold suggested was reported the moment anyone
+  tended it. The comment says what belongs there (why this shape, what was
+  rejected) and how it differs from `description`, which says what the
+  step does.
 
 ## 0.1.0 — 2026-08-06
 
