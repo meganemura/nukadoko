@@ -18,10 +18,10 @@ import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 // A `FixtureCache` is the one piece of state this module owns: one per
 // scope-lifetime (a fresh one per pickle for `"scenario"` scope, one shared
 // across a whole `nuka run` invocation for `"process"` scope — `nuka do`
-// creates one of each, both discarded after that single execution, per
-// `.claude-team/playwright-native-design.md` 6 節). `resolveFixtures` below
-// is the one place both caches are read from and written to; nothing else
-// in this package touches a `FixtureCache`'s own entries directly.
+// creates one of each, both discarded after that single execution).
+// `resolveFixtures` below is the one place both caches are read from and
+// written to; nothing else in this package touches a `FixtureCache`'s own
+// entries directly.
 //
 // **Builtin resolution never changes**: `buildStepFixtures` (src/context/
 // create-context.ts, unmodified) still resolves every builtin name this
@@ -182,14 +182,13 @@ export async function resolveFixtures(
 
 /**
  * Tears down every fixture instance currently in `cache`, in reverse build
- * order (P5 task spec, scope item 6; `.claude-team/playwright-native-
- * design.md` 5 節: "この逆順の単純化は直列実行が前提" — folding teardown
- * over the exact reverse of construction order only guarantees every
- * dependency outlives its own dependents because nukadoko runs everything
- * in this cache's own scope *serially*; the day any of it parallelizes,
- * this ordering guarantee breaks silently and this function has to change
- * first). Never throws: each instance's own `teardown()` already turns a
- * failure into a returned message rather than a rejection (src/fixture/
+ * order (P5 task spec, scope item 6) — folding teardown over the exact
+ * reverse of construction order only guarantees every dependency outlives
+ * its own dependents because nukadoko runs everything in this cache's own
+ * scope *serially*; the day any of it parallelizes, this ordering guarantee
+ * breaks silently and this function has to change first. Never throws: each
+ * instance's own `teardown()` already turns a failure into a returned
+ * message rather than a rejection (src/fixture/
  * lifecycle.ts), so one fixture's broken teardown can never stop a
  * sibling's from running, and never changes the step's/scenario's own
  * outcome either. Empties `cache` afterward — a cache is torn down exactly

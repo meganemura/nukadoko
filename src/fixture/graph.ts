@@ -4,14 +4,14 @@ import { fixtureParameterNames } from "../step/fixture-names.js";
 import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from "./types.js";
 
 // Responsibility: the fixture *dependency graph* — layering builtin and
-// `config.fixtures` names into one structure (P5 task spec, scope item 5;
-// `.claude-team/playwright-native-design.md` 5 節 "層"), and every purely
-// structural judgment over it that does not need to actually run anything:
-// which name a dependency edge resolves to (honoring "a same-named override
-// depends on the previous layer, not on itself"), a cycle, a `process`-scope
-// fixture depending on a `scenario`-scope one, `page` overridden by a
-// fixture that owns neither `page` nor `context`, and the reachable subgraph
-// + build order a step's own requested names close over. src/step/
+// `config.fixtures` names into one structure (P5 task spec, scope item 5),
+// and every purely structural judgment over it that does not need to
+// actually run anything: which name a dependency edge resolves to (honoring
+// "a same-named override depends on the previous layer, not on itself"), a
+// cycle, a `process`-scope fixture depending on a `scenario`-scope one,
+// `page` overridden by a fixture that owns neither `page` nor `context`,
+// and the reachable subgraph + build order a step's own requested names
+// close over. src/step/
 // validate-fixtures.ts turns this module's findings into the `FixtureIssue`/
 // `FixtureDefinitionIssue` shape `nuka check`/`nuka run`/`nuka do` already
 // share; src/fixture/resolver.ts is the only caller that actually builds
@@ -21,9 +21,11 @@ import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from
 // **This module never calls a fixture function.** Every judgment here reads
 // a fixture's own declared dependency *names* (`fixtureParameterNames`,
 // src/step/fixture-names.ts — the same `fn.toString()` parse a step's own
-// destructuring already goes through) — never its body, matching this
-// project's own "check never executes a fixture" rule (this task's spec,
-// "前提" via `.claude-team/playwright-native-design.md` 5 節).
+// destructuring already goes through) — never its body: running one could
+// launch a browser or make a network call before a `run` has even begun,
+// which is exactly what a check meant to decide things *before* execution
+// must not do, matching this project's own "check never executes a
+// fixture" rule (this task's spec, "前提").
 //
 // The override rule (Playwright's own `extend()` semantics, deliberately
 // mirrored): a fixture defined under `config.fixtures` with the same name

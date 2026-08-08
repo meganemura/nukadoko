@@ -427,9 +427,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     });
     // `nuka do` is one execution, so `"scenario"` and `"process"` scope both
     // collapse to this one call's own lifetime (P5 task spec, scope item
-    // 3; `.claude-team/playwright-native-design.md` 6 節): two separate,
-    // freshly created caches (never shared across `nuka do` invocations),
-    // each torn down once, below, after this step's own `run()` returns.
+    // 3): two separate, freshly created caches (never shared across `nuka
+    // do` invocations), each torn down once, below, after this step's own
+    // `run()` returns.
     const fixtureScenarioCache = createFixtureCache();
     const fixtureProcessCache = createFixtureCache();
     const startedAt = new Date();

@@ -9,8 +9,7 @@ import type { FixtureDefinition } from "./types.js";
 // happens later, over the *resolved* config (src/step/validate-fixtures.ts)
 // — the same defineConfig/loadConfig split this mirrors.
 //
-// Why this needs to exist at all (measured, `.claude-team/
-// playwright-native-design.md` 3 節): a plain
+// Why this needs to exist at all (measured): a plain
 //
 //   export const fixtures = { tenant: async ({ request }, use) => {...} };
 //

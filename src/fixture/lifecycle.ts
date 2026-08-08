@@ -3,9 +3,10 @@ import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "./types.js";
 // Responsibility: runs *one* fixture function's own setup/teardown
 // coroutine — `await use(value)` inside it suspends until this module's own
 // caller (src/fixture/resolver.ts) later decides the outcome and calls
-// `teardown()`. This is the "自前で解決する" half of P5 (`.claude-team/
-// playwright-native-design.md` 5 節): Playwright's own fixture runtime
-// cannot be borrowed (this task's spec, "前提"), so the same "a function
+// `teardown()`. Playwright's own fixture engine is runner machinery keyed on
+// `testInfo` (which test, which retry) that only Playwright's own test
+// runner owns; nukadoko is its own runner, not Playwright's, so that engine
+// cannot be borrowed (this task's spec, "前提") — the same "a function
 // suspended on `use()`, resumed by teardown" shape is reimplemented here,
 // from scratch, over a plain `Promise`.
 //

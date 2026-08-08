@@ -14,11 +14,13 @@ import type { StepFixtures } from "../context.js";
 //
 // `UseFn` is deliberately *not* parameterized by a map of every fixture
 // name to its own value type the way Playwright's own `Fixtures<T, W, ...>`
-// is (`.claude-team/playwright-native-design.md` 3 節: "共有 fixtures.ts は
-// 型が壊れる" — the reason `defineFixtures` has to exist at all). Measured
-// against this project's own TypeScript version while designing this file:
-// making a fixture's `deps` parameter type depend on a self-referencing
-// generic inferred from the very `defineFixtures({...})` call it appears in
+// is — the same contextual-typing limit that forces `defineFixtures` to
+// exist at all (define-fixtures.ts's own header: `base.extend()`-style
+// inference only works on an inline object literal, not one exported to a
+// variable first). Measured against this project's own TypeScript version
+// while designing this file: making a fixture's `deps` parameter type
+// depend on a self-referencing generic inferred from the very
+// `defineFixtures({...})` call it appears in
 // only actually infers real per-key types once at least one entry in that
 // same call happens to use the tuple form (`[fn, options]`) — an
 // undocumented compiler quirk (a bare-function-only object literal, with no
@@ -46,8 +48,7 @@ import type { StepFixtures } from "../context.js";
 /** Passed to whatever `use()`'s own promise resolves with, once the step
  * (or, for `scope: "process"`, the process itself) that named this fixture
  * has finished — a fixture's only way to know whether to keep what it built
- * or discard it (`.claude-team/playwright-native-design.md` 5 節 "teardown
- * に成否を渡す"). Never available at setup time: an outcome doesn't exist
+ * or discard it. Never available at setup time: an outcome doesn't exist
  * yet when `use()` is first called, only once whatever named this fixture
  * is itself done — see `UseFn`'s own doc comment for why this is the
  * *return* value of `use()`, not a second argument to the fixture
@@ -93,8 +94,7 @@ export type FixtureFn = (deps: FixtureDeps, use: UseFn) => Promise<void> | void;
  * once — the first time any step in the whole `nuka run` invocation names
  * it (or its own dependents do) — and tears down once, after every
  * scenario has finished. Under `nuka do` the two collapse to the same
- * single-execution lifetime (this task's spec, scope item 3;
- * `.claude-team/playwright-native-design.md` 3 節/6 節).
+ * single-execution lifetime (this task's spec, scope item 3).
  *
  * `"worker"` is deliberately not a member: there is no parallel execution
  * yet, so it would be a synonym for `"process"` with none of the meaning a

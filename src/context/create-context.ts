@@ -858,15 +858,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
  * Resolves `names` (a typed step's own `fixtureParameterNames(step.run)`,
  * src/step/fixture-names.ts) into a `StepFixtures` bag, reading each named
  * fixture off `ctx` (this file's own `createStepContext` output) — the
- * "build only what was named" half of p4a-fixture-bag task spec's design
- * (`.claude-team/playwright-native-design.md` 5 節 "構築"). `page`/`context`
- * are the only two names that can cause a browser to launch (`context` is
- * `page`'s own `.context()` — never a second browser, never a second
- * `ctx.page()` call site of its own): a step whose `run` destructures
- * neither never calls `ctx.page()` at all, so this function itself is the
- * one place "a step that doesn't name `page` doesn't launch a browser"
- * actually happens, not merely something the fixture's own laziness makes
- * true incidentally.
+ * "build only what was named" half of p4a-fixture-bag task spec's design:
+ * a step's requested names are closed over the reachable part of the
+ * fixture graph and built in topological order, so a fixture nothing
+ * reaches is never built. `page`/`context` are the only two names that can
+ * cause a browser to launch (`context` is `page`'s own `.context()` — never
+ * a second browser, never a second `ctx.page()` call site of its own): a
+ * step whose `run` destructures neither never calls `ctx.page()` at all, so
+ * this function itself is the one place "a step that doesn't name `page`
+ * doesn't launch a browser" actually happens, not merely something the
+ * fixture's own laziness makes true incidentally.
  *
  * `names` is trusted to already be validated (src/step/validate-
  * fixtures.ts, run before execution in `nuka check`/`nuka run`/`nuka do`'s

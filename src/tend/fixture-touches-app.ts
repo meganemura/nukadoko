@@ -4,14 +4,14 @@ import type { TendIssue } from "./types.js";
 // Responsibility: docs/spec.md "Tending"'s `fixture-touches-app` finding
 // (P5 task spec, scope item 9) — names every `config.fixtures` entry that
 // reaches `page`/`context`, directly or through another fixture. This is
-// the standing answer to "a fixture that drives Given" (`.claude-team/
-// playwright-native-design.md` 4 節): a fixture that logs a user in before
-// a step ever runs lets a scenario go green with a precondition the feature
-// file itself never named, quietly reversing "the feature file names
-// everything that ran". A `drives` declaration was considered and dropped
-// (same design doc, same section) — it would add a vocabulary word for
-// something already readable from a fixture's own destructuring, and a
-// hand-written declaration can lie where a static read cannot.
+// the standing answer to "a fixture that drives Given": a fixture that logs
+// a user in before a step ever runs lets a scenario go green with a
+// precondition the feature file itself never named, quietly reversing "the
+// feature file names everything that ran". A `drives` declaration (letting a
+// fixture author flag which of these it is) was considered and dropped — it
+// would add a vocabulary word for something already readable from a
+// fixture's own destructuring, and a hand-written declaration can lie where
+// a static read cannot.
 //
 // **Deliberately not a judgment.** `storageState` generation — the most
 // common legitimate reason a fixture opens a page at all — is exactly this

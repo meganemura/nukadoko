@@ -134,10 +134,12 @@ function isFixtureFunction(value: unknown): value is (...args: never[]) => unkno
  * naming *why* (P5 task spec, scope item 4) — the one option this schema
  * does treat as a hard, structural mistake rather than deferring to a later
  * check: accepting it would be the first claim this package would be
- * breaking about its own fixture support (`.claude-team/
- * playwright-native-design.md` 3 節: "「Playwright fixture 互換」とは名乗
- * らない" — engine-constructed-without-being-named is exactly what CLAUDE.md's
- * "the feature file names everything that ran" principle exists to forbid). */
+ * breaking about its own fixture support. nukadoko accepts the *shape* of a
+ * Playwright fixture definition, never its "build whatever wasn't named"
+ * behavior — an engine constructing a fixture nothing named is exactly what
+ * CLAUDE.md's "the feature file names everything that ran" principle exists
+ * to forbid, so this package never claims to be "Playwright fixture
+ * compatible". */
 const fixtureDefinitionSchema: z.ZodType<FixtureDefinition> = z
   .custom<FixtureDefinition>(
     (value) => isFixtureFunction(value) || (Array.isArray(value) && value.length === 2 && isFixtureFunction(value[0])),

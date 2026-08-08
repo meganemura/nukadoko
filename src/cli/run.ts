@@ -814,16 +814,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
 
       // `"process"`-scope fixture teardown (P5 task spec, scope items 3, 6)
-      // — once, after every scenario in this invocation has finished
-      // (`.claude-team/playwright-native-design.md` 5 節: "run の最後、全
-      // シナリオの後"), after AfterAll (a `"process"`-scope fixture is
-      // nukadoko's own machinery, not a compat hook's teardown target, so it
-      // has no ordering promise relative to AfterAll beyond "after every
-      // scenario"). Never changes `allPassed` — same "teardown の throw は
-      // 成否を変えない" rule as scenario-scope teardown — and, unlike a
-      // scenario-scope failure, has no single `ScenarioRecord` of its own to
-      // land on (this process-scope cache spans every scenario in the
-      // invocation, not one), so it is announced on stderr only.
+      // — once, after every scenario in this invocation has finished, after
+      // AfterAll (a `"process"`-scope fixture is nukadoko's own machinery,
+      // not a compat hook's teardown target, so it has no ordering promise
+      // relative to AfterAll beyond "after every scenario"). Never changes
+      // `allPassed` — a teardown failure must not turn an otherwise-green
+      // run red for a reason unrelated to the acceptance criteria, the same
+      // rule scenario-scope teardown follows — and, unlike a scenario-scope
+      // failure, has no single `ScenarioRecord` of its own to land on (this
+      // process-scope cache spans every scenario in the invocation, not
+      // one), so it is announced on stderr only.
       const processFixtureTeardownErrors = await teardownFixtureCache(
         fixtureProcessCache,
         allPassed ? "passed" : "failed",

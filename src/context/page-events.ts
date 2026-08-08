@@ -11,10 +11,11 @@
 // the same way it resets `observed`/`sections`/`polls`.
 //
 // Subscribed on `BrowserContext`, not `Page` (P0-page-events task spec,
-// "前提"): the design (`.claude-team/playwright-native-design.md` 2 節)
-// leaves room for a user-supplied `page` fixture to override the one this
-// module hands back later, and a context-level subscription keeps recording
-// even then, where a page-level one would silently stop.
+// "前提"): overriding a builtin fixture is legitimate in this design (a
+// config author is free to wrap the `page` this module hands back later,
+// e.g. to set a default timeout), and a context-level subscription keeps
+// recording through that wrap, where a page-level one would silently stop
+// the moment the wrapped `page` took over.
 //
 // Only `console.error` calls are recorded, never `warning`/`log`/etc — a
 // warning is something most SPAs emit routinely, and folding it in would

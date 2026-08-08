@@ -151,7 +151,7 @@
     {
       "en": ["outcome"],
       "ja": "成否",
-      "note": "P5 task spec で fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す。.claude-team/playwright-native-design.md 5 節がすでにこの訳語を使っていたので合わせた"
+      "note": "P5 task spec で fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す"
     },
     {
       "en": ["parser", "parsers"],

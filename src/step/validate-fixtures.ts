@@ -45,11 +45,9 @@ import type { Step } from "./define-step.js";
 //      depending on a `"scenario"`-scope one, and `page` overridden by a fixture that
 //      owns neither `page` nor `context` (src/fixture/graph.ts does the
 //      actual graph-shape work; this file only turns its findings into the
-//      same kind of issue `nuka check`/`nuka run`/`nuka do` already share).
-//      `.claude-team/playwright-native-design.md` 5 節/7 節: "既存の
-//      validate-fixtures.ts に足すこと。新しい仕組みを作らない" — no new
-//      check-wiring mechanism, only more findings through the one that
-//      already exists.
+//      same kind of issue `nuka check`/`nuka run`/`nuka do` already share) —
+//      no new check-wiring mechanism, only more findings routed through the
+//      one that already exists.
 //
 // Extraction itself (src/step/fixture-names.ts) can throw for a step (or a
 // fixture) whose own function isn't shaped in a way names can be read from

@@ -37,12 +37,12 @@ import type { TendIssue } from "./types.js";
 // is skipped the same way cli/accept.ts's own filter treats "no browser":
 // an unmeasured axis carries no confirmed condition to disagree with.
 //
-// The "matrix incomplete" finding the design doc's own 11 section floats
-// (`.claude-team/playwright-native-design.md`) is deliberately not built:
-// this task drops the named matrix entirely (per its own spec), so there is
-// no declared set of conditions to compare a feature's sign-offs against —
-// only measured ones, and "some declared conditions are missing a sign-off"
-// would need a declaration that does not exist.
+// A "some declared browser conditions have no sign-off yet" finding was
+// considered and deliberately not built: this task drops the named matrix
+// entirely (per its own spec), so there is no declared set of conditions to
+// compare a feature's sign-offs against — only measured ones, and "some
+// declared conditions are missing a sign-off" would need a declaration that
+// does not exist.
 
 export function findSignoffConditionMismatch(rootDir: string, currentBrowserType: string): TendIssue[] {
   interface FeatureLatest {
