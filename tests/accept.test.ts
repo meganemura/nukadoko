@@ -463,3 +463,75 @@ describe("nuka accept: declared vs observed (accept-declared-vs-observed task sp
     expect(content).toContain(stepText);
   });
 });
+
+describe("nuka accept: after a directory run (run-directory-target task spec)", () => {
+  let rootDir: string;
+  let featuresDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("accept-project");
+    featuresDir = path.join(rootDir, "features");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("accepts one feature out of several that ran in the same directory invocation", async () => {
+    await initGitRepo(rootDir);
+
+    // accept-project's own `features/` holds three files: greeting.feature
+    // (green), multi.feature (green), failing.feature (red) — one directory
+    // run touches all three, sharing one run_id, and the run's own exit
+    // code is non-zero because of failing.feature. Neither fact is accept's
+    // concern: this task's own required investigation found that `nuka
+    // accept` never assumed "1 run = 1 feature" in the first place — it
+    // filters `record.feature` down to the one feature named on the command
+    // line before it ever looks at run_id grouping (src/accept/select-run.ts
+    // groups only what cli/accept.ts already filtered) — so the real risk
+    // was never accept.ts, it was `nuka run` mislabeling every record from a
+    // directory run with the same single `relativePath` (see src/cli/run.ts,
+    // `flatPickles`); this test is what would have caught that.
+    const runStdout = createCaptureSink();
+    const runExit = await runCli(["run", "features"], {
+      rootDir,
+      stdout: runStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(1);
+
+    const records = runStdout
+      .text()
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { feature: string; run_id: string });
+    expect(new Set(records.map((r) => r.feature))).toEqual(
+      new Set(["features/failing.feature", "features/greeting.feature", "features/multi.feature"]),
+    );
+    expect(new Set(records.map((r) => r.run_id)).size).toBe(1);
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const acceptExit = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(acceptExit).toBe(0);
+    expect(stderr.text()).toBe("");
+    expect(await mdFilesIn(featuresDir)).toEqual([
+      expect.stringMatching(/^greeting\./),
+    ]);
+
+    const relativePath = stdout.text().trim();
+    const content = await readFile(path.join(rootDir, relativePath), "utf8");
+    expect(content).toContain("feature: features/greeting.feature");
+    // Only greeting.feature's own scenario landed in the record — proof
+    // this accept did not pull in a scenario from multi.feature or
+    // failing.feature just because they shared the same run_id.
+    expect(content).toContain("name: greet a visitor");
+    expect(content).not.toContain("first visitor");
+    expect(content).not.toContain("it fails partway through");
+  });
+});

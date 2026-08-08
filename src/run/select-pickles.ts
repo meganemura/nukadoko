@@ -1,17 +1,41 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
-import { parseFeatureSource } from "../feature/load-features.js";
-import { FeatureFileNotFoundError, FeatureParseFailedError, NoMatchingScenarioError } from "./errors.js";
+import { parseFeatureSource, walkFeatureFiles } from "../feature/load-features.js";
+import {
+  DirectoryTargetLineError,
+  FeatureFileNotFoundError,
+  FeatureParseFailedError,
+  NoFeatureFilesFoundError,
+  NoMatchingScenarioError,
+} from "./errors.js";
 
-// Responsibility: turn `nuka run`'s `<feature[:line]>` argument into the
-// pickle(s) it selects (this task's spec, decision 1) — the one place that
-// argument's syntax and gherkin's own pickle `location` are both known. A
-// missing file, a parse failure, or (when `:line` was given) zero matching
-// pickles are all setup failures, thrown here before anything about the run
-// is decided (this task's spec, decision 2); cli/run.ts turns them into
-// stderr + exit 1 the same way it already does for config/environment
-// errors.
+// Responsibility: turn `nuka run`'s `<feature[:line]>|<dir>` argument into
+// the pickle(s) it selects (this task's spec, decision 1) — the one place
+// that argument's syntax and gherkin's own pickle `location` are both
+// known. A missing file, a parse failure, `:line` matching zero pickles, a
+// directory carrying `:line`, or a directory with no `.feature` file
+// anywhere under it are all setup failures, thrown here before anything
+// about the run is decided (this task's spec, decision 2); cli/run.ts turns
+// them into stderr + exit 1 the same way it already does for
+// config/environment errors.
+//
+// run-directory-target task spec: the single positional now also accepts a
+// directory (decision 1 — still exactly one positional, never a variadic
+// list). `selectPickles` decides file-vs-directory by `statSync`, tried
+// first: a path that doesn't exist at all falls straight through to the
+// same `readFileSync`-then-catch that already raised
+// `FeatureFileNotFoundError` before this task, so that error's own wording
+// and behavior for "nothing at this path" is unchanged. A directory is
+// walked recursively for every `.feature` file via
+// src/feature/load-features.ts's own `walkFeatureFiles` (reused, not
+// duplicated), then re-sorted here by rootDir-relative path in plain byte
+// order (decision 2) — never `localeCompare`, whose collation can legally
+// differ between machines/ICU builds, exactly the run-to-run instability
+// this sort exists to rule out. `:line` on a directory is refused outright
+// (decision 4): it names one pickle inside a single file's own gherkin
+// `location.line`, and a directory names no single file for that to mean
+// anything against.
 
 export interface FeatureTarget {
   readonly relativePath: string;
@@ -33,67 +57,140 @@ export function parseFeatureTarget(featureArg: string): FeatureTarget {
   return { relativePath: match[1]!, line: Number(match[2]!) };
 }
 
-export interface SelectedScenarios {
+/** One feature file's own parsed contribution to a run (this task's spec,
+ * decision 5: a directory target is N of these flowing into the same one
+ * run, never a different shape). */
+export interface SelectedFeature {
   readonly relativePath: string;
-  readonly pickles: readonly Pickle[];
-  /** How many pickles the file has in total, whether or not `:line` cut the
-   * selection down. Carried here rather than recovered by a second
-   * `selectPickles` call without the line: this one already compiled the
-   * whole document to filter it, and parsing the file twice would let the
-   * two counts describe two different reads of it. */
-  readonly totalPickles: number;
   /** This feature file's own parsed document (m21b-compat-execution task
-   * spec, item 3) — threaded through to every `runScenario` call so a
-   * Before/After hook's `HookParameter.gherkinDocument` is this run's real
-   * document, not a stand-in. */
+   * spec, item 3) — threaded through to every `runScenario` call for its
+   * own pickles so a Before/After hook's `HookParameter.gherkinDocument` is
+   * that pickle's real document, never a stand-in and never another file's
+   * (run-directory-target task spec: a directory target must not let one
+   * file's pickle borrow a different file's document). */
   readonly gherkinDocument: GherkinDocument;
+  readonly pickles: readonly Pickle[];
+}
+
+export interface SelectedScenarios {
+  /** One entry per feature file this invocation runs, in the order cli/
+   * run.ts's own pickle loop executes them: a single entry for a file
+   * target (unchanged from before this task), one entry per file
+   * `walkFeatureFiles` found — sorted deterministically, this file's own
+   * header — for a directory target. cli/run.ts flattens this into
+   * `{ feature, pickle }` pairs for its own loop; grouped by file is kept
+   * here because the messages emitter (src/report/messages/emitter.ts)
+   * needs that same per-file grouping for its own `begin()` call. */
+  readonly features: readonly SelectedFeature[];
+  /** How many pickles the target has in total, whether or not `:line` cut
+   * a single file's own selection down (unchanged meaning for a file
+   * target, this file's own pre-existing behavior). A directory target
+   * never filters, so this always equals the sum of every feature's own
+   * `pickles.length`. */
+  readonly totalPickles: number;
 }
 
 /**
- * Loads exactly one `.feature` file and selects which of its pickles `nuka
- * run` executes: every pickle in file order when no `:line` was given, or
- * only the pickle(s) whose own gherkin `location.line` equals it when one
- * was — a Scenario Outline's Examples row included, since `@cucumber/
- * gherkin`'s `compile()` assigns each expanded pickle the location of the
- * row that produced it, not the outline's own line (verified against this
- * repo's own check-clean-project fixture).
+ * Reads and parses one `.feature` file already known to exist at
+ * `relativePath` (rootDir-relative) — the single-file half of
+ * `selectPickles`'s own work, factored out so both the file-target branch
+ * and the directory-target branch (one call per file the walk found) share
+ * it rather than each re-implementing "read, parse, wrap the failure".
  */
-export function selectPickles(rootDir: string, featureArg: string): SelectedScenarios {
-  const target = parseFeatureTarget(featureArg);
-  const absolutePath = path.join(rootDir, target.relativePath);
+function parseOneFeatureFile(rootDir: string, relativePath: string): SelectedFeature {
+  const absolutePath = path.join(rootDir, relativePath);
 
   let source: string;
   try {
     source = readFileSync(absolutePath, "utf8");
   } catch {
-    throw new FeatureFileNotFoundError(target.relativePath);
+    throw new FeatureFileNotFoundError(relativePath);
   }
 
   let gherkinDocument: GherkinDocument;
-  let allPickles: readonly Pickle[];
+  let pickles: readonly Pickle[];
   try {
-    ({ gherkinDocument, pickles: allPickles } = parseFeatureSource(source, target.relativePath));
+    ({ gherkinDocument, pickles } = parseFeatureSource(source, relativePath));
   } catch (error) {
-    throw new FeatureParseFailedError(target.relativePath, error);
+    throw new FeatureParseFailedError(relativePath, error);
   }
+
+  return { relativePath, gherkinDocument, pickles };
+}
+
+/** Plain UTF-16 code-unit comparison (`<`/`>`), deliberately not
+ * `String.prototype.localeCompare` (this file's own header, decision 2):
+ * for ASCII repo-relative paths this is byte order, and unlike collation it
+ * is fixed by the language itself, not by whatever ICU data the running
+ * Node build happens to carry. */
+function compareByteOrder(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function selectDirectory(rootDir: string, relativePath: string): SelectedScenarios {
+  const absolutePath = path.join(rootDir, relativePath);
+
+  const relativeFilePaths = walkFeatureFiles(absolutePath)
+    .map((absoluteFilePath) => path.relative(rootDir, absoluteFilePath))
+    .sort(compareByteOrder);
+
+  if (relativeFilePaths.length === 0) {
+    throw new NoFeatureFilesFoundError(relativePath, absolutePath);
+  }
+
+  const features = relativeFilePaths.map((filePath) => parseOneFeatureFile(rootDir, filePath));
+  const totalPickles = features.reduce((sum, feature) => sum + feature.pickles.length, 0);
+  return { features, totalPickles };
+}
+
+/**
+ * Loads the `.feature` file(s) `featureArg` names and selects which of
+ * their pickles `nuka run` executes: every pickle, in file order, when no
+ * `:line` was given, or (a single-file target only) only the pickle(s)
+ * whose own gherkin `location.line` equals it — a Scenario Outline's
+ * Examples row included, since `@cucumber/gherkin`'s `compile()` assigns
+ * each expanded pickle the location of the row that produced it, not the
+ * outline's own line (verified against this repo's own check-clean-project
+ * fixture). `featureArg`'s target is a directory when it resolves
+ * (`statSync`) to one; every other case, including a path that doesn't
+ * exist at all, is a single-file target, unchanged from before this task.
+ */
+export function selectPickles(rootDir: string, featureArg: string): SelectedScenarios {
+  const target = parseFeatureTarget(featureArg);
+  const absolutePath = path.join(rootDir, target.relativePath);
+
+  let isDirectory = false;
+  try {
+    isDirectory = statSync(absolutePath).isDirectory();
+  } catch {
+    // Doesn't exist (or isn't statable) at all — not this function's
+    // business to report: falls through to the file-target path below,
+    // whose own `readFileSync` catch is what actually raises
+    // `FeatureFileNotFoundError`, unchanged from before this task.
+    isDirectory = false;
+  }
+
+  if (isDirectory) {
+    if (target.line !== null) {
+      throw new DirectoryTargetLineError(target.relativePath, target.line);
+    }
+    return selectDirectory(rootDir, target.relativePath);
+  }
+
+  const feature = parseOneFeatureFile(rootDir, target.relativePath);
 
   if (target.line === null) {
-    return {
-      relativePath: target.relativePath,
-      pickles: allPickles,
-      totalPickles: allPickles.length,
-      gherkinDocument,
-    };
+    return { features: [feature], totalPickles: feature.pickles.length };
   }
 
-  const matching = allPickles.filter((pickle) => pickle.location?.line === target.line);
+  const matching = feature.pickles.filter((pickle) => pickle.location?.line === target.line);
   if (matching.length === 0) {
     throw new NoMatchingScenarioError(target.relativePath, target.line);
   }
   return {
-    relativePath: target.relativePath,
-    pickles: matching,
-    totalPickles: allPickles.length,
-    gherkinDocument,
+    features: [{ ...feature, pickles: matching }],
+    totalPickles: feature.pickles.length,
   };
 }

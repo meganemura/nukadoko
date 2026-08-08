@@ -345,13 +345,15 @@ export async function runCli(
 
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
     command: "run <feature>",
-    describe: "execute scenarios from a feature file; receipts + scenario records",
+    describe: "execute scenarios from a feature file or a directory of them; receipts + scenario records",
     builder: (y: Argv) =>
       y
         .positional("feature", {
           type: "string",
           demandOption: true,
-          describe: "feature file path, optionally with :line (e.g. features/checkout.feature:12)",
+          describe:
+            "feature file path, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
+            "walked recursively for .feature files (:line is refused on a directory)",
         })
         .option("session", {
           type: "string",

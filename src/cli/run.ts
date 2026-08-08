@@ -55,8 +55,10 @@ import type { WritableSink } from "./writable-sink.js";
 // Responsibility: `nuka run`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs (same split as cli/do.ts). Two
 // phases, matching docs/spec.md's "Running"/"Receipts" split exactly —
-// generalized from cli/do.ts's own split to a whole feature file's worth of
-// pickles instead of one step:
+// generalized from cli/do.ts's own split to every pickle this invocation
+// selects (one feature file's worth, or, since run-directory-target, every
+// `.feature` file under a directory target folded into this same one
+// invocation) instead of one step:
 //
 //   1. Setup — a malformed feature target (missing file, invalid `:line`,
 //      a parse failure — src/run/select-pickles.ts), a config/discovery
@@ -102,11 +104,17 @@ import type { WritableSink } from "./writable-sink.js";
 // registered `TestRuntime`; src/run/run-scenario.ts is what repoints which
 // collector is "active" per pickle and per step/hook boundary.
 //
-// m21b-compat-execution task spec, item 3: `selected.gherkinDocument` (src/
-// run/select-pickles.ts) is threaded into every `runScenario` call below —
-// the same document for every pickle in this feature file, since a
-// Before/After hook's own `HookParameter.gherkinDocument` is this file's
-// document regardless of which pickle triggered the hook.
+// m21b-compat-execution task spec, item 3: each pickle's own feature's
+// `gherkinDocument` (`SelectedFeature.gherkinDocument`, src/run/
+// select-pickles.ts) is threaded into every `runScenario` call below — the
+// same document for every pickle that came from the same file, since a
+// Before/After hook's own `HookParameter.gherkinDocument` is that file's
+// document regardless of which pickle triggered the hook. Extended by
+// run-directory-target: a directory target's own pickles span more than one
+// file now, each carrying *its own* feature's document via the
+// `{ feature, pickle }` pairs `flatPickles` below builds, never a single
+// shared one the way a lone `selected.gherkinDocument` field would have
+// implied.
 //
 // m2b-compat-execution task spec closes m2a-compat-registry's two temporary
 // asymmetries: `buildStepBindings` now receives `compatParameterTypes` too
@@ -127,7 +135,7 @@ import type { WritableSink } from "./writable-sink.js";
 // immediately around the pickle `for` loop below (after every setup-phase
 // failure path has already returned, so environment/session/discovery are
 // all settled by the time either one runs) and skipped entirely when
-// `selected.pickles` is empty (this task's spec: a run that selects no
+// `flatPickles` (below) is empty (this task's spec: a run that selects no
 // pickle must not run BeforeAll/AfterAll at all — a run that executes
 // nothing has nothing for a BeforeAll/AfterAll to prepare or tear down, and
 // running one anyway would be a surprise side effect, e.g. standing up a
@@ -186,10 +194,14 @@ import type { WritableSink } from "./writable-sink.js";
 // Output-file semantics (item 3): one `nuka run` invocation is one stream,
 // written to one file; `begin()` truncates it (appending would produce a
 // second `testRunStarted` in what must read back as a single well-formed
-// message stream). Since `nuka run` only ever runs one feature file per
-// invocation, running a second feature afterward overwrites the first run's
-// stream rather than appending to it — a deliberate consequence of "one
-// file, truncated on begin", not a bug.
+// message stream). One invocation can select more than one feature file now
+// (run-directory-target task spec: a directory target folds every `.feature`
+// file it walked into this same one stream, `begin()` called once with all
+// of them — see that call site below), but it is still exactly one
+// invocation, one stream: running `nuka run` a second time, whether against
+// one file or a directory, overwrites the first run's stream rather than
+// appending to it — a deliberate consequence of "one file, truncated on
+// begin", not a bug.
 //
 // m6b-from-check task spec, item 2's own leftover: `from`'s structural
 // validation (src/step/validate-from.ts's `validateStepFrom`, m6a-from-core
@@ -334,12 +346,25 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       return 1;
     }
 
+    // Flattened once, here, into the `{ feature, pickle }` pairs every use
+    // below actually needs (run-directory-target task spec): `selected.
+    // features` stays grouped by file for the messages emitter's own
+    // `begin()` call (its own site below), but every other use — counting,
+    // the from/fixture checks, the pickle loop itself — wants one ordered
+    // sequence across every file, each pickle still paired with *its own*
+    // feature's `relativePath`/`gherkinDocument`, never a stray shared one.
+    const flatPickles = selected.features.flatMap((feature) =>
+      feature.pickles.map((pickle) => ({ feature, pickle })),
+    );
+
     // See this file's own header (partial-run-visibility task spec) — no
     // notice at all when `:line` wasn't given, so a normal full run stays
-    // silent every time.
+    // silent every time. `:line` on a directory target is refused in setup
+    // (src/run/select-pickles.ts's `DirectoryTargetLineError`), so reaching
+    // here with a non-null `line` always means a single-file target.
     if (parseFeatureTarget(featureArg).line !== null) {
       stderr.write(
-        `Partial run: ${featureArg} selects ${selected.pickles.length} of ${selected.totalPickles} scenarios. ` +
+        `Partial run: ${featureArg} selects ${flatPickles.length} of ${selected.totalPickles} scenarios. ` +
           "A partial run cannot be accepted; `nuka accept` needs a run of the whole feature.\n",
       );
     }
@@ -375,7 +400,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // resolve to nothing here, same as everywhere else this resolution is
     // done; they are none of this guard's business either.
     const usedStepNames = new Set<string>();
-    for (const pickle of selected.pickles) {
+    for (const { pickle } of flatPickles) {
       for (const step of pickle.steps) {
         const { stepNames } = matchPickleStepText(step.text, patterns);
         if (stepNames.length === 1) {
@@ -519,7 +544,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // Tallied alongside `allPassed` above, read by the summary/output-
       // location lines near this function's own `return` (fb5-run-output
       // task spec, decisions 2-3) — `scenariosWritten`/`scenariosPassed`
-      // count actual `stdout.write`s below, never `selected.pickles.length`:
+      // count actual `stdout.write`s below, never `flatPickles.length`:
       // a BeforeAll failure or a mid-loop storageState read failure can
       // leave this run with fewer scenario records than pickles selected,
       // and the summary line must say what actually happened, not what was
@@ -532,7 +557,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // Skipped entirely for a run that selects zero pickles (this task's
       // spec: no pickle selected means BeforeAll/AfterAll never run) —
       // `hasPickles` gates every step below, including AfterAll.
-      const hasPickles = selected.pickles.length > 0;
+      const hasPickles = flatPickles.length > 0;
 
       // This whole invocation's own `"process"`-scope fixture cache (P5 task
       // spec, scope item 3) — one instance, shared by every `runScenario`
@@ -586,10 +611,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         try {
           const output = path.join(rootDir, messagesOutputRel);
           messagesEmitter = createMessagesEmitter({ output, rootDir, stderr });
+          // One `features` entry per file `selected` carries (run-directory-
+          // target task spec) — `selected.features` is already in this
+          // run's own deterministic order, so this emitter has no reordering
+          // of its own to do (src/report/messages/emitter.ts's own header).
           messagesEmitter.begin({
-            relativeFeaturePath: selected.relativePath,
-            gherkinDocument: selected.gherkinDocument,
-            pickles: selected.pickles,
+            features: selected.features.map((feature) => ({
+              relativeFeaturePath: feature.relativePath,
+              gherkinDocument: feature.gherkinDocument,
+              pickles: feature.pickles,
+            })),
           });
         } catch (error) {
           messagesEmitter = null;
@@ -625,7 +656,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
 
       if (hasPickles && !beforeAllFailed) {
-        for (const [pickleIndex, pickle] of selected.pickles.entries()) {
+        for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
           let storageState: StorageState | null = null;
           if (session !== null) {
             try {
@@ -659,8 +690,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           if (!quiet) {
             writeScenarioBoundary(stderr, {
               index: pickleIndex + 1,
-              total: selected.pickles.length,
-              relativeFeaturePath: selected.relativePath,
+              total: flatPickles.length,
+              relativeFeaturePath: feature.relativePath,
               line: pickle.location?.line ?? 0,
               name: pickle.name,
             });
@@ -686,9 +717,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             ? (info) => {
                 allureEmitter?.emitStep({
                   ...info,
-                  gherkinDocument: selected.gherkinDocument,
+                  gherkinDocument: feature.gherkinDocument,
                   pickle,
-                  relativeFeaturePath: selected.relativePath,
+                  relativeFeaturePath: feature.relativePath,
                   environment: resolvedEnv.name,
                   session,
                   targetVersion,
@@ -701,8 +732,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             rootDir,
             config: runConfig,
             pickle,
-            relativeFeaturePath: selected.relativePath,
-            gherkinDocument: selected.gherkinDocument,
+            relativeFeaturePath: feature.relativePath,
+            gherkinDocument: feature.gherkinDocument,
             vocabulary,
             bindings,
             patterns,
@@ -755,9 +786,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // reference.
           allureEmitter?.endScenario({
             record,
-            gherkinDocument: selected.gherkinDocument,
+            gherkinDocument: feature.gherkinDocument,
             pickle,
-            relativeFeaturePath: selected.relativePath,
+            relativeFeaturePath: feature.relativePath,
           });
           messagesEmitter?.emitScenario({ record, pickle });
           if (record.status !== "passed") {

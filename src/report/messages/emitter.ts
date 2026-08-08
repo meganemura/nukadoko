@@ -53,10 +53,22 @@ export interface MessagesEmitterOptions {
   readonly stderr: WritableSink;
 }
 
-export interface MessagesBeginInput {
+/** One feature file's own contribution to `begin()` (run-directory-target
+ * task spec: a directory-target `nuka run` folds N feature files into this
+ * one run's own single messages stream, so `begin()` needs one of these per
+ * file rather than exactly one). */
+export interface MessagesBeginFeatureInput {
   readonly relativeFeaturePath: string;
   readonly gherkinDocument: GherkinDocument;
   readonly pickles: readonly Pickle[];
+}
+
+export interface MessagesBeginInput {
+  /** In the exact order `begin()` should write them — cli/run.ts already
+   * hands this the same deterministic, byte-order-sorted order its own
+   * pickle loop runs in (run-directory-target task spec, decision 2), so
+   * this emitter has no ordering decision of its own to make. */
+  readonly features: readonly MessagesBeginFeatureInput[];
 }
 
 export interface MessagesEmitScenarioInput {
@@ -65,9 +77,12 @@ export interface MessagesEmitScenarioInput {
 }
 
 export interface MessagesEmitter {
-  /** Once, at the start of a run. Writes `meta` / `source` /
-   * `gherkinDocument` / one `pickle` per selected pickle / `testRunStarted`,
-   * in that order (this task's spec, decision 4). Truncates `output`. */
+  /** Once, at the start of a run. Writes `meta`, then, per feature in
+   * `input.features`'s own order, that feature's `source` /
+   * `gherkinDocument` / one `pickle` per selected pickle, then one
+   * `testRunStarted` once every feature has been written (this task's spec,
+   * decision 4; extended to more than one feature by run-directory-target).
+   * Truncates `output`. */
   begin(input: MessagesBeginInput): void;
   /** One scenario. Never throws (this task's spec, decision 3). */
   emitScenario(input: MessagesEmitScenarioInput): void;
@@ -175,31 +190,41 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
 
         appendEnvelope({ meta: buildMeta() });
 
-        // `source.uri` is made identical to `pickle.uri`/`gherkinDocument.
-        // uri` by construction (this task's spec, decision 4: a consumer
-        // joins the three of them together via this one uri) —
-        // `gherkinDocument.uri` first
-        // (@cucumber/gherkin's own `Parser.parse` never sets it in this
-        // repo's usage today, so this is a forward-compatible first
-        // choice), falling back to the posix'd relative feature path
-        // otherwise, then stamped onto every one of the three envelopes
-        // below rather than trusted to already agree.
-        const uri = input.gherkinDocument.uri ?? toPosixPath(input.relativeFeaturePath);
+        // One (`source`, `gherkinDocument`, `pickle`*N) group per feature,
+        // in `input.features`'s own order (run-directory-target task spec:
+        // a directory target folds N files into this one stream) — every
+        // envelope inside one file's own group still uses that one file's
+        // own uri, never a later or earlier file's, so a reader joining
+        // `source`/`gherkinDocument`/`pickle` by uri (this task's spec,
+        // decision 4) can never cross two different files by accident.
+        for (const featureInput of input.features) {
+          // `source.uri` is made identical to `pickle.uri`/`gherkinDocument.
+          // uri` by construction (this task's spec, decision 4: a consumer
+          // joins the three of them together via this one uri) —
+          // `gherkinDocument.uri` first
+          // (@cucumber/gherkin's own `Parser.parse` never sets it in this
+          // repo's usage today, so this is a forward-compatible first
+          // choice), falling back to the posix'd relative feature path
+          // otherwise, then stamped onto every one of the three envelopes
+          // below rather than trusted to already agree.
+          const uri = featureInput.gherkinDocument.uri ?? toPosixPath(featureInput.relativeFeaturePath);
 
-        try {
-          const data = readFileSync(path.join(options.rootDir, input.relativeFeaturePath), "utf8");
-          appendEnvelope({ source: { uri, data, mediaType: SourceMediaType.TEXT_X_CUCUMBER_GHERKIN_PLAIN } });
-        } catch (error) {
-          // Feature source unreadable: drop only the `source` envelope, not
-          // the rest of `begin()` (this task's spec, decision 4: if it
-          // can't be read, warn and drop only the source envelope —
-          // everything else continues).
-          warn(`could not read feature source for messages: ${errorMessage(error)}`);
-        }
+          try {
+            const data = readFileSync(path.join(options.rootDir, featureInput.relativeFeaturePath), "utf8");
+            appendEnvelope({ source: { uri, data, mediaType: SourceMediaType.TEXT_X_CUCUMBER_GHERKIN_PLAIN } });
+          } catch (error) {
+            // Feature source unreadable: drop only this feature's own
+            // `source` envelope, not the rest of `begin()` (this task's
+            // spec, decision 4: if it can't be read, warn and drop only the
+            // source envelope — everything else continues, including every
+            // other feature in this loop).
+            warn(`could not read feature source for messages: ${errorMessage(error)}`);
+          }
 
-        appendEnvelope({ gherkinDocument: { ...input.gherkinDocument, uri } });
-        for (const pickle of input.pickles) {
-          appendEnvelope({ pickle: { ...pickle, uri } });
+          appendEnvelope({ gherkinDocument: { ...featureInput.gherkinDocument, uri } });
+          for (const pickle of featureInput.pickles) {
+            appendEnvelope({ pickle: { ...pickle, uri } });
+          }
         }
 
         appendEnvelope({ testRunStarted: { timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(Date.now()) } });

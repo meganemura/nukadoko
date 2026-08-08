@@ -150,6 +150,16 @@ just until 0.1.
   `section:`/`poll:`; and each `page_events` category's parameter reads the
   same count the step's own receipt recorded. Kept in a feature of its own
   so stage 1 through stage 3 keep their existing runtime.
+- **`nuka run` now takes a directory in place of a single feature file.**
+  `nuka run features/` walks it recursively for every `.feature` file and
+  folds all of their pickles into the one invocation: one run_id, one
+  summary, one exit code, one messages stream, one Allure results tree, in
+  a fixed order (the repo-relative path compared byte by byte, not by
+  locale) so a record or a report stays comparable across runs. `:line` on
+  a directory is refused, and a directory with no `.feature` file anywhere
+  under it fails setup, naming what it walked, the same tone `nuka check`'s
+  own `no-step-files-found` uses. README's own CI example
+  (`npx nuka run features/`) now runs as written.
 
 ## 0.1.0 — 2026-08-06
 

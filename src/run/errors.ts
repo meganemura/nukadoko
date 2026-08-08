@@ -44,3 +44,40 @@ export class NoMatchingScenarioError extends Error {
     this.line = line;
   }
 }
+
+/** Thrown when a directory target (run-directory-target task spec, decision
+ * 4) also carries a `:line` suffix — `:line` selects one pickle inside a
+ * single file's own gherkin `location.line`, and a directory names no single
+ * file for that to mean anything against. */
+export class DirectoryTargetLineError extends Error {
+  readonly relativePath: string;
+  readonly line: number;
+
+  constructor(relativePath: string, line: number) {
+    super(
+      `":line" has no meaning for a directory: ${relativePath}:${line} names a directory, not a feature file`,
+    );
+    this.name = "DirectoryTargetLineError";
+    this.relativePath = relativePath;
+    this.line = line;
+  }
+}
+
+/** Thrown when a directory target's own recursive walk (run-directory-target
+ * task spec, decision 3) finds zero `.feature` files anywhere under it — the
+ * same "name exactly what it looked at" tone `nuka check`'s own
+ * `no-step-files-found` uses (src/check/analyze.ts), so a run that would do
+ * nothing refuses loudly instead of exiting 0 having run nothing at all. */
+export class NoFeatureFilesFoundError extends Error {
+  readonly relativePath: string;
+  readonly resolvedPath: string;
+
+  constructor(relativePath: string, resolvedPath: string) {
+    super(
+      `no .feature file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`,
+    );
+    this.name = "NoFeatureFilesFoundError";
+    this.relativePath = relativePath;
+    this.resolvedPath = resolvedPath;
+  }
+}

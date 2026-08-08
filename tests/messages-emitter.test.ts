@@ -32,6 +32,17 @@ const FEATURE_SOURCE = `Feature: Checkout
       | member |
 `;
 
+// A second, unrelated feature (run-directory-target task spec: a directory
+// target's own `begin()` call carries more than one feature) — just one
+// scenario, enough to prove `begin()` writes a second (source,
+// gherkinDocument, pickle) group rather than only ever the first.
+const SECOND_FEATURE_SOURCE = `Feature: Shipping
+  Handles the shipping flow.
+
+  Scenario: a customer picks a carrier
+    Given a carrier is chosen
+`;
+
 function writeReceiptFile(rootDir: string, receipt: Receipt): void {
   const dir = path.join(rootDir, ".nukadoko", "receipts", receipt.receipt_id);
   mkdirSync(dir, { recursive: true });
@@ -75,7 +86,7 @@ describe("createMessagesEmitter", () => {
       const pickle = pickles[0]!;
       const outlineRow = pickles.find((p) => p.name.startsWith("checkout as"))!;
 
-      emitter.begin({ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles });
+      emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
       const receiptDir = path.join(rootDir, ".nukadoko", "receipts", "rcpt-1");
       mkdirSync(receiptDir, { recursive: true });
@@ -266,16 +277,69 @@ describe("createMessagesEmitter", () => {
     writeFileSync(output, "leftover line from a previous run\n");
 
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles });
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
     const content = readFileSync(output, "utf8");
     expect(content).not.toContain("leftover line from a previous run");
   });
 
+  it("begin() with more than one feature writes meta, then one (source, gherkinDocument, pickle x N) group per feature in the given order, then one testRunStarted", () => {
+    const first = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    const second = parseFeatureSource(SECOND_FEATURE_SOURCE, "features/shipping.feature");
+
+    mkdirSync(path.join(rootDir, "features"), { recursive: true });
+    writeFileSync(path.join(rootDir, "features", "checkout.feature"), FEATURE_SOURCE);
+    writeFileSync(path.join(rootDir, "features", "shipping.feature"), SECOND_FEATURE_SOURCE);
+
+    emitter.begin({
+      features: [
+        { relativeFeaturePath: "features/checkout.feature", gherkinDocument: first.gherkinDocument, pickles: first.pickles },
+        { relativeFeaturePath: "features/shipping.feature", gherkinDocument: second.gherkinDocument, pickles: second.pickles },
+      ],
+    });
+
+    const envelopes = readEnvelopes(output);
+    const kinds = envelopes.map((e) => Object.keys(e)[0]);
+
+    // meta, then checkout's own (source, gherkinDocument, pickle x 3), then
+    // shipping's own (source, gherkinDocument, pickle x 1), then
+    // testRunStarted — one group per feature, in the order `features` was
+    // given, never interleaved.
+    expect(kinds).toEqual([
+      "meta",
+      "source",
+      "gherkinDocument",
+      "pickle",
+      "pickle",
+      "pickle",
+      "source",
+      "gherkinDocument",
+      "pickle",
+      "testRunStarted",
+    ]);
+
+    const sources = envelopes.filter((e) => e.source).map((e) => e.source!);
+    const gherkinDocuments = envelopes.filter((e) => e.gherkinDocument).map((e) => e.gherkinDocument!);
+    expect(sources[0]!.data).toBe(FEATURE_SOURCE);
+    expect(sources[1]!.data).toBe(SECOND_FEATURE_SOURCE);
+    expect(gherkinDocuments[0]!.uri).toBe(sources[0]!.uri);
+    expect(gherkinDocuments[1]!.uri).toBe(sources[1]!.uri);
+    expect(sources[0]!.uri).not.toBe(sources[1]!.uri);
+
+    // Every pickle carries its own feature's own uri, never the other
+    // feature's — the exact mistake a shared/stale `uri` local across the
+    // loop iterations would produce.
+    const pickleEnvelopes = envelopes.filter((e) => e.pickle).map((e) => e.pickle!);
+    for (const pickle of pickleEnvelopes.slice(0, 3)) {
+      expect(pickle.uri).toBe(sources[0]!.uri);
+    }
+    expect(pickleEnvelopes[3]!.uri).toBe(sources[1]!.uri);
+  });
+
   it("degrades gracefully when a declared attachment file doesn't exist: warns, but the scenario's own envelopes still land", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
-    emitter.begin({ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles });
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
     const receipt: Receipt = {
       receipt_id: "rcpt-missing-file",
@@ -324,7 +388,7 @@ describe("createMessagesEmitter", () => {
 
   it("sets testRunFinished.success to false on end(false)", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles });
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
     emitter.end(false);
 
     const envelopes = readEnvelopes(output);
@@ -343,7 +407,7 @@ describe("createMessagesEmitter", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
 
-      expect(() => emitter.begin({ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles })).not.toThrow();
+      expect(() => emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] })).not.toThrow();
       expect(sink.text()).toContain("warning:");
 
       const record: ScenarioRecord = {

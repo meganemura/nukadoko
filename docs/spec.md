@@ -1094,6 +1094,20 @@ executes the steps in order. One receipt per step; one scenario record
 (feature path, scenario name, ordered receipt ids, per-step status) per
 pickle.
 
+`nuka run` also takes a directory in place of a single feature file:
+`nuka run features/` walks it recursively for every `.feature` file and
+folds all of their pickles into the one invocation above, in file order,
+one run_id, one summary, one exit code, one messages stream, one Allure
+results tree. Files are visited in a fixed order, the repo-relative path
+compared byte by byte rather than by locale, so which scenario ran in which
+position stays stable across runs and a record or a report can be compared
+against another one. `:line` on a directory is refused: it selects one
+scenario inside a single file, and a directory names no single file for it
+to select inside. A directory holding no `.feature` file anywhere under it
+is refused too, the same tone `nuka check`'s own `no-step-files-found`
+uses: it names exactly what it scanned, because a run that did nothing must
+say so loudly rather than exit 0 having run nothing at all.
+
 Every run writes to two channels for different readers. stdout stays NDJSON
 only, one scenario record per line, meant for a script to parse, and nothing
 else is ever written there. Everything meant for a person watching the run
@@ -2343,11 +2357,19 @@ fixes up a dirty tree.
 The npm package is `nukadoko`; the one command it installs is `nuka`.
 
 ```
-nuka run <feature[:line]>     execute scenarios; receipts + allure-results.
+nuka run <feature[:line]|dir>
+                              execute scenarios; receipts + allure-results.
                               :line runs one scenario, for iteration only — a
-                              partial run can never be accepted. stderr gets
-                              per-step/per-scenario progress as it runs, then
-                              every location this run wrote and a summary
+                              partial run can never be accepted. A directory
+                              is walked recursively for .feature files, in
+                              deterministic byte order, folded into this one
+                              invocation: one run_id, one summary, one exit
+                              code, one messages stream, one Allure results
+                              tree. :line on a directory is refused, and a
+                              directory with no .feature file anywhere under
+                              it fails setup, naming what it walked. stderr
+                              gets per-step/per-scenario progress as it runs,
+                              then every location this run wrote and a summary
                               line; --quiet drops the progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always

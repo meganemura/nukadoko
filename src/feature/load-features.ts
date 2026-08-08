@@ -57,7 +57,15 @@ export interface LoadFeaturesResult {
   readonly parseErrors: readonly FeatureParseError[];
 }
 
-function walkFeatureFiles(dir: string): string[] {
+/** Exported for src/run/select-pickles.ts's own directory-target walk
+ * (run-directory-target task spec) — reused rather than re-implemented so
+ * there is exactly one function that knows how to find every `.feature`
+ * file under a directory. That caller re-sorts what this returns by
+ * rootDir-relative path in plain byte order of its own (see that file's own
+ * header for why): the tree-order sort this function applies below is
+ * `nuka check`/`nuka tend`'s own convention, not what a run's own
+ * determinism needs. */
+export function walkFeatureFiles(dir: string): string[] {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
