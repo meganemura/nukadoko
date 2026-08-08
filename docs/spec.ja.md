@@ -859,6 +859,12 @@ nukadoko はその receipt がどの step を記録したものかを読み、�
 同じキーについては scenario の中で pattern の capture が勝つのとまったく同じように、`--args` は今も `--use` に勝ちます。
 実際に取り出された receipt id はこの実行自身の `used` に載るので、複数回の `do` 呼び出しにまたがって手で組み立てた chain も、scenario が駆動した chain と同じくらい後から追跡できます。
 
+`--use` が運ぶのは値そのものであり、それが指すものがまだそこにあるという保証ではありません。
+上流の step が返した path は、fixture が所有するリソースを指していることがあります。
+`do` の下では 1 回の実行が fixture の scope のすべてなので(「Fixtures」を参照)、後から別の `--use` 呼び出しがその path を読み込む時点では、その fixture はすでに teardown 済みかもしれません。
+返り値が fixture が teardown するものを指しているかどうかは、schema からも step 自身のコードからも読み取れません。
+だからこれは、実行より前に `check` が捕まえられる間違いではありません。
+
 `do` の下で通った step は、それだけでは `run` の下でも通ることが示されたわけではありません。
 `do` はすべての実行にそれぞれ専用のブラウザとそれ以外のすべてを与えますが、scenario はそのすべての step に 1 つの context を与えるので、2 番目の step は 1 番目が残したものをそのまま引き継ぎます(すでにログイン済みかもしれず、別のページにいるかもしれず、ダイアログが開いたままかもしれません)。
 この 2 つの問いは別物であり、どちらの答えも他方の代わりにはなりません: `do` はその step が動くかどうかを問い、`run` はそこで動くかどうかを問います。
@@ -1114,7 +1120,28 @@ Cucumber が持ったことのない実行インフラです:
   名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
   それを決めるのは git の追跡/未追跡の分類と `secrets.redact` だけです。
 
-Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります: `featuresDir`(デフォルトは `features`。feature ファイルと step のコードは両方ともこの下に置かれる、Cucumber 流のやり方です)、`additionalFeatureDirs`、`baseURL`、`envFiles`、`environments`、`stateDir`(デフォルトは `.nukadoko`)、`browserType`、`browser`、`browserContext`、`requestContext`、`secrets`、`parameterTypes`、`fixtures`、`fixtureTimeout`(「Fixtures」を参照)、`allure`(`resultsDir` のみ。Allure emitter を参照)、`messages`(`output` のみ。Messages emitter を参照)。
+Configuration は `nukadoko.config.ts`(`defineConfig`)の中にあります。
+受け付けるすべてのキーを、名前と 1 行だけで示します。
+さらに述べることがあるキーは、その先を、この下にある段落か、そのキーが属する機能を説明している節に指し示します:
+
+| キー | 内容 |
+| --- | --- |
+| `featuresDir` | feature ファイルと step のコード。`nuka run` が無人で実行する集合そのもの(デフォルトは `features`。Cucumber 流のやり方) |
+| `additionalFeatureDirs` | `nuka check`/`nuka tend` が語彙を結び付ける対象を広げる追加のディレクトリ。`featuresDir` そのものを広げることはない(デフォルトは `[]`。下記) |
+| `baseURL` | トップレベルの base URL。environment ごとに上書きされる(下記) |
+| `envFiles` | トップレベルの env file。environment ごとに追記される(下記) |
+| `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
+| `stateDir` | nukadoko が実行時に書き込む場所(デフォルトは `.nukadoko`。「State directory」を参照) |
+| `browserType` | `ctx.page()` が起動する Playwright のエンジン: `chromium`(デフォルト)、`firefox`、`webkit`(下記) |
+| `browser` | Playwright 自身の `LaunchOptions`。そのエンジンの `launch` にそのまま渡される(下記) |
+| `browserContext` | Playwright 自身の `BrowserContextOptions`。`browser.newContext()` に渡される(下記) |
+| `requestContext` | `ctx.request()` に対応する `newContext` のオプション(下記) |
+| `secrets` | `public`/`redact` のリスト。キーごとの redact の扱いを調整する(上記) |
+| `parameterTypes` | カスタムの cucumber-expressions parameter type(下記) |
+| `fixtures` | ユーザー定義の fixture(「Fixtures」を参照) |
+| `fixtureTimeout` | fixture インスタンスごとの setup/teardown の既定タイムアウト(ms)(「Fixtures」を参照) |
+| `allure` | `resultsDir` のみ(Allure emitter を参照) |
+| `messages` | `output` のみ(Messages emitter を参照) |
 
 `additionalFeatureDirs`(デフォルトは `[]`)は、`featuresDir` とは違う問いに答えます。
 `featuresDir` は無人で *実行される* 集合です。
@@ -1173,6 +1200,24 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 名前を付けるということは、それが存在すると主張することだからです。
 `version` プローブが関数になっているのは、config がすでに実行可能な TypeScript だからです(URL と jsonPath の DSL は `fetch` を書くにはより悪い方法でしょう)。
 ツールはこれを実行ごとに 1 回、10 秒の予算で呼び出し、throw やタイムアウトが犠牲にするのは `target_version` だけで、実行そのものが失敗することはありません。
+
+`environments` と `fixtures` を両方名指しする例です:
+
+```ts
+export default defineConfig({
+  baseURL: "https://acme.example",
+  environments: {
+    staging: { baseURL: "https://staging.acme.example", policy: "read-only" },
+  },
+  fixtures: {
+    tenant: async ({ request }, use) => {
+      const t = await createTenant(request);
+      await use(t);
+      await destroyTenant(request, t);
+    },
+  },
+});
+```
 
 ### State directory
 
