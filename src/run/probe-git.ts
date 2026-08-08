@@ -4,21 +4,20 @@ import { promisify } from "node:util";
 import type { ScenarioRecord } from "./record-types.js";
 
 // Responsibility: measure the commit and working-tree cleanliness a `nuka
-// run` invocation started at (m4a-run-provenance task spec, decisions 2-3),
-// and (accept-names-the-state-dir task spec) the dirty paths themselves for
+// run` invocation started at, and the dirty paths themselves for
 // `nuka accept`'s own dirty-tree refusal. `probeGitState` is called once per
-// run (cli/run.ts), never once per pickle (decision 4): a step that edits a
+// run (cli/run.ts), never once per pickle: a step that edits a
 // tracked file mid-run must not change what every scenario record from that
 // same run reports as its own starting point.
 //
-// One git call, not two (m4a-probe-cost task spec, decision 1): what costs
+// One git call, not two: what costs
 // time here isn't the git command itself (`status --porcelain` is 10-20ms
 // standalone) but the child-process fork+exec, which contends when vitest's
 // parallel workers all do it at once. `git status --porcelain=v2 --branch`
 // reports the commit (a `# branch.oid ...` header line) and the working-tree
 // state (any non-`#`-prefixed line) in one invocation, so `rev-parse` is no
 // longer needed at all. `--porcelain=v2` is used deliberately, still never
-// `-uno` (carried over from decision 3): an untracked step file is exactly
+// `-uno`: an untracked step file is exactly
 // what src/discover/discover-steps.ts would have loaded into this same run,
 // so it belongs in the same cleanliness check a later sign-off will demand —
 // v2's header lines are always `#`-prefixed, so untracked (`?`) and changed
@@ -35,7 +34,7 @@ import type { ScenarioRecord } from "./record-types.js";
 // other.
 //
 // Follows src/secrets/classify-env-files.ts's existing `execFile`/
-// `promisify` pattern for calling git (decision 3), including its fail-safe
+// `promisify` pattern for calling git, including its fail-safe
 // stance: no git binary on PATH, `rootDir` outside a repository, or any
 // other failure collapses to `undefined` — the field is entirely absent
 // from the record, the same convention `target_version`'s own probe already
@@ -75,7 +74,7 @@ export async function probeGitState(rootDir: string): Promise<GitState | undefin
   }
 }
 
-// A second, separate call (accept-names-the-state-dir task spec), not a
+// A second, separate call, not a
 // change to `probeGitState` above: that function's own one-call rationale
 // is about the hot path (`nuka run`, once per invocation); this one only
 // runs from `nuka accept`'s dirty-tree refusal, an error path taken at most

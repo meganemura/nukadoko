@@ -1,5 +1,5 @@
 // Responsibility: the scenario record shape from docs/spec.md "Running" /
-// "The state directory" (this task's spec, decision 6) — one record per
+// "The state directory" — one record per
 // pickle, the scenario-level counterpart to a step's receipt (receipt/
 // types.ts). `steps` mirrors the pickle's own step order; a step's `status`
 // widens beyond a receipt's ok/failed to also say *why* no receipt exists
@@ -7,22 +7,22 @@
 // allowed to say that, per docs/spec.md "an execution that never began must
 // not be citable".
 //
-// `hooks` is added now (m2b-compat-execution task spec, item 5): compat's
-// Before/After hooks have no receipt of their own (they run against the
-// pickle's shared World, not any one step), so their own ok/failed outcome
+// `hooks` records compat's Before/After hooks' own outcome: they have no
+// receipt of their own since they run against the pickle's shared World,
+// not any one step, so their own ok/failed outcome
 // is recorded here instead, on the scenario record. Always present, even
 // when empty (no compat hooks matched this pickle's tags, or none are
 // registered at all) — same convention as `steps`.
 //
-// `ScenarioHookRecord.declared` is added now (m2d-allure-shim task spec,
-// item 4): a hook has no receipt to carry its own `declared` field on (see
+// `ScenarioHookRecord.declared` is added now: a hook has no receipt to
+// carry its own `declared` field on (see
 // receipt/types.ts's own header), so this record is where its own
 // attachments/labels/links/parameters/logs land instead — one collector
 // boundary per individual hook invocation, not per Before/After phase, so
 // one hook's own declared data never gets smeared across its sibling hooks.
 //
-// `ScenarioHookRecord.error.kind` is added now (m3a-receipt-kinds task spec,
-// decision 2): a hook has no receipt of its own to carry `error.kind` on
+// `ScenarioHookRecord.error.kind` is added now: a hook has no receipt of
+// its own to carry `error.kind` on
 // either (see receipt/types.ts's own header for the enum itself and why it
 // exists), so this is where a hook's own failure gets the same machine-
 // readable classification a step's receipt does — the M3 Allure emitter
@@ -34,7 +34,7 @@
 // against the same World a compat step does), and `step_error`.
 //
 // `ScenarioHookRecord.type` gains `"after_step"`, and `.step_index` is added
-// now (t7-compat-status-afterstep task spec, item 2-4): `AfterStep`
+// now: `AfterStep`
 // (src/compat/hooks.ts) runs once per *executed* pickle step, not once per
 // scenario the way Before/After do, so — unlike those two — its own record
 // entry needs to say which step it ran after, or a report reading
@@ -48,8 +48,8 @@
 // the same "a step nothing matched doesn't appear here" convention this
 // interface's own header already documents for a tag-mismatched hook.
 //
-// `ScenarioRecord.run_id` and `.git` are added now (m4a-run-provenance task
-// spec) — recording-side groundwork for `nuka accept` (docs/spec.md
+// `ScenarioRecord.run_id` and `.git` are added now — recording-side
+// groundwork for `nuka accept` (docs/spec.md
 // "Sign-off"), which is not implemented yet and does not read either field
 // itself. `run_id` identifies "every scenario record one `nuka run`
 // invocation wrote" — a fact no existing field carries, since `scenario_id`
@@ -61,9 +61,8 @@
 // (src/environment/probe-version.ts): the run itself never fails over
 // either field.
 //
-// `ScenarioHookRecord.trace`/`.actions`/`.truncated` are added now
-// (p3d-hook-trace task spec) — closing a gap p3a-trace-per-step opened:
-// once the Playwright trace became one chunk per step, a Before/After/
+// `ScenarioHookRecord.trace`/`.actions`/`.truncated` close a gap: once the
+// Playwright trace became one chunk per step, a Before/After/
 // AfterStep hook's own `ctx.page()` calls stopped landing in any chunk at
 // all, since a chunk only ever opened for a step's own boundary. A hook has
 // no receipt of its own (same "no args/returns/binding concept" reasoning
@@ -83,7 +82,7 @@
 // chunk itself rather than from anything the hook explicitly called, is
 // unaffected by that gap.
 //
-// `ScenarioRecord.browser` is added now (p6-browser-type task spec) — the
+// `ScenarioRecord.browser` is added now — the
 // measured counterpart to the new `config.browserType` (src/config/
 // schema.ts), which lets a project launch firefox or webkit instead of
 // chromium. It carries what the run actually launched (`Browser#
@@ -110,8 +109,8 @@ export interface ScenarioStepRecord {
   readonly error?: { readonly message: string };
 }
 
-/** One Before/After hook's own outcome (m2b-compat-execution task spec,
- * item 5) — a hook that didn't apply to this pickle (tag mismatch) is
+/** One Before/After hook's own outcome — a hook that didn't apply to this
+ * pickle (tag mismatch) is
  * simply absent, the same way a step nothing matched doesn't appear here
  * either. */
 export interface ScenarioHookRecord {
@@ -120,18 +119,18 @@ export interface ScenarioHookRecord {
   /** Present only when `status` is `"failed"`. `kind` is the same closed
    * enum a step's own `receipt.error.kind` uses (this file's own header). */
   readonly error?: { readonly message: string; readonly kind: ErrorKind };
-  /** This hook's own declared attachments/labels/links/parameters/logs
-   * (m2d-allure-shim task spec, item 4) — same shape, same "collected at
+  /** This hook's own declared attachments/labels/links/parameters/logs —
+   * same shape, same "collected at
    * collection time, never after" reasoning as a step's own `declared`
    * (src/receipt/types.ts). Present only when at least one of its own
    * sub-fields is non-empty. */
   readonly declared?: DeclaredSnapshot;
-  /** Present only when `type` is `"after_step"` (this file's own header,
-   * t7-compat-status-afterstep task spec) — the 0-based index into this
+  /** Present only when `type` is `"after_step"` (this file's own header) —
+   * the 0-based index into this
    * record's own `steps` array that this AfterStep hook ran after. */
   readonly step_index?: number;
   /** This hook invocation's own trace chunk, relative to the *scenario's*
-   * evidence dir (p3d-hook-trace task spec, this file's own header) —
+   * evidence dir (this file's own header) —
    * unlike `ScenarioStepRecord`, a hook has no receipt dir of its own, so
    * its chunk lands beside its sibling hooks' in the scenario's own dir
    * instead, each under a name unique to that one invocation (src/run/
@@ -158,15 +157,15 @@ export interface ScenarioEvidence {
   /** Present only when a browser was used anywhere in the scenario. */
   readonly trace?: string;
   /** Screenshots actually written; empty when no browser was used. Same
-   * shape as `EvidenceMeta.screenshots` (src/receipt/types.ts, fb4-evidence-
-   * time task spec, item 2) — at most one entry, `final.png`, with its own
+   * shape as `EvidenceMeta.screenshots` (src/receipt/types.ts) — at most
+   * one entry, `final.png`, with its own
    * `at`. */
   readonly screenshots: readonly ScreenshotEntry[];
 }
 
 export interface ScenarioRecord {
   readonly scenario_id: string;
-  /** This run's own id (m4a-run-provenance task spec, decision 1) — every
+  /** This run's own id — every
    * scenario record one `nuka run` invocation writes shares the same value,
    * generated once per invocation, never per pickle. Required, unlike
    * `git` below: every run has one, regardless of git. */
@@ -185,7 +184,7 @@ export interface ScenarioRecord {
   readonly environment: string;
   readonly target_version?: string;
   /** The browser engine and version this scenario's run actually launched
-   * (p6-browser-type task spec) — read from the real `Browser` object
+   * — read from the real `Browser` object
    * (`Browser#browserType().name()` / `Browser#version()`), never from
    * `config.browserType` itself: a step can override the `page` fixture
    * with a browser this scenario's own `ctx` never launched, so only what
@@ -202,11 +201,11 @@ export interface ScenarioRecord {
   readonly steps: readonly ScenarioStepRecord[];
   readonly hooks: readonly ScenarioHookRecord[];
   /** The commit and cleanliness of the working tree when this run started
-   * (m4a-run-provenance task spec, decision 2; docs/spec.md "Sign-off": "the
+   * (docs/spec.md "Sign-off": "the
    * commit the working tree was at when the run started"). Absent outside a
    * git repository, before the first commit, or when the git call fails —
-   * see this file's own header. Measured once per run, not once per pickle
-   * (decision 4): every scenario record from the same `nuka run` invocation
+   * see this file's own header. Measured once per run, not once per pickle:
+   * every scenario record from the same `nuka run` invocation
    * carries the same value, even if a step during the run itself edits a
    * tracked file. */
   readonly git?: {
@@ -217,11 +216,11 @@ export interface ScenarioRecord {
     readonly clean: boolean;
   };
   readonly evidence: ScenarioEvidence;
-  /** A `"scenario"`-scope fixture's own teardown failure (P5 task spec,
-   * scope item 6) — teardown runs *after* every step's own receipt for this
+  /** A `"scenario"`-scope fixture's own teardown failure — teardown runs
+   * *after* every step's own receipt for this
    * scenario is already written (src/receipt/types.ts's own header), so it
-   * has nowhere else to land. Never changes `status` above: "teardown の
-   * throw は step / シナリオの成否を変えない" — a broken cleanup routine
+   * has nowhere else to land. Never changes `status` above: a broken
+   * cleanup routine
    * must not turn an otherwise-passing scenario red for a reason unrelated
    * to its own acceptance criteria. Present only when non-empty; `nuka run`
    * still announces each entry on stderr (exit code unaffected) so it is

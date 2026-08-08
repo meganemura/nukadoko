@@ -5,20 +5,19 @@
 // of being left open from the start — `session` from a `null`-only
 // placeholder to `string | null` (sessions slice), and `environment` from a
 // `"default"`-only placeholder to `string`, plus the optional
-// `target_version` (m1-environments task spec, decision 6). `kind` and
-// `scenario` are widened again now that `nuka run` exists (m1-run task spec,
-// decision 5): `kind: "do" | "run"` tells a receipt's origin apart — the
+// `target_version`. `kind` and
+// `scenario` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a receipt's origin apart — the
 // distinction matters for the Allure mapping and sign-off contexts, per
 // docs/spec.md — and `scenario: string | null` carries the owning scenario's
 // id for a `run`-originated receipt, `null` for a `do`-originated one.
 //
-// `observed` is added now (m2pre-observed task spec, decision 3): the
+// `observed` is added now: the
 // network calls the tool itself measured this execution making, never what
 // a step declared. It is required on both `ReceiptOk` and `ReceiptFailed` —
 // unlike `target_version`, there is no "not applicable" case for it, only
 // "zero calls happened" (`{ http_reads: 0, http_writes: 0 }`).
 //
-// `used` is added now (m2pre-resultof task spec, decision 4): measured
+// `used` is added now: measured
 // provenance, the receipts `ctx.resultOf` actually read a value from during
 // this execution (docs/spec.md "Receipts"). Optional and omitted when
 // empty — unlike `observed`, "no reads happened" is the overwhelmingly
@@ -26,7 +25,7 @@
 // `target_version`'s "absence is the normal case" convention instead.
 //
 // `used`'s own entry shape widens from a bare receipt id string to
-// `{ receipt, step }` now (m6a-from-core task spec, item 5): a `from`
+// `{ receipt, step }` now: a `from`
 // injection (docs/spec.md "Chaining steps") is a second way this array gets
 // populated, alongside `ctx.resultOf`, and docs/spec.md "Receipts" always
 // described the richer shape — "Each entry is `{ "receipt": "rcpt-…", "step":
@@ -37,7 +36,7 @@
 // worth the duplication. Breaking change, no back-compat shim — 0.1 hasn't
 // shipped.
 //
-// `sections` is added now (t3-sections task spec, decisions 1-3): the labels
+// `sections` is added now: the labels
 // `ctx.section` was called with during this execution, in call order — how
 // far a step got, not how long each stage took, deliberately (no start/end
 // timestamps: that shape can be added later without a breaking change,
@@ -48,8 +47,8 @@
 // labels it reached before failing, and its last element already answers
 // "which stage was it in" — one fact, one place to read it.
 //
-// `sections` widens to `SectionEntry[]` — `{ label, at }` — now (fb4-
-// evidence-time task spec, item 3): "no start/end timestamps" above was a
+// `sections` widens to `SectionEntry[]` — `{ label, at }` — now: "no
+// start/end timestamps" above was a
 // bet that the shape could wait, and it turned out wrong the first time a
 // receipt was actually read under pressure. A real run left `status:
 // "failed"` sitting next to a `final.png` that showed the target present —
@@ -65,7 +64,7 @@
 // "did the state actually change" and "was this read taken before it
 // settled" stop being indistinguishable from a receipt alone.
 //
-// `polls` is added now (ctx-poll-receipt task spec): every `ctx.poll` call
+// `polls` is added now: every `ctx.poll` call
 // that finished during this execution, in completion order rather than call
 // order — a nested poll finishes before the one containing it, so recording
 // at call time would have nothing to report yet. Unlike `sections` it does
@@ -81,7 +80,7 @@
 // convention; a compat step has no `ctx` to call `poll` on, so this field is
 // simply omitted for one, the same way `sections` is.
 //
-// `PollRecord.at` is added now (fb4-evidence-time task spec, item 4): a
+// `PollRecord.at` is added now: a
 // `waited_ms` duration alone has no fixed point to measure from, so a poll
 // could not be placed on the same timeline `sections`' new `at` and
 // `evidence.screenshots[].at` share — and putting timestamps on only one of
@@ -91,7 +90,7 @@
 // reader can line up every stage and every wait without opening trace.zip
 // by hand.
 //
-// `world` is added now (m2c-typed-world task spec, item 3): a compat step's
+// `world` is added now: a compat step's
 // own World reads/writes, measured the same "always on" way `observed` is —
 // deduplicated, in access order, both arrays omitted together (`used`'s own
 // convention) when a step never touched `this` at all. Never present on a
@@ -100,7 +99,7 @@
 // and this field is always omitted for it — no separate "kind" check is
 // needed to enforce that.
 //
-// `declared` is added now (m2d-allure-shim task spec, decisions 3, 5): what
+// `declared` is added now: what
 // a step or its glue *reported about itself* through the allure-js runtime
 // shim (src/compat/allure-runtime.ts, src/compat/declared.ts) or a compat
 // World's own `this.attach`/`log`/`link` channel — kept in a field separate
@@ -114,20 +113,20 @@
 // sub-fields is non-empty; the attachment *files* themselves are never
 // redacted (the same honest limit trace.zip/screenshots already have).
 //
-// `required_env` is added now (env-reads-and-mutates-doc task spec, item A):
-// the env var names `ctx.requireEnv` was actually called with during this
+// `required_env` is added now: the env var names `ctx.requireEnv` was
+// actually called with during this
 // execution — measured, the same way `used` is, since `requireEnv` is the
 // one call site the library controls; a step that reads `ctx.env[name]`
 // directly leaves no trace here (no `ctx.env` Proxy exists to catch that
-// path, deliberately — same spec, scope). Deduplicated, in read order, and
+// path, deliberately). Deduplicated, in read order, and
 // recorded even for a call that went on to throw `MissingEnvError`, so a
 // run that failed for a missing key still shows what it asked for. Names
 // only, never values — a value can be a secret. Optional and omitted when
 // empty, `used`'s own convention (most steps never call `requireEnv` at
 // all). Always empty, hence always omitted, for a compat step: compat's
-// `this` has no counterpart to `requireEnv` (same spec, scope).
+// `this` has no counterpart to `requireEnv`.
 //
-// `page_events` is added now (P0-page-events task spec): console errors,
+// `page_events` is added now: console errors,
 // uncaught page errors, and failed requests the harness itself saw a
 // browser context produce, which cucumber-js has no way to hold at all — it
 // has no browser context of its own to measure from. A step can pass
@@ -137,7 +136,7 @@
 // documents *why* each category is shaped the way it is (console limited to
 // `error`, `weberror` never carrying `Error#stack`, the 100-entries-per-
 // category cap reported through the sibling `truncated` field rather than by
-// changing a category's own type, fix-union task spec). Present on both
+// changing a category's own type). Present on both
 // `ReceiptOk` and `ReceiptFailed` alike, and independent of `status`: a page
 // error is evidence about the page, not a verdict on the step. The whole
 // field, and each of its three categories individually, is omitted when
@@ -145,8 +144,7 @@
 // never called `ctx.page()`, or did and the page stayed clean, carries no
 // `page_events` key at all.
 //
-// `error.kind` and `mutates` are added now (m3a-receipt-kinds task spec,
-// decisions 1, 3): M3's Allure interop needs a machine-readable failure
+// `error.kind` and `mutates` are added now: M3's Allure interop needs a machine-readable failure
 // marker (Categories.json can't be generated from `error.message`, free
 // text meant for humans) and a way to check a step's declared `mutates`
 // against what it actually did without a second lookup. `ErrorKind` is a
@@ -154,9 +152,9 @@
 // stop being usable as a classifier — and only the first four values name a
 // failure the contract layer itself can point at (the same "Tier A" claim
 // README makes); every other throw is `"step_error"`, the deliberate
-// catch-all a caller falls back to whenever it isn't sure (this task's spec:
-// default to step_error whenever classification is uncertain — misnaming a
-// failure as a contract failure is worse than not naming it at all).
+// catch-all a caller falls back to whenever it isn't sure — default to
+// step_error whenever classification is uncertain, since misnaming a
+// failure as a contract failure is worse than not naming it at all.
 // `mutates` mirrors a step's own
 // `defineStep` declaration (default `true`) so a receipt alone can be
 // checked against `observed` without a second lookup into the vocabulary;
@@ -166,8 +164,8 @@
 // `declared` already means something else on this exact interface (self-
 // reported allure-js data, directly above) — reusing it here would collide.
 //
-// `http_omitted` is added now (p3b-page-network task spec, scope item 2):
-// http.jsonl now also carries page-issued document/xhr/fetch traffic (each
+// `http_omitted` is added now: http.jsonl now also carries page-issued
+// document/xhr/fetch traffic (each
 // entry's new `via: "page"`, alongside `ctx.request()`'s own `via:
 // "request"` — see http-log.ts's own `HttpLogEntry`), but a page load's
 // image/stylesheet/script/etc traffic is deliberately left off that file —
@@ -183,8 +181,7 @@
 // other. Measured by `HttpOmittedCollector` (src/context/http-omitted.ts),
 // tallied by page-http-log.ts's own `response` subscription.
 //
-// `actions` and its sibling `truncated` are added now (p3a-trace-per-step
-// task spec, scope B): every Playwright call the step made through
+// `actions` and its sibling `truncated` are added now: every Playwright call the step made through
 // `ctx.page()`, read back out of that step's own trace chunk
 // (`evidence.trace`, now a per-step file rather than one spanning the whole
 // scenario — see this file's own `evidence.trace`-adjacent notes below and
@@ -196,7 +193,7 @@
 // 100 entries, `truncated: { actions: <true total> }` reporting the same way
 // `page_events`'s own per-category `truncated` does when the cap is hit.
 //
-// `fixtures` is added now (P5 task spec, scope item 10): what a step's own
+// `fixtures` is added now: what a step's own
 // bag actually cost to assemble, once user-defined fixtures
 // (`config.fixtures`) exist to cost anything. Teardown is deliberately not
 // here — it runs *after* a step's own receipt is already closed (this
@@ -205,7 +202,7 @@
 // (src/run/record-types.ts) instead, the scenario-level counterpart to this
 // field.
 //
-// `EvidenceMeta.attachments` is added now (P9 task spec): the one gap the
+// `EvidenceMeta.attachments` is added now: the one gap the
 // rest of `evidence` never covered — application-specific evidence (an API
 // response body, a DB snapshot, a generated file) a step chooses to add,
 // where every other member of `evidence` is something the harness collects
@@ -233,7 +230,7 @@ import type { FixtureUsageEntry } from "../fixture/resolver.js";
 export type { FixtureUsageEntry } from "../fixture/resolver.js";
 
 /** The closed set of machine-readable failure causes a receipt's `error` can
- * carry (m3a-receipt-kinds task spec, decision 1) — see this file's own
+ * carry — see this file's own
  * header for the classification principle. Each value's own home:
  *
  *   - `args_invalid` — args failed the step's own `args` schema.
@@ -259,8 +256,8 @@ export type ErrorKind =
   | "unsupported"
   | "step_error";
 
-/** One `ctx.section` call's own record (fb4-evidence-time task spec, item 3;
- * docs/spec.md "Receipts") — a label alone said only *that* execution
+/** One `ctx.section` call's own record (docs/spec.md
+ * "Receipts") — a label alone said only *that* execution
  * reached a stage, never *when*; `at` is what lets it share one timeline
  * with `polls` and `evidence.screenshots` (see this file's own header for
  * why that gap turned out to matter). */
@@ -273,13 +270,13 @@ export interface SectionEntry {
   readonly at: string;
 }
 
-/** One `ctx.poll` call's own record (ctx-poll-receipt task spec; docs/spec.md
+/** One `ctx.poll` call's own record (docs/spec.md
  * "Receipts"). */
 export interface PollRecord {
   /** `options.description`, when the call was given one — included in
    * `PollTimeoutError`'s own message too (src/context/poll.ts). */
   readonly description?: string;
-  /** ISO 8601 — this poll's own start (fb4-evidence-time task spec, item 4),
+  /** ISO 8601 — this poll's own start,
    * the same instant `pollWithRecording` (src/context/poll.ts) already
    * measures as `startedAt` to compute `waited_ms` from — this field just
    * exposes it, so a poll can be placed on the same absolute timeline
@@ -298,8 +295,8 @@ export interface PollRecord {
   readonly outcome: "resolved" | "timed_out" | "failed";
 }
 
-/** One screenshot the harness actually wrote (fb4-evidence-time task spec,
- * item 2) — replaces the former bare file-name string. A second, differently
+/** One screenshot the harness actually wrote — replaces the former bare
+ * file-name string. A second, differently
  * named file used to exist so a failed receipt's evidence was easy to spot,
  * but it was the same buffer as `final.png` written a second time: zero
  * additional information, since `receipt.status` already answers "did this
@@ -318,7 +315,7 @@ export interface ScreenshotEntry {
 }
 
 /** One `evidence.attach`/`evidence.path` result the harness confirmed
- * actually landed on disk (P9 task spec; `EvidenceMeta.attachments`' own
+ * actually landed on disk (`EvidenceMeta.attachments`' own
  * doc comment above). `name` is what the step asked for; `file` is what was
  * actually written under `EvidenceMeta.dir` — the two can differ when the
  * same `name` was used more than once this execution (src/context/
@@ -340,14 +337,14 @@ export interface EvidenceMeta {
   /** Present only when a browser was used. */
   trace?: string;
   /** Screenshots actually written; empty when no browser was used. At most
-   * one entry (fb4-evidence-time task spec, item 1: the second, per-outcome
+   * one entry: the second, per-outcome
    * copy is gone, so a run that used the browser writes exactly
-   * `final.png`, whatever the outcome). */
+   * `final.png`, whatever the outcome. */
   screenshots: ScreenshotEntry[];
   /** Present only when at least one `ctx.request()` call was logged. */
   http?: string;
   /** Application-specific evidence `evidence.attach`/`evidence.path` added
-   * this execution (P9 task spec) — this file's own header, above. Present
+   * this execution — this file's own header, above. Present
    * only when non-empty; capped at 100 entries, sorted by `at`. The true
    * total, once that cap is hit, is on the receipt's own top-level
    * `truncated.evidence` (`ReceiptBase.truncated`, below). */
@@ -368,8 +365,7 @@ interface ReceiptBase {
   /** The `--env` name this run targeted; `"default"` when `--env` was
    * omitted. Not a special value in the schema sense — docs/spec.md
    * "Sessions, environments, secrets": default is just the name of an
-   * environment that may or may not itself be configured (this task's spec,
-   * decision 2). */
+   * environment that may or may not itself be configured. */
   environment: string;
   /** The `--session` name this run carried, or `null` when none was given
    * (docs/spec.md "Sessions...": no `--session` means a clean start, never
@@ -385,59 +381,58 @@ interface ReceiptBase {
    * `ctx.request()` and the page alike — GET/HEAD as reads, everything else
    * as writes. Measured, never declared: this is what run-time keyword
    * enforcement and read-only environments act on (docs/spec.md "Keyword
-   * semantics", "Receipts"; this task's spec, decisions 1-4). */
+   * semantics", "Receipts"). */
   observed: ObservedCounts;
   /** Env var names `ctx.requireEnv` was actually called with during this
-   * execution (docs/spec.md "Receipts"; env-reads-and-mutates-doc task spec,
-   * item A). Present only when non-empty; deduplicated, in read order.
+   * execution (docs/spec.md "Receipts"). Present only when non-empty;
+   * deduplicated, in read order.
    * Recorded even for a call that throws `MissingEnvError` — measured, not
    * declared, and reading `ctx.env[name]` directly instead leaves no trace
    * here. */
   required_env?: string[];
-  /** `ctx.section` calls made during this execution, in call order (t3-
-   * sections task spec, decisions 1-3; `at` added by fb4-evidence-time task
-   * spec, item 3). Present only when non-empty; a failed step's array still
+  /** `ctx.section` calls made during this execution, in call order.
+   * Present only when non-empty; a failed step's array still
    * carries whichever labels it reached before failing — that array's last
    * element is "the last stage this execution entered", so there is no
    * separate `error.section` field duplicating the same fact. Only a typed
-   * step's `ctx` has `section` (decision 5) — a compat step has no
+   * step's `ctx` has `section` — a compat step has no
    * counterpart on `this`, so this field is simply omitted for one, the same
    * way `used` is omitted for a typed step that never calls
    * `ctx.resultOf`. */
   sections?: SectionEntry[];
   /** Every `ctx.poll` call that finished during this execution, in
-   * completion order rather than call order (ctx-poll-receipt task spec;
-   * this file's own header). Present only when non-empty; only a typed
+   * completion order rather than call order (this file's own header).
+   * Present only when non-empty; only a typed
    * step's `ctx` has `poll`, so this field is simply omitted for a compat
    * step, the same way `sections` is. */
   polls?: readonly PollRecord[];
-  /** A compat step's own World reads/writes (m2c-typed-world task spec,
-   * item 3) — deduplicated, in access order. Present only when at least one
+  /** A compat step's own World reads/writes — deduplicated, in access
+   * order. Present only when at least one
    * of `reads`/`writes` is non-empty; absent for a typed step (no World),
    * and absent for a compat step that never touched `this` at all. */
   world?: { reads: string[]; writes: string[] };
   /** Attachments/labels/links/parameters/logs this step (or its World
-   * channel) declared through the allure-js runtime shim (m2d-allure-shim
-   * task spec, decisions 3, 5) — see this file's own header for how this
+   * channel) declared through the allure-js runtime shim — see this file's
+   * own header for how this
    * differs from `evidence`/`observed`. Present only when at least one of
    * its own sub-fields is non-empty. */
   declared?: DeclaredSnapshot;
   /** Console errors, uncaught page errors, and failed requests the browser
-   * context saw during this execution (P0-page-events task spec; this
-   * file's own header) — measured, the same "harness saw it happen" way
+   * context saw during this execution (this file's own header) — measured,
+   * the same "harness saw it happen" way
    * `observed` is, never declared by the step. Present only when at least
    * one of `console_errors`/`page_errors`/`failed_requests` is non-empty;
    * absent when `ctx.page()` was never called this execution, or was and
    * the page stayed clean. */
   page_events?: PageEventsSnapshot;
   /** How many page-issued requests this execution made were left out of
-   * http.jsonl, by resourceType — `{ "image": 34, "stylesheet": 5 }` (p3b-
-   * page-network task spec, scope item 2; this file's own header). Present
+   * http.jsonl, by resourceType — `{ "image": 34, "stylesheet": 5 }` (this
+   * file's own header). Present
    * only when at least one request was left out. */
   http_omitted?: HttpOmittedCounts;
   /** Every Playwright call this step made through `ctx.page()`, read back
-   * out of this step's own trace chunk (p3a-trace-per-step task spec, scope
-   * B; this file's own header) — `expect` waits included, with their own
+   * out of this step's own trace chunk (this file's own header) — `expect`
+   * waits included, with their own
    * `ms`. Present only when non-empty; capped at 100 entries, same
    * convention as `page_events`. Omitted, never present-and-empty, when
    * `ctx.page()` was never called this step, when the chunk itself could not
@@ -447,8 +442,8 @@ interface ReceiptBase {
    * report that case once, on stderr, instead — src/context/trace-
    * actions.ts's own header). */
   actions?: readonly ActionEntry[];
-  /** Present only when `actions` above and/or `evidence.attachments` (P9
-   * task spec) hit its own 100-entry cap — the true total for whichever of
+  /** Present only when `actions` above and/or `evidence.attachments` hit
+   * its own 100-entry cap — the true total for whichever of
    * the two was actually truncated, the same `{ category: <true total> }`
    * shape `page_events`'s own `truncated` field already uses, `actions`/
    * `evidence` as this receipt's two categories. Built by `mergeTruncated`
@@ -458,8 +453,8 @@ interface ReceiptBase {
   truncated?: { actions?: number; evidence?: number };
   /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
    * the counterpart to `observed` a receipt needs to let "declared vs
-   * observed" be checked from the receipt alone (this task's spec, decision
-   * 3). `null` for a compat step: compat has no `mutates` declaration to
+   * observed" be checked from the receipt alone. `null` for a compat step:
+   * compat has no `mutates` declaration to
    * report (`then-compat-step` warns about exactly this gap), so `null` is a
    * third value, never coerced to `false`. Present on both `ReceiptOk` and
    * `ReceiptFailed` — the declared/observed comparison matters most for a
@@ -470,17 +465,18 @@ interface ReceiptBase {
    * a probe *and* it resolved to a string within its timeout; omitted — not
    * `null` — when there is no probe, it throws, or it times out, since a
    * probe's absence or failure is metadata about the target, never a reason
-   * to fail the run itself (this task's spec, decision 5). */
+   * to fail the run itself. */
   target_version?: string;
   /** Every `config.fixtures` entry actually resolved while assembling this
-   * step's own bag (P5 task spec, scope item 10) — src/fixture/resolver.ts's
+   * step's own bag — src/fixture/resolver.ts's
    * own `resolveFixtures`, called once per step by src/run/run-scenario.ts
    * and src/cli/do.ts alike. Present only when non-empty: a step whose own
    * `run()` destructures only builtins (or none at all) never reaches a
    * user fixture, so this field is simply omitted for one, the same
    * "absence is the normal case" convention `used`/`sections`/`polls`
    * already follow. Builtins themselves never appear here — resolving one
-   * is unchanged from before P5, and was never measured this way either.
+   * is unchanged from before this field existed, and was never measured
+   * this way either.
    * `setup_ms`/`at` are present only for an entry this call actually built
    * (`reused: false`); their absence on a `reused: true` entry is what
    * lets a reader tell "reused, hence fast" apart from "measured 0ms" —
@@ -495,11 +491,9 @@ export interface ReceiptOk extends ReceiptBase {
   result: unknown;
   /** The earlier executions whose validated results this execution actually
    * read from — through a `from` injection or a `ctx.resultOf` call alike
-   * (docs/spec.md "Receipts"; m2pre-resultof task spec, decisions 1-2;
-   * m6a-from-core task spec, item 5). Present only when non-empty;
+   * (docs/spec.md "Receipts"). Present only when non-empty;
    * deduplicated by receipt id, in read order. `UsedEntry`, not
-   * `UsedEntryWithResult` (fb3-used-result task spec, type-hardening
-   * follow-up): an "ok" receipt's own `used` can never carry the upstream's
+   * `UsedEntryWithResult`: an "ok" receipt's own `used` can never carry the upstream's
    * `result` — the value is already sitting on this step's own
    * `args`/upstream receipt, and a construction site that tries to hand a
    * result-bearing entry here fails to compile instead of silently leaking
@@ -510,11 +504,10 @@ export interface ReceiptOk extends ReceiptBase {
 export interface ReceiptFailed extends ReceiptBase {
   status: "failed";
   /** `message` is unchanged — the human-readable text this receipt always
-   * had. `kind` is new (this task's spec, decision 1): a machine-readable
+   * had. `kind` is new: a machine-readable
    * classification alongside it, never a replacement for it. */
   error: { message: string; kind: ErrorKind };
-  /** Same field as `ReceiptOk.used`, but `UsedEntryWithResult` (fb3-used-
-   * result task spec, decisions 1-3, type-hardening follow-up): a failed
+  /** Same field as `ReceiptOk.used`, but `UsedEntryWithResult`: a failed
    * step's receipt is exactly where a reader most needs "what upstream
    * value did this read", without opening a second receipt.json — so
    * `result` is required here, not merely allowed. */

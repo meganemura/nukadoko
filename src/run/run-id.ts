@@ -1,7 +1,7 @@
 import { generateId } from "../receipt/receipt-id.js";
 
-// Responsibility: the run id format (m4a-run-provenance task spec, decision
-// 1): `run-<YYYYMMDD-HHMMSS>-<4 alphanumeric>`, the same id family as a
+// Responsibility: the run id format,
+// `run-<YYYYMMDD-HHMMSS>-<4 alphanumeric>`, the same id family as a
 // receipt's `rcpt-...` and a scenario's own `scn-...` (src/run/scenario-
 // id.ts) — reuses receipt-id.ts's shared `generateId` rather than
 // duplicating the date/random-suffix logic, the same precedent scenario-

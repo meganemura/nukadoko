@@ -11,22 +11,23 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 // Responsibility: the run-time half of the shared seam — build the matching
 // CucumberExpression (or, for a compat RegExp pattern, nothing to build at
 // all) for every pattern in the vocabulary directly from src/binding/* (not
-// src/check/binding-check.ts, which mixes in check-only issue reporting;
-// this task's spec, decision 1: run matches and binds at the same layer
-// check does, without mixing in check-only knowledge), match one pickle
-// step's text against them, and zip the matched values onto the step's named
-// capture keys plus the one table/docstring key they left unconsumed
-// ("final argument" rule, enforced here at run time exactly as `nuka check`
-// enforces it statically). A pattern that fails to build (bad capture name,
-// unknown parameter type) can never match anything at run time either —
-// reporting *why* it failed to build is `nuka check`'s job, not this
-// module's; here it is simply skipped, so any pickle
-// step text relying on it surfaces as "undefined" instead.
+// src/check/binding-check.ts, which mixes in check-only issue reporting —
+// this module runs matches and binds at the same layer check does, without
+// mixing in check-only knowledge), match one pickle step's text against
+// them, and zip the matched values onto the step's named capture keys plus
+// the one table/docstring key they left unconsumed ("final argument" rule,
+// enforced here at run time exactly as `nuka check` enforces it statically).
+// A pattern that fails to build (bad capture name, unknown parameter type)
+// can never match anything at run time either — reporting *why* it failed to
+// build is `nuka check`'s job, not this module's; here it is simply skipped,
+// so any pickle step text relying on it surfaces as "undefined" instead.
 //
-// m2b-compat-execution task spec, item 2 closes m2a-compat-registry's
-// "temporary asymmetry #2": a compat entry now contributes a binding here
-// too, on equal footing with a typed one — a compat *string* pattern builds
-// a plain `CucumberExpression` with no named-capture requirement (identical
+// A compat entry now contributes a binding here too, on equal footing with
+// a typed one, closing a gap where a pattern that only a compat step
+// matched used to come back defined from `nuka check`'s static matching but
+// undefined at `nuka run` time, because run-time matching covered typed
+// entries only — a compat *string* pattern builds a plain
+// `CucumberExpression` with no named-capture requirement (identical
 // treatment to src/check/binding-check.ts's own compat handling: the
 // migration door's promise is unmodified cucumber-expressions syntax), and a
 // compat *RegExp* pattern needs no building at all, matched via `.exec()`
@@ -35,8 +36,8 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 // `[...customTypes, ...compatParameterTypes]` — the exact same composition
 // order src/check/binding-check.ts already uses — so a pattern using a
 // compat-registered `defineParameterType` matches here exactly as `nuka
-// check` already treats it as defined (this closes the other half of that
-// same asymmetry).
+// check` already treats it as defined, closing that same gap for a
+// compat-registered parameter type too.
 
 export type StepBinding =
   | {
@@ -92,9 +93,8 @@ export function buildStepBindings(
       continue;
     }
 
-    // entry.kind === "compat" (m2b-compat-execution task spec, item 2): one
-    // pattern per entry, no aliases, no named captures — see this file's own
-    // header.
+    // entry.kind === "compat": one pattern per entry, no aliases, no named
+    // captures — see this file's own header.
     const pattern = entry.compat.patternSource;
     if (typeof entry.compat.pattern === "string") {
       let expression: CucumberExpression;
@@ -133,9 +133,9 @@ export type MatchOutcome =
 /**
  * Matches `text` against every binding, one candidate per distinct step name
  * — two patterns/aliases of the *same* step both matching is not ambiguous,
- * only two *different* steps (typed or compat alike — this task's spec,
- * item 2: a match across kinds is ambiguous, a run-time error with the same
- * semantics check already gives it) matching is (the same rule
+ * only two *different* steps (typed or compat alike — a match across kinds
+ * is ambiguous, a run-time error with the same semantics check already
+ * gives it) matching is (the same rule
  * src/check/feature-check.ts applies statically).
  * Coercion happens here via `Argument.getValue` (the parameter type's
  * transformer, e.g. `{int}` -> number, or a `config.parameterTypes`/compat
@@ -146,9 +146,9 @@ export type MatchOutcome =
  * typed step's own args schema (a compat step has none to fail, but the same
  * unresolved-Promise value would still reach its glue function as-is). If a
  * transformer throws, that throw propagates unchanged, straight out of this
- * function (this task's spec, decision 5: cucumber-expressions itself does
- * no try/catch around a transformer call, and this module deliberately adds
- * none of its own) — src/run/run-scenario.ts calls this function outside any
+ * function (cucumber-expressions itself does no try/catch around a
+ * transformer call, and this module deliberately adds none of its own) —
+ * src/run/run-scenario.ts calls this function outside any
  * try/catch of its own too, so today that surfaces as an uncaught exception
  * failing the whole `nuka run` invocation, not a per-step failed receipt.
  * `nuka check` never reaches this code path at all: src/check/feature-
@@ -157,9 +157,9 @@ export type MatchOutcome =
  * `nuka run` time.
  *
  * A compat RegExp binding is matched with a *fresh* `RegExp` built from its
- * `source`/`flags` (m2b-compat-execution task spec, item 2), for the exact
- * reason src/check/feature-check.ts's own `checkedPatternMatches` already
- * documents: a `/g`/`/y`-flagged pattern's `lastIndex` must not carry state
+ * `source`/`flags`, for the exact reason src/check/feature-check.ts's own
+ * `checkedPatternMatches` already documents: a `/g`/`/y`-flagged pattern's
+ * `lastIndex` must not carry state
  * across the many pickle-step texts this function is called with, one at a
  * time, over a `nuka run` invocation's lifetime.
  */
@@ -205,7 +205,7 @@ export type BindArgsResult =
  * step carries a table or docstring — binds it to the one required args key
  * the named captures left unconsumed. Zero or several unconsumed required
  * keys, or an args schema that isn't even a `z.object` to ask the question
- * of, is a binding failure — this task's spec, decision 4: counted as "the
+ * of, is a binding failure: counted as "the
  * step's execution began" (like an args-validation failure), not as "never
  * started" (like undefined/ambiguous), so callers still write a failed
  * receipt for it.

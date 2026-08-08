@@ -1,8 +1,8 @@
 import type { WritableSink } from "../cli/writable-sink.js";
 
-// Responsibility: `nuka run`'s own progress output (fb5-run-output task
-// spec) — what src/context.ts and src/compat/allure-runtime.ts used to call
-// "a future progress-log feature" before this file existed. Every function
+// Responsibility: `nuka run`'s own progress output — what src/context.ts
+// and src/compat/allure-runtime.ts used to call "a future progress-log
+// feature" before this file existed. Every function
 // here writes to stderr only; stdout's one-JSON-record-per-scenario contract
 // (src/cli/run.ts) is untouched by any of it. Display only: nothing written
 // here is read back by `nuka accept` or any other command, so its exact
@@ -29,11 +29,11 @@ function formatStepDuration(durationMs: number): string {
 }
 
 /** `"ok"` / `"FAIL"` / `"skip"` — three words, not `ScenarioStepStatus`'s
- * five verbatim (this task's spec, decision 1: passed/failed/skipped must
- * be told apart at a glance). `undefined`/`ambiguous` both fold into
- * `"FAIL"` here: both are "never began, and this scenario is now failing"
- * outcomes as far as a progress line reader needs to know; their own detail
- * still lands on the scenario record unabridged. */
+ * five verbatim (passed/failed/skipped must be told apart at a glance).
+ * `undefined`/`ambiguous` both fold into `"FAIL"` here: both are "never
+ * began, and this scenario is now failing" outcomes as far as a progress
+ * line reader needs to know; their own detail still lands on the scenario
+ * record unabridged. */
 function formatStepStatusWord(status: StepProgressInfo["status"]): string {
   switch (status) {
     case "passed":
@@ -51,9 +51,8 @@ function formatStepStatusWord(status: StepProgressInfo["status"]): string {
  * `createTraceVersionWarner` (src/context/trace-actions.ts) already
  * established. Unlike that warner, this one never stops firing: a progress
  * line's whole point is to keep appearing for as long as the scenario runs.
- * One line, never wrapped (this task's spec, decision 1: a long step name
- * runs off the right edge rather than break the one-step-one-line
- * guarantee). */
+ * One line, never wrapped (a long step name runs off the right edge rather
+ * than break the one-step-one-line guarantee). */
 export function createStepProgressLogger(stderr: WritableSink): (info: StepProgressInfo) => void {
   return (info: StepProgressInfo): void => {
     stderr.write(
@@ -82,14 +81,13 @@ export function writeScenarioBoundary(stderr: WritableSink, boundary: ScenarioBo
   );
 }
 
-/** One row of "where this run wrote" (this task's spec, decision 2) —
- * `count` is omitted for a stream this run either wrote in full or not at
- * all (`allure`, `messages`), never a count of anything. `kind` only
- * decides the trailing slash: a directory reads as one, a file
- * (`messages.ndjson`) does not. Callers pass only the rows this run
- * actually has (this task's spec: "実際に書いたものだけ") — this function
- * has no "was this really written" judgment of its own to make; see
- * cli/run.ts's own call site for which condition gates which row. */
+/** One row of "where this run wrote" — `count` is omitted for a stream
+ * this run either wrote in full or not at all (`allure`, `messages`),
+ * never a count of anything. `kind` only decides the trailing slash: a
+ * directory reads as one, a file (`messages.ndjson`) does not. Callers
+ * pass only the rows this run actually has — this function has no "was
+ * this really written" judgment of its own to make; see cli/run.ts's own
+ * call site for which condition gates which row. */
 export interface OutputLocation {
   readonly label: string;
   readonly relativePath: string;
@@ -138,11 +136,11 @@ function formatSummaryDuration(durationMs: number): string {
   return parts.join(" ");
 }
 
-/** The one line `nuka run` used to leave to the exit code alone (this
- * task's spec, decision 3) — always written, `--quiet` included (decision
- * 4: this and `writeOutputLocations` above are each written exactly once
- * per invocation, and "where did output land" is never worth suppressing
- * for a flag whose whole point is a quieter terminal, not a silent one). */
+/** The one line `nuka run` used to leave to the exit code alone —
+ * always written, `--quiet` included: this and `writeOutputLocations`
+ * above are each written exactly once per invocation, and "where did
+ * output land" is never worth suppressing for a flag whose whole point is
+ * a quieter terminal, not a silent one. */
 export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void {
   stderr.write(
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +

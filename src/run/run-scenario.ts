@@ -53,14 +53,14 @@ import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./r
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
 
-// Responsibility: execute one pickle end to end (this task's spec, item 1's
-// own name for this: a scenario executor) — the scenario-level counterpart to cli/do.ts's execution
+// Responsibility: execute one pickle end to end — the scenario-level
+// counterpart to cli/do.ts's execution
 // phase. One `ctx` is created for the whole pickle and shared by every step
 // (docs/spec.md "Running": "Steps in one pickle share one context"); a
 // step's own failure/undefined/ambiguous stops matching or running any
 // further step in this scenario, but every step still gets a scenario-record
-// entry (`skipped` for the rest). Evidence follows its natural scope (this
-// task's spec, decision 5): the browser's
+// entry (`skipped` for the rest). Evidence follows its natural scope: the
+// browser's
 // trace/screenshots belong to the scenario as a whole (one `dispose()` call,
 // at the very end), while each step's own http.jsonl belongs to that step's
 // receipt dir — reached by calling `contextHandle.beginStep` right before
@@ -71,12 +71,11 @@ import { writeScenarioRecord } from "./write-record.js";
 // execution that never began must not be citable". Every other failure
 // (binding, args validation, the step's own throw, returns validation)
 // happens *after* that point and therefore always gets a failed receipt,
-// mirroring `nuka do`'s own setup/execution split (this task's spec,
-// decision 4).
+// mirroring `nuka do`'s own setup/execution split.
 //
 // A Then-position (`PickleStepType.OUTCOME`) step's own execution is never
-// judged by what it observed on the wire (t2-trust-declaration task spec):
-// this file used to demote an otherwise-"ok" status when a Then-bound step's
+// judged by what it observed on the wire: this file used to demote an
+// otherwise-"ok" status when a Then-bound step's
 // execution measured a network write, but the write/read-method proxy that
 // measurement rests on is not the semantics itself — GraphQL, RPC-over-POST,
 // and many vendor query APIs run a semantically pure read through POST, and
@@ -86,10 +85,10 @@ import { writeScenarioRecord } from "./write-record.js";
 // declared-mutating step is bound in Then position, but nothing in this file
 // enforces it at runtime any more — the step just runs like any other.
 //
-// `policy: "read-only"` enforcement (m2pre-resultof task spec, decision 3)
-// closes a gap this file always had: unlike cli/do.ts, `nuka run` never
+// `policy: "read-only"` enforcement closes a gap this file always had:
+// unlike cli/do.ts, `nuka run` never
 // looked at the resolved environment's policy at all. Only the declared half
-// of that check remains (t2-trust-declaration task spec, same reasoning as
+// of that check remains (same reasoning as
 // the Then-position paragraph above): a step whose *declared* `mutates` is
 // `true` is refused before it ever runs — a "never began" outcome, alongside
 // undefined/ambiguous, with `receipt: null` and the rest of the scenario
@@ -100,7 +99,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // visible there and in http.jsonl for a report to catch, rather than failing
 // the run that exposed it.
 //
-// `ctx.resultOf` (m2pre-resultof task spec, decisions 1-2): this file is the
+// `ctx.resultOf`: this file is the
 // one place a pickle's result chain is held — a `Map` keyed by the Step
 // object itself (not by name), updated only when a step's own status is
 // `"ok"`. The chain is created fresh per scenario and never escapes this
@@ -110,27 +109,27 @@ import { writeScenarioRecord } from "./write-record.js";
 // reflected back afterward via `contextHandle.usedSnapshot()` onto that
 // step's own receipt (`used`). Only a *typed* step's chain key ever exists
 // (compat has no Step object, and no validated result to offer — see below),
-// so this chain is exclusively typed-to-typed provenance, unchanged by this
-// slice's compat additions (v1 builds no data bridge between compat and
+// so this chain is exclusively typed-to-typed provenance, unchanged by
+// compat support (v1 builds no data bridge between compat and
 // typed interop).
 //
-// Object identity survives a step file importing another step file
-// (m2pre-module-identity task spec): src/discover/discover-steps.ts loads
+// Object identity survives a step file importing another step file:
+// src/discover/discover-steps.ts loads
 // every file through one shared tsx module registration for the whole
 // discovery run, so a step file's own relative import of another step
 // file's default export is the same object discovery put in this chain's
 // key space. See tests/resultof.test.ts's header comment for the
 // empirical proof this relies on.
 //
-// m2b-compat-execution task spec: this file now also runs compat steps and
-// Before/After hooks, closing m2a-compat-registry's two temporary
-// asymmetries (`buildStepBindings`/`matchPickleStep`, src/run/match-step.ts,
-// already match through compat entries; this file is where a *matched*
-// compat entry now actually executes instead of being skipped). One World
-// is constructed per pickle (item 4: "1 pickle = 1 World = 1 ctx"), shared
+// This file also runs compat steps and Before/After hooks, closing two gaps
+// where compat lagged typed steps: `buildStepBindings`/`matchPickleStep`
+// (src/run/match-step.ts) already matched through compat entries, but this
+// file is where a *matched*
+// compat entry now actually executes instead of being skipped. One World
+// is constructed per pickle ("1 pickle = 1 World = 1 ctx"), shared
 // by every compat step and hook in it, wrapping the exact same `ctx`
 // (`contextHandle.ctx`) a typed step's own `request`/`page` fixtures are
-// resolved from (`buildStepFixtures`, p4a-fixture-bag task spec) — so a
+// resolved from (`buildStepFixtures`) — so a
 // typed step's `request` fixture and a compat step's `this.request` (after
 // `await this.openRequest()`) are the identical Playwright object, cookies
 // and all. A compat step's own
@@ -141,17 +140,17 @@ import { writeScenarioRecord } from "./write-record.js";
 // returned). Before/After hooks run against that same World, outside any
 // step's own receipt boundary — `contextHandle.beginStep(scenarioDir, ...)`
 // before each individual hook invocation redirects http.jsonl logging and
-// the `observed` tally away from any step's own receipt dir (this task's
-// spec, item 5). http.jsonl and `observed` stay scenario-wide and
+// the `observed` tally away from any step's own receipt dir. http.jsonl and
+// `observed` stay scenario-wide and
 // un-attributed to any one hook invocation, a documented v1 limit rather
 // than a bug (neither is measured on, or visible from, any single
 // `ScenarioHookRecord` entry) — but a hook invocation's own trace chunk and
-// `actions` are not: p3d-hook-trace closed that half of the gap, giving
+// `actions` are not: that half of the gap is closed, giving
 // each individual Before/After/AfterStep call that touches the browser its
 // own isolated trace, the same per-invocation boundary `declaredCollector`
 // (below) already had.
 //
-// m2d-allure-shim task spec: this file also owns `declaredCollector` (src/
+// This file also owns `declaredCollector` (src/
 // compat/declared.ts) — one per pickle, repointed as "the currently active
 // declared collector" right after `instantiateCompatWorld` runs, and reset
 // via its own `beginStep(dir)` at the same points `contextHandle.beginStep`/
@@ -163,46 +162,46 @@ import { writeScenarioRecord } from "./write-record.js";
 // `TestRuntime` and a compat World's own attach/log/link read the same
 // active pointer).
 //
-// m21b-compat-execution task spec: closes the "silent behavior change" gaps
-// left in compat step/hook *execution* (as opposed to A's registration-time
-// closures) — a compat step's or hook's own `{ timeout }` is now actually
-// enforced (`runWithTimeout`, item 2), every Before/After hook is called
-// with a real `HookParameter` instead of zero arguments (`buildHookParameter`,
-// item 3), and a string return of `"pending"`/`"skipped"` or an apparent
-// `done`-callback arity both fail loudly instead of silently passing (items
-// 4-5) — all four checks apply only to compat steps and hooks, never to a
+// This file closes gaps where compat step/hook execution silently diverged
+// from cucumber-js's own semantics — a compat step's or hook's own
+// `{ timeout }` is now actually
+// enforced (`runWithTimeout`), every Before/After hook is called
+// with a real `HookParameter` instead of zero arguments (`buildHookParameter`),
+// and a string return of `"pending"`/`"skipped"` or an apparent
+// `done`-callback arity both fail loudly instead of silently passing —
+// all four checks apply only to compat steps and hooks, never to a
 // typed step, whose fixed `run(fixtures, args)` arity and zod-validated
 // `returns` make none of cucumber-js's own conventions here relevant to it.
 //
-// m22-compat-run-scope task spec, item 1: `defaultTimeoutMs` (this run's own
+// `defaultTimeoutMs` (this run's own
 // `setDefaultTimeout` value, or `undefined`) is threaded in from cli/run.ts
 // and falls back only where a compat step's/hook's *own* `{ timeout }` is
 // `undefined` (`?? defaultTimeoutMs` at each `runWithTimeout` call site
 // below) — an own declaration always wins, matching cucumber-js. `undefined
 // ?? undefined` stays `undefined`, so never calling `setDefaultTimeout`
-// leaves every compat step/hook exactly as unbounded as before this task.
+// leaves every compat step/hook exactly as unbounded as it always was.
 // `runWithTimeout`/`pendingOrSkippedMessage`/`doneCallbackMessage` are
 // exported (unchanged otherwise) so cli/run.ts's own BeforeAll/AfterAll
-// execution (this task's spec, item 2 — a run-scope hook, not a per-pickle
+// execution (a run-scope hook, not a per-pickle
 // one, so it does not belong in this file) reuses the exact same
 // timeout-racing/message logic rather than a second, drifting copy of it.
 //
-// m4a-run-provenance task spec: `runId` and `git` are both computed once by
+// `runId` and `git` are both computed once by
 // the caller (cli/run.ts), before this run's own pickle loop, and threaded
 // into every `runScenario` call unchanged — the same "measured once per
 // run, not once per pickle" shape `targetVersion` above already has. This
 // file only ever copies them onto each scenario record it writes.
 //
-// t7-compat-status-afterstep task spec: `runAfterStepHooks` (defined just
+// `runAfterStepHooks` (defined just
 // above the pickle.steps loop it's called from) adds `AfterStep` execution —
 // once per pickle step that actually ran, not once per scenario the way
 // Before/After are — with the exact same non-breaking failure handling the
 // After loop above already has (see that function's own header). Only a
 // step that actually executed reaches it; a skipped/never-began step does
-// not, matching this task's spec, item 2-3.
+// not.
 
-/** The declared-mutates read-only refusal message (this task's spec,
- * decision 3): matches cli/do.ts's own setup-phase rejection wording, since
+/** The declared-mutates read-only refusal message: matches cli/do.ts's own
+ * setup-phase rejection wording, since
  * this is the same fact about the same policy, just reached from `nuka run`
  * this time. */
 function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
@@ -211,8 +210,7 @@ function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): 
 
 /** One pickle's own result chain: which Step object most recently finished
  * with `status: "ok"`, and what its validated result, receipt id, and own
- * step name were (this task's spec, decision 1). `stepName` (m6a-from-core
- * task spec, item 5) is carried alongside `receiptId` so a `used` entry
+ * step name were. `stepName` is carried alongside `receiptId` so a `used` entry
  * built from this chain — whether through `ctx.resultOf` or a `from`
  * injection — can cite the step name docs/spec.md "Receipts" asks for
  * without a second vocabulary lookup. */
@@ -222,8 +220,8 @@ interface ChainEntry {
   readonly stepName: string;
 }
 
-/** Everything the Allure emitter (allure-step-as-test task spec, decision 2)
- * needs to write one step's own test the moment that step finishes — never
+/** Everything the Allure emitter needs to write one step's own test the
+ * moment that step finishes — never
  * batched to scenario end. `receipt` is the exact in-memory object
  * `pushStepRecord`'s own caller already has (`finishExecutedStep`'s
  * `redactedReceipt`, or the general backstop catch's own), never a second
@@ -251,10 +249,9 @@ export interface RunScenarioOptions {
   readonly pickle: Pickle;
   readonly relativeFeaturePath: string;
   /** This pickle's own feature file, already parsed (src/feature/load-
-   * features.ts's `parseFeatureSource`, m21b-compat-execution task spec,
-   * item 3) — every Before/After hook's `HookParameter.gherkinDocument`
-   * below is this exact object, never a partial/reconstructed stand-in
-   * (this task's spec: no cutting corners with a partial stand-in object). */
+   * features.ts's `parseFeatureSource`) — every Before/After hook's
+   * `HookParameter.gherkinDocument`
+   * below is this exact object, never a partial/reconstructed stand-in. */
   readonly gherkinDocument: GherkinDocument;
   readonly vocabulary: Vocabulary;
   readonly bindings: readonly StepBinding[];
@@ -263,16 +260,16 @@ export interface RunScenarioOptions {
    * phase calls it once for the whole run, not once per pickle) — this
    * pickle's own from-order guard (below) resolves each of its steps' bound
    * names through these, the exact seam `src/check/from-order.ts`'s own
-   * header explains (m6b-from-check task spec, item 3: `nuka check` and
+   * header explains (`nuka check` and
    * `nuka run` share one judgment, never two). */
   readonly patterns: readonly CheckedPattern[];
-  /** This `nuka run` invocation's own id (m4a-run-provenance task spec,
-   * decision 1) — generated once by the caller (cli/run.ts), before any
+  /** This `nuka run` invocation's own id — generated once by the caller
+   * (cli/run.ts), before any
    * pickle runs, and copied verbatim onto every scenario record this
    * invocation writes (`ScenarioRecord.run_id`). */
   readonly runId: string;
   /** The commit and cleanliness of the working tree when this run started
-   * (m4a-run-provenance task spec, decisions 2 and 4) — probed once by the
+   * — probed once by the
    * caller (`src/run/probe-git.ts`), before any pickle runs, and copied
    * verbatim onto every scenario record this invocation writes
    * (`ScenarioRecord.git`). `undefined` outside a git repository or when
@@ -280,10 +277,10 @@ export interface RunScenarioOptions {
   readonly git: GitState | undefined;
   readonly environment: string;
   /** The resolved environment's `policy` (cli/run.ts's `resolvedEnv.policy`)
-   * — `"read-only"` refuses a declared-mutating step before it runs (this
-   * task's spec, decision 3); `undefined` means no restriction. A step
+   * — `"read-only"` refuses a declared-mutating step before it runs;
+   * `undefined` means no restriction. A step
    * declared `mutates: false` that is nonetheless measured writing is no
-   * longer demoted for it (t2-trust-declaration task spec) — the
+   * longer demoted for it — the
    * declaration is trusted, and `observed.http_writes` on its receipt is
    * where a wrong one stays visible instead. */
   readonly policy: "read-only" | undefined;
@@ -292,7 +289,7 @@ export interface RunScenarioOptions {
   readonly env: Readonly<Record<string, string>>;
   readonly secrets: SecretSet;
   /** This scenario's starting storageState, already read from the session
-   * file by the caller (this task's spec, decision 8: read at each
+   * file by the caller (read at each
    * scenario's own start, so an earlier scenario's save in the same run is
    * visible to a later one) — `null` for no `--session` or a session's
    * first-ever use. */
@@ -301,11 +298,11 @@ export interface RunScenarioOptions {
    * `--session` wasn't given (nothing is read or written). */
   readonly sessionFilePath: string | null;
   /** Constructs this pickle's own World (src/discover/discover-steps.ts's
-   * `DiscoveryResult.instantiateCompatWorld`, m2b-compat-execution task spec,
-   * item 4), already wrapped for measurement + this run's own `defineWorld`
-   * schemas (m2c-typed-world task spec, items 1-2), with its `attach`/`log`/
-   * `link` wired to the given declared collector (m2d-allure-shim task spec,
-   * item 4). Called exactly once per pickle, with this function's own
+   * `DiscoveryResult.instantiateCompatWorld`), already wrapped for
+   * measurement + this run's own `defineWorld`
+   * schemas, with its `attach`/`log`/
+   * `link` wired to the given declared collector. Called exactly once per
+   * pickle, with this function's own
    * freshly created `declaredCollector`. */
   readonly instantiateCompatWorld: (
     ctx: StepContext,
@@ -314,24 +311,24 @@ export interface RunScenarioOptions {
   /** Every registered Before/After hook (src/discover/discover-steps.ts's
    * `DiscoveryResult.compatHooks`) — already validated for tag-expression
    * support by the caller (cli/run.ts's setup phase); this file only
-   * filters by this pickle's own tags (this task's spec, item 5). */
+   * filters by this pickle's own tags. */
   readonly compatHooks: readonly HookRegistration[];
   /** This run's own `setDefaultTimeout` value (src/discover/discover-
    * steps.ts's `DiscoveryResult.defaultTimeoutMs`), or `undefined` if it was
-   * never called (m22-compat-run-scope task spec, item 1) — applied as the
+   * never called — applied as the
    * fallback for a compat step's or Before/After hook's own `timeoutMs`
    * wherever that is `undefined`; an own declaration always wins. Not
    * applied to a typed step, which has no timeout mechanism at all. */
   readonly defaultTimeoutMs: number | undefined;
-  /** Reports a trace format version this build cannot read (p3a-trace-per-
-   * step task spec, scope B item 2) — one instance per `nuka run`
+  /** Reports a trace format version this build cannot read — one instance
+   * per `nuka run`
    * invocation (`src/context/trace-actions.ts`'s `createTraceVersionWarner`,
    * built once by cli/run.ts and passed unchanged into every
    * `runScenario` call for that invocation), so a run whose several steps
    * each hit this still only ever writes the stderr warning once. */
   readonly onUnknownTraceVersion: (version: number) => void;
-  /** Reports one pickle step's own outcome the moment it stops running
-   * (fb5-run-output task spec, decision 1) — one instance per `nuka run`
+  /** Reports one pickle step's own outcome the moment it stops running —
+   * one instance per `nuka run`
    * invocation (src/run/progress-log.ts's `createStepProgressLogger`, built
    * once by cli/run.ts, same "build once, thread unchanged into every
    * runScenario call" shape `onUnknownTraceVersion` above already has).
@@ -341,11 +338,11 @@ export interface RunScenarioOptions {
    * see that function's own header for why every step-record append site
    * funnels through it instead of calling this directly. */
   readonly onStepEnd?: (info: StepProgressInfo) => void;
-  /** Reports one pickle step's own finished record, receipt, and moment
-   * (allure-step-as-test task spec, decision 2) — unlike `onStepEnd` above,
+  /** Reports one pickle step's own finished record, receipt, and moment —
+   * unlike `onStepEnd` above,
    * never gated on `--quiet` (that flag silences only the terminal's own
-   * progress line, this task's spec, decision 3: "レポートの粒度がターミ
-   * ナルのフラグに従うのは誤り"); the caller (cli/run.ts) builds one
+   * progress line; the report's own granularity should not depend on a
+   * terminal flag); the caller (cli/run.ts) builds one
    * instance per pickle, since it needs that pickle's own `gherkinDocument`/
    * `relativeFeaturePath` to do anything with what this reports.
    * `undefined` under `nuka do` (no scenario, no `runScenario` call) or when
@@ -354,7 +351,7 @@ export interface RunScenarioOptions {
    * `onStepEnd` — see that function's own header for why every step-record
    * append site funnels through it instead of calling this directly. */
   readonly onStepFinished?: (info: StepFinishedInfo) => void;
-  /** The fixture dependency graph for this run (P5 task spec, scope item 5)
+  /** The fixture dependency graph for this run
    * — builtins ∪ `config.fixtures`, built once by cli/run.ts's own setup
    * phase (`src/fixture/graph.ts`'s `buildFixtureGraph`) and passed
    * unchanged into every `runScenario` call, so every pickle in this
@@ -362,11 +359,11 @@ export interface RunScenarioOptions {
    * already validated before any of them ran. */
   readonly fixtureGraph: FixtureGraph;
   /** This whole `nuka run` invocation's own `"process"`-scope fixture cache
-   * (P5 task spec, scope item 3) — created once by cli/run.ts, before the
+   * — created once by cli/run.ts, before the
    * first pickle, and passed unchanged into every `runScenario` call, so a
    * `"process"`-scope fixture named by more than one scenario is built
    * exactly once, by whichever scenario names it first, and reused by every
-   * scenario after that (this task's own completion condition 5). Torn
+   * scenario after that. Torn
    * down once by cli/run.ts, after every scenario in the invocation has
    * finished — never here, since this function has no way to know it is
    * looking at the invocation's *last* pickle. */
@@ -381,7 +378,7 @@ function ambiguousStepMessage(text: string, stepNames: readonly string[]): strin
   return `"${text}" matches more than one step: ${[...stepNames].sort().join(", ")}`;
 }
 
-// --- p3a-trace-per-step task spec, scope A item 4: a step's own trace chunk
+// --- A step's own trace chunk
 // is titled with its full gherkin text, keyword included ("Given the page is
 // open"), so the chunk names itself the same way a reader would refer to the
 // step. `pickleStep.text` alone never carries the keyword (gherkin's own
@@ -391,8 +388,7 @@ function ambiguousStepMessage(text: string, stepNames: readonly string[]): strin
 // from `pickleStep.astNodeIds[0]` back to the `Step` node that produced it.
 // A small, local re-derivation rather than an import from map-scenario.ts:
 // that module's own helpers are private, and even if they were not, src/
-// report/** is out of this task's scope entirely (this task's spec, "対象
-// ファイル").
+// report/** is out of this file's scope entirely.
 
 function collectGherkinStepKeywords(doc: GherkinDocument): Map<string, string> {
   const keywords = new Map<string, string>();
@@ -424,7 +420,7 @@ function stepChunkTitle(stepKeywords: ReadonlyMap<string, string>, pickleStep: P
   return keyword !== undefined ? `${keyword}${pickleStep.text}` : pickleStep.text;
 }
 
-// --- p3d-hook-trace task spec, scope 1: one trace chunk per individual
+// --- One trace chunk per individual
 // Before/After/AfterStep *invocation*, isolated from every step's own chunk
 // and from every sibling hook's — titled/named so a trace viewer (and a
 // reader of the scenario evidence dir's own file listing) can tell one
@@ -446,8 +442,7 @@ function hookChunkTitle(type: "before" | "after" | "after_step", stepIndex?: num
   }
 }
 
-/** Unique within one scenario's own evidence dir (this task's spec: "同じ
- * type の hook が複数登録されていても衝突しないこと") — built from
+/** Unique within one scenario's own evidence dir — built from
  * `HookRegistration.registrationOrder` (src/compat/hooks.ts), which discovery
  * assigns once, globally, in registration order, so two hooks of the same
  * `type` can never collide even though neither carries a name of its own.
@@ -471,13 +466,13 @@ function hookChunkFileName(
   }
 }
 
-// --- m6a-from-core task spec, item 4: `from` injection (scenario path
+// --- `from` injection (scenario path
 // only — `nuka do` has no chain, docs/spec.md "Chaining steps": "Under
 // `nuka do` there is no scenario and therefore no chain"). ---
 
 /**
  * Fills `value`'s still-unfilled args keys from `step`'s own `from`
- * declaration, using this pickle's own chain (this task's spec, item 4):
+ * declaration, using this pickle's own chain:
  * capture always wins (a key `bindStepArgs` already put something in —
  * including from a table/docstring — is left untouched, `value[key] !==
  * undefined`), and a key whose upstream hasn't yet produced a successful
@@ -487,33 +482,30 @@ function hookChunkFileName(
  * dependency is a feature-file mistake to fix, not one this function papers
  * over.
  *
- * A key naming several candidate producers (m7a-from-alternatives task spec,
- * item 2) looks for whichever *one* of them has a chain entry — the pre-
+ * A key naming several candidate producers looks for whichever *one* of
+ * them has a chain entry — the pre-
  * execution guard (`checkFromOrder`, called before this pickle's steps ever
  * run) already required exactly one candidate to be bound earlier, so this
  * function itself never *chooses* among candidates; it only ever finds zero
  * (upstream hasn't produced a result yet — the pre-existing case, generalized
  * to "none of the candidates has") or one. Finding two or more here would
  * mean that guard was bypassed or has a bug — not a case to resolve with a
- * rule (this task's spec, item 2: "到達不能なはずの状態に出会ったら、規則で
- * 解決せず失敗させること" — no first-found, no most-recent-across-different-
+ * rule: no first-found, no most-recent-across-different-
  * steps; fail loudly instead of inventing the priority docs/spec.md says
- * `from` deliberately does not have).
+ * `from` deliberately does not have.
  *
  * Mutates `value` in place (the same object `began.rawArgs` already points
- * at, this task's spec: the receipt's own `args` should show what the step
+ * at — the receipt's own `args` should show what the step
  * actually ran with, injected keys included — otherwise a reader could never
  * tell an injected value apart from one that was simply never validated).
- * Every key it *does* fill is reported to `recordUsed` (this task's spec,
- * item 5) — the same collector `ctx.resultOf` itself writes into, so a step
+ * Every key it *does* fill is reported to `recordUsed` — the same collector `ctx.resultOf` itself writes into, so a step
  * that is both injected into and separately calls `ctx.resultOf` still ends
  * up with one deduplicated `used` list. Every key it *cannot* fill is
  * returned (key -> the still-unfilled key's candidate step name(s), joined
  * when there is more than one, or a description of the problem if a
  * candidate was never itself named by `vocabulary` — see `stepNameOf`'s own
  * comment above) so the caller can name it if args validation goes on to
- * fail because of it (this task's spec, item 4: "the message should be
- * better than the hand-written era" — name which key, from which step).
+ * fail because of it — name which key, from which step.
  */
 function injectFrom(
   value: Record<string, unknown>,
@@ -526,8 +518,8 @@ function injectFrom(
   for (const [key, entry] of Object.entries(step.from)) {
     if (value[key] !== undefined) {
       // Capture (or a table/docstring) already filled this key — `from`
-      // only ever supplies a key the pattern itself left unfilled (this
-      // task's spec, item 4, bullet 1; docs/spec.md "Chaining steps": "A
+      // only ever supplies a key the pattern itself left unfilled
+      // (docs/spec.md "Chaining steps": "A
       // pattern capture still wins").
       continue;
     }
@@ -560,8 +552,8 @@ function injectFrom(
 }
 
 /**
- * Names which still-missing `from` key(s) actually caused `issues` (this
- * task's spec, item 4) — not every key `injectFrom` couldn't fill is
+ * Names which still-missing `from` key(s) actually caused `issues` — not
+ * every key `injectFrom` couldn't fill is
  * necessarily why args validation failed (an unfilled *optional* key is not
  * a zod issue at all), so this only speaks up for a key zod itself flagged.
  * `""` when there is nothing to add, so callers can simply append this to
@@ -585,27 +577,27 @@ function fromInjectionHint(
   return ` (${parts.join("; ")})`;
 }
 
-// --- m21b-compat-execution task spec, items 2, 4, 5: compat step/hook
-// execution honesty (only compat entries and Before/After hooks — the audit
-// this task closes is entirely about hand-written, cucumber-js-style glue;
+// --- Compat step/hook
+// execution honesty (only compat entries and Before/After hooks —
+// this audit is entirely about hand-written, cucumber-js-style glue;
 // a typed step's `run(fixtures, args)` has a fixed arity and a zod-validated
 // return, so none of these three checks apply to one). ---
 
-/** Item 2's failure message: names which timeout fired (a step's own
+/** This function's own failure message: names which timeout fired (a step's own
  * `{ timeout }` vs a hook's), on what, and the configured value. Not
  * exported — only `runWithTimeout` below builds one, and that function
  * itself is what cli/run.ts's own BeforeAll/AfterAll reuses (see this
- * file's own header, m22-compat-run-scope task spec addendum). */
+ * file's own header). */
 function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number): string {
   return `${kind} "${name}" timed out after ${timeoutMs}ms (its own registered timeout)`;
 }
 
-/** Item 4: cucumber-js interprets the string returns `"pending"`/`"skipped"`
+/** cucumber-js interprets the string returns `"pending"`/`"skipped"`
  * as their own outcomes; nukadoko's receipt/record schema has no such status
- * (implementing it for real is explicitly out of this task's scope), so
+ * (implementing it for real is out of scope here), so
  * rather than silently passing through as success, a step/hook that returns
  * one of these two strings is failed with a message a migrator can act on.
- * Exported (m22-compat-run-scope task spec addendum) so cli/run.ts's own
+ * Exported so cli/run.ts's own
  * BeforeAll/AfterAll execution reports the exact same wording for the exact
  * same fact, rather than a second copy of this message. */
 export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: string): string {
@@ -615,15 +607,15 @@ export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, val
   );
 }
 
-/** Item 5: cucumber-js infers a `done` callback from a glue function
+/** cucumber-js infers a `done` callback from a glue function
  * declaring one more parameter than it is actually called with, and passes
  * that extra argument a callback nukadoko never provides. Detected by arity
  * *before* calling the function at all — calling it would already be the
  * silent failure this closes (the callback never fires, the function
  * "succeeds" immediately having done none of its real work yet, and that
  * work keeps running unobserved after this step/hook is already recorded).
- * Exported for the same reason as `pendingOrSkippedMessage` above (m22-
- * compat-run-scope task spec addendum) — cli/run.ts's own BeforeAll/AfterAll
+ * Exported for the same reason as `pendingOrSkippedMessage` above —
+ * cli/run.ts's own BeforeAll/AfterAll
  * arity check reuses this exact wording. */
 export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
   return (
@@ -635,8 +627,8 @@ export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string
 
 /**
  * Races `run()` against `timeoutMs` (when given) and returns whichever
- * settles first. Honest limit, spelled out here because it is easy to miss
- * (this task's spec, item 2): JavaScript cannot cancel an in-flight
+ * settles first. Honest limit, spelled out here because it is easy to miss:
+ * JavaScript cannot cancel an in-flight
  * Promise — a timed-out call's own body keeps executing to completion in
  * the background no matter what this function returns. All this actually
  * guarantees is that the step/hook that started it is recorded as failed
@@ -651,10 +643,9 @@ export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string
  * per-step timeout must never cause.
  *
  * The timer itself is always cleared, on every path, so a step/hook that
- * finishes in time never leaks a pending Node timer (this task's spec: the
- * timer must always be cleared).
+ * finishes in time never leaks a pending Node timer.
  *
- * Exported (m22-compat-run-scope task spec addendum) so cli/run.ts's own
+ * Exported so cli/run.ts's own
  * BeforeAll/AfterAll execution races against the exact same logic a
  * scenario's own compat step/hook already does, rather than a second,
  * potentially-drifting copy of it — a run-scope hook is still "a compat
@@ -688,10 +679,8 @@ export async function runWithTimeout<T>(
 }
 
 /** Classifies a compat step's/hook's own thrown value into the closed
- * `error.kind` enum (m3a-receipt-kinds task spec, decisions 1-2) —
- * identified by type, never by matching the thrown value's own message text
- * (this task's spec: judging by a string match on the message is not
- * allowed). Only
+ * `error.kind` enum — identified by type, never by matching the thrown
+ * value's own message text. Only
  * `CompatTimeoutError` (`runWithTimeout`, above, always constructed by this
  * very module) and a `WorldWriteValidationError` (a declared World key's
  * write, src/compat/world-instrumentation.ts — checked via
@@ -699,8 +688,8 @@ export async function runWithTimeout<T>(
  * error is reached through discovery's own scoped tsx import and
  * `instanceof` would silently miss it there; see that function's own header)
  * are identifiable this way; anything else — including a non-`Error` thrown
- * value — falls back to `"step_error"` (this task's spec: default to
- * step_error whenever classification is uncertain). Not applied to a typed step's own throw: a typed
+ * value — falls back to `"step_error"`, the default whenever classification
+ * is uncertain. Not applied to a typed step's own throw: a typed
  * step never touches a World or `runWithTimeout` (no `this`, no timeout
  * mechanism — this file's own header), so that catch site hardcodes
  * `"step_error"` directly rather than call through here for a case that can
@@ -711,8 +700,8 @@ function classifyCaughtError(error: unknown): ErrorKind {
   return "step_error";
 }
 
-/** Builds this hook invocation's own `HookParameter` (this task's spec, item
- * 3) — `result` is included only for an After hook (`resultStatus !==
+/** Builds this hook invocation's own `HookParameter` — `result` is
+ * included only for an After hook (`resultStatus !==
  * undefined`), matching cucumber-js's own convention of never setting it for
  * Before. */
 function buildHookParameter(
@@ -760,8 +749,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     fixtureProcessCache,
   } = options;
 
-  // This pickle's own `"scenario"`-scope fixture cache (P5 task spec,
-  // scope item 3) — fresh per pickle, unlike `fixtureProcessCache` above, and
+  // This pickle's own `"scenario"`-scope fixture cache — fresh per pickle,
+  // unlike `fixtureProcessCache` above, and
   // torn down at this pickle's own end (below, before `contextHandle.
   // dispose()` — a scenario-scope fixture may itself hold `page`/`context`/
   // `request` and needs them still open during its own teardown code).
@@ -778,7 +767,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const startedAt = new Date();
 
-  // m6b-from-check task spec, item 2: the pre-execution guard docs/spec.md
+  // The pre-execution guard docs/spec.md
   // "Chaining steps" promises ("`nuka run`, before it executes that
   // scenario") — the exact judgment `nuka check` makes (src/check/from-
   // order.ts's own header), asked here before anything else in this pickle
@@ -786,14 +775,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // `contextHandle`/the World are ever created, not merely before the
   // per-step loop below: a violation found anywhere in this pickle fails the
   // *whole* scenario without executing any of its steps, including ones
-  // textually before the offending line (this task's spec: "実行せずに失敗
-  // させる") — so no step's own `run` ever gets a chance to call
+  // textually before the offending line — so no step's own `run` ever gets
+  // a chance to call
   // `ctx.page()`, and this scenario's own browser session is never opened.
   // Every other pickle in this `nuka run` invocation is untouched (cli/
   // run.ts's own pickle loop calls this function once per pickle,
   // independently).
   //
-  // m7b-unfillable-key task spec, item 2: `checkUnfillableKeys` (src/check/
+  // `checkUnfillableKeys` (src/check/
   // unfillable-key.ts) joins `checkFromOrder` at this exact guard — same
   // judgment `nuka check` makes, same "never began" shape, one shared list of
   // per-step messages below rather than a second guard block.
@@ -852,7 +841,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     return redactedRecord;
   }
 
-  // This scenario's own result chain (this task's spec, decision 1) — kept
+  // This scenario's own result chain — kept
   // here, not inside create-context.ts, so it never outlives this one
   // pickle's execution. `readChain` is the plain closure createStepContext
   // wraps into `ctx.resultOf`; this function is the only place that ever
@@ -862,15 +851,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     return chain.get(step);
   }
 
-  // Every typed step's own Step object, keyed by its vocabulary name (m6a-
-  // from-core task spec, items 4, 6) — built once per pickle from the same
+  // Every typed step's own Step object, keyed by its vocabulary name — built
+  // once per pickle from the same
   // `vocabulary` every pickle in this `nuka run` invocation shares. Doubles
   // as the "is this Step object one discovery actually registered" predicate
-  // `ctx.resultOf`'s unregistered-Step throw needs (item 6: `stepNameOf.has`
+  // `ctx.resultOf`'s unregistered-Step throw needs (`stepNameOf.has`
   // answers exactly that question — a Step this map doesn't have a name for
   // is, by construction, not `===` anything discovery put in the vocabulary)
   // and as the name lookup a `from` injection's own "still missing" error
-  // message uses (item 4) to name which upstream step a key should have come
+  // message uses to name which upstream step a key should have come
   // from, whether or not that step has run yet in this scenario.
   const stepNameOf = new Map<Step, string>();
   for (const entry of vocabulary.values()) {
@@ -895,12 +884,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   /**
    * The one place this pickle's own `stepRecords` array is ever appended to
-   * (fb5-run-output task spec, decision 1) — every one of the seven places
+   * — every one of the seven places
    * below that used to call `stepRecords.push` directly now calls this
    * instead, so `onStepEnd` fires exactly once per step, by construction,
-   * rather than by seven separate call sites staying in sync by discipline
-   * (this task's spec: a step must never produce two progress lines, or
-   * zero). `durationMs` is `0` for a step that never actually executed
+   * rather than by seven separate call sites staying in sync by discipline.
+   * `durationMs` is `0` for a step that never actually executed
    * (skipped by an earlier failure, undefined, ambiguous, or refused by the
    * read-only policy) — there is no "how long did it take" for work that
    * never started; the two backstop call sites (a step that threw before or
@@ -911,12 +899,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * length is what a progress-line reader actually wants: "which line is
    * this, out of how many so far", not a 0-based array position.
    *
-   * `receipt` (allure-step-as-test task spec, decision 2) is the exact
+   * `receipt` is the exact
    * in-memory object the two receipt-writing call sites already redacted and
    * wrote to disk, handed straight through to `onStepFinished` — `null` for
    * every other call site, none of which ever opened a receipt at all.
    * `finishedAt` is captured right here, on every call, the moment this
-   * step's own record is appended — this is what "step 完了時点" means for
+   * step's own record is appended — this is what "the moment this step
+   * finished" means for
    * every step, not only the ones with a receipt.
    */
   function pushStepRecord(record: ScenarioStepRecord, durationMs: number, receipt: Receipt | null = null): void {
@@ -939,16 +928,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   }
 
   /**
-   * Shared by the typed and compat branches below (this task's spec, item
-   * 2's asymmetry-closing and item 3's compat receipt shape): records this
+   * Shared by the typed and compat branches below: records this
    * step in `chain` when `chainKey` is given and the final status is `"ok"`
-   * (typed only — `undefined` for a compat step, this task's spec, item 4:
+   * (typed only — `undefined` for a compat step, since
    * a World is shared compat-to-compat only), then builds, redacts, and writes the receipt
    * and this step's own scenario-record entry. `observed.http_writes` (every
    * network path this ctx opens tallies into whichever kind of step opened
    * it, typed or compat alike) is recorded on every receipt below regardless
    * of position or policy, but no longer demotes `status` from it
-   * (t2-trust-declaration task spec: measurement stays a record, never a
+   * (measurement stays a record, never a
    * verdict — see this file's own header). A closure over this function's
    * own `chain`/`contextHandle`/`environment`/`policy`/`targetVersion`/
    * `session`/`scenarioId`/`secrets`, and mutates the outer
@@ -965,17 +953,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     initialErrorMessage: string,
     // `undefined` exactly when `initialStatus` is `"ok"` — a real `ErrorKind`
     // is required whenever the caller already knows this step failed for its
-    // own reason (args/binding/returns/its own throw), m3a-receipt-kinds
-    // task spec, decision 1.
+    // own reason (args/binding/returns/its own throw).
     initialErrorKind: ErrorKind | undefined,
     result: unknown,
     rawArgs: unknown,
     chainKey: Step | undefined,
     // This step's own declared `mutates` (typed) or `null` (compat, which
-    // has no declaration at all) — this task's spec, decision 3.
+    // has no declaration at all).
     mutates: boolean | null,
-    // Every `config.fixtures` entry this step's own bag actually resolved
-    // (P5 task spec, scope item 10) — `[]` for a compat step, which has no
+    // Every `config.fixtures` entry this step's own bag actually resolved —
+    // `[]` for a compat step, which has no
     // fixture bag at all.
     fixtureUsage: FixtureUsageEntry[],
   ): Promise<void> {
@@ -984,7 +971,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const errorKind = initialErrorKind;
 
     // Closes this step's own trace chunk, if one is open, *before* anything
-    // below reads from `begun.receiptDir` (p3a-trace-per-step task spec) —
+    // below reads from `begun.receiptDir` —
     // the reason this is a dedicated call rather than left to the next
     // `beginStep` (which only runs once the next step, or a hook boundary,
     // starts, well after this step's own receipt is already written): a
@@ -995,7 +982,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
     // `observed.http_writes`/`http_reads` are tallied every occurrence,
     // typed or compat alike, and always land on the receipt below — this is
-    // a record, not a verdict (t2-trust-declaration task spec): nukadoko no
+    // a record, not a verdict: nukadoko no
     // longer demotes `status` for what a step's execution measured, whether
     // that step is bound in Then position or running under a read-only
     // policy. What's left of that enforcement is entirely declared: the
@@ -1005,19 +992,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const observed = contextHandle.observedCounts();
     const usedEntries = contextHandle.usedSnapshot();
     // Labels `ctx.section` was called with since the current step boundary
-    // began (t3-sections task spec, decisions 1-2, 4) — reset at the same
+    // began — reset at the same
     // `beginStep` calls `observed`/`used` already are, so a step never
     // inherits an earlier step's labels in this shared-`ctx` pickle.
     const sectionLabels = contextHandle.sectionsSnapshot();
     // Every `ctx.poll` call that finished since the current step boundary
-    // began, in completion order (ctx-poll-receipt task spec) — same
+    // began, in completion order — same
     // "read after execution, whatever the outcome" shape as `sectionLabels`
     // right above; a poll that timed out or whose `fn` threw is exactly the
     // record a failed step's receipt needs.
     const pollRecords = contextHandle.pollsSnapshot();
     // Env var names `ctx.requireEnv` was called with since the current step
     // boundary began, including a call that went on to throw
-    // `MissingEnvError` (env-reads-and-mutates-doc task spec, item A) —
+    // `MissingEnvError` —
     // reset at the same `beginStep` call `observed`/`used`/`sections`
     // already are, so a step never inherits an earlier step's required
     // names in this shared-`ctx` pickle. Always empty for a compat step (no
@@ -1025,36 +1012,36 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // omitted for one below, the same way `sections` already is.
     const requiredEnv = contextHandle.envReadsSnapshot();
     // Console errors/uncaught page errors/failed requests the browser
-    // context saw since the current step boundary began (P0-page-events
-    // task spec) — same "read after execution, whatever the outcome" shape
+    // context saw since the current step boundary began — same
+    // "read after execution, whatever the outcome" shape
     // as `observed`/`sectionLabels`/`pollRecords`/`requiredEnv` above;
     // `undefined` when `ctx.page()` was never called this step, or was and
     // the page stayed clean.
     const pageEvents = contextHandle.pageEventsSnapshot();
     // How many page-issued requests since the current step boundary began
     // were left out of http.jsonl, by resourceType, read the same "after
-    // execution, whatever the outcome" way `pageEvents` just above is (p3b-
-    // page-network task spec, scope item 2) — `undefined` when nothing was
+    // execution, whatever the outcome" way `pageEvents` just above is —
+    // `undefined` when nothing was
     // ever left out.
     const httpOmitted = contextHandle.httpOmittedSnapshot();
-    // World reads/writes tallied since the current step boundary began (m2c-
-    // typed-world task spec, item 3) — always empty for a typed step (no
+    // World reads/writes tallied since the current step boundary began —
+    // always empty for a typed step (no
     // `this`), so the `world` field below is naturally omitted for one,
     // with no separate kind check needed.
     const worldReadsWrites = worldInstrumentation.snapshot();
     // What this step (kind-independent) declared through the allure-js
-    // runtime shim or a compat World's own attach/log/link (m2d-allure-shim
-    // task spec, items 2-3) — `undefined` when nothing was ever recorded
+    // runtime shim or a compat World's own attach/log/link — `undefined`
+    // when nothing was ever recorded
     // this step, omitted from the receipt the same way `used`/`world` are.
     const declared = declaredCollector.snapshot();
     // Application-specific evidence `evidence.attach`/`.path` produced since
-    // the current step boundary began (P9 task spec) — only a typed step's
+    // the current step boundary began — only a typed step's
     // fixture bag has `evidence`, so this is naturally empty for a compat
     // step, the same way `sections`/`polls` already are. Read the same
     // "after execution, whatever the outcome" way as every snapshot above.
     const evidenceSnapshot = await contextHandle.evidenceSnapshot();
     // Combines `traceEvidence`'s own `{ actions }` truncation with
-    // `evidenceSnapshot`'s (P9 task spec) into the receipt's single
+    // `evidenceSnapshot`'s into the receipt's single
     // top-level `truncated` field — see `mergeTruncated`'s own doc comment
     // (src/context/evidence.ts) for why this is one shared function rather
     // than two independent spreads.
@@ -1093,7 +1080,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
-            // `omitUsedResults` (fb3-used-result task spec, decision 2): an
+            // `omitUsedResults`: an
             // "ok" receipt keeps `used`'s original `{ receipt, step }` shape
             // — the upstream's own result is only worth a second look on a
             // *failed* receipt, the failed branch just below.
@@ -1118,10 +1105,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             args: rawArgs,
             // `errorKind` is guaranteed set by this point: the caller always
             // passes one alongside `initialStatus === "failed"`, and this
-            // function no longer demotes an "ok" status to "failed" itself
-            // (t2-trust-declaration task spec). The `?? "step_error"`
-            // fallback is a belt-and-braces default only, matching this
-            // task's own principle of defaulting to step_error whenever
+            // function no longer demotes an "ok" status to "failed" itself.
+            // The `?? "step_error"`
+            // fallback is a belt-and-braces default only, matching the
+            // general principle of defaulting to step_error whenever
             // classification is uncertain — it should never actually be reached.
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
@@ -1140,8 +1127,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
-            // Unstripped here, unlike the "ok" branch above (fb3-used-result
-            // task spec, decisions 1-2): a failed step's receipt is exactly
+            // Unstripped here, unlike the "ok" branch above: a failed
+            // step's receipt is exactly
             // where a reader most needs "what upstream value did this read",
             // without opening a second receipt.json to find out.
             ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
@@ -1159,8 +1146,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           };
 
-    // Redacted once, as one object, same as `nuka do` (this task's spec,
-    // decision 6): receipt.json must never be able to disagree with the
+    // Redacted once, as one object, same as `nuka do`: receipt.json must
+    // never be able to disagree with the
     // scenario record about what got redacted.
     const redactedReceipt = redact(receipt, secrets) as Receipt;
     await writeReceipt(begun.receiptDir, redactedReceipt);
@@ -1180,15 +1167,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     );
   }
 
-  // --- Hooks + World (m2b-compat-execution task spec, items 4-5) ---
+  // --- Hooks + World ---
   // One World per pickle, shared by every compat step and hook that runs in
   // it, wrapping this same `contextHandle.ctx` a typed step's `run` also
-  // receives (item 4: "1 pickle = 1 World = 1 ctx"). `worldInstrumentation`
-  // is this same World's own measurement handle (m2c-typed-world task spec,
-  // items 1-3) — advanced (`beginStep()`) at the exact same points
+  // receives ("1 pickle = 1 World = 1 ctx"). `worldInstrumentation`
+  // is this same World's own measurement handle — advanced (`beginStep()`)
+  // at the exact same points
   // `contextHandle.beginStep()` is called below, and read (`snapshot()`)
   // inside `finishExecutedStep` and this function's own backstop catch.
-  // m2d-allure-shim task spec, items 1-2: one collector for this whole
+  // One collector for this whole
   // pickle. Repointed as "the currently active declared collector" (read by
   // the registered allure-js `TestRuntime`, src/compat/allure-runtime.ts) and
   // passed directly into `instantiateCompatWorld` so this pickle's own
@@ -1215,7 +1202,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     .filter((hook) => hook.type === "after" && hookApplies(hook.tags, pickleTags))
     .slice()
     .reverse();
-  // AfterStep hooks (t7-compat-status-afterstep task spec, item 2-1): same
+  // AfterStep hooks: same
   // tag-filter as Before/After. Kept in registration order, unlike After's
   // own reversal above — that reversal exists because After is teardown for
   // Before's setup and cucumber-js unwinds teardown in the opposite order
@@ -1226,36 +1213,35 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     (hook) => hook.type === "after_step" && hookApplies(hook.tags, pickleTags),
   );
 
-  // Hooks get their own boundary, never a step's own receipt dir (this
-  // task's spec, item 5: a hook's own network stays outside any step
+  // Hooks get their own boundary, never a step's own receipt dir
+  // (a hook's own network stays outside any step
   // boundary) — redirected to the scenario dir itself, the same place
   // `httpLogDir` already starts out pointed at before any step's own
-  // `beginStep()` call ever runs. Since p3d-hook-trace, that boundary opens
+  // `beginStep()` call ever runs. That boundary opens
   // once per *individual* hook invocation, inside the loop below, each with
   // its own title/chunk file (`hookChunkTitle`/`hookChunkFileName`) — the
   // same per-invocation granularity `declaredCollector.beginStep` already
-  // had (m2d-allure-shim task spec, item 4), now shared by the trace chunk
+  // had, now shared by the trace chunk
   // too, so a Before hook that touches `ctx.page()` gets a chunk isolated
   // from its sibling Before hooks and from every step's own chunk.
   for (const hook of beforeHooks) {
     const chunkFileName = hookChunkFileName("before", hook.registrationOrder);
     await contextHandle.beginStep(scenarioDir, hookChunkTitle("before"), chunkFileName);
-    // Same per-boundary point for the World's own instrumentation (m2c-typed-
-    // world task spec, item 1's reconcile + item 3's per-boundary reset) — a
+    // Same per-boundary point for the World's own instrumentation — a
     // Before hook's own World reads/writes get tallied here but are
     // discarded by the next `beginStep()` call (the next Before hook, or
     // step 1's own), so they are never attributed to any step's receipt,
     // the same isolation `observed`/`used` already give hooks.
     worldInstrumentation.beginStep();
-    // m2d-allure-shim task spec, item 4: each hook gets its own declared
+    // Each hook gets its own declared
     // boundary — reset right before it runs, read right after — so one
     // hook's own facade/World-channel calls land on exactly that hook's own
     // `hookRecords` entry, never smeared across its sibling Before hooks.
     declaredCollector.beginStep(scenarioDir);
-    // Item 3: `HookParameter.result` is absent for a Before hook (cucumber-js
+    // `HookParameter.result` is absent for a Before hook (cucumber-js
     // never sets it there either — a scenario's outcome isn't known yet).
     const hookParameter = buildHookParameter(gherkinDocument, pickle, scenarioId, undefined);
-    // m3a-receipt-kinds task spec, decision 2: the arity check and the
+    // The arity check and the
     // pending/skipped return are both classified `"unsupported"` directly,
     // at the exact point each is detected — set on `hookStatus`/
     // `hookErrorKind` rather than thrown, so they never need to be told
@@ -1268,7 +1254,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
     if (hook.fn.length >= 2) {
-      // Item 5's arity check, before the call itself (see runWithTimeout's
+      // This arity check, before the call itself (see runWithTimeout's
       // own header for why calling it at all would already be the failure).
       hookStatus = "failed";
       hookErrorMessage = doneCallbackMessage("Hook", "Before");
@@ -1293,7 +1279,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
     }
     // Closes this hook's own trace chunk, if one is open, *before* its own
-    // `hookRecords` entry is built (p3d-hook-trace task spec) — the same
+    // `hookRecords` entry is built — the same
     // "close, then read" order `finishExecutedStep` already follows for a
     // step's own chunk, so `trace` is never set on a record whose chunk
     // hasn't actually finished writing yet.
@@ -1320,8 +1306,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;
-      // Stop at the first Before failure (this task's spec, item 5: a Before
-      // failure skips every step): this scenario's setup already didn't
+      // Stop at the first Before failure — a Before
+      // failure skips every step: this scenario's setup already didn't
       // complete, so there is nothing left for a later Before hook to
       // prepare into.
       break;
@@ -1330,7 +1316,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   /**
    * Runs every applicable AfterStep hook for one pickle step that actually
-   * executed (t7-compat-status-afterstep task spec, item 2-3) — the three
+   * executed — the three
    * call sites below are exactly the three places a step's own execution
    * reaches a final `"ok"`/`"failed"` status: the typed branch, the compat
    * branch, and the general per-step backstop catch's `began !== null` arm.
@@ -1343,10 +1329,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * `continue`s before matching/running anything).
    *
    * `stepStatus` is that one step's own outcome, not the scenario's running
-   * one (item 2-2: `HookParameter.result` reflects "the step itself", the
+   * one (`HookParameter.result` reflects "the step itself", the
    * same distinction `buildHookParameter`'s own header draws for After).
    *
-   * Failure handling mirrors the After loop above exactly (item 2-5: read
+   * Failure handling mirrors the After loop above exactly (read
    * that loop before touching this one) — an AfterStep hook's own failure
    * still lets every other AfterStep hook for this same step run (no
    * `break`, unlike the Before loop above: Before breaks because its own
@@ -1368,22 +1354,22 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     );
     for (const hook of afterStepHooks) {
       // Same boundary redirect as the Before/After loops (this file's own
-      // header, m2b-compat-execution task spec, item 5): a hook's own
+      // header): a hook's own
       // network activity stays outside any step's own receipt boundary.
       // Without this, an AfterStep hook's own requests would keep writing
       // into the step it just ran after's own http.jsonl, even though that
       // step's receipt (and its `observed` tally) was already built and
       // written by `finishExecutedStep` before this function is ever
       // called. `stepIndex` is folded into both the title and the chunk
-      // file name (p3d-hook-trace task spec) — this same hook can run again
+      // file name — this same hook can run again
       // after a *later* step in this same scenario, and each of those
       // invocations needs its own chunk, never overwriting the previous
       // one's.
       const chunkFileName = hookChunkFileName("after_step", hook.registrationOrder, stepIndex);
       await contextHandle.beginStep(scenarioDir, hookChunkTitle("after_step", stepIndex), chunkFileName);
       worldInstrumentation.beginStep();
-      // Same per-hook declared boundary as the Before/After loops (m2d-
-      // allure-shim task spec, item 4) — reset right before, read right
+      // Same per-hook declared boundary as the Before/After loops —
+      // reset right before, read right
       // after, so one AfterStep hook's own declared data never bleeds into a
       // sibling's.
       declaredCollector.beginStep(scenarioDir);
@@ -1413,8 +1399,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           hookErrorKind = classifyCaughtError(error);
         }
       }
-      // Same "close, then read" order as the Before loop above (p3d-
-      // hook-trace task spec).
+      // Same "close, then read" order as the Before loop above.
       await contextHandle.endStep();
       const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
       const declared = declaredCollector.snapshot();
@@ -1439,7 +1424,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
           ...(declared ? { declared } : {}),
         });
-        // No `break` — see this function's own header (item 2-5: same
+        // No `break` — see this function's own header (same
         // non-breaking failure handling as the After loop above).
         scenarioFailed = true;
       }
@@ -1448,7 +1433,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   for (const [stepIndex, pickleStep] of pickle.steps.entries()) {
     if (scenarioFailed) {
-      // item 2-3's own regression case: a step skipped because an earlier
+      // A step skipped because an earlier
       // one already failed never executes, so it never reaches any of the
       // three `runAfterStepHooks` call sites below either — this `continue`
       // is exactly where that "no after for a skipped step" boundary lives.
@@ -1456,8 +1441,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       continue;
     }
 
-    // General per-step backstop (fix-scenario-step-backstop task spec,
-    // decisions 1-2): everything from matching this step's text through
+    // General per-step backstop: everything from matching this step's text
+    // through
     // writing its receipt sits inside the try below, so ANY unexpected
     // throw still leaves this pickle's own scenario record written
     // (docs/spec.md "Running": once a pickle begins executing, every step
@@ -1465,15 +1450,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // invocation uncaught. The violation this backstop exists for: a
     // custom `config.parameterTypes` transformer's throw propagates
     // unchanged straight out of match-step.ts's `matchPickleStep` (that
-    // file's own header comment, decision 5 — cucumber-expressions itself
+    // file's own header comment — cucumber-expressions itself
     // never catches a transformer call, and that module deliberately
-    // doesn't either), and nothing between it and here caught it before
-    // this task. This backstop changes nothing about any failure already
+    // doesn't either), and nothing between it and here used to catch it.
+    // This backstop changes nothing about any failure already
     // handled by name below (undefined/ambiguous/binding failure/args
     // zod/the step's own `run` throw/the read-only declared-mutates
     // refusal) — each keeps its own branch, unchanged; this is only the
-    // last net underneath all of them. `began` mirrors the exact point (marked
-    // below, unchanged from before this task) this function already
+    // last net underneath all of them. `began` mirrors the exact point
+    // (marked below) this function already
     // treats as "a receipt is always written from here on": a throw
     // before it is "never began" (`receipt: null`, the same family as
     // undefined/ambiguous/the read-only declared-mutates refusal just
@@ -1481,7 +1466,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // exactly like any other execution-phase failure this function
     // already handles inline.
     //
-    // fb5-run-output task spec: this iteration's own start, read by the
+    // This iteration's own start, read by the
     // `began === null` arm of the backstop catch below — the one step
     // outcome with no more precise start time available (nothing "began"
     // yet in the sense above), so its own progress line reports elapsed
@@ -1497,12 +1482,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // This step's own declared `mutates` (typed) or `null` (compat) —
       // carried on `began` so the general backstop catch below (which has
       // no `entry` in scope of its own) can still put the right value on a
-      // receipt it has to write (this task's spec, decision 3).
+      // receipt it has to write.
       readonly mutates: boolean | null;
       rawArgs: unknown;
     } | null = null;
-    // Every `config.fixtures` entry this step's own bag actually resolved
-    // (P5 task spec, scope item 10) — hoisted to this scope, alongside
+    // Every `config.fixtures` entry this step's own bag actually resolved —
+    // hoisted to this scope, alongside
     // `began`, so the general backstop catch below can still put it on the
     // receipt it writes for an unexpected throw that happens *after*
     // fixture resolution succeeded but before `finishExecutedStep` runs.
@@ -1550,18 +1535,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
 
       if (entry.kind === "typed") {
-        // Read-only policy, declared-mutates refusal (this task's spec,
-        // decision 3): a "never began" outcome, alongside undefined/
+        // Read-only policy, declared-mutates refusal: a "never began"
+        // outcome, alongside undefined/
         // ambiguous above — no receipt id or directory is created, and the
         // rest of the scenario is skipped, matching cli/do.ts's own
         // setup-phase refusal for the same policy. `mutates: false` steps
-        // are unaffected regardless of policy — and, since
-        // t2-trust-declaration, so is a step that goes on to actually write
+        // are unaffected regardless of policy — and so is a step that goes
+        // on to actually write
         // despite that declaration: the declaration is trusted, not
         // re-verified against what execution measures, so
         // `finishExecutedStep` no longer has a backstop for it. A compat
-        // entry has no declared `mutates` at all (m2b-compat-execution task
-        // spec, item 2), so this check simply does not apply to one; nothing
+        // entry has no declared `mutates` at all, so this check simply
+        // does not apply to one; nothing
         // in this file checks a compat step's read-only behavior either.
         if (policy === "read-only" && entry.step.mutates) {
           scenarioFailed = true;
@@ -1586,8 +1571,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         await mkdir(receiptDir, { recursive: true });
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — the trace chunk `ctx.page()` opens lazily
-        // during this step, if it does, self-identifies the same way this
-        // task's spec asked for.
+        // during this step, if it does, self-identifies the same way.
         await contextHandle.beginStep(receiptDir, stepChunkTitle(stepKeywords, pickleStep));
         worldInstrumentation.beginStep();
         declaredCollector.beginStep(receiptDir);
@@ -1622,12 +1606,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           errorMessage = bindResult.message;
           errorKind = "binding_invalid";
         } else {
-          // `from` injection (this task's spec, item 4) — after binding, so
+          // `from` injection — after binding, so
           // capture already won every key it could; before args validation,
           // so an injected key is validated exactly like a captured one and
           // a required key `from` couldn't fill still fails args validation
-          // normally (the "last line of defense" this task's spec names —
-          // m6b's own pre-execution guard is what turns this into a fatal
+          // normally (the "last line of defense" — the pre-execution
+          // from-order guard above is what turns this into a fatal
           // check *before* the browser session even starts).
           const stillMissingFrom = injectFrom(
             bindResult.value,
@@ -1645,9 +1629,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             errorKind = "args_invalid";
           } else {
             try {
-              // Bag construction sits inside this same try (p4a-fixture-bag
-              // task spec, widened by P5 to also resolve `config.fixtures`
-              // entries) — a step whose `run` destructures `page` opens the
+              // Bag construction sits inside this same try (this also
+              // resolves `config.fixtures`
+              // entries, not just builtins) — a step whose `run` destructures `page` opens the
               // browser (and this step's own trace chunk, already pending
               // from `beginStep` above) right here, not before args
               // validated and not lazily from inside the step's own body
@@ -1680,8 +1664,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               }
             } catch (error) {
               // Always "step_error", never routed through
-              // `classifyCaughtError` (this file's own header, m3a-receipt-
-              // kinds task spec): a typed step's `run(fixtures, args)` never
+              // `classifyCaughtError` (this file's own header): a typed
+              // step's `run(fixtures, args)` never
               // receives `this` and has no timeout mechanism, so neither a
               // `WorldWriteValidationError` nor a `CompatTimeoutError` can
               // ever reach this catch.
@@ -1708,8 +1692,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         );
         await runAfterStepHooks(stepIndex, status);
       } else {
-        // entry.kind === "compat" (m2b-compat-execution task spec, items
-        // 2-3): fn is called with `this = World` and positional arguments —
+        // entry.kind === "compat": fn is called with `this = World` and
+        // positional arguments —
         // no args/returns schema exists to validate against, so there is no
         // binding-failure branch here the way there is for a typed step.
         const receiptId = generateReceiptId();
@@ -1727,18 +1711,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           relativeReceiptDir,
           stepName: outcome.stepName,
           startedAt: new Date(),
-          // Compat has no `mutates` declaration at all (this task's spec,
-          // decision 3) — `null`, never coerced to `false`.
+          // Compat has no `mutates` declaration at all — `null`, never
+          // coerced to `false`.
           mutates: null,
           rawArgs: undefined,
         };
 
         // Positional args: the matched values, then — when the pickle step
-        // carries a table or docstring — one more argument (this task's
-        // spec, item 3). The receipt's own `args` stays JSON-plain
+        // carries a table or docstring — one more argument. The receipt's
+        // own `args` stays JSON-plain
         // (`string[][]`/`string`); the *function call* gets a richer
-        // `DataTable` wrapping those same rows (2026-08-02 lead scope
-        // addendum: a raw `string[][]` would break existing glue calling
+        // `DataTable` wrapping those same rows (a raw `string[][]` would
+        // break existing glue calling
         // `table.hashes()`/`.rowsHash()`, which the migration-door rule
         // forbids) — two shapes for two different consumers of the exact
         // same data; the DataTable object itself is never what gets
@@ -1761,7 +1745,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let status: "ok" | "failed" = "ok";
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
-        // Item 5's arity check, before the call itself: a compat step's
+        // This arity check, before the call itself: a compat step's
         // glue function declaring more parameters than `positionalArgs`
         // actually supplies is cucumber-js's own signal for a `done`
         // callback — nukadoko never passes one (see `doneCallbackMessage`'s
@@ -1773,11 +1757,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           errorKind = "unsupported";
         } else {
           try {
-            // Item 2: `entry.compat.timeoutMs` is this step's own
+            // `entry.compat.timeoutMs` is this step's own
             // `{ timeout }` (wired through discover-steps.ts's
             // `CompatStepDefinition.timeoutMs`) — `undefined` runs
-            // unbounded, same as before this task. m22-compat-run-scope task
-            // spec, item 1: `?? defaultTimeoutMs` only ever takes effect when
+            // unbounded. `?? defaultTimeoutMs` only ever takes effect when
             // this step declared no `{ timeout }` of its own.
             const returnValue = await runWithTimeout(
               () => Promise.resolve(entry.compat.fn.apply(world, positionalArgs)),
@@ -1785,7 +1768,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               "Step",
               outcome.stepName,
             );
-            // Item 4: cucumber-js's own pending/skipped return convention —
+            // cucumber-js's own pending/skipped return convention —
             // nukadoko doesn't implement either, so this fails loudly
             // instead of quietly passing (see `pendingOrSkippedMessage`'s
             // own header).
@@ -1795,7 +1778,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               errorKind = "unsupported";
             }
           } catch (error) {
-            // m3a-receipt-kinds task spec, decisions 1-2: identified by
+            // Identified by
             // type (`CompatTimeoutError`/`WorldWriteValidationError`), never
             // by matching `message` — see `classifyCaughtError`'s own header.
             status = "failed";
@@ -1846,7 +1829,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       } else {
         // Same "close this step's own chunk before reading anything from
         // its receipt dir" call `finishExecutedStep` makes (this file's own
-        // header, p3a-trace-per-step task spec) — a chunk can be open here
+        // header) — a chunk can be open here
         // too: `began !== null` means this step's own `beginStep` already
         // ran, so `ctx.page()` could already have opened one before the
         // uncaught throw this backstop exists for.
@@ -1856,32 +1839,32 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const httpLogExists = existsSync(path.join(began.receiptDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
         const usedEntries = contextHandle.usedSnapshot();
-        // Same backstop-only read as `observed`/`used` just above (t3-
-        // sections task spec, decision 4) — whatever labels this step
+        // Same backstop-only read as `observed`/`used` just above —
+        // whatever labels this step
         // reached before the uncaught throw still belong on its receipt.
         const sectionLabels = contextHandle.sectionsSnapshot();
-        // Same backstop-only read again, for `polls` (ctx-poll-receipt task
-        // spec) — a poll this step was mid-wait on when the uncaught throw
+        // Same backstop-only read again, for `polls` — a poll this step
+        // was mid-wait on when the uncaught throw
         // hit still finished (`finally` in poll.ts's own loop guarantees
         // that), so its own record still belongs on this receipt.
         const pollRecords = contextHandle.pollsSnapshot();
-        // Same backstop-only read again, for `required_env` (env-reads-and-
-        // mutates-doc task spec, item A) — whatever names this step
+        // Same backstop-only read again, for `required_env` — whatever
+        // names this step
         // required before the uncaught throw still belong on its receipt.
         const requiredEnv = contextHandle.envReadsSnapshot();
-        // Same backstop-only read again, for `page_events` (P0-page-events
-        // task spec) — whatever the browser context already saw before the
+        // Same backstop-only read again, for `page_events` — whatever the
+        // browser context already saw before the
         // uncaught throw still belongs on this receipt.
         const pageEvents = contextHandle.pageEventsSnapshot();
-        // Same backstop-only read again, for `http_omitted` (p3b-page-
-        // network task spec, scope item 2) — whatever the page already left
+        // Same backstop-only read again, for `http_omitted` — whatever the
+        // page already left
         // out of http.jsonl before the uncaught throw still belongs on this
         // receipt.
         const httpOmitted = contextHandle.httpOmittedSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
-        // Same backstop-only read again, for `evidence.attach`/`.path` (P9
-        // task spec) — whatever this step already wrote before the
+        // Same backstop-only read again, for `evidence.attach`/`.path` —
+        // whatever this step already wrote before the
         // uncaught throw still belongs on its receipt.
         const evidenceSnapshot = await contextHandle.evidenceSnapshot();
         const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
@@ -1893,7 +1876,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           // This is the true catch-all: whatever threw here was never
           // turned into an `ErrorKind` by any of the classification points
           // above, so this is the default-to-step_error-when-uncertain case
-          // itself, not just its fallback (this task's spec, decision 1).
+          // itself, not just its fallback.
           error: { message, kind: "step_error" },
           status: "failed",
           environment,
@@ -1950,23 +1933,23 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     }
   }
 
-  // After hooks are attempted regardless of Before/step outcome (this
-  // task's spec, item 5), before dispose() so a hook can still use
+  // After hooks are attempted regardless of Before/step outcome, before
+  // dispose() so a hook can still use
   // `this.page`/`this.request` while the browser/request context is open —
   // redirected to the scenario's own boundary for the same reason Before
   // hooks are, above, rather than left pointed at whichever step happened
-  // to run last. Since p3d-hook-trace, each individual After hook opens its
+  // to run last. Each individual After hook opens its
   // own boundary (title + chunk file), inside the loop below, the same
   // per-invocation shape the Before loop above now has.
   for (const hook of afterHooks) {
     const chunkFileName = hookChunkFileName("after", hook.registrationOrder);
     await contextHandle.beginStep(scenarioDir, hookChunkTitle("after"), chunkFileName);
     worldInstrumentation.beginStep();
-    // Same per-hook declared boundary as the Before loop above (this task's
-    // spec, item 4) — reset right before, read right after, so one After
+    // Same per-hook declared boundary as the Before loop above — reset
+    // right before, read right after, so one After
     // hook's own declared data never bleeds into a sibling's.
     declaredCollector.beginStep(scenarioDir);
-    // Item 3: `result.status` reflects the scenario's outcome *as of right
+    // `result.status` reflects the scenario's outcome *as of right
     // before this After hook runs* — every Before hook and every step has
     // already had its chance to set `scenarioFailed`, and an earlier After
     // hook in this same loop (if any) already folded its own failure in too
@@ -1979,7 +1962,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       scenarioFailed ? "FAILED" : "PASSED",
     );
     // Same non-throwing arity/pending-skipped classification as the Before
-    // loop above (this task's spec, decision 2) — see that loop's own
+    // loop above — see that loop's own
     // comment for why.
     let hookStatus: "ok" | "failed" = "ok";
     let hookErrorMessage = "";
@@ -2007,8 +1990,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         hookErrorKind = classifyCaughtError(error);
       }
     }
-    // Same "close, then read" order as the Before loop above (p3d-
-    // hook-trace task spec) — this hook's own chunk (if any) is written to
+    // Same "close, then read" order as the Before loop above — this hook's
+    // own chunk (if any) is written to
     // disk, and read back, *before* `dispose()` closes the browser context
     // for good just below this loop.
     await contextHandle.endStep();
@@ -2039,7 +2022,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const finishedAt = new Date();
 
-  // `"scenario"`-scope fixture teardown (P5 task spec, scope items 3, 6) —
+  // `"scenario"`-scope fixture teardown —
   // *before* `contextHandle.dispose()` just below: a fixture built off
   // `page`/`context`/`request` needs those still open while its own
   // teardown code runs. Reverse build order (src/fixture/resolver.ts's own
@@ -2047,8 +2030,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // every step and hook has already had its chance to set `scenarioFailed`
   // by this point, so "passed"/"failed" here is the scenario's real,
   // settled outcome, never a provisional one. A teardown failure never
-  // changes `scenarioFailed` itself (this task's spec: "teardown の throw
-  // は step / シナリオの成否を変えない") — it only ever lands on
+  // changes `scenarioFailed` itself — it only ever lands on
   // `ScenarioRecord.teardown_errors`, below.
   const fixtureTeardownErrors = await teardownFixtureCache(
     fixtureScenarioCache,
@@ -2057,7 +2039,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   let disposeResult;
   try {
-    // No status argument (fb4-evidence-time task spec, item 1) — `dispose`'s
+    // No status argument — `dispose`'s
     // own evidence no longer varies by outcome, so there is nothing left for
     // this scenario's `scenarioFailed`/pass-fail status to select between.
     disposeResult = await contextHandle.dispose();
@@ -2103,12 +2085,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     evidence: {
       dir: relativeScenarioDir,
       screenshots: browserEvidence.screenshots,
-      // No scenario-level `trace` any more (p3a-trace-per-step task spec):
+      // No scenario-level `trace` any more:
       // the whole-scenario recording this used to report is retired, split
       // into each step's own `receipt.evidence.trace` instead (this file's
       // own header). `ScenarioEvidence.trace` (record-types.ts) stays typed
-      // as optional for src/report/**'s own sake (out of this task's
-      // scope), but this executor never sets it any more.
+      // as optional for src/report/**'s own sake, but this executor never
+      // sets it any more.
     },
     ...(fixtureTeardownErrors.length > 0 ? { teardown_errors: fixtureTeardownErrors } : {}),
   };

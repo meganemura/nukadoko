@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 // Responsibility: the `<prefix>-<YYYYMMDD-HHMMSS>-<4 alphanumeric>` id
 // format docs/spec.md "Receipts" and "The state directory" both use —
 // `rcpt-...` for a receipt, `scn-...` for a scenario record
-// (src/run/scenario-id.ts, m1-run task spec: generalize receipt-id.ts).
+// (src/run/scenario-id.ts).
 // Generalized into `generateId` here rather than duplicated, since the two
 // ids are the same family with only the prefix differing. The timestamp
 // component is local wall-clock digits, not a real timestamp field — it
