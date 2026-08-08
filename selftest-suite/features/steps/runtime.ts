@@ -35,3 +35,12 @@ export const When = impl.When;
 export const Then = impl.Then;
 export const World = impl.World;
 export const setWorldConstructor = impl.setWorldConstructor;
+// selftest-allure task spec, decision 2: the HTTP server that serves a
+// generated Allure report is started/stopped by a cucumber-js Before/After
+// hook, on both tracks. Before/After go through this same swap so that
+// hook, like every step above, binds to the real @cucumber/cucumber on the
+// baseline track and to nukadoko/compat on the swap track, never a stray
+// direct import of either that would silently register into the wrong
+// registry.
+export const Before = impl.Before;
+export const After = impl.After;

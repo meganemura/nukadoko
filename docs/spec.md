@@ -2055,6 +2055,27 @@ renders nothing.
   identity bullet above, this emitter does not feed them across runs: what
   Allure shows for any one `nuka run` invocation is complete, and nothing
   about a later invocation's steps is linked back to this one's.
+- Confirmed against a real browser, not just against `allure-js-commons`'
+  own API: running `nuka run` against a small fixture with a passing, a
+  failing, and a Before-hook-stopped scenario, generating the report with
+  the real `allure` CLI, serving it over a real HTTP server (the report's
+  SPA fetches its own `widgets/*.json` on load, which `file://` cannot
+  serve at all, though its shell still renders regardless, so a check has
+  to read something data-dependent to mean anything), and driving a real
+  headless browser against it. What that confirmed: the report's own pass/failed/
+  skipped counts match what `nuka run` itself reported, each scenario
+  renders as its own tree group and each step as one of that group's
+  leaves, a failed step's `receipt.json` attachment is present and its own
+  content is readable (naming that step's own receipt id), `nuka init`'s
+  own `allurerc.mjs` (above) actually sorts a failure into its own category
+  rather than Allure 3's default "Product errors", and a step's own
+  `sections`/`polls` render as its own child steps, one level under that
+  step, not two. Also confirmed, and pinned rather than treated as
+  incidental: a scenario a Before hook stops shows every one of its own
+  steps skipped, not red, in the running report the same way it does once
+  generated (the trade-off named earlier in this section, seen for real).
+  Not yet exercised this way: `allure watch` serving a report live, and a
+  hook's own trace attachment (both left to a later stage).
 
 Not yet built: a hook's own duration (record.json carries no per-hook
 timestamp today, so a hook's start and stop both collapse to the

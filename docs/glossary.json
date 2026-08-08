@@ -201,6 +201,10 @@
     {
       "term": "fixture",
       "why": "p4a-fixture-bag task spec で入った run() の第一引数(page/context/request/env/requireEnv/baseURL/resultOf/section/poll)を指す語。StepFixtures 型名、fixture bag という言い回しと直接対応し、Playwright 自身の fixture とも語根を共有する。訳すと両方の結び付きが失われる"
+    },
+    {
+      "term": "data-dependent",
+      "why": "selftest-allure task spec の file:// トラップの文脈で使う語。ページのシェル(見出しや装飾文言)はデータが届かなくても描画されるが、data-dependent な要素(件数・ツリーの行・ステータス)はデータが実際に届いたときにしか現れない、という対比を指す。「データ依存」に訳すと硬い直訳になり、シェルとの対比が伝わりにくい"
     }
   ],
   "identifiers": {

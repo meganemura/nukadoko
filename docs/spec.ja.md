@@ -1416,6 +1416,11 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
 - 1 回の run を見ることは Allure の仕事であり、nukadoko 自身に web UI はありません。
   history、trend、flakiness も Allure の機能ですが、上の identity の項目のとおり、この emitter はそれらを run をまたいでは供給しません。
   1 回の `nuka run` の呼び出しについて Allure が示すものはそれ自体で完結しており、後の呼び出しの step が今回の呼び出しに紐づくことは何もありません。
+- `allure-js-commons` 自身の API に対してだけでなく、実際のブラウザに対しても確認済みです。
+  passing な scenario、failing な scenario、Before hook が止める scenario を持つ小さな fixture に対して `nuka run` を実行し、実物の `allure` CLI でレポートを生成し、実物の HTTP サーバでそれを配信し、実物のヘッドレスブラウザでそれを操作するという形です(レポートの SPA は読み込み時に自身の `widgets/*.json` を fetch しますが、`file://` はそれを一切配信できず、それでもシェル自体は変わらず描画されてしまうため、チェックは意味を持つために data-dependent な何かを読む必要があります)。
+  これで確認できたのは次のことです: レポート自身の pass/failed/skipped の件数が `nuka run` 自身の報告と一致すること、各 scenario がそれ自身のグループ行として、各 step がそのグループの行の 1 つとして表示されること、失敗した step の `receipt.json` の attachment が存在し、しかもその中身が実際に読めること(その step 自身の receipt id を示します)、`nuka init` 自身が書く `allurerc.mjs`(前述)が実際に失敗を Allure 3 の既定の「Product errors」ではなく固有の category に振り分けること、そして step 自身の `sections`/`polls` がその step の直下の子 step として、2 段ではなく 1 段だけ潜った形で表示されることです。
+  あわせて確認し、たまたまではなく固定した事実として扱っているものが 1 つあります: Before hook が止めた scenario は、その scenario のすべての step が赤くではなく skipped として表示されるということで、これは生成済みのレポートで見えるのと同じ挙動であり、この節で先に触れたトレードオフを実物のレポートで確かめたものです。
+  まだこの形で試されていないもの: `allure watch` によるレポートのライブ配信と、hook 自身の trace の attachment です(どちらも後の段階に残しています)。
 
 まだ実装されていないもの: フック自身の duration(record.json は今のところ hook ごとの timestamp を持たないため、フックの開始と終了はどちらも scenario 自身の境界に潰れます)、BeforeAll/AfterAll(emitter がそこから map できる run レベルの record が存在しません)、そして link-template の設定(`@issue:123` のような tag を URL に対応付けるもの)です。
 

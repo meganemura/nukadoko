@@ -109,6 +109,19 @@ just until 0.1.
   extensions Allure auto-detects (`allurerc.{js,mjs,cjs,json,yaml,yml}`)
   first and writes nothing, naming the file it found on stderr, when a
   project already has one.
+- **The Allure report is now confirmed against a real browser, not just
+  against `allure-js-commons`' own API.** A selftest scenario runs `nuka
+  run` against a small fixture with a passing, a failing, and a
+  Before-hook-stopped scenario, generates the report with the real
+  `allure` CLI, serves it over a real HTTP server, and drives a real
+  headless browser against it, reading only data-dependent content (a
+  count, a tree row, a status), never the report shell's own boilerplate.
+  Confirmed this way: pass/failed/skipped counts match what `nuka run`
+  itself reported, a scenario renders as its own group and a step as one of
+  that group's rows, a failed step's `receipt.json` attachment is present
+  and its own content is readable, `allurerc.mjs`'s categorization actually
+  sorts a failure away from "Product errors", and a step's `sections`/
+  `polls` render as its own child steps, one level under it, not two.
 
 ## 0.1.0 — 2026-08-06
 
