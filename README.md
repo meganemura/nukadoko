@@ -48,7 +48,10 @@ when Node gives up. You don't need to gitignore `.nukadoko/` yourself:
 
 Gherkin states acceptance criteria as executable scenarios: `Given` /
 `When` / `Then` lines in a `.feature` file, with the code behind each line
-written separately.
+written separately. Those keywords are Cucumber's rather than this
+project's, and [Cucumber's own Gherkin reference](https://cucumber.io/docs/gherkin/)
+is where they are defined; nukadoko reads the format with Cucumber's own
+parser.
 
 ```gherkin
 Feature: Projects
