@@ -125,6 +125,11 @@ scenario なしで 1 step だけを単独で実行すると、実際にその後
 `check` は安価な静的ゲートであり、`run` は receipt の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
 その accept の記録は Markdown ファイルで、`<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で feature の隣に書かれます: feature の全文、scenario の記録、そして各 step の receipt(evidence は取り除かれたもの)です。
+それにはさらに `Declared vs observed` という節があり、`mutates: false` と宣言していながら書き込みを行ったと計測された step をすべて一覧します。
+レビュアーはこれによって、自分で計算し直さなくても宣言と計測がどこで食い違ったかを確認できます。
+sign-off 自体は `(environment, browser)` の組ひとつに紐づき、これは run 自身の計測から読み取られるものであって、宣言されるものではありません。
+Chromium は accept 済みで firefox はまだ、という状態は正常であり、古びた記録ではありません。
+詳しくは [Sign-off](docs/spec.ja.md#sign-off) を参照してください。
 
 ## Why this exists now
 
@@ -302,6 +307,7 @@ emitter は、何も仕込まずに、あらゆる receipt からレポートを
 1 回の試行と 40 回の試行では直し方が正反対になりますが、それを見分けられるのはレポートの中でここだけです。
 ページ自身が述べたこと(console error、捕捉されないエラー、失敗したリクエスト)の件数が step のそばに置かれるので、ページが 3 件の捕捉されないエラーを投げながら通った step は、誰も attachment を開かなくてもそれを語ります。
 添付される trace はその step 自身のものであり scenario 全体のものではないため、失敗した step はさがし回らずに直接開けます。
+同じ `trace.zip` は receipt の下にも単体で置かれており、Allure を介さずに `npx playwright show-trace <evidence.dir>/trace.zip` で直接開けます。
 receipt も全文がそのまま添付され、それがこの一覧を古びさせずにいる理由です。
 receipt が後から何を得ても、2 つ目の対応表を覚える必要なくレポートに届きます。
 
@@ -320,6 +326,11 @@ npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a
 npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
+
+生成したレポートの `index.html` は `file://` で直接開けません。
+レポート自身の SPA が読み込み時に `widgets/*.json` を fetch しますが、`file://` はそれを一切配信できず、それでもヘッダとフッタは変わらず描画されてしまうため、壊れたレポートが見た目には開けたように見えてしまいます。
+CI からレポートのアーティファクトを落として手元で `index.html` をダブルクリックする動きは、まさにこれで失敗します。
+サーバを通してください: 上の `npx allure open` や `npx allure watch` を使います。
 
 `nuka init` はプロジェクトの root に `allurerc.mjs` を書き出します(Allure が自動検出するいずれかの名前で既にあれば、書かずにその旨を伝えます)。
 これを置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、7 個の `error.kind` のどれにも分類されません。
@@ -563,6 +574,7 @@ nukadoko は、きゅうりを漬ける発酵させた米糠の床です。
 
 `nuka check` が問うのは、プロジェクトがいますぐ run できるかであり、あらゆる run の前に読まれることを意図しています。
 `nuka tend` が問うのは別の問い、すなわちこれのどこかが腐りつつあるかです。
+詳しくは [Tending](docs/spec.ja.md#tending手入れ) を参照してください。
 凍結された result が、その step の現在のスキーマをもはや通らない sign-off。
 その記録はいまも数えられ続けながら、もはや自分が述べている内容を言い表していません。
 何にも行使されない `from` 宣言。
