@@ -23,6 +23,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "pretest": "npm run build",
     "test": "vitest run",
+    "preselftest": "npm run build",
+    "selftest": "node selftest-suite/run-selftest.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -68,6 +70,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "13.2.0",
     "@cucumber/junit-xml-formatter": "0.14.0",
     "@types/node": "26.1.1",
     "@types/yargs": "17.0.35",

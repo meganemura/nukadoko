@@ -1,0 +1,10 @@
+[tools]
+# 26 rather than this machine's default 25: @cucumber/cucumber (a devDependency,
+# used by selftest-suite/ to run the suite under the real cucumber-js before
+# swapping its imports for nukadoko/compat) refuses to start on anything but
+# Node 22, 24, or >=26, and checks that itself at startup.
+#
+# This pins the development environment only. package.json's own `engines` stays
+# at >=20, which is what nukadoko asks of a project that installs it; nothing
+# here narrows that.
+node = "26.7.0"
