@@ -1,6 +1,6 @@
 import type { TendIssue } from "./types.js";
 
-// Responsibility: docs/spec.md fb3-scan-dirs task spec's decision 2 — an
+// Responsibility: an
 // `additionalFeatureDirs` entry that does not exist on disk. It was named
 // specifically to widen what `nuka check`/`nuka tend` scan, so a typo or a
 // removed directory left behind in config is a config mistake, the same way

@@ -15,26 +15,25 @@ import path from "node:path";
 // parsing bug and a judgment bug are never the same diff, and a judgment bug
 // in one finding is never the same diff as a judgment bug in the other).
 //
-// `condition`/`acceptedAt` are added now (accept-condition task spec, item
-// 6/7) — `render-record.ts`'s own new `browser:` frontmatter line and its
+// `condition`/`acceptedAt` are added now — `render-record.ts`'s own new
+// `browser:` frontmatter line and its
 // already-existing `environment:`/`accepted_at:` ones, read back the same
 // line-oriented way `feature:` already is. `condition` is `undefined`
 // whenever the `browser:` line itself is absent, which is exactly every
-// record accepted before this task shipped (task spec item 6: "このタスク
-// 以前に作られた記録には条件の節が無い" — never guessed at, never defaulted
-// to "no browser" for an old record that simply never had an opinion).
+// record accepted before this field existed — never guessed at, never
+// defaulted to "no browser" for an old record that simply never had an
+// opinion.
 //
 // Discovery walks the whole project, not just featuresDir (src/cli/
 // accept.ts's own header: an acceptance feature is recommended to live
 // outside featuresDir, so its record can be anywhere too) — a `.md` file is
 // only treated as a record once its own frontmatter carries all four of
-// `run_id`/`commit`/`feature`/`scenarios` (this task's spec: the condition
+// `run_id`/`commit`/`feature`/`scenarios` (the condition
 // that keeps an ordinary README from being mistaken for one, deliberately
 // not loosened).
 //
 // No YAML library is added for this (project rule: no new dependency
-// without sign-off, and this task's own spec repeats it for YAML
-// specifically) — `render-record.ts`'s own `yamlScalar` only ever quotes a
+// without sign-off) — `render-record.ts`'s own `yamlScalar` only ever quotes a
 // value with `JSON.stringify`, never any other YAML quoting style, so
 // "is this value quoted" reduces to "does it start with `\"`", and decoding
 // it is exactly `JSON.parse`. That is the one and only YAML shape this
@@ -114,13 +113,13 @@ function extractGherkinFence(body: string): string | undefined {
  * `renderHook` emits `{ type, status, ... }` — no `step` key — so filtering
  * on `step` being a string is what tells a step's own receipt block apart
  * from a hook's, without needing to parse the preceding heading text at
- * all). `actions` is added now (fb5-stale-wait-note task spec) so
+ * all). `actions` is added now so
  * src/tend/post-navigation-read.ts can read it straight off a parsed
  * record: the field is already embedded verbatim by
  * `extractReceiptLikeBlocks` below (a receipt's own JSON, only `evidence`
  * ever stripped, `render-record.ts`'s own header), so this interface only
- * needed a name for it. `polls` is added the same way (fb5-stale-wait-poll
- * task spec), for the same module to tell a `ctx.poll`-covered read apart
+ * needed a name for it. `polls` is added the same way, for the same module
+ * to tell a `ctx.poll`-covered read apart
  * from one that is not. Kept as `unknown`, `result`'s own convention: this
  * module never validates a receipt's own shape beyond "is this
  * receipt-like"; a per-entry check of what `actions`/`polls` actually
@@ -166,8 +165,8 @@ function extractReceiptLikeBlocks(body: string): { ok: true; receipts: RecordRec
   return { ok: true, receipts };
 }
 
-/** A record's own recorded condition (accept-condition task spec, item 1) —
- * `browserType` is `undefined` when the record's own `browser:` frontmatter
+/** A record's own recorded condition — `browserType` is `undefined` when
+ * the record's own `browser:` frontmatter
  * line reads the literal `none` (this file's own header: a *known* "no
  * browser was launched", never the same thing as `ParsedAcceptanceRecord.
  * condition` itself being `undefined`, which means "unknown, no line at
@@ -190,8 +189,8 @@ export interface ParsedAcceptanceRecord {
   readonly featureSource: string;
   /** Every step-shaped receipt this record embeds, in document order. */
   readonly receipts: readonly RecordReceiptLike[];
-  /** This record's own condition (accept-condition task spec, item 6) —
-   * `undefined` when the frontmatter has no `browser:` line at all, which is
+  /** This record's own condition — `undefined` when the frontmatter has no
+   * `browser:` line at all, which is
    * every record accepted before this task shipped (this file's own
    * header). Never guessed at: a caller that needs "is this record's
    * condition known" checks this field, not `environment`'s own presence
@@ -215,9 +214,9 @@ export type RecordParseResult =
  * through only for the returned record's own identity — this function does
  * no filesystem access itself.
  *
- * Three outcomes, not two, on purpose (this task's spec: a record that
+ * Three outcomes, not two, on purpose: a record that
  * fails to parse must be reported, not silently skipped, or a broken record
- * would read as a healthy one by omission): `"not-a-record"` for ordinary
+ * would read as a healthy one by omission. `"not-a-record"` for ordinary
  * Markdown that never claimed to be a record at all (no `errors` entry —
  * this is the expected case for every non-record `.md` file in a project),
  * `"malformed"` once the frontmatter shape has already claimed record-ness
@@ -254,7 +253,7 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
     return { kind: "malformed", reason: receiptsResult.reason };
   }
 
-  // `condition`/`acceptedAt` (accept-condition task spec, item 6/7) — read
+  // `condition`/`acceptedAt` — read
   // leniently, never `"malformed"` on their own absence: an old record
   // (no `browser:` line) is a legitimate, common case (this file's own
   // header), not a broken one, and a missing/unparsable `accepted_at:`

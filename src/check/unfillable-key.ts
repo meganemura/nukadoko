@@ -17,8 +17,7 @@ import { matchPickleStepText } from "./feature-check.js";
 // certain to fail args validation the moment it runs — knowable without
 // ever opening a browser.
 //
-// Zero false positives is the whole design point (m7b-unfillable-key task
-// spec, "制約・前提"), so this module only ever answers the question for a
+// Zero false positives is the whole design point, so this module only ever answers the question for a
 // line it can resolve with certainty: exactly one *typed* step match (an
 // undefined/ambiguous line is feature-check.ts's own concern, and a compat
 // match has no args schema to check at all) whose `args` is a `z.object`
@@ -36,8 +35,7 @@ import { matchPickleStepText } from "./feature-check.js";
 // order.ts, exported for this file) for the table/docstring "exactly one
 // unconsumed required key" rule — the same computation src/check/feature-
 // check.ts's own `table-docstring-key-mismatch` inline copy already applies,
-// reused rather than approximated a third time (this task's spec: "二つ目
-// の計算を作らない").
+// reused rather than approximated a third time.
 //
 // One function, called from both `nuka check` (src/check/feature-check.ts,
 // once per pickle) and `nuka run`'s pre-execution guard (src/run/run-
@@ -54,8 +52,8 @@ export interface UnfillableKeyIssue {
   readonly message: string;
 }
 
-/** Names the step and key, and every one of the four remedies this task's
- * spec requires — there is no fifth way to fill a required args key, so
+/** Names the step and key, and every one of the four remedies — there is no
+ * fifth way to fill a required args key, so
  * enumerating exactly these four is a fact, not a guess. */
 function unfillableKeyMessage(stepName: string, key: string): string {
   return (

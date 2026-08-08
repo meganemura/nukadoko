@@ -2,23 +2,23 @@ import type { FixtureConsumer } from "./fixture-names.js";
 
 // Responsibility: a best-effort, lexical-only guess at which fixtures an
 // unmigrated step's run() touches — read only after `fixtureParameterNames`
-// (src/step/fixture-names.ts) has already thrown for that step's `run`
-// (fb5-needs-inferred task spec, decision 2: "stepNeeds が throw したとき
-// だけ試みる"). This is inventory, never a contract: the caller is the one
+// (src/step/fixture-names.ts) has already thrown for that step's `run`.
+// This is inventory, never a contract: the caller is the one
 // place that decides whether to surface this at all, and it must only ever
 // land in a field of its own (`needs_inferred`), never merged into `needs`
-// itself (that task spec's decision 1 — the one thing this whole feature
+// itself (the one thing this whole feature
 // exists to keep separate). Nothing here decides `needs_browser` either;
 // this file states no fact it cannot back with a contract.
 //
-// Measured against 68 steps already migrated on main (that task spec's own
-// "背景"): scanning a pre-migration step's source text for
+// Measured against 68 steps already migrated on main: scanning a
+// pre-migration step's source text for
 // `<firstArgumentName>.<member>` (plus its optional-chaining and
 // destructuring variants below), filtered down to known fixture names,
 // matched all 68 migrated `needs` lists exactly, zero false positives, zero
-// false negatives. The same "背景" names two shapes this scan still misses
+// false negatives. That same measurement names two shapes this scan still
+// misses
 // on purpose (an alias — `const c = ctx; c.page()` — needs real AST
-// tracking this task's own scope excludes, "字句スキャンの守備範囲外"):
+// tracking, which is out of scope for a lexical scan):
 // documented here rather than silently accepted, and the caller (src/cli/
 // vocabulary.ts) is the one that keeps this fact visible to a reader
 // instead of quietly treating an inferred list as complete.
@@ -42,18 +42,18 @@ type ScanState = "code" | "line-comment" | "block-comment" | "single-quote" | "d
  * `filterOutComments` gives a step's parameter-list text; this is that same
  * idea widened to cover a whole function body, since this module has to
  * scan wherever `<name>.<member>` can legally appear, not just the
- * signature. Not shared with fixture-names.ts's own copy on purpose: that
- * file's success path is off limits for this task (fb5-needs-inferred task
- * spec's own 触るなリスト), and its version has no reason to know about
+ * signature. Not shared with fixture-names.ts's own copy on purpose:
+ * modifying that file's already-working success path was out of scope
+ * here, and its version has no reason to know about
  * string/template literals at all — it only ever reads a parameter list,
  * never a function body.
  *
- * This task's own measured false positive was a plain string literal
+ * The one false positive measured here was a plain string literal
  * (`"see ctx.page"`); a template literal's own `${...}` interpolation is
  * stripped along with the rest of it here rather than preserved, which
- * this task did not measure against and does not claim to catch — a fixture
- * genuinely referenced only inside one is a miss, same "字句スキャンの守備
- * 範囲外" as an alias (this file's own header).
+ * wasn't measured against and isn't claimed to be caught — a fixture
+ * genuinely referenced only inside one is a miss, the same kind of gap as
+ * an alias (this file's own header).
  */
 function stripCommentsAndLiterals(source: string): string {
   let result = "";
@@ -140,7 +140,7 @@ function destructuredPropName(prop: string): string | undefined {
  * `run(ctx, args)`'s own `"ctx"`). `fn` is never called, only read via
  * `.toString()`, same as every other reader in src/step/fixture-names.ts.
  *
- * Scans for three shapes only (this file's own header's "実測"):
+ * Scans for three shapes only (see this file's own header):
  * `name.member`, `name?.member` (optional chaining), and
  * `const { a, b } = name` (destructuring an alias for the whole first
  * argument somewhere in the body) — then keeps only names present in
@@ -151,9 +151,8 @@ function destructuredPropName(prop: string): string | undefined {
  * Returns `undefined`, not `[]`, when `firstArgumentName` itself isn't a
  * plain identifier this scan could key a search on at all — nothing was
  * attempted, so the caller reads this the same as "couldn't infer" rather
- * than "inferred nothing" (fb5-needs-inferred task spec, decision 3: a
- * reader must be able to tell the two apart, never silently folded into
- * one).
+ * than "inferred nothing" (a reader must be able to tell the two apart,
+ * never silently folded into one).
  */
 export function inferNeeds(
   fn: FixtureConsumer,

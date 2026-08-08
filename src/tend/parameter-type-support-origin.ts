@@ -4,8 +4,8 @@ import type { TendIssue } from "./types.js";
 // Responsibility: docs/spec.md "Tending"'s "A defineParameterType still
 // registered from support code" finding — moved here from
 // src/check/binding-check.ts's own `parameter-type-support-origin` warning
-// (m8d-move-to-tend task spec: "この一つは以前 `nuka check` の warning
-// だった。それは分類の誤りだった" — docs/spec.md's own wording). It keeps
+// (docs/spec.md "Tending": "This one used to be a `nuka check` warning,
+// which was a mis-sort"). It keeps
 // working, and `config.parameterTypes` is its typed-era home; moving the
 // registration changes no match. It fires for as long as a suite has any
 // compat left, which is a normal in-progress state, not something that

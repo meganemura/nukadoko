@@ -6,9 +6,9 @@ import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
 import type { CheckIssue } from "./types.js";
 
-// Responsibility: this task's spec's "config coherence" category (item 5) —
+// Responsibility: config coherence —
 // featuresDir not existing on disk is one error-level item (joined by
-// fb3-scan-dirs's own additionalFeatureDirs-missing check, same severity and
+// the additionalFeatureDirs-missing check below, same severity and
 // same reasoning: a directory named in config to be scanned and absent from
 // disk is a config mistake, not a leniency to extend); a configured envFile
 // (top-level or per-environment) not existing is a warning. The distinction
@@ -18,8 +18,8 @@ import type { CheckIssue } from "./types.js";
 // redaction correctness at runtime is the real guarantee; this is
 // visibility only).
 //
-// secrets-redact-and-warning task spec added another item to that same
-// visibility job: `secrets-redact-key-too-short`, a `secrets.redact` entry
+// That same
+// visibility job also covers `secrets-redact-key-too-short`: a `secrets.redact` entry
 // whose value is under MIN_REDACTABLE_LENGTH and so never actually gets
 // redacted (build-secret-set.ts applies the same floor to every key
 // regardless of origin) — surfacing that, rather than letting an explicit
@@ -29,7 +29,7 @@ import type { CheckIssue } from "./types.js";
 // `secrets-public-key-unknown` and `secrets-redact-key-unknown` — a
 // `secrets.public`/`secrets.redact` entry naming a key no configured
 // envFile defines at all — used to live here too, as warnings. They moved
-// to src/tend/secrets-unknown-key.ts (m8d-move-to-tend task spec): neither
+// to src/tend/secrets-unknown-key.ts: neither
 // changes whether a run should happen, unlike their `-too-short` neighbor
 // above, which means plaintext reaches a log immediately. `collectDefinedEnvKeys`
 // below is exported so that module can answer "which keys does any envFile
@@ -103,8 +103,8 @@ export async function checkConfig(
     });
   }
 
-  // Same error-level treatment as featuresDir above, one entry at a time
-  // (fb3-scan-dirs task spec, decision 2): additionalFeatureDirs is named
+  // Same error-level treatment as featuresDir above, one entry at a time:
+  // additionalFeatureDirs is named
   // specifically to widen what nuka check/tend scan, so an entry that
   // doesn't exist is a config mistake to report, not an empty answer to
   // fail open on — src/feature/load-features.ts's loadFeaturesFromDirs

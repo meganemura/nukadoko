@@ -1,6 +1,6 @@
 import type { TendIssue } from "./types.js";
 
-// Responsibility: fb5-loader-visibility task spec, decision 4 — `nuka tend`
+// Responsibility: `nuka tend`
 // (src/tend/analyze.ts) discovers steps with `{ tolerateImportFailures:
 // true }`, the same tolerant mode `nuka check` uses, but until now silently
 // dropped a broken glue file's own steps from every count and finding here
@@ -9,8 +9,7 @@ import type { TendIssue } from "./types.js";
 // from "this step exists but couldn't be read" (CLAUDE.md's "Nothing breaks
 // silently"). This is the one note that says so.
 //
-// One note for the whole run, not one per broken file (this task's spec:
-// "個々のファイルのverdictは出さない") — a broken file's own verdict is
+// One note for the whole run, not one per broken file — a broken file's own verdict is
 // `nuka check`'s finding (`step-file-import-failed`), not tend's: tend
 // looks at what is rotting in what it *can* see, and a file it never even
 // read has nothing here to rot yet.

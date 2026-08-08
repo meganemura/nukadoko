@@ -9,8 +9,7 @@ import type { StepOccurrences } from "./step-bindings.js";
 // never actually gets a chance to supply a value, because every line that
 // binds this step already fills that key some other way (a pattern capture,
 // or the one table/docstring key a line's attachment resolves to). A step
-// never bound anywhere is *not* this finding's business (spec's own line:
-// "どの feature にも現れない step は、この所見ではなく次の所見の対象") —
+// never bound anywhere is *not* this finding's business —
 // that is pattern-unbound.ts's question, not this one's.
 //
 // "Filled some other way" is decided by the exact same two facts
@@ -22,7 +21,7 @@ import type { StepOccurrences } from "./step-bindings.js";
 // own "does `from` even apply here" gate can never quietly disagree with
 // each other.
 //
-// Reported as a fact, not a verdict (this task's spec, "制約・前提"): the
+// Reported as a fact, not a verdict: the
 // message never says to delete the declaration — `nuka do --use` can still
 // reach it (docs/spec.md "Tending": "the declaration may still be reached
 // through `nuka do --use`").

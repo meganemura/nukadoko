@@ -7,10 +7,9 @@ import type { StepOccurrences } from "./step-bindings.js";
 // occupy a place in a scenario) but no feature line resolves uniquely to it
 // (src/tend/step-bindings.ts's own "bound" — see that file's header for why
 // ambiguous/undefined lines don't count either way here). Compat steps are
-// out of scope entirely (this task's spec: "compat step は対象外" — an
-// unused compat glue file mid-migration is the expected, healthy state,
-// docs/spec.md "Compat steps"), so this only ever looks at `vocabulary`'s
-// typed entries.
+// out of scope entirely: an unused compat glue file mid-migration is the
+// expected, healthy state (docs/spec.md "Compat steps"), so this only ever
+// looks at `vocabulary`'s typed entries.
 
 export function findUnboundPatternedSteps(vocabulary: Vocabulary, occurrences: StepOccurrences): TendIssue[] {
   const issues: TendIssue[] = [];

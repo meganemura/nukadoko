@@ -14,7 +14,7 @@ import { checkUnfillableKeys } from "./unfillable-key.js";
 // Responsibility: match every pickle step (from src/feature/load-features.ts)
 // against the vocabulary's patterns (already built once by
 // src/check/binding-check.ts, reused here rather than re-parsed) and produce
-// this task's spec's per-feature check items: undefined steps (with a
+// this module's per-feature check items: undefined steps (with a
 // scaffold hint, plus a near-miss escape hint — see findEscapeHint below),
 // ambiguous matches (2+ steps matching one pickle step), Then-position steps
 // whose kind can't be statically cleared, and a table/docstring's "exactly
@@ -24,15 +24,15 @@ import { checkUnfillableKeys } from "./unfillable-key.js";
 // match anything here, which is the right behavior: this module must not
 // report the same root cause a second time under a different code.
 //
-// `then-mutates` is a *warning*, not an error (m2pre-observed task spec,
-// decision 5, superseding this module's earlier classification): a
+// `then-mutates` is a *warning*, not an error (superseding this module's
+// earlier classification): a
 // declared-mutating step bound in Then position is a tension worth a
 // reviewer's eyes, but `mutates` is a declaration nukadoko trusts, not a
 // fact the tool re-derives from what ran — nothing at run time settles this
 // tension anymore (docs/spec.md "Keyword semantics"). Every other issue
 // this module reports stays an error.
 //
-// m2a-compat-registry task spec, item 6: a compat pattern participates in
+// A compat pattern participates in
 // undefined-step and ambiguous-match detection on equal footing with a typed
 // one (both live in the one `patterns` array binding-check.ts already built,
 // matched through `checkedPatternMatches` below regardless of whether the
@@ -45,7 +45,7 @@ import { checkUnfillableKeys } from "./unfillable-key.js";
 // coverage gap, not a run-time finding (docs/spec.md "Compat steps",
 // "Keyword semantics").
 //
-// m6b-from-check task spec: `matchPickleStepText`/`MatchResult` are exported
+// `matchPickleStepText`/`MatchResult` are exported
 // so `./from-order.ts`'s own scenario-order check can resolve a pickle
 // step's own bound name exactly the way undefined-step/ambiguous-step
 // detection already does, rather than re-parsing `patterns` a second time —
@@ -53,7 +53,7 @@ import { checkUnfillableKeys } from "./unfillable-key.js";
 // module's own per-pickle findings, so `nuka check`'s report always carries
 // both.
 //
-// m7b-unfillable-key task spec: `checkUnfillableKeys` (./unfillable-key.ts)
+// `checkUnfillableKeys` (./unfillable-key.ts)
 // is called the same way, right alongside `checkFromOrder` — a required args
 // key that no capture, table/docstring, or `from` declaration could ever
 // fill on a given line is a static certainty (docs/spec.md "Typed steps"),
@@ -257,7 +257,7 @@ export function checkFeatures(
         }
       }
 
-      // m6b-from-check task spec, item 1: one call per pickle, after this
+      // One call per pickle, after this
       // pickle's own per-step findings above — a scenario-order violation is
       // a property of the whole pickle (which upstream is bound where),
       // never of one line in isolation the way the checks above are.
@@ -271,7 +271,7 @@ export function checkFeatures(
         });
       }
 
-      // m7b-unfillable-key task spec, item 1: same "once per pickle,
+      // Same "once per pickle,
       // alongside this module's own per-step findings" shape as
       // `checkFromOrder` just above — a property of one line's own resolved
       // step + matched capture set, never something feature-check.ts needs

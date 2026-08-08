@@ -3,19 +3,19 @@ import path from "node:path";
 import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
-// Responsibility: docs/spec.md fb3-scan-dirs task spec's decision 4 — a
+// Responsibility: docs/spec.md "Tending"'s "An accepted feature outside
+// every directory `nuka check`/`nuka tend` scan" finding — a
 // feature with a sign-off record on disk (src/accept/render-record.ts is the
 // only writer) whose own path falls outside every directory `nuka check`/
 // `nuka tend` actually scan (`featuresDir` + `additionalFeatureDirs`). This
-// is the exact situation this whole task spec exists for
+// is the exact situation this finding exists for
 // (skills/acceptance/SKILL.md recommends an accepted feature live outside
 // `featuresDir`, so `pattern-unbound` calls its steps unbound unless the
 // feature's own directory is named in `additionalFeatureDirs`) — this
 // finding is what makes that gap visible from `tend`'s own output instead of
 // staying a silent false positive on a different finding.
 //
-// Deliberately *not* used to decide what gets scanned (this task's spec,
-// decision 4's own "判定に使わない理由"): reading sign-off records to expand
+// Deliberately *not* used to decide what gets scanned: reading sign-off records to expand
 // the scanned set would only ever notice a feature that has already been
 // accepted at least once, silently missing one still being drafted —
 // exactly the feature a false `pattern-unbound` would most mislead someone
@@ -23,7 +23,7 @@ import type { TendIssue } from "./types.js";
 // itself always comes from `scannedFeatureDirs`, computed from config alone
 // (src/tend/analyze.ts).
 //
-// Severity is `note`, not `error` (this task's spec, decision 4): unlike
+// Severity is `note`, not `error`: unlike
 // `signoff-rot`'s findings, nothing here is a record that has stopped being
 // true — the record may be perfectly accurate, it is simply proving a claim
 // about a feature nothing else in the report is currently looking at.

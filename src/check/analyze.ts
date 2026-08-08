@@ -28,7 +28,7 @@ import type { CheckIssue, CheckReport } from "./types.js";
 // have some glue files still broken.
 //
 // A broken step file's own import failure, by contrast, *is* one of this
-// report's issues as of m21a-compat-gap-detect (a change from this module's
+// report's issues (a change from this module's
 // earlier behavior, where it fell into the same fundamental-failure bucket
 // as the paragraph above): `discoverSteps` is called with
 // `{ tolerateImportFailures: true }` below, so one broken glue file no
@@ -43,14 +43,14 @@ import type { CheckIssue, CheckReport } from "./types.js";
 // reason: one broken file must not stop every other feature's issues from
 // being reported.
 //
-// m5b-check-feature-arg task spec: `featureArg`, when given, *replaces*
-// which feature(s) get checked — the `featuresDir`(+`additionalFeatureDirs`,
-// fb3-scan-dirs task spec) walk above is skipped entirely in favor of that
+// `featureArg`, when given, *replaces*
+// which feature(s) get checked — the `featuresDir` (+`additionalFeatureDirs`)
+// walk above is skipped entirely in favor of that
 // one file (not added to it: an existing error under `featuresDir` would
 // otherwise bury the very feature this argument exists to single out).
 // `discoverSteps` above is untouched by this parameter (config/binding
 // checks and the vocabulary they check features against always come from
-// `featuresDir`, spec's own decision) — only the `loadFeaturesFromDirs` call
+// `featuresDir`) — only the `loadFeaturesFromDirs` call
 // below is conditional. A `featureArg` that doesn't exist or can't be read
 // is a usage mistake, not a project finding: it
 // throws `CheckFeatureNotFoundError` (message pre-formatted "nuka check: …",
@@ -73,8 +73,8 @@ export class CheckFeatureNotFoundError extends Error {
 }
 
 // Path resolution matches `nuka run`/`nuka accept` (relative to `rootDir`,
-// absolute paths accepted as-is) — this task's spec, decision 4. No `:line`
-// support (spec, same decision): check is a static analysis over a whole
+// absolute paths accepted as-is). No `:line`
+// support: check is a static analysis over a whole
 // file, not one scenario.
 function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesResult {
   const relativePath = path.relative(rootDir, path.resolve(rootDir, featureArg));
@@ -101,7 +101,7 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
 }
 
 // esbuild's own transform-error format, measured directly rather than
-// guessed (fb5-import-error-line task spec: "推測で正規表現を書かないこと"):
+// guessed:
 // "Transform failed with N error(s):\n<path>:<line>:<col>: ERROR: <msg>",
 // one line per error. Matched against the *start* of a line (`^` + `m`) so
 // this never fires on a colon that happens to sit inside the error text
@@ -120,7 +120,7 @@ const IMPORT_FAILURE_LOCATION = /^(.+):(\d+):(\d+): ERROR: /m;
 // this `importFailures` entry is attributed to — attaching it would point
 // a reader at the wrong file, so this returns `undefined` instead.
 // `path.resolve` against `rootDir` on both sides absorbs the absolute/
-// relative difference between them (this task's spec, decision 1): the
+// relative difference between them: the
 // message always carries the absolute path esbuild was given, while
 // `issueFile` is rootDir-relative (discover-steps.ts's own
 // `importFailures[].filePath`).
@@ -141,7 +141,7 @@ function extractImportFailureLine(message: string, rootDir: string, issueFile: s
 
 export async function analyzeProject(rootDir: string, featureArg?: string): Promise<CheckReport> {
   const config = await loadConfig(rootDir);
-  // Tolerant mode (this task's spec, decision 1) — a broken step file
+  // Tolerant mode — a broken step file
   // becomes a report entry (`importFailures`, handled below) instead of
   // rejecting this whole call the way `run`/`do`/`steps`/`init` still do via
   // their own plain `discoverSteps(rootDir, config.featuresDir)` calls.
@@ -157,8 +157,10 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
 
-  // Node's own error message, unmodified (this task's spec, decision 4) —
-  // see this file's own header for why a broken glue file is a report entry
+  // Node's own error message, unmodified: it already names the missing
+  // export, subpath, or package, so re-parsing it here would mean depending
+  // on Node's own wording while losing information rather than adding any.
+  // See this file's own header for why a broken glue file is a report entry
   // here rather than the fundamental failure it still is for `run`/`do`/
   // `steps`/`init`.
   for (const failure of importFailures) {
@@ -166,18 +168,17 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       code: "step-file-import-failed",
       message: failure.message,
       file: failure.filePath,
-      // Extracted from the message above, never re-derived some other way
-      // (this task's spec, decision 1) — the message itself stays verbatim
-      // either way.
+      // Extracted from the message above, never re-derived some other way —
+      // the message itself stays verbatim either way.
       line: extractImportFailureLine(failure.message, rootDir, failure.filePath),
     });
   }
 
-  // p10-step-discovery task spec, scope 3: both findings below are
+  // Both findings below are
   // decidable from the walk alone (an extension check, a length check),
   // never a guess about a file's contents — and both are things a run needs
-  // known beforehand, the same "yes" this task's spec asks before sorting a
-  // finding into `check` rather than `tend`. Errors, not warnings: a `.cjs`
+  // known beforehand, the same standard that sorts a finding into `check`
+  // rather than `tend`. Errors, not warnings: a `.cjs`
   // file is nukadoko's one already-documented go/no-go (docs/migration.md
   // "CommonJS glue"), the same certainty `step-file-import-failed` above
   // already gets error severity for, and a featuresDir with nothing loadable
@@ -207,8 +208,8 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // The same tag-expression validation `nuka run` runs before executing any
   // pickle (src/cli/run.ts, near its own `validateTagExpression` call) —
   // reused here via the one shared function rather than copied, but run
-  // every hook through it instead of stopping at the first violation
-  // (this task's spec, decision 5): a report lists every finding, where
+  // every hook through it instead of stopping at the first violation:
+  // a report lists every finding, where
   // `run`'s own try/catch existing early-exit behavior is untouched. No
   // `file`: a hook isn't attributed to the file that registered it
   // (src/discover/discover-steps.ts's own header explains why), and adding
@@ -236,10 +237,10 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   warnings.push(...bindingResult.warnings);
 
   // `from`'s own structural validation (src/step/validate-from.ts's
-  // `validateStepFrom`, m6a-from-core) — docs/spec.md "Chaining steps"
+  // `validateStepFrom`) — docs/spec.md "Chaining steps"
   // promises "`nuka check` reports it" for the same findings `run`/`do`
   // already refuse to execute over (src/cli/run.ts, src/cli/do.ts); this is
-  // that promise's other half, missing until now (m6f-check-structural-from).
+  // that promise's other half, which was missing until now.
   // `isRegisteredStep` is built once, from the whole vocabulary, and
   // `validateStepFrom` is called once per typed step — not once per pickle
   // that happens to use it (unlike `checkFromOrder` below) — because a
@@ -268,14 +269,16 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     }
   }
 
-  // The fixture-bag counterpart to the `from` structural check just above
-  // (p4a-fixture-bag task spec, scope item 3: "nuka check と nuka run が同じ
-  // 検査を共有する形") — an unknown fixture name, or a `run()` whose first
-  // argument isn't a plain object-destructuring pattern, reported once per
+  // The fixture-bag counterpart to the `from` structural check just above:
+  // this is the same validation `nuka check` and `nuka run` share
+  // (docs/spec.md "Context API"), so a
+  // malformed step is judged identically whether it's caught here or at run
+  // time. An unknown fixture name, or a `run()` whose first
+  // argument isn't a plain object-destructuring pattern, is reported once per
   // typed step (src/step/validate-fixtures.ts's own `validateStepFixtures`),
   // same "once per declaration, not once per occurrence" reasoning as above.
-  // `knownNames` widens the closed builtin-only set P4a checked against to
-  // builtins ∪ `config.fixtures` (P5 task spec, scope item 5) — a step
+  // `knownNames` widens the closed builtin-only set this check first shipped
+  // against to builtins ∪ `config.fixtures` — a step
   // naming a real user fixture is no longer reported as unknown.
   const knownNames = knownFixtureNames(config);
   for (const entry of vocabulary.values()) {
@@ -292,8 +295,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     }
   }
 
-  // The `config.fixtures` *definitions* themselves (P5 task spec, scope
-  // item 8) — a fixture destructuring an unknown name (same judgment as
+  // The `config.fixtures` *definitions* themselves — a fixture destructuring an unknown name (same judgment as
   // above, applied to a fixture's own body), a dependency cycle, a
   // `"process"`-scope fixture depending on a `"scenario"`-scope one, and `page`
   // overridden by a fixture that owns neither `page` nor `context`
@@ -312,11 +314,13 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
 
   const { features, parseErrors } =
     featureArg === undefined
-      ? // additionalFeatureDirs joins featuresDir here too (fb3-scan-dirs
-        // task spec, decision 1: "含めるコマンド: nuka check(引数なし)") —
-        // a config mistake in additionalFeatureDirs itself is
-        // config-check.ts's own `additional-feature-dir-missing`, not
-        // repeated here; `missingAdditionalDirs` is intentionally unread.
+      ? // additionalFeatureDirs joins featuresDir here too: a no-argument
+        // `nuka check` is one of the two commands whose default scan
+        // includes it (`nuka tend` is the other), while `nuka run`'s
+        // default scan does not — a config mistake in additionalFeatureDirs
+        // itself is config-check.ts's own `additional-feature-dir-missing`,
+        // not repeated here; `missingAdditionalDirs` is intentionally
+        // unread.
         loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs)
       : loadSingleFeature(rootDir, featureArg);
   for (const parseError of parseErrors) {
@@ -330,8 +334,8 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   warnings.push(...featureResult.warnings);
 
   // A broken glue file's own missing steps otherwise resurface here as a
-  // flood of `undefined-step` errors (this task's spec, decision 6 — an
-  // empirical 1-broken-file-to-20-undefined-step ratio) — noise that
+  // flood of `undefined-step` errors (empirically, a
+  // 1-broken-file-to-20-undefined-step ratio) — noise that
   // buries the one real cause (the import failure already reported above)
   // and misleadingly reads as "write this step", when the step may well
   // already exist in the file that failed to import. Suppressed only when

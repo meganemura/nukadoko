@@ -12,8 +12,8 @@ import type { TendIssue } from "./types.js";
 // `asObjectShape` narrowing src/check/binding-check.ts and
 // src/check/feature-check.ts already use — reused, not re-derived).
 //
-// One issue per step (this task's spec: "step ごとに1件にまとめ… フィール
-// ド1つにつき1件だと大きなスキーマで洪水になる"), listing every missing
+// One issue per step, rather than one per field (which would flood a
+// reader in a large schema), listing every missing
 // field across *both* `args` and `returns`, each prefixed with which schema
 // it's in — a step's contract is the pair together, and an agent reading
 // `nuka tend`'s output needs to know which side a bare field name refers to.
@@ -23,20 +23,19 @@ import type { TendIssue } from "./types.js";
 // }` on that specific clone in zod's `globalRegistry`; `.meta()` with no
 // arguments reads it back (`core.globalRegistry.get(this)`) — for that
 // exact object only, not anything it wraps or is wrapped by (empirically
-// confirmed against this repo's own pinned zod 4.4.3 — see this task's own
-// report). That means *where* the description lives depends on chain
+// confirmed against this repo's own pinned zod 4.4.3). That means *where*
+// the description lives depends on chain
 // order: `.describe(d).optional()` puts it on the pre-wrap schema, one
 // `.unwrap()` down from the field as stored in the shape; `.optional
 // ().describe(d)` puts it on the field exactly as stored, no unwrapping
 // needed. `hasDescription` below checks every layer while unwrapping,
 // never just the first or the last, so neither ordering is missed.
 // `isUnwrappable`/`.unwrap()` themselves mirror src/binding/schema-shape.ts's
-// own private (unexported) unwrap step rather than importing it: that
-// module isn't in this task's file ownership, and the check is one line
-// with no behavior to keep in sync — duplicating it here is cheaper and
-// safer than widening that module's exports for one caller.
+// own private (unexported) unwrap step rather than importing it: the check
+// is one line with no behavior to keep in sync — duplicating it here is
+// cheaper and safer than widening that module's exports for one caller.
 //
-// `analyzeFieldDescriptions` (m8c-tend-summary) is now the one export doing
+// `analyzeFieldDescriptions` is now the one export doing
 // the walk: it returns this finding's issues *and* the total/described field
 // counts src/tend/summary.ts needs for the "how much of what a typed step
 // could declare is actually declared" summary line — same `hasDescription`
@@ -64,10 +63,9 @@ function hasDescription(fieldSchema: z.ZodTypeAny): boolean {
 
 // A field's own `label.key` name plus whether it carries a `.describe()` —
 // one entry per schema field, so both this finding's "which ones are
-// missing" and m8c-tend-summary's "how many total, how many described"
-// summary count come from the exact same per-field walk (that task's spec:
-// "二度数えないこと"), never a second traversal re-deciding `hasDescription`
-// for the summary.
+// missing" and the summary's "how many total, how many described"
+// summary count come from the exact same per-field walk, never a second
+// traversal re-deciding `hasDescription` for the summary.
 interface FieldCoverageEntry {
   readonly name: string;
   readonly described: boolean;
@@ -84,8 +82,8 @@ function fieldCoverage(schema: z.ZodTypeAny, label: "args" | "returns"): FieldCo
   }));
 }
 
-/** `findMissingFieldDescriptions`'s issues, plus the field totals m8c-tend-
- * summary's "how much of what a typed step could declare is actually
+/** `findMissingFieldDescriptions`'s issues, plus the field totals the
+ * "how much of what a typed step could declare is actually
  * declared" summary line needs — both `args` and `returns` fields of every
  * typed step, counted once here rather than a second time in
  * src/tend/summary.ts. */

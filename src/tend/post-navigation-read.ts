@@ -3,8 +3,8 @@ import path from "node:path";
 import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
-// Responsibility: docs/spec.md "Tending"'s post-navigation-read note (fb5-
-// stale-wait-note task spec) - a step whose own trace shows it made another
+// Responsibility: docs/spec.md "Tending"'s post-navigation-read note - a
+// step whose own trace shows it made another
 // call a short time after a navigation call, with nothing here saying
 // whether the page had actually finished rendering by then.
 //
@@ -29,8 +29,8 @@ import type { TendIssue } from "./types.js";
 // itself already carries: a call's own method name, when it ended, and when
 // the next call started.
 //
-// A read that lands inside a `ctx.poll` call's own window is excluded (fb5-
-// stale-wait-poll task spec): `docs/spec.md:350-375` already asks a step to
+// A read that lands inside a `ctx.poll` call's own window is excluded:
+// `docs/spec.md:350-375` already asks a step to
 // use `poll()` rather than a direct browser wait precisely so a delayed
 // render cannot flake it, and a step written that way is the thing this
 // note exists to tell apart from - not another instance of it. That
@@ -50,17 +50,17 @@ import type { TendIssue } from "./types.js";
 /** The four navigation calls this note looks for, read verbatim off each
  * action's own `method` (trace's own `before.method`, src/context/
  * trace-actions.ts's `ActionEntry`) - never inferred from a URL change or
- * any other signal, and never grown past this list (this task's spec:
- * "増やさない"). A form submit or a client-side router can navigate too, but
+ * any other signal, and never grown past this list. A form submit or a
+ * client-side router can navigate too, but
  * neither leaves a trace call under one of these four names, so this note
  * simply has nothing to say about either case - narrower coverage, not a
  * wrong verdict, is the trade-off that keeps this list from turning into
- * the classification table this task's spec rules out. */
+ * the classification table the paragraph above already rules out. */
 const NAVIGATION_METHODS = new Set(["goto", "reload", "goBack", "goForward"]);
 
 /**
  * Above this many milliseconds, a navigation-to-next-call gap is not listed
- * at all. Chosen from the direction this task's spec requires: "this gap is
+ * at all. Chosen to answer "this gap is
  * far enough apart that listing it adds little", never "this gap is short
  * enough to be unsafe" - the two would-be sources for a stricter number
  * (this note's own motivating incident) point the same way. That incident's
@@ -95,8 +95,7 @@ function isActionLike(value: unknown): value is ActionLike {
  * for the same reason (a record's own JSON can be hand-edited, or written
  * before `polls` existed at all). The real `PollRecord` (src/receipt/
  * types.ts) also carries `attempts` and `outcome`, but this note's own
- * judgment never looks at either: this task's spec, item 2, "poll を使って
- * いる時点でリトライの機構はあり" - a poll that happened to resolve on its
+ * judgment never looks at either: a poll that happened to resolve on its
  * first attempt is still a step written to retry, not a step that got
  * lucky. */
 interface PollLike {
@@ -112,8 +111,8 @@ function isPollLike(value: unknown): value is PollLike {
 
 /** True when `readStartedAt` (a post-navigation read's own start,
  * milliseconds since epoch) falls inside any poll's own window: `poll.at`
- * through `poll.at + poll.waited_ms`. Both ends are included (fb5-stale-
- * wait-poll task spec, decision 3) - the boundary is resolved toward
+ * through `poll.at + poll.waited_ms`. Both ends are included - the boundary
+ * is resolved toward
  * excluding the read rather than reporting it, the same direction this
  * note's own gap cutoff (`NOT_WORTH_LISTING_ABOVE_MS`) already leans in its
  * own comment. */

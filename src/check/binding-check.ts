@@ -9,8 +9,7 @@ import type { ParameterTypeConfig } from "../config/schema.js";
 import type { CompatParameterTypeEntry, Vocabulary } from "../discover/discover-steps.js";
 import type { CheckIssue } from "./types.js";
 
-// Responsibility: this task's spec decisions 1+2 applied to the whole
-// vocabulary — for every pattern-bearing typed step, parse+strip each of its
+// Responsibility: for every pattern-bearing typed step, parse+strip each of its
 // patterns (src/binding/pattern.ts), build the matching CucumberExpression
 // (src/binding/expression.ts's underlying pieces), and check the result
 // against the step's `args` schema (src/binding/schema-shape.ts). Also the
@@ -21,7 +20,7 @@ import type { CheckIssue } from "./types.js";
 // reuses the latter to match pickle steps, so this is the one place the
 // vocabulary's patterns are parsed for the whole `nuka check` run.
 //
-// m2a-compat-registry task spec, item 6 extends all of the above to compat
+// This also extends to compat
 // vocabulary entries: a compat pattern participates in undefined-step and
 // ambiguous-match detection exactly like a typed one (both live in the one
 // `patterns` array feature-check.ts consumes), and in duplicate-pattern
@@ -40,8 +39,8 @@ import type { CheckIssue } from "./types.js";
 // between the two sources raises the exact same `parameter-type-invalid`
 // issue a config/config collision already does. Listing each compat-origin
 // registration as its own finding used to happen here too, as a warning;
-// it moved to src/tend/parameter-type-support-origin.ts (m8d-move-to-tend
-// task spec) — it fires for as long as a suite has any compat left, which
+// it moved to src/tend/parameter-type-support-origin.ts
+// — it fires for as long as a suite has any compat left, which
 // is a normal in-progress state rather than a reason to stop a run, so it
 // no longer belongs on `nuka check`'s own report.
 
@@ -94,8 +93,8 @@ function captureErrorToIssue(error: unknown, stepName: string, pattern: string):
   };
 }
 
-/** Every name `registry` actually has a `ParameterType` registered under
- * (cli-messages-name-the-cause task spec, item 2) — read from the registry
+/** Every name `registry` actually has a `ParameterType` registered under,
+ * read from the registry
  * itself, not a hardcoded list, so this always matches what this project's
  * own patterns can bind against: cucumber-expressions' own built-ins plus
  * whatever `config.parameterTypes`/compat `defineParameterType` added on top
@@ -126,9 +125,9 @@ function expressionErrorToIssue(
   if (error instanceof UndefinedParameterTypeError) {
     // The type name alone (`error.undefinedParameterTypeName`) is not
     // reported here on top of `message`: cucumber-expressions' own message
-    // already names it ("Undefined parameter type 'number'"); what it never
-    // says is what to write instead, which is the gap this task's spec
-    // reported two independent readers hitting.
+    // already names it ("Undefined parameter type 'number'"), but never says
+    // what to write instead — the exact gap that has led real users to write
+    // `number` and get no next step.
     const available = availableParameterTypeNames(registry);
     return {
       code: "unknown-parameter-type",
@@ -149,7 +148,7 @@ export function checkBindings(
   // A name collision in config.parameterTypes (against a built-in type,
   // another config entry, or now a compat-origin entry — this reuses the
   // existing collision error) is a config-authoring error, not something any individual
-  // pattern did wrong (this task's spec, decision 3) — reported once, here,
+  // pattern did wrong — reported once, here,
   // as its own issue rather than once per pattern that would otherwise have
   // used the registry. No pattern can be checked at all without a working
   // registry, so `patterns` is empty in this case, same as any other early
@@ -171,8 +170,7 @@ export function checkBindings(
   const issues: CheckIssue[] = [];
   const patterns: CheckedPattern[] = [];
   // strippedPattern -> every (stepName, pattern) that normalizes to it,
-  // across the *entire* vocabulary and *across kind* (this task's spec,
-  // item 6: duplicate detection spans kind) — a typed step's stripped
+  // across the *entire* vocabulary and *across kind* — a typed step's stripped
   // pattern and a compat string pattern share this one text namespace
   // because both are, in the end, plain cucumber-expression source; a
   // compat RegExp pattern has its own separate namespace below (regexpText
@@ -288,7 +286,7 @@ export function checkBindings(
 
   // Compat entries: one pattern per entry, no aliases, no args schema — just
   // build the matcher and register it for duplicate/undefined/ambiguous
-  // detection (this task's spec, item 6, first bullet).
+  // detection.
   for (const entry of entries) {
     if (entry.kind !== "compat") {
       continue;
@@ -299,9 +297,8 @@ export function checkBindings(
     if (typeof entry.compat.pattern === "string") {
       // No stripCaptureNames here, on purpose — compat prose is unmodified
       // cucumber-expressions syntax (`{string}`, `{int}`, a custom type
-      // name), never nukadoko's `{key:type}` naming convention (this task's
-      // spec, item 6: a compat string pattern is not required to use
-      // named-capture syntax).
+      // name), never nukadoko's `{key:type}` naming convention: a compat
+      // string pattern is not required to use named-capture syntax.
       const owners = strippedTextOwners.get(entry.compat.pattern) ?? [];
       owners.push({ stepName, pattern });
       strippedTextOwners.set(entry.compat.pattern, owners);

@@ -19,22 +19,21 @@ import type { Step } from "./define-step.js";
 
 // Responsibility: the one judgment "does this step's run() ask for fixtures
 // nukadoko can actually build" — the fixture-bag counterpart to src/step/
-// validate-from.ts's structural `from` check (p4a-fixture-bag task spec,
-// scope item 3: "既存の束縛順検査 src/step/validate-from.ts と同じ流儀に
-// すること"). A pure function returning issues, never throwing and never
+// validate-from.ts's structural `from` check, matched to that same
+// checking style. A pure function returning issues, never throwing and never
 // printing: `nuka check` (src/check/analyze.ts) folds every issue into its
 // own report, and `nuka run`/`nuka do` (src/cli/run.ts, src/cli/do.ts) turn
 // a non-empty result into the same setup-phase, no-receipt-written refusal
 // ConfigError/a broken `from`/an unknown step name already use — a step
-// whose fixtures cannot be resolved never begins executing at all (this
-// task's spec: "実行そのものを拒む", never a step failure).
+// whose fixtures cannot be resolved never begins executing at all: the same
+// "never began" outcome an undefined step already gets, never a step
+// failure (docs/spec.md "Context API").
 //
-// P5 widens this file two ways, both additive (this task's spec, scope
-// items 5, 8):
+// This file was later widened two ways, both additive:
 //
 //   1. `validateStepFixtures` now takes the *known* fixture-name set as a
 //      parameter (`knownFixtureNames`, defaulting to builtins alone, so
-//      every P4 call site and test keeps compiling unchanged) — a caller
+//      every existing call site and test keeps compiling unchanged) — a caller
 //      that has loaded a config now passes builtins ∪ `config.fixtures`
 //      keys, so a step naming a real user fixture is no longer refused as
 //      "unknown".
@@ -116,9 +115,10 @@ function validateFixtureConsumer(fn: FixtureConsumer, knownNames: ReadonlySet<st
  * argument is a well-formed object-destructuring pattern and every name in
  * it is a member of `knownFixtureNames`.
  *
- * `knownFixtureNames` defaults to builtins alone (P4's own closed set) so
+ * `knownFixtureNames` defaults to builtins alone (the original closed set)
+ * so
  * every call site that has not loaded a config — including this file's own
- * pre-P5 tests — keeps compiling and behaving unchanged; a caller that has
+ * earlier tests — keeps compiling and behaving unchanged; a caller that has
  * loaded one passes `knownFixtureNames(config)` (this file's own export)
  * instead, so a step naming a real `config.fixtures` entry is no longer
  * refused as unknown.
@@ -141,7 +141,7 @@ export function formatFixtureIssues(issues: readonly FixtureIssue[]): string {
 
 /** One structural finding about a `config.fixtures` *definition* itself, as
  * opposed to `FixtureIssue` above (a *step's own usage* of one) — `nuka
- * check`'s fixture-* codes (P5 task spec, scope item 8): `fixture-cycle`,
+ * check`'s fixture-* codes: `fixture-cycle`,
  * `fixture-scope-violation`, `page-override-unowned` (src/fixture/graph.ts),
  * plus `fixture-structural-violation` for a fixture whose own destructuring
  * is unknown/malformed — the exact same code `validateStepFixtures`'s own

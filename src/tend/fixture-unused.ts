@@ -3,8 +3,8 @@ import { closeFixtureNames, type FixtureGraph } from "../fixture/graph.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { TendIssue } from "./types.js";
 
-// Responsibility: docs/spec.md "Tending"'s `fixture-unused` finding (P5 task
-// spec, scope item 9) — a `config.fixtures` entry no typed step requires,
+// Responsibility: docs/spec.md "Tending"'s `fixture-unused` finding —
+// a `config.fixtures` entry no typed step requires,
 // directly or transitively through another fixture. Reported as a fact, the
 // same "note, not a verdict" convention every other tend finding follows
 // (docs/spec.md "Tending"): an unused fixture is not automatically dead —

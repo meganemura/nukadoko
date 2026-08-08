@@ -5,8 +5,8 @@ import type { TendIssue } from "./types.js";
 // Responsibility: docs/spec.md "Tending"'s "A configured parameter type no
 // pattern uses" finding — a `config.parameterTypes` entry no typed *or*
 // compat pattern's `{...}` token ever names. Compat's own
-// `defineParameterType` registrations (support-side) are out of scope by
-// this task's spec ("設定に書かれたものだけを見る") — only entries this
+// `defineParameterType` registrations (support-side) are out of scope —
+// only entries this
 // project's own `nukadoko.config.ts` declares are checked here.
 //
 // A typed pattern's token is always `{key:type}` (src/binding/pattern.ts's

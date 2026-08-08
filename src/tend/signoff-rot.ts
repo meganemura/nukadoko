@@ -7,7 +7,7 @@ import type { TendIssue } from "./types.js";
 
 // Responsibility: docs/spec.md "Tending"'s first, error-level finding — a
 // sign-off that no longer matches the code it froze. This is the one
-// finding m8a left `errors` empty for (src/tend/types.ts's own header): a
+// finding `errors` is ever populated with (src/tend/types.ts's own header): a
 // record proves a claim ("this feature was green at this commit, and here
 // is the evidence"), and unlike the other five tend findings, a record that
 // has quietly stopped being true is worse than no record at all, because it
@@ -43,7 +43,7 @@ import type { TendIssue } from "./types.js";
 
 const FIX_HINT = "re-run `nuka run` and `nuka accept` to refreeze it, or revert whatever changed since it was accepted";
 
-// The one normalization allowed (this task's spec, constraints): a feature
+// The one normalization allowed: a feature
 // file always ends in its own trailing newline, and `render-record.ts`
 // strips exactly one before embedding it (its own comment: "the fence's own
 // closing ``` already supplies that break"). Applying the identical

@@ -1,5 +1,5 @@
-// Responsibility: the one finding shape `nuka tend`'s five (soon six, once
-// m8b adds the sign-off finding) checks all produce. Shaped identically to
+// Responsibility: the one finding shape `nuka tend`'s six checks all
+// produce. Shaped identically to
 // src/check/types.ts's `CheckIssue` (code/message/optional file/line/step)
 // but declared fresh rather than imported: `check` answers "can this run"
 // and `tend` answers "is this healthy" (docs/spec.md "Tending" — deliberately
@@ -12,11 +12,11 @@
 // on, docs/spec.md's own "the rest do not, because a project is allowed to
 // carry them").
 //
-// `errors` was `[]` throughout m8a (that task's own non-scope: sign-off
+// `errors` started out always `[]`: sign-off
 // staleness — the one finding docs/spec.md "Tending" marks as an error — was
-// left for m8b, which parses accepted-record Markdown m8a never touched).
-// The field existed from m8a onward rather than being added later, so m8b's
-// report shape (src/tend/signoff-rot.ts populating it) is additive rather
+// added later, once accepted-record Markdown parsing existed to support it.
+// The field existed from the start rather than being added later, so
+// src/tend/signoff-rot.ts populating it is additive rather
 // than a breaking change to `--json` consumers who already saw an
 // always-empty `errors` array.
 
@@ -29,10 +29,10 @@ export interface TendIssue {
 }
 
 /** How much of a countable thing typed steps declare vs. could declare —
- * shared shape for the two "declaration coverage" numbers below (m8c-tend-
- * summary task spec: exactly two such numbers, `rationale` and `describe`,
+ * shared shape for the two "declaration coverage" numbers below: exactly
+ * two such numbers, `rationale` and `describe`,
  * kept to that shape rather than each spelling out its own field names so a
- * reader sees at a glance that both mean "declared out of total"). */
+ * reader sees at a glance that both mean "declared out of total". */
 export interface TendDeclarationCoverage {
   readonly declared: number;
   readonly total: number;
@@ -42,32 +42,31 @@ export interface TendDeclarationCoverage {
  * (docs/spec.md "Tending": "Before any finding, `tend` states where the bed
  * currently is") — not itself a finding: a suite mid-migration with compat
  * steps still on disk is a normal state, so this never touches `errors`/
- * `notes` or the exit code (m8c-tend-summary task spec, "非スコープ").
+ * `notes` or the exit code.
  * Capped at the three numbers docs/spec.md's own two paragraphs name —
  * typed vs. compat, and the two declaration-coverage ratios — on purpose:
- * every additional number here dilutes the ones that matter (task spec:
- * "数字を増やさない…並べるほど1つあたりの意味が薄まる").
+ * every additional number here dilutes the ones that matter.
  *
- * `compatStepNames` names every counted entity for `--json`'s reader (an
- * agent, per this task's spec: "「compat が8個」より「この8個」のほうが
- * 使える"). `rationale`/`describe` do *not* get an equivalent name list —
+ * `compatStepNames` names every counted entity for `--json`'s reader: an
+ * agent finds "these 8" more actionable than "compat is 8".
+ * `rationale`/`describe` do *not* get an equivalent name list —
  * `missing-rationale.ts`/`missing-describe.ts`'s own notes already name
  * those steps/fields individually (with a `file`), so repeating the names
  * here would be the same information twice; only the migration breakdown is
  * new, because nothing else in this report currently names a compat step at
  * all.
  *
- * `scannedFeatureDirs` and `readOnlySteps` (fb3-scan-dirs task spec,
- * decisions 3 and 5) are the two exceptions to the "cap at three numbers"
+ * `scannedFeatureDirs` and `readOnlySteps` are the two exceptions to the
+ * "cap at three numbers"
  * rule just above, added deliberately rather than by drift: `pattern-unbound`
  * had gone quietly wrong for any project that placed an accepted feature
  * outside `featuresDir` (docs/spec.md's own recommendation), because nothing
  * in `tend`'s own output said which directories it had actually looked at —
  * `scannedFeatureDirs` is what makes that fixable by reading the output
- * rather than the source. `readOnlySteps` is the one number this task's own
- * spec calls out by exact source location (src/tend/summary.ts's own
- * counting loop, `entry.step.mutates === false`) as belonging beside the
- * typed/compat counts it is already computed alongside. */
+ * rather than the source. `readOnlySteps` is counted in the same loop as
+ * the typed/compat counts (src/tend/summary.ts's own counting loop,
+ * `entry.step.mutates === false`), belonging beside them rather than a
+ * separate pass. */
 export interface TendSummary {
   readonly typedSteps: number;
   readonly compatSteps: number;

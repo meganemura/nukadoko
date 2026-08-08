@@ -5,7 +5,7 @@ import type { TendIssue } from "./types.js";
 // Responsibility: docs/spec.md "Tending"'s "A secrets.public or
 // secrets.redact entry naming a key no envFile defines" finding — moved
 // here from src/check/config-check.ts's own `secrets-public-key-unknown`/
-// `secrets-redact-key-unknown` warnings (m8d-move-to-tend task spec): a
+// `secrets-redact-key-unknown` warnings: a
 // real instruction reaching nothing, but configuration drift, not something
 // that changes whether this run should happen. Its two neighbors —
 // `secrets-redact-key-too-short` and `tracked-secret-looking-key` — stay on

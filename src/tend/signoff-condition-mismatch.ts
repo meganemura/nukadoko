@@ -3,14 +3,14 @@ import path from "node:path";
 import { discoverMarkdownFiles, parseAcceptanceRecord, type RecordCondition } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
-// Responsibility: docs/spec.md "Tending"'s `signoff-condition-mismatch`
-// finding (accept-condition task spec, item 7) — the one feature-level fact
+// Responsibility: docs/spec.md "Tending"'s "A sign-off's own recorded
+// condition drifting from the config" finding — the one feature-level fact
 // "does the most recent sign-off's own recorded condition still match what
-// this project's config would produce". A note, not an error (this task's
-// own severity call: nothing is wrong *right now* — "chromium accepted,
-// firefox not yet" is a normal state, docs/spec.md "Sign-off" — this is
+// this project's config would produce". A note, not an error: nothing is
+// wrong *right now* — "chromium accepted, firefox not yet" is a normal
+// state (docs/spec.md "Sign-off") — this is
 // left-alone-and-it-rots territory, the same split every other tend finding
-// already draws). Unrelated to src/tend/signoff-rot.ts's own four staleness
+// already draws. Unrelated to src/tend/signoff-rot.ts's own four staleness
 // checks: a condition mismatch says nothing about whether the frozen claim
 // itself is still true, only that a *different* condition is what `nuka
 // accept` would select today. Walks the whole project itself, independently
@@ -29,18 +29,19 @@ import type { TendIssue } from "./types.js";
 // "The latest sign-off" is the record with the greatest `acceptedAt` among
 // every record this feature has, full stop — not the latest *among records
 // with a known condition*. If that literal latest record predates this
-// task (no condition recorded at all), this finding has nothing to compare
-// and says nothing for that feature (task spec item 7: "条件不明の古い記録
-// はこの所見の対象外") — falling back to an older, superseded record instead
+// note's own condition tracking (no condition recorded at all), this
+// finding has nothing to compare
+// and says nothing for that feature — falling back to an older, superseded record instead
 // would compare against a claim that is no longer the one actually
 // standing. A record whose own known condition measured no browser launch
 // is skipped the same way cli/accept.ts's own filter treats "no browser":
 // an unmeasured axis carries no confirmed condition to disagree with.
 //
 // A "some declared browser conditions have no sign-off yet" finding was
-// considered and deliberately not built: this task drops the named matrix
-// entirely (per its own spec), so there is no declared set of conditions to
-// compare a feature's sign-offs against — only measured ones, and "some
+// considered and deliberately not built: nukadoko has no declared matrix of
+// browser/environment combinations, so there is no declared set of
+// conditions to compare a feature's sign-offs against — only measured ones,
+// and "some
 // declared conditions are missing a sign-off" would need a declaration that
 // does not exist.
 

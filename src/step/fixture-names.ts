@@ -1,6 +1,6 @@
 // Responsibility: read a step's `run` function's own declared fixture names
 // — the first argument's object-destructuring pattern — from `fn.toString()`,
-// without ever calling the function (p4a-fixture-bag task spec). This is
+// without ever calling the function. This is
 // what lets `nuka check` treat a step's fixture needs as a static fact,
 // and what lets `nuka run`/`nuka do` build only the resources a step's own
 // `run({ page, section }, args)` actually names.
@@ -10,18 +10,17 @@
 // (c) Microsoft Corporation) — same regex-based split of the source text
 // into a parameter list, same "first argument must be `{...}`", same
 // "`...rest` is refused" rule. Rewritten here rather than imported, for two
-// reasons this task's spec calls out: (1) Playwright's own version reports a
+// reasons: (1) Playwright's own version reports a
 // broken pattern through an `onError` callback rather than throwing, and
 // this file wants real `Error` subclasses a caller can `instanceof`, the
 // same convention every other error type in this package follows
 // (src/context/errors.ts, src/config/errors.ts, ...); (2) its own
 // memoization key is an internal `Symbol("signature")` this package has no
 // business reaching for — a plain `WeakMap` here needs no `require` of any
-// Playwright-internal symbol at all (this task's spec: "内部シンボルを
-// require しない").
+// Playwright-internal symbol at all.
 //
-// A default value breaks this kind of extraction (this task's spec,
-// "前提", measured against the same Playwright source above):
+// A default value breaks this kind of extraction (measured against the same
+// Playwright source above):
 // `{ page = null }` parses to the single, useless name `"page=null"`;
 // `{ page = fn(a, b) }` corrupts even further, since neither this file's own
 // `splitByComma` below nor Playwright's tracks `(`/`)` nesting, so the comma
@@ -140,7 +139,7 @@ function filterOutComments(source: string): string {
 
 /** Splits `text` on top-level commas only — `{`/`[` nesting is tracked,
  * `(` is not (Playwright's own `splitByComma`, mirrored here). That last
- * gap is exactly this file's own header's "実測": a default value's own
+ * gap is exactly what this file's own header measured: a default value's own
  * function call, `{ page = fn(a, b) }`, has a top-level-looking comma
  * inside `fn(...)` that this function cannot tell apart from a second
  * destructured prop — which is why a default value is refused outright by
@@ -178,8 +177,8 @@ function computeFixtureNames(fn: FixtureConsumer): readonly string[] {
   }
   const trimmed = (match[1] ?? "").trim();
   if (!trimmed) {
-    // A step whose run() takes no arguments at all — spec's own "引数を1つ
-    // も取らない関数も許す": it needs no fixtures.
+    // A step whose run() takes no arguments at all is allowed too: it needs
+    // no fixtures.
     return [];
   }
   const [firstArgument] = splitByComma(trimmed);
@@ -212,7 +211,7 @@ const cache = new WeakMap<FixtureConsumer, readonly string[]>();
  * argument — `[]` for a function that takes no arguments, or an empty
  * object pattern (`async ({}, args) => ...`). Memoized per function
  * reference, so a caller that asks more than once (`nuka check` and `nuka
- * run` sharing this same judgment, this task's spec) re-parses the source
+ * run` sharing this same judgment) re-parses the source
  * text exactly once.
  *
  * @throws {FixtureNotDestructuredError} the first argument isn't an object

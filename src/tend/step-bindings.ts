@@ -9,10 +9,9 @@ import type { FeatureFile } from "../feature/load-features.js";
 // *uniquely* resolves to, and (for from-unused.ts) that occurrence's own
 // matched capture set. Built once here and shared by both findings rather
 // than each re-walking every feature, and built through
-// src/check/feature-check.ts's own `matchPickleStepText` (this task's spec:
-// "capture 判定は src/check/feature-check.ts / src/check/from-order.ts が既
-// に使っている計算を流用すること" — never a third implementation of pattern
-// matching).
+// src/check/feature-check.ts's own `matchPickleStepText`, the same capture
+// judgment src/check/feature-check.ts/src/check/from-order.ts already use —
+// never a third implementation of pattern matching.
 //
 // "Bound" here means the same thing src/check/from-order.ts's own
 // `resolvedNames` means: exactly one pattern matched this line's text. A

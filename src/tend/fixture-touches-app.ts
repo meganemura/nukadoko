@@ -1,8 +1,8 @@
 import { fixtureReachesBrowser, type FixtureGraph } from "../fixture/graph.js";
 import type { TendIssue } from "./types.js";
 
-// Responsibility: docs/spec.md "Tending"'s `fixture-touches-app` finding
-// (P5 task spec, scope item 9) — names every `config.fixtures` entry that
+// Responsibility: docs/spec.md "Tending"'s `fixture-touches-app` finding —
+// names every `config.fixtures` entry that
 // reaches `page`/`context`, directly or through another fixture. This is
 // the standing answer to "a fixture that drives Given": a fixture that logs
 // a user in before a step ever runs lets a scenario go green with a

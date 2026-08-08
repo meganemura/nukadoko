@@ -6,12 +6,12 @@ import { STEP_BRAND } from "./brand.js";
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
 // stored, never called here) and does not validate `args`/`returns` at the
 // run boundary — that is the execution slice's job. `from`'s own runtime
-// validation (m6a-from-core task spec, item 3) lives in
+// validation lives in
 // src/step/validate-from.ts, not here, for the same reason this file never
 // validates `args`/`returns` itself: this module only shapes a declaration,
 // it never checks one against a live vocabulary.
 //
-// `from` (m6a-from-core task spec; docs/spec.md "Typed steps"/"Chaining
+// `from` (docs/spec.md "Typed steps"/"Chaining
 // steps") declares where an args key's value comes from when a pickle line
 // doesn't capture it: `{ projectId: [createProject, "id"] }` reads as
 // "`projectId` is the `id` of whatever `createProject` returned earlier in
@@ -21,8 +21,8 @@ import { STEP_BRAND } from "./brand.js";
 // system: `FromMap` below constrains, per key, (1) that the key is one of
 // `args`' own keys, (2) that the tuple's second element is one of the
 // upstream step's `returns` keys, and (3) that the upstream value's type is
-// assignable to the args key's type. It stops there on purpose (m6a-from-core
-// task spec, item 2: don't burn time turning this into a type puzzle) — an
+// assignable to the args key's type. It stops there on purpose (not burning
+// time turning this into a type puzzle) — an
 // upstream `returns` that isn't itself an object schema, or one this file's
 // own inference can't pin down precisely, is left unconstrained rather than
 // forced into a contorted type; src/step/validate-from.ts's runtime check is
@@ -30,8 +30,8 @@ import { STEP_BRAND } from "./brand.js";
 // is the one line of defense against a step author lying to the type checker
 // with an `as` cast.
 //
-// A key may instead list several mutually exclusive producers (m7a-from-
-// alternatives task spec, item 1; docs/spec.md "Chaining steps": "A key may
+// A key may instead list several mutually exclusive producers (docs/spec.md
+// "Chaining steps": "A key may
 // name more than one possible producer"): `{ projectId: [[createProject,
 // "id"], [importProject, "projectId"]] }`. Discriminated from the single-
 // candidate form by the tuple's own first element — a `Step` means "this is
@@ -45,8 +45,8 @@ import { STEP_BRAND } from "./brand.js";
 // `src/run/run-scenario.ts` judge, never this file (docs/spec.md "Chaining
 // steps": "What this deliberately does not introduce is a priority").
 
-/** A zod object schema's own key→schema shape; `{}` when `T` isn't one. This
- * task's spec, item 2's own scope note: `from`'s three checks only make
+/** A zod object schema's own key→schema shape; `{}` when `T` isn't one.
+ * `from`'s three checks only make
  * sense against an object — a step whose `args`, or whose upstream's
  * `returns`, is some other schema shape (a bare `z.string()`, a union, ...)
  * has no keys for `from` to be checked against at all, so this collapses to
@@ -57,7 +57,7 @@ type ObjectShapeOf<T extends z.ZodTypeAny> = T extends z.ZodObject<infer Shape>
   : Record<string, never>;
 
 /** The keys of object shape `Shape` whose own value type is assignable to
- * `V` — bullet 3 of `from`'s three checks (this task's spec, item 2),
+ * `V` — bullet 3 of `from`'s three checks (this file's own header),
  * applied to whichever upstream `returns` shape `ValidatedFromEntry` below
  * resolves for a given entry. `z.infer` itself is unconstrained (zod 4's own
  * `core.output<T>` falls back to `unknown` for a `T` it doesn't recognize
@@ -74,8 +74,7 @@ type KeysAssignableTo<Shape, V> = {
  * Validates one candidate producer tuple (`[Step, string]`) against args key
  * `K`'s own declared value type — the same three-bullet check `from` has
  * always applied to its single-candidate form, factored out so it can run
- * once per candidate when a key lists several (m7a-from-alternatives task
- * spec, item 1). Self-referential on purpose — `S` (the upstream `Step`) and
+ * once per candidate when a key lists several. Self-referential on purpose — `S` (the upstream `Step`) and
  * its own `returns` shape are inferred fresh per candidate, so two different
  * candidates (whether on the same key or different keys) can each name a
  * different upstream step without their types interfering. Collapses to
@@ -99,7 +98,7 @@ type ValidatedCandidate<Candidate, ArgsValueType> = Candidate extends readonly [
  * (`ValidatedCandidate` above). Recursive rather than a mapped-type-then-
  * compare pass, so one invalid candidate anywhere in the list fails the
  * whole entry directly — no candidate is allowed to "cover for" another
- * (m7a-from-alternatives task spec: the "no priority" rule has a type-level
+ * (the "no priority" rule has a type-level
  * corollary too — every listed candidate must independently type-check;
  * there is no "the first one that does wins"). Tuples this short (a `from`
  * key naming more than a handful of alternatives would already be a design
@@ -117,8 +116,8 @@ type AllCandidatesValid<Candidates extends readonly unknown[], ArgsValueType> = 
 /**
  * Validates one `from` entry (`TFrom[K]`, the literal TypeScript sees at
  * this exact key in the object literal a `defineStep` caller wrote) against
- * args key `K`'s own declared type — either the pre-m7a single-candidate
- * tuple, or an array of candidates (m7a-from-alternatives task spec, item 1).
+ * args key `K`'s own declared type — either the original single-candidate
+ * tuple, or an array of candidates.
  * Discriminated the same way the runtime does (this file's own header, and
  * src/step/define-step.ts's `fromCandidates`): the tuple's first element
  * being a `Step` (never an array — a `Step` is a plain object) means "this
@@ -162,9 +161,9 @@ export type FromCandidate = readonly [step: Step, key: string];
  * literal a step author wrote; nothing downstream of `defineStep` needs to
  * know the specific upstream `Step`/key types of each entry, only that each
  * is *some* upstream `Step` paired with *some* key name). A key's own value
- * is either one candidate (the pre-m7a shape, kept so an existing `from: {
+ * is either one candidate (the original shape, kept so an existing `from: {
  * key: [step, "key"] }` declaration never needs rewriting) or an array of
- * them (m7a-from-alternatives task spec, item 1: mutually exclusive
+ * them (mutually exclusive
  * producers, docs/spec.md "Chaining steps") — `fromCandidates` below is how
  * every consumer reads either shape uniformly instead of re-deriving which
  * one a given entry is. Consumers (src/run/run-scenario.ts's injection,
@@ -174,16 +173,14 @@ export type FromCandidate = readonly [step: Step, key: string];
 export type StepFromMap = Readonly<Record<string, FromCandidate | readonly FromCandidate[]>>;
 
 /**
- * Normalizes one `Step.from` entry to its full candidate list (m7a-from-
- * alternatives task spec, item 1: "内部表現は正規化して構わない") — a single
+ * Normalizes one `Step.from` entry to its full candidate list — a single
  * `[Step, string]` tuple becomes a one-element array; an already-multi
  * `readonly [Step, string][]` passes through unchanged. The discriminator is
  * the entry's own first element: a `Step` (always a plain object, never an
  * array — `isStep`'s own brand check below) means "this is one candidate
  * tuple itself"; an array means "this is already the candidate list"
  * (docs/spec.md "Chaining steps": "A key may name more than one possible
- * producer", and this task's spec, item 1: "タプルの第 1 要素が Step か配列
- * かで判別できる"). Every reader of `Step.from` calls this once per key
+ * producer"). Every reader of `Step.from` calls this once per key
  * instead of re-deriving the discriminator itself, so "single vs multi"
  * stays decided in exactly one place.
  */
@@ -208,7 +205,7 @@ export interface StepDefinitionInput<
   /** Whether the step changes state anywhere it touches. Defaults to `true`. */
   mutates?: boolean;
   /** Where an args key's value comes from when a pickle line doesn't capture
-   * it (m6a-from-core task spec; docs/spec.md "Chaining steps") — omit it
+   * it (docs/spec.md "Chaining steps") — omit it
    * entirely, or omit any key of it, for a step that only ever takes that key
    * from the pattern/table/docstring. See this file's own header for what the
    * type system checks here versus what src/step/validate-from.ts's runtime
@@ -216,12 +213,12 @@ export interface StepDefinitionInput<
   from?: TFrom;
   /** Why this is implemented this way, and what was tried and rejected — the
    * information an agent uses to judge whether it may rewrite the step.
-   * Not shown in `nuka steps` (t2-rationale task spec, item 3: that listing
+   * Not shown in `nuka steps` (that listing
    * stays one-line-per-step); shown in `nuka describe`. No default — omit it
    * and `Step.rationale` is `undefined`, same as omitting `pattern`. */
   rationale?: string;
   /** `fixtures` is a `StepFixtures` bag, named by destructuring
-   * (`run({ page, section }, args) => ...`, p4a-fixture-bag task spec) —
+   * (`run({ page, section }, args) => ...`) —
    * only the names actually destructured get built at all (docs/spec.md
    * "Context API"): a step that never destructures `page`/`context` never
    * causes a browser to launch. The destructuring pattern is read
@@ -248,7 +245,7 @@ export interface Step<
   readonly mutates: boolean;
   /** Empty (`{}`) when the step declares no `from` at all — the same
    * "default fills the gap" convention `mutates`'s own `?? true` follows,
-   * rather than `undefined` (m6a-from-core task spec, item 1: `Step` always
+   * rather than `undefined` (`Step` always
    * has a `from`, never an optional one, so every reader can iterate it
    * unconditionally). */
   readonly from: StepFromMap;
