@@ -122,6 +122,19 @@ just until 0.1.
   and its own content is readable, `allurerc.mjs`'s categorization actually
   sorts a failure away from "Product errors", and a step's `sections`/
   `polls` render as its own child steps, one level under it, not two.
+- **`allure watch` updating live, not just a finished report, is now a
+  repeatable check, not a one-off scratch script.** README and
+  docs/spec.md already said a run's report can be watched from before the
+  first `nuka run` and re-renders as each step finishes; nothing had
+  confirmed that claim more than once. A selftest scenario now starts
+  `allure watch` against an empty results directory, opens the report in a
+  real headless browser exactly once, and spawns `nuka run` against a
+  fixture with deliberately slow steps without waiting for it to finish, so
+  the browser tab is read while the run is still going. The mid-run count
+  it observes has to sit strictly between 0 and the run's own final total,
+  or the scenario fails: that in-between reading, arriving with no
+  `.goto()`/`.reload()` from the test itself, is the only evidence a
+  report update actually arrived on its own.
 
 ## 0.1.0 — 2026-08-06
 
