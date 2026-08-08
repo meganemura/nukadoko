@@ -15,8 +15,8 @@ export class InvalidEnvironmentNameError extends Error {
 }
 
 /** Thrown only when `--env <name>` was given explicitly and `name` has no
- * matching entry in nukadoko.config.ts's `environments` (this task's spec,
- * decision 2). The implicit "default" environment never throws this even
+ * matching entry in nukadoko.config.ts's `environments`. The implicit
+ * "default" environment never throws this even
  * when `environments.default` is undefined — see resolve-environment.ts. */
 export class UnknownEnvironmentError extends Error {
   readonly environmentName: string;
@@ -31,8 +31,7 @@ export class UnknownEnvironmentError extends Error {
 }
 
 /** Thrown in `nuka do`'s setup phase (before any receipt is written) when a
- * mutating step targets an environment whose `policy` is `"read-only"` (this
- * task's spec, decision 4). */
+ * mutating step targets an environment whose `policy` is `"read-only"`. */
 export class ReadOnlyEnvironmentError extends Error {
   readonly stepName: string;
   readonly environmentName: string;

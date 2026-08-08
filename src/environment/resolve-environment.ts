@@ -2,19 +2,19 @@ import type { NukadokoConfig } from "../config/schema.js";
 import { UnknownEnvironmentError } from "./errors.js";
 
 // Responsibility: turn a `--env` name plus the loaded config into the
-// *effective* settings one `do` run actually uses (this task's spec, item
-// 2/3) — never anything else's job (cli/do.ts wires the result into session
+// *effective* settings one `do` run actually uses, and never anything
+// else's job (cli/do.ts wires the result into session
 // paths, the read-only check, the version probe, and ctx.baseURL/envFiles;
 // it never re-derives any of this layering itself).
 //
-// Layering rule (decision 3): effective baseURL = env.baseURL ?? top-level
+// Layering rule: effective baseURL = env.baseURL ?? top-level
 // baseURL; effective envFiles = [...top-level envFiles, ...env.envFiles]
 // (append, later files winning when merged by context/env.ts — the same
 // "common + per-environment override" shape as dotenv's own convention).
 // `policy`/`version` exist only per-environment; there is no top-level
 // fallback for either.
 //
-// Unknown-name handling (decision 2) depends on whether `--env` was given
+// Unknown-name handling depends on whether `--env` was given
 // explicitly: an explicit name with no matching `environments` entry is a
 // setup failure (`UnknownEnvironmentError`), but the implicit "default" (no
 // `--env` at all) is *not* required to have a matching entry — it just

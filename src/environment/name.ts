@@ -3,7 +3,7 @@ import { InvalidEnvironmentNameError } from "./errors.js";
 // Responsibility: the one validity check on a runtime `--env` value that is
 // used directly as a filesystem path segment (sessions/<env>/...) *without*
 // first being looked up against nukadoko.config.ts's `environments` — i.e.
-// `nuka session clear --env <name>` (this task's spec, decision 7). `nuka do
+// `nuka session clear --env <name>`. `nuka do
 // --env` doesn't need this check separately: any name failing this pattern
 // can never be a key of `environments` either (config/schema.ts's zod schema
 // enforces the same regex), so resolve-environment.ts's "unknown

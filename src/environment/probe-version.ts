@@ -1,7 +1,7 @@
 // Responsibility: run an environment's `version` probe with a hard timeout,
 // per docs/spec.md "Sessions, environments, secrets" (`target_version`
-// recorded "(when probed)") and this task's spec, decision 5 — called once,
-// by the executor (cli/do.ts), at the top of the execution phase, never
+// recorded "(when probed)"). Called once, by the executor
+// (cli/do.ts), at the top of the execution phase, never
 // reachable from a step's own `run`. A probe is metadata about the target,
 // not part of what the step is being measured doing: neither a throw nor a
 // timeout may fail the run itself, so this module never throws — it always
