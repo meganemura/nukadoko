@@ -1218,6 +1218,15 @@ drawn from land in this execution's own `used`, so a chain assembled by
 hand across several `do` calls is as traceable afterwards as one a scenario
 drove.
 
+What crosses with `--use` is the value itself, not a guarantee that
+whatever it names is still there: a path an upstream step returned can
+point at a resource a fixture owns, and that fixture may already have torn
+down by the time a later `--use` call reads the path back, since one
+execution is the whole of a fixture's scope under `do` (see "Fixtures").
+Whether a returned value names something a fixture will tear down is not
+visible from the schema or from the step's own code, so this is not a
+mistake `check` can catch before the run does.
+
 A step that passes under `do` has not thereby been shown to pass under
 `run`. `do` gives every execution its own browser and its own everything
 else; a scenario gives one context to all of its steps, so the second one
@@ -1592,13 +1601,29 @@ The execution infrastructure Cucumber never had:
   secret does not add it to what gets redacted; only git's tracked/
   untracked classification and `secrets.redact` do that.
 
-Configuration lives in `nukadoko.config.ts` (`defineConfig`): `featuresDir`
-(default `features`; feature files and step code both live under it,
-Cucumber-style), `additionalFeatureDirs`, `baseURL`, `envFiles`,
-`environments`, `stateDir` (default `.nukadoko`), `browserType`, `browser`,
-`browserContext`, `requestContext`, `secrets`, `parameterTypes`, `fixtures`,
-`fixtureTimeout` (see "Fixtures"), `allure` (only `resultsDir`, see "Allure
-emitter"), `messages` (only `output`, see "Messages emitter").
+Configuration lives in `nukadoko.config.ts` (`defineConfig`). Every key it
+accepts, name and one line each; a key with more to say points at where
+that is, a later paragraph here or the section documenting the feature it
+belongs to:
+
+| Key | What it holds |
+| --- | --- |
+| `featuresDir` | feature files and step code, `nuka run`'s own unattended set (default `features`, Cucumber-style) |
+| `additionalFeatureDirs` | extra directories `nuka check`/`nuka tend` bind vocabulary against, without joining `featuresDir` (default `[]`, below) |
+| `baseURL` | top-level base URL, overridden per environment (below) |
+| `envFiles` | top-level env files, appended to per environment (below) |
+| `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
+| `stateDir` | where nukadoko writes at run time (default `.nukadoko`, see "The state directory") |
+| `browserType` | which Playwright engine `ctx.page()` launches: `chromium` (default), `firefox`, or `webkit` (below) |
+| `browser` | Playwright's own `LaunchOptions`, passed to that engine's `launch` (below) |
+| `browserContext` | Playwright's own `BrowserContextOptions`, passed to `browser.newContext()` (below) |
+| `requestContext` | the matching `newContext` options for `ctx.request()` (below) |
+| `secrets` | `public`/`redact` lists that adjust a key's redaction handling (above) |
+| `parameterTypes` | custom cucumber-expressions parameter types (below) |
+| `fixtures` | user-defined fixtures (see "Fixtures") |
+| `fixtureTimeout` | default setup/teardown timeout per fixture instance, in ms (see "Fixtures") |
+| `allure` | only `resultsDir` (see "Allure emitter") |
+| `messages` | only `output` (see "Messages emitter") |
 
 `additionalFeatureDirs` (default `[]`) answers a different question than
 `featuresDir` does. `featuresDir` is the set that *runs* unattended: `nuka
@@ -1680,6 +1705,24 @@ because config is executable TypeScript already (a URL+jsonPath DSL would
 be a worse way to write `fetch`); the tool calls it once per run with a
 10-second budget, and a throw or timeout costs only `target_version`,
 never the run.
+
+`environments` and `fixtures` naming both at once:
+
+```ts
+export default defineConfig({
+  baseURL: "https://acme.example",
+  environments: {
+    staging: { baseURL: "https://staging.acme.example", policy: "read-only" },
+  },
+  fixtures: {
+    tenant: async ({ request }, use) => {
+      const t = await createTenant(request);
+      await use(t);
+      await destroyTenant(request, t);
+    },
+  },
+});
+```
 
 ### The state directory
 
