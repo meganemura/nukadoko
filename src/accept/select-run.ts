@@ -164,7 +164,14 @@ export function listConditionsWithGreenRun(
   for (const group of groupByRunId(featureRecords).values()) {
     const condition = groupCondition(group, featureLines);
     if (condition === undefined) continue;
-    const key = `${condition.environment} ${condition.browserType ?? ""}`;
+    // The two halves of this key are joined by a separator because neither
+    // is length-bounded against the other: environment "stagingchromium"
+    // with no browser would otherwise key the same as environment "staging"
+    // run on chromium, collapsing two conditions into one. It is spelled as
+    // an escape rather than written as the byte itself, which would make
+    // this whole file read as binary and drop it out of every `git grep`
+    // without saying so.
+    const key = `${condition.environment}\u0000${condition.browserType ?? ""}`;
     if (!seen.has(key)) {
       seen.set(key, condition);
     }
