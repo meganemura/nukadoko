@@ -42,6 +42,20 @@ just until 0.1.
   exit code and `record.json` are unaffected, and `nuka accept` is
   unchanged, since the acceptance unit was always the scenario, never
   the Allure report.
+- **`nuka steps` now fails when the project has no features directory.**
+  It used to print an empty vocabulary and exit `0` there, which reads
+  exactly like a project whose features directory exists and simply holds
+  no steps yet. Those are different facts, and `nuka check` already told
+  them apart: `nuka steps` was reusing discovery's own leniency, where a
+  missing directory means "nothing found here" so that an empty
+  vocabulary stays a valid answer. The cost landed on the reader who
+  reaches for `nuka steps` first, an agent taking its opening move, who
+  got a plausible empty answer instead of being told it was in the wrong
+  place. Now the resolved path it looked for is named on stderr, stdout
+  stays empty in both plain and `--json` form rather than carrying an
+  error-shaped payload, and the exit code is non-zero. A features
+  directory that exists and holds no steps is unchanged: `{ "steps": [],
+  "import_failures": [] }` and exit `0`.
 
 ### Added
 

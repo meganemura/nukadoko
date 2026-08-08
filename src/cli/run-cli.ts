@@ -17,6 +17,7 @@ import { runSessionClear, runSessionList } from "./session.js";
 import { runSkillPath } from "./skill.js";
 import { runTend } from "./tend.js";
 import {
+  assertFeaturesDirExists,
   buildStepNames,
   describeContract,
   formatImportFailuresStderr,
@@ -190,6 +191,14 @@ export async function runCli(
         const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
         });
+        // `nuka check`'s own `features-dir-missing` condition (cli-messages-
+        // name-the-cause task spec, item 1): discovery itself treats a
+        // missing featuresDir as an empty vocabulary, so this call is what
+        // keeps that leniency from reading, on stdout, as indistinguishable
+        // from a real project that simply has no steps yet. Thrown before
+        // any stdout.write below, so a failure here never leaves a partial
+        // or misleading `--json` payload behind.
+        assertFeaturesDirExists(rootDir, config);
         const stepNames = buildStepNames(vocabulary);
         const graph = buildFixtureGraph(config);
         const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, graph));

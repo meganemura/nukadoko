@@ -35,7 +35,7 @@ This part does not change release to release.
 
 ## Unreleased
 
-Two breaking changes. Each entry says what to fix; why is in
+Three breaking changes. Each entry says what to fix; why is in
 [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
 
 - **`nuka steps --json`'s top level changed from a bare array to `{ steps,
@@ -50,6 +50,14 @@ Two breaking changes. Each entry says what to fix; why is in
   the next run's `allure-results/`, that carry-forward no longer does
   anything, since nothing in this emitter's output links a step to itself
   in an earlier run.
+- **`nuka steps` now exits non-zero when the project has no features
+  directory.** A script that ran it outside a nukadoko project, or after
+  `featuresDir` was renamed without the config following, used to get an
+  empty vocabulary and a clean exit. It now gets the resolved path it
+  looked for on stderr and a non-zero exit, with nothing on stdout. If a
+  pipeline was relying on the clean exit, point it at the right directory
+  or fix `featuresDir` in `nukadoko.config.ts`. A project whose features
+  directory exists but holds no steps is unaffected, and still exits `0`.
 
 ## 0.0.5 to 0.1.0
 

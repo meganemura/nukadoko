@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { ConfigError } from "../config/errors.js";
 import { loadConfig } from "../config/load-config.js";
@@ -68,6 +70,40 @@ export async function loadVocabulary(
   const config = await loadConfig(rootDir);
   const { vocabulary, importFailures } = await discoverSteps(rootDir, config.featuresDir, options);
   return { vocabulary, config, importFailures };
+}
+
+/** Thrown by {@link assertFeaturesDirExists} (cli-messages-name-the-cause
+ * task spec, item 1). `discoverSteps` itself treats a missing `featuresDir`
+ * as "nothing found here" (src/discover/discover-steps.ts's own
+ * `walkStepFiles`) rather than an error, on purpose: an empty vocabulary is
+ * a valid answer for a project that does have a `featuresDir`, just no steps
+ * in it yet. But `nuka steps` was reusing that same leniency for a project
+ * that has no `featuresDir` at all, which is a different fact — indistinguishable
+ * from the empty-vocabulary case in `--json`'s own `{"steps": [], ...}`
+ * output, `nuka check`'s `features-dir-missing` already tells the two apart
+ * (src/check/config-check.ts), and this error, and the message it carries,
+ * matches that check's own wording so the same mistake reads the same way
+ * from either command. */
+export class FeaturesDirMissingError extends Error {
+  constructor(
+    readonly featuresDir: string,
+    readonly resolvedPath: string,
+  ) {
+    super(`featuresDir "${featuresDir}" does not exist at ${resolvedPath}`);
+    this.name = "FeaturesDirMissingError";
+  }
+}
+
+/** Throws {@link FeaturesDirMissingError} when `config.featuresDir` does not
+ * exist on disk, the same condition `nuka check`'s `features-dir-missing`
+ * checks (src/check/config-check.ts) — kept here, not called from
+ * `loadVocabulary` itself, so `nuka describe` (this task's spec named only
+ * `nuka steps`) keeps its own existing behavior unchanged. */
+export function assertFeaturesDirExists(rootDir: string, config: NukadokoConfig): void {
+  const featuresRoot = path.join(rootDir, config.featuresDir);
+  if (!existsSync(featuresRoot)) {
+    throw new FeaturesDirMissingError(config.featuresDir, featuresRoot);
+  }
 }
 
 /** `{ file, message }` per import failure (fb5-loader-visibility task spec,
