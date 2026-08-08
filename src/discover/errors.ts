@@ -17,8 +17,8 @@ export class DuplicateStepError extends Error {
   }
 }
 
-/** The compat-registration analog of `DuplicateStepError` (m2a-compat-
- * registry task spec, decision 3): a compat step's identity is its pattern
+/** The compat-registration analog of `DuplicateStepError`: a compat step's
+ * identity is its pattern
  * source text, not a file name (one file can hold many `Given`/`When`/`Then`
  * calls), so two registrations — anywhere in the vocabulary, under any
  * keyword — that resolve to the exact same pattern source collide the same
@@ -39,8 +39,8 @@ export class DuplicateCompatStepError extends Error {
   }
 }
 
-/** `defineWorld` was called more than once in a single discovery run (m2c-
- * typed-world task spec, item 2: a second call is an error) — whether both calls are
+/** `defineWorld` was called more than once in a single discovery run — a
+ * second call is always an error, whether both calls are
  * in one file (`firstFilePath === duplicateFilePath`) or two, since
  * src/compat/define-world.ts's own buffer only ever holds registrations,
  * never rejects one itself (the same reason src/compat/registry.ts's

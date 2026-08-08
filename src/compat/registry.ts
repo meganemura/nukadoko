@@ -29,9 +29,9 @@
 // (src/discover/discover-steps.ts, src/binding/registry.ts) where the full
 // vocabulary/config picture is available.
 //
-// `setDefaultTimeout`/`getDefaultTimeoutMs` (m22-compat-run-scope task spec,
-// item 1) live here rather than in a module of their own: they need the
-// exact same module-identity handoff to src/discover/discover-steps.ts's
+// `setDefaultTimeout`/`getDefaultTimeoutMs` live here rather than in a
+// module of their own: they need the exact same module-identity handoff to
+// src/discover/discover-steps.ts's
 // scoped tsx import that this file's own step buffer already has (see
 // above), and discover-steps.ts already loads this module directly for that
 // buffer — reusing that same load is simpler than adding a second scoped
@@ -44,8 +44,9 @@ export type CompatPattern = string | RegExp;
 
 /** A compat glue function's signature (cucumber-js's own commonly used
  * shape): called with `this` bound to the World and the matched values as
- * positional arguments. Execution (actually calling `fn`) is M2's slice B —
- * this module only ever stores it. `...args: any[]`, not `unknown[]`, on
+ * positional arguments. Execution (actually calling `fn`) happens in
+ * src/run/, not here — this module only ever stores it. `...args: any[]`,
+ * not `unknown[]`, on
  * purpose: a pattern's captures determine each argument's real type (e.g. a
  * `{string}` capture wants a `(name: string) => ...` glue function), which
  * this module can't know statically — `unknown[]` would make TypeScript's
@@ -61,12 +62,11 @@ export interface CompatStepRegistration {
   /** From the 3-argument form's `{ timeout }` (cucumber-js's own commonly
    * used shape: `Given(pattern, { timeout: 30_000 }, fn)`). Held here,
    * unenforced — this module only records what was called (see file header);
-   * actually honoring a per-step timeout is m2b-compat-execution's job
-   * (src/run/). Kept rather than silently dropped so a step whose author
-   * wrote `{ timeout }` to bound a slow call doesn't quietly start running
-   * unbounded — the exact "silent behavior change" the compat audit closes
-   * at the registration boundary; slice B still owns whether it's ever
-   * actually applied. */
+   * actually honoring a per-step timeout is src/run/'s job. Kept rather than
+   * silently dropped so a step whose author wrote `{ timeout }` to bound a
+   * slow call doesn't quietly start running unbounded — the exact "silent
+   * behavior change" the compat audit closes at the registration boundary;
+   * whether it's ever actually applied is still up to src/run/. */
   readonly timeoutMs?: number;
   readonly registrationOrder: number;
 }
@@ -75,9 +75,9 @@ export interface CompatStepRegistration {
  * Options object accepted by the 3-argument step registration form —
  * `Given(pattern, options, fn)` (cucumber-js's own commonly used shape;
  * 194 real-world call sites across 3 repos per the compat audit). `timeout`
- * is the only key this task's spec recognizes; every other key throws at
- * registration time rather than being silently dropped (the audit's other
- * closed case: an unrecognized option must not quietly disappear).
+ * is the only key recognized here; every other key throws at registration
+ * time rather than being silently dropped (the audit's other closed case:
+ * an unrecognized option must not quietly disappear).
  */
 export interface CompatStepOptions {
   readonly timeout?: number;
@@ -102,8 +102,8 @@ let registrationCounter = 0;
 
 /** `value` is a plain options object — not a function (the 2-argument form),
  * and not `null`/an array/a string either, none of which this registration
- * API accepts as an options object (this task's spec, decision 2: throw
- * even when options is not an object). */
+ * API accepts as an options object: any of those shapes throws rather than
+ * being coerced or silently accepted. */
 function isStepOptionsObject(value: CompatStepOptions | CompatStepFn): value is CompatStepOptions {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -126,10 +126,9 @@ function registerStep(
   const unknownKeys = Object.keys(optionsOrFn).filter((key) => key !== "timeout");
   if (unknownKeys.length > 0) {
     // A door that stays quiet is worse than one that's briefly noisy: an
-    // unrecognized option key must not silently vanish the way `{ timeout }`
-    // used to before this task closed that case (this task's spec, decision
-    // 2) — so any *other* unknown key gets the exact same treatment, up
-    // front, rather than waiting to become a future silent gap of its own.
+    // unrecognized option key must not silently vanish, so any *other*
+    // unknown key gets the exact same treatment, thrown at registration up
+    // front, rather than becoming a future silent gap of its own.
     throw new Error(
       `${keyword}(${String(pattern)}, options, fn): unsupported option key "${unknownKeys[0]}"` +
         ` (only "timeout" is supported)`,
@@ -149,9 +148,9 @@ function registerStep(
 
 /**
  * `Given`/`When`/`Then` are the exact same registration function under three
- * names (m2a-compat-registry task spec, decision 1; cucumber-js itself works
- * the same way) — the keyword carries no matching meaning at registration
- * time. Only Gherkin's own pickle compilation later gives a step *text* an
+ * names (cucumber-js itself works the same way): the keyword carries no
+ * matching meaning at registration time. Only Gherkin's own pickle
+ * compilation later gives a step *text* an
  * Action/Outcome position (docs/spec.md "Keyword semantics": "Gherkin
  * classifies an And/But step by inheriting the pickle step type of the
  * preceding primary keyword" — a nukadoko/gherkin behavior, not something
@@ -160,8 +159,7 @@ function registerStep(
  * `Given(pattern, fn)`: the original 2-argument form.
  */
 export function Given(pattern: CompatPattern, fn: CompatStepFn): void;
-/** `Given(pattern, { timeout }, fn)`: cucumber-js's own 3-argument form
- * (this task's spec, decision 2). */
+/** `Given(pattern, { timeout }, fn)`: cucumber-js's own 3-argument form. */
 export function Given(pattern: CompatPattern, options: CompatStepOptions, fn: CompatStepFn): void;
 export function Given(
   pattern: CompatPattern,
@@ -228,21 +226,21 @@ export function drainCompatParameterTypes(): CompatParameterTypeRegistration[] {
 }
 
 /**
- * cucumber-js's own `setDefaultTimeout(ms)` (m22-compat-run-scope task spec,
- * item 1) — the timeout a compat step or hook falls back to when it
- * declares no `{ timeout }` of its own (src/run/run-scenario.ts applies the
- * fallback for a scenario's own compat steps/Before/After, src/cli/run.ts
- * for BeforeAll/AfterAll; this module only records the value, same split as
- * this file's own per-registration `timeoutMs` fields). Last call wins
- * (this task's spec: the last call wins when called more than once —
- * cucumber-js's own documented behavior, so no detection/warning is added for a second call).
+ * cucumber-js's own `setDefaultTimeout(ms)` — the timeout a compat step or
+ * hook falls back to when it declares no `{ timeout }` of its own
+ * (src/run/run-scenario.ts applies the fallback for a scenario's own compat
+ * steps/Before/After, src/cli/run.ts for BeforeAll/AfterAll; this module
+ * only records the value, same split as this file's own per-registration
+ * `timeoutMs` fields). Last call wins when called more than once,
+ * cucumber-js's own documented behavior, so no detection or warning is
+ * added for a repeated call.
  * Deliberately *not* seeded with cucumber-js's own 5000ms default when never
  * called at all: nukadoko's compat steps/hooks have always run unbounded
  * absent their own `{ timeout }`, and introducing a 5-second ceiling here
  * would make an existing suite's slow step start failing purely from
  * switching to nukadoko — the exact regression the migration door forbids
  * (docs/spec.md, migration-door rule). This choice is documented for
- * readers in docs/migration.md (a later task; not this one).
+ * readers in docs/migration.md.
  */
 let defaultTimeoutMs: number | undefined;
 

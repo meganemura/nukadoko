@@ -3,9 +3,9 @@ import { ReservedWorldKeyDeclaredError } from "./errors.js";
 import { RESERVED_WORLD_KEYS } from "./world-instrumentation.js";
 import { World, type WorldConstructorParams } from "./world.js";
 
-// Responsibility: the `defineWorld(schemas)` registration API (m2c-typed-
-// world task spec, item 2) — declares which World keys are validated at
-// write time and (see below) attempts to carry that shape into TypeScript's
+// Responsibility: the `defineWorld(schemas)` registration API — declares
+// which World keys are validated at write time and (see below) attempts to
+// carry that shape into TypeScript's
 // own `this` typing for compat glue. Registration only; the buffer this
 // module owns is read exactly once per discovery run by
 // src/discover/discover-steps.ts, the same buffer/drain shape
@@ -20,8 +20,8 @@ import { World, type WorldConstructorParams } from "./world.js";
 // src/compat/world.ts's `instantiateWorldForPickle` once per pickle; this
 // module never touches a World *instance*, only the schema *declaration*.
 //
-// TS typing attempt (task spec item 4): `defineWorld` returns the real
-// `World` class itself, cast to a constructor type whose instances carry
+// TS typing attempt: `defineWorld` returns the real `World` class itself,
+// cast to a constructor type whose instances carry
 // `InferWorldFields<S>` — so `class MyWorld extends defineWorld({ listing:
 // z.object({...}).optional() }) {}` makes `this.listing` type-check inside
 // compat glue (`this: MyWorld`) with no interface written by hand. This

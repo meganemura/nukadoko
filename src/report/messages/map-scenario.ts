@@ -20,10 +20,10 @@ import type { Receipt } from "../../receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord, ScenarioStepStatus } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
-// Responsibility: the pure transform at the center of this module (this
-// task's spec, decision 1: map-scenario.ts is a pure function that
+// Responsibility: the pure transform at the center of this module:
+// map-scenario.ts is a pure function that
 // assembles one scenario's worth of envelope material and never touches
-// the filesystem) — `(record, receipts,
+// the filesystem — `(record, receipts,
 // pickle, newId, hookIds) -> cucumber-messages envelope material for one
 // scenario`. No `node:fs` anywhere in this file: every input is already
 // resolved by the caller (src/report/messages/emitter.ts reads receipt.json
@@ -31,7 +31,7 @@ import { contentTypeForFileName } from "../media-type.js";
 // be driven entirely from fixture data in a test, no real NDJSON stream and
 // no real IdGenerator anywhere in the call graph — `newId` is passed in
 // specifically so a test can substitute `IdGenerator.incrementing()` for
-// deterministic ids (this task's spec, decision 11).
+// deterministic ids.
 //
 // `@cucumber/messages` is fine to import here (types and the odd runtime
 // value/enum alike, e.g. `TestStepResultStatus`, `HookType`,
@@ -48,13 +48,12 @@ import { contentTypeForFileName } from "../media-type.js";
 // This module never builds a `Hook`/`TestCase`/... envelope wrapper
 // (`{ hook: ... }`, `{ testCase: ... }`) itself — it returns the bare
 // message bodies; src/report/messages/emitter.ts (the only place that
-// touches `node:fs`) wraps each one and decides the on-disk order (this
-// task's spec, decision 4).
+// touches `node:fs`) wraps each one and decides the on-disk order.
 
 /** A declared file attachment still needs its bytes read and base64-encoded
  * (I/O — emitter.ts's job); a declared log line is already a complete
- * `Attachment` body (no file to read, so this task's spec, decision 9's own
- * always-BASE64-since-either-encoding-is-lossless reasoning doesn't apply
+ * `Attachment` body (no file to read, so the always-BASE64-since-either-
+ * encoding-is-lossless reasoning below doesn't apply
  * to it — IDENTITY is pinned for logs specifically) and so is built here in
  * full. Keeping
  * both cases in one discriminated union (rather than two parallel lists)
@@ -85,11 +84,11 @@ function joinRelative(dir: string, fileName: string): string {
   return `${dir.replace(/\/+$/, "")}/${fileName}`;
 }
 
-// `declared.attachments`/`declared.logs` (this task's spec, decision 9) —
+// `declared.attachments`/`declared.logs` —
 // the only two `declared` sub-fields this module reads. `declared.labels`/
 // `links`/`parameters` have no home in the messages protocol's closed
-// schema and are dropped here (known limit, documented in spec-b, not this
-// slice's docs work).
+// schema and are dropped here (known limit, documented in docs/spec.md's
+// "Honest limits" list).
 function declaredAttachmentPlans(
   declared: DeclaredSnapshot | undefined,
   evidenceDir: string,
@@ -139,7 +138,7 @@ function statusForHook(status: "ok" | "failed"): TestStepResultStatus {
   return status === "ok" ? TestStepResultStatus.PASSED : TestStepResultStatus.FAILED;
 }
 
-// Duration never negative (this task's spec, decision 8: round to 0 when
+// Duration never negative (round to 0 when
 // duration would otherwise go negative) — a receiptless step pinned to the previous step's
 // own stop is always zero-width by construction, but a real receipt's own
 // started_at/finished_at pair is operator-authored input this module has no
@@ -149,7 +148,7 @@ function buildResult(status: TestStepResultStatus, message: string | undefined, 
     status,
     duration: TimeConversion.millisecondsToDuration(Math.max(stopMs - startMs, 0)),
     ...(message !== undefined ? { message } : {}),
-    // `exception` is never set (this task's spec, decision 7): `Exception.
+    // `exception` is never set: `Exception.
     // type` is required and record/receipt only ever carry a message, never
     // a type string worth reporting as fact.
   };
@@ -159,8 +158,8 @@ export interface MappedTestStep {
   readonly testStep: TestStep;
   readonly testStepStarted: TestStepStarted;
   readonly testStepFinished: TestStepFinished;
-  /** Emitted between `testStepStarted` and `testStepFinished` (this task's
-   * spec, decision 9 — that's what cucumber's own runner does). */
+  /** Emitted between `testStepStarted` and `testStepFinished` — that's
+   * what cucumber's own runner does. */
   readonly attachments: readonly MessagesAttachmentPlan[];
 }
 
@@ -183,8 +182,8 @@ function mapPickleSteps(
       stopMs = Date.parse(receipt.finished_at);
     } else {
       // Same zero-width-pinned-to-previous-stop rule as
-      // src/report/allure/map-scenario.ts:483-496 (this task's spec,
-      // decision 8: it would be a bug for the two emitters to show
+      // src/report/allure/map-scenario.ts:483-496 (it would be a bug for
+      // the two emitters to show
       // different timelines built from the same record).
       startMs = previousStopMs;
       stopMs = previousStopMs;
@@ -201,7 +200,7 @@ function mapPickleSteps(
       testStep: {
         id: testStepId,
         // `stepDefinitionIds`/`stepMatchArgumentsLists` deliberately never
-        // set (this task's spec, decision 7) — omitted keys, not `undefined`
+        // set — omitted keys, not `undefined`
         // ones, since `JSON.stringify` treats the two identically for NDJSON
         // output.
         ...(pickleStepId !== undefined ? { pickleStepId } : {}),
@@ -222,9 +221,9 @@ function mapPickleSteps(
   });
 }
 
-// `hookId` is now a resolver, not a single fixed string (t7-afterstep-
-// consumers task spec, item 1): a "before"/"after" call site still always
-// returns the same id (one Hook definition, same as before this change),
+// `hookId` is a resolver, not a single fixed string: a "before"/"after"
+// call site still always
+// returns the same id (one Hook definition for the whole run),
 // but an "after_step" call site needs a different Hook id per `step_index`
 // (see `mapScenario`'s own AfterStep section below for why: cucumber-
 // messages has no field on `TestStep` to carry "which step" other than the
@@ -242,9 +241,8 @@ function mapHookSteps(
     const testStepId = newId();
     const attachments = declaredAttachmentPlans(hook.declared, evidenceDir, testCaseStartedId, testStepId);
     // Before-hook = scenario start, after-hook (both "after" and
-    // "after_step") = scenario finish, all zero-width (this task's spec,
-    // decision 8, extended by t7-afterstep-consumers task spec, item 1 to
-    // "after_step" — record.json carries no per-hook timestamp of its own,
+    // "after_step") = scenario finish, all zero-width (record.json carries
+    // no per-hook timestamp of its own,
     // the same known limit src/report/allure/emitter.ts's own header
     // documents, and the same collapse src/report/allure/map-scenario.ts's
     // own `mapHooks` already makes for "after_step").
@@ -267,12 +265,11 @@ function mapHookSteps(
 }
 
 /** A `Hook` envelope this scenario is the first to need, alongside which
- * run-wide slot it fills (this task's spec, decision 6: created lazily, on
+ * run-wide slot it fills (created lazily, on
  * first need) — `hookIds.before`/`hookIds.after` for `"before"`/`"after"`,
- * or `hookIds.afterStep[stepIndex]` for `"after_step"` (t7-afterstep-
- * consumers task spec, item 1: one Hook definition per distinct
- * `step_index`, not one for the whole run, since each needs its own
- * `AfterStep[<index>]` name). */
+ * or `hookIds.afterStep[stepIndex]` for `"after_step"` (one Hook definition
+ * per distinct `step_index`, not one for the whole run, since each needs
+ * its own `AfterStep[<index>]` name). */
 export type NewHookEnvelope =
   | { readonly type: "before" | "after"; readonly hook: Hook }
   | { readonly type: "after_step"; readonly stepIndex: number; readonly hook: Hook };
@@ -286,12 +283,12 @@ export interface MapScenarioInput {
   readonly receipts: ReadonlyMap<string, Receipt | null>;
   readonly pickle: Pickle;
   readonly newId: () => string;
-  /** The `Hook` id(s) already assigned earlier in this run (this task's
-   * spec, decision 6) — `undefined`/absent means not yet assigned; this call
+  /** The `Hook` id(s) already assigned earlier in this run — `undefined`/
+   * absent means not yet assigned; this call
    * then allocates one via `newId` and returns it in `newHooks` for the
    * caller (emitter.ts) to remember for every later scenario.
-   * `afterStep` is keyed by `step_index` (t7-afterstep-consumers task
-   * spec, item 1) — one id per index, not one for the whole run, since each
+   * `afterStep` is keyed by `step_index` — one id per index, not one for
+   * the whole run, since each
    * index gets its own `AfterStep[<index>]`-named Hook. */
   readonly hookIds: {
     readonly before?: string;
@@ -306,9 +303,8 @@ export interface MappedScenario {
   readonly testCaseStarted: TestCaseStarted;
   readonly testCaseFinished: TestCaseFinished;
   /** In envelope order: before-hook test steps, then pickle-step test steps,
-   * then after_step-hook test steps, then after-hook test steps (this
-   * task's spec, decision 7, extended by t7-afterstep-consumers task spec,
-   * item 1) — also exactly `testCase.testSteps`' own order. `after_step`
+   * then after_step-hook test steps, then after-hook test steps — also
+   * exactly `testCase.testSteps`' own order. `after_step`
    * sits before `after`, not after it, even though both collapse to the
    * same zero-width `scenarioStopMs` instant (this file's own `mapHookSteps`
    * comment): every AfterStep hook actually finishes, in real execution,
@@ -345,17 +341,17 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     });
   }
 
-  // AfterStep (t7-afterstep-consumers task spec, item 1): one Hook
+  // AfterStep: one Hook
   // definition per distinct `step_index`, created lazily and reused across
   // the run the same way before/after are (`hookIds.afterStep`, threaded in
   // by emitter.ts) — not folded onto the existing "after" Hook id, since
   // that would give every AfterStep occurrence the same "After" name and
-  // erase exactly the fact this task exists to stop dropping (which step it
+  // erase the one fact this preserves (which step it
   // ran after). `type: HookType.AFTER_TEST_STEP` is the protocol's own
   // existing concept for a step-level hook (messages.d.ts's `HookType`
   // enum) — using it, rather than reusing `AFTER_TEST_CASE`, is not "a new
-  // concept on the cucumber-messages side" (the thing this task's spec rules
-  // out); it is the concept the protocol already ships for exactly this
+  // concept on the cucumber-messages side"; it is the concept the protocol
+  // already ships for exactly this
   // case. `Hook.name` still folds the index in (`AfterStep[<index>]`, same
   // as src/report/allure/map-scenario.ts's own `mapHooks`) because
   // `TestStep` itself has no field of its own to carry "which step" — only

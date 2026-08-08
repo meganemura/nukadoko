@@ -1,9 +1,9 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-// Responsibility: the "declared" bucket (m2d-allure-shim task spec, decisions
-// 2-3, 5) — what a step or its glue *reported about itself* through the
-// allure-js runtime shim (src/compat/allure-runtime.ts) or a compat World's
+// Responsibility: the "declared" bucket — what a step or its glue
+// *reported about itself* through the allure-js runtime shim
+// (src/compat/allure-runtime.ts) or a compat World's
 // own `this.attach`/`log`/`link` channel (src/compat/world.ts), as opposed to
 // `observed`/`used`/`world` (src/context/observed.ts, src/context/used.ts,
 // src/compat/world-instrumentation.ts), which the harness itself measures.
@@ -16,8 +16,8 @@ import path from "node:path";
 // hook, before each step) — the same "one object, mutable boundary" shape
 // src/context/create-context.ts's own `httpLogDir` already uses. That one
 // object reaches its two writers two different ways, both landing on the
-// identical instance (this task's spec, item 2's kind-independence requirement):
-// world.ts gets it passed directly, as a plain constructor parameter
+// identical instance: world.ts gets it passed directly, as a plain
+// constructor parameter
 // (`instantiateWorldForPickle`'s own `declaredCollector` argument) — a
 // directly-passed object reference has no module-identity concerns, unlike
 // a module-level variable would (world.ts is loaded through discovery's own
@@ -33,11 +33,10 @@ import path from "node:path";
 //
 // Concurrency note: the active pointer is a genuine `globalThis`-adjacent
 // singleton — two `runRun()` calls active at once in the *same process*
-// would clobber each other's active collector.
-// vitest's default worker-per-file isolation keeps this repo's own test
-// suite safe;
-// an in-process concurrent `nuka run` would need a different mechanism (e.g.
-// `AsyncLocalStorage`) — out of scope for this slice.
+// would clobber each other's active collector. vitest's default
+// worker-per-file isolation keeps this repo's own test suite safe; an
+// in-process concurrent `nuka run` would need a different mechanism (e.g.
+// `AsyncLocalStorage`), which this module doesn't provide.
 
 export interface DeclaredLabel {
   readonly name: string;
@@ -56,8 +55,7 @@ export interface DeclaredParameter {
 }
 
 /** The receipt's own `declared` shape (src/receipt/types.ts) — every field
- * omitted when empty, the whole object omitted when every field is (this
- * task's spec, decision 5: omit the whole object when every field is empty). */
+ * omitted when empty, the whole object omitted when every field is. */
 export interface DeclaredSnapshot {
   attachments?: string[];
   labels?: DeclaredLabel[];
@@ -77,9 +75,9 @@ export interface DeclaredCollector {
   recordLog(text: string): void;
   /** Writes `content` under the current boundary's directory as `baseName`
    * (sanitized) + `extension` (already normalized, may be `""`), appending
-   * `-2`, `-3`, ... on a name collision within the same boundary (this
-   * task's spec, decision 3: a name collision gets a sequence number), then records the resulting
-   * file name into this boundary's `attachments` tally. A no-op before the
+   * `-2`, `-3`, ... on a name collision within the same boundary, then
+   * records the resulting file name into this boundary's `attachments`
+   * tally. A no-op before the
    * first `beginStep()` ever runs (defensive; every real caller runs inside
    * a step or hook, which src/run/run-scenario.ts always begins first). */
   recordAttachment(baseName: string, content: Buffer, extension: string): void;
@@ -185,9 +183,9 @@ const EXTENSION_BY_MEDIA_TYPE: Readonly<Record<string, string>> = {
   "image/svg+xml": ".svg",
 };
 
-/** A best-effort file extension for World's own `attach(data, mediaType)`
- * (this task's spec, item 4) — unlike the allure facade's `attachment()`,
- * cucumber-js's own `this.attach` never carries an explicit `fileExtension`,
+/** A best-effort file extension for World's own `attach(data, mediaType)` —
+ * unlike the allure facade's `attachment()`, cucumber-js's own `this.attach`
+ * never carries an explicit `fileExtension`,
  * so this is inferred from a short, common-case media-type table; anything
  * not listed gets no extension rather than a guess. */
 export function extensionForMediaType(mediaType: string): string {

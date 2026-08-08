@@ -14,9 +14,8 @@ import type { ErrorKind, PollRecord, Receipt } from "../../receipt/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
-// Responsibility: the pure transform at the center of this module (allure-
-// step-as-test task spec, decision 5: "keep the mapping decision in one
-// identifiable place") — `mapStep` turns one pickle step's own record,
+// Responsibility: the pure transform at the center of this module, kept in
+// one identifiable place — `mapStep` turns one pickle step's own record,
 // receipt, and gherkin context into one Allure *test* (not a child of one),
 // `mapHooks` turns a scenario's own before/after hooks into fixtures, and
 // `mapScenarioEvidence` turns whatever browser evidence belongs to the
@@ -30,7 +29,7 @@ import { contentTypeForFileName } from "../media-type.js";
 // only place that turns the plain data these functions return into actual
 // `ReporterRuntime` calls.
 //
-// **Step = test, not scenario = test** (this task's spec, decision 1). This
+// **Step = test, not scenario = test.** This
 // is the one thing to change to revert that choice later: `mapStep` is the
 // function whose *output shape* ("this much data, this much status, these
 // attachments — one unit") encodes it. Reverting to scenario = test means
@@ -40,9 +39,9 @@ import { contentTypeForFileName } from "../media-type.js";
 // logic (parameters, attachments, timelines, labels) does not need to
 // change, only how many Allure tests the result becomes.
 //
-// **Why this module never fills in a `historyId`, and never will** (this
-// task's spec, decision 4 — read this before "fixing" a report that looks
-// like it has no history): a step has no identity that survives a run.
+// **Why this module never fills in a `historyId`, and never will** (read
+// this before "fixing" a report that looks like it has no history): a step
+// has no identity that survives a run.
 // Text repeats (two steps can share the exact same wording), position
 // shifts (an edit anywhere earlier in the feature file moves every line
 // number after it), and occurrence count breaks under duplicate text the
@@ -91,7 +90,7 @@ export interface MappedParameter {
    * @allurereport/core's own historyId computation: a `mode: "hidden"`
    * parameter is hidden from the report's own UI but still folds into
    * `historyId`, unlike `excluded: true`, which drops out of the hash
-   * entirely — this module's own header, decision 4). A plain string
+   * entirely — this module's own header). A plain string
    * literal, not allure-js-commons' own `ParameterMode` enum import: that
    * type is itself already `"hidden" | "masked" | "default"`, a plain
    * string union, so this narrower field is directly assignable to it with
@@ -100,16 +99,17 @@ export interface MappedParameter {
   readonly mode?: "hidden";
 }
 
-/** A child step nested under a mapped step/hook (p2-allure-measurement task
- * spec, decision: widened from `{ name }` alone) — a declared log line
+/** A child step nested under a mapped step/hook (widened from a bare
+ * `{ name }` shape) — a declared log line
  * (`mapDeclared`, always zero-width, `startMs === stopMs`, `"passed"`) or one
  * entry of a step's own `sections`/`polls` timeline (`mapTimelineChildSteps`,
  * below), which carry their own real duration and outcome. One shape for
  * both keeps `writeChildSteps` (emitter.ts) from needing to know which kind
  * of child step it is rendering. Nests directly under a step's own test now
- * (this task's spec, decision 1) — one level shallower than when a step was
- * itself a child of the scenario's own test (this task's spec's own written
- * facts: "child step は1段浅くなるだけで成立する"). */
+ * — one level shallower than when a step was itself a child of the
+ * scenario's own test. Verified this still works: parameters and errors are
+ * still preserved, and the lost nesting level is carried by Allure's own
+ * breadcrumb instead. */
 export interface MappedChildStep {
   readonly name: string;
   readonly startMs: number;
@@ -133,15 +133,15 @@ export type MappedAttachment =
       readonly fileExtension: string;
     };
 
-/** `type` stays the closed `"before" | "after"` pair unchanged (t7-compat-
- * status-afterstep task spec, item 2-6) even though `record.hooks[].type`
+/** `type` stays the closed `"before" | "after"` pair unchanged even though
+ * `record.hooks[].type`
  * itself now also has `"after_step"` — allure-js-commons' own `FixtureType`
  * is that exact same closed union (no third kind exists to map onto), and
- * this task's spec is explicit that the Allure side gets no new concept: an
+ * the Allure side gets no new concept: an
  * `"after_step"` record hook still becomes an `"after"` fixture, just named
  * so its own step is readable from the report (`mapHooks`, below). Also
- * doubles as `mapScenarioEvidence`'s own synthetic "after" fixture shape
- * (this task's spec) — same fields, same emitter.ts rendering path, no
+ * doubles as `mapScenarioEvidence`'s own synthetic "after" fixture shape —
+ * same fields, same emitter.ts rendering path, no
  * second type needed for a fixture that happens not to come from a real
  * hook. */
 export interface MappedHook {
@@ -155,8 +155,8 @@ export interface MappedHook {
   readonly childSteps: MappedChildStep[];
 }
 
-/** One step, mapped onto everything its own Allure test needs (this task's
- * spec, decision 1: step = test) — the union of what used to be a step (a
+/** One step, mapped onto everything its own Allure test needs (step = test)
+ * — the union of what used to be a step (a
  * child of the scenario's own test) and a test (the scenario's own test
  * itself), now the same thing. `featureName`/`description` exist per step
  * only because there is no longer a shared scenario-level test to hold them
@@ -178,10 +178,10 @@ export interface MappedStepTest {
 }
 
 export interface MapStepInput {
-  /** This run's own id (m4a-run-provenance task spec) — folded into
-   * `identityParameters` below (this task's spec, decision 4), never into
-   * `fullName` (which stays a human-readable identifier, decision 4's own
-   * words: "run 固有の値を fullName に混ぜないこと"). */
+  /** This run's own id — folded into
+   * `identityParameters` below, never into
+   * `fullName` (which stays a human-readable identifier: a run-specific
+   * value must never be mixed into it). */
   readonly runId: string;
   /** This pickle's own scenario id (src/run/scenario-id.ts) — folded into
    * `identityParameters` below the same way `runId` is, so two scenarios
@@ -196,7 +196,7 @@ export interface MapStepInput {
    * just persisted for this step, or `null` for a step with no receipt of
    * its own at all (skipped, undefined, ambiguous, or a never-began
    * refusal) — never a receipt that exists on disk but could not be read
-   * back: this task's spec's own seam (`pushStepRecord`) hands the caller
+   * back: `pushStepRecord`'s own seam hands the caller
    * the object it already has, so there is nothing to re-read. */
   readonly receipt: Receipt | null;
   /** This step's own 0-based position in both `record.steps` and
@@ -359,16 +359,16 @@ function buildExampleParameters(doc: GherkinDocument, pickle: Pickle): MappedPar
   return headers.map((name, index) => ({ name, value: values[index] ?? "" }));
 }
 
-// --- tags -> labels (this task's spec, decision 6) ---
+// --- tags -> labels ---
 // `@allure.label.<name>:<value>` / `@allure.label.<name>=<value>` resolve to
 // a first-class label; `@allure.id:<v>` / `@allure.id=<v>` resolve to the
 // `ALLURE_ID` label ("ALLURE_ID" is the literal string value allure-js-
 // commons' own `LabelName.ALLURE_ID` enum member holds — spelled out here
 // rather than importing the enum, since this module imports nothing from
 // allure-js-commons). Anything else passes through as a raw `tag` label. A
-// tag resolves to exactly one of the three, never more than one, so
-// "resolved tags never also appear as a raw `tag` label" (this task's spec)
-// falls out of this loop for free rather than needing a second filtering
+// tag resolves to exactly one of the three, never more than one, so a
+// resolved tag never also appearing as a raw `tag` label falls out of this
+// loop for free rather than needing a second filtering
 // pass.
 
 const ALLURE_LABEL_TAG = /^@allure\.label\.([^:=]+)[:=](.+)$/;
@@ -462,7 +462,7 @@ function mapDeclared(
   // outcome lands in when its declared value differs run to run — the same
   // historyId behavior classic allure-cucumberjs has for its own step
   // parameters, carried through here rather than suppressed. (This is
-  // already moot for a step's own test, this task's spec, decision 4: every
+  // already moot for a step's own test: every
   // step's own `identityParameters` already force `historyId` apart on
   // their own — a declared parameter's participation is unchanged, not the
   // thing doing the isolating.)
@@ -482,7 +482,7 @@ interface Outcome {
 }
 
 /** `receipt` is exactly what the caller already has for this step — never a
- * disk read (this task's spec, decision 2; `MapStepInput.receipt`'s own doc
+ * disk read (`MapStepInput.receipt`'s own doc
  * comment) — so, unlike the scenario = test design this replaced, there is
  * no longer an "unreadable receipt.json" case to fall back for: `receipt`
  * is `null` exactly when `step.receipt` is `null` (a step that never began
@@ -697,7 +697,7 @@ function pageEventCount(entries: readonly unknown[] | undefined, truncatedTotal:
   return truncatedTotal !== undefined ? `${entries.length} of ${truncatedTotal}` : String(entries.length);
 }
 
-// --- one step -> one Allure test (this task's spec, decision 1) ---
+// --- one step -> one Allure test ---
 
 export function mapStep(input: MapStepInput): MappedStepTest {
   const {
@@ -829,8 +829,8 @@ export function mapStep(input: MapStepInput): MappedStepTest {
         path: joinRelative(receipt.evidence.dir, screenshot.file),
       });
     }
-    // Application-specific evidence `evidence.attach`/`.path` produced (P9
-    // task spec) — same path-attachment shape as trace/screenshots above,
+    // Application-specific evidence `evidence.attach`/`.path` produced —
+    // same path-attachment shape as trace/screenshots above,
     // `name` kept as the step's own. `contentType` is guessed from `file`'s
     // own extension; an unrecognized extension falls back to
     // `application/octet-stream` rather than a guess this module cannot
@@ -859,7 +859,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
   const name = keyword !== undefined ? `${keyword}${record.text}` : record.text;
 
   // This test's own identity-breaking parameters — see this module's own
-  // header for the full reasoning (this task's spec, decision 4). `run`
+  // header for the full reasoning. `run`
   // alone already keeps two `nuka run` invocations apart; `scenario` keeps
   // two scenarios sharing one run apart (including two rows of one Scenario
   // Outline, which share one gherkin name); `step` keeps two steps sharing
@@ -885,7 +885,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     { name: "env", value: environment },
     ...declared.labels,
     // This step's own outcome, direct — no scenario-wide "first failure"
-    // search needed any more (this task's spec, decision 1): every failing
+    // search needed any more: every failing
     // step now gets its own `nukadoko.failure` label and its own
     // `statusDetails.message`, on its own test, where the old scenario =
     // test design could only ever mark the first failure in the whole
@@ -918,7 +918,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
   };
 }
 
-// --- hooks -> fixtures (this task's spec, decision 1: unchanged from
+// --- hooks -> fixtures (unchanged from
 // before — hooks stay fixtures, mapped once the whole scenario is over) ---
 
 interface HookMapping {
@@ -930,8 +930,8 @@ interface HookMapping {
    * step or test does). A hook's own declared links and labels, unlike
    * parameters, have no home any more: the old scenario = test design
    * bubbled them onto the one scenario-wide test, but by the time a hook is
-   * even mapped (this task's spec, decision 1: scenario completion, well
-   * after every step's own test is already written to disk — decision 2),
+   * even mapped (scenario completion, well
+   * after every step's own test is already written to disk),
    * there is no test left to reach, and a fixture has no `links`/`labels`
    * field in the Allure model at all to hold them instead. Dropped, not
    * silently miscounted: attachments and log lines a hook declares still
@@ -1004,12 +1004,12 @@ export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenar
 // screenshots` — in practice always at most one, `final.png`, taken once at
 // `dispose()`) and the legacy `evidence.trace` field belong to the scenario
 // as a whole, not any one step. The old scenario = test design attached
-// both directly to the scenario's own test; there is no such test any more
-// (this task's spec, decision 1), and by the time this evidence is even
+// both directly to the scenario's own test; there is no such test any more,
+// and by the time this evidence is even
 // known (`dispose()` runs after every step, so this is only ever called at
 // scenario completion, the same `endScenario` moment `mapHooks` above is
-// called from) every step's own test has already been written to disk
-// (decision 2) — nothing can retroactively attach to one. A dedicated,
+// called from) every step's own test has already been written to disk —
+// nothing can retroactively attach to one. A dedicated,
 // clearly-named synthetic fixture keeps this evidence visible without
 // folding it into a *real* hook's own fixture, which would misattribute
 // where it actually came from.

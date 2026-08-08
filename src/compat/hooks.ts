@@ -1,45 +1,43 @@
-// Responsibility: Before/After hook registration (m2b-compat-execution task
-// spec, item 5) — the same registration-buffer shape as src/compat/
-// registry.ts's Given/When/Then (a step file's top-level call pushes onto a
-// module-level array; src/discover/discover-steps.ts reads it back through
-// the same scoped tsx import, for the same module-identity reason that
-// file's own header documents), except a hook is never attributed to a
-// file: a Before/After hook is a property of the whole discovery/run, not
-// of the vocabulary, so there is nothing here for `nuka steps`/`nuka check`
-// to list or duplicate-detect. `getRegisteredHooks()` is read exactly once,
-// at the very end of a discovery run; the buffer is never drained mid-run —
-// each discovery run gets its own module instance (tsx's per-run namespace,
-// same as registry.ts), so a fresh, empty buffer is what every run already
-// starts with.
+// Responsibility: Before/After hook registration — the same registration-
+// buffer shape as src/compat/registry.ts's Given/When/Then (a step file's
+// top-level call pushes onto a module-level array; src/discover/discover-
+// steps.ts reads it back through the same scoped tsx import, for the same
+// module-identity reason that file's own header documents), except a hook
+// is never attributed to a file: a Before/After hook is a property of the
+// whole discovery/run, not of the vocabulary, so there is nothing here for
+// `nuka steps`/`nuka check` to list or duplicate-detect. `getRegisteredHooks()`
+// is read exactly once, at the very end of a discovery run; the buffer is
+// never drained mid-run — each discovery run gets its own module instance
+// (tsx's per-run namespace, same as registry.ts), so a fresh, empty buffer
+// is what every run already starts with.
 //
-// m21b-compat-execution task spec, items 1 and 3: `HookOptions.timeout` and
-// `HookParameter` are added here (this module still only *records* what was
-// called — enforcing the timeout and actually building a `HookParameter` at
-// call time are src/run/run-scenario.ts's job, same split as
-// src/compat/registry.ts's own `CompatStepOptions.timeout`/`timeoutMs`).
+// `HookOptions.timeout` and `HookParameter` are added here (this module
+// still only *records* what was called — enforcing the timeout and
+// actually building a `HookParameter` at call time are
+// src/run/run-scenario.ts's job, same split as src/compat/registry.ts's own
+// `CompatStepOptions.timeout`/`timeoutMs`).
 //
-// t7-compat-status-afterstep task spec: `AfterStep` is added — the compat
-// audit that drove this task counted it once, in one real-world repo, but an
-// ESM named import that misses one name drops the whole `import { ... }`
-// statement's file, so even one occurrence is a full file's worth of real
-// damage. Registration form is deliberately identical to `Before`/`After`
-// (same three call shapes, same tag-expression subset, same `registerHook`)
-// — this task's spec is explicit that `AfterStep` invents no new registration
-// vocabulary of its own.
+// `AfterStep` is added: the compat audit counted it once, in one real-world
+// repo, but an ESM named import that misses one name drops the whole
+// `import { ... }` statement's file, so even one occurrence is a full
+// file's worth of real damage. Registration form is deliberately identical
+// to `Before`/`After` (same three call shapes, same tag-expression subset,
+// same `registerHook`): `AfterStep` invents no new registration vocabulary
+// of its own.
 
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 
-/** `"after_step"` added (t7-compat-status-afterstep task spec) — `AfterStep`
- * below, alongside the pre-existing `Before`/`After`. Registration is
- * identical for all three (`registerHook`, this file); only *execution*
- * (src/run/run-scenario.ts) treats `"after_step"` differently, since it
- * runs once per executed pickle step rather than once per scenario. */
+/** `"after_step"` — for `AfterStep`, alongside the pre-existing `Before`/
+ * `After`. Registration is identical for all three (`registerHook`, this
+ * file); only *execution* (src/run/run-scenario.ts) treats `"after_step"`
+ * differently, since it runs once per executed pickle step rather than
+ * once per scenario. */
 export type HookType = "before" | "after" | "after_step";
 
 /**
- * cucumber-js's own `ITestCaseHookParameter` shape (m21b-compat-execution
- * task spec, item 3) — the argument every Before/After hook now receives as
- * its first parameter. Real-world glue destructures this directly (e.g.
+ * cucumber-js's own `ITestCaseHookParameter` shape — the argument every
+ * Before/After hook now receives as its first parameter. Real-world glue
+ * destructures this directly (e.g.
  * `Before(function ({ pickle }) {...})`, 10 call sites across 4 repos per
  * the compat audit); previously nukadoko called every hook with zero
  * arguments, so that destructuring crashed outright, and a plain
@@ -57,17 +55,17 @@ export interface HookParameter {
   readonly testCaseStartedId: string;
   /** After-hook and AfterStep-hook only (cucumber-js itself never sets this
    * for Before) — for After, the scenario's own outcome so far; for
-   * AfterStep (t7-compat-status-afterstep task spec), that one step's own
-   * outcome, not the scenario's. `status` reuses cucumber's own `Status`
-   * enum's *string values* (`"PASSED"`/`"FAILED"`) — and, as of this task,
-   * `nukadoko/compat` also re-exports that exact enum, under the same name,
-   * as `Status` (src/compat/index.ts, re-exporting `@cucumber/messages`'s
-   * `TestStepResultStatus` verbatim), so glue written as
-   * `result.status === Status.FAILED` now imports and compares correctly.
+   * AfterStep, that one step's own outcome, not the scenario's. `status`
+   * reuses cucumber's own `Status` enum's *string values*
+   * (`"PASSED"`/`"FAILED"`) — and `nukadoko/compat` also re-exports that
+   * exact enum, under the same name, as `Status` (src/compat/index.ts,
+   * re-exporting `@cucumber/messages`'s `TestStepResultStatus` verbatim), so
+   * glue written as `result.status === Status.FAILED` now imports and
+   * compares correctly.
    * This comment used to claim `@cucumber/cucumber` doesn't export `Status`
-   * either — that was simply wrong (cucumber-js does; the compat audit that
-   * drove this task counted that exact `result.status === Status.FAILED`
-   * shape 3 times, across 3 real-world repos). The equally common
+   * either — that was simply wrong (cucumber-js does; the compat audit
+   * counted that exact `result.status === Status.FAILED` shape 3 times,
+   * across 3 real-world repos). The equally common
    * `result.status === "FAILED"` string comparison still means what it
    * always meant, unaffected by the enum's own re-export. */
   readonly result?: { readonly status: "PASSED" | "FAILED" };
@@ -77,10 +75,10 @@ export interface HookParameter {
   readonly willBeRetried: false;
 }
 
-/** `HookParameter` under cucumber-js's own name (t5-compat-types task spec;
- * the compat audit found `ITestCaseHookParameter` appears in 2/2
- * real-world repos as a bare type import) — the same `tsc`-only gap
- * `IWorldOptions` closed for world.ts, for the same reason (see that alias's
+/** `HookParameter` under cucumber-js's own name (the compat audit found
+ * `ITestCaseHookParameter` appears in 2/2 real-world repos as a bare type
+ * import) — the same `tsc`-only gap `IWorldOptions` closed for world.ts,
+ * for the same reason (see that alias's
  * own doc comment). `HookParameter` above already documents that it was
  * built to match this exact shape, so this alias adds a name, not a new
  * definition. */
@@ -99,8 +97,8 @@ export type ITestCaseHookParameter = HookParameter;
  * `HookParameter` still satisfies this type (TypeScript lets a function
  * value ignore trailing parameters), so a plain `Before(function () {...})`
  * keeps typechecking unchanged. The trailing `...rest: any[]` exists for the
- * opposite case (this task's spec, item 5): real done-callback-style glue
- * declares one *more* parameter than nukadoko ever passes (e.g. `function
+ * opposite case: real done-callback-style glue declares one *more*
+ * parameter than nukadoko ever passes (e.g. `function
  * (hookParameter, done) {...}`) — without a rest tail here, TypeScript's own
  * static arity check would reject that shape outright, before
  * src/run/run-scenario.ts's own runtime arity check ever got a chance to
@@ -117,9 +115,9 @@ export interface HookOptions {
    * `not @tag` (src/compat/tag-expression.ts). `undefined` (the plain
    * `Before(fn)`/`After(fn)` form) applies to every scenario. */
   readonly tags?: string;
-  /** cucumber-js's own per-hook timeout override, in milliseconds (m21b-
-   * compat-execution task spec, item 1: 14 real-world call sites, 3 repos,
-   * previously silently dropped — `HookOptions` only ever had `tags`).
+  /** cucumber-js's own per-hook timeout override, in milliseconds (the
+   * compat audit found 14 real-world call sites, 3 repos, previously
+   * silently dropped — `HookOptions` only ever had `tags`).
    * Enforced by src/run/run-scenario.ts; this module only records it (see
    * this file's own header). */
   readonly timeout?: number;
@@ -138,9 +136,8 @@ const hookBuffer: HookRegistration[] = [];
 let hookCounter = 0;
 
 /** Same "is this a plain options object" guard as src/compat/registry.ts's
- * `isStepOptionsObject` (m21b-compat-execution task spec, item 1: align the
- * implementation approach too) — not a function, and not `null`/an array either, neither of
- * which this registration API accepts as an options object. */
+ * `isStepOptionsObject` — not a function, and not `null`/an array either,
+ * neither of which this registration API accepts as an options object. */
 function isHookOptionsObject(value: HookOptions | HookFn | string): value is HookOptions {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -177,9 +174,9 @@ function registerHook(
   const unknownKeys = Object.keys(optionsOrFn).filter((key) => key !== "tags" && key !== "timeout");
   if (unknownKeys.length > 0) {
     // Same "a door that stays quiet is worse than one that's briefly noisy"
-    // reasoning as src/compat/registry.ts's own unknown-key check (m21b-
-    // compat-execution task spec, item 1): `{ timeout }` itself used to
-    // vanish silently before this task closed that case; any *other*
+    // reasoning as src/compat/registry.ts's own unknown-key check: before
+    // `HookOptions.timeout` was added, `HookOptions` only read `tags`, so a
+    // `{ timeout }` key passed alongside it vanished silently; any *other*
     // unrecognized key gets the same up-front treatment rather than
     // becoming a future silent gap of its own.
     throw new Error(
@@ -225,9 +222,9 @@ export function After(optionsOrFn: HookOptions | HookFn | string, fn?: HookFn): 
 }
 
 /** `AfterStep(fn)`: attempted after every step that actually ran in this
- * scenario (t7-compat-status-afterstep task spec, item 2-3) — not after a
- * step this scenario skipped because an earlier one already failed: a
- * skipped step never began, so there is no "after" for this hook to run at.
+ * scenario — not after a step this scenario skipped because an earlier one
+ * already failed: a skipped step never began, so there is no "after" for
+ * this hook to run at.
  * See src/run/run-scenario.ts's own `runAfterStepHooks` for where that
  * boundary is actually drawn at execution time (this file only registers). */
 export function AfterStep(fn: HookFn): void;

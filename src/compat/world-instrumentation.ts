@@ -3,8 +3,8 @@ import { formatValidationIssues } from "../binding/format-issues.js";
 import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.js";
 
 // Responsibility: the wrap mechanism behind "measurement is always on,
-// declaration is opt-in" for a compat World instance (m2c-typed-world task
-// spec — a throwaway prototype measured this). The measured surface is the
+// declaration is opt-in" for a compat World instance (a throwaway prototype
+// measured this). The measured surface is the
 // instance's own DATA properties only — a class's methods/getters (own or
 // inherited) are left completely alone, and a `#private` field is invisible
 // to this module by construction (it never appears in `Object.keys`/

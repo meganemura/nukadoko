@@ -1,12 +1,12 @@
 import { UnsupportedTagExpressionError } from "./errors.js";
 
-// Responsibility: the v1 subset of Cucumber's tag expression grammar this
-// task's spec (item 5) commits to — a single `@tag`, or its negation
+// Responsibility: the v1 subset of Cucumber's tag expression grammar
+// nukadoko commits to — a single `@tag`, or its negation
 // `not @tag` — applied to a Before/After hook's own `{ tags }` option
 // against one pickle's own tags. Anything else (`and`/`or`/parentheses) is a
 // setup error naming itself unsupported (UnsupportedTagExpressionError),
 // rather than a silent (and possibly wrong) partial match — an explicit
-// refusal beats a silent mismatch (m2b-compat-execution task spec, item 5).
+// refusal beats a silent mismatch.
 
 interface ParsedTagExpression {
   readonly negate: boolean;
@@ -33,11 +33,11 @@ function parseTagExpression(expression: string): ParsedTagExpression {
 /**
  * Validated once, up front, for every registered hook that has a `tags`
  * option (src/cli/run.ts's setup phase) — an unsupported tag expression is a
- * setup failure the same way a `config.parameterTypes` name collision is
- * (this task's spec: the expression's own syntax is either supported or
+ * setup failure the same way a `config.parameterTypes` name collision is:
+ * the expression's own syntax is either supported or
  * not, independent of which pickle a run happens to execute; discovering it
  * only when a matching pickle comes along would make the failure appear to
- * depend on scenario selection, which it doesn't).
+ * depend on scenario selection, which it doesn't.
  * @throws {UnsupportedTagExpressionError}
  */
 export function validateTagExpression(expression: string): void {

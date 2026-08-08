@@ -1,9 +1,8 @@
 // Responsibility: a thin, dependency-free stand-in for cucumber-js's own
-// DataTable class (lead scope addendum to the m2b-compat-execution task
-// spec, 2026-08-02: the migration-door rule is binary, not friction-scaled —
+// DataTable class: the migration-door rule is binary, not friction-scaled —
 // legacy glue calling `table.hashes()` would throw against a raw
 // `string[][]`, which is a working asset breaking on an import switch, and
-// the door forbids that). A compat step whose pickle step carries a Gherkin
+// the door forbids that. A compat step whose pickle step carries a Gherkin
 // table receives an instance of this class as its trailing argument; a
 // typed step is untouched by this file entirely — it keeps receiving the
 // raw `string[][]` it always has, checked by zod (docs/spec.md "Typed

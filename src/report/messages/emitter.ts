@@ -17,8 +17,8 @@ import { readOwnVersion } from "../../version.js";
 import { readReceiptsForRecord } from "../receipts.js";
 import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 
-// Responsibility: the I/O half of this emitter (this task's spec, decision
-// 1) — the only module in src/report/messages/** that touches `node:fs`:
+// Responsibility: the I/O half of this emitter — the only module in
+// src/report/messages/** that touches `node:fs`:
 // NDJSON writes, id generation (the one `IdGenerator.uuid()` instance this
 // run's every id comes from, threaded into map-scenario.ts's pure
 // `mapScenario` as its `newId` argument), and reading each declared file
@@ -28,18 +28,17 @@ import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 // division src/report/allure/emitter.ts already draws against its own
 // map-scenario.ts sibling.
 //
-// Why this emitter exists at all (this task's spec's own "this emitter's
-// role" section):
-// unlike the Allure emitter (nukadoko's own measurement surface), this one
+// Why this emitter exists at all: unlike the Allure emitter (nukadoko's own
+// measurement surface), this one
 // is compat-fidelity only — a migrated team's existing formatter/JUnit
 // CI/HTML report keeps working. receipt internals (validated result,
 // observed, mutates, error.kind) never appear here: `TestStepResult`/
 // `TestStepFinished` are `additionalProperties: false` closed schemas with
-// no place to put them, and this task's spec forbids smuggling them in via
+// no place to put them, and nothing here smuggles them in via
 // a prefix or marker the way the Allure side's `[nukadoko.failure=<kind>]`
-// does.
+// does. This stream stays exactly what cucumber-messages defines.
 //
-// Failure isolation (this task's spec, decision 3): all three public
+// Failure isolation: all three public
 // methods are wrapped in try/catch and never throw. `begin()`'s own failure
 // (including a failed truncate) latches `enabled` false for the rest of
 // this emitter's lifetime — appending onto a stream that was never
@@ -53,8 +52,8 @@ export interface MessagesEmitterOptions {
   readonly stderr: WritableSink;
 }
 
-/** One feature file's own contribution to `begin()` (run-directory-target
- * task spec: a directory-target `nuka run` folds N feature files into this
+/** One feature file's own contribution to `begin()` (a directory-target
+ * `nuka run` folds N feature files into this
  * one run's own single messages stream, so `begin()` needs one of these per
  * file rather than exactly one). */
 export interface MessagesBeginFeatureInput {
@@ -66,7 +65,7 @@ export interface MessagesBeginFeatureInput {
 export interface MessagesBeginInput {
   /** In the exact order `begin()` should write them — cli/run.ts already
    * hands this the same deterministic, byte-order-sorted order its own
-   * pickle loop runs in (run-directory-target task spec, decision 2), so
+   * pickle loop runs in, so
    * this emitter has no ordering decision of its own to make. */
   readonly features: readonly MessagesBeginFeatureInput[];
 }
@@ -80,14 +79,13 @@ export interface MessagesEmitter {
   /** Once, at the start of a run. Writes `meta`, then, per feature in
    * `input.features`'s own order, that feature's `source` /
    * `gherkinDocument` / one `pickle` per selected pickle, then one
-   * `testRunStarted` once every feature has been written (this task's spec,
-   * decision 4; extended to more than one feature by run-directory-target).
+   * `testRunStarted` once every feature has been written.
    * Truncates `output`. */
   begin(input: MessagesBeginInput): void;
-  /** One scenario. Never throws (this task's spec, decision 3). */
+  /** One scenario. Never throws. */
   emitScenario(input: MessagesEmitScenarioInput): void;
   /** Once, at the end of a run. `success` is the run's own exit code, not
-   * this emitter's own health (this task's spec, decision 8). Never
+   * this emitter's own health. Never
    * throws. */
   end(success: boolean): void;
 }
@@ -99,11 +97,9 @@ function errorMessage(error: unknown): string {
 /** Normalizes a root-relative filesystem path to the POSIX separators
  * cucumber-messages `uri` fields use, regardless of which separator the
  * host OS's own `path` produced — a small, deliberate duplicate of
- * src/report/allure/identity.ts's own `toPosixPath` (this task's spec lists
- * only src/report/media-type.ts and src/report/receipts.ts as shared
- * extractions; this one-line helper wasn't one of them, and importing from
+ * src/report/allure/identity.ts's own `toPosixPath`: importing from
  * the allure/ directory would make this emitter — meant to be that
- * directory's sibling, not its dependent — reach sideways into it). */
+ * directory's sibling, not its dependent — reach sideways into it. */
 function toPosixPath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
@@ -111,7 +107,7 @@ function toPosixPath(relativePath: string): string {
 function buildMeta(): Meta {
   return {
     protocolVersion,
-    // `version` on `implementation` (own-version task spec): read via
+    // `version` on `implementation`: read via
     // src/version.ts's readOwnVersion(), which throws if nukadoko's own
     // package.json can't be found or has no string `version` — a packaging
     // bug, not something to guess a fallback for here. Deliberately not
@@ -127,15 +123,15 @@ function buildMeta(): Meta {
     runtime: { name: "node", version: process.versions.node },
     os: { name: process.platform },
     cpu: { name: process.arch },
-    // `ci` omitted (this task's spec, decision 5): detecting it needs a
-    // separate package this task does not add.
+    // `ci` omitted: detecting it needs a
+    // separate package, which nukadoko doesn't add a dependency on for this.
   };
 }
 
 export function createMessagesEmitter(options: MessagesEmitterOptions): MessagesEmitter {
   const newId = IdGenerator.uuid();
   let enabled = false;
-  // `afterStep` added (t7-afterstep-consumers task spec, item 1) — keyed by
+  // `afterStep` — keyed by
   // `step_index`, mirroring `before`/`after` but one id per index rather
   // than one for the whole run (map-scenario.ts's own `MapScenarioInput.
   // hookIds` header explains why).
@@ -150,12 +146,12 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
   }
 
   // A declared file attachment's bytes are read and base64-encoded here
-  // (this task's spec, decision 9: always BASE64-encode, even for text,
+  // (always BASE64-encode, even for text,
   // since either encoding is equally lossless, so no branch is worth
   // adding) — a `"built"` plan (a declared log line) is
   // already a complete `Attachment`, map-scenario.ts's own job, not this
   // one's. A file that can't be read is dropped with a warning; the
-  // scenario's own stream continues (this task's spec, decision 9: drop
+  // scenario's own stream continues (drop
   // just that one attachment and warn).
   function writeAttachment(plan: MessagesAttachmentPlan): void {
     if (plan.kind === "built") {
@@ -191,15 +187,15 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
         appendEnvelope({ meta: buildMeta() });
 
         // One (`source`, `gherkinDocument`, `pickle`*N) group per feature,
-        // in `input.features`'s own order (run-directory-target task spec:
-        // a directory target folds N files into this one stream) — every
+        // in `input.features`'s own order (a directory target folds N
+        // files into this one stream) — every
         // envelope inside one file's own group still uses that one file's
         // own uri, never a later or earlier file's, so a reader joining
-        // `source`/`gherkinDocument`/`pickle` by uri (this task's spec,
-        // decision 4) can never cross two different files by accident.
+        // `source`/`gherkinDocument`/`pickle` by uri can never cross two
+        // different files by accident.
         for (const featureInput of input.features) {
           // `source.uri` is made identical to `pickle.uri`/`gherkinDocument.
-          // uri` by construction (this task's spec, decision 4: a consumer
+          // uri` by construction (a consumer
           // joins the three of them together via this one uri) —
           // `gherkinDocument.uri` first
           // (@cucumber/gherkin's own `Parser.parse` never sets it in this
@@ -214,10 +210,9 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
             appendEnvelope({ source: { uri, data, mediaType: SourceMediaType.TEXT_X_CUCUMBER_GHERKIN_PLAIN } });
           } catch (error) {
             // Feature source unreadable: drop only this feature's own
-            // `source` envelope, not the rest of `begin()` (this task's
-            // spec, decision 4: if it can't be read, warn and drop only the
-            // source envelope — everything else continues, including every
-            // other feature in this loop).
+            // `source` envelope, not the rest of `begin()` — warn and drop
+            // only the source envelope; everything else continues,
+            // including every other feature in this loop.
             warn(`could not read feature source for messages: ${errorMessage(error)}`);
           }
 

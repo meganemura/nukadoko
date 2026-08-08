@@ -24,10 +24,10 @@ import {
 // Responsibility: walk `featuresDir`, import every `.ts`/`.mts`/`.js`/`.mjs`
 // file found -- skipping `node_modules` at any depth, any dot-directory
 // (`.git`, `.nukadoko`, ...), and `.d.ts`/`.d.mts` declarations; see
-// `walkStepFiles`'s own comment for why (p10-step-discovery task spec) --
-// and collect the vocabulary of typed steps by filename, plus (m2a-compat-
-// registry task spec) every compat step and compat `defineParameterType`
-// call any of those files made along the way. Deliberately imports modules
+// `walkStepFiles`'s own comment for why -- and collect the vocabulary of
+// typed steps by filename, plus every compat step and compat
+// `defineParameterType` call any of those files made along the way.
+// Deliberately imports modules
 // to discover them (docs/spec.md "Implementation notes" accepts this:
 // listing the vocabulary requires running each file's top-level code, same
 // as executing it). A default export that isn't a branded Step (e.g. a
@@ -35,8 +35,8 @@ import {
 // and is skipped silently. Two files producing the same typed step name, or
 // two `Given`/`When`/`Then` calls anywhere resolving to the same compat
 // pattern source, are both errors: identity (a file name for typed, a
-// pattern source for compat — m2a-compat-registry task spec, decision 3)
-// must be unique, and a silent last-write-wins would hide a real collision.
+// pattern source for compat) must be unique, and a silent last-write-wins
+// would hide a real collision.
 //
 // Single `register({ namespace })` per discovery run, not per-file
 // `tsImport()`: tsx's `tsImport()` convenience wrapper mints a fresh
@@ -76,18 +76,18 @@ export interface TypedVocabularyEntry {
  * builds a plain cucumber-expression with no named-capture requirement — the
  * migration door's promise — a RegExp is matched as-is); `patternSource` is
  * the display/identity text derived from it. Execution (`fn`) is stored, not
- * called — M2's slice B. */
+ * called here — that happens in src/run/. */
 export interface CompatStepDefinition {
   readonly keyword: CompatKeyword;
   readonly pattern: string | RegExp;
   readonly patternSource: string;
   readonly fn: CompatStepFn;
-  /** From the registration's own `{ timeout }` (m21b-compat-execution task
-   * spec, item 2) — carried through so src/run/run-scenario.ts can actually
+  /** From the registration's own `{ timeout }` — carried through so
+   * src/run/run-scenario.ts can actually
    * enforce it; src/compat/registry.ts only records it (that file's own
    * `CompatStepRegistration.timeoutMs` comment). Previously dropped right
    * here, which is why a `{ timeout }` step never actually timed out despite
-   * A already keeping the value on `CompatStepRegistration`. */
+   * src/compat/registry.ts already keeping the value on `CompatStepRegistration`. */
   readonly timeoutMs?: number;
   readonly registrationOrder: number;
 }
@@ -127,14 +127,13 @@ export interface DiscoveryResult {
   readonly vocabulary: Vocabulary;
   readonly compatParameterTypes: readonly CompatParameterTypeEntry[];
   /** Constructs one pickle's own World — base `World`, or whatever this
-   * run's step files last passed to `setWorldConstructor` (m2b-compat-
-   * execution task spec, item 1) — with `ctx` attached as the runtime bridge
-   * `World.openPage()`/`openRequest()` read from, already wrapped for
-   * measurement + this run's own `defineWorld` schemas (m2c-typed-world task
-   * spec, items 1-2), and its `attach`/`log`/`link` wired to the given
-   * `declaredCollector` (m2d-allure-shim task spec, item 4 — src/run/run-
-   * scenario.ts passes its own per-pickle collector here, directly, for the
-   * module-identity reason src/compat/world.ts's own header explains). Bound
+   * run's step files last passed to `setWorldConstructor` — with `ctx`
+   * attached as the runtime bridge `World.openPage()`/`openRequest()` read
+   * from, already wrapped for measurement + this run's own `defineWorld`
+   * schemas, and its `attach`/`log`/`link` wired to the given
+   * `declaredCollector` (src/run/run-scenario.ts passes its own per-pickle
+   * collector here, directly, for the module-identity reason
+   * src/compat/world.ts's own header explains). Bound
    * to the *exact* module instance this discovery run's own scoped tsx
    * import loaded src/compat/world.ts through (see that file's header for
    * why identity matters here) — callers (src/run/run-scenario.ts) never
@@ -143,21 +142,20 @@ export interface DiscoveryResult {
     ctx: StepContext,
     declaredCollector: DeclaredCollector,
   ) => InstantiatedWorld;
-  /** Every Before/After hook any step file registered during this run
-   * (m2b-compat-execution task spec, item 5) — not attributed to a file
-   * (see src/compat/hooks.ts's header), read once here after every file's
-   * import has finished. */
+  /** Every Before/After hook any step file registered during this run — not
+   * attributed to a file (see src/compat/hooks.ts's header), read once here
+   * after every file's import has finished. */
   readonly compatHooks: readonly HookRegistration[];
   /** Every BeforeAll/AfterAll hook any step file registered during this run
-   * (m22-compat-run-scope task spec, item 2) — same "not attributed to a
-   * file, read once at the end" contract as `compatHooks`, via
-   * src/compat/run-hooks.ts instead. src/cli/run.ts is what actually runs
-   * these (unlike `compatHooks`, which src/run/run-scenario.ts runs per
+   * — same "not attributed to a file, read once at the end" contract as
+   * `compatHooks`, via src/compat/run-hooks.ts instead. src/cli/run.ts is
+   * what actually runs these (unlike `compatHooks`, which
+   * src/run/run-scenario.ts runs per
    * pickle) — a run-scope hook has no pickle to be scoped to. */
   readonly compatRunHooks: readonly RunHookRegistration[];
-  /** `setDefaultTimeout`'s final value for this run (m22-compat-run-scope
-   * task spec, item 1), or `undefined` if it was never called — read once
-   * here, after every file's import has finished, same timing as
+  /** `setDefaultTimeout`'s final value for this run, or `undefined` if it
+   * was never called — read once here, after every file's import has
+   * finished, same timing as
    * `compatHooks` (last call anywhere in this run wins; see
    * src/compat/registry.ts's own header for why "last wins" rather than
    * per-file attribution). `undefined` here must keep meaning "run
@@ -165,9 +163,9 @@ export interface DiscoveryResult {
    * defaulted to cucumber-js's own 5000ms (see `setDefaultTimeout`'s own
    * comment for why). */
   readonly defaultTimeoutMs: number | undefined;
-  /** One entry per file whose `scoped.import()` threw, tolerant mode only
-   * (m21a-compat-gap-detect task spec, decision 1) — always `[]` in the
-   * default (non-tolerant) mode, since that mode rejects on the first such
+  /** One entry per file whose `scoped.import()` threw, tolerant mode only —
+   * always `[]` in the default (non-tolerant) mode, since that mode rejects
+   * on the first such
    * file instead of collecting them. `filePath` is rootDir-relative, matching
    * every other `CheckIssue.file` this run's caller (src/check/analyze.ts)
    * already produces (src/feature/load-features.ts's `relativePath`,
@@ -182,7 +180,7 @@ export interface DiscoveryResult {
    * the nearest `package.json`'s own `"type"`, so importing one the way a
    * `.ts`/`.mts`/`.js`/`.mjs` file is imported below would just be a
    * different, more confusing way to fail. `nuka check`'s
-   * `step-file-unsupported-extension` (p10-step-discovery task spec)
+   * `step-file-unsupported-extension`
    * reports each one by name instead of letting whatever it would have
    * defined resurface as an unexplained `undefined-step`. */
   readonly unsupportedExtensionFiles: readonly string[];
@@ -193,8 +191,8 @@ export interface DiscoveryResult {
    * "did the walk find anything to try": an empty vocabulary is also what a
    * project with real, cleanly-importing support-only files (no
    * `Given`/`When`/`Then`, no `export default defineStep(...)`) produces.
-   * This list is what lets `nuka check`'s `no-step-files-found` (p10-step-
-   * discovery task spec) tell those two apart and name every directory it
+   * This list is what lets `nuka check`'s `no-step-files-found` tell those
+   * two apart and name every directory it
    * walked -- the same "so a reader can tell a finding isn't lying"
    * reasoning as `nuka tend`'s own `scanned:` line (src/cli/tend.ts). */
   readonly walkedFiles: readonly string[];
@@ -221,15 +219,15 @@ interface WalkStepFilesResult {
   readonly unsupportedExtensionFiles: string[];
 }
 
-// Renamed from `walkTsFiles` (p10-step-discovery task spec, scope 2): the
-// old name stopped matching what this function does the moment `.mts`/
-// `.js`/`.mjs` joined `.ts` as files it walks.
+// Named `walkStepFiles`, not `walkTsFiles`: `.mts`/`.js`/`.mjs` join `.ts`
+// as files this function walks, so a name naming only `.ts` would no
+// longer match what it does.
 //
 // `node_modules` and any dot-directory (`.git`, `.nukadoko`, an editor's
 // own `.vscode`, ...) are skipped at every depth, not just featuresDir's
-// own immediate children -- this is a bug fix independent of the extension
-// widening above (p10-step-discovery task spec, scope 1), since a project
-// with `featuresDir: "."` (a real, observed configuration) already walked
+// own immediate children -- this is independent of which extensions are
+// walked, since a project with `featuresDir: "."` (a real, observed
+// configuration) already walked
 // `node_modules` recursively and imported every `.ts` file a dependency
 // shipped, `.d.ts` included, before this function ever considered `.js`.
 // `.d.ts`/`.d.mts` are excluded because a type declaration is never a step
@@ -280,10 +278,9 @@ function walkStepFiles(dir: string): WalkStepFilesResult {
 
 export interface DiscoverStepsOptions {
   /** Default `false`: `discoverSteps` rejects on the first file whose import
-   * fails, the same as before this option existed — `run`/`do`/`steps`/
-   * `init` all stay fail-fast on purpose (m21a-compat-gap-detect task spec:
+   * fails — `run`/`do`/`steps`/`init` all stay fail-fast on purpose:
    * continuing past a broken glue file is dangerous for anything that's
-   * about to *execute*). `true` is `nuka check`'s own mode (src/check/
+   * about to *execute*. `true` is `nuka check`'s own mode (src/check/
    * analyze.ts): a broken file is collected into `importFailures` instead,
    * so the rest of the project can still be discovered and reported on — a
    * migrating suite's normal state is "some glue files are still broken",
@@ -323,9 +320,9 @@ export async function discoverSteps(
       new URL("../compat/registry.js", import.meta.url).href,
       import.meta.url,
     )) as typeof import("../compat/registry.js");
-    // Same identity reasoning as compatRegistry above, extended to World
-    // (m2b-compat-execution task spec, item 1) and Before/After (item 5):
-    // loaded through this run's own scoped import, never a plain top-level
+    // Same identity reasoning as compatRegistry above, extended to World and
+    // Before/After: loaded through this run's own scoped import, never a
+    // plain top-level
     // one, so `setWorldConstructor`/`Before`/`After` calls a step file makes
     // via "nukadoko/compat" land in the exact instances captured here.
     const compatWorld = (await scoped.import(
@@ -336,17 +333,16 @@ export async function discoverSteps(
       new URL("../compat/hooks.js", import.meta.url).href,
       import.meta.url,
     )) as typeof import("../compat/hooks.js");
-    // Same identity reasoning again, for BeforeAll/AfterAll (m22-compat-
-    // run-scope task spec, item 2): loaded through this run's own scoped
-    // import so a step file's `BeforeAll`/`AfterAll` call via
-    // "nukadoko/compat" lands in the exact instance drained below.
+    // Same identity reasoning again, for BeforeAll/AfterAll: loaded through
+    // this run's own scoped import so a step file's `BeforeAll`/`AfterAll`
+    // call via "nukadoko/compat" lands in the exact instance drained below.
     const compatRunHooksModule = (await scoped.import(
       new URL("../compat/run-hooks.js", import.meta.url).href,
       import.meta.url,
     )) as typeof import("../compat/run-hooks.js");
-    // Same identity reasoning again, for `defineWorld` (m2c-typed-world task
-    // spec, item 2) — src/compat/define-world.ts's own registration buffer,
-    // loaded through this run's own scoped import so a step file's
+    // Same identity reasoning again, for `defineWorld` —
+    // src/compat/define-world.ts's own registration buffer, loaded through
+    // this run's own scoped import so a step file's
     // `defineWorld(...)` call via "nukadoko/compat" lands in the exact
     // instance this function drains below.
     const defineWorldModule = (await scoped.import(
@@ -357,9 +353,8 @@ export async function discoverSteps(
     const vocabulary = new Map<string, VocabularyEntry>();
     const compatParameterTypes: CompatParameterTypeEntry[] = [];
     // At most one file's worth of `defineWorld` schemas ever wins — a second
-    // registration, anywhere, is always an error (m2c-typed-world task spec,
-    // item 2: a second call is an error), detected here rather than inside define-
-    // world.ts itself so both offending files can be named
+    // registration, anywhere, is always an error, detected here rather than
+    // inside define-world.ts itself so both offending files can be named
     // (DuplicateWorldDefinitionError), the same reasoning
     // DuplicateCompatStepError already applies to a colliding compat step.
     let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
@@ -376,9 +371,9 @@ export async function discoverSteps(
       // is failing to close: a glue file esbuild elides the import from
       // runs exactly as written, so there is nothing broken to report.
       //
-      // Only the import call itself is inside this try (m21a-compat-gap-
-      // detect task spec, decision 2) — `isStep`, the drains below, and the
-      // duplicate checks they can throw all stay outside it, so they only
+      // Only the import call itself is inside this try — `isStep`, the
+      // drains below, and the duplicate checks they can throw all stay
+      // outside it, so they only
       // ever run once this file's own import has actually succeeded. Putting
       // them inside the same try would let a DuplicateStepError/
       // DuplicateCompatStepError/DuplicateWorldDefinitionError — a cross-file
@@ -398,18 +393,17 @@ export async function discoverSteps(
         // calls sitting in the shared buffers below. Draining and
         // discarding them here, rather than leaving them for the *next*
         // file's own drain, is what keeps this loop's per-file attribution
-        // (the comment above, and m2a-compat-registry task spec decision 3)
-        // from misattributing a dead file's partial registrations to
-        // whichever healthy file happens to import next.
+        // (the comment above) from misattributing a dead file's partial
+        // registrations to whichever healthy file happens to import next.
         compatRegistry.drainCompatSteps();
         compatRegistry.drainCompatParameterTypes();
         defineWorldModule.drainWorldSchemaRegistrations();
         importFailures.push({
           filePath: path.relative(rootDir, filePath),
-          // Passed through verbatim, not re-classified into a nukadoko code
-          // (this task's spec, decision 4): Node's own message already names
-          // the missing export/subpath/package, and reparsing it here would
-          // only add a brittle dependency on Node's exact wording while
+          // Passed through verbatim, not re-classified into a nukadoko code:
+          // Node's own message already names the missing
+          // export/subpath/package, and reparsing it here would only add a
+          // brittle dependency on Node's exact wording while
           // losing information.
           message: error instanceof Error ? error.message : String(error),
         });
@@ -418,8 +412,8 @@ export async function discoverSteps(
 
       const candidate = mod.default;
       if (isStep(candidate)) {
-        // `path.extname` rather than a hardcoded `".ts"` (p10-step-discovery
-        // task spec, scope 2): `walkStepFiles` now hands this loop a mix of
+        // `path.extname` rather than a hardcoded `".ts"`: `walkStepFiles`
+        // hands this loop a mix of
         // `.ts`/`.mts`/`.js`/`.mjs` files, and each one's own extension is
         // exactly what should come off its name, whichever one it is.
         const name = path.basename(filePath, path.extname(filePath));
@@ -430,9 +424,9 @@ export async function discoverSteps(
         vocabulary.set(name, { kind: "typed", name, filePath, step: candidate });
       }
 
-      // Attribute this file's own compat registrations (m2a-compat-registry
-      // task spec, decision 3): drained immediately after this file's own
-      // import completes, before the next file's import can add anything
+      // Attribute this file's own compat registrations: drained immediately
+      // after this file's own import completes, before the next file's
+      // import can add anything
       // else, so whatever is in the buffer right here is exactly — and
       // only — this file's own contribution.
       for (const registration of compatRegistry.drainCompatSteps()) {
@@ -483,8 +477,8 @@ export async function discoverSteps(
       // header, on concurrent-discovery safety): a World constructor/hook isn't
       // attributed to any one file, unlike a compat step, so there is
       // nothing to drain per file — just this run's own final state.
-      // `declaredWorldSchemas` is curried in here (m2c-typed-world task
-      // spec, item 1) so `instantiateWorldForPickle` never needs to reach
+      // `declaredWorldSchemas` is curried in here so
+      // `instantiateWorldForPickle` never needs to reach
       // back into src/compat/define-world.ts's own buffer itself.
       instantiateCompatWorld: (ctx: StepContext, declaredCollector: DeclaredCollector) =>
         compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector),

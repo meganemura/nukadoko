@@ -37,18 +37,18 @@ import { createAtomicWriter } from "./writer.js";
 // Writer plumbing) and the only one that touches the filesystem beyond what
 // the `Writer` itself does (resolving the project name).
 //
-// Three calls per pickle, not one (allure-step-as-test task spec, decisions
-// 1-2): `beginScenario` opens this scenario's own Allure *scope* before its
-// first step runs; `emitStep` writes one step's own *test* to disk the
-// moment that step finishes — never batched to scenario end, the whole
-// point of this task — reading it straight off `ReporterRuntime.startTest`/
+// Three calls per pickle, not one: `beginScenario` opens this scenario's own
+// Allure *scope* before its first step runs; `emitStep` writes one step's
+// own *test* to disk the moment that step finishes — never batched to
+// scenario end, which is the entire point of writing per step rather than
+// per scenario — reading it straight off `ReporterRuntime.startTest`/
 // `writeTest`, which write on call, not on some later flush; `endScenario`
 // maps this scenario's own hooks into fixtures under that same scope, adds
 // a synthetic fixture for whatever browser evidence belongs to the scenario
 // as a whole (map-scenario.ts's own `mapScenarioEvidence`), and only then
-// writes the scope's own container (`writeScope`) — unchanged from before
-// this task: a hook was always mapped once the whole scenario was over, and
-// still is. This module holds exactly one piece of state across those three
+// writes the scope's own container (`writeScope`) — a hook is always mapped
+// once the whole scenario is over, not per step, unlike a step's own test.
+// This module holds exactly one piece of state across those three
 // calls, `currentScopeUuid` — safe because `nuka run` executes scenarios
 // strictly sequentially, never two at once.
 //
@@ -62,11 +62,11 @@ import { createAtomicWriter } from "./writer.js";
 // own Before hook is the one case this redesign reports less prominently
 // than before. `nuka run`'s own exit code and the written `record.json` are
 // both unaffected — this is a report-display regression only, accepted as
-// part of this task's own trade-off (step = test), not something this file
-// works around with a synthetic failing test.
+// part of the step = test trade-off, not something this file works around
+// with a synthetic failing test.
 //
-// Known limit, unchanged from before this task: record.json carries no
-// per-hook timestamp of its own, so every before-hook collapses to the
+// Known limit: record.json carries no per-hook timestamp of its own, so
+// every before-hook collapses to the
 // scenario's own `started_at` and every after-hook to its `finished_at`,
 // both zero-width (map-scenario.ts's own `mapHooks`).
 //
@@ -75,8 +75,7 @@ import { createAtomicWriter } from "./writer.js";
 // run-scenario.ts's own `onStepFinished`) — this emitter never reads a
 // receipt.json off disk itself any more, unlike the messages emitter
 // (src/report/messages/emitter.ts), which still does via
-// src/report/receipts.ts's `readReceiptsForRecord` (out of this task's own
-// scope).
+// src/report/receipts.ts's `readReceiptsForRecord`.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -98,7 +97,7 @@ export interface EmitStepInput {
   /** The exact in-memory object run-scenario.ts's own `writeReceipt` call
    * just persisted for this step, or `null` for a step with no receipt of
    * its own at all — see map-scenario.ts's `MapStepInput.receipt` for the
-   * full reasoning (this task's spec, decision 2). */
+   * full reasoning. */
   readonly receipt: Receipt | null;
   readonly index: number;
   readonly finishedAt: Date;
@@ -121,8 +120,8 @@ export interface AllureEmitter {
   /** Opens this scenario's own scope, before its first step runs. Never
    * throws. */
   beginScenario(): void;
-  /** Writes one step's own test, the moment that step finishes (this task's
-   * spec, decision 2). Never throws. */
+  /** Writes one step's own test, the moment that step finishes. Never
+   * throws. */
   emitStep(input: EmitStepInput): void;
   /** Maps this scenario's own hooks (and whatever scenario-level evidence it
    * collected) into fixtures under the scope `beginScenario` opened, then
@@ -186,8 +185,9 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
 
   // Every child step nests directly under `rootUuid` now (`parentStepUuid`
   // is always `null` at both call sites below) — one level shallower than
-  // when a step was itself a child of the scenario's own test (this task's
-  // spec's own written facts: "child step は1段浅くなるだけで成立する").
+  // when a step was itself a child of the scenario's own test. Verified
+  // this still works: parameters and errors are still preserved, and the
+  // lost nesting level is carried by Allure's own breadcrumb instead.
   function writeChildSteps(rootUuid: string, childSteps: readonly MappedChildStep[]): void {
     for (const child of childSteps) {
       const uuid = runtime.startStep(rootUuid, null, { name: child.name, start: child.startMs });
@@ -273,8 +273,8 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           posixPath,
         });
 
-        // `{project}:{featurePath}#{scenario}#{step text}` (this task's
-        // spec, decision 4) — a human-readable identifier, unlike historyId
+        // `{project}:{featurePath}#{scenario}#{step text}` — a
+        // human-readable identifier, unlike historyId
         // (this module's own header, and map-scenario.ts's own header for
         // why historyId is deliberately left to fall apart instead).
         const fullName = buildFullName(projectName, posixPath, `${input.pickle.name}#${mapped.name}`);
@@ -312,13 +312,13 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           // this test's own `nukadoko.run`/`nukadoko.scenario`/
           // `nukadoko.step` hidden ones) the moment it runs, below — no
           // reason to reimplement that formula here (map-scenario.ts's own
-          // header, this task's spec, decision 4).
+          // header).
         };
         // Mutates `partialTest.labels` in place, appending suite labels
         // only when none are already present. `[featureName, scenario
-        // name]` fills both `parentSuite` and `suite` now (this task's
-        // spec, decision 1) — the `suite` slot was empty before this task
-        // (this task's spec's own written facts).
+        // name]` fills both `parentSuite` and `suite` — the `suite` slot
+        // was previously left empty (`ensureSuiteLabels` used to be called
+        // with only `[featureName]`).
         ensureSuiteLabels(partialTest, [mapped.featureName, input.pickle.name]);
 
         const testUuid = runtime.startTest(partialTest, [scopeUuid]);

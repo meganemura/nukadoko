@@ -1,25 +1,25 @@
-// Responsibility: BeforeAll/AfterAll registration (m22-compat-run-scope task
-// spec, item 2) — the run-scope counterpart of src/compat/hooks.ts's
-// per-scenario Before/After. Same module-level-buffer registration shape and
+// Responsibility: BeforeAll/AfterAll registration — the run-scope
+// counterpart of src/compat/hooks.ts's per-scenario Before/After. Same
+// module-level-buffer registration shape and
 // the same module-identity handoff to src/discover/discover-steps.ts's
 // scoped tsx import (see hooks.ts's own header for why that identity
 // matters); kept as its own module rather than folded into hooks.ts because
 // cucumber-js's own BeforeAll/AfterAll differ from Before/After in every
-// dimension that module's types encode: no `tags` (this task's spec: a tag
+// dimension that module's types encode: no `tags` (a tag
 // has no meaning for a run-scope hook — there is no per-scenario pickle for a
 // tag expression to match against), no `HookParameter` argument (cucumber-js
 // itself calls a run-scope hook with zero arguments — there is no
 // pickle/gherkinDocument/testCaseStartedId for one run to hand it), and
 // `this` is never bound to anything (see `RunHookFn`'s own comment).
 // Execution (src/cli/run.ts, around the whole scenario loop, once per `nuka
-// run` invocation) is this task's own job too; this module only records
-// what was called.
+// run` invocation) is src/cli/run.ts's job; this module only records what
+// was called.
 
 export type RunHookType = "beforeAll" | "afterAll";
 
 /**
- * `this: any`, and never actually bound to anything at call time (this
- * task's spec: `this` is never bound to a World — at BeforeAll time no pickle has
+ * `this: any`, and never actually bound to anything at call time (`this` is
+ * never bound to a World — at BeforeAll time no pickle has
  * been selected for execution yet and no World has been constructed for one
  * either; a World is created per pickle, src/run/run-scenario.ts, strictly
  * after BeforeAll would have already run). `...args: any[]` exists purely so
@@ -75,8 +75,8 @@ function registerRunHook(
     );
   }
 
-  // Only "timeout" is recognized — in particular, *not* "tags" (this task's
-  // spec: run-scope hooks don't accept one at all, unlike Before/After).
+  // Only "timeout" is recognized — in particular, *not* "tags": run-scope
+  // hooks don't accept one at all, unlike Before/After.
   // Same "a door that stays quiet is worse than one that's briefly noisy"
   // reasoning as src/compat/hooks.ts's own unknown-key check: an
   // unrecognized key throws immediately rather than vanishing silently.

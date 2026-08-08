@@ -8,8 +8,7 @@ import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instru
 // Responsibility: cucumber-js's own World shape (a single-argument
 // constructor receiving `{ attach, log, link, parameters }`, all four just
 // own writable data properties at run time despite being typed readonly
-// upstream) plus the harness's own two-tier page/request access
-// (m2b-compat-execution task spec, decision 1, lead-arbitrated):
+// upstream) plus the harness's own two-tier page/request access:
 //
 //   - Glue that launches its own Playwright is left alone entirely — it
 //     isn't reachable through this class at all, and nukadoko never
@@ -25,9 +24,9 @@ import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instru
 //     resolves is a mistake this class refuses to paper over with
 //     `undefined` (WorldNotOpenedError names the fix instead).
 //
-// `attach`/`log`/`link` route into this pickle's own declared collector
-// (m2d-allure-shim task spec, item 4) — the same object src/run/run-
-// scenario.ts creates and passes into `instantiateWorldForPickle` below as a
+// `attach`/`log`/`link` route into this pickle's own declared collector —
+// the same object src/run/run-scenario.ts creates and passes into
+// `instantiateWorldForPickle` below as a
 // plain parameter (`declaredCollector`, captured directly in the closures
 // that build `attach`/`log`/`link`), never read back out through src/compat/
 // declared.ts's own module-level "active collector" pointer the way the
@@ -66,11 +65,11 @@ export interface WorldConstructorParams {
 }
 
 /**
- * `WorldConstructorParams` under cucumber-js's own name (t5-compat-types
- * task spec; the compat audit found `IWorldOptions` appears in 2/2
- * real-world repos' glue as a bare type import, e.g. `import { type
- * IWorldOptions } from "nukadoko/compat"`). Until now that import failed
- * `tsc` while `nuka run`/`nuka check` stayed silent — a type-only import
+ * `WorldConstructorParams` under cucumber-js's own name (the compat audit
+ * found `IWorldOptions` appears in 2/2 real-world repos' glue as a bare
+ * type import, e.g. `import { type
+ * IWorldOptions } from "nukadoko/compat"`). Without this alias that import
+ * fails `tsc` while `nuka run`/`nuka check` stay silent — a type-only import
  * gets stripped by esbuild before either ever sees it — so this alias closes
  * a gap only the caller's own typechecker could see.
  *
@@ -133,7 +132,7 @@ export class World {
   async openPage(): Promise<Page> {
     const ctx = runtimeByWorld.get(this);
     if (!ctx) {
-      // Unreachable: every World this slice constructs goes through
+      // Unreachable: every World this module constructs goes through
       // instantiateWorldForPickle below, which always attaches one.
       throw new Error("internal: this World has no attached runtime context");
     }
@@ -171,9 +170,9 @@ export function setWorldConstructor(ctor: WorldConstructor): void {
 /** What `instantiateWorldForPickle` hands back: the constructed World a
  * compat step/hook runs against, plus the instrumentation handle
  * src/run/run-scenario.ts calls at each step boundary (`beginStep()`) and
- * reads (`snapshot()`) to build that step's receipt's `world` field (m2c-
- * typed-world task spec, item 3). Two separate values rather than one
- * augmented object: the instrumentation handle is executor-only, the same
+ * reads (`snapshot()`) to build that step's receipt's `world` field. Two
+ * separate values rather than one augmented object: the instrumentation
+ * handle is executor-only, the same
  * "a step cannot see or reset its own observation" rule create-context.ts's
  * header documents for `observed`/`used` — nothing about `World` itself
  * exposes it. */
@@ -186,13 +185,11 @@ export interface InstantiatedWorld {
  * Constructs this pickle's own World (base `World`, or whatever
  * `setWorldConstructor` last registered), attaches `ctx` as the runtime
  * bridge `openPage()`/`openRequest()` read from, and wraps the fresh
- * instance for measurement + optional declared-key validation (m2c-typed-
- * world task spec, items 1-2; a throwaway prototype measured this
- * own-data-defineProperty mechanism), applied right here, before any hook or
- * step ever sees this instance (this task's spec, item 1:
- * instantiateWorldForPickle applies it right after construction). Called exactly once per
- * pickle (m2b-compat-execution task spec, item 4: "1 pickle = 1 World = 1
- * ctx") by src/run/run-scenario.ts, through the reference
+ * instance for measurement + optional declared-key validation (a throwaway
+ * prototype measured this own-data-defineProperty mechanism), applied right
+ * here, before any hook or step ever sees this instance. Called exactly
+ * once per pickle (one World per pickle, sharing that pickle's own ctx) by
+ * src/run/run-scenario.ts, through the reference
  * src/discover/discover-steps.ts captured via its own scoped tsx import —
  * see this file's header for why that indirection matters.
  *
@@ -201,9 +198,9 @@ export interface InstantiatedWorld {
  * never reads that module's buffer itself, so it does not care which of
  * this run's step files (if any) called `defineWorld`, only what the result
  * was.
- * @param declaredCollector This pickle's own declared collector (src/compat/
- * declared.ts, m2d-allure-shim task spec, item 4) — the same instance src/
- * run/run-scenario.ts also points the allure-js runtime shim's "active
+ * @param declaredCollector This pickle's own declared collector
+ * (src/compat/declared.ts) — the same instance src/run/run-scenario.ts
+ * also points the allure-js runtime shim's "active
  * collector" pointer at; passed directly here (not read back through that
  * pointer) for the module-identity reason this file's own header explains.
  */

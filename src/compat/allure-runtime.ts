@@ -2,9 +2,9 @@ import type { RuntimeMessage } from "allure-js-commons/sdk";
 import { MessageTestRuntime, setGlobalTestRuntime } from "allure-js-commons/sdk/runtime";
 import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtension } from "./declared.js";
 
-// Responsibility: the interception point itself (m2d-allure-shim task spec,
-// item 1; verified against allure-js-commons' own runtime surface) — a
-// `MessageTestRuntime` subclass that turns every allure-js facade call
+// Responsibility: the interception point itself (verified against
+// allure-js-commons' own runtime surface) — a `MessageTestRuntime` subclass
+// that turns every allure-js facade call
 // (label/link/parameter/attachment/step/logStep — whichever module instance
 // of "allure-js-commons" a step file's own import resolved to; the
 // interception itself lives on `globalThis`, not on any one module instance,
@@ -15,10 +15,10 @@ import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtensi
 // — never per pickle: src/run/run-scenario.ts is what repoints which
 // collector is active, per pickle and per step/hook boundary.
 //
-// v1 message mapping (this task's spec, decision 3) — the exhaustive list of
-// what this class actually reads out of the stream; everything else is
-// silently dropped (`default:` below), a documented v1 scope decision, not
-// an oversight (the full ignored-kind list is below):
+// v1 message mapping — the exhaustive list of what this class actually
+// reads out of the stream; everything else is silently dropped (`default:`
+// below), a documented v1 scope decision, not an oversight (the full
+// ignored-kind list is below):
 //   - `metadata` -> declared.labels / .links / .parameters (this message's
 //     own `description`/`descriptionHtml`/`testCaseId`/`historyId`/
 //     `displayName` fields are dropped: no receipt field exists for them
@@ -27,11 +27,10 @@ import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtensi
 //     LIFO on this instance's own stack (nesting is unlikely in practice via
 //     `logStep`, but `step(name, fn)` can nest, and this still pairs
 //     correctly either way); `nuka run` now has its own progress log
-//     (fb5-run-output task spec, src/run/progress-log.ts), but it reports
-//     one line per pickle step, not per declared sub-step — promoting a
-//     `step_start`/`step_stop` pair onto it, preserving its own nesting,
-//     stays unimplemented rather than merely deferred to a feature that
-//     didn't exist yet (this task's spec, decision 3, unchanged).
+//     (src/run/progress-log.ts), but it reports one line per pickle step,
+//     not per declared sub-step — promoting a `step_start`/`step_stop` pair
+//     onto it, preserving its own nesting, stays unimplemented rather than
+//     merely deferred to a feature that didn't exist yet.
 //   - `attachment_content` -> a file under the active collector's current
 //     boundary directory, plus a `declared.attachments` entry.
 // Ignored entirely (not mapped to anything): `step_metadata` (StepContext's
@@ -98,9 +97,8 @@ export class NukadokoAllureTestRuntime extends MessageTestRuntime {
         // instead of an extensionless one map-scenario.ts's own
         // `contentTypeForFileName` can only resolve to
         // `application/octet-stream` (verified against the real Allure
-        // report, M3-C spec item 2). Reusing the same table here rather than
-        // adding a second one is deliberate (this task's spec: don't create
-        // a new table).
+        // report). Reusing the same table here rather than adding a second
+        // one is deliberate.
         const extension = normalizeFileExtension(fileExtension) || extensionForMediaType(contentType);
         collector.recordAttachment(name, Buffer.from(content, encoding), extension);
         break;
@@ -116,8 +114,8 @@ export class NukadokoAllureTestRuntime extends MessageTestRuntime {
 const ALLURE_TEST_RUNTIME_KEY = "allureTestRuntime";
 
 /** Registers `NukadokoAllureTestRuntime` as the process's global allure-js
- * `TestRuntime` (this task's spec, item 1) — called once, at the top of
- * `nuka run`'s execution phase (src/cli/run.ts). Returns a best-effort
+ * `TestRuntime` — called once, at the top of `nuka run`'s execution phase
+ * (src/cli/run.ts). Returns a best-effort
  * restore callback: captures whatever was at
  * `globalThis["allureTestRuntime"]` beforehand (nothing, in every case this
  * repo's own test suite exercises) and puts it back when called — this

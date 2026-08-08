@@ -4,8 +4,8 @@ import type { Receipt } from "../receipt/types.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 
 // Responsibility: read every receipt.json a scenario record's own steps
-// reference, once per record (m3c-messages-emitter task spec, decision 2) —
-// pulled up from src/report/allure/emitter.ts's own `receiptsForRecord`
+// reference, once per record — pulled up from
+// src/report/allure/emitter.ts's own `receiptsForRecord`
 // (its original home) into src/report/ itself because
 // src/report/messages/emitter.ts now needs the identical read for the
 // identical reason (both emitters map the same record.json/receipt.json

@@ -9,7 +9,7 @@ import path from "node:path";
 // `fullName` no longer doubles as a promise of continuity across runs (the
 // docs/spec.md claim this file's own header used to restate, that a team
 // migrating in "keeps its existing Allure history/retry links intact", is
-// withdrawn by the allure-step-as-test task — see src/report/allure/map-
+// withdrawn — see src/report/allure/map-
 // scenario.ts's own header for why a step has no identity that survives a
 // run at all, and why trying to fake one would only misconnect quietly).
 // `buildFullName` stays a plain, readable identifier
@@ -26,8 +26,7 @@ import path from "node:path";
 
 /** `null` when `<rootDir>/package.json` doesn't exist, isn't readable,
  * isn't valid JSON, or has no string `name` — every one of those collapses
- * to "no project name" the same way (this task's spec, decision 5:
- * unreadable or absent both collapse to null), since a caller building
+ * to "no project name" the same way, since a caller building
  * `fullName` treats all of them identically. */
 export function resolveProjectName(rootDir: string): string | null {
   try {
@@ -46,16 +45,15 @@ export function resolveProjectName(rootDir: string): string | null {
 }
 
 /** Normalizes a root-relative filesystem path to the POSIX separators
- * `fullName`/`posixPath` (this task's spec, decision 5) require, regardless
+ * `fullName`/`posixPath` require, regardless
  * of which separator the host OS's own `path.relative` produced. */
 export function toPosixPath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
 /** `${projectName}:${posixPath}#${name}`, or `${posixPath}#${name}` when
- * there is no project name (m3b-allure-emitter task spec, decision 5's own
- * formula, unchanged). emitter.ts's own caller passes `${pickle.name}#
- * ${step name}` as `name` (allure-step-as-test task spec, decision 4's own
+ * there is no project name. emitter.ts's own caller passes `${pickle.name}#
+ * ${step name}` as `name` (the
  * `{project}:{featurePath}#{scenario}#{step text}` shape) — one call per
  * step's own test now, not one per scenario. */
 export function buildFullName(projectName: string | null, posixPath: string, name: string): string {

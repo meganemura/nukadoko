@@ -3,8 +3,8 @@ import type { Category } from "allure-js-commons/sdk";
 import type { ErrorKind } from "../../receipt/types.js";
 import { buildFailureMarker, statusForKind } from "./map-scenario.js";
 
-// Responsibility: the run-wide categories.json (this task's spec, decision
-// 4) — one rule per `ErrorKind`, always all of them, written once at the
+// Responsibility: the run-wide categories.json — one rule per `ErrorKind`,
+// always all of them, written once at the
 // start of a run (the content never depends on how the run goes, so there's
 // no reason to wait until it finishes). Each rule's own `matchedStatuses`/
 // marker format comes from map-scenario.ts's own `statusForKind`/
@@ -52,7 +52,7 @@ function escapeRegExp(value: string): string {
 }
 
 /** One rule per `ErrorKind`, Allure 2's "first rule wins, full-text,
- * DOTALL" regex format (this task's spec, decision 4). Order follows
+ * DOTALL" regex format. Order follows
  * `ErrorKind`'s own declaration order in receipt/types.ts — the regexes are
  * mutually exclusive by construction (each matches only messages carrying
  * that exact kind's own marker), so the order has no effect on matching,

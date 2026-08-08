@@ -1,11 +1,10 @@
 // Responsibility: the one place a declared attachment's file extension
-// becomes a media type (m3c-messages-emitter task spec, decision 2) — pulled
-// up from src/report/allure/map-scenario.ts (its original home) into
+// becomes a media type — pulled up from src/report/allure/map-scenario.ts
+// (its original home) into
 // src/report/ itself because src/report/messages/map-scenario.ts now needs
 // the exact same lookup for the exact same reason (a step's/hook's own
 // `declared.attachments` file name is all either mapper ever has to guess a
-// content type from). A third copy, rather than sharing this one, was the
-// alternative this task's spec rejected.
+// content type from), rather than duplicating it a third time.
 //
 // The reverse of src/compat/declared.ts's own `EXTENSION_BY_MEDIA_TYPE` —
 // duplicated rather than imported so this module's own import list stays
