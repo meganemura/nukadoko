@@ -29,7 +29,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## Unreleased
 
-破壊的変更は 2 つです。
+破壊的変更は 3 つです。
 各項目は「何を直すか」だけを述べます。
 なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
 
@@ -42,6 +42,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   Allure の history、trend、run をまたいだ flaky 検出はもう機能しません。
   CI で、run が生成したレポートの `history.jsonl` を次の run の `allure-results/` へ引き継ぐ運用を組んでいたなら、その引き継ぎはもう何もしません。
   この emitter の出力には、ある step を以前の run の自分自身に結び付けるものが何も無いからです。
+- **`nuka steps` は、プロジェクトに features ディレクトリが無いとき、非ゼロで終了するようになりました。**
+  nukadoko プロジェクトの外で叩いていたスクリプトや、`featuresDir` を改名したまま config を直していないスクリプトは、これまで空の語彙とクリーンな終了を受け取っていました。
+  いまは探しに行った解決済みのパスが stderr に出て、終了コードは非ゼロになり、stdout には何も出ません。
+  クリーンな終了に依存していたパイプラインがあれば、正しいディレクトリを指すか、`nukadoko.config.ts` の `featuresDir` を直してください。
+  features ディレクトリが存在していて step が 0 本のプロジェクトは影響を受けず、これまでどおり `0` で終了します。
 
 ## 0.0.5 から 0.1.0 へ
 
