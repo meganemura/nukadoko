@@ -147,3 +147,21 @@ change against before writing it.
   reaches the wrong readers. Both files are paired with their `.ja.md`.
 - Code comments explain why, not what; each module opens with its
   responsibility and boundaries.
+- **A comment that ships has to stand on its own, in English.** `src/` goes
+  out in the npm tarball (`package.json`'s `files`), and the README's own
+  claim is that an agent can read `node_modules` and find out why the code
+  is the way it is. A comment that defers its reason somewhere else breaks
+  that promise at exactly the place it was made. Nothing a reader outside
+  this repository cannot open may be cited: not a path
+  (`.claude-team/whatever.md`), and not a bare name either
+  (`m6a-from-core task spec`). The bare name is the more deceptive of the
+  two, because it reads like a ticket the reader could go look up, so it
+  costs them the search before they learn there was nothing to find. Write
+  the reason itself, and drop the internal coordinates that came with it:
+  phase labels (`P5`), section numbers, revision numbers, "this task's
+  spec". The same rule is why these comments are English. Quoting an
+  internal document's Japanese section heading inside an English comment is
+  both problems in one move: unreachable, and in a language the rest of the
+  published tier does not use. Task specs are still where a decision gets
+  written down before it is built; what ships is the conclusion, not the
+  citation.
