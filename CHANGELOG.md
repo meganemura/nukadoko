@@ -191,6 +191,15 @@ just until 0.1.
   tended it. The comment says what belongs there (why this shape, what was
   rejected) and how it differs from `description`, which says what the
   step does.
+- **`nuka accept`'s dirty-tree refusal now names the state directory when
+  that is what is dirty.** A project that never gitignored it (`nuka init`
+  does this automatically, but an existing project migrated by hand can
+  miss it) could get stuck in a loop: dirty, commit, accept refuses because
+  HEAD moved, run again, dirty again from the same state directory, forever.
+  The refusal now says whether the dirty paths are entirely or partly under
+  the state directory and that `nuka init` gitignores it for that reason,
+  without assuming the project didn't mean to track it; a tree dirty for an
+  unrelated reason gets the same message as before.
 
 ## 0.1.0 — 2026-08-06
 

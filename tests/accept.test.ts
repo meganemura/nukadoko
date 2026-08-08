@@ -259,6 +259,52 @@ describe("nuka accept: refusal conditions", () => {
 
     expect(acceptExit).toBe(1);
     expect(stderr.text()).toMatch(/dirty/i);
+    // accept-names-the-state-dir task spec: this fixture's own .gitignore
+    // already excludes `.nukadoko/` (this file's own header comment), so
+    // the only dirty path here is the unrelated scratch.txt above. The
+    // state-directory sentence must not appear when nothing measured is
+    // actually under it.
+    expect(stderr.text()).not.toMatch(/state directory/i);
+    expect(await mdFilesIn(featuresDir)).toEqual([]);
+  });
+
+  it("refuses on a dirty working tree caused by an untracked-in-.gitignore state directory, and names it (accept-names-the-state-dir task spec)", async () => {
+    // Reproduces the loop the task spec describes: a project whose
+    // .gitignore never picked up the `.nukadoko/` entry `nuka init` writes
+    // automatically, so nukadoko's own state directory shows up as
+    // ordinary dirty content after every run instead of being invisible to
+    // git, first as untracked files, then (once a user commits to clear
+    // the first refusal) as tracked changes on every run after.
+    await writeFile(path.join(rootDir, ".gitignore"), "features/*.md\n");
+    await initGitRepo(rootDir);
+
+    const firstRunExit = await runCli(["run", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(firstRunExit).toBe(0);
+
+    await commitAll(rootDir, "track .nukadoko along with everything else");
+
+    const secondRunExit = await runCli(["run", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(secondRunExit).toBe(0);
+
+    const stderr = createCaptureSink();
+    const acceptExit = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(acceptExit).toBe(1);
+    expect(stderr.text()).toMatch(/dirty/i);
+    expect(stderr.text()).toMatch(/state directory/i);
+    expect(stderr.text()).toContain(".nukadoko/");
     expect(await mdFilesIn(featuresDir)).toEqual([]);
   });
 

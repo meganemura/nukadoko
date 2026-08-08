@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 import type { ScenarioRecord } from "./record-types.js";
 
 // Responsibility: measure the commit and working-tree cleanliness a `nuka
-// run` invocation started at (m4a-run-provenance task spec, decisions 2-3) —
-// groundwork for `nuka accept` (docs/spec.md "Sign-off"), which is not
-// implemented yet and does not call this module itself. Called once per run
-// (cli/run.ts), never once per pickle (decision 4): a step that edits a
+// run` invocation started at (m4a-run-provenance task spec, decisions 2-3),
+// and (accept-names-the-state-dir task spec) the dirty paths themselves for
+// `nuka accept`'s own dirty-tree refusal. `probeGitState` is called once per
+// run (cli/run.ts), never once per pickle (decision 4): a step that edits a
 // tracked file mid-run must not change what every scenario record from that
 // same run reports as its own starting point.
 //
@@ -71,5 +72,55 @@ export async function probeGitState(rootDir: string): Promise<GitState | undefin
     return commit === undefined ? undefined : { commit, clean };
   } catch {
     return undefined;
+  }
+}
+
+// A second, separate call (accept-names-the-state-dir task spec), not a
+// change to `probeGitState` above: that function's own one-call rationale
+// is about the hot path (`nuka run`, once per invocation); this one only
+// runs from `nuka accept`'s dirty-tree refusal, an error path taken at most
+// once per rejected `accept`. Adding paths to `GitState` instead would leak
+// into every stored `ScenarioRecord.git` (src/run/record-types.ts), which
+// has no use for them.
+//
+// Porcelain output (v1 or v2, with or without `-C`) is always relative to
+// the repository root, never to the directory `git` was invoked from or
+// pointed at with `-C` -- verified empirically, not assumed. `rootDir` is
+// not guaranteed to be that root (a project can live in a subdirectory of a
+// larger repository), so paths are rebased onto `rootDir` here before
+// being handed back; skipping that step would make a stateDir string match
+// paths it was never actually under, or miss ones it was.
+export async function listDirtyPaths(rootDir: string): Promise<string[]> {
+  try {
+    const [{ stdout: topLevelOut }, { stdout: statusOut }] = await Promise.all([
+      execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"], { encoding: "utf8" }),
+      execFileAsync("git", ["-C", rootDir, "status", "--porcelain=v1", "-z"], { encoding: "utf8" }),
+    ]);
+    const repoRoot = topLevelOut.trim();
+
+    const tokens = statusOut.split("\0").filter((token) => token.length > 0);
+    const repoRelativePaths: string[] = [];
+    let skipNext = false;
+    for (const token of tokens) {
+      if (skipNext) {
+        // The path a rename/copy moved from (git-scm.com/docs/git-status:
+        // "R"/"C" entries emit the new path, then the original path, as two
+        // separate NUL-terminated fields). A refusal message only needs to
+        // say where the tree currently differs, not where from.
+        skipNext = false;
+        continue;
+      }
+      const statusCode = token.slice(0, 2);
+      repoRelativePaths.push(token.slice(3));
+      if (statusCode[0] === "R" || statusCode[0] === "C") {
+        skipNext = true;
+      }
+    }
+
+    return repoRelativePaths.map((repoRelativePath) =>
+      path.relative(rootDir, path.resolve(repoRoot, repoRelativePath)).split(path.sep).join("/"),
+    );
+  } catch {
+    return [];
   }
 }

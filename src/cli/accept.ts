@@ -13,7 +13,7 @@ import { loadConfig } from "../config/load-config.js";
 import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment, type ResolvedEnvironment } from "../environment/resolve-environment.js";
 import { parseFeatureSource } from "../feature/load-features.js";
 import { readReceiptsForRecord } from "../report/receipts.js";
-import { probeGitState } from "../run/probe-git.js";
+import { listDirtyPaths, probeGitState } from "../run/probe-git.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
@@ -123,6 +123,47 @@ function formatCondition(condition: RunCondition): string {
     : `environment ${condition.environment}, browser ${condition.browserType}`;
 }
 
+// accept-names-the-state-dir task spec: whether a dirty path measured by
+// `listDirtyPaths` sits under the state directory. `stateDir` is a
+// rootDir-relative string (config/schema.ts's own default: ".nukadoko");
+// `dirtyPath` is already rootDir-relative and forward-slash-separated
+// (probe-git.ts's own rebasing), so both sides are normalized to the same
+// separator before comparing.
+function isUnderStateDir(dirtyPath: string, stateDir: string): boolean {
+  const normalizedStateDir = stateDir.split(path.sep).join("/").replace(/\/+$/, "");
+  return dirtyPath === normalizedStateDir || dirtyPath.startsWith(`${normalizedStateDir}/`);
+}
+
+// accept-names-the-state-dir task spec: refusal condition 3's own message,
+// widened to say *what* is dirty when that closes the loop the spec
+// reproduces (dirty -> commit/stash -> accept -> HEAD moved -> run -> dirty
+// again, because the thing making the tree dirty was nukadoko's own state
+// directory the whole time). Only ever reports what was measured, never a
+// verdict: the project may be gitignoring the state directory correctly and
+// dirty for an unrelated reason (no mention here, the base message alone
+// answers that), or may be tracking it on purpose (this function does not
+// say that is wrong, only that `nuka init` gitignores it and why).
+function formatDirtyTreeRefusal(dirtyPaths: readonly string[], stateDir: string): string {
+  const base = "nuka accept: the working tree is dirty (untracked files included).";
+  const cta = "Commit or stash first, then run `nuka accept` again.";
+
+  const underState = dirtyPaths.filter((dirtyPath) => isUnderStateDir(dirtyPath, stateDir));
+  if (underState.length === 0) {
+    return `${base} ${cta}`;
+  }
+
+  const scopeSentence =
+    underState.length === dirtyPaths.length
+      ? `nuka accept: the working tree is dirty, entirely under the state directory (${stateDir}/).`
+      : `nuka accept: the working tree is dirty, including paths under the state directory (${stateDir}/).`;
+
+  return (
+    `${scopeSentence} That is where nukadoko writes on every \`nuka run\` (receipts, scenario records). ` +
+    `\`nuka init\` gitignores it for that reason, so this project's .gitignore may be missing that entry, ` +
+    `or ${stateDir}/ may be tracked on purpose. ${cta}`
+  );
+}
+
 function localDateStamp(iso: string): string {
   const d = new Date(iso);
   const yyyy = d.getFullYear();
@@ -217,9 +258,8 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     return 1;
   }
   if (!currentGit.clean) {
-    stderr.write(
-      "nuka accept: the working tree is dirty (untracked files included). Commit or stash first, then run `nuka accept` again.\n",
-    );
+    const dirtyPaths = await listDirtyPaths(rootDir);
+    stderr.write(`${formatDirtyTreeRefusal(dirtyPaths, config.stateDir)}\n`);
     return 1;
   }
 
