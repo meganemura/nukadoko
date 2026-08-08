@@ -93,6 +93,39 @@ describe("checkBindings", () => {
     expect(result.issues[0]?.message).toContain("Undefined parameter type 'frobnicate'");
   });
 
+  it("names every parameter type this project actually has, built-in and config-registered, on an unknown-parameter-type issue", () => {
+    // cli-messages-name-the-cause task spec, item 2: the raw cucumber-
+    // expressions message names the unknown type but never what to write
+    // instead — read straight from the same registry `nuka run` matches
+    // against, not a hardcoded list, so a `config.parameterTypes` entry can
+    // never go missing from it.
+    const step = defineStep({
+      pattern: "a {value:frobnicate} thing",
+      description: "d",
+      args: z.object({ value: z.string() }),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const result = checkBindings(vocab({ "frob-thing": step }), [
+      { name: "negation", regexp: /( not)?/, transformer: (s: string) => s === " not" },
+    ]);
+    expect(result.issues).toHaveLength(1);
+    const message = result.issues[0]?.message ?? "";
+    // Built-in types cucumber-expressions itself registers.
+    expect(message).toContain("int");
+    expect(message).toContain("string");
+    // The project's own config.parameterTypes entry, proving registered
+    // types are never dropped from the list.
+    expect(message).toContain("negation");
+    // The anonymous built-in type has no name a person could type, so it
+    // must never surface as a stray blank entry in the listed names.
+    const listed = message.split("registered parameter types are: ")[1]?.replace(/\.$/, "").split(", ") ?? [];
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.every((name) => name.length > 0)).toBe(true);
+  });
+
   it("flags a captured key that isn't in the args schema", () => {
     const step = defineStep({
       pattern: "unknown key {oops:string} thing",

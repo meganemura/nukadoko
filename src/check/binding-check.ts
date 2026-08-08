@@ -1,4 +1,4 @@
-import { CucumberExpression } from "@cucumber/cucumber-expressions";
+import { CucumberExpression, type ParameterTypeRegistry } from "@cucumber/cucumber-expressions";
 import { UndefinedParameterTypeError } from "@cucumber/cucumber-expressions/dist/Errors.js";
 import { type Capture, stripCaptureNames } from "../binding/pattern.js";
 import { ParameterTypeCollisionError } from "../binding/parameter-type-errors.js";
@@ -94,13 +94,45 @@ function captureErrorToIssue(error: unknown, stepName: string, pattern: string):
   };
 }
 
-function expressionErrorToIssue(error: unknown, stepName: string, pattern: string): CheckIssue {
+/** Every name `registry` actually has a `ParameterType` registered under
+ * (cli-messages-name-the-cause task spec, item 2) — read from the registry
+ * itself, not a hardcoded list, so this always matches what this project's
+ * own patterns can bind against: cucumber-expressions' own built-ins plus
+ * whatever `config.parameterTypes`/compat `defineParameterType` added on top
+ * (src/binding/registry.ts's `createParameterTypeRegistry`). The anonymous
+ * type (`""`, matched by writing a capture with no type name at all, e.g.
+ * `{value}`) is excluded: it has no name a person could type after the
+ * colon, so listing it would only read as a stray blank entry. Sorted so the
+ * message is stable across runs, not insertion order (built-ins first,
+ * config entries after). */
+function availableParameterTypeNames(registry: ParameterTypeRegistry): readonly string[] {
+  const names: string[] = [];
+  for (const parameterType of registry.parameterTypes) {
+    if (parameterType.name !== undefined && parameterType.name.length > 0) {
+      names.push(parameterType.name);
+    }
+  }
+  return names.sort();
+}
+
+function expressionErrorToIssue(
+  error: unknown,
+  stepName: string,
+  pattern: string,
+  registry: ParameterTypeRegistry,
+): CheckIssue {
   const context = `Step "${stepName}" pattern "${pattern}"`;
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof UndefinedParameterTypeError) {
+    // The type name alone (`error.undefinedParameterTypeName`) is not
+    // reported here on top of `message`: cucumber-expressions' own message
+    // already names it ("Undefined parameter type 'number'"); what it never
+    // says is what to write instead, which is the gap this task's spec
+    // reported two independent readers hitting.
+    const available = availableParameterTypeNames(registry);
     return {
       code: "unknown-parameter-type",
-      message: `${context}: ${message}`,
+      message: `${context}: ${message} This project's registered parameter types are: ${available.join(", ")}.`,
       step: stepName,
     };
   }
@@ -197,7 +229,7 @@ export function checkBindings(
       try {
         expression = new CucumberExpression(stripped.strippedPattern, registry);
       } catch (error) {
-        issues.push(expressionErrorToIssue(error, stepName, pattern));
+        issues.push(expressionErrorToIssue(error, stepName, pattern, registry));
         continue;
       }
       patterns.push({
@@ -278,7 +310,7 @@ export function checkBindings(
       try {
         expression = new CucumberExpression(entry.compat.pattern, registry);
       } catch (error) {
-        issues.push(expressionErrorToIssue(error, stepName, pattern));
+        issues.push(expressionErrorToIssue(error, stepName, pattern, registry));
         continue;
       }
       patterns.push({ matcherKind: "expression", stepName, pattern, captures: [], expression });
