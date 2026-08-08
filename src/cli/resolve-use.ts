@@ -2,9 +2,9 @@ import type { UsedEntryWithResult } from "../context/used.js";
 import type { Receipt } from "../receipt/types.js";
 import { fromCandidates, type Step } from "../step/define-step.js";
 
-// Responsibility: `nuka do --use <receipt-id>`'s own lookup (m6c-do-use task
-// spec; docs/spec.md "Single steps (the agent path)", the `--use` paragraph)
-// — turns one receipt id into whichever of the step actually being run's own
+// Responsibility: `nuka do --use <receipt-id>`'s own lookup (docs/spec.md
+// "Single steps (the agent path)", the `--use` paragraph) — turns one
+// receipt id into whichever of the step actually being run's own
 // `from` keys that receipt's result fills. A pure function around one
 // receipt id at a time, returning a result rather than throwing (same shape
 // as src/step/validate-from.ts's `validateStepFrom`): `nuka do`'s own setup
@@ -19,16 +19,15 @@ import { fromCandidates, type Step } from "../step/define-step.js";
 // under" map `nuka do`'s own `isRegisteredStep` predicate is built from
 // (one vocabulary walk, not two).
 //
-// A key naming several candidate producers (m7a-from-alternatives task spec,
-// item 4) matches this receipt against every one of them via
-// `fromCandidates`, exactly the way a single-candidate key already did — one
-// receipt can therefore still fill a key whose `from` lists several
-// candidates, as long as its own step is one of them. What this module does
-// *not* do is notice when two different `--use` values end up filling the
-// same key from two *different* candidates — that cross-call comparison
-// needs every `--use` value's own result side by side, which only this
-// function's caller (src/cli/do.ts) has; that is where m7a-from-
-// alternatives' own conflict check lives instead.
+// A key naming several candidate producers matches this receipt against
+// every one of them via `fromCandidates`, exactly the way a
+// single-candidate key already did — one receipt can therefore still fill a
+// key whose `from` lists several candidates, as long as its own step is one
+// of them. What this module does *not* do is notice when two different
+// `--use` values end up filling the same key from two *different*
+// candidates — that cross-call comparison needs every `--use` value's own
+// result side by side, which only this function's caller (src/cli/do.ts)
+// has, and that is where the conflict check lives instead.
 
 export interface ResolveUseError {
   readonly ok: false;
@@ -45,14 +44,13 @@ export interface ResolveUseSuccess {
   readonly filled: Readonly<Record<string, unknown>>;
   /** The `{ receipt, step, result }` shape the `used` collector
    * (src/context/used.ts) already records — handed straight to
-   * `StepContextHandle.recordUsed` (m6a-from-core task spec's own collector;
-   * this task's spec, item 6: no second recording path) once the caller
-   * decides at least one of `filled`'s keys actually landed. `result` is
-   * this upstream receipt's own full validated result (fb3-used-result task
-   * spec, decision 4) — always populated here (this function only ever
-   * reaches this point for a receipt whose `status` is already checked
-   * `"ok"`, above); the caller strips it back off for an "ok" receipt of its
-   * own the same way run-scenario.ts's `finishExecutedStep` does. */
+   * `StepContextHandle.recordUsed`, the sole path into that collector, once
+   * the caller decides at least one of `filled`'s keys actually landed.
+   * `result` is this upstream receipt's own full validated result, always
+   * populated here (this function only ever reaches this point for a
+   * receipt whose `status` is already checked `"ok"`, above); the caller
+   * strips it back off for an "ok" receipt of its own the same way
+   * run-scenario.ts's `finishExecutedStep` does. */
   readonly used: UsedEntryWithResult;
 }
 
@@ -63,10 +61,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Resolves one `--use <receiptId>` against `step`'s own `from` declaration
- * (this task's spec, items 1-4). Checked in the order the task spec's own
- * error list states: unknown id, a non-`"ok"` receipt, a receipt whose step
- * names none of `step.from`'s upstreams, then — per matching entry — a
+ * Resolves one `--use <receiptId>` against `step`'s own `from` declaration.
+ * Checked in this order: unknown id, a non-`"ok"` receipt, a receipt whose
+ * step names none of `step.from`'s upstreams, then — per matching entry — a
  * `result` missing the key that entry names.
  */
 export function resolveUse(
@@ -88,12 +85,11 @@ export function resolveUse(
   }
 
   // Entries (plural on purpose — docs/spec.md's own wording): a single
-  // upstream step can be named by more than one of this step's `from` keys
-  // (this task's spec, item 3), and one matching receipt fills all of them.
-  // Each key's own candidates (m7a-from-alternatives task spec, item 4) are
-  // checked individually via `fromCandidates`, so a key whose `from` lists
-  // several producers still matches as long as one of them is this receipt's
-  // own step.
+  // upstream step can be named by more than one of this step's `from` keys,
+  // and one matching receipt fills all of them. Each key's own candidates
+  // are checked individually via `fromCandidates`, so a key whose `from`
+  // lists several producers still matches as long as one of them is this
+  // receipt's own step.
   const matches: Array<readonly [key: string, upstreamKey: string]> = [];
   for (const [key, entry] of Object.entries(step.from)) {
     for (const [upstream, upstreamKey] of fromCandidates(entry)) {

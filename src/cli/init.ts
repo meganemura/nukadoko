@@ -8,8 +8,8 @@ import { buildCategories } from "../report/allure/categories.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: `nuka init`'s actual work (this task's spec, decision 1),
-// kept out of run-cli.ts so it's unit-testable without going through yargs
+// Responsibility: `nuka init`'s actual work, kept out of run-cli.ts so it's
+// unit-testable without going through yargs
 // (same split as cli/do.ts and cli/session.ts). One command, one all-or-
 // nothing outcome:
 //
@@ -19,10 +19,9 @@ import type { WritableSink } from "./writable-sink.js";
 //     from "fully initialized" or "never initialized" — refusing up front is
 //     the only way to keep that question answerable.
 //   - Otherwise, generate the config, the (empty) steps directory, the
-//     `.gitignore` entry, and (init-allurerc task spec) `allurerc.mjs`,
-//     printing each path actually written to stdout as it happens
-//     (diagnostics go to stderr — this task's spec's stdout discipline: an
-//     agent parses stdout, so it carries only paths).
+//     `.gitignore` entry, and `allurerc.mjs`, printing each path actually
+//     written to stdout as it happens (diagnostics go to stderr — an agent
+//     parses stdout, so it carries only paths).
 //   - Finish with a self-check: load the config just written and discover
 //     its vocabulary for real, the same two calls `nuka steps`/`nuka do`
 //     make. A failure here is reported (stderr + exit 1) but the generated
@@ -34,19 +33,19 @@ import type { WritableSink } from "./writable-sink.js";
 // (`configSchema.parse({})`) rather than hard-coding "features"/".nukadoko"
 // here a second time, so this module can never drift from schema.ts's
 // source of truth for what "the default project layout" means. `--features-
-// dir` (t2-init-features-dir task spec) is the one way to override
-// `featuresDir` specifically: without it, this stays exactly as it was.
+// dir` is the one way to override `featuresDir` specifically: without it,
+// this stays exactly as it was.
 //
-// t2-init-features-dir task spec: when `--features-dir` is given, its
-// (normalized) value drives both the steps directory `mkdir` below *and*
-// the generated config's own `featuresDir` field — the two must never
-// diverge, since divergence is exactly the bug this option exists to fix
-// (a hand-edited config's `featuresDir` no longer matching where `init`
-// actually created `steps/`). It is deliberately left out of the config
-// template when omitted (`featuresDirOverride` stays `null`, see
-// `configTemplate` below): baking schema.ts's current default into every
-// generated config would leave that default frozen in every existing
-// project's config the day schema.ts's own default ever changes.
+// When `--features-dir` is given, its (normalized) value drives both the
+// steps directory `mkdir` below *and* the generated config's own
+// `featuresDir` field — the two must never diverge, since divergence is
+// exactly the bug this option exists to fix (a hand-edited config's
+// `featuresDir` no longer matching where `init` actually created `steps/`).
+// It is deliberately left out of the config template when omitted
+// (`featuresDirOverride` stays `null`, see `configTemplate` below): baking
+// schema.ts's current default into every generated config would leave that
+// default frozen in every existing project's config the day schema.ts's own
+// default ever changes.
 
 export interface RunInitOptions {
   rootDir: string;
@@ -63,13 +62,11 @@ export interface RunInitOptions {
  * `path.relative(rootDir, path.resolve(rootDir, arg))` idiom `nuka check`/
  * `nuka accept` already use for their own path arguments
  * (src/check/analyze.ts's `loadSingleFeature`, src/cli/accept.ts's
- * `normalizeFeaturePath`) — this task's spec says to investigate how this
- * codebase already validates a path argument and align with it rather than
- * invent a new convention, and that is what those two do. Reusing their
- * exact idiom means an absolute value or one containing `..` is accepted
- * as-is here too, same as it already is for those two commands' own feature
- * argument (see src/check/analyze.ts's own comment: "absolute paths
- * accepted as-is").
+ * `normalizeFeaturePath`), rather than inventing a new convention here.
+ * Reusing their exact idiom means an absolute value or one containing `..`
+ * is accepted as-is here too, same as it already is for those two commands'
+ * own feature argument (see src/check/analyze.ts's own comment: "absolute
+ * paths accepted as-is").
  *
  * Empty is the one case that convention doesn't already answer for *this*
  * command: a feature-file argument that normalizes to nothing simply fails
@@ -110,7 +107,7 @@ function configTemplate(baseUrl: string | null, featuresDir: string | null): str
  * Appends `<stateDir>/` to `<rootDir>/.gitignore`, creating the file if it
  * doesn't exist. Returns whether the file was actually written — `false`
  * when the entry was already present, so the caller knows not to report a
- * path that didn't change (this task's spec: don't add the line when it's already present).
+ * path that didn't change.
  */
 async function ensureGitignoreEntry(rootDir: string, stateDir: string): Promise<boolean> {
   const gitignorePath = path.join(rootDir, ".gitignore");
@@ -131,10 +128,9 @@ async function ensureGitignoreEntry(rootDir: string, stateDir: string): Promise<
 }
 
 // Allure 3 auto-detects a config under any of these names from the current
-// working directory (init-allurerc task spec, decision 2) — checking only
-// `.mjs` before writing one would silently leave two competing configs in
-// place whenever a project already carries its allurerc under any of the
-// other five.
+// working directory — checking only `.mjs` before writing one would
+// silently leave two competing configs in place whenever a project already
+// carries its allurerc under any of the other five.
 const ALLURE_CONFIG_FILENAMES = [
   "allurerc.js",
   "allurerc.mjs",
@@ -145,8 +141,8 @@ const ALLURE_CONFIG_FILENAMES = [
 ] as const;
 
 /** Recovers the `ErrorKind` a `buildCategories()` rule was built for from
- * its own `messageRegex` (init-allurerc task spec, decision 1) — the rule
- * itself never carries `kind` as a field, only the escaped
+ * its own `messageRegex` — the rule itself never carries `kind` as a field,
+ * only the escaped
  * `[nukadoko.failure=<kind>]` marker `categories.ts`'s own `escapeRegExp`
  * folded into that string (tests/allure-config-drift.test.ts's
  * `nameByKindFromEngine` recovers it the same way). Throws rather than
@@ -170,7 +166,7 @@ function kindFromMessageRegex(messageRegex: string | RegExp | undefined): string
  * (`src/report/allure/categories.ts`), the same source of truth
  * `examples/allure/allurerc.mjs` is checked against
  * (tests/allure-config-drift.test.ts) — never a second, hand-typed copy of
- * the seven category names (init-allurerc task spec, decision 1).
+ * the seven category names.
  */
 function allurercTemplate(): string {
   const entries = buildCategories().map((rule) => {
@@ -215,12 +211,11 @@ function allurercTemplate(): string {
 
 /**
  * Writes `<rootDir>/allurerc.mjs` unless a config Allure 3 already
- * auto-detects is present under any of `ALLURE_CONFIG_FILENAMES` (decision
- * 2) — in which case nothing is written, and stderr says which file was
- * found and why nothing happened (decision 2: never skip silently, the
- * same "diagnostics on stderr" split every other line in this module
- * follows). Returns the path written, relative to `rootDir`, or `null`
- * when nothing was.
+ * auto-detects is present under any of `ALLURE_CONFIG_FILENAMES` — in which
+ * case nothing is written, and stderr says which file was found and why
+ * nothing happened (never skip silently, the same "diagnostics on stderr"
+ * split every other line in this module follows). Returns the path
+ * written, relative to `rootDir`, or `null` when nothing was.
  */
 async function ensureAllurercFile(rootDir: string, stderr: WritableSink): Promise<string | null> {
   for (const filename of ALLURE_CONFIG_FILENAMES) {

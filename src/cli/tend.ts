@@ -7,33 +7,30 @@ import type { WritableSink } from "./writable-sink.js";
 // way cli/check.ts's own `runCheck` is (unit-testable without going through
 // yargs). Exit code is "1 or more errors" (docs/spec.md "Tending": "the
 // sign-off finding exits non-zero … the rest do not, because a project is
-// allowed to carry them") — in m8a `errors` is always `[]`, so this always
-// exits 0 until m8b adds the one finding that can set it to 1.
+// allowed to carry them") — `errors` is populated by the sign-off-rot
+// finding alone: every other finding this command reports is a note.
 //
 // `formatLocation`/`formatIssueLine` are a small, deliberate duplicate of
 // cli/check.ts's own private (unexported) helpers of the same name, not an
-// import from that file: cli/check.ts is outside this task's file
-// ownership, and the two commands' human-readable formats only coincide by
-// convention (this task's spec: "nuka check の text 出力の作りに倣う") —
-// sharing the implementation would wire the two commands' output format
-// together for no reason either command needs.
+// import from that file: the two commands' human-readable formats only
+// coincide by convention, matching `nuka check`'s text output so the two
+// look consistent — sharing the implementation would wire the two
+// commands' output format together for no reason either command needs.
 //
-// `formatSummaryLines` (m8c-tend-summary task spec) prints ahead of every
-// finding, in plain "label: value" prose rather than the tab-separated
-// `error`/`note` line shape below — deliberately, so a reader can tell "this
-// is where the bed is" from "this is a finding" without reading either
-// line's content (docs/spec.md "Tending": the summary is not itself a
-// finding). It always prints, even with zero compat steps or an otherwise
-// empty report — "typed 12, compat 0" is itself the useful fact that
-// migration is done (this task's spec).
+// `formatSummaryLines` prints ahead of every finding, in plain
+// "label: value" prose rather than the tab-separated `error`/`note` line
+// shape below — deliberately, so a reader can tell "this is where the bed
+// is" from "this is a finding" without reading either line's content
+// (docs/spec.md "Tending": the summary is not itself a finding). It always
+// prints, even with zero compat steps or an otherwise empty report —
+// "typed 12, compat 0" is itself the useful fact that migration is done.
 //
-// The `scanned:` line (fb3-scan-dirs task spec, decision 3) prints first,
-// ahead of `bed:` — a reader needs to know what was looked at before a count
-// derived from that look means anything; this is the fact that makes
-// `pattern-unbound` legible instead of quietly wrong the moment an accepted
-// feature lives outside `featuresDir`. `read-only` joins the `bed:` line
-// itself (same task spec, decision 5: "bed 行に出す") rather than a fourth
-// line, since it is counted in the exact same vocabulary walk as
+// The `scanned:` line prints first, ahead of `bed:` — a reader needs to
+// know what was looked at before a count derived from that look means
+// anything; this is the fact that makes `pattern-unbound` legible instead
+// of quietly wrong the moment an accepted feature lives outside
+// `featuresDir`. `read-only` joins the `bed:` line itself rather than a
+// fourth line, since it is counted in the exact same vocabulary walk as
 // `typed`/`compat` (src/tend/summary.ts).
 
 export interface RunTendOptions {
@@ -65,9 +62,11 @@ function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
 
 // Two lines, matching docs/spec.md's own CLI summary phrasing for `nuka
 // tend` ("how much of the vocabulary is typed rather than compat and how
-// much of it declares what it could"). `compatStepNames` is left out of text
-// on purpose (this task's spec: "text 出力は数字のまま") — it is still on
-// `report.summary` for `--json`, which dumps the whole report as-is below.
+// much of it declares what it could"). `compatStepNames` is left out of
+// text on purpose: text output is what a human takes in at a glance, so it
+// stays as counts; it is still on `report.summary` for `--json`, which
+// dumps the whole report as-is below, because naming the actual steps is
+// more useful than a count to whatever reads that machine-readable form.
 function formatSummaryLines(summary: TendSummary): string[] {
   return [
     `scanned: ${summary.scannedFeatureDirs.join(", ")}`,
@@ -90,11 +89,11 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   if (json) {
     stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
-    // Summary first (m8c-tend-summary task spec: "findings の前"), then
-    // findings grouped by kind (this task's spec): errors first (always
-    // empty until m8b), then notes — and `analyzeTend` already builds
-    // `notes` as consecutive per-finding blocks, so printing it in order is
-    // grouping, with no sort needed here.
+    // Summary first, ahead of the findings, then the findings grouped by
+    // kind: errors first (empty unless the sign-off-rot finding fired),
+    // then notes — and `analyzeTend` already builds `notes` as consecutive
+    // per-finding blocks, so printing it in order is grouping, with no sort
+    // needed here.
     for (const line of formatSummaryLines(report.summary)) {
       stdout.write(`${line}\n`);
     }

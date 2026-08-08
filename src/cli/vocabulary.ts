@@ -20,14 +20,14 @@ import { stepNeeds } from "../step/step-needs.js";
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
 // load the project's config, then discover its vocabulary. Kept out of
 // run-cli.ts so that path is unit-testable without going through yargs.
-// `discoverSteps` also returns compat-origin parameter type registrations
-// (m2a-compat-registry task spec) — irrelevant to `steps`/`describe`, which
-// only ever list/describe the step vocabulary itself, so this module drops
-// that half of the result. `formatVocabulary` below is `nuka steps`' non-JSON
-// rendering, also kept here as a pure function (steps-human-output task
-// spec) — `run-cli.ts`'s handler passes a `WritableSink`, which can't answer
-// "how wide is the terminal", so the width this function wraps to is
-// resolved by the caller and passed in as a plain number.
+// `discoverSteps` also returns compat-origin parameter type registrations —
+// irrelevant to `steps`/`describe`, which only ever list/describe the step
+// vocabulary itself, so this module drops that half of the result.
+// `formatVocabulary` below is `nuka steps`' non-JSON rendering, also kept
+// here as a pure function — `run-cli.ts`'s handler passes a `WritableSink`,
+// which can't answer "how wide is the terminal", so the width this
+// function wraps to is resolved by the caller and passed in as a plain
+// number.
 //
 /** One `discoverSteps`-style import failure, before this module renames its
  * `filePath` field to `file` for `--json` (`toImportFailureSummaries`
@@ -41,24 +41,23 @@ export interface RawImportFailure {
 /** Default `false`, same convention as `discoverSteps`' own
  * `tolerateImportFailures` (src/discover/discover-steps.ts) — `run`/`do`/
  * `init` build their own vocabulary without ever passing this at all
- * (fb5-loader-visibility task spec: those stay fail-fast, only `steps`/
- * `describe` opt in here), so an unspecified option here still means
- * exactly the pre-existing behavior. */
+ * (those stay fail-fast, only `steps`/`describe` opt in here), so an
+ * unspecified option here still means exactly the pre-existing behavior. */
 export interface LoadVocabularyOptions {
   readonly tolerateImportFailures?: boolean;
 }
 
-/** Also returns `config` (P5 task spec, scope item 11) — `nuka steps
- * --json`'s own `needs_browser` now needs the fixture dependency graph
- * (`buildFixtureGraph(config)`) to compute its transitive closure through
- * `config.fixtures`, and building that graph needs `config` itself.
- * `describe`'s own handler simply ignores this second field, unchanged.
+/** Also returns `config` — `nuka steps --json`'s own `needs_browser` now
+ * needs the fixture dependency graph (`buildFixtureGraph(config)`) to
+ * compute its transitive closure through `config.fixtures`, and building
+ * that graph needs `config` itself. `describe`'s own handler simply
+ * ignores this second field, unchanged.
  *
- * Also returns `importFailures` (fb5-loader-visibility task spec) — always
- * `[]` unless the caller passes `{ tolerateImportFailures: true }`, in which
- * case a broken step file is collected here instead of rejecting this whole
- * call, the same tolerant mode `nuka check`/`nuka tend` already use
- * (src/check/analyze.ts, src/tend/analyze.ts). */
+ * Also returns `importFailures` — always `[]` unless the caller passes
+ * `{ tolerateImportFailures: true }`, in which case a broken step file is
+ * collected here instead of rejecting this whole call, the same tolerant
+ * mode `nuka check`/`nuka tend` already use (src/check/analyze.ts,
+ * src/tend/analyze.ts). */
 export async function loadVocabulary(
   rootDir: string,
   options: LoadVocabularyOptions = {},
@@ -72,18 +71,18 @@ export async function loadVocabulary(
   return { vocabulary, config, importFailures };
 }
 
-/** Thrown by {@link assertFeaturesDirExists} (cli-messages-name-the-cause
- * task spec, item 1). `discoverSteps` itself treats a missing `featuresDir`
- * as "nothing found here" (src/discover/discover-steps.ts's own
- * `walkStepFiles`) rather than an error, on purpose: an empty vocabulary is
- * a valid answer for a project that does have a `featuresDir`, just no steps
- * in it yet. But `nuka steps` was reusing that same leniency for a project
- * that has no `featuresDir` at all, which is a different fact — indistinguishable
+/** Thrown by {@link assertFeaturesDirExists}. `discoverSteps` itself
+ * treats a missing `featuresDir` as "nothing found here"
+ * (src/discover/discover-steps.ts's own `walkStepFiles`) rather than an
+ * error, on purpose: an empty vocabulary is a valid answer for a project
+ * that does have a `featuresDir`, just no steps in it yet. But `nuka
+ * steps` was reusing that same leniency for a project that has no
+ * `featuresDir` at all, which is a different fact — indistinguishable
  * from the empty-vocabulary case in `--json`'s own `{"steps": [], ...}`
- * output, `nuka check`'s `features-dir-missing` already tells the two apart
- * (src/check/config-check.ts), and this error, and the message it carries,
- * matches that check's own wording so the same mistake reads the same way
- * from either command. */
+ * output, `nuka check`'s `features-dir-missing` already tells the two
+ * apart (src/check/config-check.ts), and this error, and the message it
+ * carries, matches that check's own wording so the same mistake reads
+ * the same way from either command. */
 export class FeaturesDirMissingError extends Error {
   constructor(
     readonly featuresDir: string,
@@ -97,8 +96,8 @@ export class FeaturesDirMissingError extends Error {
 /** Throws {@link FeaturesDirMissingError} when `config.featuresDir` does not
  * exist on disk, the same condition `nuka check`'s `features-dir-missing`
  * checks (src/check/config-check.ts) — kept here, not called from
- * `loadVocabulary` itself, so `nuka describe` (this task's spec named only
- * `nuka steps`) keeps its own existing behavior unchanged. */
+ * `loadVocabulary` itself, so `nuka describe` (this check's own scope was
+ * `nuka steps` alone) keeps its own existing behavior unchanged. */
 export function assertFeaturesDirExists(rootDir: string, config: NukadokoConfig): void {
   const featuresRoot = path.join(rootDir, config.featuresDir);
   if (!existsSync(featuresRoot)) {
@@ -106,11 +105,10 @@ export function assertFeaturesDirExists(rootDir: string, config: NukadokoConfig)
   }
 }
 
-/** `{ file, message }` per import failure (fb5-loader-visibility task spec,
- * decision 1) — `file`, not `discoverSteps`' own `filePath`, to match every
- * other `--json` field this CLI already uses for a location
- * (`CheckIssue.file`), rather than this one command inventing a second name
- * for the same thing. */
+/** `{ file, message }` per import failure — `file`, not `discoverSteps`'
+ * own `filePath`, to match every other `--json` field this CLI already
+ * uses for a location (`CheckIssue.file`), rather than this one command
+ * inventing a second name for the same thing. */
 export interface ImportFailureSummary {
   readonly file: string;
   readonly message: string;
@@ -122,9 +120,9 @@ export function toImportFailureSummaries(
   return failures.map((failure) => ({ file: failure.filePath, message: failure.message }));
 }
 
-/** stderr's own tail listing (fb5-loader-visibility task spec, decision 1:
- * "読めなかったファイルは stderr に末尾で列挙する" so stdout's own shape,
- * json or text, never has to carry it). Returns `""` (nothing to write) when
+/** stderr's own tail listing: unreadable files are listed there, at the
+ * tail, so stdout's own shape, json or text, never has to carry it.
+ * Returns `""` (nothing to write) when
  * `failures` is empty, so a caller can call this unconditionally. Same
  * newline-collapsing as src/cli/check.ts's own `formatIssueLine` — an
  * import error's message can itself carry embedded newlines. */
@@ -138,23 +136,23 @@ export function formatImportFailuresStderr(failures: readonly ImportFailureSumma
   return `${failures.length} step file${failures.length === 1 ? "" : "s"} could not be imported:\n${lines.join("\n")}\n`;
 }
 
-// `StepNames` (m6a-from-core task spec, item 7): a step's own `from` field
-// (src/step/define-step.ts's `StepFromMap`) names its upstream by the `Step`
-// object itself, never by name — the same identity-over-name choice
-// `ctx.resultOf` makes, and for the same reason (docs/spec.md "Chaining
-// steps"). Rendering `from` for `nuka steps --json`/`nuka describe` still
-// has to show a *name* ("projectId" ← "create-project.id"), which only
-// exists at discovery time. `summarize`/`describeContract` below take one
-// `VocabularyEntry` at a time, never the whole `Vocabulary`, so neither can
-// resolve an upstream Step's name from its own argument alone — hence this
-// second, required parameter, built once per command by `buildStepNames`
-// below and threaded through. A previous version of this module kept that
-// lookup in a module-level `WeakMap`, populated as a `loadVocabulary` side
-// effect: that made a caller's *order* (load, then summarize) load-bearing
-// in a way neither type signature said, and left "(unregistered step)"
-// ambiguous between "really never discovered" and "just called before that
-// side effect ran" (m6d-vocabulary-name-lookup task spec). Passing the
-// lookup as an argument makes forgetting it a compile error instead.
+// `StepNames`: a step's own `from` field (src/step/define-step.ts's
+// `StepFromMap`) names its upstream by the `Step` object itself, never by
+// name — the same identity-over-name choice `ctx.resultOf` makes, and for
+// the same reason (docs/spec.md "Chaining steps"). Rendering `from` for
+// `nuka steps --json`/`nuka describe` still has to show a *name*
+// ("projectId" ← "create-project.id"), which only exists at discovery
+// time. `summarize`/`describeContract` below take one `VocabularyEntry` at
+// a time, never the whole `Vocabulary`, so neither can resolve an upstream
+// Step's name from its own argument alone — hence this second, required
+// parameter, built once per command by `buildStepNames` below and
+// threaded through. A previous version of this module kept that lookup in
+// a module-level `WeakMap`, populated as a `loadVocabulary` side effect:
+// that made a caller's *order* (load, then summarize) load-bearing in a
+// way neither type signature said, and left "(unregistered step)"
+// ambiguous between "really never discovered" and "just called before
+// that side effect ran". Passing the lookup as an argument makes
+// forgetting it a compile error instead.
 export type StepNames = ReadonlyMap<Step, string>;
 
 /** Builds the {@link StepNames} lookup `summarize`/`describeContract` need,
@@ -182,26 +180,24 @@ function upstreamStepName(step: Step, stepNames: StepNames): string {
 
 /** One candidate producer, rendered for `nuka steps --json` — `fromSummary`
  * below emits one of these directly for a single-candidate key (unchanged
- * shape, m6a-from-core) or an array of them for a multi-candidate key (m7a-
- * from-alternatives task spec, item 5): the array-vs-object distinction
- * itself is how a reader tells a key with one candidate from a key with
- * several, without a separate count field. */
+ * shape) or an array of them for a multi-candidate key: the
+ * array-vs-object distinction itself is how a reader tells a key with one
+ * candidate from a key with several, without a separate count field. */
 interface FromCandidateSummary {
   readonly step: string;
   readonly key: string;
 }
 
-/** `nuka steps --json`'s own rendering of a step's `from` (this task's spec,
- * item 7; multi-candidate shape added by m7a-from-alternatives task spec,
- * item 5) — one entry per key, `undefined` (hence omitted, `rationale`'s own
- * convention) when the step declares no `from` at all. A key with exactly
- * one candidate keeps the pre-m7a `{ step, key }` object shape untouched
- * (existing output for existing steps does not change); a key with more than
- * one is an array of that same shape, `[{ step, key }, ...]` — deliberately
- * not always-an-array, so a consumer written against the single-candidate
- * shape before this task keeps working, and a reader can tell "one
- * candidate" from "several" by checking `Array.isArray` (or simply
- * `.length`) without a separate field either way. */
+/** `nuka steps --json`'s own rendering of a step's `from` — one entry per
+ * key, `undefined` (hence omitted, `rationale`'s own convention) when the
+ * step declares no `from` at all. A key with exactly one candidate keeps
+ * the original `{ step, key }` object shape untouched (existing output for
+ * existing steps does not change); a key with more than one is an array of
+ * that same shape, `[{ step, key }, ...]` — deliberately not
+ * always-an-array, so a consumer written against the single-candidate
+ * shape keeps working, and a reader can tell "one candidate" from
+ * "several" by checking `Array.isArray` (or simply `.length`) without a
+ * separate field either way. */
 function fromSummary(
   from: StepFromMap,
   stepNames: StepNames,
@@ -223,16 +219,15 @@ function fromSummary(
   return result;
 }
 
-/** `nuka describe`'s own rendering of a step's `from` (this task's spec,
- * item 7) — one human-readable "step.key" string per key, the same "arrow"
- * shape docs/spec.md "Chaining steps" itself uses in prose
- * ("`projectId` ← `createProject.id`"), deliberately different from
- * `fromSummary`'s more structured shape above: `nuka describe` is the one
- * command meant for a person to read directly, `nuka steps --json` the one
- * meant for a program to parse. `undefined` (hence omitted) under the same
- * condition as `fromSummary`. A key with more than one candidate (m7a-from-
- * alternatives task spec, item 5) reads as "either of A or B" — spelled out
- * so a person skimming `nuka describe` sees the "exactly one of these, never
+/** `nuka describe`'s own rendering of a step's `from` — one human-readable
+ * "step.key" string per key, the same "arrow" shape docs/spec.md "Chaining
+ * steps" itself uses in prose ("`projectId` ← `createProject.id`"),
+ * deliberately different from `fromSummary`'s more structured shape above:
+ * `nuka describe` is the one command meant for a person to read directly,
+ * `nuka steps --json` the one meant for a program to parse. `undefined`
+ * (hence omitted) under the same condition as `fromSummary`. A key with
+ * more than one candidate reads as "either of A or B" — spelled out so a
+ * person skimming `nuka describe` sees the "exactly one of these, never
  * both" relationship the JSON form only implies through array length. */
 function fromHumanReadable(from: StepFromMap, stepNames: StepNames): Record<string, string> | undefined {
   const entries = Object.entries(from);
@@ -250,8 +245,9 @@ function fromHumanReadable(from: StepFromMap, stepNames: StepNames): Record<stri
 }
 
 /**
- * `nuka steps`' one row per vocabulary entry. `kind` is always present
- * (this task's spec, item 5: `kind` is always shown); `description`/`mutates` are
+ * `nuka steps`' one row per vocabulary entry. `kind` is always present:
+ * it is the field that tells a typed entry from a compat one, so it can't
+ * be conditional the way `description`/`mutates` are — those are
  * present only for a typed entry — a compat entry has neither (no
  * declaration exists to show), and are omitted entirely from `--json`
  * output rather than serialized as `null` (optional fields simply aren't
@@ -264,25 +260,23 @@ export interface StepSummary {
   readonly description?: string;
   readonly mutates?: boolean;
   /** The fixture names this step's own `run()` destructures, alphabetized
-   * (p4b-steps-needs task spec, `src/step/step-needs.ts`'s `stepNeeds`) —
-   * present and possibly `[]` for a typed entry (a step that needs no
-   * fixtures still gets the key, so "no needs" reads differently from "not
-   * a typed entry", which omits it, the same convention `mutates` already
-   * follows), absent entirely for a compat entry (no `run()` exists to
-   * read). Not repeated in `formatVocabulary`'s text rendering below (this
-   * task's spec: the full list is a `--json` concern, the text output only
-   * marks `needsBrowser`).
+   * (`src/step/step-needs.ts`'s `stepNeeds`) — present and possibly `[]`
+   * for a typed entry (a step that needs no fixtures still gets the key, so
+   * "no needs" reads differently from "not a typed entry", which omits it,
+   * the same convention `mutates` already follows), absent entirely for a
+   * compat entry (no `run()` exists to read). Not repeated in
+   * `formatVocabulary`'s text rendering below: the full list is a
+   * `--json` concern, the text output only marks `needsBrowser`.
    *
-   * `null` (fb5-loader-visibility task spec, decision 2), never `undefined`,
-   * when `stepNeeds` itself throws (a `run()` whose first argument can't be
-   * read as fixture names at all) — that step's name/pattern/description
-   * still came through cleanly, so it stays in the output instead of taking
-   * the whole `nuka steps` call down with it (this same throw used to
-   * propagate straight out of `summarize` and kill every other step's own
-   * entry too); `needs_error` on the same entry carries why. `null` reads as
-   * "couldn't tell", distinct from `[]`'s "asked, and there is nothing" the
-   * same way `needs`'s own presence already distinguishes typed from
-   * compat. */
+   * `null`, never `undefined`, when `stepNeeds` itself throws (a `run()`
+   * whose first argument can't be read as fixture names at all) — that
+   * step's name/pattern/description still came through cleanly, so it
+   * stays in the output instead of taking the whole `nuka steps` call
+   * down with it (this same throw used to propagate straight out of
+   * `summarize` and kill every other step's own entry too); `needs_error`
+   * on the same entry carries why. `null` reads as "couldn't tell",
+   * distinct from `[]`'s "asked, and there is nothing" the same way
+   * `needs`'s own presence already distinguishes typed from compat. */
   readonly needs?: readonly string[] | null;
   /** Whether this step's own fixture needs open a browser (`page` or
    * `context` among `needs`, `stepNeeds`'s own doc comment explains why
@@ -295,42 +289,38 @@ export interface StepSummary {
    * Also omitted, alongside `needs: null`, when `stepNeeds` throws — a
    * browser-need verdict this file can't derive is not one it states. */
   readonly needs_browser?: boolean;
-  /** `stepNeeds`'s own thrown error message (fb5-loader-visibility task
-   * spec, decision 2), present only alongside `needs: null` — see that
-   * field's own doc comment. */
+  /** `stepNeeds`'s own thrown error message, present only alongside
+   * `needs: null` — see that field's own doc comment. */
   readonly needs_error?: string;
   /** A best-effort guess at this step's fixture needs, read by scanning
-   * `run()`'s own source text for its first argument's member accesses
-   * (fb5-needs-inferred task spec) — present only alongside `needs: null`
-   * and only when that guess could be attempted at all (`src/step/infer-
-   * needs.ts`'s own `inferNeeds`, called only for the one throw shape it
-   * can key a scan on: `run(ctx, args)`'s own un-destructured first
-   * argument). Deliberately a field of its own, never merged into `needs`
-   * (that spec's decision 1, "推論値と契約を混ぜない"): `needs` is read
-   * from a destructuring pattern and used to decide what to build before a
-   * step runs; this is a lexical guess about a step that cannot run yet,
-   * kept for the sake of an agent tallying what a migration still owes, not
-   * for anything that decides what nukadoko does. `needs_browser` is never
-   * inferred alongside this for the same reason — see that field's own
-   * doc comment. Possibly `[]` (attempted, and nothing recognizable was
+   * `run()`'s own source text for its first argument's member accesses —
+   * present only alongside `needs: null` and only when that guess could be
+   * attempted at all (`src/step/infer-needs.ts`'s own `inferNeeds`, called
+   * only for the one throw shape it can key a scan on: `run(ctx, args)`'s
+   * own un-destructured first argument). Deliberately a field of its own,
+   * never merged into `needs`: `needs` is read from a destructuring
+   * pattern and used to decide what to build before a step runs; this is
+   * a lexical guess about a step that cannot run yet, kept for the sake of
+   * an agent tallying what a migration still owes, not for anything that
+   * decides what nukadoko does. `needs_browser` is never inferred
+   * alongside this for the same reason — see that field's own doc
+   * comment. Possibly `[]` (attempted, and nothing recognizable was
    * touched), same "asked, and there is nothing" reading `needs: []`
    * already carries for a typed entry. */
   readonly needs_inferred?: readonly string[];
-  /** Where each declared args key not left to a pattern capture comes from
-   * (m6a-from-core task spec, item 7) — key → `{ step, key }`, the upstream
-   * step's own name and the `returns` key read from it, or (m7a-from-
-   * alternatives task spec, item 5) an array of that same shape when the key
-   * lists more than one mutually exclusive candidate producer. Absent for a
-   * compat entry (no declaration exists) and omitted entirely, like
-   * `mutates`, rather than serialized as `{}`, when a typed step declares no
-   * `from` at all. Deliberately absent from `formatVocabulary`'s text
-   * rendering below — `nuka steps` (non-JSON) stays one line per step, an
-   * existing decision this task does not revisit. */
+  /** Where each declared args key not left to a pattern capture comes
+   * from — key → `{ step, key }`, the upstream step's own name and the
+   * `returns` key read from it, or an array of that same shape when the
+   * key lists more than one mutually exclusive candidate producer. Absent
+   * for a compat entry (no declaration exists) and omitted entirely, like
+   * `mutates`, rather than serialized as `{}`, when a typed step declares
+   * no `from` at all. Deliberately absent from `formatVocabulary`'s text
+   * rendering below — `nuka steps` (non-JSON) stays one line per step. */
   readonly from?: Record<string, { step: string; key: string } | ReadonlyArray<{ step: string; key: string }>>;
 }
 
-/** The fixture names `needs_inferred` (fb5-needs-inferred task spec) is
- * allowed to keep, mirroring `stepNeeds`'s own graph-or-builtins fallback
+/** The fixture names `needs_inferred` is allowed
+ * to keep, mirroring `stepNeeds`'s own graph-or-builtins fallback
  * just below: `graph.nodes` is already builtins ∪ `config.fixtures` (src/
  * fixture/graph.ts's own `FixtureGraph` doc comment), so a caller that
  * built one hands back exactly that; a caller with no config-derived graph
@@ -340,7 +330,7 @@ function knownFixtureNamesFor(graph: FixtureGraph | undefined): ReadonlySet<stri
   return graph !== undefined ? new Set(graph.nodes.keys()) : new Set(BUILTIN_FIXTURE_NAMES);
 }
 
-/** `graph` (P5 task spec, scope item 11) is optional so every call site
+/** `graph` is optional so every call site
  * that has no config-derived fixture graph handy keeps working unchanged
  * (`needs_browser` falls back to `stepNeeds`'s own direct membership
  * check) — `nuka steps --json`'s own handler (run-cli.ts) is the one
@@ -364,22 +354,20 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
   // `stepNeeds` throws for a `run()` it can't read fixture names from at all
   // (src/step/step-needs.ts, via src/step/fixture-names.ts) — that used to
   // propagate straight out of this function and take every other step's own
-  // entry down with it (fb5-loader-visibility task spec, decision 2: one
-  // unparseable `run()` should not empty the whole vocabulary a reader is
-  // trying to see). Caught here, per entry, so the rest of `nuka steps`
-  // still lists everything else it could read.
+  // entry down with it: one unparseable `run()` should not empty the whole
+  // vocabulary a reader is trying to see. Caught here, per entry, so the
+  // rest of `nuka steps` still lists everything else it could read.
   try {
     const { needs, needsBrowser } = stepNeeds(entry.step, graph);
     return { ...base, needs, needs_browser: needsBrowser };
   } catch (error) {
-    // A guess at what `error` couldn't state as a contract (fb5-needs-
-    // inferred task spec) — attempted only for the one throw shape
-    // `inferNeeds` can key a scan on (`FixtureNotDestructuredError`'s own
-    // bare first-argument identifier, e.g. `run(ctx, args)`'s `"ctx"`); a
-    // default-value or rest-property throw leaves no such identifier to
-    // scan by, so this stays `undefined` for those and `needs_inferred`
-    // is simply omitted, same as before this task (decision 3: no
-    // guess reads as no guess, never as an empty one).
+    // A guess at what `error` couldn't state as a contract — attempted
+    // only for the one throw shape `inferNeeds` can key a scan on
+    // (`FixtureNotDestructuredError`'s own bare first-argument identifier,
+    // e.g. `run(ctx, args)`'s `"ctx"`); a default-value or rest-property
+    // throw leaves no such identifier to scan by, so this stays
+    // `undefined` for those and `needs_inferred` is simply omitted: no
+    // guess reads as no guess, never as an empty one.
     const inferred =
       error instanceof FixtureNotDestructuredError
         ? inferNeeds(entry.step.run, error.firstArgumentText, knownFixtureNamesFor(graph))
@@ -395,7 +383,7 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
 
 /**
  * `nuka steps`' non-JSON rendering: one block per entry, blank-line
- * separated, no trailing blank line (steps-human-output task spec). A
+ * separated, no trailing blank line. A
  * one-line-per-step tab-separated table was the previous shape, but real
  * vocabularies run 120-145 characters a line — unreadable once an 80-column
  * terminal soft-wraps it with no indentation to say where a row starts.
@@ -424,24 +412,22 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
     return `${s.name}  compat`;
   }
   const mutatesLabel = s.mutates ? "mutates" : "read-only";
-  // `needs` itself (the full destructured-name list) stays out of this text
-  // rendering on purpose (this task's spec: "needs の全列挙はテキスト側に
-  // 出さない", `--json` is where a reader gets the list); `needs_browser`
+  // `needs` itself (the full destructured-name list) stays out of this
+  // text rendering on purpose: the full enumeration is a `--json`
+  // concern, `--json` is where a reader gets the list; `needs_browser`
   // gets a single word, appended only when true, the same "mark the fact,
-  // say nothing when there's nothing to say" choice `compat` above already
-  // makes for a step with no declaration at all.
+  // say nothing when there's nothing to say" choice `compat` above
+  // already makes for a step with no declaration at all.
   const browserLabel = s.needs_browser ? "  browser" : "";
-  // A heading marker plus its own reason line (fb5-loader-visibility task
-  // spec, decision 2: "human では needs の位置に理由つきで「引けなかった」
-  // と分かる表示を出す") — never both this and `browserLabel`, since
-  // `needs_browser` is itself only ever set when `needs_error` is not.
-  // `needs_inferred` (fb5-needs-inferred task spec, decision 3) swaps the
-  // marker word itself rather than adding a second one — a reader still
-  // sees exactly one word at this position, now saying "guessed, don't
-  // trust it" instead of "gave up" when a guess was possible. The reason
-  // line just below stays exactly as it was either way (still `needs_error`,
-  // never the guessed list itself — that stays a `--json`-only concern, same
-  // as `needs` in the successful case).
+  // A heading marker plus its own reason line — never both this and
+  // `browserLabel`, since `needs_browser` is itself only ever set when
+  // `needs_error` is not. `needs_inferred` swaps the marker word itself
+  // rather than adding a second one — a reader still sees exactly one
+  // word at this position, now saying "guessed, don't trust it" instead
+  // of "gave up" when a guess was possible. The reason line just below
+  // stays exactly as it was either way (still `needs_error`, never the
+  // guessed list itself — that stays a `--json`-only concern, same as
+  // `needs` in the successful case).
   const needsErrorLabel =
     s.needs_error === undefined ? "" : s.needs_inferred !== undefined ? "  needs (inferred)" : "  needs unreadable";
   const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}${needsErrorLabel}`];
@@ -462,9 +448,9 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
  * Wraps `text` at space boundaries only — a pattern is a cucumber-expression
  * or regex and a description is free-form prose, and splitting either mid-
  * word would make it uncopyable as the literal thing it names. A single word
- * wider than `width` is left on its own line unsplit for the same reason
- * (this task's spec: the terminal's own wrapping is the fallback, not this
- * function's job to improve on).
+ * wider than `width` is left on its own line unsplit for the same reason:
+ * the terminal's own wrapping is the fallback, not this function's job to
+ * improve on.
  */
 function wrapIndented(text: string, width: number): string[] {
   const lines: string[] = [];
@@ -500,11 +486,11 @@ export interface TypedStepContract {
   readonly mutates: boolean;
   /** Why this step is implemented this way, and what was rejected
    * (`defineStep`'s own `rationale`) — present only when the step declared
-   * one (t2-rationale task spec, item 3: omitted, not an empty string, same
-   * convention as `used` on a receipt). Deliberately absent from
-   * `StepSummary`/`summarize` below — `nuka steps` stays one line per step. */
+   * one (omitted, not an empty string, same convention as `used` on a
+   * receipt). Deliberately absent from `StepSummary`/`summarize` below —
+   * `nuka steps` stays one line per step. */
   readonly rationale?: string;
-  /** Human-readable rendering of `from` (m6a-from-core task spec, item 7) —
+  /** Human-readable rendering of `from` —
    * `fromHumanReadable`'s own doc comment explains the "step.key" shape and
    * why it differs from `StepSummary.from`'s more structured one. Omitted,
    * not `{}`, when the step declares no `from` at all — same convention as
@@ -515,7 +501,7 @@ export interface TypedStepContract {
 }
 
 /**
- * `nuka describe` on a compat entry (this task's spec, item 5): no schema
+ * `nuka describe` on a compat entry: no schema
  * exists to show, so this shape says so explicitly instead of a StepContract
  * with holes in it — `pattern` names what would need a `defineStep` to gain
  * a contract, and `message` states that plainly (docs/spec.md "What compat
@@ -548,7 +534,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames): 
     mutates: entry.step.mutates,
     // `rationale` is `string | undefined` on `Step`; `JSON.stringify` drops
     // an `undefined`-valued key on its own, so a step with none simply has
-    // no "rationale" key in the output (t2-rationale task spec, item 3).
+    // no "rationale" key in the output.
     rationale: entry.step.rationale,
     from: fromHumanReadable(entry.step.from, stepNames),
     args: z.toJSONSchema(entry.step.args),

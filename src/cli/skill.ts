@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: `nuka skill path` (docs/spec.md "CLI summary", M5 roadmap
-// slice A). `path` is the only verb: printing where this package's own
+// Responsibility: `nuka skill path` (docs/spec.md "CLI summary").
+// `path` is the only verb: printing where this package's own
 // skill sources live on disk is a fact about the installed nukadoko, not a
 // choice nukadoko should be making on a user's behalf.
 //
@@ -28,7 +28,7 @@ import type { WritableSink } from "./writable-sink.js";
 // post-build: two directories below `<root>` either way. Walking up two
 // directories from this file's own URL therefore lands on the package root
 // whether the process started via `npx tsx src/cli.ts` or `node
-// dist/cli.js` — the two entry points this task's spec requires both work.
+// dist/cli.js` — both of which need to work.
 
 function packageRoot(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));

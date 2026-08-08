@@ -18,9 +18,9 @@ import type { ScenarioRecord } from "../run/record-types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: `nuka accept <feature>`'s actual work (m4b-accept task
-// spec), kept out of run-cli.ts so it's unit-testable without going through
-// yargs (same split as every other command). `accept` never executes
+// Responsibility: `nuka accept <feature>`'s actual work, kept out of
+// run-cli.ts so it's unit-testable without going through yargs (same split
+// as every other command). `accept` never executes
 // anything — src/run/run-scenario.ts is untouched by this file — it only
 // reads what `nuka run` already wrote (record.json/receipt.json under
 // `<stateDir>/scenarios/*`) and, if every one of the spec's seven refusal
@@ -42,15 +42,16 @@ import type { WritableSink } from "./writable-sink.js";
 // (src/run/probe-git.ts, reused rather than re-implemented per the spec's
 // own list of things this task must not touch).
 //
-// Condition 4's fourth way (accept-condition task spec, item 3/4;
-// p8-scope-rename-and-accept-env task spec, part B): a candidate must have
-// run under the *current* condition, both axes — `environment` (this
-// command's own `--env`, resolved through `resolveEnvironment`, the exact
-// same path `nuka run` uses, no separate default of its own) matched
-// against each record's own measured `environment` field, and `config.
-// browserType` matched against each record's own measured `browser.type`
-// (never a declaration stored on the record; there isn't one, p6-browser-
-// type task spec) via `browserConditionMatches`. Filenames already carry
+// Condition 4's fourth way: a candidate must have run under the *current*
+// condition, both axes — `environment` (this command's own `--env`,
+// resolved through `resolveEnvironment`, the exact same path `nuka run`
+// uses, no separate default of its own) matched against each record's own
+// measured `environment` field, and `config.browserType` matched against
+// each record's own measured `browser.type` (never a declaration stored on
+// the record: a declared browser type and the one actually launched can
+// diverge, e.g. a step overriding the `page` fixture with a different
+// engine, so only the measured value is worth recording or comparing
+// against) via `browserConditionMatches`. Filenames already carry
 // the condition (below), so a candidate selected under the wrong
 // environment would freeze a record whose own name lies about what it was
 // confirmed under — `--env` closes that gap: without it, two green runs of
@@ -64,8 +65,8 @@ import type { WritableSink } from "./writable-sink.js";
 // `browserType` at one that already has one") from "nothing has ever run"
 // — see the "no run under the current condition" branch below.
 //
-// Feature-path normalization (spec decision on identifying the target run, item 1) is
-// applied to *both* sides of the comparison, not just the argument. A
+// Feature-path normalization is applied to *both* sides of the
+// comparison, not just the argument. A
 // record's own `feature` is the literal string its `nuka run` invocation was
 // given — src/run/select-pickles.ts's `parseFeatureTarget` strips a trailing
 // `:<line>` and stores the rest verbatim — so `nuka run
@@ -92,15 +93,15 @@ function normalizeFeaturePath(rootDir: string, featureArg: string): string {
   return path.relative(rootDir, path.resolve(rootDir, featureArg));
 }
 
-// The number of failed scenarios named in a "red" refusal is capped (this
-// task's spec: truncation is fine, silent truncation is not) so one feature
-// with dozens of scenarios can't turn the refusal into a wall of text; the
+// The number of failed scenarios named in a "red" refusal is capped
+// (truncation is fine, silent truncation is not) so one feature with
+// dozens of scenarios can't turn the refusal into a wall of text; the
 // "(+N more)" tail is what keeps the cap from reading as the whole story.
 const MAX_FAILED_SCENARIOS_NAMED = 5;
 
 // git-state refusals just above already name what they read (run_id,
-// commit) — this task's spec brings "red"/"partial-only" in line with that,
-// rather than leaving them the only refusals in this file that don't.
+// commit); this brings "red"/"partial-only" in line with that, rather
+// than leaving them the only refusals in this file that don't.
 function formatFailedScenarios(group: readonly ScenarioRecord[]): string {
   const failed = group.filter((record) => record.status !== "passed").sort((a, b) => a.line - b.line);
   const shown = failed.slice(0, MAX_FAILED_SCENARIOS_NAMED);
@@ -112,20 +113,21 @@ function formatFailedScenarios(group: readonly ScenarioRecord[]): string {
   return parts.join("; ");
 }
 
-// accept-condition task spec, item 4: naming the alternatives a "wrong
-// condition" refusal enumerates. `browserType: undefined` reads as "no
-// browser launched" rather than an empty string, matching how the record
-// body and the filename itself both say the same thing explicitly rather
-// than leaving a blank (item 5's own "空欄にしない").
+// Names the alternatives a "wrong condition" refusal enumerates.
+// `browserType: undefined` reads as "no browser launched" rather than an
+// empty string, matching how the record body and the filename itself both
+// say the same thing explicitly rather than leaving a blank: an empty
+// value would leave "no browser launched" indistinguishable from "forgot
+// to record it".
 function formatCondition(condition: RunCondition): string {
   return condition.browserType === undefined
     ? `environment ${condition.environment} (no browser launched)`
     : `environment ${condition.environment}, browser ${condition.browserType}`;
 }
 
-// accept-names-the-state-dir task spec: whether a dirty path measured by
-// `listDirtyPaths` sits under the state directory. `stateDir` is a
-// rootDir-relative string (config/schema.ts's own default: ".nukadoko");
+// Whether a dirty path measured by `listDirtyPaths` sits under the state
+// directory. `stateDir` is a rootDir-relative string (config/schema.ts's
+// own default: ".nukadoko");
 // `dirtyPath` is already rootDir-relative and forward-slash-separated
 // (probe-git.ts's own rebasing), so both sides are normalized to the same
 // separator before comparing.
@@ -134,11 +136,11 @@ function isUnderStateDir(dirtyPath: string, stateDir: string): boolean {
   return dirtyPath === normalizedStateDir || dirtyPath.startsWith(`${normalizedStateDir}/`);
 }
 
-// accept-names-the-state-dir task spec: refusal condition 3's own message,
-// widened to say *what* is dirty when that closes the loop the spec
-// reproduces (dirty -> commit/stash -> accept -> HEAD moved -> run -> dirty
-// again, because the thing making the tree dirty was nukadoko's own state
-// directory the whole time). Only ever reports what was measured, never a
+// Refusal condition 3's own message, widened to say *what* is dirty when
+// that closes a loop this can otherwise fall into (dirty -> commit/stash
+// -> accept -> HEAD moved -> run -> dirty again, because the thing making
+// the tree dirty was nukadoko's own state directory the whole time). Only
+// ever reports what was measured, never a
 // verdict: the project may be gitignoring the state directory correctly and
 // dirty for an unrelated reason (no mention here, the base message alone
 // answers that), or may be tracking it on purpose (this function does not
@@ -173,8 +175,8 @@ function localDateStamp(iso: string): string {
 }
 
 // Frontmatter wants `ran_at`/`accepted_at` to read the same day as the
-// filename's `localDateStamp` (spec's own settled-decisions section) — a UTC `toISOString()`
-// can land on the previous/next local day and make one run look like two.
+// filename's `localDateStamp` — a UTC `toISOString()` can land on the
+// previous/next local day and make one run look like two.
 // Node has no built-in local-offset ISO formatter, so this is hand-rolled:
 // `getTimezoneOffset()` returns minutes *west* of UTC (positive west), the
 // opposite sign of the offset we print, hence the negation below.
@@ -269,12 +271,11 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   const featureRecords = allRecords.filter(
     (record: ScenarioRecord) => normalizeFeaturePath(rootDir, record.feature) === featurePath,
   );
-  // "Measured vs measured" (accept-condition task spec, item 3;
-  // p8-scope-rename-and-accept-env task spec, part B): every candidate must
-  // match on both axes — `environment` against each record's own measured
-  // `environment` field, and browser: either the record launched none at
-  // all, or it launched the one the *current* config declares (never a
-  // value stored on the record itself).
+  // "Measured vs measured": every candidate must match on both axes —
+  // `environment` against each record's own measured `environment` field,
+  // and browser: either the record launched none at all, or it launched
+  // the one the *current* config declares (never a value stored on the
+  // record itself).
   const conditionRecords = featureRecords.filter(
     (record) => record.environment === resolvedEnv.name && browserConditionMatches(record, config.browserType),
   );
@@ -282,10 +283,9 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
 
   if (outcome.kind !== "ok") {
     // The current condition has no qualifying run. Before falling back to
-    // the three condition-blind refusals below (unchanged from m4b-accept),
-    // check whether a green full run exists at all, just under some other
-    // condition — a materially different situation from "nothing has ever
-    // run" (accept-condition task spec, item 4).
+    // the three condition-blind refusals below, check whether a green
+    // full run exists at all, just under some other condition — a
+    // materially different situation from "nothing has ever run".
     const anyConditionOutcome = selectAcceptableRun(featureRecords, featureLines);
 
     if (anyConditionOutcome.kind === "ok") {
@@ -327,11 +327,10 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
 
   const { group, startedAt } = outcome;
   const anyRecord = group[0]!;
-  // The group's own recorded browser condition (accept-condition task spec,
-  // item 2/5) — every record in `group` already satisfies
-  // `browserConditionMatches`, so any one that launched a browser at all
-  // measured the same `config.browserType` this run was filtered against;
-  // `undefined` when none of them did.
+  // The group's own recorded browser condition — every record in `group`
+  // already satisfies `browserConditionMatches`, so any one that launched
+  // a browser at all measured the same `config.browserType` this run was
+  // filtered against; `undefined` when none of them did.
   const browserRecord = group.find((record) => record.browser !== undefined)?.browser;
 
   // --- Refusal conditions 5-7: the *selected run's own* git state. ---
@@ -385,16 +384,16 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
     throw error;
   }
 
-  // The filename bakes the condition in (accept-condition task spec, item
-  // 2) — a different condition must never collide with, and silently
-  // overwrite, another one's own record. `<date>-<sha>` stays exactly where
-  // it was so an existing reader looking for that substring still finds it;
-  // `environment` and the browser segment are appended after. The browser
-  // segment is the literal `no-browser` when nothing in `group` launched
-  // one, never an omitted segment — an omitted segment would make "browser
-  // not part of this filename" indistinguishable from "happened not to need
-  // one this time" at a glance, and never a version (item 2: the engine's
-  // type is enough for acceptance; the version lives in the record body).
+  // The filename bakes the condition in — a different condition must
+  // never collide with, and silently overwrite, another one's own record.
+  // `<date>-<sha>` stays exactly where it was so an existing reader
+  // looking for that substring still finds it; `environment` and the
+  // browser segment are appended after. The browser segment is the literal
+  // `no-browser` when nothing in `group` launched one, never an omitted
+  // segment — an omitted segment would make "browser not part of this
+  // filename" indistinguishable from "happened not to need one this time"
+  // at a glance, and never a version (the engine's type is enough for
+  // acceptance; the version lives in the record body).
   const basename = path.basename(featurePath, ".feature");
   const dateStamp = localDateStamp(startedAt.toISOString());
   const sha7 = runGit.commit.slice(0, 7);

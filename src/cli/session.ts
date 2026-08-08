@@ -11,8 +11,9 @@ import type { WritableSink } from "./writable-sink.js";
 // stateDir (for sessions/<env>/) but never touch its step vocabulary, so
 // neither loads or discovers steps the way `do`/`steps`/`describe` do.
 // `list` always reports every environment; `clear` takes `--env` (default
-// "default") and only ever touches that one environment's subdirectory
-// (m1-environments task spec, decision 7).
+// "default") and only ever touches that one environment's subdirectory:
+// clearing every environment at once is left out, since the risk of an
+// accidental blast radius outweighs any use case for it.
 
 export interface RunSessionListOptions {
   rootDir: string;
@@ -41,8 +42,8 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
       stdout.write(`${session.name}\t${session.updated_at}\n`);
     }
   }
-  // Empty is a valid, if unhelpful, answer (this task's spec: exit 0
-  // even with zero results) — never an error.
+  // Empty is a valid, if unhelpful, answer, so exit 0 even with zero
+  // results, never an error.
   return 0;
 }
 
@@ -50,8 +51,8 @@ export interface RunSessionClearOptions {
   rootDir: string;
   /** `null` clears every session for `environment`. */
   name: string | null;
-  /** `--env`'s value; "default" when omitted (this task's spec, decision 7 —
-   * there is no all-environments clear). */
+  /** `--env`'s value; "default" when omitted (there is no all-environments
+   * clear). */
   environment: string;
   stdout: WritableSink;
   stderr: WritableSink;
@@ -82,7 +83,7 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
   }
 
   // Silent on success, like `rm`: stdout is reserved for `do`'s receipt and
-  // `list`'s listing (this task's spec's stdout discipline); a successful
-  // `clear` has nothing structured to report.
+  // `list`'s listing; a successful `clear` has nothing structured to
+  // report.
   return 0;
 }

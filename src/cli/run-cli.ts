@@ -44,13 +44,12 @@ import type { WritableSink } from "./writable-sink.js";
 // actual findings) — the same split, one command answering "can this run",
 // the other "is this still healthy" (docs/spec.md "Tending"); `accept`'s
 // own run-selection and record-rendering logic lives in cli/accept.ts and
-// src/accept/* (m4b-accept task spec), the same split; `skill`'s own path
-// resolution logic lives in cli/skill.ts (m5a-acceptance-skill task spec,
-// `install` removed in m5e-skill-spec-compliance — see that file's header),
-// the same split; this module only wires their argv shapes and reports
-// their exit codes.
+// src/accept/*, the same split; `skill`'s own path resolution logic lives
+// in cli/skill.ts (`install` removed — see that file's header), the same
+// split; this module only wires their argv shapes and reports their exit
+// codes.
 //
-// `--version` (own-version task spec) reads nukadoko's own package.json via
+// `--version` reads nukadoko's own package.json via
 // src/version.ts's readOwnVersion() and is fed to yargs' `.version()`
 // explicitly, below — yargs was never told a version before, so it fell
 // back to its own default resolution, which walks up from `process.cwd()`
@@ -78,17 +77,16 @@ interface DescribeArgs {
 
 interface DoArgs {
   name: string;
-  /** Optional only when `--use` is also given (fb4-args-optional task
-   * spec) — `doCommand`'s own `.check()` below enforces that at least one
-   * of the two is present; the handler defaults a missing `args` to
-   * `"{}"` so `--use`'s `from` injection (do.ts, execution phase) still has
-   * an object to fill. */
+  /** Optional only when `--use` is also given — `doCommand`'s own
+   * `.check()` below enforces that at least one of the two is present; the
+   * handler defaults a missing `args` to `"{}"` so `--use`'s `from`
+   * injection (do.ts, execution phase) still has an object to fill. */
   args?: string;
   session?: string;
   env?: string;
-  /** `--use <receipt-id>` (repeatable, m6c-do-use task spec) — yargs'
-   * `array: true` collects every occurrence into this list, in the order
-   * given, rather than only keeping the last one. */
+  /** `--use <receipt-id>` (repeatable) — yargs' `array: true` collects
+   * every occurrence into this list, in the order given, rather than only
+   * keeping the last one. */
   use?: string[];
 }
 
@@ -96,9 +94,9 @@ interface RunArgs {
   feature: string;
   session?: string;
   env?: string;
-  /** Suppresses the per-step/per-scenario progress lines (fb5-run-output
-   * task spec, decision 4) — the output-location and summary lines still
-   * print; run.ts's own header explains why those two are exempt. */
+  /** Suppresses the per-step/per-scenario progress lines — the
+   * output-location and summary lines still print; run.ts's own header
+   * explains why those two are exempt. */
   quiet?: boolean;
 }
 
@@ -182,20 +180,19 @@ export async function runCli(
     handler: async (args: Arguments<StepsArgs>) => {
       if (argsFailed) return;
       try {
-        // Tolerant (fb5-loader-visibility task spec, decision 1): `steps` is
-        // a reporting tool, not something about to execute a step, so one
-        // broken glue file elsewhere must not empty everything else it could
-        // still read — the same migrating-suite reasoning `nuka check`/
-        // `nuka tend` already act on. `run`/`do`/`init` deliberately do not
-        // pass this (they stay fail-fast).
+        // Tolerant: `steps` is a reporting tool, not something about to
+        // execute a step, so one broken glue file elsewhere must not empty
+        // everything else it could still read — the same migrating-suite
+        // reasoning `nuka check`/`nuka tend` already act on. `run`/`do`/
+        // `init` deliberately do not pass this (they stay fail-fast).
         const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
         });
-        // `nuka check`'s own `features-dir-missing` condition (cli-messages-
-        // name-the-cause task spec, item 1): discovery itself treats a
-        // missing featuresDir as an empty vocabulary, so this call is what
-        // keeps that leniency from reading, on stdout, as indistinguishable
-        // from a real project that simply has no steps yet. Thrown before
+        // `nuka check`'s own `features-dir-missing` condition: discovery
+        // itself treats a missing featuresDir as an empty vocabulary, so
+        // this call is what keeps that leniency from reading, on stdout, as
+        // indistinguishable from a real project that simply has no steps
+        // yet. Thrown before
         // any stdout.write below, so a failure here never leaves a partial
         // or misleading `--json` payload behind.
         assertFeaturesDirExists(rootDir, config);
@@ -205,11 +202,10 @@ export async function runCli(
         const importFailureSummaries = toImportFailureSummaries(importFailures);
         if (args.json) {
           // Top-level shape change from a bare array to `{ steps,
-          // import_failures }` (fb5-loader-visibility task spec, decision 1)
-          // — 0.x accepts the break; the alternative, silently dropping
-          // `import_failures` off a bare array, is exactly the "machine
-          // reader treats an incomplete list as complete" failure this field
-          // exists to prevent.
+          // import_failures }` — 0.x accepts the break; the alternative,
+          // silently dropping `import_failures` off a bare array, is
+          // exactly the "machine reader treats an incomplete list as
+          // complete" failure this field exists to prevent.
           stdout.write(
             `${JSON.stringify({ steps: summaries, import_failures: importFailureSummaries }, null, 2)}\n`,
           );
@@ -217,15 +213,15 @@ export async function runCli(
           // `stdout` here is the injected `WritableSink` (real process
           // stdout by default, a capture sink in tests), which has no
           // notion of terminal width; `process.stdout.columns` is read
-          // directly instead, falling back to 80 for a non-TTY or a test run
-          // (steps-human-output task spec).
+          // directly instead, falling back to 80 for a non-TTY or a test
+          // run.
           stdout.write(formatVocabulary(summaries, process.stdout.columns ?? 80));
         }
         stderr.write(formatImportFailuresStderr(importFailureSummaries));
         // Exit 1 whenever the output is incomplete in a way this command
-        // still went ahead and printed anyway (fb5-loader-visibility task
-        // spec, decisions 1 and 2): an import failure, or a step whose own
-        // `needs` this run couldn't read (`summarize`'s own `needs_error`).
+        // still went ahead and printed anyway: an import failure, or a
+        // step whose own `needs` this run couldn't read (`summarize`'s own
+        // `needs_error`).
         // Output is not withheld either way — only "this succeeded" is.
         if (importFailures.length > 0 || summaries.some((s) => s.needs_error !== undefined)) {
           exitCode = 1;
@@ -249,11 +245,11 @@ export async function runCli(
     handler: async (args: Arguments<DescribeArgs>) => {
       if (argsFailed) return;
       try {
-        // Same tolerant mode as `steps` above, same reasoning (fb5-loader-
-        // visibility task spec, decision 1) — also the one case where it
-        // matters most: the step this call is asking about may be exactly
-        // the one whose own file failed to import, so "Unknown step" alone
-        // would misdiagnose a migration problem as a typo.
+        // Same tolerant mode as `steps` above, same reasoning — also the
+        // one case where it matters most: the step this call is asking
+        // about may be exactly the one whose own file failed to import, so
+        // "Unknown step" alone would misdiagnose a migration problem as a
+        // typo.
         const { vocabulary, importFailures } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
         });
@@ -309,10 +305,10 @@ export async function runCli(
           describe:
             "receipt id whose result fills this step's `from` keys (repeatable; --args still wins for a key it also sets)",
         })
-        // `--args` lost its `demandOption` (fb4-args-optional task spec):
-        // once `--use` is given, "arguments come from the chain" is already
-        // stated, so making the caller also write `--args '{}'` for a step
-        // every key of which `from` fills is pure ritual. This `.check()`
+        // `--args` lost its `demandOption`: once `--use` is given,
+        // "arguments come from the chain" is already stated, so making the
+        // caller also write `--args '{}'` for a step every key of which
+        // `from` fills is pure ritual. This `.check()`
         // is what still refuses the case that matters — neither flag given
         // — kept in the same yargs layer `demandOption` used to occupy
         // (not moved into do.ts) so a bad invocation still fails before any
@@ -339,9 +335,8 @@ export async function runCli(
         name: args.name,
         // `--args`'s own `.check()` above already refused this when both
         // it and `--use` are absent, so `??` here only ever fires when
-        // `--use` supplies this step's arguments (fb4-args-optional task
-        // spec) — `"{}"` gives do.ts's `from` injection (execution phase)
-        // an object to fill.
+        // `--use` supplies this step's arguments — `"{}"` gives do.ts's
+        // `from` injection (execution phase) an object to fill.
         argsJson: args.args ?? "{}",
         session: args.session ?? null,
         env: args.env ?? null,

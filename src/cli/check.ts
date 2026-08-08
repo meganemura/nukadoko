@@ -3,8 +3,8 @@ import type { CheckIssue } from "../check/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: `nuka check`'s actual work (this task's spec, item 6),
-// kept out of run-cli.ts so it's unit-testable without going through yargs
+// Responsibility: `nuka check`'s actual work, kept out of run-cli.ts so
+// it's unit-testable without going through yargs
 // (same split as cli/do.ts, cli/init.ts, cli/scaffold.ts). The report itself
 // — human-readable lines or `--json` — is stdout-only; a failure to even
 // produce a report (config/discovery error) is stderr + exit 1, the same
@@ -12,9 +12,9 @@ import type { WritableSink } from "./writable-sink.js";
 // Exit code is exactly "1 or more errors" (docs/spec.md "CLI summary":
 // warnings alone are exit 0).
 //
-// m5b-check-feature-arg task spec: `featureArg` is passed straight through
-// to `analyzeProject` unchanged (`null`/absent means "no argument", the
-// existing featuresDir-wide behavior). `CheckFeatureNotFoundError` needs no
+// `featureArg` is passed straight through to `analyzeProject` unchanged
+// (`null`/absent means "no argument", the existing featuresDir-wide
+// behavior). `CheckFeatureNotFoundError` needs no
 // special handling here — it is an `Error` like every other setup failure
 // this catch already turns into stderr + exit 1 via `formatVocabularyError`.
 
@@ -26,12 +26,11 @@ export interface RunCheckOptions {
   stderr: WritableSink;
 }
 
-// Shared by formatLocation below and formatImportFailureGroup further down
-// (fb5-import-error-line task spec, item 3: "そこに乗るだけで、新しい出力
-// 形式を作らないこと") — one place decides how a file and an optional line
-// combine into the third tab-separated column, so a `step-file-import-
-// failed` finding with a `line` prints identically whether or not it went
-// through the grouping fold below.
+// Shared by formatLocation below and formatImportFailureGroup further
+// down: one place decides how a file and an optional line combine into
+// the third tab-separated column, so a `step-file-import-failed` finding
+// with a `line` prints identically whether or not it went through the
+// grouping fold below.
 function formatFileAndLine(file: string | undefined, line: number | undefined): string {
   if (file === undefined) {
     return "-";
@@ -62,18 +61,17 @@ function formatIssueLine(severity: "error" | "warning", issue: CheckIssue): stri
 
 const STEP_FILE_IMPORT_FAILED_CODE = "step-file-import-failed";
 
-// Groups `step-file-import-failed` findings by exact message match, for the
-// human-readable rendering only (fb5-loader-visibility task spec, decision
-// 3) — `CheckIssue`/`analyzeProject`'s own `importFailures` are untouched
-// (still one verbatim-message entry per file); this is a display-only fold
-// over that same data, never a data-structure change, so `--json` below
-// keeps printing `report` exactly as `analyzeProject` returned it. Node's
-// own ESM loader caches a module that fails to import and rethrows the
-// identical error to every importer, so an identical message across files
-// is the one thing this can say for certain about them; which file failed
-// *first* is not something the error text can answer, so this never singles
-// one out as "the" cause (this task's spec: "root cause のファイルを断定し
-// てはいけない" — only "N files share this message" is ever printed).
+// Groups `step-file-import-failed` findings by exact message match, for
+// the human-readable rendering only: `CheckIssue`/`analyzeProject`'s own
+// `importFailures` are untouched (still one verbatim-message entry per
+// file); this is a display-only fold over that same data, never a
+// data-structure change, so `--json` below keeps printing `report` exactly
+// as `analyzeProject` returned it. Node's own ESM loader caches a module
+// that fails to import and rethrows the identical error to every importer,
+// so an identical message across files is the one thing this can say for
+// certain about them; which file failed *first* is not something the error
+// text can answer, so this never singles one out as "the" cause, and only
+// ever prints "N files share this message" instead.
 // File lists are sorted (dictionary order), not left in report order, so
 // the same broken suite renders identically run to run.
 function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMap<string, string[]> {
@@ -97,10 +95,10 @@ function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMa
 // One line for the common case (a single broken file), byte-identical to
 // what `formatIssueLine("error", issue)` already printed for it — a
 // migrating suite hitting only one broken glue file at a time sees no
-// rendering change at all, `line` included (fb5-import-error-line task
-// spec, item 3 — this used to reconstruct the file column by hand instead
-// of going through `formatFileAndLine`, which silently dropped `line`
-// before that task added it). A shared-cause group (more than one file
+// rendering change at all, `line` included (this used to reconstruct the
+// file column by hand instead of going through `formatFileAndLine`, which
+// silently dropped `line` until it was routed through that function
+// instead). A shared-cause group (more than one file
 // behind the identical message) instead prints the message once, then the
 // sorted file list, one per line, and deliberately never a line number even
 // when `line` is passed in: the file whose own path the message's location

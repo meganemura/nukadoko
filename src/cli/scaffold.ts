@@ -5,11 +5,11 @@ import { loadConfig } from "../config/load-config.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
-// Responsibility: `nuka scaffold <name>`'s actual work (this task's spec,
-// decision 2), kept out of run-cli.ts so it's unit-testable without going
+// Responsibility: `nuka scaffold <name>`'s actual work, kept out of
+// run-cli.ts so it's unit-testable without going
 // through yargs (same split as cli/do.ts and cli/init.ts). Unlike `init`,
 // this command assumes a project already exists: it needs `featuresDir` from
-// a successfully loaded config (this task's spec, decision 3), so a load
+// a successfully loaded config, so a load
 // failure here is reported exactly like any other command that loads config
 // (cli/vocabulary.ts's `formatVocabularyError`), not a scaffold-specific
 // error.
@@ -36,8 +36,8 @@ import type { WritableSink } from "./writable-sink.js";
 // "genuinely not there" and "not rendered yet" unless the step returns
 // proof of which one it saw (docs/spec.md "Typed steps").
 //
-// The template omits `pattern`/`patterns` on purpose (this task's spec,
-// decision 2): no pattern means CLI-only vocabulary by default (docs/
+// The template omits `pattern`/`patterns` on purpose: no pattern means
+// CLI-only vocabulary by default (docs/
 // spec.md "Typed steps") — a human adds a pattern by hand when the step is
 // ready to be bound into a feature file. `run` always throws
 // `not implemented: <name>`, so the step is discoverable (`nuka steps`) the
