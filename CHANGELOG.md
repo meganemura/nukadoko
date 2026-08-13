@@ -222,6 +222,23 @@ just until 0.1.
   own `ClientOptions` as a second argument, forwarded straight to
   `Client`'s own constructor, most usefully to opt into the 2026-07-28
   handshake through `versionNegotiation`.
+- **`nuka experimental webmcp-tools <url>` and `experimental_callWebmcpTool`
+  reach a page's own declared tools, via `navigator.modelContext.registerTool`.**
+  Both carry their mark in a position a caller cannot route around, because
+  the WebMCP standard's own documentation says it is subject to change, and
+  its English and Japanese pages currently disagree about whether a caller
+  shaped like this one is supported at all; it measurably works against
+  Chromium 149 today, and that is measured, not promised, with the
+  condition for dropping the prefix written beside it. The listing is a
+  separate face from `nuka steps`, deliberately: folding a page's declared
+  tools into the step vocabulary would let the page under test decide part
+  of the vocabulary that checks it. Calling a tool needs nothing from the
+  executor but `page`, which a step already receives, so it is a plain
+  import rather than a fixture. The launch flag Chromium needs is never
+  injected: a project states it in its own config's `browser.args`, the
+  same as any other Playwright launch option, and a page missing the API
+  raises its own error rather than reporting zero tools, so "nothing
+  declared" and "no API to ask" stay distinguishable.
 
 ## 0.1.0 — 2026-08-06
 
