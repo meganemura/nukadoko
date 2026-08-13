@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatSdkMissingMessage } from "../src/cli/mcp-tools.js";
+import { formatClientMissingMessage } from "../src/cli/mcp-tools.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { callMcpTool } from "../src/mcp/call-tool.js";
 import { connectMcpServer } from "../src/mcp/connect.js";
@@ -126,13 +126,13 @@ describe("`nuka steps --json` and the mcpClient fixture", () => {
   });
 });
 
-describe("formatSdkMissingMessage", () => {
+describe("formatClientMissingMessage", () => {
   it("recognizes ERR_MODULE_NOT_FOUND naming the client package's own specifier", () => {
     const error = Object.assign(
       new Error("Cannot find package '@modelcontextprotocol/client' imported from /x/y.js"),
       { code: "ERR_MODULE_NOT_FOUND" },
     );
-    const message = formatSdkMissingMessage(error);
+    const message = formatClientMissingMessage(error);
     expect(message).toContain("@modelcontextprotocol/client@2.0.0");
     expect(message).toContain("npm install");
   });
@@ -142,10 +142,10 @@ describe("formatSdkMissingMessage", () => {
       new Error("Cannot find package 'left-pad' imported from /x/y.js"),
       { code: "ERR_MODULE_NOT_FOUND" },
     );
-    expect(formatSdkMissingMessage(error)).toBeNull();
+    expect(formatClientMissingMessage(error)).toBeNull();
   });
 
   it("returns null for a value that isn't an Error at all", () => {
-    expect(formatSdkMissingMessage("boom")).toBeNull();
+    expect(formatClientMissingMessage("boom")).toBeNull();
   });
 });

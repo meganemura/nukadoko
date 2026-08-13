@@ -28,7 +28,7 @@ const CLIENT_VERSION = "2.0.0";
  * imports needs) must not be mislabeled as "the client package is missing"
  * and shown a misleading install command instead of its own real cause.
  */
-export function formatSdkMissingMessage(error: unknown): string | null {
+export function formatClientMissingMessage(error: unknown): string | null {
   if (
     !(error instanceof Error) ||
     (error as NodeJS.ErrnoException).code !== "ERR_MODULE_NOT_FOUND" ||
@@ -81,8 +81,8 @@ export async function runMcpTools(options: RunMcpToolsOptions): Promise<number> 
     }
     return 0;
   } catch (error) {
-    const sdkMissing = formatSdkMissingMessage(error);
-    stderr.write(`${sdkMissing ?? (error instanceof Error ? error.message : String(error))}\n`);
+    const clientMissing = formatClientMissingMessage(error);
+    stderr.write(`${clientMissing ?? (error instanceof Error ? error.message : String(error))}\n`);
     return 1;
   }
 }
