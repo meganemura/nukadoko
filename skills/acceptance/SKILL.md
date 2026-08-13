@@ -223,6 +223,10 @@ fails loudly by name rather than hanging the run; `nuka check` catches a
 dependency cycle among fixtures and a `process`-scope fixture depending on
 a `scenario`-scope one before anything runs.
 
+An MCP server over stdio is the same pattern: `connectMcpServer`/
+`callMcpTool` (`"nukadoko/mcp"`) belong in a fixture. `nuka mcp-tools --
+<command> [args...]` reads its tools separately, never as vocabulary.
+
 ## Waiting for an external effect
 
 A step that writes to a system whose effect lands elsewhere asynchronously

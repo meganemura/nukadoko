@@ -200,6 +200,28 @@ just until 0.1.
   the state directory and that `nuka init` gitignores it for that reason,
   without assuming the project didn't mean to track it; a tree dirty for an
   unrelated reason gets the same message as before.
+- **`nuka mcp-tools -- <command> [args...]` and `connectMcpServer`/
+  `callMcpTool` (from `"nukadoko/mcp"`) reach an ordinary MCP server over
+  stdio.** The first reads whatever tools a server declares and prints
+  them; the second lets a hand-written step call one and throws when a
+  tool reports an in-band failure (`isError: true`), which MCP itself
+  returns as a normal, successful response rather than a rejected promise.
+  Both are kept apart from `nuka steps` on purpose: a server's own
+  declared tools are material for a person writing a step's `args` by
+  hand, never something this package turns into a step or its vocabulary
+  on its own. A server's process lifetime rides on the existing fixture
+  mechanism instead of a new config key: a fixture calls `connectMcpServer`
+  in its own setup and `client.close()` in its own teardown, the same
+  setup/teardown/scope shape any other fixture-owned resource already
+  uses. `@modelcontextprotocol/client` is an optional peer dependency, so
+  a project that never touches this surface never installs it; `nuka
+  mcp-tools`'s own CLI wiring reaches it through a dynamic import for
+  exactly that reason, and names the exact version to install when it is
+  missing. `connectMcpServer` connects with the client package's own
+  2025-era default (no probe, no new headers) unless a caller passes its
+  own `ClientOptions` as a second argument, forwarded straight to
+  `Client`'s own constructor, most usefully to opt into the 2026-07-28
+  handshake through `versionNegotiation`.
 
 ## 0.1.0 — 2026-08-06
 

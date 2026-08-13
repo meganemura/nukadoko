@@ -11,6 +11,7 @@ import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
 import { runDo } from "./do.js";
 import { runInit } from "./init.js";
+import { runMcpTools } from "./mcp-tools.js";
 import { runRun } from "./run.js";
 import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
@@ -32,9 +33,9 @@ import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
 // `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `tend`,
-// `accept`, `skill path`, `experimental webmcp-tools`) to yargs and turns
-// any failure — yargs' own (bad flags, no command) or ours (config/
-// discovery errors, unknown step name) — into stderr output plus a
+// `accept`, `skill path`, `mcp-tools`, `experimental webmcp-tools`) to
+// yargs and turns any failure — yargs' own (bad flags, no command) or ours
+// (config/discovery errors, unknown step name) — into stderr output plus a
 // non-zero exit code, without ever calling `process.exit` itself. That is
 // `cli.ts`'s job, so this function stays callable directly from tests.
 // `do`'s own setup/execution split and receipt writing lives in cli/do.ts;
@@ -51,8 +52,14 @@ import type { WritableSink } from "./writable-sink.js";
 // `experimental webmcp-tools`'s own browser launch and tool-reading logic
 // lives in cli/webmcp.ts (thin wiring) and src/webmcp/list-tools.ts (the
 // actual work), nested one command under `experimental` rather than a
-// top-level command so the word is unavoidable at every call site; this
-// module only wires their argv shapes and reports their exit codes.
+// top-level command so the word is unavoidable at every call site;
+// `mcp-tools`'s own connect-list-close logic lives in cli/mcp-tools.ts
+// (thin wiring, reaching src/mcp/list-tools.ts through a dynamic
+// `import()` rather than a static one — that file's own header explains
+// why) and stays a top-level command, unlike `webmcp-tools`: MCP is the
+// protocol this whole surface is named after, not an auxiliary one
+// (docs/spec.md "MCP servers"); this module only wires their argv shapes
+// and reports their exit codes.
 //
 // `--version` reads nukadoko's own package.json via
 // src/version.ts's readOwnVersion() and is fed to yargs' `.version()`
@@ -140,6 +147,15 @@ interface AcceptArgs {
 interface WebmcpToolsArgs {
   url: string;
   json?: boolean;
+}
+
+interface McpToolsArgs {
+  json?: boolean;
+  /** Every token after `--` (`command` plus its own args), populated by
+   * `.parserConfiguration({ "populate--": true })` below — yargs' own
+   * `Arguments<T>` types this as `unknown` via its index signature, so the
+   * builder's own return type states the real shape here instead. */
+  "--"?: string[];
 }
 
 type SkillPathArgs = Record<string, never>;
@@ -580,6 +596,39 @@ export async function runCli(
     },
   };
 
+  const mcpToolsCommand: CommandModule<Record<string, never>, McpToolsArgs> = {
+    command: "mcp-tools",
+    describe:
+      "list the tools an MCP server declares over stdio: `nuka mcp-tools -- <command> [args...]` " +
+      "connects to it just long enough to ask. A separate face from `nuka steps`; nothing this " +
+      "command reports is ever part of that vocabulary",
+    builder: (y: Argv) =>
+      y
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "machine-readable output; each tool's inputSchema exactly as the server declared it",
+        })
+        // Everything after `--` becomes the server's own command line
+        // rather than being parsed as this command's own flags — the same
+        // reason `npm run <script> -- --flag` needs it: without this, a
+        // flag meant for the server (say `--port`) would be consumed by
+        // yargs itself instead of reaching the server.
+        .parserConfiguration({ "populate--": true }) as Argv<McpToolsArgs>,
+    handler: async (args: Arguments<McpToolsArgs>) => {
+      if (argsFailed) return;
+      const rest = args["--"] ?? [];
+      const [command, ...serverArgs] = rest;
+      exitCode = await runMcpTools({
+        command,
+        args: serverArgs,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const webmcpToolsCommand: CommandModule<Record<string, never>, WebmcpToolsArgs> = {
     command: "webmcp-tools <url>",
     describe:
@@ -661,6 +710,7 @@ export async function runCli(
     .command(tendCommand)
     .command(acceptCommand)
     .command(skillCommand)
+    .command(mcpToolsCommand)
     .command(experimentalCommand)
     .demandCommand(1)
     .strict()

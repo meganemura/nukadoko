@@ -16,6 +16,10 @@
     "./compat": {
       "types": "./dist/compat/index.d.ts",
       "import": "./dist/compat/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
     }
   },
   "scripts": {
@@ -72,11 +76,21 @@
   "devDependencies": {
     "@cucumber/cucumber": "13.2.0",
     "@cucumber/junit-xml-formatter": "0.14.0",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@types/node": "26.1.1",
     "@types/yargs": "17.0.35",
     "allure": "3.14.3",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/client": "2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/client": {
+      "optional": true
+    }
   },
   "overrides": {
     "adm-zip": "0.6.0"

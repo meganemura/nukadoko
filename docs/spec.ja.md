@@ -480,6 +480,37 @@ setup と teardown はそれぞれ自分自身のタイムアウト予算を持�
 それでも `needs_inferred`(「Context API」を参照)は持つことがあります。
 ただしこのフィールドは契約ではなく字句上の推測であり、`needs`/`needs_browser` のようには fixture グラフを閉じません。
 
+### MCP servers
+
+普通の MCP サーバに stdio 経由で届く面は 2 つあり、`nuka steps` からは切り離されています。
+`nuka mcp-tools -- <command> [args...]` はサーバが宣言するツールを読み、それを出力します。
+`connectMcpServer`/`callMcpTool`(`"nukadoko/mcp"` から)は、手で書いた step がその 1 つを呼べるようにします。
+サーバ自身が宣言するツールは、人が手で step の `args` を書くための材料であり、このパッケージが step やその語彙を自動生成する材料では決してありません。
+`nuka steps` は MCP のツールを一度も一覧に出さず、ここから何かを生成することもありません。
+
+サーバのプロセスの寿命は fixture の仕事であり、config のキーではありません。
+`nukadoko.config.ts` に MCP 専用のフィールドは増えません。
+サーバの寿命が必要とするものはすべて「Fixtures」がすでに持っているからです(setup、teardown、`scenario` か `process` の scope)。
+fixture は自分自身の setup の中で `connectMcpServer` を呼び、自分自身の teardown の中で `client.close()` を呼びます。
+それが scenario ごとに起きるか run ごとに起きるかは、fixture がすでに持つ scope で選びます。
+サーバを 2 つ同時に使うのは fixture が 2 つになるだけで、機構そのものは何も変わりません。
+
+`connectMcpServer` は client パッケージ自身の stdio パラメータと、任意で第 2 引数として client パッケージ自身の `ClientOptions` を、どちらもそのまま受け取り、client パッケージ自身の `Client` を接続済みのまま返します。
+`ctx.page()`/`ctx.request()` が Playwright にすでに行っている「公式 API の上に薄く乗る」という同じ判断です。
+ある接続がどの MCP プロトコルの世代で話すかは、client パッケージ自身の `versionNegotiation` の設定が決めることであり、それは `ClientOptions` の 1 フィールドです。
+省略した場合は client パッケージ自身の既定が適用されます。
+つまり probe も新しいヘッダもない、そのままの 2025 世代の接続手順です。
+`{ versionNegotiation: { mode: 'auto' } }` を渡した呼び出し側は、まず `server/discover` の probe を受けます。
+サーバが modern だと答えなかった場合は、同じ 2025 世代の手順への保守的なフォールバックが働きます。
+stdio ではこの probe のために、接続ごとに 1 つ、短命の別プロセスがさらに起動します。
+probe を走らせるためだけに spawn され、世代が判明した時点で捨てられるプロセスなので、`'auto'` を選んだ fixture は、自分自身の setup が `connectMcpServer` を呼ぶたびにこの余分な spawn 1 回分の代金を払います。
+pin するモード(`{ mode: { pin: '<version>' } }`)はこのフォールバックを行わず、サーバが指定した版を正確に提供しなかった場合は代わりに大きな声で失敗します。
+`connectMcpServer` は `ClientOptions` を読み取ることも上書きすることもなく、`Client` 自身のコンストラクタへそのまま渡すだけです。
+世代を選ぶのは呼び出し側の判断のままであり、この面はその選択を運ぶだけです。
+`callMcpTool` はただの素通しの上に 1 つだけ足します。
+MCP 自身は、ツールの帯域内での失敗を、例外ではなく正常な戻り値(`isError: true`)として返すので、それを読まない step は失敗した呼び出しを成功として記録してしまいます。
+`callMcpTool` はその 1 つの場合にだけ投げ、それ以外の戻り値のフィールドはすべてそのまま返します。
+
 ### step の連鎖
 
 CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` を与えて scenario に束ねると、その step が単体では直面しなかった問いが立ち上がります。

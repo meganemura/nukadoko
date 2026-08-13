@@ -693,6 +693,51 @@ that entry has no `needs_browser` either. It may still carry `needs_inferred`
 (see "Context API"), but that field is a lexical guess, not a contract, and
 is never closed over the fixture graph the way `needs`/`needs_browser` are.
 
+### MCP servers
+
+Two faces reach an ordinary MCP server over stdio, kept apart from `nuka
+steps`: `nuka mcp-tools -- <command> [args...]` reads whatever tools a
+server declares and prints them, and `connectMcpServer`/`callMcpTool`,
+from `"nukadoko/mcp"`, let a hand-written step call one. A server's own
+declared tools are material for a person writing a step's `args` by hand,
+never something this package turns into a step, or its vocabulary, on its
+own: `nuka steps` never lists an MCP tool, and nothing here generates one.
+
+A server's process lifetime is a fixture's job, not a config key.
+`nukadoko.config.ts` gets no MCP-specific field, because "Fixtures"
+already covers everything a server's lifetime needs: setup, teardown, and
+a `scenario` or `process` scope. A fixture calls `connectMcpServer` in its
+own setup and `client.close()` in its own teardown, and picks whether that
+happens once per scenario or once per run through the scope it already
+has; running two servers at once is two fixtures, and nothing about the
+mechanism itself changes.
+
+`connectMcpServer` takes the client package's own stdio parameters and,
+optionally, the client package's own `ClientOptions` as a second argument,
+both unmodified, and returns the client package's own `Client`, connected,
+the same "thin over official APIs" choice `ctx.page()`/`ctx.request()`
+already make for Playwright. Which MCP protocol era a connection ends up
+speaking is the client package's own `versionNegotiation` setting to
+decide, itself one field of `ClientOptions`. Left out, the client
+package's own default applies: the plain 2025 connect sequence, no probe,
+no new headers. A caller that passes `{ versionNegotiation: { mode: 'auto'
+} }` gets a `server/discover` probe first, with a conservative fallback to
+that same 2025 sequence when the server does not answer as modern; on
+stdio that probe costs one extra short-lived sibling process per connect,
+spawned to run the probe and discarded once the era is known, so a fixture
+that opts into `'auto'` pays for one extra spawn every time its own setup
+calls `connectMcpServer`. A pinned mode (`{ mode: { pin: '<version>' } }`)
+skips that fallback and fails loudly instead when the server does not
+offer the exact pinned revision. `connectMcpServer` passes `ClientOptions`
+straight through to `Client`'s own constructor, unread and never
+overridden: choosing the era stays the caller's call, this face only
+carries the choice. `callMcpTool` adds exactly one thing on top of a plain
+pass-through: MCP itself returns a tool's own in-band failure as a normal,
+successful response (`isError: true`), not a rejected promise, so a step
+that never reads that field would record a failed call as a passing one.
+`callMcpTool` throws in that one case and returns every other field of the
+result untouched.
+
 ### Chaining steps
 
 Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
