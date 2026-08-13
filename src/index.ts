@@ -32,3 +32,7 @@ export type {
 } from "./receipt/types.js";
 export type { Step, StepDefinitionInput } from "./step/define-step.js";
 export { defineStep } from "./step/define-step.js";
+// EXPERIMENTAL: see call-tool.ts's own header for why the name carries the
+// mark, and the condition that would let it be dropped.
+export { experimental_callWebmcpTool } from "./webmcp/call-tool.js";
+export type { WebmcpToolDescriptor } from "./webmcp/list-tools.js";

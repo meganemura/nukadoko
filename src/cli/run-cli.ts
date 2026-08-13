@@ -16,6 +16,7 @@ import { runScaffold } from "./scaffold.js";
 import { runSessionClear, runSessionList } from "./session.js";
 import { runSkillPath } from "./skill.js";
 import { runTend } from "./tend.js";
+import { runWebmcpTools } from "./webmcp.js";
 import {
   assertFeaturesDirExists,
   buildStepNames,
@@ -31,23 +32,27 @@ import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
 // `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `tend`,
-// `accept`, `skill path`) to yargs and turns any failure — yargs' own (bad
-// flags, no command) or ours (config/discovery errors, unknown step name) —
-// into stderr output plus a non-zero exit code, without ever calling
-// `process.exit` itself. That is `cli.ts`'s job, so this function stays
-// callable directly from tests. `do`'s own setup/execution split and
-// receipt writing lives in cli/do.ts; `session`'s own list/clear logic
-// lives in cli/session.ts; `init`/`scaffold`'s own generation logic lives
-// in cli/init.ts and cli/scaffold.ts; `check`'s own analysis lives in
-// cli/check.ts (thin wiring) and src/check/* (the actual checks); `tend`'s
-// own analysis lives in cli/tend.ts (thin wiring) and src/tend/* (the
-// actual findings) — the same split, one command answering "can this run",
-// the other "is this still healthy" (docs/spec.md "Tending"); `accept`'s
-// own run-selection and record-rendering logic lives in cli/accept.ts and
-// src/accept/*, the same split; `skill`'s own path resolution logic lives
-// in cli/skill.ts (`install` removed — see that file's header), the same
-// split; this module only wires their argv shapes and reports their exit
-// codes.
+// `accept`, `skill path`, `experimental webmcp-tools`) to yargs and turns
+// any failure — yargs' own (bad flags, no command) or ours (config/
+// discovery errors, unknown step name) — into stderr output plus a
+// non-zero exit code, without ever calling `process.exit` itself. That is
+// `cli.ts`'s job, so this function stays callable directly from tests.
+// `do`'s own setup/execution split and receipt writing lives in cli/do.ts;
+// `session`'s own list/clear logic lives in cli/session.ts; `init`/
+// `scaffold`'s own generation logic lives in cli/init.ts and
+// cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin
+// wiring) and src/check/* (the actual checks); `tend`'s own analysis lives
+// in cli/tend.ts (thin wiring) and src/tend/* (the actual findings) — the
+// same split, one command answering "can this run", the other "is this
+// still healthy" (docs/spec.md "Tending"); `accept`'s own run-selection and
+// record-rendering logic lives in cli/accept.ts and src/accept/*, the same
+// split; `skill`'s own path resolution logic lives in cli/skill.ts
+// (`install` removed — see that file's header), the same split;
+// `experimental webmcp-tools`'s own browser launch and tool-reading logic
+// lives in cli/webmcp.ts (thin wiring) and src/webmcp/list-tools.ts (the
+// actual work), nested one command under `experimental` rather than a
+// top-level command so the word is unavoidable at every call site; this
+// module only wires their argv shapes and reports their exit codes.
 //
 // `--version` reads nukadoko's own package.json via
 // src/version.ts's readOwnVersion() and is fed to yargs' `.version()`
@@ -130,6 +135,11 @@ interface TendArgs {
 interface AcceptArgs {
   feature: string;
   env?: string;
+}
+
+interface WebmcpToolsArgs {
+  url: string;
+  json?: boolean;
 }
 
 type SkillPathArgs = Record<string, never>;
@@ -570,6 +580,48 @@ export async function runCli(
     },
   };
 
+  const webmcpToolsCommand: CommandModule<Record<string, never>, WebmcpToolsArgs> = {
+    command: "webmcp-tools <url>",
+    describe:
+      "EXPERIMENTAL, may change or disappear without notice: list the WebMCP tools a page has " +
+      "declared via navigator.modelContext.registerTool. A separate face from `nuka steps`; " +
+      "nothing this command reports is ever part of that vocabulary",
+    builder: (y: Argv) =>
+      y
+        .positional("url", {
+          type: "string",
+          demandOption: true,
+          describe: "absolute URL to load and read declared tools from (no baseURL resolution)",
+        })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "machine-readable output; each tool's inputSchema exactly as the page declared it",
+        }) as Argv<WebmcpToolsArgs>,
+    handler: async (args: Arguments<WebmcpToolsArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runWebmcpTools({
+        rootDir,
+        url: args.url,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const experimentalCommand: CommandModule = {
+    command: "experimental",
+    describe:
+      "EXPERIMENTAL: commands this package is still trying out; any of them may change shape or " +
+      "disappear release to release without the deprecation notice a stable command would get",
+    builder: (y: Argv) => y.command(webmcpToolsCommand).demandCommand(1).strict(),
+    handler: () => {
+      // Never invoked: `demandCommand(1)` on the sub-builder above requires
+      // `webmcp-tools`, same pattern as `skillCommand`/`sessionCommand`.
+    },
+  };
+
   const sessionCommand: CommandModule = {
     command: "session",
     describe: "list|clear sessions",
@@ -609,6 +661,7 @@ export async function runCli(
     .command(tendCommand)
     .command(acceptCommand)
     .command(skillCommand)
+    .command(experimentalCommand)
     .demandCommand(1)
     .strict()
     .help();
