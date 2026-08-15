@@ -92,7 +92,7 @@ describe("discoverSteps", () => {
 // report). discover-extensions-project's own step files throw if
 // discoverSteps ever imports one it shouldn't -- see each fixture file's
 // own comment.
-describe("discoverSteps: extensions, node_modules, dot-directories (p10-step-discovery)", () => {
+describe("discoverSteps: extensions, node_modules, dot-directories", () => {
   it("finds .ts, .mts, .js, and .mjs step files under featuresDir", async () => {
     const { vocabulary } = await discoverSteps(fixture("discover-extensions-project"), "features");
     expect([...vocabulary.keys()].sort()).toEqual([
@@ -140,7 +140,7 @@ describe("discoverSteps: extensions, node_modules, dot-directories (p10-step-dis
 // — the mode `nuka check` (src/check/analyze.ts) uses so one broken file
 // doesn't take down the entire report the way it still does for
 // `run`/`do`/`steps`/`init`.
-describe("discoverSteps: tolerant mode (m21a-compat-gap-detect)", () => {
+describe("discoverSteps: tolerant mode", () => {
   it("collects a broken file's import failure and still discovers a sibling healthy file", async () => {
     const { vocabulary, importFailures } = await discoverSteps(
       fixture("discover-import-failure-project"),

@@ -13,11 +13,11 @@ import {
 // page-events-project — a real chromium page
 // producing a console error, an uncaught error, and a failed request, all
 // three landing on the step record under both `nuka do` and `nuka run`
-// (completion condition 3: neither path alone), redacted the same way
+// (neither path alone), redacted the same way
 // http.jsonl/record.json already are (a secret embedded in the console
 // text and the failed request's URL), and the field entirely absent — not
-// present-but-empty — when a step's page never produces any of the three
-// (completion condition 4). PageEventsCollector's own record/reset/cap
+// present-but-empty — when a step's page never produces any of the
+// three. PageEventsCollector's own record/reset/cap
 // behavior is unit-tested directly in tests/page-events.test.ts; a real
 // browser is a poor way to prove a 100-entry cap.
 

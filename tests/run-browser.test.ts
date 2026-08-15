@@ -12,14 +12,14 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: the Background + browser round trip, rewritten
-// for p3a-trace-per-step (trace is now per-step, not per-
-// scenario) — a Background step opens the browser and picks up a cookie,
+// Responsibility: the Background + browser round trip, against a trace
+// that is per-step, not per-scenario — a Background step opens the browser
+// and picks up a cookie,
 // the scenario's own step reuses the *same* browser context to see it
 // (steps in one pickle share one context), and each
 // step's own trace.zip now lands in *that step's own* step record dir, carrying
 // only that step's own operations — the scenario record itself carries no trace of its own any
-// more (completion condition: "シナリオ全体の1本は無くなった"). A second
+// more. A second
 // scenario in the same feature file (a step that never calls `ctx.page()`,
 // run right after the Background already launched the browser for an
 // earlier scenario in this same `nuka run` invocation) proves completion
@@ -120,7 +120,7 @@ describe("nuka run (Background + browser)", () => {
     expect(existsSync(path.join(scenarioDir, "trace.zip"))).toBe(false);
     expect(existsSync(path.join(scenarioDir, "final.png"))).toBe(true);
 
-    // Each step carries its own trace.zip instead — completion condition 2:
+    // Each step carries its own trace.zip instead:
     // a 2-step scenario produces 2 trace files, each holding only that
     // step's own operations.
     const loginStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
@@ -154,7 +154,7 @@ describe("nuka run (Background + browser)", () => {
     // Second scenario: its own Background step still runs (and still gets a
     // trace, launching a brand new browser for this new scenario's own
     // ctx), but the scenario's *own* step after it never calls `ctx.page()`
-    // at all and must carry no trace of its own (completion condition 6) —
+    // at all and must carry no trace of its own,
     // proving the trace chunk is opened lazily per step, never just because
     // a browser already happens to be running.
     expect(noBrowserRecord.status).toBe("passed");

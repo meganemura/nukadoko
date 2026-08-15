@@ -5,7 +5,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // sibling promotion-glue-project fixture's compat step
 // (features/steps/create-project.ts there), promoted to a typed step: named
 // capture instead of position capture, and a zod-validated `result` that
-// promotion-comparison-test's own test asserts against directly (the
+// tests/promotion-comparison.test.ts asserts against directly (the
 // server response's extra, undeclared key gets stripped by the schema, not
 // just passed through — that's what makes "validated" checkable here
 // rather than only asserted).

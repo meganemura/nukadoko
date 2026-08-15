@@ -9,8 +9,8 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // keys from an earlier execution's step record instead of the chain a scenario
 // would have provided (docs/spec.md "Single steps (the agent path)", the
 // `--use` paragraph). `from`'s own scenario-path injection mechanism is
-// already covered by tests/from-chain.test.ts (m6a-from-core); this file
-// only covers what's new here: reading a record id off the command line,
+// already covered by tests/from-chain.test.ts; this file only covers what's
+// new here: reading a record id off the command line,
 // matching it against the step actually being run's own `from`, and the
 // same `used` collector recording what was actually drawn on.
 

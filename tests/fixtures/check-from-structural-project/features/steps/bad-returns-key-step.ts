@@ -4,8 +4,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // `from` names a key ("missingKey") that is not one of create-project.ts's
 // own `returns` keys ("id"/"name") — the other structural finding
-// validateStepFrom makes (m6a-from-core), distinct from an unregistered
-// upstream (unregistered-from-step.ts). The type system itself already
+// validateStepFrom makes, distinct from an unregistered upstream
+// (unregistered-from-step.ts). The type system itself already
 // rejects this at the literal (src/step/define-step.ts's own `FromMap`), so
 // producing it at all needs the same `as` cast that file's own header names
 // as the one way a step author can still get this wrong at runtime.

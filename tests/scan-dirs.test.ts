@@ -42,7 +42,7 @@ async function runCheck(rootDir: string): Promise<{ report: CheckReport; exitCod
   return { report: JSON.parse(stdout.text()) as CheckReport, exitCode };
 }
 
-describe("additionalFeatureDirs (fb3-scan-dirs)", () => {
+describe("additionalFeatureDirs", () => {
   describe("nuka tend", () => {
     it("does not report pattern-unbound for a step bound only from an additionalFeatureDirs feature", async () => {
       const { report } = await runTend(fixture("tend-additional-dirs-project"));

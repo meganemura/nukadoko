@@ -2,10 +2,9 @@ import { z } from "zod";
 import { defineWorld, setWorldConstructor } from "../../nukadoko-compat-shim.js";
 
 // This run's own `defineWorld` registration — `listing` is legitimately
-// absent until first write
-// (`.optional()`), the case proto-typed-world/findings.md's "hole 2" is
-// about: a declared-but-not-yet-present key must still validate its first
-// write, not skip validation because there was nothing to overwrite yet.
+// absent until first write (`.optional()`); a declared-but-not-yet-present
+// key must still validate its first write, not skip validation because
+// there was nothing to overwrite yet.
 const worldSchemas = {
   listing: z.object({ id: z.string() }).optional(),
 };
@@ -20,11 +19,10 @@ export class CustomWorld extends defineWorld(worldSchemas) {
   // schema is optional).
   visits = 0;
 
-  // proto-typed-world/findings.md's central claim: a `#private` field stays
-  // reachable through a method exactly as if this instrumentation didn't
-  // exist, because the wrap mechanism never wraps `this` itself in a Proxy
-  // — only own *data* properties are replaced with accessors, directly on
-  // the real instance.
+  // A `#private` field stays reachable through a method exactly as if this
+  // instrumentation didn't exist, because the wrap mechanism never wraps
+  // `this` itself in a Proxy — only own *data* properties are replaced with
+  // accessors, directly on the real instance.
   #secret = 42;
 
   revealSecret(): number {

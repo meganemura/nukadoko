@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run`'s pre-execution guard side of m7b-unfillable-
-// key (item 2) — the same judgment tests/check-unfillable-key.test.ts
+// Responsibility: `nuka run`'s pre-execution guard side of the
+// unfillable-key check — the same judgment tests/check-unfillable-key.test.ts
 // already covers for `nuka check` (src/check/unfillable-key.ts's own
 // header: one function, two callers), exercised here through the executor
 // instead. A scenario with a statically-unfillable required key never gets

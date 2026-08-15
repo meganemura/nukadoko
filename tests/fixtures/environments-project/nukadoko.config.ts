@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// Fixture for m1-environments: named environments covering baseURL/envFiles
+// Fixture for named environments covering baseURL/envFiles
 // layering, `policy: "read-only"`, and the `version` probe (success and
 // throw). No real HTTP server is needed — the steps under features/steps/
 // only ever read `ctx.baseURL`/`ctx.env`, never `ctx.request()`/`ctx.page()`

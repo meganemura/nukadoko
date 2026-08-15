@@ -8,8 +8,8 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 
 // Responsibility: coverage for the compat
 // World's "measurement is always on, declaration is opt-in" mechanism
-// (typed-world-design.md's own section on the mechanism; proto-typed-world/findings.md's
-// verified own-data-defineProperty variant, `wrapDefinePropertySeeded`).
+// (src/compat/world-instrumentation.ts's own header documents the
+// own-data-defineProperty variant this wraps around each instance).
 //
 //   - Measurement: a compat step's own reads/writes of an ordinary bag
 //     field land on that step's step record (`stepRecord.world`), deduplicated, in
@@ -24,9 +24,9 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 //   - Reserved keys (`attach`/`log`/`link`/`parameters`): declaring one
 //     through `defineWorld`, or reassigning one at run time, are both
 //     errors — the former at discovery, the latter at execution.
-//   - The `#private` integration test proto-typed-world/findings.md's own
-//     central claim rests on: a private field stays reachable through a
-//     method with no crash, alongside ordinary bag-field measurement.
+//   - The `#private` integration test: a private field stays reachable
+//     through a method with no crash, alongside ordinary bag-field
+//     measurement.
 //   - A typed-only scenario's step records are unaffected (no `world` field at
 //     all — a typed step has no `this`).
 
@@ -96,14 +96,14 @@ describe("nuka run: typed World measurement + declaration", () => {
 
     const creationStepRecord = await readStepRecord(rootDir, scenario.steps[0].record);
     // The write happened, but the accessor didn't exist yet — not measured,
-    // and not recorded at all (proto-typed-world/findings.md's "hole 1").
+    // and not recorded at all.
     expect(creationStepRecord.world).toBeUndefined();
 
     const readStepRecordBody = await readStepRecord(rootDir, scenario.steps[1].record);
     expect(readStepRecordBody.world).toEqual({ reads: ["freshField"], writes: [] });
   });
 
-  it("a #private field stays reachable through a method (no crash), the central proto-typed-world claim", async () => {
+  it("a #private field stays reachable through a method (no crash)", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/measurement.feature"], {
       rootDir,
@@ -142,8 +142,8 @@ describe("nuka run: typed World measurement + declaration", () => {
     expect(invalid.steps[0].error.message).toContain("listing");
     const invalidStepRecord = await readStepRecord(rootDir, invalid.steps[0].record);
     expect(invalidStepRecord.status).toBe("failed");
-    // The invalid write must never appear in world.writes (proto-typed-
-    // world/findings.md Q1's bug, regularized).
+    // The invalid write must never appear in world.writes: the throw runs
+    // before the write is recorded (src/compat/world-instrumentation.ts).
     expect(invalidStepRecord.world).toBeUndefined();
     // Identified by type (`WorldWriteValidationError`), never by matching
     // the message — distinct from "step_error" (an ordinary throw from a

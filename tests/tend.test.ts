@@ -44,9 +44,9 @@ describe("nuka tend", () => {
     // project's own step files) — declared === total on both.
     expect(report.summary.rationale).toEqual({ declared: 2, total: 2 });
     expect(report.summary.describe).toEqual({ declared: 5, total: 5 });
-    // fb3-scan-dirs: featuresDir alone, since this fixture sets no
-    // additionalFeatureDirs (schema default `[]`), and every step here
-    // defaults to `mutates: true` (define-step.ts's own `?? true`).
+    // featuresDir alone, since this fixture sets no additionalFeatureDirs
+    // (schema default `[]`), and every step here defaults to
+    // `mutates: true` (define-step.ts's own `?? true`).
     expect(report.summary.scannedFeatureDirs).toEqual(["features"]);
     expect(report.summary.readOnlySteps).toBe(0);
     // A summary-only report (zero errors, zero notes) still exits 0 — the
@@ -251,9 +251,9 @@ describe("nuka tend", () => {
 
     expect(exitCode).toBe(0);
     const allLines = stdout.text().trim().split("\n");
-    // The summary (now three lines since
-    // fb3-scan-dirs's own `scanned:` line) prints first, and is visually
-    // distinct from a finding line: no leading `error\t`/`note\t`.
+    // The summary (three lines, including a `scanned:` line) prints first,
+    // and is visually distinct from a finding line: no leading
+    // `error\t`/`note\t`.
     const summaryLines = allLines.slice(0, 3);
     const noteLines = allLines.slice(3);
     for (const line of summaryLines) {

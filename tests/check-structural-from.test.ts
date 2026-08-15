@@ -4,7 +4,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check`'s structural `from` check
 // (src/step/validate-from.ts's `validateStepFrom`, wired into
-// src/check/analyze.ts by m6f-check-structural-from) — docs/spec.md
+// src/check/analyze.ts) — docs/spec.md
 // "Chaining steps" promises "`nuka check` reports it" for an unregistered
 // upstream/missing returns key/missing args key the same way `run`/`do`
 // already refuse to execute over; this file is that promise's own test,

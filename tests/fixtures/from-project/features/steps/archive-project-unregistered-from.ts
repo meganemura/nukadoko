@@ -18,7 +18,7 @@ const neverDiscovered = defineStep({
 // allows this): `from`
 // naming an unregistered Step must refuse to execute at all, via `nuka do`.
 export default defineStep({
-  description: "from names a Step discovery never registered, on purpose (m6a-from-core fixture)",
+  description: "from names a Step discovery never registered, on purpose",
   args: z.object({ projectId: z.string() }),
   returns: z.object({ archived: z.boolean() }),
   from: { projectId: [neverDiscovered, "id"] },

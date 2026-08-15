@@ -28,8 +28,8 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 // path, never via-import.ts's.
 //
 // tests/fixtures/check-import-failure-project (require()-in-ESM, an
-// existing fixture, m21a-compat-gap-detect) is reused for the location-less
-// case: Node's own ESM-loader error carries no location at all.
+// existing fixture) is reused for the location-less case: Node's own
+// ESM-loader error carries no location at all.
 
 describe("nuka check: step-file-import-failed carries a line when the message has one", () => {
   it("fills line from an esbuild transform error's own <path>:<line>:<col> location", async () => {

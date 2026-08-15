@@ -381,7 +381,7 @@ describe("mapStep: declared attachments/links/labels/logs", () => {
     expect(mapped.labels).toContainEqual({ name: "custom", value: "v" });
   });
 
-  it("turns declared.logs into zero-width, passed child steps (p2-allure-measurement: unchanged regardless of MappedChildStep's own widened shape)", () => {
+  it("turns declared.logs into zero-width, passed child steps (unchanged regardless of MappedChildStep's own widened shape)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { logs: ["hello from glue"] } });

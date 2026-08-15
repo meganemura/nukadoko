@@ -3,7 +3,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 export default defineStep({
   pattern: "the mts step runs",
-  description: "Proves discovery reads a .mts step file (p10-step-discovery task spec)",
+  description: "Proves discovery reads a .mts step file",
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,

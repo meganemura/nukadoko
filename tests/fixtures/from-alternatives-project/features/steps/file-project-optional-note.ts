@@ -4,9 +4,9 @@ import createProject from "./create-project.js";
 import importProject from "./import-project.js";
 
 // An *optional* key with
-// several candidate producers is silent when none is bound (m6b-from-check's
-// own rule, unaffected by having more than one candidate) but still errors
-// when two or more are bound earlier — docs/spec.md "Chaining steps": "Two
+// several candidate producers is silent when none is bound (unaffected by
+// having more than one candidate) but still errors when two or more are
+// bound earlier — docs/spec.md "Chaining steps": "Two
 // or more of a key's listed producers bound earlier is an error whether the
 // key is required or optional".
 export default defineStep({

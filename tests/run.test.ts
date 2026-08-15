@@ -336,7 +336,7 @@ describe("nuka run", () => {
 // failed as "undefined step" instead of naming the real cause. Its own
 // fixture (js-steps-project), not run-project above, since run-project's
 // step files are relied on as .ts by other tests in this file.
-describe("nuka run: .js and .mjs step files (p10-step-discovery)", () => {
+describe("nuka run: .js and .mjs step files", () => {
   it("discovers and executes a .js Given step and a .mjs Then step", async () => {
     const rootDir = await copyFixtureToTempDir("js-steps-project");
     try {

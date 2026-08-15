@@ -83,17 +83,14 @@ describe("from: scenario-path injection", () => {
     expect(archiveStepRecord.used).toBeUndefined();
   });
 
-  it("the upstream hasn't run yet: m6b-from-check's pre-execution guard now catches this before the step ever runs", async () => {
-    // This scenario used to actually run and fail args validation —
-    // m6a-from-core's
-    // own comment on this exact fixture line anticipated the change: "m6b
-    // が入れば、この失敗は実行前に捕まるようになる。ここでは最後の砦。"
-    // m6b-from-check landed, so this is no longer the last line of defense;
-    // see tests/run-from-order.test.ts for that guard's own dedicated
-    // coverage (missing vs. later upstream, other scenarios unaffected).
-    // This test only needs to keep proving the *message* still names the
-    // key and the upstream step, now from the guard instead of from args
-    // validation.
+  it("the upstream hasn't run yet: the binding-order check now catches this before the step ever runs", async () => {
+    // This scenario used to actually run and fail args validation; the
+    // pre-execution binding-order guard now catches it before the step ever
+    // runs, so args validation is no longer the last line of defense — see
+    // tests/run-from-order.test.ts for that guard's own dedicated coverage
+    // (missing vs. later upstream, other scenarios unaffected). This test
+    // only needs to keep proving the *message* still names the key and the
+    // upstream step, now from the guard instead of from args validation.
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/chain.feature:11"], {

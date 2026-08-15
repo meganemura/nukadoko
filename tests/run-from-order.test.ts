@@ -45,11 +45,9 @@ describe("nuka run: from's scenario-order guard", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
-    // `record: null` — unlike this exact scenario's pre-m6b behavior (this
-    // step used to actually run and fail args validation with a real
-    // step record; m6a-from-core's own comment anticipated this: "m6b が入れば、
-    // この失敗は実行前に捕まるようになる") — this step's own `run` is never
-    // called at all now, so no browser session could ever have been opened.
+    // `record: null` — the binding-order check catches the missing upstream
+    // before execution begins, so this step's own `run` is never called at
+    // all, and no browser session could ever have been opened.
     expect(record.steps[0].record).toBeNull();
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("archive-project");

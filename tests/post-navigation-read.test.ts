@@ -117,7 +117,7 @@ function buildRecord(options: { featurePath: string; stepText: string; stepRecor
   ].join("\n");
 }
 
-describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
+describe("nuka tend: post-navigation-read", () => {
   describe("a real chromium step record", () => {
     let server: Server;
     let baseURL: string;

@@ -33,9 +33,10 @@ import {
 //   3. only the typed side runs standalone via `nuka do`; the compat step
 //      is refused by name (docs/spec.md "Compat steps")
 //
-// This is a different axis than selftest-suite, which compares "the same
-// code under two runtimes" (the compat door) — this compares "the same
-// feature line under two implementations" (promotion).
+// This is a different axis than selftest-suite/ (this repo's own root),
+// which compares "the same code under two runtimes" (the compat door) —
+// this compares "the same feature line under two implementations"
+// (promotion).
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {
   return new Promise((resolve) => {

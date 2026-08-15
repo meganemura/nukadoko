@@ -11,11 +11,12 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: the one accepted-but-unverified corner of p3a-trace-per-
-// step's own completion condition ("`expect` の待ちが `actions` に `ms` 付き
-// で載ること") — trace-actions.test.ts already fixed `parseTraceActions`
-// against a hand-built trace, and trace-actions-step-record.test.ts already
-// proves `goto`'s own `url` reaches a real step record end to end, but
+// Responsibility: the one accepted-but-unverified corner of the per-step
+// trace's own guarantee, that a wait inside `expect(...)` itself gets
+// recorded in `actions` with a `ms` duration — trace-actions.test.ts already
+// fixed `parseTraceActions` against a hand-built trace, and
+// trace-actions-step-record.test.ts already proves `goto`'s own `url`
+// reaches a real step record end to end, but
 // neither exercises a real `expect(...).toBeVisible()` retrying against a
 // real chromium. This file is that missing leg: the fixture page's own
 // `#late` element is added by client-side JS 600ms after load, so the

@@ -28,7 +28,7 @@ async function runTend(rootDir: string): Promise<{ report: Report; exitCode: num
   return { report: JSON.parse(stdout.text()) as Report, exitCode };
 }
 
-describe("nuka tend: sign-off rot (m8b-tend-signoff-rot)", () => {
+describe("nuka tend: sign-off rot", () => {
   let rootDir: string;
   let featuresDir: string;
   let recordPath: string;

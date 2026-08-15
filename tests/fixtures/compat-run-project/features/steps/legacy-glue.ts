@@ -4,9 +4,8 @@ import { Given, Then, When, defineParameterType } from "../../nukadoko-compat-sh
 // compat-origin
 // `defineParameterType` merges into the same registry `nuka run` uses to
 // match — the pattern below could not match "the legacy flag is yes"
-// without it (closing m2a-compat-registry's "temporary asymmetry #2":
-// `nuka check` already treated this pattern as defined; `nuka run` now
-// actually matches and executes it).
+// without it. `nuka check` already treated this pattern as defined; `nuka
+// run` now actually matches and executes it too.
 defineParameterType({
   name: "legacyBoolean",
   regexp: /(yes|no)/,
@@ -35,7 +34,7 @@ Then("the legacy flag is {legacyBoolean}", function (flag: boolean) {
   }
 });
 
-// Table arrives as a DataTable (2026-08-02 lead scope addendum) —
+// Table arrives as a DataTable:
 // `.hashes()` folds the header row into keys for every data row.
 When("a legacy table is provided:", function (table: { hashes(): Record<string, string>[] }) {
   const rows = table.hashes();

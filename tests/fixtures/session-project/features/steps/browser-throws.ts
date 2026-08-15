@@ -15,6 +15,6 @@ export default defineStep({
   mutates: false,
   async run({ page, baseURL }) {
     await page.goto(`${baseURL}/whoami`);
-    throw new Error("deliberate failure for the fb4-evidence-time browser-failure test");
+    throw new Error("deliberate failure for the browser-failure test");
   },
 });

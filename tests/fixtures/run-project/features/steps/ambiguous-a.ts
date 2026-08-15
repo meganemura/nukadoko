@@ -4,8 +4,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 // Deliberately matches the exact same text as ambiguous-b.ts: `nuka check`
 // would flag this vocabulary's "duplicate-pattern", but this fixture is for
 // `nuka run` directly (no `check` run first), exercising its own run-time
-// ambiguous-match rule (capture-binding-design.md: at run time, if more than
-// one step matches a single pickle step, both are named and the run fails).
+// ambiguous-match rule: at run time, if more than one step matches a single
+// pickle step, both are named and the run fails.
 export default defineStep({
   pattern: "an ambiguous thing exists",
   description: "One of two steps that both match the same text",

@@ -12,9 +12,8 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: compat-only scenario e2e
-// coverage — `nuka run` actually matching and executing a compat step
-// (closing m2a-compat-registry's two temporary asymmetries): string/RegExp
-// patterns, a compat-registered custom parameter type, table (as a
+// coverage — `nuka run` actually matching and executing a compat step:
+// string/RegExp patterns, a compat-registered custom parameter type, table (as a
 // DataTable)/docstring as the trailing positional argument, a throwing step,
 // and a Then-position compat step that observes a network write and passes
 // anyway (compat has no `mutates` to trust,
@@ -156,13 +155,11 @@ describe("nuka run: compat step execution", () => {
     expect(record.steps[1].record).toBeNull();
   });
 
-  // Before t2-trust-declaration, this same fixture failed: a Then-position
-  // step's own measured write demoted its step record regardless of any
-  // declaration, and compat has no `mutates` declaration at all, so it
-  // could never opt out. Now that the measured Then-position check is gone
-  // entirely (this file's own header), a compat step bound in Then position
-  // passes exactly like any other step — the write is still recorded, just
-  // no longer judged.
+  // A compat step bound in Then position passes exactly like any other
+  // step, because the measured Then-position check is gone entirely (this
+  // file's own header) — the write is still recorded, just no longer
+  // judged. Compat has no `mutates` declaration at all, so under the old
+  // check it could never have opted out either way.
   it("a Then-position compat step that observes a network write passes, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/compat-then.feature"], {

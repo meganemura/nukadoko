@@ -125,9 +125,8 @@ describe("nuka accept: a green run", () => {
     expect(content).toContain("No step declared `mutates: false` and was measured making a write.");
   });
 
-  it("writes ran_at/accepted_at as local-offset ISO strings whose date matches the filename (m4c-record-timestamps)", async () => {
-    // No `TZ` fixture here on purpose (m4c-record-timestamps spec's own
-    // testing note): rewriting `TZ` mid-process doesn't reliably change what
+  it("writes ran_at/accepted_at as local-offset ISO strings whose date matches the filename", async () => {
+    // No `TZ` fixture here on purpose: rewriting `TZ` mid-process doesn't reliably change what
     // Node's Date/Intl internals already cached, so the only assertions
     // that mean the same thing on every machine/CI are format-shape and
     // cross-consistency with the filename, not a specific offset value.

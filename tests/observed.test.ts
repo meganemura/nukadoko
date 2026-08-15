@@ -14,13 +14,13 @@ import {
 // Responsibility: measured mutates end to end against tests/fixtures/
 // observed-project — a real local http server, exercised through both
 // `nuka do` and `nuka run`: the request-side `{1, 1}` tally landing on a
-// step record, and — since
-// t2-trust-declaration — that a declared `mutates: false` step's own
-// occurrence is never failed by what it actually observed writing, whether
-// it is bound in Then position or run under a `policy: "read-only"`
-// environment; `observed` still records the write either way, only `status`
-// stopped reacting to it. Page-side (chromium) observation has its own test
-// in browser-evidence.test.ts, following that file's existing convention for
+// step record, and that a declared `mutates: false` step's own occurrence
+// is never failed by what it actually observed writing — the declaration is
+// trusted over the observed HTTP-method proxy — whether it is bound in Then
+// position or run under a `policy: "read-only"` environment; `observed`
+// still records the write either way, only `status` stopped reacting to it.
+// Page-side (chromium) observation has its own test in
+// browser-evidence.test.ts, following that file's existing convention for
 // browser-path evidence.
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {
@@ -105,13 +105,12 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].status).toBe("passed");
   });
 
-  // Before t2-trust-declaration this scenario failed: a Then-position step's
-  // own measured write demoted its step record regardless of what it declared,
-  // and skipped the rest of the scenario. The step here now declares
-  // `mutates: false` (tests/fixtures/observed-project/features/steps/
-  // a-write-happens.ts) — nukadoko trusts that declaration instead of the
-  // measurement, so the whole scenario passes and the following step, which
-  // used to be skipped, actually runs.
+  // A Then-position step's own measured write does not demote its step
+  // record when the step declares `mutates: false` (tests/fixtures/
+  // observed-project/features/steps/a-write-happens.ts) — nukadoko trusts
+  // that declaration instead of the measurement, so the whole scenario
+  // passes and the following step, which would otherwise be skipped,
+  // actually runs.
   it("nuka run: a Then-position step declared mutates: false passes even though it observes a write, and the rest of the scenario keeps running", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
@@ -141,12 +140,12 @@ describe("measured mutates: request-side observed counts", () => {
     expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
-  // Before t2-trust-declaration this was the "lie backstop": a declared
-  // `mutates: false` step that actually POSTed under a read-only
-  // environment used to be demoted to `status: "failed"`. nukadoko now
-  // trusts the declaration instead of measuring against it, so this
-  // succeeds — the write still lands on `observed`, unredacted and
-  // unchanged, for a report to catch the wrong declaration after the fact.
+  // The "lie backstop": a declared `mutates: false` step that actually
+  // POSTed under a read-only environment used to be demoted to
+  // `status: "failed"`. nukadoko now trusts the declaration instead of
+  // measuring against it, so this succeeds — the write still lands on
+  // `observed`, unredacted and unchanged, for a report to catch the wrong
+  // declaration after the fact.
   it("read-only environment: a declared mutates:false step that actually POSTs passes, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
@@ -163,9 +162,9 @@ describe("measured mutates: request-side observed counts", () => {
   // `nuka run` against a read-only environment: the gap the previous slice
   // surfaced — `nuka run` never looked at
   // `policy` at all — closed the same way `nuka do` already handles it. A
-  // declared `mutates: true` step is still refused before it ever runs
-  // (t2-trust-declaration keeps this half unchanged); a declared
-  // `mutates: false` lie is no longer backstopped — see the test below.
+  // declared `mutates: true` step is still refused before it ever runs,
+  // unchanged; a declared `mutates: false` lie is no longer backstopped —
+  // see the test below.
   it("nuka run: a declared-mutating step is refused before it runs in a read-only environment; the rest of the scenario is skipped", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
@@ -191,9 +190,9 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].record).toBeNull();
   });
 
-  // Before t2-trust-declaration this was `nuka run`'s own version of the
-  // lie backstop above, and failed the same way. It now passes for the same
-  // reason: the declaration is trusted over the measurement.
+  // `nuka run`'s own version of the lie backstop above: a declared
+  // `mutates: false` step that actually writes passes for the same reason,
+  // because the declaration is trusted over the measurement.
   it("nuka run: a step declared mutates:false that actually writes passes under a read-only environment, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(

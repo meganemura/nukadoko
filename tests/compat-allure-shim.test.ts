@@ -19,8 +19,8 @@ import {
 //   - compat glue calling the allure-js facade directly (the door's own
 //     main path — no import switch, `import ... from "allure-js-commons"`
 //     unmodified);
-//   - the World channel (`this.attach`/`log`/`link`, held-but-unread since
-//     m2b-compat-execution) now wired to the same collector;
+//   - the World channel (`this.attach`/`log`/`link`, previously held but
+//     unread) now wired to the same collector;
 //   - a Before hook's own declared data landing on `record.hooks[].declared`
 //     instead of any step's own step record;
 //   - a *typed* step importing the facade directly, proving collection is

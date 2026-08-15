@@ -7,8 +7,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // one pattern matches both "the items are listed" and "the items are
 // listed from 'inventory'", folding what would otherwise be two step
 // definitions (one per location-clause variant, the wp-cli/e-petitions pain
-// parameter-types-design.md names) into one, paired with `dir`'s own
-// `.optional()` args key.
+// point) into one, paired with `dir`'s own `.optional()` args key.
 export default defineStep({
   pattern: "the items are listed{dir:from-dir}",
   description: "List items, optionally scoped to a location clause",

@@ -16,8 +16,8 @@ When("a legacy step throws for hook coverage", function () {
 
 // --- item 3: HookParameter reaches every hook, untagged included ---
 // Destructuring `{ gherkinDocument, pickle }` here must not crash (real
-// glue does exactly this — m2.1-a compat-audit synthesis, 10 sites, 4
-// repos) — logged via `this.log` (World's declared channel) so
+// glue does exactly this — compat-audit synthesis, 10 sites, 4 repos) —
+// logged via `this.log` (World's declared channel) so
 // tests/compat-execution.test.ts can read it back off
 // `record.hooks[].declared.logs` without needing a data bridge of its own.
 Before(function ({ gherkinDocument, pickle, testCaseStartedId, willBeRetried }) {
