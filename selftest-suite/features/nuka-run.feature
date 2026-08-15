@@ -5,11 +5,11 @@ Feature: nuka run drives a fixture project
   # before any of the later, more specific scenarios (stage 2 = @allure-report,
   # stage 3 = @allure-watch, stage 4 = @allure-browser, one steps file each)
   # build on it.
-  Scenario: nuka run passes and leaves one allure result file per executed step
+  Scenario: nuka run passes and leaves one allure result file per executed step and one per scenario
     Given a clean copy of the fixture project's nukadoko state
     When nuka run runs "features/passing.feature" in the fixture project
     Then the run exits 0
-    And the fixture project's allure-results has one result file per executed step
+    And the fixture project's allure-results has one result file per executed step and one per scenario
 
   # run-selftest.mjs drives both tracks off this one feature file (`nuka
   # run <feature>` only ever takes a single file, never a directory), which
@@ -26,12 +26,13 @@ Feature: nuka run drives a fixture project
     And the fixture project has nukadoko's own allurerc.mjs
     When nuka run runs "features/mixed.feature" in the fixture project
     And the fixture project's Allure report is generated and opened in a browser
-    Then the tab counts match the step statuses nuka run reported
+    Then the tab counts match the step and scenario statuses nuka run reported
     And every scenario is a tree group and every step is one of its leaves
     And the failing step's record.json attachment is readable and matches its own record
     And the failing step is categorized as "Step error", not "Product errors"
     And the timeline step's section and poll appear as its own child steps
     And the before-hook-stopped scenario's step shows skipped, not failed
+    And the before-hook-stopped scenario itself shows failed, not skipped
 
   # Stage 2 above reads a *finished* report; this scenario is the one place
   # that opens the report BEFORE `nuka run` even starts and watches it
@@ -52,8 +53,8 @@ Feature: nuka run drives a fixture project
     Then the live report's result count rises above 0 while the run is still going
     When I wait for that run to finish
     Then the run exits 0
-    And the fixture project's allure-results has one result file per executed step
-    And the live report's final result count matches the number of executed steps
+    And the fixture project's allure-results has one result file per executed step and one per scenario
+    And the live report's final result count matches the number of executed steps and scenarios
 
   # Stage 2 read a finished report and stage 3 watched one update live, but
   # neither one ever launched a browser inside the run under test itself --

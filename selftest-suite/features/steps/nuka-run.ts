@@ -27,8 +27,9 @@ Given("a clean copy of the fixture project's nukadoko state", async function (th
   // The allure writer never deletes an existing result file
   // (src/report/allure/writer.ts: "never delete an existing allure-results
   // directory"), so a leftover `.nukadoko/` from a previous run of this
-  // very scenario would make "one result file per step" a fact about every
-  // run since the state dir was last cleared, not about this run.
+  // very scenario would make "one result file per executed step and one
+  // per scenario" a fact about every run since the state dir was last
+  // cleared, not about this run.
   await rm(path.join(fixtureProjectDir, ".nukadoko"), { recursive: true, force: true });
 });
 
@@ -56,20 +57,31 @@ Then("the run exits {int}", function (this: SelftestWorld, expected: number) {
   }
 });
 
-Then("the fixture project's allure-results has one result file per executed step", async function (this: SelftestWorld) {
-  const lines = this.nukaStdout.split("\n").filter((line) => line.length > 0);
-  const totalSteps = lines.reduce((sum, line) => sum + (JSON.parse(line).steps as unknown[]).length, 0);
+Then(
+  "the fixture project's allure-results has one result file per executed step and one per scenario",
+  async function (this: SelftestWorld) {
+    const scenarios = this.nukaStdout
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as { steps: unknown[] });
+    const totalSteps = scenarios.reduce((sum, scenario) => sum + scenario.steps.length, 0);
+    // On top of one Allure result per step, `endScenario` also writes one
+    // more per scenario (map-scenario.ts's own `mapScenario`), added so a
+    // scenario can be recognised across runs the way a step, with nothing
+    // stable to match on, never can.
+    const expectedFiles = totalSteps + scenarios.length;
 
-  const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "export", "allure-results");
-  const entries = await readdir(resultsDir);
-  // `*-result.json` only: the same directory also holds `*-container.json`
-  // (src/report/allure/writer.ts's writeGroup) and other allure assets,
-  // none of which are one-per-step.
-  const resultFiles = entries.filter((name) => name.endsWith("-result.json"));
+    const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "export", "allure-results");
+    const entries = await readdir(resultsDir);
+    // `*-result.json` only: the same directory also holds `*-container.json`
+    // (src/report/allure/writer.ts's writeGroup) and other allure assets,
+    // none of which are one-per-step or one-per-scenario.
+    const resultFiles = entries.filter((name) => name.endsWith("-result.json"));
 
-  if (resultFiles.length !== totalSteps) {
-    throw new Error(
-      `expected ${totalSteps} allure result file(s) in ${resultsDir}, found ${resultFiles.length}`,
-    );
-  }
-});
+    if (resultFiles.length !== expectedFiles) {
+      throw new Error(
+        `expected ${expectedFiles} allure result file(s) (${totalSteps} step + ${scenarios.length} scenario) in ${resultsDir}, found ${resultFiles.length}`,
+      );
+    }
+  },
+);

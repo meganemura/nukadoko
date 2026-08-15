@@ -4,8 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-// Responsibility: run this suite (selftest-suite/features/nuka-run.feature)
-// on both tracks and fail loudly if they disagree. `npm run selftest` is
+// Responsibility: run this suite's feature files (selftest-suite/features/*,
+// SUITE_FEATURES below) on both tracks and fail loudly if any of them
+// disagree. `npm run selftest` is
 // the one command that runs both tracks, so how to run them is discoverable
 // from a single command instead of two invocations someone has to already
 // know about.
@@ -47,10 +48,23 @@ import { promisify } from "node:util";
 // (fixture-project/.nukadoko/... vs selftest-suite/.nukadoko/...), only
 // one of which either track's assertions ever look at.
 //
-// ## "Same results", defined precisely
+// ## "Same results", defined precisely, and compared per feature file
 //
-// The two tracks are compared on exactly one artifact each, boiled down to
-// a `scenario name -> status` map:
+// `nuka run` only ever takes a single feature file, never a directory or a
+// list, so the swap track already had to loop once per entry in
+// SUITE_FEATURES below regardless of how many feature files this suite
+// has; running the baseline track once per feature file too, rather than
+// handing cucumber-js the whole list, is what keeps both tracks structured
+// the same way, invocation for invocation, instead of one track working
+// off a single combined run and the other off several. Comparing per
+// feature file rather than pooling every scenario name across every
+// feature file into one shared map also keeps two different feature files
+// free to reuse the same scenario name without one accidentally masking
+// the other's own mismatch, and keeps the "at least one scenario found on
+// both tracks" guard below meaningful per file instead of one empty file
+// hiding behind a populated one.
+//
+// Each comparison is boiled down to a `scenario name -> status` map:
 //
 //   - baseline: `cucumber-js --format json`'s own JSON output. Each
 //     `elements[]` entry with `type === "scenario"` contributes its `name`
@@ -63,8 +77,11 @@ import { promisify } from "node:util";
 //     `scenario` field is the key; `status` is used as-is, since nuka run
 //     already reports one status per scenario directly.
 //
-// The two maps must have the same key set and the same value at every key.
-// Nothing else about either track's output is compared.
+// The two maps for one feature file must have the same key set and the
+// same value at every key. Nothing else about either track's output is
+// compared.
+//
+const SUITE_FEATURES = ["features/nuka-run.feature", "features/acceptance-lifecycle.feature", "features/same-scenario-across-runs.feature"];
 
 const execFileAsync = promisify(execFile);
 
@@ -74,14 +91,13 @@ const repoRoot = path.resolve(here, "..");
 
 const cucumberJsBin = path.join(repoRoot, "node_modules", "@cucumber", "cucumber", "bin", "cucumber.js");
 const nukaCliBin = path.join(repoRoot, "dist", "cli.js");
-const suiteFeature = "features/nuka-run.feature";
 
 function fail(message) {
   console.error(`selftest: ${message}`);
   process.exitCode = 1;
 }
 
-async function runBaseline() {
+async function runBaseline(suiteFeature) {
   // cucumber-js 13.2.0 only runs on Node 22, 24, or >=26 (its own
   // package.json `engines`, enforced at startup, not just advisory) --
   // narrower than nukadoko's own `>=20`. If the Node running this script
@@ -126,7 +142,7 @@ async function runBaseline() {
   return results;
 }
 
-async function runSwap() {
+async function runSwap(suiteFeature) {
   const env = { ...process.env, NUKADOKO_SELFTEST_TRACK: "swap" };
   const { stdout } = await execFileAsync(process.execPath, [nukaCliBin, "run", suiteFeature], {
     cwd: suiteDir,
@@ -142,13 +158,13 @@ async function runSwap() {
   return results;
 }
 
-function compare(baseline, swap) {
+function compare(suiteFeature, baseline, swap) {
   if (baseline.size === 0 || swap.size === 0) {
     // A misconfigured path/glob can make either runner exit 0 having found
     // zero scenarios -- a silent false green that an equality check alone
     // would not catch (two empty maps compare equal).
     fail(
-      `expected at least one scenario on both tracks, got ${baseline.size} (baseline) and ${swap.size} (swap)`,
+      `${suiteFeature}: expected at least one scenario on both tracks, got ${baseline.size} (baseline) and ${swap.size} (swap)`,
     );
     return;
   }
@@ -159,7 +175,7 @@ function compare(baseline, swap) {
   const onlySwap = [...swapKeys].filter((key) => !baselineKeys.has(key));
   if (onlyBaseline.length > 0 || onlySwap.length > 0) {
     fail(
-      `scenario names differ between tracks. Only on baseline: ${JSON.stringify(onlyBaseline)}. Only on swap: ${JSON.stringify(onlySwap)}.`,
+      `${suiteFeature}: scenario names differ between tracks. Only on baseline: ${JSON.stringify(onlyBaseline)}. Only on swap: ${JSON.stringify(onlySwap)}.`,
     );
     return;
   }
@@ -172,30 +188,34 @@ function compare(baseline, swap) {
     }
   }
   if (mismatches.length > 0) {
-    fail(`status mismatch for ${mismatches.length} scenario(s): ${mismatches.join("; ")}`);
+    fail(`${suiteFeature}: status mismatch for ${mismatches.length} scenario(s): ${mismatches.join("; ")}`);
     return;
   }
 
-  console.log(`selftest: ${baseline.size} scenario(s) agree on both tracks.`);
+  console.log(`selftest: ${suiteFeature}: ${baseline.size} scenario(s) agree on both tracks.`);
   for (const [name, status] of baseline) {
     console.log(`  ${status}  ${name}`);
   }
 }
 
-const baseline = await runBaseline().catch((error) => {
-  fail(`baseline track (cucumber-js) failed: ${error.message}`);
-  return null;
-});
-
-if (baseline !== null) {
-  const swap = await runSwap().catch((error) => {
-    fail(`swap track (nuka run) failed: ${error.message}`);
+async function runOneFeature(suiteFeature) {
+  const baseline = await runBaseline(suiteFeature).catch((error) => {
+    fail(`${suiteFeature}: baseline track (cucumber-js) failed: ${error.message}`);
     return null;
   });
+  if (baseline === null) return;
 
-  if (swap !== null) {
-    compare(baseline, swap);
-  }
+  const swap = await runSwap(suiteFeature).catch((error) => {
+    fail(`${suiteFeature}: swap track (nuka run) failed: ${error.message}`);
+    return null;
+  });
+  if (swap === null) return;
+
+  compare(suiteFeature, baseline, swap);
+}
+
+for (const suiteFeature of SUITE_FEATURES) {
+  await runOneFeature(suiteFeature);
 }
 
 process.exit(process.exitCode ?? 0);

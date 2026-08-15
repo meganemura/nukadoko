@@ -14,17 +14,27 @@
 // already writes a matching categories.json straight into allure-results/
 // each run.
 //
-// Already have your own allurerc? Merge this `categories` array into it
-// rather than replacing the whole file — and keep every entry on the
-// `matchers` key shown below; mixing it with the legacy
+// `historyPath` points Allure's own generate/watch/report at a file (not a
+// directory) where each run's own history point is appended, kept beside
+// the disposable allure-results/ directory rather than inside it, so
+// clearing results between runs (a fresh CI checkout, a local rerun) never
+// discards it. Without this, Allure never builds history, trend, or
+// flaky-across-runs detection at all, no matter how stable a scenario's
+// own identity is (docs/spec.md "Allure emitter").
+//
+// Already have your own allurerc? Merge this `categories` array (and
+// `historyPath`, if you don't already set one of your own) into it rather
+// than replacing the whole file, and keep every entry on the `matchers`
+// key shown below; mixing it with the legacy
 // `matchedStatuses`/`messageRegex` keys in the same rule throws at
 // generate time (see `@allurereport/core-api/dist/categories.js`).
 //
 // The seven `name` values below are copied verbatim from
-// `src/report/allure/categories.ts`'s own `NAME_BY_KIND` — that file is
+// `src/report/allure/categories.ts`'s own `NAME_BY_KIND`: that file is
 // the source of truth; a drift test (tests/allure-config-drift.test.ts)
-// keeps this file's copy honest against it.
+// keeps this file's copy honest against it, `historyPath` included.
 export default {
+  historyPath: ".nukadoko/export/allure-history.jsonl",
   categories: [
     {
       name: "Contract: args failed the step's schema",

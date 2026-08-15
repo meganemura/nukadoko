@@ -39,24 +39,39 @@ import { contentTypeForFileName } from "../media-type.js";
 // logic (parameters, attachments, timelines, labels) does not need to
 // change, only how many Allure tests the result becomes.
 //
-// **Why this module never fills in a `historyId`, and never will** (read
-// this before "fixing" a report that looks like it has no history): a step
-// has no identity that survives a run.
-// Text repeats (two steps can share the exact same wording), position
-// shifts (an edit anywhere earlier in the feature file moves every line
-// number after it), and occurrence count breaks under duplicate text the
-// same way text itself does — every one of those was tried and each one
-// produced a report that silently linked two *different* steps as if they
-// were the same one, with no trace of the mistake left in the output to
-// catch it later. Given that, the only choice that does not eventually lie
-// is to make sure nothing links across runs at all: `mapStep`'s own
-// `identityParameters` (three run/scenario/step-scoped values, `mode:
-// "hidden"`) exist to force every Allure test's own `historyId` apart, on
-// purpose, every time. Do not replace them with `excluded: true` (Allure
-// drops an `excluded` parameter from the hash entirely, which undoes the
-// whole point) and do not delete them because the report "should" have
-// history — it cannot, honestly, until steps carry an identity of their
-// own, which nothing in this codebase invents.
+// **Why `mapStep` never fills in a `historyId`, and never will** (read this
+// before "fixing" a step's own test that looks like it has no history): a
+// step has no identity that survives a run. Text repeats (two steps can
+// share the exact same wording), position shifts (an edit anywhere earlier
+// in the feature file moves every line number after it), and occurrence
+// count breaks under duplicate text the same way text itself does — every
+// one of those was tried and each one produced a report that silently
+// linked two *different* steps as if they were the same one, with no trace
+// of the mistake left in the output to catch it later. Given that, the
+// only choice that does not eventually lie is to make sure nothing links
+// across runs at all: `mapStep`'s own `identityParameters` (three
+// run/scenario/step-scoped values, `mode: "hidden"`) exist to force every
+// step's own Allure test's own `historyId` apart, on purpose, every time.
+// Do not replace them with `excluded: true` (Allure drops an `excluded`
+// parameter from the hash entirely, which undoes the whole point) and do
+// not delete them because the report "should" have history — it cannot,
+// honestly, until steps carry an identity of their own, which nothing in
+// this codebase invents.
+//
+// `mapScenario`, below, is a deliberately different case: a *scenario*, not
+// a step, has content of its own to build a stable identity from — its own
+// gherkin name, its own Examples row (when it has one), and its own ordered
+// step text — none of which need position or an invented counter to stay
+// meaningful across runs. `mapScenario`'s own `fullName` carries only the
+// scenario's name (never a run id), and every one of its parameters that
+// participates in `historyId` is deterministic from the scenario's own
+// definition: two runs of the same scenario hash the same, and two
+// Scenario Outline rows or two identically-named scenarios that actually
+// differ hash apart. Only a scenario whose name, Examples row, and full
+// ordered step text are *all* identical to another scenario's stays
+// indistinguishable from it — the same "no link is safer than a wrong
+// link" choice `mapStep` makes above, just one level up, where it can
+// actually be satisfied most of the time instead of never.
 //
 // `@cucumber/messages` is fine to import here (types and the odd runtime
 // value alike) — it is plain data with no I/O of its own, unlike the two
@@ -351,7 +366,12 @@ function resolveDescription(doc: GherkinDocument, scenario: Scenario | undefined
   return featureDescription !== "" ? featureDescription : undefined;
 }
 
-function buildExampleParameters(doc: GherkinDocument, pickle: Pickle): MappedParameter[] {
+/** Exported for `mapScenario`, below, to reuse verbatim — a Scenario
+ * Outline row's own Examples values are the one already-verified way to
+ * keep two rows of the same outline apart (this module's own header); a
+ * second, hand-rolled copy of this lookup would only risk drifting from
+ * the one `mapStep` already relies on for a step's own parameters. */
+export function buildExampleParameters(doc: GherkinDocument, pickle: Pickle): MappedParameter[] {
   const hit = resolveExampleRow(doc, pickle);
   if (!hit) {
     return [];
@@ -927,6 +947,142 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     // step's own sections/polls/actions timeline after — additive, never
     // reordering what was already there.
     childSteps: [...declared.childSteps, ...timelineChildSteps],
+  };
+}
+
+// --- one scenario -> one more Allure test, additive to its own steps' ---
+//
+// `mapScenario` runs once per scenario, at `endScenario` (emitter.ts), never
+// once per step — it exists purely to give the whole scenario a second,
+// stable identity to sit beside its own already-per-step tests (this
+// module's own header explains why a step's own test can never have one).
+// The result is a plain `MappedStepTest` again (same shape a step's own
+// test already uses) rather than a new interface: emitter.ts already knows
+// how to turn that shape into a `startTest`/`stopTest`/`writeTest` call, and
+// a second, near-identical shape would only invite the two to drift.
+
+export interface MapScenarioInput {
+  readonly record: ScenarioRecord;
+  readonly gherkinDocument: GherkinDocument;
+  readonly pickle: Pickle;
+  readonly environment: string;
+  readonly session: string | null;
+  readonly targetVersion?: string;
+  /** The feature file's root-relative path, already POSIX-normalized — see
+   * `MapStepInput.posixPath`'s own doc comment; the same value, computed
+   * the same way, by the same caller. */
+  readonly posixPath: string;
+  /** The first of this scenario's own steps whose failure resolved to a
+   * classified `ErrorKind` (mapStep's own `nukadoko.failure` label), or
+   * `undefined` when no step's own failure was classified — a scenario that
+   * passed, or one whose only failures were vocabulary defects (undefined/
+   * ambiguous, which carry no `ErrorKind` at any grain). emitter.ts is the
+   * only caller with the per-step visibility to compute this (it sees every
+   * step's own mapped labels as they're emitted); `mapScenario` only
+   * consumes it, here, to give the scenario-level test itself a category to
+   * land in instead of Allure 3's built-in "Product errors" catch-all. */
+  readonly firstFailure?: { readonly kind: string; readonly message: string };
+}
+
+/** `ScenarioStepRecord.status` (`"undefined"`/`"ambiguous"` included) onto
+ * the four-way `MappedStatus` a child step can carry — the same "a
+ * vocabulary defect is broken, unmarked" convention `resolveStepOutcome`
+ * above already uses for a step's own test, applied here to the summary
+ * child steps `mapScenario` lists below rather than reimplemented. */
+function scenarioStepChildStatus(status: ScenarioStepRecord["status"]): MappedStatus {
+  switch (status) {
+    case "passed":
+      return "passed";
+    case "failed":
+      return "failed";
+    case "skipped":
+      return "skipped";
+    case "undefined":
+    case "ambiguous":
+      return "broken";
+  }
+}
+
+export function mapScenario(input: MapScenarioInput): MappedStepTest {
+  const { record, gherkinDocument, pickle, environment, session, targetVersion, posixPath, firstFailure } = input;
+
+  const scenario = resolveScenario(gherkinDocument, pickle);
+  const featureName = gherkinDocument.feature?.name ?? "";
+
+  const startMs = Date.parse(record.started_at);
+  const stopMs = Date.parse(record.finished_at);
+
+  // The one piece of this test's own identity `mapStep` has no equivalent
+  // for: two scenarios can share a gherkin name (this module's own header),
+  // and a shared name with no Examples row of its own (the Scenario
+  // Outline case `buildExampleParameters` already covers) would otherwise
+  // hash to the exact same `historyId`, wrongly folding the second one into
+  // the first one's history. `record.steps[].text` is the pickle's own
+  // already-interpolated step text (record-types.ts: "record.steps[i]
+  // mirrors pickle.steps[i]"), so this reads the scenario's own content,
+  // never anything about *this* run of it (unlike `mapStep`'s
+  // `identityParameters`, this is deliberately not `runId`/`scenarioId`
+  // scoped: the whole point here is for two runs of the same scenario to
+  // agree). `status` is deliberately excluded from this join: a step's
+  // outcome changing from one run to the next is exactly the "regressed"/
+  // "fixed" transition this test exists to make visible, not a reason to
+  // treat the two runs as different scenarios.
+  const stepSignature = record.steps.map((step) => step.text).join("\n");
+
+  const identityParameters: MappedParameter[] = [
+    { name: "nukadoko.scenario.steps", value: stepSignature, mode: "hidden" },
+  ];
+
+  const contextParameters: MappedParameter[] = [
+    { name: "environment", value: environment, excluded: true },
+    ...(session !== null ? [{ name: "session", value: session, excluded: true }] : []),
+    ...(targetVersion !== undefined ? [{ name: "target_version", value: targetVersion, excluded: true }] : []),
+  ];
+
+  const labels: MappedLabel[] = [
+    { name: "feature", value: featureName },
+    { name: "package", value: posixPath.split("/").join(".") },
+    ...resolveTagLabels(pickle),
+    { name: "env", value: environment },
+    // Visible (unlike the identity parameters above), so a reader — or a
+    // future tool — can tell this test apart from its own scenario's step
+    // tests without relying on its own `name`'s "Scenario: " prefix alone.
+    { name: "nukadoko.grain", value: "scenario" },
+    // Reusing the first classified step failure's own kind (never
+    // recomputed here — this module has no step record of its own to
+    // classify from) is what keeps this test out of Allure 3's built-in
+    // "Product errors" catch-all when the scenario failed for a reason one
+    // of `nuka init`'s own seven categories already names.
+    ...(firstFailure !== undefined ? [{ name: "nukadoko.failure", value: firstFailure.kind }] : []),
+  ];
+
+  const childSteps: MappedChildStep[] = record.steps.map((step) => ({
+    name: step.text,
+    startMs,
+    stopMs,
+    status: scenarioStepChildStatus(step.status),
+  }));
+
+  return {
+    // "Scenario: " (never bare `pickle.name`) so this test's own leaf never
+    // reads as plain, unlabeled duplicate text next to the "suite" tree
+    // group heading its own `ensureSuiteLabels` call (emitter.ts) already
+    // gives that exact name to — the leaf still names the scenario, just
+    // not as the group heading's own bare echo. Never part of `fullName`
+    // (built separately, in emitter.ts, from `pickle.name` alone) or of any
+    // parameter, so this prefix changes nothing about `historyId`.
+    name: `Scenario: ${pickle.name}`,
+    featureName,
+    description: resolveDescription(gherkinDocument, scenario),
+    status: record.status,
+    message: firstFailure?.message,
+    startMs,
+    stopMs,
+    labels,
+    links: [],
+    parameters: [...buildExampleParameters(gherkinDocument, pickle), ...contextParameters, ...identityParameters],
+    attachments: [],
+    childSteps,
   };
 }
 

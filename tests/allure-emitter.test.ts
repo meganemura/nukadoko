@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { createAllureEmitter, type AllureEmitter, type EmitStepInput } from "../src/report/allure/emitter.js";
 import type { StepRecord } from "../src/record/types.js";
@@ -229,14 +230,19 @@ describe("createAllureEmitter", () => {
       step2Uuid = (results.find((r) => (r as { name?: string }).name === "Then the total is correct") as { uuid?: string } | undefined)?.uuid;
     });
 
-    it("writes one result.json per step (step count = test count), not one per scenario", () => {
+    it("writes one result.json per step (step count = test count), plus exactly one more for the scenario as a whole", () => {
       const results = readResultFiles(resultsDir);
       const names = results.map((r) => (r as { name?: string }).name).filter((name) => name !== undefined);
       expect(names).toContain("Given the cart has items");
       expect(names).toContain("Then the total is correct");
-      // Exactly the two steps this scenario has — no third "scenario" test
-      // exists any more.
+      // Exactly the two steps this scenario has, every step still gets its
+      // own test, unchanged.
       expect(names.filter((name) => name?.includes("cart") || name?.includes("total"))).toHaveLength(2);
+      // ...and exactly one more, the scenario-level test `endScenario` adds
+      // on top (map-scenario.ts's own `mapScenario`), additive, never
+      // replacing the per-step ones above.
+      expect(names).toContain("Scenario: a customer checks out");
+      expect(results).toHaveLength(3);
     });
 
     it("fills parentSuite from the feature and suite from the scenario on every step's own test", () => {
@@ -530,6 +536,80 @@ describe("createAllureEmitter", () => {
       expect(runParam.excluded).toBeFalsy();
       expect(results[0]!.parameters.find((p) => p.name === "nukadoko.scenario")?.mode).toBe("hidden");
       expect(results[0]!.parameters.find((p) => p.name === "nukadoko.step")?.mode).toBe("hidden");
+    });
+  });
+
+  describe("identity: the scenario-level test is the deliberate opposite, it DOES link across runs", () => {
+    // Every step of `pickle` emitted with `stepRecord: null` (its own text
+    // is all `mapScenario`'s own step-signature parameter reads, this
+    // file's own header on why a full step record isn't needed here),
+    // followed by a matching `endScenario`: the full three-call cycle a
+    // real `nuka run` invocation drives, since `mapScenario` only runs
+    // there, never from `emitStep` alone the way this file's other
+    // `emitOnce` helper (above) exercises `mapStep`.
+    function runFullScenario(runId: string, scenarioId: string, gherkinDocument: GherkinDocument, pickle: Pickle): void {
+      emitter.beginScenario();
+      pickle.steps.forEach((step, index) => {
+        emitter.emitStep(
+          baseStepInput({
+            record: { text: step.text, status: "passed", record: null },
+            stepRecord: null,
+            gherkinDocument,
+            pickle,
+            runId,
+            scenarioId,
+            index,
+          }),
+        );
+      });
+      const record: ScenarioRecord = {
+        scenario_id: scenarioId,
+        run_id: runId,
+        feature: "features/checkout.feature",
+        scenario: pickle.name,
+        line: 3,
+        status: "passed",
+        environment: "staging",
+        session: null,
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:01.000Z",
+        steps: pickle.steps.map((step) => ({ text: step.text, status: "passed", record: null }) as ScenarioStepRecord),
+        hooks: [],
+        evidence: { dir: `.nukadoko/records/scenarios/${scenarioId}`, screenshots: [] },
+      };
+      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+    }
+
+    function scenarioLevelResults(): { name: string; historyId: string }[] {
+      return (readResultFiles(resultsDir) as { name: string; historyId: string }[]).filter((r) =>
+        r.name.startsWith("Scenario: "),
+      );
+    }
+
+    it("gives the same scenario-level historyId to two separate runs of the same scenario (the exact inverse of a step's own runId test above)", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles[0]!;
+
+      runFullScenario("run-A", "scn-A", gherkinDocument, pickle);
+      runFullScenario("run-B", "scn-B", gherkinDocument, pickle);
+
+      const results = scenarioLevelResults();
+      expect(results).toHaveLength(2);
+      expect(results[0]!.historyId).toBe(results[1]!.historyId);
+    });
+
+    it("gives two Scenario Outline rows sharing a run a different scenario-level historyId (Examples values feed the hash)", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const outlineRows = pickles.filter((p) => p.name.startsWith("checkout as"));
+      expect(outlineRows).toHaveLength(2);
+
+      outlineRows.forEach((pickle, index) => {
+        runFullScenario("run-A", `scn-outline-${index}`, gherkinDocument, pickle);
+      });
+
+      const results = scenarioLevelResults();
+      expect(results).toHaveLength(2);
+      expect(results[0]!.historyId).not.toBe(results[1]!.historyId);
     });
   });
 

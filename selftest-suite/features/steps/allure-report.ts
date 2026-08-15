@@ -66,10 +66,13 @@ const allureBin = path.join(repoRoot, "node_modules", "allure", "cli.js");
 
 // --- NDJSON scenario records (the same "scenario name -> status" shape
 // run-selftest.mjs's own swap track already parses `nuka run`'s stdout
-// into), read here for each step's own text/status/record rather than
-// just its scenario-level status -- the tab-count check needs a per-step
-// tally, and the record-attachment check needs a specific step's own
-// record id. ---
+// into), read here for both grains this Allure emitter now writes: each
+// step's own text/status/record (the tab-count check's per-step tally, and
+// the record-attachment check's own step lookup) and, on top of it, each
+// scenario's own top-level `status` -- `nuka run` writes one Allure test
+// result per step and one more per scenario (map-scenario.ts's own
+// `mapScenario`), so a tab total counting only steps would undercount the
+// report's own totals by one per scenario. ---
 
 interface RunStepRecord {
   readonly text: string;
@@ -79,6 +82,10 @@ interface RunStepRecord {
 
 interface RunScenarioRecord {
   readonly scenario: string;
+  // "passed" | "failed" only (ScenarioRecord.status, src/run/record-
+  // types.ts) -- a scenario's own Allure test result is never `skipped`,
+  // so every skipped tab count below is a step-grain one.
+  readonly status: "passed" | "failed";
   readonly steps: readonly RunStepRecord[];
 }
 
@@ -304,17 +311,29 @@ async function openStepDetail(world: SelftestWorld, stepText: string): Promise<P
   return page;
 }
 
-// --- the 5 checks this stage verifies, plus a pin for a known display
-// limit (a 6th, deliberately kept separate from "the 5") ---
+// --- the 5 checks this stage verifies, plus two pins about the
+// before-hook-stopped scenario's own display (a 6th: the step-grain leaf's
+// known skip; a 7th: the scenario-grain leaf's own failed, the fix that
+// closed over it -- both deliberately kept separate from "the 5") ---
 
-Then("the tab counts match the step statuses nuka run reported", async function (this: SelftestWorld) {
+Then("the tab counts match the step and scenario statuses nuka run reported", async function (this: SelftestWorld) {
   const page = await openReportPage(this);
 
-  const steps = allSteps(parseRunRecords(this.nukaStdout));
+  const records = parseRunRecords(this.nukaStdout);
+  const steps = allSteps(records);
+  // Two grains of Allure test land per run now: one per step (unchanged)
+  // and, on top of it, one per scenario (map-scenario.ts's own
+  // mapScenario) -- every tab total below counts both, the same as the
+  // report's own tree does, or this check would keep asserting a total the
+  // report stopped matching.
   const expected = {
-    all: steps.length,
-    passed: steps.filter((step) => step.status === "passed").length,
-    failed: steps.filter((step) => step.status === "failed").length,
+    all: steps.length + records.length,
+    passed:
+      steps.filter((step) => step.status === "passed").length +
+      records.filter((record) => record.status === "passed").length,
+    failed:
+      steps.filter((step) => step.status === "failed").length +
+      records.filter((record) => record.status === "failed").length,
     skipped: steps.filter((step) => step.status === "skipped").length,
   };
 
@@ -404,8 +423,9 @@ Then("the timeline step's section and poll appear as its own child steps", async
   // step's own test result -- one level shallower than before step became
   // the Allure test-result unit (docs/spec.md "Allure emitter"), which is
   // exactly what this checks: the section/poll this step's own fixture
-  // recorded must show up here, not two levels down inside a scenario-wide
-  // test that no longer exists.
+  // recorded must show up here, not two levels down inside the scenario's
+  // own test the way it used to (the scenario now has a test result of its
+  // own again too, but that one carries no step-level timeline of its own).
   const childSteps = page.getByTestId("test-result-step");
   const sectionCount = await childSteps.filter({ hasText: "section:" }).count();
   const pollCount = await childSteps.filter({ hasText: "poll:" }).count();
@@ -421,19 +441,51 @@ Then("the before-hook-stopped scenario's step shows skipped, not failed", async 
   await expandAllTreeSections(page);
 
   // Known, accepted limit, pinned rather than hidden (docs/spec.md "Allure
-  // emitter"): step became the
-  // Allure test-result unit, so a scenario a Before hook stops has no
-  // scenario-level test left for that hook's own failure to turn red --
-  // every one of its steps shows skipped instead. `nuka run`'s own exit
-  // code and record.json still say "failed"; only the report's own display
-  // reads this way, and that gap is what this pins so a future change to
-  // either direction is a deliberate one, not a silent regression.
+  // emitter"): a step-level test still has nowhere of its own to put a
+  // failure that happened before that step ever ran, so every step of a
+  // scenario a Before hook stops still shows skipped. `nuka run`'s own exit
+  // code and record.json still say "failed"; the scenario-grain leaf pinned
+  // in the next check now says so too -- only a step-grain leaf still
+  // cannot, and that is what this pins so a future change to either
+  // direction is a deliberate one, not a silent regression.
+  //
+  // Two grains of leaf now sit in this scenario's own tree group: this
+  // scenario's own leaf (title always prefixed "Scenario: ",
+  // map-scenario.ts's own header) and one leaf per step. `nukadoko.grain`
+  // itself is a result label, not something the tree row renders, so the
+  // "Scenario: " prefix is the only thing the tree itself renders that
+  // tells the two apart -- scoping this check away from it here is what
+  // keeps it from re-counting the scenario-grain leaf the next check pins
+  // separately.
   const content = sectionContent(page, "a before hook stops the scenario before its own step runs");
-  const skippedCount = await content.locator('[data-testid="tree-leaf-status-skipped"]').count();
-  const failedCount = await content.locator('[data-testid="tree-leaf-status-failed"]').count();
+  const stepLeaves = content.getByTestId("tree-leaf").filter({ hasNotText: "Scenario: " });
+  const skippedCount = await stepLeaves.locator('[data-testid="tree-leaf-status-skipped"]').count();
+  const failedCount = await stepLeaves.locator('[data-testid="tree-leaf-status-failed"]').count();
   if (skippedCount !== 1 || failedCount !== 0) {
     throw new Error(
-      `expected the before-hook-stopped scenario's own step to show skipped, not failed: skipped=${skippedCount} failed=${failedCount}`,
+      `expected the before-hook-stopped scenario's own step-grain leaf to show skipped, not failed: skipped=${skippedCount} failed=${failedCount}`,
+    );
+  }
+});
+
+Then("the before-hook-stopped scenario itself shows failed, not skipped", async function (this: SelftestWorld) {
+  const page = await openReportPage(this);
+  await expandAllTreeSections(page);
+
+  // The gain the check above pins the limit of: a scenario a Before hook
+  // stops now has a scenario-grain leaf of its own too (map-scenario.ts's
+  // own mapScenario, added on top of the step-grain leaves above), and
+  // that leaf carries the scenario's own `record.status` ("failed" --
+  // `nuka run`'s own exit code already said so) directly, closing over the
+  // display gap 0.2.0's own CHANGELOG entry named: before this, a hook's
+  // own failure had nowhere red to land on the report at all.
+  const content = sectionContent(page, "a before hook stops the scenario before its own step runs");
+  const scenarioLeaf = content.getByTestId("tree-leaf").filter({ hasText: "Scenario: " });
+  const failedCount = await scenarioLeaf.locator('[data-testid="tree-leaf-status-failed"]').count();
+  const skippedCount = await scenarioLeaf.locator('[data-testid="tree-leaf-status-skipped"]').count();
+  if (failedCount !== 1 || skippedCount !== 0) {
+    throw new Error(
+      `expected the before-hook-stopped scenario's own scenario-grain leaf to show failed, not skipped: failed=${failedCount} skipped=${skippedCount}`,
     );
   }
 });

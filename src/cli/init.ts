@@ -167,8 +167,17 @@ function kindFromMessageRegex(messageRegex: string | RegExp | undefined): string
  * `examples/allure/allurerc.mjs` is checked against
  * (tests/allure-config-drift.test.ts) — never a second, hand-typed copy of
  * the seven category names.
+ *
+ * `historyPath` is written unconditionally alongside `categories`: without
+ * it, Allure 3's own `generate`/`watch`/`report` never build history at
+ * all, regardless of how stable a run's own `historyId` values are
+ * (`@allurereport/core`'s own `historyPath` default is `undefined`, and its
+ * `report.js` only wires up history when this is set) — a project that
+ * skipped this field would see no trend, no regression/fixed transitions,
+ * and no flaky detection, with nothing in the report itself pointing at a
+ * missing config key as the reason.
  */
-function allurercTemplate(): string {
+function allurercTemplate(historyPathRelative: string): string {
   const entries = buildCategories().map((rule) => {
     if (rule.name === undefined) {
       throw new Error("nukadoko: a categories.ts rule has no name");
@@ -195,12 +204,22 @@ function allurercTemplate(): string {
     "// from src/report/allure/categories.ts's own NAME_BY_KIND, the source of",
     "// truth for these names.",
     "//",
-    "// Already have your own allurerc? Merge this categories array into it",
-    "// instead of replacing the whole file.",
+    "// historyPath points Allure's own generate/watch/report at a file (not a",
+    "// directory) where each run's own history point is appended, kept beside",
+    "// the disposable allure-results/ directory rather than inside it so",
+    "// clearing results between runs (a fresh CI checkout, a local rerun)",
+    "// never discards it. Without this, Allure never builds history, trend, or",
+    "// flaky-across-runs detection, no matter how stable a scenario's own",
+    "// identity is.",
+    "//",
+    "// Already have your own allurerc? Merge this categories array (and",
+    "// historyPath, if you don't already set one) into it instead of",
+    "// replacing the whole file.",
     "//",
     "// Using Allure 2 instead? This file is not needed: nukadoko's own emitter",
     "// already writes a matching categories.json into export/allure-results/ every run.",
     "export default {",
+    `  historyPath: ${JSON.stringify(historyPathRelative)},`,
     "  categories: [",
     categoryLines,
     "  ],",
@@ -217,7 +236,11 @@ function allurercTemplate(): string {
  * split every other line in this module follows). Returns the path
  * written, relative to `rootDir`, or `null` when nothing was.
  */
-async function ensureAllurercFile(rootDir: string, stderr: WritableSink): Promise<string | null> {
+async function ensureAllurercFile(
+  rootDir: string,
+  historyPathRelative: string,
+  stderr: WritableSink,
+): Promise<string | null> {
   for (const filename of ALLURE_CONFIG_FILENAMES) {
     if (existsSync(path.join(rootDir, filename))) {
       stderr.write(
@@ -228,7 +251,7 @@ async function ensureAllurercFile(rootDir: string, stderr: WritableSink): Promis
   }
 
   const allurercPath = path.join(rootDir, "allurerc.mjs");
-  await writeFile(allurercPath, allurercTemplate());
+  await writeFile(allurercPath, allurercTemplate(historyPathRelative));
   return "allurerc.mjs";
 }
 
@@ -279,7 +302,17 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
   stdout.write(`${allureResultsDirRelative}\n`);
 
-  const allurercWritten = await ensureAllurercFile(rootDir, stderr);
+  // A sibling of allure-results/, in the same export/ directory — a file,
+  // not a directory, and never created here: Allure's own history.appendHistory
+  // creates its own parent directory on first write (@allurereport/core's own
+  // history.js), and creating an empty placeholder ahead of that would only
+  // risk the two disagreeing about whether "empty" and "no history yet" are
+  // the same thing. Posix-joined (not `path.join`) since this becomes a
+  // string literal inside a generated .mjs file, which should read the same
+  // on every host OS regardless of which one generated it.
+  const historyPathRelative = [defaults.stateDir, "export", "allure-history.jsonl"].join("/");
+
+  const allurercWritten = await ensureAllurercFile(rootDir, historyPathRelative, stderr);
   if (allurercWritten !== null) {
     stdout.write(`${allurercWritten}\n`);
   }

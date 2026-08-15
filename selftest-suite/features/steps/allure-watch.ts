@@ -67,11 +67,19 @@ const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "export", "allure-r
 // stage 2's own generated report if both scenarios ever ran close together.
 const watchReportDir = path.join(fixtureProjectDir, ".nukadoko", "allure-watch-report");
 
-function parseStepTotal(stdout: string): number {
-  return stdout
+// One Allure result per executed step, plus one more per scenario
+// (map-scenario.ts's own `mapScenario`, the same total nuka-run.ts's own
+// "one result file per executed step and one per scenario" Then step
+// checks against the on-disk directory) -- the live report tallies the
+// exact same results, so its own final count has to match this total, not
+// the step count alone.
+function parseResultTotal(stdout: string): number {
+  const scenarios = stdout
     .split("\n")
     .filter((line) => line.length > 0)
-    .reduce((sum, line) => sum + (JSON.parse(line).steps as unknown[]).length, 0);
+    .map((line) => JSON.parse(line) as { steps: unknown[] });
+  const totalSteps = scenarios.reduce((sum, scenario) => sum + scenario.steps.length, 0);
+  return totalSteps + scenarios.length;
 }
 
 After({ tags: "@allure-watch" }, async function (this: SelftestWorld) {
@@ -241,30 +249,30 @@ When("I wait for that run to finish", { timeout: 60_000 }, async function (this:
   this.nukaExitCode = result.code;
   this.nukaStdout = result.stdout;
   // Reuses the same two World fields nuka-run.ts's own Then steps already
-  // read ("the run exits {int}", "...one result file per executed step"),
-  // so this scenario shares those checks below instead of duplicating
-  // either one.
+  // read ("the run exits {int}", "...one result file per executed step and
+  // one per scenario"), so this scenario shares those checks below instead
+  // of duplicating either one.
 });
 
 Then(
-  "the live report's final result count matches the number of executed steps",
+  "the live report's final result count matches the number of executed steps and scenarios",
   { timeout: 30_000 },
   async function (this: SelftestWorld) {
     if (this.page === null) {
       throw new Error("no page: earlier steps did not run first");
     }
-    const totalSteps = parseStepTotal(this.nukaStdout);
+    const totalResults = parseResultTotal(this.nukaStdout);
     // Same reasoning as the mid-run Then step above: the step's own
     // timeout has to exceed the `expect`'s own 15s, or cucumber-js's 5s
     // default kills the step before the wait inside it gets the chance to
     // succeed.
-    await expect(this.page.getByTestId("tab-all")).toHaveText(`Total ${totalSteps}`, { timeout: 15_000 });
+    await expect(this.page.getByTestId("tab-all")).toHaveText(`Total ${totalResults}`, { timeout: 15_000 });
 
     // The other half of the zero-results check above, and the actual proof
     // this scenario exists to deliver: the mid-run observation being
     // neither 0 nor the total is what proves liveness. Only checkable now
-    // that totalSteps is known: a mid-run reading of 0 would mean nothing had rendered yet,
-    // and a reading equal to totalSteps would mean the run had already
+    // that totalResults is known: a mid-run reading of 0 would mean nothing had rendered yet,
+    // and a reading equal to totalResults would mean the run had already
     // finished by the time it was taken -- either way this scenario would
     // not have shown anything a finished-report read (stage 2) doesn't
     // already show.
@@ -276,11 +284,11 @@ Then(
     // swap track parses `nuka run`'s stdout as NDJSON (run-selftest.mjs),
     // so any stray stdout write from a step would corrupt one or both.
     console.error(
-      `selftest-watch: observed 0 -> ${this.midRunResultCount} -> ${totalSteps} while features/slow.feature ran`,
+      `selftest-watch: observed 0 -> ${this.midRunResultCount} -> ${totalResults} while features/slow.feature ran`,
     );
-    if (this.midRunResultCount <= 0 || this.midRunResultCount >= totalSteps) {
+    if (this.midRunResultCount <= 0 || this.midRunResultCount >= totalResults) {
       throw new Error(
-        `expected the mid-run count (${this.midRunResultCount}) to be strictly between 0 and the total (${totalSteps})`,
+        `expected the mid-run count (${this.midRunResultCount}) to be strictly between 0 and the total (${totalResults})`,
       );
     }
   },

@@ -64,10 +64,11 @@ describe("nuka run: allure-results wiring", () => {
     expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
     expect(existsSync(path.join(resultsDir, "environment.properties"))).toBe(true);
     // passing.feature has two steps (step = test, so step count = test
-    // count) — no longer one file for
-    // the whole scenario.
+    // count), plus the one scenario-level test `endScenario` adds on top
+    // (map-scenario.ts's own `mapScenario`): one file per step, and one
+    // more for the scenario as a whole.
     const record = JSON.parse(stdoutLines[0]!) as { steps: unknown[] };
-    expect(resultFiles(resultsDir)).toHaveLength(record.steps.length);
+    expect(resultFiles(resultsDir)).toHaveLength(record.steps.length + 1);
     expect(record.steps.length).toBe(2);
   });
 
@@ -95,7 +96,9 @@ describe("nuka run: allure-results wiring", () => {
 
     const resultsDir = path.join(rootDir, "reports", "allure");
     expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
-    expect(resultFiles(resultsDir)).toHaveLength(2);
+    // Two steps' own tests, plus one scenario-level test (this file's first
+    // test above).
+    expect(resultFiles(resultsDir)).toHaveLength(3);
     // The default location is untouched — the override moves the output,
     // it doesn't add a second copy.
     expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(false);
@@ -129,12 +132,19 @@ describe("nuka run: allure-results wiring", () => {
 
     const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     const files = resultFiles(resultsDir);
-    expect(files).toHaveLength(2);
+    // Two steps' own tests, plus one scenario-level test, excluded below
+    // before this test's own two-file comparison: the scenario-level test
+    // is written once, at `endScenario`, after both steps already finished
+    // (map-scenario.ts's own `mapScenario`), so it has nothing to say about
+    // whether a *step's* own test is written live.
+    expect(files).toHaveLength(3);
+    const stepFiles = files.filter((name) => !(readResult(resultsDir, name) as { name?: string }).name?.startsWith("Scenario: "));
+    expect(stepFiles).toHaveLength(2);
 
     // Identify each file by its own mapped `start` (the step record's own
     // started_at, map-scenario.ts's `mapStep`) rather than by array order,
     // which readdirSync makes no guarantee about.
-    const results = files.map((name) => ({ name, body: readResult(resultsDir, name) as { start?: number } }));
+    const results = stepFiles.map((name) => ({ name, body: readResult(resultsDir, name) as { start?: number } }));
     results.sort((a, b) => (a.body.start ?? 0) - (b.body.start ?? 0));
     const [first, second] = results;
 
@@ -188,7 +198,22 @@ describe("nuka run: allure-results wiring", () => {
     }
   });
 
-  it("never shares a historyId between two separate `nuka run` invocations against the same feature (the structural check that misconnection cannot happen)", async () => {
+  it("never shares a step's own historyId between two separate `nuka run` invocations against the same feature, and always shares the scenario's own", async () => {
+    interface ResultLike {
+      readonly name?: string;
+      readonly historyId?: string;
+    }
+    // Split by `mapScenario`'s own "Scenario: " name prefix (map-scenario.ts),
+    // the only marker this test needs to tell the one scenario-level
+    // result apart from its own two step-level ones.
+    function historyIdsByGrain(resultsDir: string): { steps: (string | undefined)[]; scenarios: (string | undefined)[] } {
+      const results = resultFiles(resultsDir).map((name) => readResult(resultsDir, name) as ResultLike);
+      return {
+        steps: results.filter((r) => !r.name?.startsWith("Scenario: ")).map((r) => r.historyId),
+        scenarios: results.filter((r) => r.name?.startsWith("Scenario: ")).map((r) => r.historyId),
+      };
+    }
+
     const firstStdout = createCaptureSink();
     const firstStderr = createCaptureSink();
     const firstExit = await runCli(["run", "features/passing.feature"], {
@@ -199,9 +224,11 @@ describe("nuka run: allure-results wiring", () => {
     expect(firstExit).toBe(0);
 
     const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
-    const firstHistoryIds = resultFiles(resultsDir).map((name) => (readResult(resultsDir, name) as { historyId?: string }).historyId);
-    expect(firstHistoryIds).toHaveLength(2);
-    expect(firstHistoryIds.every((id) => id !== undefined)).toBe(true);
+    const first = historyIdsByGrain(resultsDir);
+    expect(first.steps).toHaveLength(2);
+    expect(first.steps.every((id) => id !== undefined)).toBe(true);
+    expect(first.scenarios).toHaveLength(1);
+    expect(first.scenarios[0]).toBeDefined();
 
     const secondStdout = createCaptureSink();
     const secondStderr = createCaptureSink();
@@ -212,14 +239,23 @@ describe("nuka run: allure-results wiring", () => {
     });
     expect(secondExit).toBe(0);
 
-    const allHistoryIds = resultFiles(resultsDir).map((name) => (readResult(resultsDir, name) as { historyId?: string }).historyId);
+    const all = historyIdsByGrain(resultsDir);
     // Both runs' own result files now sit in the same directory (this
     // emitter never deletes anything, allure-writer.test.ts's own
-    // coverage) — 4 files, 4 distinct historyIds, none shared between the
-    // two runs' own halves.
-    expect(allHistoryIds).toHaveLength(4);
-    expect(new Set(allHistoryIds).size).toBe(4);
-    const secondHistoryIds = allHistoryIds.filter((id) => !firstHistoryIds.includes(id));
-    expect(secondHistoryIds).toHaveLength(2);
+    // coverage): 4 step-level files, 4 distinct historyIds, none shared
+    // between the two runs' own halves (mapStep's own `identityParameters`,
+    // map-scenario.ts's own header for why a step's own test can never
+    // link across runs).
+    expect(all.steps).toHaveLength(4);
+    expect(new Set(all.steps).size).toBe(4);
+    const secondStepHistoryIds = all.steps.filter((id) => !first.steps.includes(id));
+    expect(secondStepHistoryIds).toHaveLength(2);
+
+    // The opposite promise, on purpose, for the scenario-level file: two
+    // runs of the exact same feature produce 2 files but 1 historyId, the
+    // entire reason `mapScenario` exists (map-scenario.ts's own header).
+    expect(all.scenarios).toHaveLength(2);
+    expect(new Set(all.scenarios).size).toBe(1);
+    expect(all.scenarios[0]).toBe(first.scenarios[0]);
   });
 });

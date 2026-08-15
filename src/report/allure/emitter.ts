@@ -20,6 +20,7 @@ import { buildCategories } from "./categories.js";
 import { buildFullName, resolveProjectName, toPosixPath } from "./identity.js";
 import {
   mapHooks,
+  mapScenario,
   mapScenarioEvidence,
   mapStep,
   type MappedAttachment,
@@ -27,6 +28,7 @@ import {
   type MappedHook,
   type MappedParameter,
   type MappedStatus,
+  type MappedStepTest,
 } from "./map-scenario.js";
 import { createAtomicWriter } from "./writer.js";
 
@@ -43,27 +45,31 @@ import { createAtomicWriter } from "./writer.js";
 // scenario end, which is the entire point of writing per step rather than
 // per scenario — reading it straight off `ReporterRuntime.startTest`/
 // `writeTest`, which write on call, not on some later flush; `endScenario`
-// maps this scenario's own hooks into fixtures under that same scope, adds
-// a synthetic fixture for whatever browser evidence belongs to the scenario
-// as a whole (map-scenario.ts's own `mapScenarioEvidence`), and only then
-// writes the scope's own container (`writeScope`) — a hook is always mapped
-// once the whole scenario is over, not per step, unlike a step's own test.
-// This module holds exactly one piece of state across those three
-// calls, `currentScopeUuid` — safe because `nuka run` executes scenarios
-// strictly sequentially, never two at once.
+// writes one more test for the scenario as a whole (map-scenario.ts's own
+// `mapScenario`), maps this scenario's own hooks into fixtures under that
+// same scope, adds a synthetic fixture for whatever browser evidence
+// belongs to the scenario as a whole (map-scenario.ts's own
+// `mapScenarioEvidence`), and only then writes the scope's own container
+// (`writeScope`) — a hook is always mapped once the whole scenario is over,
+// not per step, unlike a step's own test; the scenario's own test is
+// written there for the same reason (record.json's own `status`, `steps`,
+// and `finished_at` are only complete once the scenario is over). This
+// module holds exactly one piece of state across those three calls,
+// `currentScopeUuid` — safe because `nuka run` executes scenarios strictly
+// sequentially, never two at once.
 //
-// A Before hook's own failure no longer turns any single Allure *test* red
-// (it did, under the old scenario = test design, via a worst-of computation
-// across every step and hook): every step it stops from ever running is
-// reported `"skipped"`, and the failure itself is visible only inside that
-// Before fixture's own detail view. The suite tree's own group status
-// (docs/spec.md "Allure emitter") still reads correctly at the `suite`
-// level for a step failing mid-scenario; a scenario that never got past its
-// own Before hook is the one case this redesign reports less prominently
-// than before. `nuka run`'s own exit code and the written `record.json` are
-// both unaffected — this is a report-display regression only, accepted as
-// part of the step = test trade-off, not something this file works around
-// with a synthetic failing test.
+// A Before hook's own failure still leaves every step it stops from ever
+// running reported `"skipped"`, never `"failed"` — the failure itself is
+// visible in that Before fixture's own detail view (unaffected by the
+// scenario-level test below). Unlike a step's own test, though, the
+// scenario-level test's own status is `record.status` directly, which the
+// scenario record already sets to `"failed"` whenever any of its steps
+// didn't pass (record-types.ts) — a Before hook stopping every step still
+// turns the scenario-level test red, closing most of the display gap the
+// step = test redesign opened (docs/spec.md "Allure emitter"): the suite
+// tree's own group status already read correctly at the `suite` level for
+// this case; now the scenario's own test does too, even though every step
+// beneath it still reads `"skipped"`.
 //
 // Known limit: record.json carries no per-hook timestamp of its own, so
 // every before-hook collapses to the
@@ -159,13 +165,28 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   const categories: Category[] = buildCategories();
   const runtime = new ReporterRuntime({ writer, categories, environmentInfo });
 
-  // The one piece of state this module carries across `beginScenario`/
-  // `emitStep`/`endScenario` — safe only because `nuka run` runs one
-  // scenario at a time (this file's own header). `null` both before the
-  // first `beginScenario` and once `endScenario` has cleared it, so a stray
+  // The state this module carries across `beginScenario`/`emitStep`/
+  // `endScenario` — safe only because `nuka run` runs one scenario at a
+  // time (this file's own header). Both are `null` both before the first
+  // `beginScenario` and once `endScenario` has cleared them, so a stray
   // `emitStep` call outside a scenario's own begin/end pair is a no-op
-  // rather than attaching to the *previous* scenario's own scope.
+  // rather than attaching to the *previous* scenario's own scope or
+  // classification.
   let currentScopeUuid: string | null = null;
+  // The first step this scenario ran whose own failure resolved to a
+  // classified `ErrorKind` (mapStep's own `nukadoko.failure` label — a
+  // vocabulary defect like "undefined"/"ambiguous" never gets one, the same
+  // as it never did at step grain). `endScenario` reads this to give the
+  // scenario-level test itself a `nukadoko.failure` label and message when
+  // the scenario failed, the same "mark the first failure" the old
+  // scenario = test design used before step = test replaced it (this
+  // file's own header) — revived here only for this one rollup test, never
+  // for a step's own test, which still carries its own precise
+  // classification unaffected. Without this, every failing scenario's own
+  // test would fall into Allure 3's built-in, uninformative "Product
+  // errors" catch-all instead of one of `nuka init`'s own seven categories,
+  // even though every step under it is already correctly classified.
+  let firstFailure: { readonly kind: string; readonly message: string } | null = null;
 
   function toAbsolute(relativePath: string): string {
     return path.join(options.rootDir, relativePath);
@@ -203,6 +224,70 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
+  // Shared by `emitStep` and `endScenario`'s own scenario-level test below:
+  // both start from a `MappedStepTest` (map-scenario.ts's own shared shape,
+  // one per step or one per scenario) and need the exact same `TestResult`
+  // fields built from it — keeping this in one place is what keeps a field
+  // (`statusDetails.message`, say) from being wired up for one grain and
+  // quietly forgotten for the other.
+  function writeMappedTest(
+    scopeUuid: string,
+    fullName: string,
+    suitePath: readonly [string, string],
+    mapped: MappedStepTest,
+  ): void {
+    const environmentLabels = getEnvironmentLabels().map((label) => ({
+      name: label.name,
+      value: redactString(label.value, options.secrets),
+    }));
+
+    const partialTest: Partial<TestResult> = {
+      name: mapped.name,
+      fullName,
+      status: allureStatus(mapped.status),
+      description: mapped.description,
+      start: mapped.startMs,
+      labels: [
+        getLanguageLabel(),
+        getFrameworkLabel("nukadoko"),
+        getHostLabel(),
+        getThreadLabel(),
+        ...mapped.labels,
+        ...environmentLabels,
+      ],
+      links: mapped.links,
+      parameters: mapped.parameters,
+      // Allure 2's own categories matching reads `error.message`/
+      // `statusDetails.message` at the *test* level — every failing step
+      // has its own test to carry it (map-scenario.ts's own `mapStep`).
+      // `mapScenario`'s own tests carry one too, but only the first
+      // classified failure's own (this file's own `firstFailure`), since a
+      // scenario's own test has no single step's outcome of its own to
+      // report.
+      ...(mapped.message !== undefined ? { statusDetails: { message: mapped.message } } : {}),
+      // `testCaseId`/`historyId` are deliberately left unset here: the SDK's
+      // own `stopTest` fills both in from `fullName` (plus every
+      // non-excluded parameter) the moment it runs, below — no reason to
+      // reimplement that formula here (map-scenario.ts's own header).
+    };
+    // Mutates `partialTest.labels` in place, appending suite labels only
+    // when none are already present. `[featureName, scenario name]` fills
+    // both `parentSuite` and `suite` for a step's own test and a scenario's
+    // own test alike — the same pair, so both grains sit in the same suite
+    // group in the report's own tree.
+    ensureSuiteLabels(partialTest, suitePath);
+
+    const testUuid = runtime.startTest(partialTest, [scopeUuid]);
+
+    for (const attachment of mapped.attachments) {
+      writeMappedAttachment(testUuid, null, attachment);
+    }
+    writeChildSteps(testUuid, mapped.childSteps);
+
+    runtime.stopTest(testUuid, { stop: mapped.stopMs });
+    runtime.writeTest(testUuid);
+  }
+
   function emitFixture(scopeUuid: string, hook: MappedHook, declaredParameters: readonly MappedParameter[]): void {
     const fixtureUuid = runtime.startFixture(scopeUuid, hook.type, { name: hook.name, start: hook.startMs });
     if (fixtureUuid === undefined) {
@@ -238,6 +323,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     },
 
     beginScenario(): void {
+      firstFailure = null;
       try {
         currentScopeUuid = runtime.startScope();
       } catch (error) {
@@ -276,63 +362,24 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           posixPath,
         });
 
+        if (firstFailure === null) {
+          const kindLabel = mapped.labels.find((label) => label.name === "nukadoko.failure");
+          if (kindLabel !== undefined && mapped.message !== undefined) {
+            // `mapped.message` is already `[nukadoko.failure=<kind>] ...`
+            // (map-scenario.ts's own `markedMessage`) whenever `kindLabel`
+            // is present, so this is a straight capture, never a second
+            // marker-formatting call.
+            firstFailure = { kind: kindLabel.value, message: mapped.message };
+          }
+        }
+
         // `{project}:{featurePath}#{scenario}#{step text}` — a
         // human-readable identifier, unlike historyId
         // (this module's own header, and map-scenario.ts's own header for
         // why historyId is deliberately left to fall apart instead).
         const fullName = buildFullName(projectName, posixPath, `${input.pickle.name}#${mapped.name}`);
 
-        const environmentLabels = getEnvironmentLabels().map((label) => ({
-          name: label.name,
-          value: redactString(label.value, options.secrets),
-        }));
-
-        const partialTest: Partial<TestResult> = {
-          name: mapped.name,
-          fullName,
-          status: allureStatus(mapped.status),
-          description: mapped.description,
-          start: mapped.startMs,
-          labels: [
-            getLanguageLabel(),
-            getFrameworkLabel("nukadoko"),
-            getHostLabel(),
-            getThreadLabel(),
-            ...mapped.labels,
-            ...environmentLabels,
-          ],
-          links: mapped.links,
-          parameters: mapped.parameters,
-          // Allure 2's own categories matching reads `error.message`/
-          // `statusDetails.message` at the *test* level — every failing
-          // step now has its own test to carry it (map-scenario.ts's own
-          // `mapStep`), where the old scenario = test design could only
-          // ever mark the scenario's first failure.
-          ...(mapped.message !== undefined ? { statusDetails: { message: mapped.message } } : {}),
-          // `testCaseId`/`historyId` are deliberately left unset here: the
-          // SDK's own `stopTest` fills both in from `fullName` (plus every
-          // non-excluded parameter, `mapped.parameters` already carrying
-          // this test's own `nukadoko.run`/`nukadoko.scenario`/
-          // `nukadoko.step` hidden ones) the moment it runs, below — no
-          // reason to reimplement that formula here (map-scenario.ts's own
-          // header).
-        };
-        // Mutates `partialTest.labels` in place, appending suite labels
-        // only when none are already present. `[featureName, scenario
-        // name]` fills both `parentSuite` and `suite` — the `suite` slot
-        // was previously left empty (`ensureSuiteLabels` used to be called
-        // with only `[featureName]`).
-        ensureSuiteLabels(partialTest, [mapped.featureName, input.pickle.name]);
-
-        const testUuid = runtime.startTest(partialTest, [scopeUuid]);
-
-        for (const attachment of mapped.attachments) {
-          writeMappedAttachment(testUuid, null, attachment);
-        }
-        writeChildSteps(testUuid, mapped.childSteps);
-
-        runtime.stopTest(testUuid, { stop: mapped.stopMs });
-        runtime.writeTest(testUuid);
+        writeMappedTest(scopeUuid, fullName, [mapped.featureName, input.pickle.name], mapped);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(
@@ -344,13 +391,33 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     endScenario(input: EndScenarioInput): void {
       const scopeUuid = currentScopeUuid;
       currentScopeUuid = null;
+      const scenarioFirstFailure = firstFailure;
+      firstFailure = null;
       if (scopeUuid === null) {
         return;
       }
       try {
-        const { record } = input;
+        const { record, gherkinDocument, pickle, relativeFeaturePath } = input;
         const scenarioStartMs = Date.parse(record.started_at);
         const scenarioStopMs = Date.parse(record.finished_at);
+
+        const posixPath = toPosixPath(relativeFeaturePath);
+        const mappedScenario = mapScenario({
+          record,
+          gherkinDocument,
+          pickle,
+          environment: record.environment,
+          session: record.session,
+          targetVersion: record.target_version,
+          posixPath,
+          firstFailure: scenarioFirstFailure ?? undefined,
+        });
+        // Bare `pickle.name`, never `${pickle.name}#...` — a scenario's own
+        // test has nothing to disambiguate itself from within its own
+        // fullName the way a step's own test disambiguates itself from its
+        // siblings (identity.ts's own header).
+        const scenarioFullName = buildFullName(projectName, posixPath, pickle.name);
+        writeMappedTest(scopeUuid, scenarioFullName, [mappedScenario.featureName, pickle.name], mappedScenario);
 
         for (const entry of mapHooks(record, scenarioStartMs, scenarioStopMs)) {
           emitFixture(scopeUuid, entry.hook, entry.declaredParameters);

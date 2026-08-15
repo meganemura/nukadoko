@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest";
+import { configSchema } from "../src/config/schema.js";
 import { buildCategories } from "../src/report/allure/categories.js";
 import { buildFailureMarker } from "../src/report/allure/map-scenario.js";
 import type { ErrorKind } from "../src/record/types.js";
 
 // Responsibility: examples/allure/allurerc.mjs is a hand-copied mirror of
-// src/report/allure/categories.ts's own NAME_BY_KIND -- Allure 3 has no way
-// to read that table itself (categories.ts writes Allure 2's
-// categories.json, which Allure 3's generate/report never opens), so the
-// two only stay honest if something re-checks them against each other.
-// Without this test, a name or kind edited in one place but not the other
-// would silently ship: the shipped example would still "work" (it's valid
-// Allure 3 config), it would just quietly mis-name or drop a category for
-// real users who copied it. This test only checks the two agree with each
-// other; render-check-2.md is what established the config format itself
-// (matchers/labels) actually gets read by `allure generate`.
+// two things `nuka init` derives on its own: src/report/allure/
+// categories.ts's own NAME_BY_KIND, and historyPath (src/cli/init.ts's own
+// `allurercTemplate`, `[stateDir, "export", "allure-history.jsonl"].join(
+// "/")`). Allure 3 has no way to read categories.ts itself (that file
+// writes Allure 2's categories.json, which Allure 3's generate/report never
+// opens), and a project not using `nuka init` has no way to derive
+// historyPath itself either -- the two only stay honest if something
+// re-checks them against the same source `nuka init` reads from. Without
+// this test, a name, kind, or historyPath edited in one place but not the
+// other would silently ship: the shipped example would still "work" (it's
+// valid Allure 3 config), it would just quietly mis-name or drop a category,
+// or leave history dark, for real users who copied it. This test only
+// checks the example agrees with its own source of truth; render-check-2.md
+// is what established the config format itself (matchers/labels) actually
+// gets read by `allure generate`.
 
 const ALL_KINDS: readonly ErrorKind[] = [
   "args_invalid",
@@ -35,6 +41,7 @@ interface Allure3CategoryRule {
 
 interface Allure3Config {
   categories: Allure3CategoryRule[];
+  historyPath?: string;
 }
 
 // A non-literal specifier keeps tsc from trying (and failing) to resolve a
@@ -114,5 +121,17 @@ describe("examples/allure/allurerc.mjs vs src/report/allure/categories.ts", () =
         expect(rule.name).toBe(engineNameByKind[kind]);
       }
     }
+  });
+
+  it("historyPath matches the value nuka init writes, not a stale literal", async () => {
+    // Derived from configSchema's own default, the same way src/cli/
+    // init.ts's own `ensureAllurercFile` call derives it, rather than a
+    // literal ".nukadoko" repeated here -- a future change to stateDir's
+    // own default would otherwise leave this test passing against a value
+    // `nuka init` itself no longer writes.
+    const stateDir = configSchema.parse({}).stateDir;
+    const expectedHistoryPath = [stateDir, "export", "allure-history.jsonl"].join("/");
+    const config = await loadExampleConfig();
+    expect(config.historyPath).toBe(expectedHistoryPath);
   });
 });

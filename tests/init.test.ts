@@ -73,9 +73,9 @@ interface GeneratedAllurercCategory {
 
 async function loadGeneratedAllurerc(
   rootDir: string,
-): Promise<{ categories: GeneratedAllurercCategory[] }> {
+): Promise<{ categories: GeneratedAllurercCategory[]; historyPath?: string }> {
   const mod = (await import(pathToFileURL(path.join(rootDir, "allurerc.mjs")).href)) as {
-    default: { categories: GeneratedAllurercCategory[] };
+    default: { categories: GeneratedAllurercCategory[]; historyPath?: string };
   };
   return mod.default;
 }
@@ -336,6 +336,26 @@ describe("nuka init: allurerc.mjs", () => {
       }
     }
     expect(seenKinds).toEqual(new Set(Object.keys(nameByKind)));
+  });
+
+  it("writes historyPath under .nukadoko/export/, a sibling of allure-results rather than inside it", async () => {
+    const exitCode = await runCli(["init"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+
+    const config = await loadGeneratedAllurerc(rootDir);
+    // Posix-separated regardless of host OS (init.ts's own `allurercTemplate`
+    // doc comment): a plain string comparison is enough here since this
+    // test always runs on the same OS that generated the file.
+    expect(config.historyPath).toBe(".nukadoko/export/allure-history.jsonl");
+    // A sibling of allure-results/, never nested inside it: that directory
+    // is exactly what a fresh checkout or a "clean copy" step clears
+    // between runs, and history has to survive that clearing to be worth
+    // writing at all.
+    expect(config.historyPath?.startsWith(".nukadoko/export/allure-results")).toBe(false);
   });
 
   it.each(ALLURE_CONFIG_FILENAMES)(
