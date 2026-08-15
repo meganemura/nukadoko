@@ -27,11 +27,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
-## Unreleased
+## 0.1.0 から 0.2.0 へ
 
 破壊的変更は 3 つです。
 各項目は「何を直すか」だけを述べます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.2.0` にあります。
 
 - **`nuka steps --json` のトップレベルは、素の配列から `{ steps, import_failures }` に変わりました。**
   旧来の素の配列を読んでいたものは、いまや `.steps` を読む必要があります。
