@@ -27,12 +27,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
-## Unreleased
+## 0.2.0 から 0.3.0 へ
 
 破壊的変更は 5 つです。
 加えて、破壊的ではないものの、新しい機能に乗るために必要な対応が 1 つあります。
 各項目は「何を直すか」だけを述べます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.3.0` にあります。
 
 - **step record の JSON は、フィールド名と id 接頭辞が変わりました。**
   step record や scenario record の JSON を読んでいたスクリプトは、現在の名前を読む必要があります: `receipt_id` は `record_id` に、id の接頭辞は `rcpt-` から `step-` に、`used` エントリの参照先フィールドは `receipt` から `record` になりました。

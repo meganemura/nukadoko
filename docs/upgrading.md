@@ -33,11 +33,11 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## Unreleased
+## 0.2.0 to 0.3.0
 
 Five breaking changes, plus one action that is not breaking but is needed
 to opt in to a new capability. Each entry says what to fix; why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+[CHANGELOG.md](../CHANGELOG.md) under `## 0.3.0`.
 
 - **A step record's JSON changed field names and id prefix.** A script
   reading a step record's or scenario record's JSON needs the current
