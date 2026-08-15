@@ -41,3 +41,21 @@ Feature: an accepted scenario is either let go or kept
     And that feature has changed since it was accepted
     When nuka tend runs in the fixture project
     Then it reports nothing about that feature's sign-off
+
+  # Reported by a project using this. Two features were made green by one
+  # run. Accepting the first wrote its record, which left the tree dirty,
+  # which refused the second. Committing that record moved HEAD, which
+  # refused the second again for a different reason. The only way through
+  # was to run the second feature again, discarding a green run that had
+  # already covered it.
+  #
+  # Both guards are right on their own. What the dirty-tree one protects is
+  # the tree the run actually read: a step file, a feature, the config. An
+  # acceptance record is none of those. It is what signing off produces,
+  # never an input to the run being signed off, so its presence cannot make
+  # the claim any less true.
+  Scenario: every feature one run made green can be accepted from that run
+    Given a fixture project with two acceptance features made green by one run
+    When each of them is accepted in turn
+    Then both records exist and neither accept asked for the run to be repeated
+

@@ -1912,7 +1912,17 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   untracked step file the discovery would have loaded, or a commit made
   between the run and the sign-off, makes that claim false. The scenario
   record grows one field to make this checkable: the commit the working
-  tree was at when the run started.
+  tree was at when the run started. An acceptance record, of any feature,
+  is never part of what counts as dirty here: it is what accepting itself
+  produces, never an input the run being frozen read, so its sitting there
+  untracked or changed cannot make that run's own claim any less true.
+  Judged the same way `nuka tend` already tells a record apart from an
+  ordinary file (frontmatter carrying
+  `run_id`/`commit`/`feature`/`scenarios`, see "Tending"), never by
+  whether git happens to be tracking it yet. A path this cannot even
+  read, most likely one deleted since it was measured, still counts as
+  dirty: a missing record is a real change, not the thing this carve-out
+  is for.
 - A red run produces nothing. There is no verdict field and no record of
   failure: a scenario that did not pass gets fixed and re-run, and what is
   worth keeping is the outcome, not the attempts.
@@ -2306,8 +2316,10 @@ nothing.
   step-grain leaves skipped, not red, the same way it does once generated,
   while its own scenario-grain leaf shows `failed`, closing the display gap
   named earlier in this section, seen for real, not only in a unit test.
-  Not yet exercised this way: `allure watch` serving a report live, and a
-  hook's own trace attachment (both left to a later stage).
+  `allure watch` serving a live report while a run is still going is
+  confirmed the same way: its result count rises above zero mid-run and
+  matches the finished run's own count once it exits. Not yet exercised
+  this way: a hook's own trace attachment (left to a later stage).
 
 Not yet built: a hook's own duration (record.json carries no per-hook
 timestamp today, so a hook's start and stop both collapse to the

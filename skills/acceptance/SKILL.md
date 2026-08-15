@@ -348,9 +348,10 @@ environment configured with `policy: "read-only"` is a second backstop, not
 a substitute for picking the right one: the engine refuses any mutating step
 there outright, regardless of what `--env` was given.
 
-1. Commit. A dirty working tree can never be accepted, so get everything
-   the run needs — including any step files from "When an operation is
-   missing" above — into a commit first.
+1. Commit. Anything the run reads has to be in a commit first, including
+   any step files from "When an operation is missing" above. Records a
+   previous `nuka accept` wrote are the exception, so a second feature
+   from the same run needs no commit in between.
 2. `nuka run <feature>` — repeat until every scenario is green. stderr
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary

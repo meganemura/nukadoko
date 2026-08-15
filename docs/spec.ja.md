@@ -1353,6 +1353,12 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   記録の主張はまるごと「この scenario は commit X で green だった」というものです。
   discovery が読み込んだはずの untracked な step ファイルや、run と sign-off の間に行われたコミットは、その主張を偽にします。
   scenario record はこれをチェック可能にするために 1 つのフィールドを増やします(run が始まったときに working tree がどの commit にあったか)。
+  acceptance record は、どの feature のものであっても、ここでの dirty には決して数えられません。
+  それは accept 自身が生み出すものであり、凍結しようとしている run が読み込んだ入力では決してないため、それが untracked のまま、あるいは変更された状態で置かれていても、その run 自身の主張を偽にすることはないからです。
+  判定は、`nuka tend` がすでに記録を普通のファイルと区別しているのと同じやり方によります(frontmatter が `run_id`/`commit`/`feature`/`scenarios` を運んでいること、「手入れ」を参照)。
+  git がまだそれを追跡しているかどうかによってではありません。
+  このチェックがそもそも読み込めないパス(おそらく計測された後に削除されたもの)は、引き続き dirty として数えられます。
+  消された記録は本物の変更であり、この除外の対象ではないからです。
 - red な run は何も生みません。
   verdict のフィールドも失敗の記録もありません(通らなかった scenario は直されて再実行され、残す価値があるのは結果であって、試行そのものではありません)。
 - 記録は、それが由来する feature の隣に `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で書かれ、accept した run 自身の条件が名前に織り込まれます(`<browser>` は、run がブラウザを一切起動しなかった場合は文字どおり `no-browser` になります)。
@@ -1587,7 +1593,8 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
   passing な scenario、failing な scenario、Before hook が止める scenario を持つ小さな fixture に対して `nuka run` を実行し、実物の `allure` CLI でレポートを生成し、実物の HTTP サーバでそれを配信し、実物のヘッドレスブラウザでそれを操作するという形です(レポートの SPA は読み込み時に自身の `widgets/*.json` を fetch しますが、`file://` はそれを一切配信できず、それでもシェル自体は変わらず描画されてしまうため、チェックは意味を持つために data-dependent な何かを読む必要があります)。
   これで確認できたのは次のことです: レポート自身の pass/failed/skipped の件数が、両方の粒度を合わせて `nuka run` 自身の報告と一致すること、各 scenario がそれ自身のグループ行として、自分の step それぞれの葉と並んで自分自身の葉を持つこと、失敗した step の `record.json` の attachment が存在し、しかもその中身が実際に読めること(その step 自身の record id を示します)、`nuka init` 自身が書く `allurerc.mjs`(前述)が実際に失敗を Allure 3 の既定の「Product errors」ではなく固有の category に振り分けること、そして step 自身の `sections`/`polls` がその step の直下の子 step として、2 段ではなく 1 段だけ潜った形で表示されることです。
   あわせて確認し、たまたまではなく固定した事実として扱っているものがもう 1 つあります: Before hook が止めた scenario は、それ自身の step 粒度の葉がすべて赤くではなく skipped として表示され、これは生成済みのレポートで見えるのと同じ挙動である一方、それ自身の scenario 粒度の葉は `failed` と表示され、この節で先に触れた表示上の欠落を埋めていることが、単体テストだけでなく実物のレポートでも確かめられています。
-  まだこの形で試されていないもの: `allure watch` によるレポートのライブ配信と、hook 自身の trace の attachment です(どちらも後の段階に残しています)。
+  `allure watch` が run の進行中にレポートをライブ配信することも、同じやり方ですでに確かめられています: その結果件数は run の途中で 0 を超えて上がり、run が終了した時点で実際の件数と一致します。
+  まだこの形で試されていないもの: hook 自身の trace の attachment です(後の段階に残しています)。
 
 まだ実装されていないもの: フック自身の duration(record.json は今のところ hook ごとの timestamp を持たないため、フックの開始と終了はどちらも scenario 自身の境界に潰れます)、BeforeAll/AfterAll(emitter がそこから map できる run レベルの record が存在しません)、そして link-template の設定(`@issue:123` のような tag を URL に対応付けるもの)です。
 

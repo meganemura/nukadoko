@@ -84,6 +84,18 @@ just until 0.1.
   previous framing, which read strongly enough to be taken as a rule
   against ever running an accepted feature at all.
 
+### Fixed
+
+- **`nuka accept` no longer refuses a second feature just because the
+  first accept, from the same green run, left its own record untracked.**
+  The dirty-tree refusal protects the tree a run actually read (a step
+  file, a feature, the config); an acceptance record is what accepting
+  produces, never an input to the run being frozen, so its being
+  untracked or changed no longer counts against that refusal, for any
+  feature. A path this cannot even read (most likely one deleted since it
+  was measured) still counts as dirty, and anything else dirty still
+  refuses exactly as before. See [Sign-off](docs/spec.md#sign-off).
+
 ## 0.2.0 — 2026-08-15
 
 ### Breaking

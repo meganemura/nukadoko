@@ -15,6 +15,7 @@ import { parseFeatureSource } from "../feature/load-features.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { listDirtyPaths, probeGitState } from "../run/probe-git.js";
 import type { ScenarioRecord } from "../run/record-types.js";
+import { parseAcceptanceRecord } from "../tend/record-parse.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -34,7 +35,10 @@ import type { WritableSink } from "./writable-sink.js";
 // listed there, each one a `return 1` before anything is written: (1) the
 // feature itself doesn't exist or doesn't parse, (2) there is no git
 // repository (or no commit yet) to name, (3) the *current* working tree is
-// dirty, (4) no run of this feature qualifies — src/accept/select-run.ts's
+// dirty, once every acceptance record sitting in it is set aside (below —
+// a record is what accepting produces, never an input the run being
+// signed off read, so its being untracked or modified cannot make that
+// run's own claim any less true), (4) no run of this feature qualifies — src/accept/select-run.ts's
 // own job, four-way distinguished (never run at all / red / partial-only /
 // wrong condition), (5)
 // the run that would be frozen recorded no git state of its own, (6) that
@@ -140,6 +144,33 @@ function isUnderStateDir(dirtyPath: string, stateDir: string): boolean {
   return dirtyPath === normalizedStateDir || dirtyPath.startsWith(`${normalizedStateDir}/`);
 }
 
+// Whether a dirty path measured by `listDirtyPaths` is itself an
+// acceptance record, judged the exact same way `nuka tend` already tells a
+// record apart from an ordinary `.md` file: frontmatter carrying
+// `run_id`/`commit`/`feature`/`scenarios` (src/tend/record-parse.ts, reused
+// rather than a second discriminator). Refusal condition 3 protects the
+// tree a run actually reads (a step file, a feature, the config); an
+// acceptance record is what accepting produces, never an input to the run
+// being signed off, so its being dirty must not make this refusal fire.
+// `"malformed"` (frontmatter present, body unreadable) still counts as a
+// record here, the same as it does for `tend`'s own
+// `signoff-record-unreadable` finding: the frontmatter already claimed
+// record-ness, and whether the body happens to parse is a different
+// question. A path this function cannot even read (deleted between `git
+// status` and this check, most likely) is left counted as dirty rather
+// than excluded — that is a real change to the tree, not the thing this
+// exclusion exists for.
+function isAcceptanceRecordPath(rootDir: string, dirtyPath: string): boolean {
+  if (!dirtyPath.endsWith(".md")) return false;
+  let content: string;
+  try {
+    content = readFileSync(path.join(rootDir, dirtyPath), "utf8");
+  } catch {
+    return false;
+  }
+  return parseAcceptanceRecord(content, dirtyPath).kind !== "not-a-record";
+}
+
 // Refusal condition 3's own message, widened to say *what* is dirty when
 // that closes a loop this can otherwise fall into (dirty -> commit/stash
 // -> accept -> HEAD moved -> run -> dirty again, because the thing making
@@ -149,6 +180,14 @@ function isUnderStateDir(dirtyPath: string, stateDir: string): boolean {
 // dirty for an unrelated reason (no mention here, the base message alone
 // answers that), or may be tracking it on purpose (this function does not
 // say that is wrong, only that `nuka init` gitignores it and why).
+//
+// `dirtyPaths` is the caller's own list, already filtered to drop
+// whatever `isAcceptanceRecordPath` above claimed — this function only
+// ever hears about the paths actually blocking the refusal, so
+// "entirely under the state directory" is a true statement about those
+// paths even when an accepted record for a different feature also sits
+// untracked elsewhere in the tree; it is exactly not part of what is
+// blocking, so it is exactly not part of what this sentence claims.
 function formatDirtyTreeRefusal(dirtyPaths: readonly string[], stateDir: string): string {
   const base = "nuka accept: the working tree is dirty (untracked files included).";
   const cta = "Commit or stash first, then run `nuka accept` again.";
@@ -160,7 +199,7 @@ function formatDirtyTreeRefusal(dirtyPaths: readonly string[], stateDir: string)
 
   const scopeSentence =
     underState.length === dirtyPaths.length
-      ? `nuka accept: the working tree is dirty, entirely under the state directory (${stateDir}/).`
+      ? `nuka accept: the working tree is dirty; every path blocking it is under the state directory (${stateDir}/).`
       : `nuka accept: the working tree is dirty, including paths under the state directory (${stateDir}/).`;
 
   return (
@@ -265,8 +304,24 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   }
   if (!currentGit.clean) {
     const dirtyPaths = await listDirtyPaths(rootDir);
-    stderr.write(`${formatDirtyTreeRefusal(dirtyPaths, config.stateDir)}\n`);
-    return 1;
+    // An acceptance record, of any feature, is set aside before this
+    // refusal is decided (isAcceptanceRecordPath's own header): it is what
+    // accepting produces, never an input the run being frozen read, so it
+    // is never itself a reason the tree isn't safe to freeze from. Only
+    // once every dirty path clears that bar does the tree count as clean
+    // for this condition. `dirtyPaths.length === 0` refuses regardless of
+    // that filter, the same way this condition always did before the
+    // filter existed: `probeGitState` already measured a dirty tree above,
+    // and `listDirtyPaths` collapses any failure of its own to `[]` (its
+    // own header) — an empty list here means the *names* of what is dirty
+    // could not be read, not that nothing is, and a dirty tree this cannot
+    // even list is exactly the "can't tell, so don't exclude" case the
+    // acceptance-record exclusion itself is not for.
+    const blockingPaths = dirtyPaths.filter((dirtyPath) => !isAcceptanceRecordPath(rootDir, dirtyPath));
+    if (dirtyPaths.length === 0 || blockingPaths.length > 0) {
+      stderr.write(`${formatDirtyTreeRefusal(blockingPaths, config.stateDir)}\n`);
+      return 1;
+    }
   }
 
   // --- Refusal condition 4: is there a run to freeze, under the current

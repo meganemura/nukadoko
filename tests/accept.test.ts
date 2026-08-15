@@ -584,3 +584,128 @@ describe("nuka accept: after a directory run", () => {
     expect(content).not.toContain("it fails partway through");
   });
 });
+
+describe("nuka accept: an acceptance record doesn't count as dirty", () => {
+  let rootDir: string;
+  let featuresDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("accept-project");
+    featuresDir = path.join(rootDir, "features");
+    // accept-project's own .gitignore also excludes `features/*.md` (this
+    // file's own header explains why: it keeps refusal conditions 4-7
+    // testable without condition 3 getting in the way first). That is
+    // exactly the case this describe block needs to *not* have: an
+    // acceptance record has to actually reach git as untracked for these
+    // tests to exercise anything, the same way it does in a real project
+    // (`nuka init` only ever gitignores the state directory, never a
+    // record beside a feature, see src/cli/init.ts).
+    await writeFile(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("accepts a second feature when the only dirty path is an acceptance record from an earlier accept", async () => {
+    await initGitRepo(rootDir);
+
+    // features/failing.feature is red, so the run's own exit is non-zero,
+    // but greeting.feature and multi.feature are both green: the same
+    // one-run-covers-several-features setup the report this task fixes
+    // was about.
+    const runExit = await runCli(["run", "features"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(1);
+
+    const firstStdout = createCaptureSink();
+    const firstAccept = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: firstStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(firstAccept).toBe(0);
+    const firstRecordPath = firstStdout.text().trim();
+
+    // The record accept just wrote is now untracked: without this task's
+    // own fix, this is exactly what refused the second accept below.
+    const secondStdout = createCaptureSink();
+    const secondStderr = createCaptureSink();
+    const secondAccept = await runCli(["accept", "features/multi.feature"], {
+      rootDir,
+      stdout: secondStdout,
+      stderr: secondStderr,
+    });
+
+    expect(secondAccept).toBe(0);
+    expect(secondStderr.text()).not.toMatch(/dirty/i);
+    const secondRecordPath = secondStdout.text().trim();
+    expect(secondRecordPath).not.toBe(firstRecordPath);
+
+    expect(await mdFilesIn(featuresDir)).toEqual(
+      [path.basename(firstRecordPath), path.basename(secondRecordPath)].sort(),
+    );
+  });
+
+  it("still refuses when a dirty path is not an acceptance record, even with one sitting right beside it", async () => {
+    // The negative control: without it, a bug that loosened the
+    // dirty-tree check in general (not narrowly for acceptance records)
+    // would pass the test above just as well.
+    await initGitRepo(rootDir);
+
+    await runCli(["run", "features"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+
+    const firstStdout = createCaptureSink();
+    const firstAccept = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: firstStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(firstAccept).toBe(0);
+    const firstRecordPath = firstStdout.text().trim();
+
+    // An ordinary, unrelated dirty file, alongside the untracked record
+    // above: never an acceptance record itself, so it must still block.
+    await writeFile(path.join(rootDir, "scratch.txt"), "never added or committed");
+
+    const stderr = createCaptureSink();
+    const secondAccept = await runCli(["accept", "features/multi.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(secondAccept).toBe(1);
+    expect(stderr.text()).toMatch(/dirty/i);
+    expect(await mdFilesIn(featuresDir)).toEqual([path.basename(firstRecordPath)]);
+  });
+
+  it("refuses when an untracked .md file exists that doesn't look like an acceptance record", async () => {
+    await initGitRepo(rootDir);
+
+    const runExit = await runCli(["run", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(0);
+
+    // Frontmatter-less, so the same discriminator `nuka tend` uses for a
+    // record never claims this one, and it has to keep counting as dirty.
+    await writeFile(path.join(rootDir, "NOTES.md"), "# Not a record\n\nJust a note about this project.\n");
+
+    const stderr = createCaptureSink();
+    const acceptExit = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(acceptExit).toBe(1);
+    expect(stderr.text()).toMatch(/dirty/i);
+    expect(await mdFilesIn(featuresDir)).toEqual([]);
+  });
+});
