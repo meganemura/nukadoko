@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
+import { isFeatureWithinDir } from "./feature-within-dir.js";
 import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
@@ -50,6 +51,21 @@ import type { TendIssue } from "./types.js";
 // docs/spec.md is explicit that a hand-edited record just goes back to
 // being a claim, which is exactly the failure mode this finding exists to
 // catch.
+//
+// Every check above is skipped for a record whose own frozen feature now
+// lives inside `featuresDir` (`isFeatureWithinDir` below, checked
+// immediately after a record parses "ok" and before even the old-format
+// check). A feature inside `featuresDir` runs unattended on every `nuka
+// run` from then on, so the guarantee that feature carries has already
+// moved from the frozen record to that run; the record is not proving
+// anything a reader still depends on. Reporting its staleness anyway would
+// turn every ordinary edit to that feature into an alarm, and an alarm that
+// fires on every ordinary edit is one nobody keeps reading. A malformed
+// record (`signoff-record-unreadable`, above) is never covered by this
+// skip: its own `feature:` value may not even have parsed, so there is no
+// placement to judge it by, and "this file looks like a record but cannot
+// be read" is a fact about the file, not about whether its claim is still
+// current.
 
 const FIX_HINT = "re-run `nuka run` and `nuka accept` to refreeze it, or revert whatever changed since it was accepted";
 
@@ -65,7 +81,7 @@ function normalizeFeatureSource(source: string): string {
   return source.replace(/\n$/, "");
 }
 
-export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIssue[] {
+export function findSignoffRot(rootDir: string, vocabulary: Vocabulary, featuresDir: string): TendIssue[] {
   const issues: TendIssue[] = [];
 
   for (const absolutePath of discoverMarkdownFiles(rootDir)) {
@@ -92,6 +108,10 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
     }
 
     const record = parsed.record;
+
+    if (isFeatureWithinDir(record.featurePath, featuresDir)) {
+      continue; // Runs unattended now; the run carries the guarantee, not this frozen record (this file's own header).
+    }
 
     if (record.isOldFormat) {
       issues.push({

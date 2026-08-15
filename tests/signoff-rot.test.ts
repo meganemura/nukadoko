@@ -14,6 +14,16 @@ import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } f
 // never actually produces (this task's own "誤検出ゼロ" constraint — the
 // (b) comparison in particular only means anything against a record the
 // real writer produced).
+//
+// `checkout.feature` lives under `elsewhere/`, outside the fixture's
+// `featuresDir` ("features"), on purpose: src/tend/signoff-rot.ts silences
+// every one of its own checks for a record whose feature lives inside
+// `featuresDir` (that file's own header — the feature runs unattended from
+// there, so the run carries the guarantee, not the frozen record), so a
+// record this file means to stale out has to sit outside it or every check
+// below would report nothing regardless of whether the detection itself
+// works. That same silencing rule has its own end-to-end tests in
+// tests/signoff-rot-featuresdir.test.ts.
 
 interface Report {
   errors: { code: string; message: string; file?: string; step?: string }[];
@@ -31,14 +41,16 @@ async function runTend(rootDir: string): Promise<{ report: Report; exitCode: num
 describe("nuka tend: sign-off rot", () => {
   let rootDir: string;
   let featuresDir: string;
+  let elsewhereDir: string;
   let recordPath: string;
 
   beforeEach(async () => {
     rootDir = await copyFixtureToTempDir("tend-signoff-project");
     featuresDir = path.join(rootDir, "features");
+    elsewhereDir = path.join(rootDir, "elsewhere");
     await initGitRepo(rootDir);
 
-    const runExit = await runCli(["run", "features/checkout.feature"], {
+    const runExit = await runCli(["run", "elsewhere/checkout.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -46,7 +58,7 @@ describe("nuka tend: sign-off rot", () => {
     expect(runExit).toBe(0);
 
     const acceptStdout = createCaptureSink();
-    const acceptExit = await runCli(["accept", "features/checkout.feature"], {
+    const acceptExit = await runCli(["accept", "elsewhere/checkout.feature"], {
       rootDir,
       stdout: acceptStdout,
       stderr: createCaptureSink(),
@@ -72,7 +84,7 @@ describe("nuka tend: sign-off rot", () => {
   });
 
   it("(a) reports the record's own feature as missing once the feature file is deleted", async () => {
-    await rm(path.join(featuresDir, "checkout.feature"));
+    await rm(path.join(elsewhereDir, "checkout.feature"));
 
     const { report, exitCode } = await runTend(rootDir);
     expect(exitCode).toBe(1);
@@ -80,13 +92,13 @@ describe("nuka tend: sign-off rot", () => {
     const missing = report.errors.filter((e) => e.code === "signoff-feature-missing");
     expect(missing).toHaveLength(1);
     expect(missing[0]!.file).toBe(recordPath);
-    expect(missing[0]!.message).toContain("features/checkout.feature");
+    expect(missing[0]!.message).toContain("elsewhere/checkout.feature");
     expect(missing[0]!.message).not.toMatch(/hand-edit|edit the record/i);
   });
 
   it("(b) reports the frozen feature source as stale once the feature file changes", async () => {
-    const original = await readFile(path.join(featuresDir, "checkout.feature"), "utf8");
-    await writeFile(path.join(featuresDir, "checkout.feature"), original.replace("a shopper checks out", "a shopper checks out twice"));
+    const original = await readFile(path.join(elsewhereDir, "checkout.feature"), "utf8");
+    await writeFile(path.join(elsewhereDir, "checkout.feature"), original.replace("a shopper checks out", "a shopper checks out twice"));
 
     const { report, exitCode } = await runTend(rootDir);
     expect(exitCode).toBe(1);
@@ -158,10 +170,14 @@ describe("nuka tend: sign-off rot", () => {
     expect(oldFormat.message).toMatch(/nuka accept/);
   });
 
-  it("reports an unparseable record as an error, naming the file, without touching the healthy one", async () => {
+  it("reports an unparseable record as an error, naming the file, without touching the healthy one — even though the file itself sits inside featuresDir", async () => {
+    // Placed inside featuresDir on purpose: a malformed record is never
+    // covered by the featuresDir placement skip (src/tend/signoff-rot.ts's
+    // own header) because a broken record's own claimed feature can't be
+    // trusted to know where the real feature lives.
     await writeFile(
       path.join(featuresDir, "broken.2026-01-01-abc1234.md"),
-      ["---", "run_id: run-x", "commit: abc1234", "feature: features/checkout.feature", "scenarios:", "  - name: nope", "---", "", "no gherkin fence here at all"].join("\n"),
+      ["---", "run_id: run-x", "commit: abc1234", "feature: elsewhere/checkout.feature", "scenarios:", "  - name: nope", "---", "", "no gherkin fence here at all"].join("\n"),
     );
 
     const { report, exitCode } = await runTend(rootDir);

@@ -82,9 +82,13 @@ describe("nuka accept: a green run", () => {
     });
 
     expect(acceptExit).toBe(0);
-    expect(stderr.text()).toBe("");
 
     const relativePath = stdout.text().trim();
+    // Success now also writes sign-off-lifecycle guidance to stderr
+    // (src/cli/accept.ts) — checked in full in
+    // tests/accept-lifecycle-guidance.test.ts; here it only needs to name
+    // the record this accept actually wrote.
+    expect(stderr.text()).toContain(relativePath);
     // The filename now bakes the condition in
     // (environment, then the browser segment — "no-browser" here, since
     // this fixture's own steps never destructure page/context).
@@ -219,8 +223,8 @@ describe("nuka accept: a green run", () => {
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
     expect(acceptExit).toBe(0);
+    expect(stderr.text()).toContain(stdout.text().trim());
     expect(await mdFilesIn(featuresDir)).toHaveLength(1);
   });
 });
@@ -429,8 +433,8 @@ describe("nuka accept: overwrite semantics", () => {
     });
 
     expect(secondExit).toBe(0);
-    expect(secondStderr.text()).toBe("");
     expect(secondStdout.text().trim()).toBe(relativePath);
+    expect(secondStderr.text()).toContain(relativePath);
     expect(relativePath).toContain(commit.slice(0, 7));
 
     const secondContent = await readFile(path.join(rootDir, relativePath), "utf8");
@@ -499,7 +503,7 @@ describe("nuka accept: declared vs observed", () => {
     // The mismatch is recorded as a fact, never a reason to refuse — none of
     // the seven rejection conditions read `mutates`/`observed` at all.
     expect(acceptExit).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toContain(stdout.text().trim());
 
     const relativePath = stdout.text().trim();
     const content = await readFile(path.join(rootDir, relativePath), "utf8");
@@ -564,7 +568,7 @@ describe("nuka accept: after a directory run", () => {
     });
 
     expect(acceptExit).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toContain(stdout.text().trim());
     expect(await mdFilesIn(featuresDir)).toEqual([
       expect.stringMatching(/^greeting\./),
     ]);

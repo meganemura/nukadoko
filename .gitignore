@@ -20,3 +20,14 @@ selftest-suite/fixture-project/allurerc.mjs
 # removed in a `finally`; ignored too as a defense against a leftover one
 # after a crashed run).
 selftest-suite/.tmp-init-*/
+# selftest-suite/features/steps/acceptance-lifecycle.ts's own disposable
+# per-scenario project directory (a real, isolated git repo `nuka accept`
+# needs -- always removed in an `After` hook; ignored too as a defense
+# against a leftover one after a crashed run).
+selftest-suite/.tmp-accept-*/
+# selftest-suite/features/steps/same-scenario-across-runs.ts's own
+# disposable per-scenario project directory (a real `nuka init`, run fresh
+# so its own allurerc.mjs's historyPath starts empty -- always removed in
+# an `After` hook; ignored too as a defense against a leftover one after a
+# crashed run).
+selftest-suite/.tmp-same-scenario-*/

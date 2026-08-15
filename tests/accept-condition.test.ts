@@ -81,9 +81,13 @@ describe("nuka accept: condition", () => {
       stderr: accept1Stderr,
     });
     expect(accept1Exit).toBe(0);
-    expect(accept1Stderr.text()).toBe("");
     const path1 = accept1Stdout.text().trim();
     expect(path1).toMatch(/\.default\.no-browser\.md$/);
+    // Success now also writes sign-off-lifecycle guidance to stderr
+    // (src/cli/accept.ts) — checked in full in
+    // tests/accept-lifecycle-guidance.test.ts; here it only needs to name
+    // the record this accept actually wrote.
+    expect(accept1Stderr.text()).toContain(path1);
 
     const accept2Stdout = createCaptureSink();
     const accept2Stderr = createCaptureSink();
@@ -93,8 +97,8 @@ describe("nuka accept: condition", () => {
       stderr: accept2Stderr,
     });
     expect(accept2Exit).toBe(0);
-    expect(accept2Stderr.text()).toBe("");
     const path2 = accept2Stdout.text().trim();
+    expect(accept2Stderr.text()).toContain(path2);
     expect(path2).toMatch(/\.staging\.no-browser\.md$/);
     expect(path2).not.toBe(path1);
 
@@ -131,9 +135,10 @@ describe("nuka accept: condition", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["accept", "features/greeting.feature"], { rootDir, stdout, stderr });
 
-    expect(stderr.text()).toBe("");
     expect(exitCode).toBe(0);
-    expect(stdout.text().trim()).toMatch(/\.no-browser\.md$/);
+    const relativePath = stdout.text().trim();
+    expect(relativePath).toMatch(/\.no-browser\.md$/);
+    expect(stderr.text()).toContain(relativePath);
   });
 
   it("refuses when no green full run exists under the current condition, naming the condition(s) that do have one", async () => {

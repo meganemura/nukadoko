@@ -24,7 +24,11 @@ import type { WritableSink } from "./writable-sink.js";
 // anything — src/run/run-scenario.ts is untouched by this file — it only
 // reads what `nuka run` already wrote (record.json/step record.json under
 // `<stateDir>/records/scenarios/*`) and, if every one of the spec's seven refusal
-// conditions is clear, writes one markdown file beside the feature.
+// conditions is clear, writes one markdown file beside the feature and
+// prints its own path on stdout — success's own stderr then names the
+// choice that follows sign-off (a feature can stay where it is, proving
+// only that this change was accepted, or move into `featuresDir` and run
+// unattended from then on), never which one to make.
 //
 // The seven refusal conditions (docs/spec.md's own "refusal conditions" list) are checked in the order
 // listed there, each one a `return 1` before anything is written: (1) the
@@ -405,6 +409,22 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
 
   await writeFile(outputPath, content);
 
-  stdout.write(`${path.relative(rootDir, outputPath)}\n`);
+  const relativeOutputPath = path.relative(rootDir, outputPath);
+  stdout.write(`${relativeOutputPath}\n`);
+  // Guidance, not a verdict: this command has no way to know whether
+  // featurePath is about the change that produced it or the product's own
+  // path, so it names the question and both homes rather than choosing one
+  // (docs/spec.md's own "the tool measures what it can measure and trusts a
+  // declaration for what it cannot" — this is exactly a thing it cannot
+  // measure). stdout above stays exactly the record's own path, unchanged,
+  // for whatever reads it as a machine-readable result; this goes to
+  // stderr, the same channel `nuka run`'s own progress output already uses
+  // for something a human reads alongside a machine-readable stdout.
+  stderr.write(
+    `nuka accept: wrote ${relativeOutputPath} for ${featurePath}.\n` +
+      "Does this describe the change, or the product's own path?\n" +
+      "Left where it is, this record only proves acceptance.\n" +
+      `Moved into ${config.featuresDir}/, together with the feature, it runs unattended on every future \`nuka run\`.\n`,
+  );
   return 0;
 }

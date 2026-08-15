@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { isFeatureWithinDir } from "./feature-within-dir.js";
 import { discoverMarkdownFiles, parseAcceptanceRecord, type RecordCondition } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
@@ -44,8 +45,21 @@ import type { TendIssue } from "./types.js";
 // and "some
 // declared conditions are missing a sign-off" would need a declaration that
 // does not exist.
+//
+// A record whose own frozen feature lives inside `featuresDir` is skipped
+// before it ever reaches `latestByFeature`, the same placement check
+// src/tend/signoff-rot.ts applies and for the same reason: once a feature
+// runs unattended on every `nuka run`, its own sign-off is not the thing
+// standing behind it any more, so a note about that sign-off's condition
+// drifting is a note about a claim nothing depends on — checked here rather
+// than left to fall out of some other filter, since this function walks
+// records independently of that one.
 
-export function findSignoffConditionMismatch(rootDir: string, currentBrowserType: string): TendIssue[] {
+export function findSignoffConditionMismatch(
+  rootDir: string,
+  currentBrowserType: string,
+  featuresDir: string,
+): TendIssue[] {
   interface FeatureLatest {
     readonly relativePath: string;
     readonly acceptedAt: Date;
@@ -69,6 +83,7 @@ export function findSignoffConditionMismatch(rootDir: string, currentBrowserType
 
     const { record } = parsed;
     if (record.acceptedAt === undefined) continue; // Can't place it in time; excluded from "latest" entirely.
+    if (isFeatureWithinDir(record.featurePath, featuresDir)) continue; // Runs unattended now; this file's own header.
 
     const existing = latestByFeature.get(record.featurePath);
     if (existing === undefined || record.acceptedAt.getTime() > existing.acceptedAt.getTime()) {

@@ -79,7 +79,11 @@ import type { TendIssue, TendReport } from "./types.js";
 // and it is the only tend finding that reads outside `vocabulary`/
 // `features` — it walks the whole project for acceptance records
 // (src/tend/record-parse.ts) and checks each one against this same
-// `vocabulary`, never a second one it builds itself.
+// `vocabulary`, never a second one it builds itself. `config.featuresDir`
+// is passed through so it can stay silent about a record whose own feature
+// now lives there (that file's own header) — `additionalFeatureDirs` is
+// deliberately not part of that check, since a feature there never runs
+// unattended either.
 //
 // `summary` is built
 // from the same `vocabulary` plus `rationaleIssues`/`fieldDescriptions`,
@@ -124,7 +128,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   );
   const occurrences = resolveStepOccurrences(features, patterns);
 
-  const errors: TendIssue[] = [...findSignoffRot(rootDir, vocabulary)];
+  const errors: TendIssue[] = [...findSignoffRot(rootDir, vocabulary, config.featuresDir)];
 
   // Called once each, their results reused for both `notes` below and the
   // summary's declaration-coverage numbers — never re-walked a second time
@@ -146,7 +150,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findSignedFeatureUnscanned(rootDir, scannedFeatureDirs),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
-    ...findSignoffConditionMismatch(rootDir, config.browserType),
+    ...findSignoffConditionMismatch(rootDir, config.browserType, config.featuresDir),
     ...findPostNavigationReads(rootDir),
   ];
 
