@@ -33,10 +33,8 @@ Everything below assumes the project is already initialized. If it isn't yet
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
-4. `nuka check <feature>` — undefined steps, pattern/schema mismatches, a
-   Then bound to a mutating step, a chained key whose producing step is
-   missing, bound too late, or ambiguous between two of them — before
-   anything runs.
+4. `nuka check <feature>`: every static inconsistency it can catch,
+   before anything runs (see "Before running").
 5. Commit. A run can only be frozen if it happened on a clean tree at the
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
@@ -47,25 +45,18 @@ Everything below assumes the project is already initialized. If it isn't yet
 
 ## Reading the vocabulary
 
-- `nuka steps --json` — top level is `{ steps, import_failures }`. Each
-  entry in `steps` carries name, patterns, description, mutates, which
-  fixtures it needs (`needs`, `needs_browser`), and where each chained args
-  key comes from. `needs_browser` is how to tell, without opening a file,
-  which steps never open a browser at all; the chained-args field is how
-  to tell which steps have to run before which. `needs` is `null`, with a
-  `needs_error` string beside it, for the one step whose own fixture needs
-  this call could not read; treat that entry's contract as unknown rather
-  than guessing at it. That same entry may also carry `needs_inferred`: a
-  lexical guess at its fixture needs, read from an un-migrated
-  `run(ctx, args)`'s own member accesses. Treat it as a starting inventory
-  only, useful while promoting the step, since it can miss an alias and
-  never states `needs_browser`. `import_failures` (`{ file, message }`)
-  names any step file that failed to import, always present, `[]` when
-  nothing did. The command exits 1 whenever either is non-empty, but still
-  prints everything it could read, so a broken step file elsewhere never
-  hides the rest of the vocabulary.
-- `nuka describe <step>` — its full contract: args/returns as JSON Schema,
-  plus the same `import_failures` beside it.
+- `nuka steps --json` lists the whole vocabulary; `nuka describe <step>`
+  gives one step's full contract. Read the JSON itself for the field
+  shapes rather than a description of them here, since a shape written
+  down twice is the one that goes stale. Both name any step file that
+  failed to import beside everything else they could still read, so a
+  broken file elsewhere never hides the rest of the vocabulary; `nuka check`
+  is where to fix the import itself.
+- Two fields carry less than they look like they do. A `needs` of `null`
+  means this tool could not read that step's `run()`, so its fixture
+  contract is unknown, not empty. A `needs_inferred` list is a lexical
+  guess at the same question: a starting inventory, never a finished one,
+  and never grounds for concluding a step needs no browser.
 - Prefer what already exists. If an acceptance condition can be expressed
   with an existing step, use it — do not scaffold a new one just because a
   criterion's wording doesn't match a pattern verbatim.
@@ -328,12 +319,11 @@ that judgment is what PR review of the feature is for.
 
 ## Before running
 
-`nuka check <feature>`. Undefined steps, pattern/schema mismatches, a Then
-bound to a mutating step, a step whose `from` key has no producing step
-earlier in that scenario or has two of them competing — every static
-inconsistency it can catch, catch before anything executes. Those last
-ones otherwise cost a whole browser session to discover, since the
-scenario looks correct until the consuming step actually runs.
+`nuka check <feature>` catches every static inconsistency it can, before
+anything executes. Among them: a step whose `from` key has no producing
+step earlier in that scenario, or has two of them competing. That one
+otherwise costs a whole browser session to discover, since the scenario
+looks correct until the consuming step actually runs.
 
 If the feature's directory is in `additionalFeatureDirs` (see "What not to
 do"), a bare `nuka check` already covers it, the same as any feature under
@@ -356,14 +346,13 @@ there outright, regardless of what `--env` was given.
 2. `nuka run <feature>` — repeat until every scenario is green. stderr
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary
-   line; pass `--quiet` to drop the two progress lines if the terminal
-   gets noisy (the paths and the summary still print). stdout stays
-   NDJSON, one scenario record per line, unaffected either way. When a
-   scenario fails, diagnose it before repeating the whole run (see "When a
-   run fails") rather than treating a full re-run as the default first
-   move. `<feature>:<line>` is fine for narrowing this while iterating,
-   but the run this step ends on must cover the whole feature — `accept`
-   never treats a partial run as a candidate, however green it was.
+   line; `--quiet` drops the progress lines when the terminal gets noisy.
+   stdout stays NDJSON, one scenario record per line, unaffected either
+   way. When a scenario fails, diagnose it before repeating the whole run
+   (see "When a run fails") rather than treating a full re-run as the
+   default first move. `<feature>:<line>` is fine for narrowing this while
+   iterating, but the run this step ends on must cover the whole feature —
+   `accept` never treats a partial run as a candidate, however green it was.
 3. `nuka accept <feature>` — freezes the newest all-green run of that
    feature as a record beside it, restricted to runs matching the current
    condition: `--env` (resolved the same way `nuka run`'s is; omit for the
@@ -440,17 +429,17 @@ call, would already have told you.
 
 ## When accept refuses
 
-`accept` has seven refusal conditions, and it always says which one fired,
-in stderr, along with the next command to run. Read that message and act on
-it — don't guess, and don't look up the list elsewhere first; stderr is the
-source of truth here and anything written in this file would just go stale
-next to it. One of the seven, "no run to freeze", now includes a fourth
-shape: a green full run of the feature exists, just not under the current
-condition. That refusal names the condition it looked for and lists every
-condition that does have a run, so the next move is either `nuka run
-<feature>` again under the current condition or pointing `accept`'s own
-`--env` and/or `browserType` in the config at one of the ones already
-listed, never a guess between them.
+`accept` always says which refusal condition fired, in stderr, along with
+the next command to run. Read that message and act on it — don't guess,
+and don't look up the list elsewhere first; stderr is the source of truth
+here and anything written in this file would just go stale next to it.
+One shape worth knowing ahead of time: "no run to freeze" can mean a green
+full run of the feature exists, just not under the current condition. That
+refusal names the condition it looked for and lists every condition that
+does have a run, so the next move is either `nuka run <feature>` again
+under the current condition or pointing `accept`'s own `--env` and/or
+`browserType` in the config at one of the ones already listed, never a
+guess between them.
 
 ## Keeping records honest over time
 
@@ -460,33 +449,18 @@ after accepting, edit the feature, or delete a step it cites, and the
 record still sits there claiming a green run it can no longer support.
 Nothing about that stops a future run, so `nuka check` never mentions it.
 
-`nuka tend` is what finds it: a frozen result that no longer passes its
-step's current schema, a frozen feature source that no longer matches the
-file, a cited step gone from the vocabulary. Those exit non-zero, so a
-periodic job can act on them.
+`nuka tend` is what finds it. A stale record is the only finding that
+exits non-zero, so a periodic job can act on it; read what it prints for
+which of the record's own claims stopped holding and how to fix it. Every
+other finding it reports, `signoff-condition-mismatch` and
+`post-navigation-read` among them, is a note a project is allowed to
+carry rather than something blocking.
 
 Run it periodically, not in the loop above — it answers whether the
 vocabulary and its records are healthy, not whether this run can proceed.
 When it reports a stale record, the fix is to run the feature again and
 `nuka accept` it again, or to undo the change that invalidated it. Never
 by editing the record.
-
-`nuka tend` also reports a note, `signoff-condition-mismatch`, when a
-feature's most recent sign-off recorded a browser the config no longer
-declares. This one never exits non-zero: nothing about that sign-off is
-wrong yet, and a project accepted under chromium is not required to also
-accept under firefox. A record accepted before this note existed reports
-nothing here at all; there is no condition on it to compare.
-
-`nuka tend` also notes, once per run, when a step file failed to import:
-its counts and findings only ever reflect what discovery could read, so a
-broken file elsewhere would otherwise leave them quietly short with no way
-to tell. This note never exits non-zero either; `nuka check` is where to
-fix the import itself.
-
-`nuka tend` also reports `post-navigation-read`: a note naming a step
-whose accepted trace shows another call landing close behind a navigation
-call, the gap itself and nothing about whether it was safe.
 
 ## What not to do
 
