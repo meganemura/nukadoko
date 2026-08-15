@@ -35,6 +35,54 @@ just until 0.1.
   lands inside it too. `nuka run` the feature again and `nuka accept` it;
   `nuka tend` reports `signoff-record-old-format` for one it still finds
   in the old shape.
+- **`nuka tend` no longer reports a stale sign-off, or a sign-off's
+  drifted condition, once the feature it names lives inside
+  `featuresDir`.** Both findings (`signoff-rot`'s four checks and
+  `signoff-condition-mismatch`) used to fire for any accepted feature
+  regardless of where it lived; now they skip a feature already running
+  unattended, because the run itself carries the guarantee those two
+  findings used to stand in for, and reporting them anyway would turn
+  every ordinary edit to a feature already running unattended into an
+  alarm nobody keeps reading. `signoff-record-unreadable` is unaffected:
+  a record `tend` cannot even parse has no placement to judge it by. A
+  project relying on `nuka tend`'s exit code to catch this for a feature
+  already inside `featuresDir` loses that coverage; running that same
+  feature, already scheduled on every commit, is what confirms the same
+  thing now.
+
+### Added
+
+- **`nuka run` now also writes one Allure test result per *scenario*, on
+  top of the existing one per step.** Named `Scenario: <scenario name>`,
+  sitting beside its own steps' leaves in the same tree group. Unlike a
+  step's own test, a scenario's own test carries an identity that stays
+  stable from one run to the next (its own feature path and gherkin name,
+  folded together with every step's own text so two scenarios sharing a
+  name never collide), so Allure's own history, trend, and
+  flaky-across-runs views work again, at scenario grain, once
+  `historyPath` (below) is set. This also closes the one display
+  regression 0.2.0 recorded in its own entry below: a scenario a Before
+  hook stops now shows `failed` on its own scenario-level leaf, not only
+  `skipped` on every step underneath it. See
+  [Allure emitter](docs/spec.md#allure-emitter).
+- **`nuka init` now writes `historyPath` into the `allurerc.mjs` it
+  generates**, pointing Allure's own `generate`/`watch`/`report` at
+  `.nukadoko/export/allure-history.jsonl`. Without it, Allure never builds
+  history at all, no matter how stable a scenario's own identity is;
+  `examples/allure/allurerc.mjs` now carries the same field, for a
+  project not using `nuka init`.
+
+### Changed
+
+- **`nuka accept` now writes guidance to stderr after a successful
+  sign-off**, naming the choice a project has after freezing a record:
+  leave the feature where it is, an acceptance claim about one commit, or
+  move it into `featuresDir` so it runs unattended from then on. stdout
+  is unchanged, still just the record's own path. The acceptance skill
+  and `docs/spec.md`'s own "Sign-off" and "Tending" sections now describe
+  this as a decision made once, right after sign-off, rather than the
+  previous framing, which read strongly enough to be taken as a rule
+  against ever running an accepted feature at all.
 
 ## 0.2.0 — 2026-08-15
 

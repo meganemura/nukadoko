@@ -1719,14 +1719,16 @@ widens it. `featuresDir` plus `additionalFeatureDirs` together is the set
 a static check *binds vocabulary against*: `nuka check` with no argument
 and `nuka tend` both walk the wider set, because whether a step's pattern
 is bound is a property of the whole project, not of what today's
-unattended run would execute. This is why an acceptance feature (see
-"Sign-off"), kept outside `featuresDir` precisely so it is never picked up
-as a regression, belongs in `additionalFeatureDirs`: named there, the
-steps it binds are counted as bound instead of reported `pattern-unbound`,
-and it still never runs unattended. An entry that does not exist on disk is
-a config mistake, not an empty scan result to fail open on: `nuka check`
-reports it as an error (`additional-feature-dir-missing`), and `nuka tend`
-reports the same fact as a note.
+unattended run would execute. This is where an acceptance feature (see
+"Sign-off") belongs for as long as it stays outside `featuresDir`: named
+in `additionalFeatureDirs`, the steps it binds are counted as bound
+instead of reported `pattern-unbound`, and it still never runs
+unattended. A feature that instead describes the product's own core path
+moves into `featuresDir` once accepted, and needs no entry here at all.
+An entry that does not exist on disk is a config mistake, not an empty
+scan result to fail open on: `nuka check` reports it as an error
+(`additional-feature-dir-missing`), and `nuka tend` reports the same fact
+as a note.
 
 `browserType` picks which Playwright engine `ctx.page()` launches:
 `"chromium"` (default), `"firefox"`, or `"webkit"`. It is a separate key
@@ -1843,11 +1845,25 @@ steps, and sign-off records.
 
 ## Sign-off
 
-A sign-off records that an agreed scenario ran green at a named commit. It
-exists for acceptance (confirming once that a ticket's criteria are met),
-not for regression. The scenario is written from the ticket's acceptance
-criteria, run until it is green, and then kept as an acceptance record;
-re-running it later is not the point, and nothing in nukadoko re-runs it.
+A sign-off records that an agreed scenario ran green at a named commit:
+a claim about that one commit, not an ongoing check. The scenario is
+written from the ticket's acceptance criteria, run until it is green, and
+then kept as an acceptance record; nothing in nukadoko re-runs it on its
+own.
+
+Signing off and running a feature answer different questions. Signing off
+records that the criteria were met at that commit; running it, in CI or
+otherwise, answers whether they still hold today. Right after signing
+off is where a project decides which of the two a scenario is for from
+here on. Most acceptance criteria describe the change a ticket asked for,
+and once that change has landed there is nothing left for a re-run to
+confirm: the feature stays where it is, named in `additionalFeatureDirs`
+(see "Sessions, environments, secrets") so a static check still binds its
+steps without ever running it unattended. Some scenarios describe a path
+through the product itself instead, one that stays true long after the
+ticket closes; a feature like that moves into `featuresDir` so `nuka run`
+picks it up on every future commit (see "Tending" for how its sign-off is
+treated once it does).
 
 ```sh
 nuka run acceptance/PROJ-123.feature     # execute, as often as needed
@@ -1908,9 +1924,16 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   same day. The browser's *version* is never in the filename: the engine's
   type is enough to identify which condition a record is for, and the
   version lives in the record body only (below). nukadoko does not choose
-  a directory (where acceptance work lives is the project's decision); a
-  project that wants these out of its regression suite puts the feature
-  outside `featuresDir`, and the record follows it there.
+  a directory: where a feature lives, and whether it moves into
+  `featuresDir`, is the project's own decision (above). The record is
+  always written beside the feature, wherever that is, so moving the
+  feature carries its record along.
+- On success, `nuka accept` writes the record's own path to stdout,
+  unchanged by anything below, and, on stderr, asks the same question a
+  project already had to answer above: does this feature describe the
+  change or the product's own path, and what each answer means for where
+  it lives. Guidance, not a verdict: the command has no way to measure
+  which one a feature is, only to name the choice.
 - The record's own body carries a "Condition" section, near the top: the
   `environment` and, when the accepted run launched a browser, its measured
   engine and version; when it did not, the section says so explicitly
@@ -1991,9 +2014,10 @@ mechanical, and the tool refuses rather than let them go wrong quietly.
 ## Allure emitter
 
 `nuka run` writes one Allure test result per *step*, the moment that step
-finishes, to the `export/allure-results/` directory (Allure 2 file format,
-readable by both Allure 2 and 3): nukadoko's only presentation layer;
-nukadoko itself renders nothing.
+finishes, and one more per *scenario*, once that scenario ends, to the
+`export/allure-results/` directory (Allure 2 file format, readable by both
+Allure 2 and 3): nukadoko's only presentation layer; nukadoko itself renders
+nothing.
 
 - The output location defaults to `.nukadoko/export/allure-results/` (the
   state directory's own `export/allure-results/`, above); `allure.resultsDir`
@@ -2030,23 +2054,37 @@ nukadoko itself renders nothing.
   soon as one of its steps does, the same as before, even though the
   `suite` slot itself was empty until now. Each Before/After hook still
   becomes its own fixture (Allure container), unchanged.
-- A scenario stopped by its own Before hook now shows every one of its
-  steps as `skipped`, with the failure visible only inside that hook's own
-  fixture, because there is no longer a scenario-level test for a hook
-  failure to turn red the way it used to. `nuka run`'s own exit code and
-  the `record.json` it writes are unaffected either way: this is a
-  report-display limit, not a change to what failed or what nukadoko
-  decided about it.
+- Each scenario also gets one more Allure test result of its own, written
+  once that scenario ends, named `Scenario: <scenario name>` so its own
+  leaf in the tree is never mistaken for one of its steps'. It sits in the
+  same `suite`/`parentSuite` pair as its own steps, so the tree still
+  groups both grains under one row rather than splitting them across two.
+  Unlike a step's own test (see the identity bullets below), a scenario's
+  own test is given an identity that is deliberately stable from one run
+  to the next, which is what makes Allure's own history, trend, and
+  flaky-across-runs views work again, at scenario grain, something a
+  step's own test can never promise.
+- A scenario stopped by its own Before hook still shows every one of its
+  own steps as `skipped`, with the hook's own failure visible only inside
+  that hook's own fixture, because a step-level test still has nowhere
+  else to put a failure that happened before that step ever ran. The
+  scenario's own test result (above) is what changed: it carries the
+  hook's failure directly, reading `failed`, the same status `nuka run`'s
+  own exit code and the `record.json` it writes already reported. Before
+  the scenario got a test result of its own, a hook's failure had nowhere
+  red to land on the report at all; the scenario-level test closes that
+  gap.
 - Attachments: per step, its own trace, HTTP log, and validated result,
   attached to that step's own test result. The scenario's own screenshot
   (`final.png`, taken once at teardown) attaches instead to a synthetic
   fixture named "Scenario evidence," since by the time it is captured every
-  step's own test has already been written to disk and there is no
-  scenario-level test left for it to attach to directly. Separately,
-  whatever a step declared about itself (an attachment, a link, a log line)
-  is emitted too, always under a name prefixed `declared:`; that prefix is
-  the one place where provenance (measured by nukadoko vs. self-reported by
-  the step) survives once everything is sitting in the same result file.
+  step's own test, and the scenario's own test result above, have already
+  been written to disk, with nothing left for it to attach to directly.
+  Separately, whatever a step declared about itself (an attachment, a
+  link, a log line) is emitted too, always under a name prefixed
+  `declared:`; that prefix is the one place where provenance (measured by
+  nukadoko vs. self-reported by the step) survives once everything is
+  sitting in the same result file.
 - Every step whose record exists, passing or failing alike, also gets that
   whole step record attached verbatim, as `record.json`. It is the same
   object that reached disk (already redacted there, so nothing here
@@ -2158,49 +2196,95 @@ nukadoko itself renders nothing.
   by hand.
 - **`fullName` (`<feature path>#<scenario name>#<step text>`) and
   `testCaseId` (a hash of `fullName`) are computed the same way the official
-  cucumberjs Allure adapter computes them. `historyId` is not, on purpose,
-  and Allure's history, trend, and flaky-across-runs detection do not work
-  here.** They all key off `historyId` matching from one run to the next,
-  and a step has nothing stable to match on: unlike a scenario, a step
-  carries no id of its own anywhere in the record. Four ways of computing
-  one anyway were tried, and every one of them mis-links two different steps
-  as if they were the same one. Step text collides with itself (two steps
-  can share the exact same wording). Position (index, line number) shifts
-  whenever anything earlier in the feature file is edited. Counting
-  occurrences cannot tell an inserted duplicate from the original it landed
-  next to. The line-number scheme was the one that made the failure mode
-  concrete: adding one comment line at the top of a feature file silently
-  re-pointed every step at its neighbour's history, and the output gave no
-  hint that it had happened, not a warning, not a mismatched count, nothing
-  a reader could have caught. Given that a wrong link is worse than no link
-  and every scheme tried produces one, the only choice that does not
-  eventually lie is to make sure nothing links across runs at all: every
+  cucumberjs Allure adapter computes them, for a step's own test. `historyId`
+  is not, on purpose, and Allure's history, trend, and flaky-across-runs
+  detection do not work at step grain.** They all key off `historyId`
+  matching from one run to the next, and a step has nothing stable to match
+  on: unlike a scenario, a step carries no id of its own anywhere in the
+  record. Four ways of computing one anyway were tried, and every one of
+  them mis-links two different steps as if they were the same one. Step
+  text collides with itself (two steps can share the exact same wording).
+  Position (index, line number) shifts whenever anything earlier in the
+  feature file is edited. Counting occurrences cannot tell an inserted
+  duplicate from the original it landed next to. The line-number scheme was
+  the one that made the failure mode concrete: adding one comment line at
+  the top of a feature file silently re-pointed every step at its
+  neighbour's history, and the output gave no hint that it had happened,
+  not a warning, not a mismatched count, nothing a reader could have
+  caught. Given that a wrong link is worse than no link and every scheme
+  tried produces one, the only choice that does not eventually lie for a
+  step is to make sure nothing links across runs at all: a step's own
   `historyId` carries the three hidden parameters above
   (`nukadoko.run`/`nukadoko.scenario`/`nukadoko.step`), which change on
-  every run and force every `historyId` apart, deliberately. They are
-  `mode: "hidden"` rather than `excluded: true` on purpose too: Allure drops
-  an `excluded` parameter before hashing it, which would undo the whole
-  point, where `hidden` only keeps a parameter out of the UI.
-  A team migrating an existing suite onto nukadoko does not keep that
-  suite's Allure history, trend, or retry tracking, and this is a choice,
-  not a gap to file: the compat door exists to let a suite move onto
-  nukadoko, not to be where it settles, and a suite that arrives and still
-  gets a cucumber-shaped report tied to yesterday's run has not gained
-  anything by moving. Time-over-time observation has a home here instead,
-  one that does not depend on an identity nothing in this codebase actually
-  has: `nuka tend`'s sign-off rot findings and its `post-navigation-read`
-  note (see "Tending"), both read from what was actually accepted rather
-  than from a chain of report entries that would have to trust a step's
-  identity to be right.
+  every run and force every step's own `historyId` apart, deliberately.
+  They are `mode: "hidden"` rather than `excluded: true` on purpose too:
+  Allure drops an `excluded` parameter before hashing it, which would undo
+  the whole point, where `hidden` only keeps a parameter out of the UI.
+- **A scenario's own test carries a `fullName` of `<feature path>#<scenario
+  name>` instead, with nothing appended, and its own `historyId`
+  deliberately carries no run id, scenario id, or step index, so it
+  matches across two runs of the same scenario: that is what makes
+  Allure's history, trend, and flaky-across-runs views work here, at
+  scenario grain, provided `historyPath` (below) is set.** Unlike a step, a scenario
+  already has a stable natural key to build that on: its own feature path
+  and gherkin name. The one gap a bare path-plus-name key leaves open is
+  the same one a hidden `nukadoko.scenario.steps` parameter closes: two
+  scenarios can share a gherkin name, most often two rows of one Scenario
+  Outline, and a shared name alone would hash both to the same
+  `historyId`, wrongly folding the second row into the first row's
+  history. `nukadoko.scenario.steps` (every one of that scenario's own
+  step texts, joined) is folded into the hash to tell them apart, and an
+  Outline row's own Examples values are folded in too, unhidden, which is
+  usually enough on its own. What neither one can rescue is two scenarios
+  sharing a name *and* every step's own text, with no Examples row to tell
+  them apart: that pair stays genuinely indistinguishable, on purpose, for
+  the same reason a step's own identity was given up on above: a wrong
+  link is worse than no link.
+- `historyPath`, set in `allurerc.mjs` (Allure 3's own config, not
+  nukadoko's), is what makes a scenario's own history above actually
+  visible: without it, Allure 3's own `generate`/`watch`/`report` never
+  build history at all, no matter how stable a scenario's own `historyId`
+  is. A project with a perfectly stable identity and no `historyPath`
+  still sees no trend, no regressed/fixed transition, no flaky detection,
+  and nothing in the report itself points at a missing config key as the
+  reason. `nuka init` writes it unconditionally into the `allurerc.mjs` it
+  generates (`.nukadoko/export/allure-history.jsonl`, kept beside the
+  disposable `allure-results/` directory rather than inside it, so
+  clearing results between runs never discards it);
+  [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs),
+  for a project not using `nuka init`, carries the same field, so copying
+  it by hand gets history too, not only categories. Setting `historyPath`
+  never makes a step's own history visible, only a scenario's: Allure
+  still appends one history point per result it sees on every
+  `generate`/`watch`/`report`, so a step's own entry, whose `historyId`
+  never recurs, still lands in `history.jsonl` every run, once per step,
+  and simply never resolves to a continuation of anything earlier.
+  nukadoko does not drive `allure generate` itself and has no way to keep
+  that file from accumulating those disposable step-grain entries.
+- A team migrating an existing suite onto nukadoko does not carry that
+  suite's own Allure history, trend, or retry tracking across the move: the
+  old history was computed under a different tool's own `historyId`
+  formula, one nukadoko does not reuse, and this is a choice, not a gap to
+  file: the compat door exists to let a suite move onto nukadoko, not to
+  be where it settles. Once on nukadoko, a scenario's own history starts
+  building fresh from nukadoko's own runs, at scenario grain (immediately
+  above); a step's own history never builds at all, on purpose, for the
+  same reason as before: nothing in this codebase gives a step a stable
+  identity to build one from. Time-over-time observation at step grain has
+  a home here instead: `nuka tend`'s sign-off rot findings and its
+  `post-navigation-read` note (see "Tending"), both read from what was
+  actually accepted rather than from a chain of report entries that would
+  have to trust a step's identity to be right.
 - Ad-hoc `do` step records are working records, not test results, and do not
   appear on the dashboard: what an exploration proves is expressed by
   repairing or writing a scenario, and that scenario run is what Allure
   shows.
 - Viewing one run is Allure's job, and nukadoko has no web UI of its own.
-  History, trend, and flakiness are Allure features too, but, per the
-  identity bullet above, this emitter does not feed them across runs: what
-  Allure shows for any one `nuka run` invocation is complete, and nothing
-  about a later invocation's steps is linked back to this one's.
+  History, trend, and flakiness are Allure features too; per the two
+  identity bullets above, this emitter feeds them at scenario grain, once
+  `historyPath` is set, and never at step grain: what Allure shows for any
+  one `nuka run` invocation is complete on its own, and nothing about a
+  later invocation's steps links back to this one's, only its scenarios do.
 - Confirmed against a real browser, not just against `allure-js-commons`'
   own API: running `nuka run` against a small fixture with a passing, a
   failing, and a Before-hook-stopped scenario, generating the report with
@@ -2208,18 +2292,20 @@ nukadoko itself renders nothing.
   SPA fetches its own `widgets/*.json` on load, which `file://` cannot
   serve at all, though its shell still renders regardless, so a check has
   to read something data-dependent to mean anything), and driving a real
-  headless browser against it. What that confirmed: the report's own pass/failed/
-  skipped counts match what `nuka run` itself reported, each scenario
-  renders as its own tree group and each step as one of that group's
-  leaves, a failed step's `record.json` attachment is present and its own
-  content is readable (naming that step's own record id), `nuka init`'s
-  own `allurerc.mjs` (above) actually sorts a failure into its own category
-  rather than Allure 3's default "Product errors", and a step's own
+  headless browser against it. What that confirmed: the report's own
+  pass/failed/skipped counts match what `nuka run` itself reported, at
+  both grains combined; each scenario renders as its own tree group,
+  holding its own leaf alongside each of its steps' leaves; a failed
+  step's `record.json` attachment is present and its own content is
+  readable (naming that step's own record id); `nuka init`'s own
+  `allurerc.mjs` (above) actually sorts a failure into its own category
+  rather than Allure 3's default "Product errors"; and a step's own
   `sections`/`polls` render as its own child steps, one level under that
   step, not two. Also confirmed, and pinned rather than treated as
   incidental: a scenario a Before hook stops shows every one of its own
-  steps skipped, not red, in the running report the same way it does once
-  generated (the trade-off named earlier in this section, seen for real).
+  step-grain leaves skipped, not red, the same way it does once generated,
+  while its own scenario-grain leaf shows `failed`, closing the display gap
+  named earlier in this section, seen for real, not only in a unit test.
   Not yet exercised this way: `allure watch` serving a report live, and a
   hook's own trace attachment (both left to a later stage).
 
@@ -2378,7 +2464,15 @@ What it looks at, and why each one is rot rather than style:
   record is still on disk making a claim it can no longer support. This
   is the one finding here that is an error rather than a note: a sign-off
   that has quietly stopped meaning what it says is worse than no sign-off,
-  because it is still being counted.
+  because it is still being counted. None of this is checked once the
+  feature the record names has moved into `featuresDir`: from then on the
+  running suite carries the guarantee, not a record frozen at one commit,
+  and a warning that fires on every ordinary edit to a feature already
+  running unattended would stop being read. The one exception is a record
+  `tend` cannot even parse (`signoff-record-unreadable`, above): its own
+  `feature:` value may not have parsed either, so there is no placement
+  to judge it by, and a file that looks like a record but cannot be read
+  is a fact about the file, not about whether its claim is still current.
 - **A sign-off's own recorded condition drifting from the config.** A
   sign-off is scoped to a condition (see "Sign-off"): `(environment,
   browser)`, both measured, never declared. If the most recent sign-off for
@@ -2386,7 +2480,10 @@ What it looks at, and why each one is rot rather than style:
   nothing about that sign-off is wrong right now, which is why this is a
   note rather than an error, unlike the finding above. A record accepted
   before this note existed carries no condition to compare against at all,
-  so it is left out of this finding entirely rather than guessed at.
+  so it is left out of this finding entirely rather than guessed at. Like
+  the finding above, this stops once the feature has moved into
+  `featuresDir`: the drifting condition belongs to a claim nothing depends
+  on any more.
 - **A step file that failed to import.** `tend` discovers steps the same
   tolerant way `nuka check` does (see "Tolerant reporting, fail-fast
   execution"): a broken glue file is skipped rather than stopping the run,

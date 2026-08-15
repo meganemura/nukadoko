@@ -9,11 +9,19 @@ license: MIT
 
 ## What this is for
 
-This is acceptance confirmation, not regression testing. A scenario is
-written once to prove a ticket's criteria were met, run until green, signed
-off, and then left alone — nukadoko never re-runs it, and neither should
-you. Hold this distinction before doing anything else below; getting it
-wrong throws off every step that follows.
+A sign-off records that a scenario ran green at one commit: write the
+scenario once, run it until green, and sign it off. Signing off and
+running the scenario in CI answer different questions, sign-off for that
+one commit, CI for whether the criteria still hold today, and nukadoko
+never re-runs a signed scenario on its own.
+
+Right after signing off, decide which of the two this scenario is for
+from here on. A ticket's acceptance criteria are usually about the change
+itself, and once that change has landed there is nothing left for a
+re-run to confirm, so the feature stays where it is. Some scenarios
+describe a path through the product that stays true long after the
+ticket closes; running those on every future commit is worth doing, so
+the feature moves into `featuresDir` instead (see "What not to do").
 
 Before writing anything, make sure the acceptance criteria are actually in
 hand. If the prompt already states them, or a ticket you've read gives them,
@@ -364,7 +372,9 @@ there outright, regardless of what `--env` was given.
    condition in (environment, then browser or `no-browser`), so accepting
    this feature again later under a different measured condition writes a
    separate record instead of overwriting this one; when two runs differ
-   only by environment, `--env` is what picks which one gets frozen.
+   only by environment, `--env` is what picks which one gets frozen. On
+   success, stderr also asks the placement question from "What not to do";
+   stdout stays exactly the record's own path.
 4. Commit the record `accept` wrote.
 
 ## When a run fails
@@ -456,6 +466,17 @@ other finding it reports, `signoff-condition-mismatch` and
 `post-navigation-read` among them, is a note a project is allowed to
 carry rather than something blocking.
 
+Once a feature has moved into `featuresDir` (see "What not to do"), `nuka
+tend` stops reporting a stale sign-off or a drifted condition for it: the
+running suite carries the guarantee now, not a record frozen at one
+commit, and reporting either finding anyway would turn every ordinary
+edit to a feature already running unattended into an alarm nobody keeps
+reading. The one exception is a record `tend` cannot even parse
+(`signoff-record-unreadable`): its own claimed feature path may not have
+parsed either, so there is no placement to judge it by, and a file that
+looks like a record but cannot be read stays worth reporting regardless
+of where the feature lives.
+
 Run it periodically, not in the loop above — it answers whether the
 vocabulary and its records are healthy, not whether this run can proceed.
 When it reports a stale record, the fix is to run the feature again and
@@ -464,13 +485,17 @@ by editing the record.
 
 ## What not to do
 
-- Don't put an acceptance feature inside the project's regression suite —
-  keep it outside `featuresDir`, so it never runs as part of the regular
-  suite. Add its directory to `additionalFeatureDirs` in
-  `nukadoko.config.ts` so `nuka check` and `nuka tend` still see the steps
-  it binds, instead of reporting them unbound — without it ever running
-  unattended. If you can't touch the config, pass the feature path to
-  `nuka check` instead (see "Before running").
+- **Decide where the feature belongs, right after signing off** (`nuka
+  accept`'s own stderr asks the same question as a reminder). A feature
+  describing the change stays outside `featuresDir`: name its directory
+  in `additionalFeatureDirs` in `nukadoko.config.ts` so `nuka check` and
+  `nuka tend` still see the steps it binds, instead of reporting them
+  unbound, without it ever running unattended. If you can't touch the
+  config, pass the feature path to `nuka check` instead (see "Before
+  running"). A feature describing the product's own core path moves into
+  `featuresDir` instead, so `nuka run` picks it up on every future
+  commit; see "Keeping records honest over time" for what changes on
+  `nuka tend` once it does.
 - Don't hand-edit a written record. It exists because it was measured, not
   claimed; editing it by hand turns it back into a claim.
 - Don't delete a record and redo it to get a cleaner one. Its git history

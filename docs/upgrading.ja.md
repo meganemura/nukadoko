@@ -29,7 +29,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## Unreleased
 
-破壊的変更は 4 つです。
+破壊的変更は 5 つです。
+加えて、破壊的ではないものの、新しい機能に乗るために必要な対応が 1 つあります。
 各項目は「何を直すか」だけを述べます。
 なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
 
@@ -47,6 +48,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **既存の acceptance record は作り直しが要ります。**
   `nuka run` でその feature を再実行し、`nuka accept` し直してください。
   `nuka tend` は、旧い形式のまま残っている acceptance record を見つけると、それを名指しします(`signoff-record-old-format`)。
+- **`nuka tend` は、すでに `featuresDir` の中にある feature については、もはや stale な sign-off も、ずれた条件も報告しません。**
+  そのような feature についてこの所見に頼っていたプロジェクトは、その効き目が移ったと考えてください: すでに無人で実行され続けているその feature の `nuka run` こそが、いまは同じことを確認します。
+  `signoff-record-unreadable` は影響を受けません。
+  どちらの場合もコードの変更は要りません。
+- **破壊的ではありませんが、乗るためには必要です: 自分自身の `allurerc.mjs` を持つプロジェクトは、Allure の history、trend、run をまたいだ flaky 検出を scenario 粒度で得るために `historyPath` を手で足す必要があります。**
+  これが無くても何も壊れません。
+  このリリースより前と同じです。
+  新しく増えた scenario レベルの Allure test result が、それらの画面に出てこないだけです。
+  既存の `categories` の配列と並べて `historyPath: ".nukadoko/export/allure-history.jsonl"` を足してください(`nukadoko.config.ts` の `stateDir` を変えている場合はそれに合わせて調整してください)。
+  `examples/allure/allurerc.mjs` にこのフィールドの実例があります。
+  このリリースで `nuka init` を実行して作ったプロジェクトには、すでに入っています。
 
 ## 0.1.0 から 0.2.0 へ
 

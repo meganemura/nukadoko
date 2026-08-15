@@ -35,7 +35,8 @@ This part does not change release to release.
 
 ## Unreleased
 
-Four breaking changes. Each entry says what to fix; why is in
+Five breaking changes, plus one action that is not breaking but is needed
+to opt in to a new capability. Each entry says what to fix; why is in
 [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
 
 - **A step record's JSON changed field names and id prefix.** A script
@@ -58,6 +59,22 @@ Four breaking changes. Each entry says what to fix; why is in
 - **An existing acceptance record needs re-creating.** `nuka run` the
   feature again and `nuka accept` it. `nuka tend` names any acceptance
   record it finds still in the old shape (`signoff-record-old-format`).
+- **`nuka tend` stops reporting a stale sign-off or a drifted condition
+  for a feature that already lives inside `featuresDir`.** If a project
+  relied on that finding for such a feature, the coverage moved: running
+  that feature, already running unattended, is what confirms the same
+  thing now. `signoff-record-unreadable` is unaffected. No code change is
+  needed either way.
+- **Not breaking, but needed to opt in: a project with its own
+  `allurerc.mjs` needs `historyPath` added by hand to get Allure's
+  history, trend, and flaky-across-runs views at scenario grain.** Nothing
+  stops working without it, the same as before this release; the new
+  scenario-level Allure test result just never shows up in those views.
+  Add `historyPath: ".nukadoko/export/allure-history.jsonl"` (adjusted if
+  `stateDir` in `nukadoko.config.ts` points elsewhere) alongside the
+  existing `categories` array; `examples/allure/allurerc.mjs` shows the
+  field in place. A project created with `nuka init` on this release
+  already has it.
 
 ## 0.1.0 to 0.2.0
 
