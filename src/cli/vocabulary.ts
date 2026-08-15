@@ -285,7 +285,7 @@ export interface StepSummary {
    * one at all. Same presence rule as `needs`: present for every typed
    * entry, absent for a compat one. JSON key is `needs_browser`, not
    * `needsBrowser` (this project's own snake_case convention for a
-   * `--json` field, matching `receipt.json`'s `waited_ms`/`http_reads`).
+   * `--json` field, matching `record.json`'s `waited_ms`/`http_reads`).
    * Also omitted, alongside `needs: null`, when `stepNeeds` throws — a
    * browser-need verdict this file can't derive is not one it states. */
   readonly needs_browser?: boolean;
@@ -487,7 +487,7 @@ export interface TypedStepContract {
   /** Why this step is implemented this way, and what was rejected
    * (`defineStep`'s own `rationale`) — present only when the step declared
    * one (omitted, not an empty string, same convention as `used` on a
-   * receipt). Deliberately absent from `StepSummary`/`summarize` below —
+   * step record). Deliberately absent from `StepSummary`/`summarize` below —
    * `nuka steps` stays one line per step. */
   readonly rationale?: string;
   /** Human-readable rendering of `from` —

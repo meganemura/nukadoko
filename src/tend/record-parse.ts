@@ -24,6 +24,16 @@ import path from "node:path";
 // defaulted to "no browser" for an old record that simply never had an
 // opinion.
 //
+// `isOldFormat` is added the same defensive way: an acceptance record
+// embeds each step's own record verbatim (render-record.ts's own header),
+// and every step record the current tool writes always carries a
+// `record_id` string. A record written before that field existed lacks it
+// on every step it embeds, so its absence is what this module tests for —
+// never a stored copy of the field's own old name, which would just be
+// another word this module has to keep in sync with the writer by hand. An
+// empty step list proves nothing either way, so it reads as "not old" by
+// the same "never guessed at" rule `condition` already follows above.
+//
 // Discovery walks the whole project, not just featuresDir (src/cli/
 // accept.ts's own header: an acceptance feature is recommended to live
 // outside featuresDir, so its record can be anywhere too) — a `.md` file is
@@ -109,30 +119,33 @@ function extractGherkinFence(body: string): string | undefined {
 }
 
 /** One `#### <step text>` fence this record embeds, narrowed to the shape a
- * receipt has and a hook record does not (`render-record.ts`'s own
+ * step record has and a hook record does not (`render-record.ts`'s own
  * `renderHook` emits `{ type, status, ... }` — no `step` key — so filtering
- * on `step` being a string is what tells a step's own receipt block apart
+ * on `step` being a string is what tells a step's own record block apart
  * from a hook's, without needing to parse the preceding heading text at
  * all). `actions` is added now so
  * src/tend/post-navigation-read.ts can read it straight off a parsed
  * record: the field is already embedded verbatim by
- * `extractReceiptLikeBlocks` below (a receipt's own JSON, only `evidence`
- * ever stripped, `render-record.ts`'s own header), so this interface only
- * needed a name for it. `polls` is added the same way, for the same module
- * to tell a `ctx.poll`-covered read apart
- * from one that is not. Kept as `unknown`, `result`'s own convention: this
- * module never validates a receipt's own shape beyond "is this
- * receipt-like"; a per-entry check of what `actions`/`polls` actually
+ * `extractStepRecordLikeBlocks` below (a step record's own JSON, only
+ * `evidence` ever stripped, `render-record.ts`'s own header), so this
+ * interface only needed a name for it. `polls` is added the same way, for
+ * the same module to tell a `ctx.poll`-covered read apart
+ * from one that is not. `record_id` is added for `isOldFormat` below, kept
+ * `unknown` the same way — the value itself is never used, only whether the
+ * key is a string at all. Kept as `unknown`, `result`'s own convention: this
+ * module never validates a step record's own shape beyond "is this
+ * step-record-like"; a per-entry check of what `actions`/`polls` actually
  * contain is that finding's own job, not this shared parser's. */
-export interface RecordReceiptLike {
+export interface EmbeddedStepRecordLike {
   readonly step: string;
   readonly status: unknown;
   readonly result?: unknown;
   readonly actions?: unknown;
   readonly polls?: unknown;
+  readonly record_id?: unknown;
 }
 
-function isReceiptLike(value: unknown): value is RecordReceiptLike {
+function isStepRecordLike(value: unknown): value is EmbeddedStepRecordLike {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -141,9 +154,11 @@ function isReceiptLike(value: unknown): value is RecordReceiptLike {
   );
 }
 
-function extractReceiptLikeBlocks(body: string): { ok: true; receipts: RecordReceiptLike[] } | { ok: false; reason: string } {
+function extractStepRecordLikeBlocks(
+  body: string,
+): { ok: true; stepRecords: EmbeddedStepRecordLike[] } | { ok: false; reason: string } {
   const pattern = /```json\n([\s\S]*?)\n```/g;
-  const receipts: RecordReceiptLike[] = [];
+  const stepRecords: EmbeddedStepRecordLike[] = [];
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(body)) !== null) {
     let parsed: unknown;
@@ -155,14 +170,14 @@ function extractReceiptLikeBlocks(body: string): { ok: true; receipts: RecordRec
         reason: `a fenced JSON block is not valid JSON (${error instanceof Error ? error.message : String(error)})`,
       };
     }
-    if (isReceiptLike(parsed)) {
-      receipts.push(parsed);
+    if (isStepRecordLike(parsed)) {
+      stepRecords.push(parsed);
     }
     // Otherwise a hook's own JSON block (no `step` key) — not this module's
     // concern; render-record.ts's `renderHook` is the only other producer of
     // a json-fenced block in a record.
   }
-  return { ok: true, receipts };
+  return { ok: true, stepRecords };
 }
 
 /** A record's own recorded condition — `browserType` is `undefined` when
@@ -187,8 +202,8 @@ export interface ParsedAcceptanceRecord {
    * comparing this against a freshly-read feature file must apply the same
    * `.replace(/\n$/, "")` to that file's text before comparing. */
   readonly featureSource: string;
-  /** Every step-shaped receipt this record embeds, in document order. */
-  readonly receipts: readonly RecordReceiptLike[];
+  /** Every step-shaped record this record embeds, in document order. */
+  readonly stepRecords: readonly EmbeddedStepRecordLike[];
   /** This record's own condition — `undefined` when the frontmatter has no
    * `browser:` line at all, which is
    * every record accepted before this task shipped (this file's own
@@ -202,6 +217,12 @@ export interface ParsedAcceptanceRecord {
    * latest sign-off" for one feature (src/tend/signoff-condition-
    * mismatch.ts) — never compared against anything else here. */
   readonly acceptedAt: Date | undefined;
+  /** True once at least one embedded step record is missing `record_id` —
+   * the one field every step record the current tool writes always carries
+   * (this file's own header). `false` for a record with no step-shaped
+   * blocks at all: nothing there proves it either way, so it is never
+   * guessed at as old. */
+  readonly isOldFormat: boolean;
 }
 
 export type RecordParseResult =
@@ -221,7 +242,11 @@ export type RecordParseResult =
  * this is the expected case for every non-record `.md` file in a project),
  * `"malformed"` once the frontmatter shape has already claimed record-ness
  * but something inside it can't be decoded, and `"ok"` with the decoded
- * fields.
+ * fields — a record written by an older version of this tool is still
+ * `"ok"` here (its frontmatter and JSON are both well-formed), so it is
+ * `isOldFormat` on the decoded record, not a fourth parse outcome, that
+ * tells a caller apart "readable, but predates the current format" from
+ * "readable and current".
  */
 export function parseAcceptanceRecord(content: string, relativePath: string): RecordParseResult {
   const frontmatterMatch = FRONTMATTER_PATTERN.exec(content);
@@ -248,9 +273,9 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
     return { kind: "malformed", reason: 'missing the "## The scenario as it ran" fenced feature source' };
   }
 
-  const receiptsResult = extractReceiptLikeBlocks(body);
-  if (!receiptsResult.ok) {
-    return { kind: "malformed", reason: receiptsResult.reason };
+  const stepRecordsResult = extractStepRecordLikeBlocks(body);
+  if (!stepRecordsResult.ok) {
+    return { kind: "malformed", reason: stepRecordsResult.reason };
   }
 
   // `condition`/`acceptedAt` — read
@@ -274,8 +299,18 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
   const acceptedAtDate = acceptedAtLineMatch ? new Date(acceptedAtLineMatch[1]!) : undefined;
   const acceptedAt = acceptedAtDate !== undefined && !Number.isNaN(acceptedAtDate.getTime()) ? acceptedAtDate : undefined;
 
+  const isOldFormat = stepRecordsResult.stepRecords.some((stepRecord) => typeof stepRecord.record_id !== "string");
+
   return {
     kind: "ok",
-    record: { relativePath, featurePath, featureSource, receipts: receiptsResult.receipts, condition, acceptedAt },
+    record: {
+      relativePath,
+      featurePath,
+      featureSource,
+      stepRecords: stepRecordsResult.stepRecords,
+      condition,
+      acceptedAt,
+      isOldFormat,
+    },
   };
 }

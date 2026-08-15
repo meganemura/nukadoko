@@ -74,11 +74,11 @@ describe("nuka do --session (browser path)", () => {
     );
     const afterLogin = Date.now();
     expect(loginExit).toBe(0);
-    const loginReceipt = JSON.parse(loginStdout.text());
-    expect(loginReceipt.result).toEqual({ ok: true });
-    expectSingleFinalScreenshot(loginReceipt, { notBefore: beforeLogin, notAfter: afterLogin });
+    const loginStepRecord = JSON.parse(loginStdout.text());
+    expect(loginStepRecord.result).toEqual({ ok: true });
+    expectSingleFinalScreenshot(loginStepRecord, { notBefore: beforeLogin, notAfter: afterLogin });
 
-    const sessionFile = path.join(rootDir, ".nukadoko", "sessions", "default", "sb1.json");
+    const sessionFile = path.join(rootDir, ".nukadoko", "cache", "sessions", "default", "sb1.json");
     expect(existsSync(sessionFile)).toBe(true);
 
     const whoamiStdout = createCaptureSink();
@@ -87,17 +87,17 @@ describe("nuka do --session (browser path)", () => {
       { rootDir, stdout: whoamiStdout, stderr: createCaptureSink() },
     );
     expect(whoamiExit).toBe(0);
-    const whoamiReceipt = JSON.parse(whoamiStdout.text());
-    expect(whoamiReceipt.result.cookie).toContain("sid=abc123");
+    const whoamiStepRecord = JSON.parse(whoamiStdout.text());
+    expect(whoamiStepRecord.result.cookie).toContain("sid=abc123");
   });
 
   // fb4-evidence-time task spec's own acceptance criterion: a browser
-  // execution's receipt carries exactly one screenshot, final.png, whether
-  // the step passed or failed — the case the former second-screenshot
-  // behavior (a second copy of the same buffer, saved under a different
-  // name on a failed run only) existed for. The success half is covered
-  // above (the login receipt); this is the failure half.
-  it("a failed browser execution's receipt still carries exactly one screenshot, final.png", async () => {
+  // execution's step record carries exactly one screenshot, final.png,
+  // whether the step passed or failed — the case the former
+  // second-screenshot behavior (a second copy of the same buffer, saved
+  // under a different name on a failed run only) existed for. The success
+  // half is covered above (the login step record); this is the failure half.
+  it("a failed browser execution's step record still carries exactly one screenshot, final.png", async () => {
     const stdout = createCaptureSink();
     const beforeRun = Date.now();
     const exitCode = await runCli(["do", "browser-throws", "--args", "{}"], {
@@ -108,19 +108,19 @@ describe("nuka do --session (browser path)", () => {
     const afterRun = Date.now();
 
     expect(exitCode).toBe(1);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("failed");
-    expectSingleFinalScreenshot(receipt, { notBefore: beforeRun, notAfter: afterRun });
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("failed");
+    expectSingleFinalScreenshot(stepRecord, { notBefore: beforeRun, notAfter: afterRun });
   });
 });
 
-/** Shared by both the success and failure browser receipts above: exactly
+/** Shared by both the success and failure browser step records above: exactly
  * one `final.png` entry, with an `at` that both parses as a date and falls
  * inside `bounds` — the wall-clock window the caller measured around the
- * whole `runCli` call, not `receipt.finished_at`. `finalize()` (src/context/
+ * whole `runCli` call, not the step record's own `finished_at`. `finalize()` (src/context/
  * browser-evidence.ts) runs from `dispose()`, which cli/do.ts calls *after*
  * `finished_at` is already recorded — the exact gap this task's spec exists
- * to make visible (docs/spec.md "Receipts": `at` is what a second,
+ * to make visible (docs/spec.md "Records": `at` is what a second,
  * per-outcome screenshot file used to stand in for without stating it), and
  * the spec's own non-scope explicitly rejects closing that gap by moving the
  * screenshot earlier ("失敗時に throw の瞬間へスクリーンショットを移す案は
@@ -130,17 +130,17 @@ describe("nuka do --session (browser path)", () => {
  * whole CLI call bounds it above, which is what "value ordering, not only
  * format" actually checks for this field. */
 function expectSingleFinalScreenshot(
-  receipt: {
+  stepRecord: {
     started_at: string;
     evidence: { screenshots: Array<{ file: string; at: string }> };
   },
   bounds: { notBefore: number; notAfter: number },
 ): void {
-  expect(receipt.evidence.screenshots).toHaveLength(1);
-  const [screenshot] = receipt.evidence.screenshots;
+  expect(stepRecord.evidence.screenshots).toHaveLength(1);
+  const [screenshot] = stepRecord.evidence.screenshots;
   expect(screenshot!.file).toBe("final.png");
   const at = Date.parse(screenshot!.at);
-  const startedAt = Date.parse(receipt.started_at);
+  const startedAt = Date.parse(stepRecord.started_at);
   expect(Number.isNaN(at)).toBe(false);
   expect(at).toBeGreaterThanOrEqual(startedAt);
   expect(at).toBeGreaterThanOrEqual(bounds.notBefore);

@@ -14,15 +14,15 @@ import {
 // Responsibility: the one accepted-but-unverified corner of p3a-trace-per-
 // step's own completion condition ("`expect` の待ちが `actions` に `ms` 付き
 // で載ること") — trace-actions.test.ts already fixed `parseTraceActions`
-// against a hand-built trace, and trace-actions-receipt.test.ts already
-// proves `goto`'s own `url` reaches a real receipt end to end, but neither
-// exercises a real `expect(...).toBeVisible()` retrying against a real
-// chromium. This file is that missing leg: the fixture page's own `#late`
-// element is added by client-side JS 600ms after load, so the assertion in
-// tests/fixtures/trace-actions-project/features/steps/wait-for-late-
-// element.ts must actually poll and wait rather than pass on its first
-// check, and this test pins the resulting receipt's `actions` entry down to
-// prove `ms` reflects that real wait (a lower bound only, per this task's
+// against a hand-built trace, and trace-actions-step-record.test.ts already
+// proves `goto`'s own `url` reaches a real step record end to end, but
+// neither exercises a real `expect(...).toBeVisible()` retrying against a
+// real chromium. This file is that missing leg: the fixture page's own
+// `#late` element is added by client-side JS 600ms after load, so the
+// assertion in tests/fixtures/trace-actions-project/features/steps/wait-for-
+// late-element.ts must actually poll and wait rather than pass on its first
+// check, and this test pins the resulting step record's `actions` entry down
+// to prove `ms` reflects that real wait (a lower bound only, per this task's
 // spec: no upper bound, since machine load can only push the real duration
 // up from 600ms, never down).
 
@@ -59,7 +59,7 @@ function startLateElementServer(): Promise<{ server: Server; baseURL: string }> 
   });
 }
 
-interface StoredReceipt {
+interface StoredStepRecord {
   status: string;
   actions?: Array<{
     method: string;
@@ -70,7 +70,7 @@ interface StoredReceipt {
   }>;
 }
 
-describe("actions on the receipt: a real expect() wait", () => {
+describe("actions on the step record: a real expect() wait", () => {
   let server: Server;
   let baseURL: string;
   let rootDir: string;
@@ -108,17 +108,18 @@ describe("actions on the receipt: a real expect() wait", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const receiptPath = path.join(
+    const stepRecordPath = path.join(
       rootDir,
       ".nukadoko",
-      "receipts",
-      record.steps[0].receipt as string,
-      "receipt.json",
+      "records",
+      "steps",
+      record.steps[0].record as string,
+      "record.json",
     );
-    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as StoredReceipt;
-    expect(receipt.status).toBe("ok");
+    const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8")) as StoredStepRecord;
+    expect(stepRecord.status).toBe("ok");
 
-    const expectAction = (receipt.actions ?? []).find((action) => action.method === "expect");
+    const expectAction = (stepRecord.actions ?? []).find((action) => action.method === "expect");
     expect(expectAction).toBeDefined();
     expect(expectAction?.expression).toBe("to.be.visible");
     expect(expectAction?.selector).toBe("#late");

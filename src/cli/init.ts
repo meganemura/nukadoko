@@ -199,7 +199,7 @@ function allurercTemplate(): string {
     "// instead of replacing the whole file.",
     "//",
     "// Using Allure 2 instead? This file is not needed: nukadoko's own emitter",
-    "// already writes a matching categories.json into allure-results/ every run.",
+    "// already writes a matching categories.json into export/allure-results/ every run.",
     "export default {",
     "  categories: [",
     categoryLines,
@@ -275,7 +275,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   // `--features-dir` never touches `stateDir` — lets `allure watch` already
   // be running before the first `nuka run`, instead of requiring one run to
   // exist first just to make the directory appear.
-  const allureResultsDirRelative = path.join(defaults.stateDir, "allure-results");
+  const allureResultsDirRelative = path.join(defaults.stateDir, "export", "allure-results");
   await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
   stdout.write(`${allureResultsDirRelative}\n`);
 

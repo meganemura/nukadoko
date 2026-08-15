@@ -12,9 +12,9 @@ import {
 // Responsibility: page_events end to end against tests/fixtures/
 // page-events-project (P0-page-events task spec) — a real chromium page
 // producing a console error, an uncaught error, and a failed request, all
-// three landing on the receipt under both `nuka do` and `nuka run`
+// three landing on the step record under both `nuka do` and `nuka run`
 // (completion condition 3: neither path alone), redacted the same way
-// http.jsonl/receipt.json already are (a secret embedded in the console
+// http.jsonl/record.json already are (a secret embedded in the console
 // text and the failed request's URL), and the field entirely absent — not
 // present-but-empty — when a step's page never produces any of the three
 // (completion condition 4). PageEventsCollector's own record/reset/cap
@@ -23,12 +23,12 @@ import {
 
 const PAGE_TOKEN = "sekrit-page-token-456";
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
-describe("page_events on the receipt", () => {
+describe("page_events on the step record", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -50,14 +50,14 @@ describe("page_events on the receipt", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
 
     // At least the explicit console.error() call this step made — Chromium
     // also auto-logs an uncaught exception as a console error of its own, so
     // this is >= 1, not exactly 1. Every entry must be redacted regardless
     // of which one Chromium generated on its own.
-    const consoleErrors = receipt.page_events.console_errors as Array<{
+    const consoleErrors = stepRecord.page_events.console_errors as Array<{
       text: string;
       location: unknown;
       at: string;
@@ -70,12 +70,12 @@ describe("page_events on the receipt", () => {
     }
     expect(consoleErrors.some((entry) => entry.text.includes("{{secret.PAGE_TOKEN}}"))).toBe(true);
 
-    const pageErrors = receipt.page_events.page_errors as Array<{ message: string; at: string }>;
+    const pageErrors = stepRecord.page_events.page_errors as Array<{ message: string; at: string }>;
     expect(pageErrors).toHaveLength(1);
     expect(pageErrors[0]!.message).toContain("{{secret.PAGE_TOKEN}}");
     expect(pageErrors[0]!.message).not.toContain(PAGE_TOKEN);
 
-    const failedRequests = receipt.page_events.failed_requests as Array<{
+    const failedRequests = stepRecord.page_events.failed_requests as Array<{
       method: string;
       url: string;
       at: string;
@@ -85,17 +85,17 @@ describe("page_events on the receipt", () => {
     expect(failedRequests[0]!.url).toContain("{{secret.PAGE_TOKEN}}");
     expect(failedRequests[0]!.url).not.toContain(PAGE_TOKEN);
 
-    // The raw token must appear nowhere: not in stdout, not in receipt.json
+    // The raw token must appear nowhere: not in stdout, not in record.json
     // on disk (same three-exits check tests/secrets.test.ts already runs
     // for http.jsonl/result).
     expect(stdout.text()).not.toContain(PAGE_TOKEN);
-    const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
-    const receiptText = await readFile(receiptPath, "utf8");
-    expect(receiptText).not.toContain(PAGE_TOKEN);
-    expect(receiptText).toContain("{{secret.PAGE_TOKEN}}");
+    const recordPath = path.join(rootDir, stepRecord.evidence.dir, "record.json");
+    const stepRecordText = await readFile(recordPath, "utf8");
+    expect(stepRecordText).not.toContain(PAGE_TOKEN);
+    expect(stepRecordText).toContain("{{secret.PAGE_TOKEN}}");
   });
 
-  it("nuka run: page_events lands on the step's own receipt", async () => {
+  it("nuka run: page_events lands on the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/page-events.feature"], {
@@ -110,9 +110,9 @@ describe("page_events on the receipt", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(receipt.status).toBe("ok");
-    const pageEvents = receipt.page_events as {
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(stepRecord.status).toBe("ok");
+    const pageEvents = stepRecord.page_events as {
       console_errors?: unknown[];
       page_errors?: unknown[];
       failed_requests?: unknown[];
@@ -134,9 +134,9 @@ describe("page_events on the receipt", () => {
     });
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
-    expect(receipt.page_events).toBeUndefined();
-    expect(Object.keys(receipt)).not.toContain("page_events");
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.page_events).toBeUndefined();
+    expect(Object.keys(stepRecord)).not.toContain("page_events");
   });
 });

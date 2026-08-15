@@ -27,9 +27,9 @@ import {
 //      features/promote.feature being byte-identical, and both `nuka run`
 //      invocations reporting the same scenario status
 //   2. named capture + zod validate `result` — asserted as: the typed
-//      receipt's result has the server response's extra, undeclared key
+//      step record's result has the server response's extra, undeclared key
 //      stripped (zod's parsed output, not the raw response); the compat
-//      step's own receipt result is always null
+//      step's own step record result is always null
 //   3. only the typed side runs standalone via `nuka do`; the compat step
 //      is refused by name (docs/spec.md "Compat steps")
 //
@@ -42,7 +42,7 @@ function startTestServer(): Promise<{ server: Server; baseURL: string }> {
     const server = createServer((req, res) => {
       if (req.method === "POST" && req.url === "/projects") {
         res.writeHead(200, { "content-type": "application/json" });
-        // `leaked` only ever reaches a receipt's `result` if something
+        // `leaked` only ever reaches a step record's `result` if something
         // skips the typed side's zod `returns` schema. It isn't an
         // argument or a fixture, only ever present on the wire — that's
         // what makes claim 2 ("result... is something the tool validated")
@@ -75,9 +75,9 @@ async function pointConfigAt(rootDir: string, baseURL: string): Promise<void> {
   );
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("README claim 1: the feature line doesn't change across the promotion", () => {
@@ -143,7 +143,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
     expect(typedRecord.status).toBe("passed");
   });
 
-  it("only the typed step's receipt carries a validated result; the compat step's receipt result is always null (claim 2)", async () => {
+  it("only the typed step's step record carries a validated result; the compat step's step record result is always null (claim 2)", async () => {
     const glueStdout = createCaptureSink();
     await runCli(["run", "features/promote.feature"], {
       rootDir: glueRoot,
@@ -151,8 +151,8 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
       stderr: createCaptureSink(),
     });
     const glueRecord = JSON.parse(nonEmptyLines(glueStdout.text())[0]!);
-    const glueReceipt = await readReceipt(glueRoot, glueRecord.steps[0].receipt);
-    expect(glueReceipt.result).toBeNull();
+    const glueStepRecord = await readStepRecord(glueRoot, glueRecord.steps[0].record);
+    expect(glueStepRecord.result).toBeNull();
 
     const typedStdout = createCaptureSink();
     await runCli(["run", "features/promote.feature"], {
@@ -161,13 +161,13 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
       stderr: createCaptureSink(),
     });
     const typedRecord = JSON.parse(nonEmptyLines(typedStdout.text())[0]!);
-    const typedReceipt = await readReceipt(typedRoot, typedRecord.steps[0].receipt);
+    const typedStepRecord = await readStepRecord(typedRoot, typedRecord.steps[0].record);
     // The server's response includes an extra `leaked` key that isn't in
     // the `returns` schema; if `result` were the raw response, it would
     // include it. It's absent because `result` is zod's *parsed* output
     // (src/run/run-scenario.ts: `result = returnsResult.data`), not the
     // step's raw return value — this is what "validated" cashes out to.
-    expect(typedReceipt.result).toEqual({ id: "p-1", name: "acme" });
+    expect(typedStepRecord.result).toEqual({ id: "p-1", name: "acme" });
   });
 });
 
@@ -196,15 +196,15 @@ describe("README claim 3: `nuka do` runs the typed step standalone and refuses t
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.status).toBe("ok");
-      expect(receipt.result).toEqual({ id: "p-1", name: "acme" });
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.result).toEqual({ id: "p-1", name: "acme" });
     } finally {
       await removeTempDir(rootDir);
     }
   });
 
-  it("`nuka do` refuses the compat step by name and writes no receipt", async () => {
+  it("`nuka do` refuses the compat step by name and writes no step record", async () => {
     const rootDir = await copyFixtureToTempDir("promotion-glue-project");
     try {
       await pointConfigAt(rootDir, baseURL);

@@ -33,6 +33,32 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## Unreleased
+
+Four breaking changes. Each entry says what to fix; why is in
+[CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+
+- **A step record's JSON changed field names and id prefix.** A script
+  reading a step record's or scenario record's JSON needs the current
+  names: `receipt_id` is now `record_id`, an id starts `step-` rather
+  than `rcpt-`, and a `used` entry's upstream key is `record`, not
+  `receipt`.
+- **`.nukadoko/` now splits into three directories, by purpose:
+  `records/`, `export/`, and `cache/`.** A step record's own directory is
+  now under `records/steps/<id>/`, a scenario record's under
+  `records/scenarios/<id>/`; the Allure and messages emitters now write
+  under `export/`; a session now lives under `cache/sessions/`.
+  `.nukadoko/` is gitignored working state, so the old directories can
+  simply be deleted; the next `nuka run` writes the new layout, nothing
+  needs migrating out of them.
+- **`--use` takes a `step-...` id now.** An id minted before this release
+  points at a directory layout the tool no longer reads; re-run the
+  producing step (`nuka do` or `nuka run`) to get one in the current
+  shape.
+- **An existing acceptance record needs re-creating.** `nuka run` the
+  feature again and `nuka accept` it. `nuka tend` names any acceptance
+  record it finds still in the old shape (`signoff-record-old-format`).
+
 ## 0.1.0 to 0.2.0
 
 Three breaking changes. Each entry says what to fix; why is in
@@ -70,8 +96,8 @@ Three breaking changes. Each entry says what to fix; why is in
   parentheses on `page`/`request`: they are values now, not functions. No
   codemod ships for this.
 - **`evidence.trace` moved off the scenario record onto each step's own
-  receipt.** Anything reading the scenario record's `evidence.trace` needs
-  to read the receipt of the step that opened a page instead.
+  record.** Anything reading the scenario record's `evidence.trace` needs
+  to read the step record of the step that opened a page instead.
 - **A sign-off record's filename now carries its condition.** Anything
   reading the old `<feature-basename>.<date>-<sha>.md` shape needs to read
   `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` instead.

@@ -44,7 +44,7 @@ describe("nuka run: messages.ndjson wiring", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes .nukadoko/messages.ndjson by default: every line parses, and every envelope kind this task's spec names is present", async () => {
+  it("writes .nukadoko/export/messages.ndjson by default: every line parses, and every envelope kind this task's spec names is present", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/passing.feature"], {
@@ -61,7 +61,7 @@ describe("nuka run: messages.ndjson wiring", () => {
     const stdoutLines = stdout.text().split("\n").filter((line) => line.length > 0);
     expect(stdoutLines).toHaveLength(1);
 
-    const output = path.join(rootDir, ".nukadoko", "messages.ndjson");
+    const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
     expect(existsSync(output)).toBe(true);
     const envelopes = await readEnvelopes(output);
     const kinds = envelopeKeys(envelopes);
@@ -104,7 +104,7 @@ describe("nuka run: messages.ndjson wiring", () => {
     expect(existsSync(output)).toBe(true);
     // The default location is untouched — the override moves the output,
     // it doesn't add a second copy.
-    expect(existsSync(path.join(rootDir, ".nukadoko", "messages.ndjson"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "export", "messages.ndjson"))).toBe(false);
   });
 
   it("writes no messages.ndjson at all for a run that selects zero pickles", async () => {
@@ -119,11 +119,11 @@ describe("nuka run: messages.ndjson wiring", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).toBe("");
     expect(stripRunProgressLines(stderr.text())).toBe("");
-    expect(existsSync(path.join(rootDir, ".nukadoko", "messages.ndjson"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "export", "messages.ndjson"))).toBe(false);
   });
 
   it("truncates on a second run to the same output: exactly one testRunStarted, not two", async () => {
-    const output = path.join(rootDir, ".nukadoko", "messages.ndjson");
+    const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
 
     const first = await runCli(["run", "features/passing.feature"], {
       rootDir,
@@ -154,7 +154,7 @@ describe("nuka run: messages.ndjson wiring", () => {
 
     expect(exitCode).toBe(1);
 
-    const output = path.join(rootDir, ".nukadoko", "messages.ndjson");
+    const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
     const envelopes = await readEnvelopes(output);
     const testRunFinished = envelopes.find(
       (envelope): envelope is { testRunFinished: { success: boolean } } => "testRunFinished" in envelope,

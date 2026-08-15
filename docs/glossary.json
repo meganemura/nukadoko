@@ -3,7 +3,7 @@
   "usage": [
     "jq -r '.terms[] | select(.en | index(\"contract\")) | .ja' docs/glossary.json",
     "jq -r '.terms[] | select(any(.en[]; test(\"wir\"; \"i\")))' docs/glossary.json",
-    "jq -r '.keep_english[] | select(.term == \"receipt\")' docs/glossary.json",
+    "jq -r '.keep_english[] | select(.term == \"step record\")' docs/glossary.json",
     "jq -r '.headings[\"docs/spec.ja.md\"]' docs/glossary.json"
   ],
   "terms": [
@@ -97,7 +97,7 @@
     {
       "en": ["absence claim", "claims absence"],
       "ja": "不在の主張",
-      "note": "receipt 上の値が対象の不在(visible: false、count: 0 など)を述べていること。対語は presence claim = 存在の主張。不在の主張には、それが未描画による見かけ上の不在ではないことを示す証拠が要る"
+      "note": "step record 上の値が対象の不在(visible: false、count: 0 など)を述べていること。対語は presence claim = 存在の主張。不在の主張には、それが未描画による見かけ上の不在ではないことを示す証拠が要る"
     },
     {
       "en": ["presence claim", "presence-claiming"],
@@ -146,7 +146,7 @@
     {
       "en": ["scope"],
       "ja": "スコープ",
-      "note": "docs/spec.md \"Fixtures\" の fixture の scenario/process scope で入った。config の options.scope や receipt の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
+      "note": "docs/spec.md \"Fixtures\" の fixture の scenario/process scope で入った。config の options.scope や step record の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
     },
     {
       "en": ["outcome"],
@@ -164,7 +164,22 @@
       "term": "step",
       "why": "Gherkin の行、defineStep で定義される単位そのものを指すドメイン語。訳すと概念との結び付きが失われる"
     },
-    { "term": "receipt", "why": "nukadoko 固有の中核データ構造。receipt.json と直接対応する" },
+    {
+      "term": "record",
+      "why": "step record と scenario record を、粒度を問わず包括して指す語。docs/spec.md \"Records\" の見出しの主題。単独の record と地の文で書くときは、どちらの粒度も指しうる文脈でのみ使う"
+    },
+    {
+      "term": "step record",
+      "why": "nukadoko 固有の中核データ構造。record.json と直接対応する"
+    },
+    {
+      "term": "scenario record",
+      "why": "step record と同じ問いを scenario 粒度で答える記録。ScenarioRecord 型、scenario record 自身の record.json と直接対応する"
+    },
+    {
+      "term": "acceptance record",
+      "why": "nuka accept が step record と scenario record から組み立てて書く記録の呼び名。sign-off という行為が残す実体を指す"
+    },
     { "term": "scenario", "why": "Gherkin の Scenario: キーワードと直接対応する" },
     {
       "term": "agent",
@@ -179,7 +194,7 @@
     { "term": "session", "why": "session / --session、nuka session コマンドと直接対応する" },
     { "term": "secret", "why": "secrets config、{{secret.NAME}} token と直接対応する" },
     { "term": "compat", "why": "nukadoko/compat という実在のサブパス名そのもの" },
-    { "term": "evidence", "why": "receipt の evidence フィールドと直接対応する" },
+    { "term": "evidence", "why": "step record の evidence フィールドと直接対応する" },
     { "term": "trace", "why": "Playwright の trace (trace.zip) という具体物を指す" },
     { "term": "World", "why": "cucumber-js 由来の this オブジェクトの正式名称。固有名詞的に大文字のまま" },
     { "term": "harness", "why": "3ファイルとも英語のまま。README.ja.md だけ ハーネス だったが統一済み" },
@@ -187,17 +202,25 @@
     { "term": "pickle", "why": "cucumber/gherkin のドメイン語" },
     { "term": "glue", "why": "cucumber/gherkin のドメイン語" },
     { "term": "gate", "why": "cucumber/gherkin のドメイン語" },
-    { "term": "observed", "why": "receipt のフィールド名と直接対応する" },
-    { "term": "provenance", "why": "receipt のフィールドが答える性質の名前として英語のまま" },
+    { "term": "observed", "why": "step record のフィールド名と直接対応する" },
+    { "term": "provenance", "why": "step record のフィールドが答える性質の名前として英語のまま" },
     {
       "term": "mutate",
       "why": "mutates フィールド名と地続きの動詞として常に英語。「状態を mutate する」のように活用させずに使う"
     },
     { "term": "sign-off", "why": "nuka accept が書く記録の呼び名。常にハイフン付きの英語" },
+    {
+      "term": "Export",
+      "why": "docs/spec.md \"Artifacts\" の成果物分類表にある行名。allure-results/ と messages.ndjson を指す。TypeScript の export キーワード(小文字、常に英語のまま)とは別の語で、行名としては大文字のまま訳さない"
+    },
+    {
+      "term": "Cache",
+      "why": "docs/spec.md \"Artifacts\" の成果物分類表にある行名。cache/sessions/ を指す。記録ではなく避けた作業を表す行名で、大文字のまま訳さない"
+    },
     { "term": "schema", "why": "zod schema、args / returns の schema と直接対応する" },
     {
       "term": "poll",
-      "why": "poll fixture と receipt の polls フィールドに直接対応する API 名。散文の「待つ / 待ち」とは書き分ける(待ちという行為の話か、その API の話かを読み手が区別できる必要がある)"
+      "why": "poll fixture と step record の polls フィールドに直接対応する API 名。散文の「待つ / 待ち」とは書き分ける(待ちという行為の話か、その API の話かを読み手が区別できる必要がある)"
     },
     {
       "term": "readiness",
@@ -214,7 +237,17 @@
   ],
   "identifiers": {
     "rule": "コード識別子と CLI コマンド名は常に原文のスペルのまま、バッククォート付きで書く",
-    "examples": ["defineStep", "from", "mutates", "ctx", "nuka check", "nuka tend"],
+    "examples": [
+      "defineStep",
+      "from",
+      "mutates",
+      "ctx",
+      "nuka check",
+      "nuka tend",
+      "record_id",
+      "record.json",
+      "step-"
+    ],
     "why": "語彙としての選択ではなく、実際にそのままのスペルで動くコードだから。例外なし"
   },
   "headings": {
@@ -226,8 +259,8 @@
     "docs/spec.ja.md": {
       "rule": "見出しの主題が keep_english に載っている語なら英語のまま。説明的な句なら日本語化。どちらとも言い切れない英語の術語が単独で立つ場合だけ、丸括弧で短い日本語の言い換えを添える",
       "examples": {
-        "english": ["Context API", "Receipt", "Sign-off", "Allure emitter", "CLI summary"],
-        "japanese": ["nukadoko とは", "課題", "キーワードの意味論", "実行", "ロードマップ"],
+        "english": ["Context API", "Records", "Sign-off", "Allure emitter", "CLI summary"],
+        "japanese": ["nukadoko とは", "課題", "成果物", "キーワードの意味論", "実行", "ロードマップ"],
         "parenthetical": [
           "Compat steps(移行の扉)",
           "Scenario(スクリプト化された経路)",

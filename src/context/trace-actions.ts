@@ -5,8 +5,8 @@ import { inflateRawSync } from "node:zlib";
 import type { WritableSink } from "../cli/writable-sink.js";
 
 // Responsibility: turn one step's own trace.zip (browser-evidence.ts's
-// per-step chunk, opened/closed by create-context.ts) into the receipt's
-// `actions` field — every Playwright call
+// per-step chunk, opened/closed by create-context.ts) into the step
+// record's `actions` field — every Playwright call
 // that step made through `ctx.page()`, `expect` waits included, without a
 // step ever needing an `expect` fixture of its own (docs/spec.md's design:
 // trace records a call at Playwright's own layer, underneath whichever
@@ -35,15 +35,15 @@ import type { WritableSink } from "../cli/writable-sink.js";
 //
 // Any parse failure here (corrupt zip, a missing `trace.trace` entry, a
 // malformed JSON line, a header missing `wallTime`/`monotonicTime`) means
-// `actions` is silently omitted from the receipt — the same "measurement
+// `actions` is silently omitted from the step record — the same "measurement
 // must never break execution" rule `observed`/`page_events` already follow;
 // a step's own status is never at the mercy of how well this file happens
 // to parse. The one exception is a trace format version this build does not
 // know how to read (`KNOWN_TRACE_VERSIONS` below): that is not a parse bug
 // to swallow quietly, since the trace itself exists and is readable enough
 // to name its own version, so `collectTraceEvidence`'s caller is told once,
-// on stderr, rather than a `status: "ok"` receipt silently missing a field a
-// reader has no way to know was ever expected. Guessing at a shape this
+// on stderr, rather than a `status: "ok"` step record silently missing a
+// field a reader has no way to know was ever expected. Guessing at a shape this
 // build has never verified would violate the same rule (CLAUDE.md: "Do not
 // automate a verdict on top of a proxy" — a version this code has not
 // checked against is exactly that), so nothing is inferred; the version is
@@ -58,13 +58,14 @@ const KNOWN_TRACE_VERSIONS: readonly number[] = [8];
 
 /** Capped the same way `page_events` is (src/context/page-events.ts) — a
  * step that clicks through a long flow can rack up hundreds of trace calls,
- * and a receipt trying to hold all of them stops being something a reader
- * can open. The full, uncapped list always still exists in trace.zip. */
+ * and a step record trying to hold all of them stops being something a
+ * reader can open. The full, uncapped list always still exists in
+ * trace.zip. */
 const MAX_ACTIONS = 100;
 
 /** One Playwright call this step made, read out of its own trace chunk
- * (docs/spec.md "Receipts"). `params` beyond the five below are never
- * carried onto the receipt (this file's own header, allowlist reasoning) —
+ * (docs/spec.md "Records"). `params` beyond the five below are never
+ * carried onto the step record (this file's own header, allowlist reasoning) —
  * `setContent`'s own HTML body is the case that motivated it: a value that
  * can run to kilobytes, next to nothing a reader needs that trace.zip
  * doesn't already have in full. */
@@ -103,12 +104,13 @@ export type TraceActionsParseResult =
   | { readonly kind: "unknown-version"; readonly version: number }
   | { readonly kind: "unreadable" };
 
-/** The receipt-shaped result of reading one step's own trace.zip — `trace`
- * mirrors `EvidenceMeta.trace` (src/receipt/types.ts), `actions`/`truncated`
- * are new top-level receipt fields, never nested under `evidence`:
- * `evidence` names files on disk, `actions`
+/** The step-record-shaped result of reading one step's own trace.zip —
+ * `trace` mirrors `EvidenceMeta.trace` (src/record/types.ts),
+ * `actions`/`truncated` are new top-level step record fields, never nested
+ * under `evidence`: `evidence` names files on disk, `actions`
  * is data derived from one of them. All three are omitted, never present-
- * but-empty, matching every other optional receipt field's own convention. */
+ * but-empty, matching every other optional step record field's own
+ * convention. */
 export interface TraceEvidence {
   readonly trace?: string;
   readonly actions?: readonly ActionEntry[];
@@ -132,7 +134,7 @@ const MAX_ZIP_COMMENT_LENGTH = 65535;
  * Throws when none is found; the caller (`readZipEntry`) is wrapped in a
  * try/catch that turns this, like any other malformed-zip failure, into
  * `{ kind: "unreadable" }` rather than a thrown exception reaching a step's
- * own receipt. */
+ * own step record. */
 function findEndOfCentralDirectory(buffer: Buffer): number {
   const searchFloor = Math.max(0, buffer.length - EOCD_FIXED_SIZE - MAX_ZIP_COMMENT_LENGTH);
   for (let offset = buffer.length - EOCD_FIXED_SIZE; offset >= searchFloor; offset--) {
@@ -252,13 +254,13 @@ function readAfter(entry: Record<string, unknown>): TraceAfter | undefined {
   return undefined;
 }
 
-/** `before.params`, narrowed to the five keys a receipt is allowed to
+/** `before.params`, narrowed to the five keys a step record is allowed to
  * carry — every other key (a `setContent`
  * call's own HTML body, for one) is dropped here, not merely left off the
  * `ActionEntry` type, so nothing beyond this list ever exists in memory as
- * part of a receipt-bound value. `timeout` on the trace side becomes
- * `timeout_ms` here, and `isNot` becomes `is_not`, matching the receipt's
- * own snake_case field convention (`http_reads`, `waited_ms`, ...). */
+ * part of a step-record-bound value. `timeout` on the trace side becomes
+ * `timeout_ms` here, and `isNot` becomes `is_not`, matching the step
+ * record's own snake_case field convention (`http_reads`, `waited_ms`, ...). */
 function allowedParams(
   params: Record<string, unknown> | undefined,
 ): Pick<ActionEntry, "expression" | "selector" | "url" | "is_not" | "timeout_ms"> {
@@ -361,25 +363,25 @@ export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseRe
   };
 }
 
-/** Reads `receiptDir/fileName` (when present) and turns it into this step's
- * (or hook invocation's) own
+/** Reads `stepRecordDir/fileName` (when present) and turns it into this
+ * step's (or hook invocation's) own
  * `trace`/`actions`/`truncated` fields. Called only after the file is known
  * to already be fully written — create-context.ts's `endStep()`/`dispose()`
- * close the current chunk before its receipt/hook record is ever built,
+ * close the current chunk before its step record/hook record is ever built,
  * exactly so this read never races that write. `undefined` result fields,
  * never thrown errors: a missing or unreadable trace file costs `actions`
  * (and `trace` itself, when the file plain doesn't exist), never the
- * receipt or hook record it belongs to (this file's own header).
+ * step record or hook record it belongs to (this file's own header).
  * `fileName` defaults to `"trace.zip"` — every step call site relies on
  * that default; a hook call site (run-scenario.ts) always names its own
  * file explicitly, since more than one can share a scenario's evidence
  * dir. */
 export async function collectTraceEvidence(
-  receiptDir: string,
+  stepRecordDir: string,
   onUnknownVersion: (version: number) => void,
   fileName = "trace.zip",
 ): Promise<TraceEvidence> {
-  const traceZipPath = path.join(receiptDir, fileName);
+  const traceZipPath = path.join(stepRecordDir, fileName);
   if (!existsSync(traceZipPath)) {
     return {};
   }

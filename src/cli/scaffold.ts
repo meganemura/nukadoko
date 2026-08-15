@@ -26,10 +26,10 @@ import type { WritableSink } from "./writable-sink.js";
 // later steps cite" alone (docs/spec.md "Typed steps"): that framing is
 // what a first reader adopts, and it drops every value the step's own
 // correctness depends on but nothing downstream reads — which is exactly
-// the set a receipt gets interrogated for once a run has gone wrong: a
+// the set a step record gets interrogated for once a run has gone wrong: a
 // step that sends a date nothing cites, computed in the wrong timezone,
-// leaves a receipt that cannot say which date it sent, and the answer has
-// to be reconstructed from someone else's error message instead.
+// leaves a step record that cannot say which date it sent, and the answer
+// has to be reconstructed from someone else's error message instead.
 //
 // The absence line right beneath it is the same idea, sharpened by an
 // incident: `visible: false` and `count: 0` erase the difference between
@@ -71,7 +71,7 @@ function stepTemplate(name: string): string {
     "  returns: z.object({",
     "    // Not only what later steps cite: also the values this step's own",
     "    // correctness rests on (the date it computed, the id it picked)",
-    "    // because a receipt can only be read for what it was given.",
+    "    // because a step record can only be read for what it was given.",
     "    // If a result can be an absence (false, 0, an empty string), return",
     "    // proof the read was valid too, not the absence on its own.",
     '    // id: z.string().describe("what this step produced, and what a failure here would be diagnosed from"),',

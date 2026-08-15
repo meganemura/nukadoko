@@ -5,7 +5,7 @@ import createProject from "./create-project.js";
 
 // fb3-used-result task spec: same two-upstream `from` shape as
 // archive-project-with-owner.ts, but always fails — proves `--use`'s own
-// `used[].result` is populated for every upstream on a failed receipt, not
+// `used[].result` is populated for every upstream on a failed step record, not
 // just the first, exercising the disk-read path (resolve-use.ts) rather than
 // a scenario's chain.
 export default defineStep({

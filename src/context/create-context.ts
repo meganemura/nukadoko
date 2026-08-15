@@ -4,7 +4,7 @@ import { request as playwrightRequest, type APIRequestContext, type Page } from 
 import type { z } from "zod";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext, StepFixtures } from "../context.js";
-import type { PollRecord, ScreenshotEntry, SectionEntry } from "../receipt/types.js";
+import type { PollRecord, ScreenshotEntry, SectionEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
@@ -38,7 +38,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // the `polls` collector and binds the two together to produce `ctx.poll`.
 // docs/spec.md's Context API boundary rule (`ctx` carries only what the
 // executor must inject) is the whole point: docs/spec.md's trust model
-// requires that a step cannot control its own receipt or evidence
+// requires that a step cannot control its own step record or evidence
 // collection, so nothing evidence-related is exposed on the object passed
 // into `run`; only the executor (src/cli/do.ts), which never hands
 // `dispose` onward, can call it.
@@ -49,7 +49,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 //
 // `nuka run` shares one `ctx` across every step of a pickle (docs/spec.md
 // "Running": "Steps in one pickle share one context"), but each step's
-// http.jsonl still belongs to that step's own receipt dir, while a browser's
+// http.jsonl still belongs to that step's own step record dir, while a browser's
 // trace/screenshots belong to the scenario as a whole. `beginStep` on the
 // handle (never on `ctx` itself — sink
 // switching stays executor-only, same rule as `dispose`) is the minimal seam
@@ -72,21 +72,21 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 //
 // `beginStep` resets `sections` the same way: `nuka run` shares one `ctx`, hence one `sections` collector,
 // across every step of a pickle, so without this reset a later step's
-// receipt would start out already carrying whichever labels an earlier
+// step record would start out already carrying whichever labels an earlier
 // step called `ctx.section` with — the same bleed-across-steps bug this
 // reset already prevents for `observed`/`used`.
 //
 // `beginStep` resets `polls` the same way: one
 // `ctx.poll` collector per `ctx`, shared across every step of a pickle just
-// like `sections`, so without this reset a later step's receipt would start
-// out already carrying whichever polls an earlier step made — the same
-// bleed-across-steps bug this reset already prevents for
+// like `sections`, so without this reset a later step's step record would
+// start out already carrying whichever polls an earlier step made — the
+// same bleed-across-steps bug this reset already prevents for
 // `observed`/`used`/`sections`.
 //
 // `beginStep` resets `pageEvents` the same way again: one collector per `ctx`, created once here and handed to
 // browser-evidence.ts's launch the same way `observed` is, so a later
-// step's receipt does not inherit console/uncaught/failed-request evidence
-// an earlier step's page already produced. The context's own `console`/
+// step's step record does not inherit console/uncaught/failed-request
+// evidence an earlier step's page already produced. The context's own `console`/
 // `weberror`/`requestfailed` subscriptions (browser-evidence.ts) are set up
 // once, at context creation, and outlive every reset — `nuka do` never
 // calls `beginStep` at all, so its single collector simply accumulates for
@@ -94,7 +94,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 //
 // `beginStep` resets `httpOmitted` the same way again: one collector per `ctx`, created once here and
 // handed to browser-evidence.ts's launch the same way `observed`/
-// `pageEvents` already are, so a later step's receipt does not inherit an
+// `pageEvents` already are, so a later step's step record does not inherit an
 // earlier step's own dropped-asset counts. `ctx.page()`'s own launch call
 // (below) also now hands the browser launcher this ctx's current
 // `httpLogDir`/`secrets` — the same two values `ctx.request()` already
@@ -112,11 +112,12 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 //
 // `resultOf`: the *lookup* — "does
 // this Step object have a most-recent successful result, and under which
-// receipt id" — is the executor's own knowledge (run-scenario.ts's chain, or
+// step record id" — is the executor's own knowledge (run-scenario.ts's chain, or
 // `nuka do`'s always-`undefined` reader), passed in here as `options.resultOf`
 // and never computed by this module. What this module owns is the *wrapper*:
 // `ctx.resultOf` calls that lookup and, only when it actually returns a
-// value, records the receipt id (and the step name that receipt records) on
+// value, records the step record id (and the step name that step record
+// records) on
 // the `used` collector below — the same
 // "step cannot see or reset its own observation" trust rule as `observed`,
 // applied to provenance instead of network calls. `usedSnapshot()` (the
@@ -136,7 +137,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // "Chaining steps" describes: a step file reached through a second, separate
 // `await import()` produces a distinct object that can never match anything
 // in the vocabulary. `recordUsed` (the handle's own executor-only write side,
-// below) exists for the *other* way a receipt becomes provenance: a `from`
+// below) exists for the *other* way a step record becomes provenance: a `from`
 // injection (run-scenario.ts) reads the exact same per-pickle chain
 // `resultOf`'s own reader does, but from outside any step's `run()` — before
 // it is even called — so it cannot go through the `ctx.resultOf` wrapper at
@@ -148,7 +149,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // `requireEnv` records the name it was given on the `envReads` collector
 // below *before* throwing `MissingEnvError` — a step whose execution failed
 // for a missing key still
-// gets a receipt showing what it asked for, which matters most exactly
+// gets a step record showing what it asked for, which matters most exactly
 // when a step fails this way. Only `requireEnv` writes to this collector:
 // a step that reads `ctx.env[name]` directly never passes through any call
 // this module owns, so that read leaves no trace here, on purpose —
@@ -162,7 +163,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // for this whole ctx's lifetime; it is now one chunk per *trace-recorded
 // boundary*, opened lazily on that boundary's own first `ctx.page()` call
 // and closed right after that boundary's own execution finishes — before
-// its receipt/hook record is built, so `evidence.trace`/`ScenarioHookRecord.
+// its step record/hook record is built, so `evidence.trace`/`ScenarioHookRecord.
 // trace` can say whether that boundary's own chunk actually exists.
 // `pendingChunkTitle`/`pendingChunkFileName`/`chunkOpen` below are the
 // bookkeeping that makes that lazy-open-eager-close shape work without a
@@ -194,7 +195,7 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // `pendingChunkFileName` is the second half of
 // that same per-boundary state, alongside `pendingChunkTitle` — needed
 // because a step's own chunk always writes to `"trace.zip"` inside that
-// step's own receipt dir (a directory no other chunk ever shares), while
+// step's own step record dir (a directory no other chunk ever shares), while
 // several hook invocations can share one scenario evidence dir (a scenario
 // can register more than one Before/After hook, and AfterStep runs once per
 // executed step), so `"trace.zip"` alone would let a later hook invocation
@@ -261,7 +262,7 @@ export interface StepContextHandle {
   ctx: StepContext;
   /** Closes whatever this execution opened (browser, request context),
    * reports which evidence files it actually produced (docs/spec.md
-   * "Receipts": only files that exist), and hands back the storageState (if
+   * "Records": only files that exist), and hands back the storageState (if
    * any) the executor should persist for this run's session. Takes no
    * `status`: its only past use was
    * passing it on to `browserHandle.finalize`, which no longer takes one
@@ -274,9 +275,9 @@ export interface StepContextHandle {
    * `nuka run` since the last `beginStep`) — GET/HEAD as reads, anything
    * else as writes, through `ctx.request()` and the page alike. Never exposed on `ctx`. */
   observedCounts(): ObservedCounts;
-  /** Executor-only: every receipt this execution actually read a value from
-   * since the current step boundary began — through `ctx.resultOf` or a
-   * `from` injection alike — deduplicated by receipt id, in read order.
+  /** Executor-only: every step record this execution actually read a value
+   * from since the current step boundary began — through `ctx.resultOf` or a
+   * `from` injection alike — deduplicated by step record id, in read order.
    * Never exposed on `ctx` — same rule as `observedCounts()`. */
   usedSnapshot(): UsedEntryWithResult[];
   /** Executor-only: records one provenance read the same `used` collector
@@ -288,7 +289,7 @@ export interface StepContextHandle {
    * this, immediately after actually reading the value it names. `result`
    * is the upstream's own full validated result
    * — carried the same way `ctx.resultOf`'s own wrapper below already does. */
-  recordUsed(receiptId: string, stepName: string, result: unknown): void;
+  recordUsed(recordId: string, stepName: string, result: unknown): void;
   /** Executor-only: the `ctx.section` calls made since the current step
    * boundary began, in call order, each entry carrying `at`. Never exposed on
    * `ctx` — same rule as `observedCounts()`/`usedSnapshot()`. */
@@ -335,7 +336,7 @@ export interface StepContextHandle {
    * running it, so a pickle's shared ctx still logs and tallies each step's
    * own network calls, provenance reads, section labels, finished polls,
    * required env names, and page-origin evidence under that step's own
-   * receipt dir. Also closes whatever trace chunk the *previous* boundary
+   * step record dir. Also closes whatever trace chunk the *previous* boundary
    * had open (this file's own header) and, when `title`
    * is given, remembers it (and `chunkFileName`) as the new boundary's own
    * chunk title/output file for the next `ctx.page()` call to open lazily.
@@ -355,12 +356,15 @@ export interface StepContextHandle {
    * boundary's own trace chunk,
    * if one is open, writing it to the current boundary's own directory (the
    * `dir` its own `beginStep` call was given, joined with `chunkFileName`)
-   * *before* that step's receipt (or that hook invocation's own record) is
+   * *before* that step's step record (or that hook invocation's own record)
+   * is
    * built — the reason this exists as its own call rather than folding into
-   * the *next* `beginStep` (this file's own header: a receipt/record is
+   * the *next* `beginStep` (this file's own header: a step record/scenario
+   * record is
    * built and written well before the next boundary's `beginStep` ever
    * runs, so waiting for that call would mean `trace` could never
-   * truthfully be set on the receipt/record that chunk actually belongs
+   * truthfully be set on the step record/scenario record that chunk
+   * actually belongs
    * to). A no-op when no chunk is open (no browser was ever launched this
    * boundary, or this ctx has no browser handle at all). Never exposed on
    * `ctx`. */
@@ -395,11 +399,11 @@ export interface CreateStepContextOptions {
    * under `nuka do`") without every caller that doesn't care about chaining
    * having to say so. `nuka run`'s executor (run-scenario.ts) passes one
    * backed by the current pickle's own chain instead. `stepName` is the
-   * step name that receipt itself records —
-   * carried alongside `receiptId` so `used` can cite it without a second
-   * lookup, per docs/spec.md "Receipts": each `used` entry is
-   * `{ "receipt": ..., "step": ... }`. */
-  resultOf?: (step: Step) => { result: unknown; receiptId: string; stepName: string } | undefined;
+   * step name that step record itself records —
+   * carried alongside `recordId` so `used` can cite it without a second
+   * lookup, per docs/spec.md "Records": each `used` entry is
+   * `{ "record": ..., "step": ... }`. */
+  resultOf?: (step: Step) => { result: unknown; recordId: string; stepName: string } | undefined;
   /** Whether `step` is one discovery actually registered — checked by
    * `ctx.resultOf` before even attempting the
    * `resultOf` lookup above; a `Step` this rejects throws
@@ -449,7 +453,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // always `"trace.zip"` until a hook boundary
   // (run-scenario.ts) names its own, since several hook invocations can
   // share one scenario evidence dir where a step's own chunk never shares
-  // its receipt dir with anything else (this file's own header). Only
+  // its step record dir with anything else (this file's own header). Only
   // meaningful when `pendingChunkTitle !== undefined`; `beginStep` is the
   // only thing that ever changes it.
   let pendingChunkFileName = "trace.zip";
@@ -528,8 +532,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     env,
     requireEnv(name: string): string {
       // Recorded first, before the presence check below can throw: a run
-      // that fails for a missing key still gets a receipt showing what it
-      // asked for, and
+      // that fails for a missing key still gets a step record showing what
+      // it asked for, and
       // this is the one call site the library controls, so a name recorded
       // here is a real measurement, not a claim. Name only, never the
       // value — a value can be a secret.
@@ -639,7 +643,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // returned `undefined` leaves no
       // trace). `entry.result` is carried alongside the same way a `from`
       // injection's own `recordUsed` call does.
-      used.record(entry.receiptId, entry.stepName, entry.result);
+      used.record(entry.recordId, entry.stepName, entry.result);
       return entry.result as z.infer<S["returns"]>;
     },
     section(label: string): void {
@@ -688,13 +692,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // to write it: `endStepChunk` swallows its own failure (the browser/
       // context can be gone by the time it runs), so this must be checked
       // the same way http.jsonl is below rather than assumed (docs/spec.md
-      // "Receipts": evidence lists only files that exist). `httpLogDir`/
+      // "Records": evidence lists only files that exist). `httpLogDir`/
       // `pendingChunkFileName`, not `evidenceDir`/`"trace.zip"`: the same
       // directory and file name `closeCurrentChunk` just wrote to, which for
       // `nuka run`'s own scenario-level `dispose()` this field is not
       // actually read from (run-scenario.ts builds `ScenarioRecord.evidence`
       // from `screenshots` alone) — kept accurate anyway, since `nuka do`'s
-      // own receipt does read it, and `pendingChunkFileName` stays
+      // own step record does read it, and `pendingChunkFileName` stays
       // `"trace.zip"` for `nuka do` regardless (it never calls `beginStep`).
       if (existsSync(path.join(httpLogDir, pendingChunkFileName))) {
         evidence.trace = pendingChunkFileName;
@@ -711,14 +715,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       } catch {
         // A step can dispose its own request context before returning;
         // losing this snapshot must not block teardown below, nor cost the
-        // receipt (see DisposeResult's doc comment: `undefined` here means
+        // step record (see DisposeResult's doc comment: `undefined` here means
         // "leave the existing session file untouched", never "clear it").
       }
       try {
         await requestContext.dispose();
       } catch {
         // As with browser teardown above, losing the request context's own
-        // dispose() is not a reason to lose the receipt; http.jsonl is
+        // dispose() is not a reason to lose the step record; http.jsonl is
         // written incrementally as calls happen, so it is unaffected by a
         // dispose() failure here.
       }
@@ -733,8 +737,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // directory is *current* at dispose time. For `do` that is always
     // `evidenceDir` (it never calls `beginStep`); for `nuka run`, dispose()
     // only ever runs once, at the whole scenario's end, so this field is not
-    // what a step's own receipt relies on — the executor checks each step's
-    // own receipt dir directly, right after that step finishes, before the
+    // what a step's own step record relies on — the executor checks each
+    // step's
+    // own step record dir directly, right after that step finishes, before the
     // log dir advances again.
     if (existsSync(path.join(httpLogDir, "http.jsonl"))) {
       evidence.http = "http.jsonl";
@@ -769,8 +774,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return used.snapshot();
   }
 
-  function recordUsed(receiptId: string, stepName: string, result: unknown): void {
-    used.record(receiptId, stepName, result);
+  function recordUsed(recordId: string, stepName: string, result: unknown): void {
+    used.record(recordId, stepName, result);
   }
 
   function sectionsSnapshot(): SectionEntry[] {

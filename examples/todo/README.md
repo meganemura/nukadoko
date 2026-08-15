@@ -106,7 +106,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
 
 ```json
 {
-  "receipt_id": "rcpt-20260802-113336-cyfi",
+  "record_id": "step-20260802-113336-cyfi",
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },
@@ -117,7 +117,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
 ```
 
 (`evidence`, `environment`, `session`, and the timestamps are trimmed above
-for space — the real receipt on your terminal has them too.) Read `result`,
+for space — the real step record on your terminal has them too.) Read `result`,
 decide the next call: that loop is what `nuka do` is for, and it's the same
 loop whether the vocabulary is complete or, as here, missing something.
 
@@ -241,7 +241,7 @@ exit `1`. The first scenario record's first step:
 ```
 
 The rest of that scenario's steps come back `"skipped"` — a step that never
-began is not citable as evidence, so it gets no receipt of its own (see
+began is not citable as evidence, so it gets no step record of its own (see
 ["Running"](../../docs/spec.md#scenarios-the-scripted-path)). The two
 scenarios after it fail the same way, each at its own first step.
 
@@ -259,7 +259,7 @@ has the same tool it had in Part 1 — run the one suspect step on its own:
 nuka do add-todo --args '{"title":"Buy milk"}'
 ```
 
-Same failure, same field, in isolation. That receipt is where the trail
+Same failure, same field, in isolation. That step record is where the trail
 ends — it says *what broke*, not *why*; finding out the "why" means actually
 looking at what changed, the same way a human would. Here that's one line
 in `app/server.ts`: the API's text field is now called `name`, not `title`.
@@ -297,9 +297,9 @@ nuka run features/todo.feature
 
 Green again — exit `0`. That green scenario run, not the `nuka do` call
 above, is the proof: docs/spec.md puts it as "the proof is the repaired
-scenario running green ... [the exploration receipts] are the narrative, not
+scenario running green ... [the exploration step records] are the narrative, not
 the proof." A PR shipping this fix cites that run; it may quote the failing
-receipt above as the story of how the fix was found, the same way this
+step record above as the story of how the fix was found, the same way this
 walkthrough just did.
 
 The edits above are yours to make and discard — this directory's committed

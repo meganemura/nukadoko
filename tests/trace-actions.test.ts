@@ -169,7 +169,7 @@ describe("parseTraceActions", () => {
         url: "http://example.test/kept",
         isNot: true,
         timeout: 1000,
-        html: "<html>this must never reach a receipt</html>",
+        html: "<html>this must never reach a step record</html>",
         someOtherField: "also dropped",
       },
       startTime: 10,
@@ -197,7 +197,7 @@ describe("parseTraceActions", () => {
     const serialized = JSON.stringify(result.actions);
     expect(serialized).not.toContain("html");
     expect(serialized).not.toContain("someOtherField");
-    expect(serialized).not.toContain("this must never reach a receipt");
+    expect(serialized).not.toContain("this must never reach a step record");
   });
 
   it("caps at 100 actions and reports the true total on truncatedCount", () => {

@@ -5,14 +5,14 @@ import type { Envelope } from "@cucumber/messages";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../src/report/messages/emitter.js";
-import type { Receipt } from "../src/receipt/types.js";
+import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 import { readOwnVersion } from "../src/version.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: integration tests (this task's spec, test item 2) —
 // drives the real `createMessagesEmitter` end to end against fixture
-// record.json/receipt.json data (built here as plain objects, not by
+// record.json/step record.json data (built here as plain objects, not by
 // actually running a scenario) and reads the real NDJSON file it writes
 // back off disk, one `JSON.parse` per line. No `.feature` file on disk is
 // needed: `parseFeatureSource` takes source text directly.
@@ -43,10 +43,11 @@ const SECOND_FEATURE_SOURCE = `Feature: Shipping
     Given a carrier is chosen
 `;
 
-function writeReceiptFile(rootDir: string, receipt: Receipt): void {
-  const dir = path.join(rootDir, ".nukadoko", "receipts", receipt.receipt_id);
+function writeStepRecordFile(rootDir: string, stepRecord: StepRecord): void {
+  const dir = path.join(rootDir, ".nukadoko", "records", "steps", stepRecord.record_id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
+  writeFileSync(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}
+`);
 }
 
 function readEnvelopes(output: string): Envelope[] {
@@ -65,7 +66,7 @@ describe("createMessagesEmitter", () => {
 
   beforeEach(() => {
     rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-messages-emitter-"));
-    output = path.join(rootDir, ".nukadoko", "report", "messages.ndjson");
+    output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
     sink = createCaptureSink();
     emitter = createMessagesEmitter({ output, rootDir, stderr: sink });
   });
@@ -88,12 +89,12 @@ describe("createMessagesEmitter", () => {
 
       emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
-      const receiptDir = path.join(rootDir, ".nukadoko", "receipts", "rcpt-1");
-      mkdirSync(receiptDir, { recursive: true });
-      writeFileSync(path.join(receiptDir, "note.txt"), "declared note");
+      const recordDir = path.join(rootDir, ".nukadoko", "records", "steps", "step-1");
+      mkdirSync(recordDir, { recursive: true });
+      writeFileSync(path.join(recordDir, "note.txt"), "declared note");
 
-      const receipt: Receipt = {
-        receipt_id: "rcpt-1",
+      const stepRecord: StepRecord = {
+        record_id: "step-1",
         step: "the cart has items",
         kind: "run",
         args: {},
@@ -104,19 +105,19 @@ describe("createMessagesEmitter", () => {
         scenario: "scn-1",
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
-        evidence: { dir: ".nukadoko/receipts/rcpt-1", screenshots: [], http: "http.jsonl" },
+        evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl" },
         observed: { http_reads: 1, http_writes: 0 },
         mutates: true,
         declared: { attachments: ["note.txt"], logs: ["did the thing"] },
       };
-      writeReceiptFile(rootDir, receipt);
+      writeStepRecordFile(rootDir, stepRecord);
 
-      const scenarioDir = path.join(rootDir, ".nukadoko", "scenarios", "scn-1");
+      const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
       writeFileSync(path.join(scenarioDir, "trace.zip"), "trace bytes");
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
 
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
       const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
       const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
       const record: ScenarioRecord = {
@@ -133,7 +134,7 @@ describe("createMessagesEmitter", () => {
         steps: [step],
         hooks: [beforeHook, afterHook],
         evidence: {
-          dir: ".nukadoko/scenarios/scn-1",
+          dir: ".nukadoko/records/scenarios/scn-1",
           trace: "trace.zip",
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.500Z" }],
         },
@@ -151,9 +152,9 @@ describe("createMessagesEmitter", () => {
         session: null,
         started_at: "2026-08-01T00:00:02.000Z",
         finished_at: "2026-08-01T00:00:02.500Z",
-        steps: [{ text: outlineRow.steps[0]!.text, status: "passed", receipt: null }],
+        steps: [{ text: outlineRow.steps[0]!.text, status: "passed", record: null }],
         hooks: [],
-        evidence: { dir: ".nukadoko/scenarios/scn-2", screenshots: [] },
+        evidence: { dir: ".nukadoko/records/scenarios/scn-2", screenshots: [] },
       };
       emitter.emitScenario({ record: record2, pickle: outlineRow });
 
@@ -341,8 +342,8 @@ describe("createMessagesEmitter", () => {
     const pickle = pickles[0]!;
     emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
-    const receipt: Receipt = {
-      receipt_id: "rcpt-missing-file",
+    const stepRecord: StepRecord = {
+      record_id: "step-missing-file",
       step: "the cart has items",
       kind: "run",
       args: {},
@@ -353,12 +354,12 @@ describe("createMessagesEmitter", () => {
       scenario: "scn-missing-file",
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
-      evidence: { dir: ".nukadoko/receipts/rcpt-missing-file", screenshots: [] },
+      evidence: { dir: ".nukadoko/records/steps/step-missing-file", screenshots: [] },
       observed: { http_reads: 0, http_writes: 0 },
       mutates: true,
       declared: { attachments: ["never-written.txt"] },
     };
-    writeReceiptFile(rootDir, receipt);
+    writeStepRecordFile(rootDir, stepRecord);
 
     const record: ScenarioRecord = {
       scenario_id: "scn-missing-file",
@@ -371,9 +372,9 @@ describe("createMessagesEmitter", () => {
       session: null,
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
-      steps: [{ text: "the cart has items", status: "passed", receipt: "rcpt-missing-file" }],
+      steps: [{ text: "the cart has items", status: "passed", record: "step-missing-file" }],
       hooks: [],
-      evidence: { dir: ".nukadoko/scenarios/scn-missing-file", screenshots: [] },
+      evidence: { dir: ".nukadoko/records/scenarios/scn-missing-file", screenshots: [] },
     };
 
     expect(() => emitter.emitScenario({ record, pickle })).not.toThrow();
@@ -421,9 +422,9 @@ describe("createMessagesEmitter", () => {
         session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
-        steps: [{ text: "the cart has items", status: "passed", receipt: null }],
+        steps: [{ text: "the cart has items", status: "passed", record: null }],
         hooks: [],
-        evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
       };
 
       expect(() => emitter.emitScenario({ record, pickle })).not.toThrow();

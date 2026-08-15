@@ -10,11 +10,11 @@ const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 // INNER project: the nukadoko project these steps drive with
-// `nuka run` as a subprocess. Its own `.nukadoko/allure-results/` is the
-// tree this file's own Then step asserts on, never the OUTER one this
+// `nuka run` as a subprocess. Its own `.nukadoko/export/allure-results/` is
+// the tree this file's own Then step asserts on, never the OUTER one this
 // suite writes for itself when the swap track runs it (that one is
-// selftest-suite/.nukadoko/allure-results/, and no step here ever reads
-// it; see selftest-suite/nukadoko.config.ts's own comment).
+// selftest-suite/.nukadoko/export/allure-results/, and no step here ever
+// reads it; see selftest-suite/nukadoko.config.ts's own comment).
 const fixtureProjectDir = path.resolve(here, "..", "..", "fixture-project");
 
 // The nukadoko CLI binary these steps drive the inner project with, always
@@ -60,7 +60,7 @@ Then("the fixture project's allure-results has one result file per executed step
   const lines = this.nukaStdout.split("\n").filter((line) => line.length > 0);
   const totalSteps = lines.reduce((sum, line) => sum + (JSON.parse(line).steps as unknown[]).length, 0);
 
-  const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "allure-results");
+  const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "export", "allure-results");
   const entries = await readdir(resultsDir);
   // `*-result.json` only: the same directory also holds `*-container.json`
   // (src/report/allure/writer.ts's writeGroup) and other allure assets,

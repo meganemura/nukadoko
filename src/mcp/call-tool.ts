@@ -7,7 +7,7 @@ import type { CallToolResult, Client } from "@modelcontextprotocol/client";
 // not a rejected promise (the spec's own "Error handling" section for
 // tools). `Client.callTool` hands that response straight to a caller
 // either way, so a step that never reads `isError` would record a failed
-// tool call as a passing one — the receipt would show a step that ran to
+// tool call as a passing one — the step record would show a step that ran to
 // completion, carrying, unread, the one field that says it did not
 // actually succeed. That is exactly the "nothing breaks silently" failure
 // this package's own design rules refuse to let through, so this one check
@@ -23,7 +23,7 @@ export type McpToolCallResult = CallToolResult;
 
 /**
  * A short text summary of `result`'s own `content`, for an error message
- * only — never the receipt-facing value, which stays the client package's
+ * only — never the step-record-facing value, which stays the client package's
  * own result, untouched. `content` is a list of typed parts (text, image,
  * audio, resource, resource_link); only the `text` ones are readable as
  * prose, so those are joined and everything else is left out of the

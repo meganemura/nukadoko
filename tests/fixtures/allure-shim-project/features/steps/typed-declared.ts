@@ -4,7 +4,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Proves item 2's kind-independence claim directly: a *typed* step importing the
 // allure-js facade on its own, with no World in sight, still gets this
-// step's own `declared` on its receipt — the same mechanism a compat step's
+// step's own `declared` on its step record — the same mechanism a compat step's
 // glue uses, not a special case for compat.
 export default defineStep({
   pattern: "a typed step declares an allure label directly",

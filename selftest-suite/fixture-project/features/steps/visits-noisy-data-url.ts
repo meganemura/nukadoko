@@ -20,7 +20,7 @@ import { defineStep } from "nukadoko";
 // connection failure too (measured, writing this file), so `console_errors`
 // reads 2 here, not 1. Nothing here or in selftest-suite's own Then step
 // hardcodes that number -- the Then step reads whatever count this step's
-// real receipt.json recorded and checks the report against that.
+// real record.json recorded and checks the report against that.
 const html = [
   "<script>console.error('browser-evidence: console error')</script>",
   "<script>throw new Error('browser-evidence: uncaught error')</script>",

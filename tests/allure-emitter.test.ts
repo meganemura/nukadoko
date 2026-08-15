@@ -5,12 +5,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { createAllureEmitter, type AllureEmitter, type EmitStepInput } from "../src/report/allure/emitter.js";
-import type { Receipt } from "../src/receipt/types.js";
+import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: integration tests — drives the real allure-js-commons
-// ReporterRuntime end to end against fixture record.json/receipt.json data
+// ReporterRuntime end to end against fixture record.json/step record.json data
 // (built here as plain objects, not by actually running a scenario) and
 // reads the real files it writes back off disk. No `.feature` file on disk
 // is needed either: `parseFeatureSource` takes source text directly.
@@ -37,10 +37,10 @@ const FEATURE_SOURCE = `Feature: Checkout
       | member |
 `;
 
-function writeReceiptFile(rootDir: string, receipt: Receipt): void {
-  const dir = path.join(rootDir, ".nukadoko", "receipts", receipt.receipt_id);
+function writeStepRecordFile(rootDir: string, stepRecord: StepRecord): void {
+  const dir = path.join(rootDir, ".nukadoko", "records", "steps", stepRecord.record_id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
+  writeFileSync(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}\n`);
 }
 
 function readResultFiles(resultsDir: string): Record<string, unknown>[] {
@@ -57,8 +57,8 @@ function readContainerFiles(resultsDir: string): Record<string, unknown>[] {
 
 /** A minimal, valid `EmitStepInput` — every test below overrides only the
  * fields it actually cares about, the same "one baseline, spread + override"
- * convention the old `record`/`receipt` object literals already followed. */
-function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "record" | "receipt">): EmitStepInput {
+ * convention the old `record`/`stepRecord` object literals already followed. */
+function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "record" | "stepRecord">): EmitStepInput {
   return {
     runId: "run-1",
     scenarioId: "scn-1",
@@ -82,7 +82,7 @@ describe("createAllureEmitter", () => {
   beforeEach(() => {
     rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-allure-emitter-"));
     writeFileSync(path.join(rootDir, "package.json"), JSON.stringify({ name: "acme-checkout" }));
-    resultsDir = path.join(rootDir, ".nukadoko", "allure-results");
+    resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     sink = createCaptureSink();
     emitter = createAllureEmitter({
       resultsDir,
@@ -115,13 +115,13 @@ describe("createAllureEmitter", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
 
-      const receiptDir = path.join(rootDir, ".nukadoko", "receipts", "rcpt-1");
-      mkdirSync(receiptDir, { recursive: true });
-      writeFileSync(path.join(receiptDir, "note.txt"), "declared note");
-      writeFileSync(path.join(receiptDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
+      const recordDir = path.join(rootDir, ".nukadoko", "records", "steps", "step-1");
+      mkdirSync(recordDir, { recursive: true });
+      writeFileSync(path.join(recordDir, "note.txt"), "declared note");
+      writeFileSync(path.join(recordDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
 
-      const receipt1: Receipt = {
-        receipt_id: "rcpt-1",
+      const stepRecord1: StepRecord = {
+        record_id: "step-1",
         step: "the cart has items",
         kind: "run",
         args: {},
@@ -133,7 +133,7 @@ describe("createAllureEmitter", () => {
         scenario: "scn-1",
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
-        evidence: { dir: ".nukadoko/receipts/rcpt-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
+        evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
         observed: { http_reads: 1, http_writes: 0 },
         mutates: true,
         declared: {
@@ -142,11 +142,11 @@ describe("createAllureEmitter", () => {
           logs: ["did the thing"],
         },
       };
-      writeReceiptFile(rootDir, receipt1);
-      writeFileSync(path.join(rootDir, ".nukadoko", "receipts", "rcpt-1", "step-trace.zip"), "step trace bytes");
+      writeStepRecordFile(rootDir, stepRecord1);
+      writeFileSync(path.join(rootDir, ".nukadoko", "records", "steps", "step-1", "step-trace.zip"), "step trace bytes");
 
-      const receipt2: Receipt = {
-        receipt_id: "rcpt-2",
+      const stepRecord2: StepRecord = {
+        record_id: "step-2",
         step: "the total is correct",
         kind: "run",
         args: {},
@@ -157,20 +157,20 @@ describe("createAllureEmitter", () => {
         scenario: "scn-1",
         started_at: "2026-08-01T00:00:01.000Z",
         finished_at: "2026-08-01T00:00:01.200Z",
-        evidence: { dir: ".nukadoko/receipts/rcpt-2", screenshots: [] },
+        evidence: { dir: ".nukadoko/records/steps/step-2", screenshots: [] },
         observed: { http_reads: 0, http_writes: 0 },
         mutates: false,
       };
-      writeReceiptFile(rootDir, receipt2);
+      writeStepRecordFile(rootDir, stepRecord2);
 
-      const scenarioDir = path.join(rootDir, ".nukadoko", "scenarios", "scn-1");
+      const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
       writeFileSync(path.join(scenarioDir, "trace.zip"), "trace bytes");
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
       writeFileSync(path.join(scenarioDir, "hook-note.txt"), "hook declared note");
 
-      const step1: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
-      const step2: ScenarioStepRecord = { text: "the total is correct", status: "passed", receipt: "rcpt-2" };
+      const step1: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+      const step2: ScenarioStepRecord = { text: "the total is correct", status: "passed", record: "step-2" };
       const beforeHook: ScenarioHookRecord = {
         type: "before",
         status: "ok",
@@ -182,7 +182,7 @@ describe("createAllureEmitter", () => {
       emitter.emitStep(
         baseStepInput({
           record: step1,
-          receipt: receipt1,
+          stepRecord: stepRecord1,
           index: 0,
           gherkinDocument,
           pickle,
@@ -193,7 +193,7 @@ describe("createAllureEmitter", () => {
       emitter.emitStep(
         baseStepInput({
           record: step2,
-          receipt: receipt2,
+          stepRecord: stepRecord2,
           index: 1,
           gherkinDocument,
           pickle,
@@ -217,7 +217,7 @@ describe("createAllureEmitter", () => {
         steps: [step1, step2],
         hooks: [beforeHook, afterHook],
         evidence: {
-          dir: ".nukadoko/scenarios/scn-1",
+          dir: ".nukadoko/records/scenarios/scn-1",
           trace: "trace.zip",
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.150Z" }],
         },
@@ -275,7 +275,7 @@ describe("createAllureEmitter", () => {
       expect(step1.parameters).toContainEqual({ name: "environment", value: "staging", excluded: true });
       expect(step1.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
       expect(step1.parameters).toContainEqual({ name: "target_version", value: "9.9.9", excluded: true });
-      expect(step1.parameters).toContainEqual({ name: "receipt", value: "rcpt-1" });
+      expect(step1.parameters).toContainEqual({ name: "record", value: "step-1" });
       expect(step1.parameters).toContainEqual({ name: "mutates (declared)", value: "true" });
 
       expect(step1.links).toContainEqual({ url: "https://issue.example/1", name: "issue-1" });
@@ -285,11 +285,11 @@ describe("createAllureEmitter", () => {
       expect(step2.links ?? []).not.toContainEqual(expect.objectContaining({ url: "https://issue.example/1" }));
 
       const attachmentNames = step1.attachments!.map((a) => a.name).sort();
-      expect(attachmentNames).toEqual(["declared: note.txt", "http log", "receipt.json", "result", "trace"]);
+      expect(attachmentNames).toEqual(["declared: note.txt", "http log", "record.json", "result", "trace"]);
       const traceAttachment = step1.attachments!.find((a) => a.name === "trace") as { type: string; source?: string };
       expect(traceAttachment.type).toBe("application/vnd.allure.playwright-trace");
       // Step1's own trace never leaks onto step2's own test — this task's
-      // spec, decision 2: a step's own receipt.evidence.trace attaches to
+      // spec, decision 2: a step's own step record evidence.trace attaches to
       // that step's own test only.
       expect(step2.attachments!.map((a) => a.name)).not.toContain("trace");
       // Neither step carries the *scenario's* own trace/screenshot — those
@@ -298,7 +298,7 @@ describe("createAllureEmitter", () => {
       expect(step1.attachments!.filter((a) => a.name === "trace")).toHaveLength(1);
     });
 
-    it("copies a step's own receipt.evidence.trace into resultsDir, attached to that step's own test", () => {
+    it("copies a step's own step record evidence.trace into resultsDir, attached to that step's own test", () => {
       const results = readResultFiles(resultsDir);
       const step1 = results.find((r) => (r as { name?: string }).name === "Given the cart has items") as {
         attachments: { name: string; source: string }[];
@@ -370,7 +370,7 @@ describe("createAllureEmitter", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
 
-    const scenarioDir = path.join(rootDir, ".nukadoko", "scenarios", "scn-hook-trace-1");
+    const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-hook-trace-1");
     mkdirSync(scenarioDir, { recursive: true });
     writeFileSync(path.join(scenarioDir, "hook-before-0.zip"), "hook trace bytes");
 
@@ -388,7 +388,7 @@ describe("createAllureEmitter", () => {
     // fixture in a scope with zero tests attached (verified against its own
     // `_writeFixturesOfScope`: `if (tests.length) { ... }`), the same as it
     // would for a scenario with zero real pickle steps in practice.
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
     const record: ScenarioRecord = {
       scenario_id: "scn-hook-trace-1",
       run_id: "run-1",
@@ -402,11 +402,11 @@ describe("createAllureEmitter", () => {
       finished_at: "2026-08-01T00:00:00.500Z",
       steps: [step],
       hooks: [beforeHook],
-      evidence: { dir: ".nukadoko/scenarios/scn-hook-trace-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/records/scenarios/scn-hook-trace-1", screenshots: [] },
     };
 
     emitter.beginScenario();
-    emitter.emitStep(baseStepInput({ record: step, receipt: null, gherkinDocument, pickle, scenarioId: "scn-hook-trace-1" }));
+    emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-hook-trace-1" }));
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
     const containers = readContainerFiles(resultsDir) as {
@@ -425,7 +425,7 @@ describe("createAllureEmitter", () => {
   });
 
   describe("identity: no history across runs, scenarios, or steps (this task's spec, decision 4)", () => {
-    function emitOnce(input: Partial<EmitStepInput> & Pick<EmitStepInput, "record" | "receipt" | "gherkinDocument" | "pickle">): void {
+    function emitOnce(input: Partial<EmitStepInput> & Pick<EmitStepInput, "record" | "stepRecord" | "gherkinDocument" | "pickle">): void {
       emitter.beginScenario();
       emitter.emitStep(baseStepInput(input));
     }
@@ -436,9 +436,9 @@ describe("createAllureEmitter", () => {
       expect(outlineRows).toHaveLength(2);
 
       for (const [index, pickle] of outlineRows.entries()) {
-        const receiptId = `rcpt-outline-${index}`;
-        const receipt: Receipt = {
-          receipt_id: receiptId,
+        const recordId = `step-outline-${index}`;
+        const stepRecord: StepRecord = {
+          record_id: recordId,
           step: pickle.steps[0]!.text,
           kind: "run",
           args: {},
@@ -449,13 +449,13 @@ describe("createAllureEmitter", () => {
           scenario: `scn-outline-${index}`,
           started_at: "2026-08-01T00:00:00.000Z",
           finished_at: "2026-08-01T00:00:00.500Z",
-          evidence: { dir: `.nukadoko/receipts/${receiptId}`, screenshots: [] },
+          evidence: { dir: `.nukadoko/records/steps/${recordId}`, screenshots: [] },
           observed: { http_reads: 0, http_writes: 0 },
           mutates: true,
         };
-        writeReceiptFile(rootDir, receipt);
-        const record: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", receipt: receiptId };
-        emitOnce({ record, receipt, gherkinDocument, pickle, scenarioId: `scn-outline-${index}` });
+        writeStepRecordFile(rootDir, stepRecord);
+        const record: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", record: recordId };
+        emitOnce({ record, stepRecord, gherkinDocument, pickle, scenarioId: `scn-outline-${index}` });
       }
 
       const results = readResultFiles(resultsDir) as { name: string; fullName: string; testCaseId: string }[];
@@ -479,10 +479,10 @@ describe("createAllureEmitter", () => {
     it("gives two emits of the exact same step a different historyId when runId differs", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
 
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-x", index: 0 });
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-B", scenarioId: "scn-x", index: 0 });
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-x", index: 0 });
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-B", scenarioId: "scn-x", index: 0 });
 
       const results = readResultFiles(resultsDir) as { historyId: string }[];
       expect(results).toHaveLength(2);
@@ -492,10 +492,10 @@ describe("createAllureEmitter", () => {
     it("gives two emits of the exact same step a different historyId when scenarioId differs (two scenarios sharing one run)", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
 
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 0 });
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-2", index: 0 });
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 0 });
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-2", index: 0 });
 
       const results = readResultFiles(resultsDir) as { historyId: string }[];
       expect(results).toHaveLength(2);
@@ -505,10 +505,10 @@ describe("createAllureEmitter", () => {
     it("gives two steps sharing the exact same text in one scenario a different historyId (index differs)", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
 
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 0 });
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 1 });
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 0 });
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 1 });
 
       const results = readResultFiles(resultsDir) as { historyId: string }[];
       expect(results).toHaveLength(2);
@@ -518,8 +518,8 @@ describe("createAllureEmitter", () => {
     it("marks the identity parameters mode: hidden (visible in the file, but excluded: false) rather than excluded: true", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
-      emitOnce({ record, receipt: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 0 });
+      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
+      emitOnce({ record, stepRecord: null, gherkinDocument, pickle, runId: "run-A", scenarioId: "scn-1", index: 0 });
 
       const results = readResultFiles(resultsDir) as {
         parameters: { name: string; value: string; excluded?: boolean; mode?: string }[];
@@ -547,12 +547,12 @@ describe("createAllureEmitter", () => {
       session: null,
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.000Z",
-      steps: [{ text: "the cart has items", status: "skipped", receipt: null }],
+      steps: [{ text: "the cart has items", status: "skipped", record: null }],
       hooks: [],
-      evidence: { dir: ".nukadoko/scenarios/scn-first", screenshots: [] },
+      evidence: { dir: ".nukadoko/records/scenarios/scn-first", screenshots: [] },
     };
     emitter.beginScenario();
-    emitter.emitStep(baseStepInput({ record: record.steps[0]!, receipt: null, gherkinDocument, pickle, scenarioId: "scn-first" }));
+    emitter.emitStep(baseStepInput({ record: record.steps[0]!, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-first" }));
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
     const firstRunFiles = new Set(readdirSync(resultsDir));
     expect(firstRunFiles.size).toBeGreaterThan(0);
@@ -570,7 +570,7 @@ describe("createAllureEmitter", () => {
     secondEmitter.begin();
     secondEmitter.beginScenario();
     secondEmitter.emitStep(
-      baseStepInput({ record: record.steps[0]!, receipt: null, gherkinDocument, pickle, scenarioId: "scn-second" }),
+      baseStepInput({ record: record.steps[0]!, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-second" }),
     );
     secondEmitter.endScenario({
       record: { ...record, scenario_id: "scn-second" },
@@ -602,8 +602,8 @@ describe("createAllureEmitter", () => {
     it("sets statusDetails.message, marked with [nukadoko.failure=<kind>], for a failed step", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const receipt: Receipt = {
-        receipt_id: "rcpt-fail-1",
+      const stepRecord: StepRecord = {
+        record_id: "step-fail-1",
         step: "the cart has items",
         kind: "run",
         args: {},
@@ -613,16 +613,16 @@ describe("createAllureEmitter", () => {
         scenario: "scn-fail-1",
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
-        evidence: { dir: ".nukadoko/receipts/rcpt-fail-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/records/steps/step-fail-1", screenshots: [] },
         observed: { http_reads: 0, http_writes: 0 },
         mutates: true,
         error: { message: "it broke on purpose", kind: "step_error" },
       };
-      writeReceiptFile(rootDir, receipt);
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "failed", receipt: "rcpt-fail-1" };
+      writeStepRecordFile(rootDir, stepRecord);
+      const record: ScenarioStepRecord = { text: "the cart has items", status: "failed", record: "step-fail-1" };
 
       emitter.beginScenario();
-      emitter.emitStep(baseStepInput({ record, receipt, gherkinDocument, pickle, scenarioId: "scn-fail-1" }));
+      emitter.emitStep(baseStepInput({ record, stepRecord, gherkinDocument, pickle, scenarioId: "scn-fail-1" }));
 
       const test = readStepResult("Given the cart has items");
       expect(test.status).toBe("failed");
@@ -633,10 +633,10 @@ describe("createAllureEmitter", () => {
     it("leaves statusDetails unset for a passed step", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
 
       emitter.beginScenario();
-      emitter.emitStep(baseStepInput({ record, receipt: null, gherkinDocument, pickle, scenarioId: "scn-pass-1" }));
+      emitter.emitStep(baseStepInput({ record, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-pass-1" }));
 
       const test = readStepResult("Given the cart has items");
       expect(test.status).toBe("passed");
@@ -649,12 +649,12 @@ describe("createAllureEmitter", () => {
       const record: ScenarioStepRecord = {
         text: "the cart has items",
         status: "undefined",
-        receipt: null,
+        record: null,
         error: { message: "no matching step definition" },
       };
 
       emitter.beginScenario();
-      emitter.emitStep(baseStepInput({ record, receipt: null, gherkinDocument, pickle, scenarioId: "scn-unresolved-1" }));
+      emitter.emitStep(baseStepInput({ record, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-unresolved-1" }));
 
       const test = readStepResult("Given the cart has items");
       expect(test.statusDetails?.message).toBe("no matching step definition");
@@ -669,7 +669,7 @@ describe("createAllureEmitter", () => {
         status: "failed",
         error: { message: "hook blew up", kind: "step_error" },
       };
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "skipped", receipt: null };
+      const step: ScenarioStepRecord = { text: "the cart has items", status: "skipped", record: null };
       const record: ScenarioRecord = {
         scenario_id: "scn-hook-fail-1",
         run_id: "run-1",
@@ -683,11 +683,11 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
         hooks: [beforeHook],
-        evidence: { dir: ".nukadoko/scenarios/scn-hook-fail-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/records/scenarios/scn-hook-fail-1", screenshots: [] },
       };
 
       emitter.beginScenario();
-      emitter.emitStep(baseStepInput({ record: step, receipt: null, gherkinDocument, pickle, scenarioId: "scn-hook-fail-1" }));
+      emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-hook-fail-1" }));
       emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
       const test = readStepResult("Given the cart has items");
@@ -702,26 +702,26 @@ describe("createAllureEmitter", () => {
   });
 
   describe("failure isolation", () => {
-    it("degrades gracefully (no throw, a normal result file) when a step's receipt.json simply doesn't exist", () => {
+    it("degrades gracefully (no throw, a normal result file) when a step's record.json simply doesn't exist", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
       const record: ScenarioStepRecord = {
         text: "the cart has items",
         status: "failed",
-        receipt: "rcpt-never-written",
+        record: "step-never-written",
         error: { message: "refused before it ever ran" },
       };
 
       emitter.beginScenario();
       expect(() =>
-        emitter.emitStep(baseStepInput({ record, receipt: null, gherkinDocument, pickle, scenarioId: "scn-missing-receipt" })),
+        emitter.emitStep(baseStepInput({ record, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-missing-record" })),
       ).not.toThrow();
 
       const results = readResultFiles(resultsDir);
       expect(results.some((r) => (r as { name?: string }).name === "Given the cart has items")).toBe(true);
     });
 
-    it("catches a genuine internal failure (a receipt claims an evidence file that isn't actually there), warns once to stderr, and leaves other steps' output intact", () => {
+    it("catches a genuine internal failure (a step record claims an evidence file that isn't actually there), warns once to stderr, and leaves other steps' output intact", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
 
@@ -730,8 +730,8 @@ describe("createAllureEmitter", () => {
       emitter.beginScenario();
       emitter.emitStep(
         baseStepInput({
-          record: { text: "the cart has items", status: "skipped", receipt: null },
-          receipt: null,
+          record: { text: "the cart has items", status: "skipped", record: null },
+          stepRecord: null,
           gherkinDocument,
           pickle,
           scenarioId: "scn-healthy",
@@ -739,12 +739,12 @@ describe("createAllureEmitter", () => {
       );
       const healthyFiles = new Set(readdirSync(resultsDir));
 
-      // A receipt whose own evidence.http names a file that was never
+      // A step record whose own evidence.http names a file that was never
       // actually written — writeAttachmentFromPath's copyFileSync throws
       // ENOENT for it, a genuine internal failure that must never escape
       // emitStep.
-      const receipt: Receipt = {
-        receipt_id: "rcpt-broken",
+      const stepRecord: StepRecord = {
+        record_id: "step-broken",
         step: "the cart has items",
         kind: "run",
         args: {},
@@ -755,18 +755,18 @@ describe("createAllureEmitter", () => {
         scenario: "scn-broken",
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
-        evidence: { dir: ".nukadoko/receipts/rcpt-broken", screenshots: [], http: "http.jsonl" },
+        evidence: { dir: ".nukadoko/records/steps/step-broken", screenshots: [], http: "http.jsonl" },
         observed: { http_reads: 0, http_writes: 0 },
         mutates: true,
       };
-      writeReceiptFile(rootDir, receipt);
-      // Deliberately not writing .nukadoko/receipts/rcpt-broken/http.jsonl.
+      writeStepRecordFile(rootDir, stepRecord);
+      // Deliberately not writing .nukadoko/records/steps/step-broken/http.jsonl.
 
       expect(() =>
         emitter.emitStep(
           baseStepInput({
-            record: { text: "the cart has items", status: "passed", receipt: "rcpt-broken" },
-            receipt,
+            record: { text: "the cart has items", status: "passed", record: "step-broken" },
+            stepRecord,
             gherkinDocument,
             pickle,
             scenarioId: "scn-broken",
@@ -795,7 +795,7 @@ describe("createAllureEmitter: begin() failure isolation", () => {
     // (EISDIR), regardless of platform/CI permissions setup.
     const rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-allure-begin-"));
     writeFileSync(path.join(rootDir, "package.json"), JSON.stringify({ name: "acme-checkout" }));
-    const resultsDir = path.join(rootDir, ".nukadoko", "allure-results");
+    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     mkdirSync(path.join(resultsDir, "categories.json"), { recursive: true });
     const sink = createCaptureSink();
 

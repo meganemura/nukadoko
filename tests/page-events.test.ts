@@ -6,9 +6,9 @@ import { createPageEventsCollector } from "../src/context/page-events.js";
 // truncated") — the one part of this task that a real browser is a poor way
 // to prove, since the truncation case needs 101+ events in one category and
 // a real browser producing that many is slow and, at that volume, likely
-// flaky. The receipt-level shape (field omission, redaction, both `nuka do`
+// flaky. The step-record-level shape (field omission, redaction, both `nuka do`
 // and `nuka run` reaching it) is instead proven end to end, through a real
-// browser, in tests/page-events-receipt.test.ts.
+// browser, in tests/page-events-step-record.test.ts.
 
 describe("PageEventsCollector", () => {
   it("snapshot() is undefined when nothing was ever recorded", () => {

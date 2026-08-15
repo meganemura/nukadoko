@@ -1,11 +1,11 @@
-import type { Receipt } from "../receipt/types.js";
+import type { StepRecord } from "../record/types.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 
 // Responsibility: render the acceptance record's markdown text (docs/spec.md
 // "Sign-off" — the exact shape mirrors that section's own worked example,
 // reproduced here field for field). Pure string building
 // only: every value this module needs (feature source, parsed feature name,
-// the winning run's scenarios, each step's own receipt) is handed in
+// the winning run's scenarios, each step's own step record) is handed in
 // already resolved — cli/accept.ts owns picking the run, checking git, and
 // writing the result to disk; this module never touches the filesystem.
 //
@@ -21,21 +21,22 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // bare `2.4.0` is valid YAML but looks unpleasantly like it could be
 // misread as a number, and quoting it costs nothing.
 //
-// `evidence` is stripped from every receipt before it is embedded (spec:
-// strip the `evidence` key from the receipt before writing it): trace.zip and
-// screenshots stay under `.nukadoko/`, never copied into a file meant to be
-// committed. Nothing else about a receipt is touched — this module does not
-// redact a second time (redaction already happened once, when the receipt
-// was first written, src/cli/run.ts's own scenario/receipt pipeline).
+// `evidence` is stripped from every step record before it is embedded
+// (docs/spec.md "Sign-off": the `evidence` key is stripped before writing
+// it): trace.zip and screenshots stay under `.nukadoko/`, never copied into a
+// file meant to be committed. Nothing else about a step record is touched
+// — this module does not redact a second time (redaction already happened
+// once, when the step record was first written, src/cli/run.ts's own
+// scenario/step-record pipeline).
 //
 // A "Declared vs observed" section (docs/spec.md "Sign-off") gives sign-off
-// its own record of what the two receipt fields, `mutates` (declared) and
-// `observed` (measured), agree or disagree about — the reconciliation used
-// to be entirely on a human reading raw receipts, with no note anywhere of
-// whether the two were ever even compared. It never changes whether `nuka
-// accept` refuses (that stays cli/accept.ts's seven conditions, untouched)
-// and never asserts the step is wrong — see renderDeclaredVsObserved's own
-// comment for why.
+// its own record of what the two step record fields, `mutates` (declared)
+// and `observed` (measured), agree or disagree about — the reconciliation
+// used to be entirely on a human reading raw step records, with no note
+// anywhere of whether the two were ever even compared. It never changes
+// whether `nuka accept` refuses (that stays cli/accept.ts's seven
+// conditions, untouched) and never asserts the step is wrong — see
+// renderDeclaredVsObserved's own comment for why.
 //
 // A "Condition" section, and a frontmatter `browser:` line beside the
 // existing `environment:` one, are added now (docs/spec.md "Sign-off") —
@@ -66,14 +67,14 @@ function yamlScalar(value: string): string {
 }
 
 /** One scenario this run accepted, plus everything its own section needs:
- * the record itself and every receipt its steps reference, already read
- * from disk and already keyed by receipt id (src/report/receipts.ts's own
- * `readReceiptsForRecord` — reused, not reimplemented, per this task's
- * spec's own "don't touch" list extending in spirit to "don't duplicate an
- * existing reader either"). */
+ * the record itself and every step record its steps reference, already read
+ * from disk and already keyed by step record id (src/report/step-records.ts's
+ * own `readStepRecordsForScenario` — reused, not reimplemented, per this
+ * task's spec's own "don't touch" list extending in spirit to "don't
+ * duplicate an existing reader either"). */
 export interface AcceptedScenario {
   readonly record: ScenarioRecord;
-  readonly receipts: ReadonlyMap<string, Receipt | null>;
+  readonly stepRecords: ReadonlyMap<string, StepRecord | null>;
 }
 
 export interface RenderAcceptanceRecordOptions {
@@ -114,23 +115,23 @@ export interface RenderAcceptanceRecordOptions {
 }
 
 /** Thrown when a scenario this module was asked to render is missing a
- * receipt its own record says it should have — every scenario passed into
- * this function is expected to be `status: "passed"` (src/run/
+ * step record its own record says it should have — every scenario passed
+ * into this function is expected to be `status: "passed"` (src/run/
  * record-types.ts: "passed only when every step passed", so every one of
- * its steps has a non-null receipt id), so this can only mean the receipt
- * was deleted or corrupted on disk after the run that wrote it. Not one of
- * the spec's seven named rejection conditions — those are all things a user
- * did (dirty tree, moved HEAD, ...); this is nukadoko's own state being
- * unexpectedly incomplete, reported the same way any other internal
+ * its steps has a non-null step record id), so this can only mean the step
+ * record was deleted or corrupted on disk after the run that wrote it. Not
+ * one of the spec's seven named rejection conditions — those are all things
+ * a user did (dirty tree, moved HEAD, ...); this is nukadoko's own state
+ * being unexpectedly incomplete, reported the same way any other internal
  * inconsistency here would be: thrown, caught once, by cli/accept.ts. */
-export class MissingReceiptError extends Error {
-  constructor(scenarioId: string, stepText: string, receiptId: string | null) {
+export class MissingStepRecordError extends Error {
+  constructor(scenarioId: string, stepText: string, recordId: string | null) {
     super(
-      receiptId === null
-        ? `scenario ${scenarioId}, step "${stepText}": no receipt id even though the scenario is recorded as passed`
-        : `scenario ${scenarioId}, step "${stepText}": receipt ${receiptId} could not be read from .nukadoko/receipts`,
+      recordId === null
+        ? `scenario ${scenarioId}, step "${stepText}": no step record id even though the scenario is recorded as passed`
+        : `scenario ${scenarioId}, step "${stepText}": step record ${recordId} could not be read from .nukadoko/records/steps`,
     );
-    this.name = "MissingReceiptError";
+    this.name = "MissingStepRecordError";
   }
 }
 
@@ -194,34 +195,42 @@ function renderHook(hook: ScenarioRecord["hooks"][number]): string[] {
 }
 
 // Shared by renderStep and the "Declared vs observed" section below: both
-// need the same step-to-receipt lookup, and both must fail the same way
-// (MissingReceiptError) when a passed scenario's own record disagrees with
-// what is actually on disk — one failure mode, one place it is checked.
-function resolveReceipt(scenarioId: string, step: ScenarioRecord["steps"][number], receipts: ReadonlyMap<string, Receipt | null>): Receipt {
-  if (step.receipt === null) {
-    throw new MissingReceiptError(scenarioId, step.text, null);
+// need the same step-to-step-record lookup, and both must fail the same way
+// (MissingStepRecordError) when a passed scenario's own record disagrees
+// with what is actually on disk — one failure mode, one place it is checked.
+function resolveStepRecord(
+  scenarioId: string,
+  step: ScenarioRecord["steps"][number],
+  stepRecords: ReadonlyMap<string, StepRecord | null>,
+): StepRecord {
+  if (step.record === null) {
+    throw new MissingStepRecordError(scenarioId, step.text, null);
   }
-  const receipt = receipts.get(step.receipt);
-  if (receipt === null || receipt === undefined) {
-    throw new MissingReceiptError(scenarioId, step.text, step.receipt);
+  const stepRecord = stepRecords.get(step.record);
+  if (stepRecord === null || stepRecord === undefined) {
+    throw new MissingStepRecordError(scenarioId, step.text, step.record);
   }
-  return receipt;
+  return stepRecord;
 }
 
-function renderStep(scenarioId: string, step: ScenarioRecord["steps"][number], receipts: ReadonlyMap<string, Receipt | null>): string[] {
-  const receipt = resolveReceipt(scenarioId, step, receipts);
+function renderStep(
+  scenarioId: string,
+  step: ScenarioRecord["steps"][number],
+  stepRecords: ReadonlyMap<string, StepRecord | null>,
+): string[] {
+  const stepRecord = resolveStepRecord(scenarioId, step, stepRecords);
   // `evidence` is the one key this record deliberately never carries (this
-  // file's own header) — every other field of the receipt, `evidence`
+  // file's own header) — every other field of the step record, `evidence`
   // included in the destructure only to drop it, passes through untouched.
-  const { evidence: _evidence, ...withoutEvidence } = receipt;
+  const { evidence: _evidence, ...withoutEvidence } = stepRecord;
   return ["", `#### ${step.text}`, "", "```json", JSON.stringify(withoutEvidence, null, 2), "```"];
 }
 
 function renderScenarioSection(scenario: AcceptedScenario): string[] {
-  const { record, receipts } = scenario;
+  const { record, stepRecords } = scenario;
   const lines: string[] = ["", `### ${record.scenario} (line ${record.line})`];
   for (const step of record.steps) {
-    lines.push(...renderStep(record.scenario_id, step, receipts));
+    lines.push(...renderStep(record.scenario_id, step, stepRecords));
   }
   for (const hook of record.hooks) {
     lines.push(...renderHook(hook));
@@ -229,8 +238,8 @@ function renderScenarioSection(scenario: AcceptedScenario): string[] {
   return lines;
 }
 
-/** One step whose own receipt declared `mutates: false` but was measured
- * making at least one write. */
+/** One step whose own step record declared `mutates: false` but was
+ * measured making at least one write. */
 interface DeclaredVsObservedMismatch {
   readonly scenarioName: string;
   readonly stepText: string;
@@ -238,7 +247,7 @@ interface DeclaredVsObservedMismatch {
 }
 
 /** Walks every accepted scenario's own steps once, sorting each into one of
- * three buckets a receipt's own `mutates` already answers: declared true
+ * three buckets a step record's own `mutates` already answers: declared true
  * (never interesting here, matches its own claim), declared false and
  * observed writes (a mismatch), or `mutates: null` (a compat step, which has
  * no declaration to compare against at all, kept out of the mismatch count
@@ -250,15 +259,19 @@ function collectDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): {
 } {
   const mismatches: DeclaredVsObservedMismatch[] = [];
   let compatStepCount = 0;
-  for (const { record, receipts } of scenarios) {
+  for (const { record, stepRecords } of scenarios) {
     for (const step of record.steps) {
-      const receipt = resolveReceipt(record.scenario_id, step, receipts);
-      if (receipt.mutates === null) {
+      const stepRecord = resolveStepRecord(record.scenario_id, step, stepRecords);
+      if (stepRecord.mutates === null) {
         compatStepCount += 1;
         continue;
       }
-      if (receipt.mutates === false && receipt.observed.http_writes > 0) {
-        mismatches.push({ scenarioName: record.scenario, stepText: step.text, writes: receipt.observed.http_writes });
+      if (stepRecord.mutates === false && stepRecord.observed.http_writes > 0) {
+        mismatches.push({
+          scenarioName: record.scenario,
+          stepText: step.text,
+          writes: stepRecord.observed.http_writes,
+        });
       }
     }
   }
@@ -304,7 +317,7 @@ function renderDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): strin
   return lines;
 }
 
-// Near the top, ahead of the scenario/receipt detail (docs/spec.md
+// Near the top, ahead of the scenario/step-record detail (docs/spec.md
 // "Sign-off") — what confirmed this run is context a reader needs before
 // the detail, not a footnote after it, the same reasoning that keeps
 // "Declared vs observed" at the tail instead: that section is a roll-up

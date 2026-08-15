@@ -14,7 +14,7 @@ import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types
 // never be redacted
 // also never becomes part of the SecretSet redact.ts has to scan). The
 // length floor applies identically to a `redact`-named key: a short value
-// still can't be redacted without wrecking ordinary receipt text, whether
+// still can't be redacted without wrecking ordinary step record text, whether
 // it got into this set by being untracked or by being named explicitly.
 //
 // This reads and parses each file itself, sharing env.ts's own

@@ -1,11 +1,11 @@
 # nukadoko
 
 > Implementations are generated now. What checks them cannot be. Typed step
-> contracts and tool-measured receipts between natural-language acceptance
-> criteria and what actually ran.
+> contracts and tool-measured step records between natural-language
+> acceptance criteria and what actually ran.
 
 nukadoko runs Gherkin scenarios under typed step contracts and writes a
-receipt for every execution: a record the tool measured rather than the
+step record for every execution: a record the tool measured rather than the
 agent reported. The criteria stay in the language the people who set them
 use; everything between those sentences and the system under test is typed,
 checked before it runs, and reviewable in a diff.
@@ -106,11 +106,11 @@ These two are a sample, not the list. `nuka check --json` is what answers
 written here that would drift the next time one is added.
 
 Running one step alone, with no scenario required, shows what actually
-lands afterward: not a pass/fail line, a receipt.
+lands afterward: not a pass/fail line, a step record.
 
 ```json
 {
-  "receipt_id": "rcpt-20260804-224640-50lp",
+  "record_id": "step-20260804-224640-50lp",
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },
@@ -121,14 +121,14 @@ lands afterward: not a pass/fail line, a receipt.
 ```
 
 (`evidence`, `environment`, `session`, and the timestamps are trimmed above
-for space; the real receipt has them too.)
+for space; the real step record has them too.)
 
 An existing cucumber-js suite reaches this door too, by switching one
 import (see [The compat door](#the-compat-door) below). But a compat step
 has no typed contract, so `nuka check` has nothing here to hold a feature
 line against, and `nuka do` refuses to run one by name at all.
 
-`check` is the cheap static gate; `run` leaves the receipt trail; `accept`
+`check` is the cheap static gate; `run` leaves the step record trail; `accept`
 freezes one green run as a committed record beside its feature; `tend` is
 the periodic one, and the only one you are meant to *not* run before every
 change.
@@ -136,8 +136,8 @@ change.
 That accept record is a Markdown file,
 `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, written beside
 the feature: the feature's full text, the scenario record, and each step's
-receipt with its evidence stripped. It also carries a `Declared vs observed`
-section, listing every step whose receipt declared `mutates: false` but was
+own step record with its evidence stripped. It also carries a `Declared vs observed`
+section, listing every step whose step record declared `mutates: false` but was
 measured making a write, so a reviewer can see where the two disagreed
 without re-deriving it. A sign-off itself is scoped to one `(environment,
 browser)` pair read off the run, never declared: Chromium accepted and
@@ -181,7 +181,7 @@ exactly the parts this replaces.
 
 An agent must be able to complete the whole loop unassisted: discover the
 vocabulary (`nuka steps --json`), read a contract (`nuka describe`, schemas
-as JSON Schema), execute one step (`nuka do`, receipt on stdout, meaningful
+as JSON Schema), execute one step (`nuka do`, step record on stdout, meaningful
 exit code), read the validated result, and decide the next call. When the
 vocabulary lacks an operation, the agent scaffolds and implements a new step
 and a human reviews the PR.
@@ -191,7 +191,7 @@ runnable alone, so its dependencies must appear in its signature rather than
 on a World, which is also why `this.foo` stops being a place to hide data
 flow. A result has to be readable by the next call, so it has to be
 validated rather than discarded. An agent's report of a run cannot be the
-record of it, so the tool writes the receipt. None of these were built for
+record of it, so the tool writes the step record. None of these were built for
 agents and then justified for humans; they are the same properties either
 way, and a suite that an agent can drive turns out to be a suite a person
 can debug.
@@ -212,7 +212,7 @@ delegated to Allure.
 whole 0.x range, not a stretch that ends at 0.1: reaching 0.1 will mean
 more of the roadmap has landed, not that the surface has frozen.
 
-Implemented and covered by tests: typed steps, receipts, sessions,
+Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), tending (`nuka tend`), and two agent
 skills. Not implemented: an AI-assisted glue converter and scenario
@@ -236,7 +236,7 @@ For what to actually fix after a breaking change, see
 
 Point `envFiles` at the env files you already have and git classifies them:
 one git doesn't track is a secret source (every value it defines is
-redacted from logs and receipts), and a tracked one is plain configuration,
+redacted from logs and step records), and a tracked one is plain configuration,
 left alone. Nothing to declare, nothing to hand-copy into a second file.
 
 ## Before / after
@@ -258,7 +258,7 @@ Given("a project {string} exists", async function (name: string) {
 });
 ```
 
-After (`defineStep`, named capture, zod, receipt-backed):
+After (`defineStep`, named capture, zod, step-record-backed):
 
 ```ts
 // features/steps/create-project.ts
@@ -283,7 +283,7 @@ export default defineStep({
   silently swaps which one lands where; `nuka check` also flags a bare
   `{string}` as an error before that can happen.
 - `args` and `returns` are zod schemas validated at the run boundary.
-  `result` in the receipt is something the tool validated, not just
+  `result` in the step record is something the tool validated, not just
   whatever the step handed back.
 - `request` above (and `page` for browser steps) is destructured straight
   out of `run`'s first argument, the fixture bag; only the names a step
@@ -292,7 +292,7 @@ export default defineStep({
   `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
   existing Playwright knowledge and helpers carry over directly.
 - `nuka do create-project --args '{"name":"acme"}'` runs this one step
-  alone and prints its receipt: the unit an agent's explore loop is built
+  alone and prints its step record: the unit an agent's explore loop is built
   on, with nothing to stand up first.
 
 ## What it fixes
@@ -304,10 +304,10 @@ they are most familiar, not because it is the only layer that has them.
 | The failure | What nukadoko does about it |
 |---|---|
 | Duplicate steps: which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
-| `this.foo`: an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name: a dependency that shows up as an import in the diff, a read that lands on the receiving step's receipt, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
-| A report that only says `passed` | Every execution writes a receipt: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
+| `this.foo`: an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name: a dependency that shows up as an import in the diff, a read that lands on the receiving step's step record, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
+| A report that only says `passed` | Every execution writes a step record: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
-| A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the receipt for review |
+| A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the step record for review |
 
 The last one is worth being precise about, because the tool used to fail on
 the count instead of the promise, and that overclaimed. Write detection
@@ -317,7 +317,7 @@ any vendor query API that implements a pure read over POST. A truthful
 write, for reasons no general HTTP-layer rule can tell apart from a real
 one. So nukadoko trusts the declaration instead: it still counts every
 non-GET call an execution actually made, through its own request context
-and page, but that count now sits on the receipt as a record, not a
+and page, but that count now sits on the step record as a fact, not a
 verdict.
 
 ## Reports fill themselves
@@ -326,7 +326,7 @@ A classic Cucumber run shows the evidence a team wired up itself: hook
 boilerplate for traces and screenshots, written and maintained per project.
 [Allure](https://allurereport.org/) is a test-report dashboard; nukadoko
 emits results in its format and never renders HTML itself. The emitter
-fills the report from every receipt with zero wiring:
+fills the report from every step record with zero wiring:
 validated result, trace, HTTP log, observed reads and writes, environment
 and version, including one no report-side effort could ever add, because
 classic Cucumber discards step return values: the validated per-step
@@ -342,10 +342,10 @@ beside the step, so a step that passed while the page threw three
 uncaught errors says so without anyone opening an attachment. The trace
 attached is that step's own, not the whole scenario's, so the failing
 step opens directly instead of being scrubbed for. That same `trace.zip`
-also sits under the receipt on its own, and opens outside Allure with
-`npx playwright show-trace <evidence.dir>/trace.zip`. The receipt is
+also sits under the step record on its own, and opens outside Allure with
+`npx playwright show-trace <evidence.dir>/trace.zip`. The step record is
 attached whole as well, which is what keeps this list from going stale:
-anything a receipt gains later arrives in the report without a second
+anything a step record gains later arrives in the report without a second
 mapping to remember.
 
 A cucumber-messages (NDJSON) emitter ships alongside it so a migrating
@@ -357,13 +357,13 @@ asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
 Both emitters run with zero configuration; there is no flag to turn
 either on. The `allure` and `messages` keys in `nukadoko.config.ts`
 only move where their output lands, from the defaults
-`.nukadoko/allure-results` and `.nukadoko/messages.ndjson`.
+`.nukadoko/export/allure-results` and `.nukadoko/export/messages.ndjson`.
 
 Since nukadoko writes results and never HTML, rendering them is Allure 3's
 CLI (`npm i -g allure`, or `npx allure` as below):
 
 ```sh
-R=.nukadoko/allure-results
+R=.nukadoko/export/allure-results
 npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a run writes
 npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
@@ -397,7 +397,7 @@ each one lands, not just once a whole scenario finishes; a suite row still
 carries the whole scenario's tally, so a long scenario turns red the
 moment one of its steps does rather than only once it ends. It serves on a
 random port (`--port` fixes one) and does not open a browser unless you
-pass `--open`. `nuka init` creates `.nukadoko/allure-results/` up front, so
+pass `--open`. `nuka init` creates `.nukadoko/export/allure-results/` up front, so
 `watch` can already be running before the first `nuka run`; see [Allure
 emitter](docs/spec.md#allure-emitter) for the live-update mechanics and
 what per-step granularity costs Allure's own history and trend views.
@@ -412,14 +412,14 @@ A scripted scenario breaks because the app changed, not because the test was
 wrong. The repair loop nukadoko is built for:
 
 1. An agent re-runs the goal adaptively through `nuka do`, one step at a
-   time, reading each receipt to decide the next call. It is not replaying
+   time, reading each step record to decide the next call. It is not replaying
    the broken scenario; it is finding out what works now.
-2. Those receipts record the sequence that actually worked, which, by
+2. Those step records record the sequence that actually worked, which, by
    definition, deviates from the scripted one. They are the narrative of the
    repair, not its proof, and the agent cites them in the PR as exactly
    that.
 3. The PR updates the typed steps or the feature file, and its proof is the
-   repaired scenario running green: a scenario record and its receipts,
+   repaired scenario running green: a scenario record and its step records,
    reviewed like any other change.
 
 The point is step 2. **Self-healing without an audit trail is how a suite
@@ -434,7 +434,7 @@ an agent workflow (the bundled skills, below), not engine magic. See
 [Self-healing, audited](docs/spec.md#self-healing-audited).
 
 What this loop does **not** catch is the other way a suite goes hollow: a
-scenario left intact while its `Then` quietly gets weaker. A receipt records
+scenario left intact while its `Then` quietly gets weaker. A step record records
 what the execution did, not whether an assertion still means anything. That
 one stays with review, and [What this does not do](#what-this-does-not-do)
 says so plainly.
@@ -477,13 +477,13 @@ where there is one.
 The migration path for an existing Cucumber + Playwright suite is switching
 one import (`nukadoko/compat` in place of `@cucumber/cucumber`), keeping
 the same pattern syntax, hooks, and World working while nukadoko's harness
-starts measuring receipts underneath them. Promoting a step to `defineStep`
+starts measuring step records underneath them. Promoting a step to `defineStep`
 is then a per-step decision rather than a rewrite, and a suite that is half
 promoted keeps passing.
 
 The door is where a suite comes in, not where it settles. A compat step
 does gain evidence and the `observed` counts, which is more than it had.
-But its return value is discarded, the receipt records `result: null`, and
+But its return value is discarded, the step record records `result: null`, and
 everything downstream of a validated result stays out of reach: no contract
 for `nuka check` to hold a feature against, no `from` to declare a
 dependency with, and a sign-off attesting that steps ran rather than that
@@ -552,7 +552,7 @@ for this project's end-to-end / acceptance tests.
 
 1. Current state — what test suite exists today: scope, coverage, what
    executes it.
-2. Fit — how typed steps + receipts would change the way an agent runs
+2. Fit — how typed steps + step records would change the way an agent runs
    this suite's checks: which flows become vocabulary, and what the
    explore-execute-decide loop looks like concretely here.
 3. First three migration moves — the first commands to run and the first
@@ -581,12 +581,12 @@ slots into a pipeline as an ordinary step.
 ```yaml
 # excerpt from a CI workflow
 - run: npx nuka check              # PR gate: static, seconds, no browser
-- run: npx nuka run features/      # merge/deploy gate: executes, writes receipts
+- run: npx nuka run features/      # merge/deploy gate: executes, writes step records
 ```
 
 Put `nuka check` on every PR: it is the cheap gate, and it can fail before
 anything runs. Put `nuka run` on the gate that actually has to be true,
-merge or deploy, since that is the one that executes and leaves a receipt
+merge or deploy, since that is the one that executes and leaves a step record
 trail behind.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
@@ -597,14 +597,14 @@ yet".** A green scenario is no evidence that its waits are placed
 correctly: every wait a scenario needed could have been supplied by
 coincidence, further down, and only a route that does not pass through
 them can show where they actually belong (see [Design](#design)). A
-receipt's `polls` field already keeps that honest, distinguishing one
+step record's `polls` field already keeps that honest, distinguishing one
 attempt that returned immediately from forty attempts spent waiting 20
 seconds; a retry that reruns a whole step until it passes and keeps only
 the winning attempt throws that distinction away to buy a green run. That
 is the shape ruled out here, the one Playwright's own `retries` and
 `testInfo.retry` take, where only the last attempt reaches the final
 report. Running a scenario more than once while keeping every attempt's
-record and receipt, and naming which attempt passed, is a different shape:
+own record, and naming which attempt passed, is a different shape:
 nothing about it makes a record state a fact it cannot support. That shape
 is not ruled out; nukadoko just does not ship a way to do it today, so
 read this as a boundary on the shape a future feature would have to take,
@@ -629,8 +629,8 @@ suite's PR gate fast.
 
 ## What this does not do
 
-- **Receipts are not unforgeable.** An agent with shell access can write
-  any file, receipts included: the same honest limit secrets have. What
+- **Step records are not unforgeable.** An agent with shell access can write
+  any file, step records included: the same honest limit secrets have. What
   nukadoko removes is the need to trust an agent's *account* of a run:
   execution and measurement stay with the tool, not with the agent
   describing them.
@@ -648,7 +648,7 @@ suite's PR gate fast.
   rule can tell those two cases apart, which is why nukadoko stopped
   failing steps on the count. See
   [Keyword semantics](docs/spec.md#keyword-semantics) for the fuller
-  argument. The count is still recorded, on the receipt and in Allure, so a
+  argument. The count is still recorded, on the step record and in Allure, so a
   wrong `mutates` declaration is falsifiable after the fact; the
   declaration and review carry the judgment.
 - **CommonJS suites cannot use `nukadoko/compat`** without a module-format
@@ -685,12 +685,12 @@ run, they would train everyone to skim past the lines that do stop one.
 
 It opens with where the bed is (how much of the vocabulary is typed rather
 than still compat), because that number was previously only visible by
-reading a directory of receipts, which nobody does.
+reading a directory of step records, which nobody does.
 
 ## Design
 
 The full design (problem statement, typed steps, keyword semantics,
-receipts, sessions/environments/secrets, sign-off, roadmap, and honest
+records, sessions/environments/secrets, sign-off, roadmap, and honest
 limits) lives in a single place: [docs/spec.md](docs/spec.md).
 
 Japanese: [README.ja.md](README.ja.md) / [docs/spec.ja.md](docs/spec.ja.md)

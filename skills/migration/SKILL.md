@@ -92,10 +92,10 @@ one is:
 | | compat step | typed step |
 |---|---|---|
 | Input | pattern capture only, unchecked | validated against an `args` schema, each field carrying a `.describe()` |
-| Output | discarded — the receipt's `result` is `null` | validated against a `returns` schema and stored in the receipt |
-| Dependencies | side effects on the World, invisible in the function signature | declared with `from`, named in an import, checked by `nuka check` before anything runs, and recorded as `used` in the receipt |
-| Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the receipt's `observed` counts |
-| Running alone | not possible (the World is empty outside a scenario) | `nuka do <step>` runs it directly, receipt printed to stdout; a `from` key comes from `--args` like any other, or from `--use <receipt-id>` for one drawn from an earlier execution; a `resultOf` fixture call inside `run` still finds nothing, since there is no scenario for it to walk |
+| Output | discarded — the step record's `result` is `null` | validated against a `returns` schema and stored in the step record |
+| Dependencies | side effects on the World, invisible in the function signature | declared with `from`, named in an import, checked by `nuka check` before anything runs, and recorded as `used` in the step record |
+| Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the step record's `observed` counts |
+| Running alone | not possible (the World is empty outside a scenario) | `nuka do <step>` runs it directly, step record printed to stdout; a `from` key comes from `--args` like any other, or from `--use <step-record-id>` for one drawn from an earlier execution; a `resultOf` fixture call inside `run` still finds nothing, since there is no scenario for it to walk |
 
 That last row is a separate fact from the "Dependencies" row above it, not a
 consequence of it: a compat step can't run alone because what it needs lives
@@ -103,9 +103,9 @@ on a World nothing populated yet, and the World isn't part of its signature —
 there's nothing to inspect to know what to set up first. A typed step's
 dependencies are named as `from` entries, visible in an import, so a
 `nuka do` call can supply them by hand: `--args` for an ordinary key, or
-`--use <receipt-id>` for one drawn from an earlier execution's result — the
+`--use <step-record-id>` for one drawn from an earlier execution's result — the
 upstream step's own name never has to appear on the command line, because
-the cited receipt already carries it. A step whose every key arrives that
+the cited step record already carries it. A step whose every key arrives that
 way needs no `--args` at all: `--use` on its own is a complete invocation. What still finds nothing outside a
 scenario is a dependency read through the `resultOf` fixture from inside `run`: that
 call has no chain to walk when there was no scenario to build one,
@@ -167,7 +167,7 @@ What changed:
 - `this.projectId` is gone; the id comes back through `returns` instead. A
   later step declares `from: { projectId: [createProjectStep, "id"] }` to
   read it by key — `nuka check` verifies the binding order before anything
-  runs, and the read shows up in that later step's own receipt (the
+  runs, and the read shows up in that later step's own step record (the
   `resultOf` fixture stays available for the rarer read a key name can't
   express).
 - The argument is a named capture bound to a schema key
@@ -175,7 +175,7 @@ What changed:
   becomes which field.
 - `mutates: true` is now a declaration, not just a fact about what the code
   happens to do — `nuka check` warns if this step is ever bound to `Then`,
-  and a read-only environment refuses to run it at all. The receipt still
+  and a read-only environment refuses to run it at all. The step record still
   records what the run actually sent, for review, but that count doesn't
   get the step rejected.
 - `this.request` becomes the `request` fixture, named by destructuring the

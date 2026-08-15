@@ -31,7 +31,7 @@ function buildJUnitXml(ndjson: string): string {
 }
 
 async function readMessagesFile(rootDir: string): Promise<string> {
-  const output = path.join(rootDir, ".nukadoko", "messages.ndjson");
+  const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
   return readFile(output, "utf8");
 }
 

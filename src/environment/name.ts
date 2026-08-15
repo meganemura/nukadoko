@@ -1,7 +1,7 @@
 import { InvalidEnvironmentNameError } from "./errors.js";
 
 // Responsibility: the one validity check on a runtime `--env` value that is
-// used directly as a filesystem path segment (sessions/<env>/...) *without*
+// used directly as a filesystem path segment (cache/sessions/<env>/...) *without*
 // first being looked up against nukadoko.config.ts's `environments` — i.e.
 // `nuka session clear --env <name>`. `nuka do
 // --env` doesn't need this check separately: any name failing this pattern

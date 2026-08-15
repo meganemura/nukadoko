@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// No allure facade call, no World channel at all — proves the receipt's own
+// No allure facade call, no World channel at all — proves the step record's own
 // `declared` field is omitted entirely when nothing was ever recorded (this
 // task's spec, test list's last bullet).
 export default defineStep({

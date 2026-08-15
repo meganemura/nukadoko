@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "nukadoko";
 
-// A plain `throw` classifies as ErrorKind "step_error" (receipt/types.ts:
+// A plain `throw` classifies as ErrorKind "step_error" (record/types.ts:
 // "every other throw is step_error"), which is one of only two kinds Allure
 // maps to its own "failed" status rather than "broken"
 // (src/report/allure/map-scenario.ts's FAILED_KINDS) -- the stage 2

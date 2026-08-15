@@ -43,7 +43,7 @@ describe("nuka run: allure-results wiring", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes categories.json, environment.properties, and one result file per step under the default .nukadoko/allure-results/", async () => {
+  it("writes categories.json, environment.properties, and one result file per step under the default .nukadoko/export/allure-results/", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/passing.feature"], {
@@ -60,7 +60,7 @@ describe("nuka run: allure-results wiring", () => {
     const stdoutLines = stdout.text().split("\n").filter((line) => line.length > 0);
     expect(stdoutLines).toHaveLength(1);
 
-    const resultsDir = path.join(rootDir, ".nukadoko", "allure-results");
+    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
     expect(existsSync(path.join(resultsDir, "environment.properties"))).toBe(true);
     // passing.feature has two steps (allure-step-as-test task spec, decision
@@ -98,7 +98,7 @@ describe("nuka run: allure-results wiring", () => {
     expect(resultFiles(resultsDir)).toHaveLength(2);
     // The default location is untouched — the override moves the output,
     // it doesn't add a second copy.
-    expect(existsSync(path.join(rootDir, ".nukadoko", "allure-results"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(false);
   });
 
   it("creates no allure-results directory at all for a run that selects zero pickles", async () => {
@@ -113,7 +113,7 @@ describe("nuka run: allure-results wiring", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).toBe("");
     expect(stripRunProgressLines(stderr.text())).toBe("");
-    expect(existsSync(path.join(rootDir, ".nukadoko", "allure-results"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(false);
   });
 
   it("writes a step's own test the moment that step finishes, not batched at scenario end (allure-step-as-test task spec, decision 2 — observed via real file mtimes, not by reading the code)", async () => {
@@ -127,11 +127,11 @@ describe("nuka run: allure-results wiring", () => {
 
     expect(exitCode).toBe(0);
 
-    const resultsDir = path.join(rootDir, ".nukadoko", "allure-results");
+    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     const files = resultFiles(resultsDir);
     expect(files).toHaveLength(2);
 
-    // Identify each file by its own mapped `start` (the receipt's own
+    // Identify each file by its own mapped `start` (the step record's own
     // started_at, map-scenario.ts's `mapStep`) rather than by array order,
     // which readdirSync makes no guarantee about.
     const results = files.map((name) => ({ name, body: readResult(resultsDir, name) as { start?: number } }));
@@ -171,8 +171,8 @@ describe("nuka run: allure-results wiring", () => {
       // is not this test's job (tests/run-progress-log.test.ts already
       // does). What this test proves is that Allure's own output is
       // unaffected by it either way.
-      const loudResultsDir = path.join(rootDir, ".nukadoko", "allure-results");
-      const quietResultsDir = path.join(quietDir, ".nukadoko", "allure-results");
+      const loudResultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
+      const quietResultsDir = path.join(quietDir, ".nukadoko", "export", "allure-results");
       expect(resultFiles(quietResultsDir)).toHaveLength(resultFiles(loudResultsDir).length);
       expect(existsSync(path.join(quietResultsDir, "categories.json"))).toBe(true);
 
@@ -198,7 +198,7 @@ describe("nuka run: allure-results wiring", () => {
     });
     expect(firstExit).toBe(0);
 
-    const resultsDir = path.join(rootDir, ".nukadoko", "allure-results");
+    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     const firstHistoryIds = resultFiles(resultsDir).map((name) => (readResult(resultsDir, name) as { historyId?: string }).historyId);
     expect(firstHistoryIds).toHaveLength(2);
     expect(firstHistoryIds.every((id) => id !== undefined)).toBe(true);

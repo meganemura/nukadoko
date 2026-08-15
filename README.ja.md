@@ -2,11 +2,11 @@
 
 > 実装は、いま生成されるようになった。
 > それを検査するものは、そうであってはならない。
-> 自然言語の受け入れ基準と、実際に走ったものとのあいだをつなぐ、型付き step の契約とツールが計測する receipt。
+> 自然言語の受け入れ基準と、実際に走ったものとのあいだをつなぐ、型付き step の契約とツールが計測する step record。
 
 > 原文は README.md。相違があれば原文が正。
 
-nukadoko は、型付き step の契約のもとで Gherkin の scenario を実行し、あらゆる実行について receipt を書きます。
+nukadoko は、型付き step の契約のもとで Gherkin の scenario を実行し、あらゆる実行について step record を書きます。
 それは agent が報告した記録ではなく、ツールが計測した記録です。
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
@@ -103,11 +103,11 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 「何を捕まえられるか」に答えるのは `nuka check --json` です。
 知っているあらゆる finding code を返すので、ここに数を書いて新しいものが増えるたびにずれていく、ということが起きません。
 
-scenario なしで 1 step だけを単独で実行すると、実際にその後に残るものが分かります: pass/fail の 1 行ではなく、receipt です。
+scenario なしで 1 step だけを単独で実行すると、実際にその後に残るものが分かります: pass/fail の 1 行ではなく、step record です。
 
 ```json
 {
-  "receipt_id": "rcpt-20260804-224640-50lp",
+  "record_id": "step-20260804-224640-50lp",
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },
@@ -118,15 +118,15 @@ scenario なしで 1 step だけを単独で実行すると、実際にその後
 ```
 
 (`evidence`、`environment`、`session`、および各種タイムスタンプは、上では紙面の都合で省いています。
-実物の receipt にはそれらも入っています。)
+実物の step record にはそれらも入っています。)
 
 既存の cucumber-js のスイートも、import を 1 つ切り替えるだけでこの扉に届きます(下の [The compat door](#the-compat-door) を参照)。
 ただし compat の step には型付きの契約がなく、`nuka check` にはここで feature の行を突き合わせる相手がありません。
 `nuka do` は、そうした step を名前で実行することを一切拒否します。
 
-`check` は安価な静的ゲートであり、`run` は receipt の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
+`check` は安価な静的ゲートであり、`run` は step record の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
-その accept の記録は Markdown ファイルで、`<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で feature の隣に書かれます: feature の全文、scenario の記録、そして各 step の receipt(evidence は取り除かれたもの)です。
+その accept の記録は Markdown ファイルで、`<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で feature の隣に書かれます: feature の全文、scenario の記録、そして各 step 自身の step record(evidence は取り除かれたもの)です。
 それにはさらに `Declared vs observed` という節があり、`mutates: false` と宣言していながら書き込みを行ったと計測された step をすべて一覧します。
 レビュアーはこれによって、自分で計算し直さなくても宣言と計測がどこで食い違ったかを確認できます。
 sign-off 自体は `(environment, browser)` の組ひとつに紐づき、これは run 自身の計測から読み取られるものであって、宣言されるものではありません。
@@ -165,14 +165,14 @@ Gherkin は、これが守るものではない。
 **agent-first はスローガンではなく、設計上の制約**
 
 agent は、介助なしにループ全体を完了できなければなりません。
-語彙を発見し(`nuka steps --json`)、契約を読み(`nuka describe`、スキーマは JSON Schema として)、1 つの step を実行し(`nuka do`、receipt は stdout に、意味のある exit code とともに)、バリデーション済みの result を読み、次の呼び出しを決めます。
+語彙を発見し(`nuka steps --json`)、契約を読み(`nuka describe`、スキーマは JSON Schema として)、1 つの step を実行し(`nuka do`、step record は stdout に、意味のある exit code とともに)、バリデーション済みの result を読み、次の呼び出しを決めます。
 語彙に操作が欠けているときは、agent が新しい step を scaffold して実装し、人間がその PR をレビューします。
 
 その制約こそが、この設計の大部分を生み出しました。
 step は単独で実行可能でなければならず、そのため依存関係は World ではなくシグネチャに現れなければなりません。
 だからこそ `this.foo` は、データフローを隠す場所ではなくなるのです。
 result は次の呼び出しから読めなければならず、そのため捨てられるのではなくバリデーションされなければなりません。
-agent によるある実行の報告は、その実行の記録そのものにはなり得ないため、ツールが receipt を書きます。
+agent によるある実行の報告は、その実行の記録そのものにはなり得ないため、ツールが step record を書きます。
 これらはどれも、agent のために作られ、その後で人間向けに正当化された、というものではありません。
 どちらの立場から見ても同じ性質であり、agent が動かせるスイートは、結局のところ人がデバッグできるスイートでもあるのです。
 
@@ -194,7 +194,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、receipt、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
@@ -216,7 +216,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 **secret に manifest は要らない**
 
 すでにある env file を `envFiles` に指定すれば、分類は git が行います。
-git が追跡していないファイルは secret source であり、そこで定義された値はログと receipt から伏せられます。
+git が追跡していないファイルは secret source であり、そこで定義された値はログと step record から伏せられます。
 追跡されているファイルは平文の設定として、そのまま扱われます。
 宣言することも、別のファイルへ手で写すこともありません。
 
@@ -242,7 +242,7 @@ Given("a project {string} exists", async function (name: string) {
 });
 ```
 
-After(`defineStep`、named capture、zod、receipt が付く):
+After(`defineStep`、named capture、zod、step record 付き):
 
 ```ts
 // features/steps/create-project.ts
@@ -263,12 +263,12 @@ export default defineStep({
 ```
 
 - named capture(`{name:string}`)は、値を名前で `args.name` に結び付けます。位置キャプチャでは、同じ型の値 2 つを pattern 内で入れ替えると、どちらの値がどこに入るかが黙って入れ替わります。`nuka check` は、それが起きる前に、裸の `{string}` もエラーとして検出します。
-- `args` と `returns` は、実行境界でバリデーションされる zod のスキーマです。receipt の `result` は、step が返しただけのものではなく、ツールがバリデーション済みのものです。
+- `args` と `returns` は、実行境界でバリデーションされる zod のスキーマです。step record の `result` は、step が返しただけのものではなく、ツールがバリデーション済みのものです。
 - 上の `request`(そして browser の step 向けの `page`)は、`run` の第一引数である fixture bag から直接分割代入されたものです。
   step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません。
   どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
-- `nuka do create-project --args '{"name":"acme"}'` は、この 1 step だけを実行して receipt を出力します。agent の探索ループが成り立つ最小単位で、他に何も用意する必要がありません。
+- `nuka do create-project --args '{"name":"acme"}'` は、この 1 step だけを実行して step record を出力します。agent の探索ループが成り立つ最小単位で、他に何も用意する必要がありません。
 
 ## What it fixes
 
@@ -280,10 +280,10 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 | The failure | What nukadoko does about it |
 |---|---|
 | 重複する step(どれが一致したか分からない) | `nuka check` は、何かが実行される前に、同じテキストが 2 回登録されている **duplicate patterns** と、feature の 1 行に異なる 2 つの pattern がどちらも一致し得る **ambiguous steps** を報告します |
-| `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、後続の step はそのうち 1 つのキーを名前で読むために `from` を宣言します。この依存関係は diff 上で見える import として現れ、読んだ事実は読み手側 step の receipt に記録され、束縛の順序が壊れていれば `nuka check` が実行前に検出します(参照: [Chaining steps](docs/spec.md#chaining-steps)) |
-| `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が観測したネットワークの読み書き、evidence、environment、target version を記録した receipt を書きます |
+| `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、後続の step はそのうち 1 つのキーを名前で読むために `from` を宣言します。この依存関係は diff 上で見える import として現れ、読んだ事実は読み手側 step の step record に記録され、束縛の順序が壊れていれば `nuka check` が実行前に検出します(参照: [Chaining steps](docs/spec.md#chaining-steps)) |
+| `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が観測したネットワークの読み書き、evidence、environment、target version を記録した step record を書きます |
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
-| 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも receipt に記録されます。 |
+| 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
 
 最後の項目は正確に言う価値があります。
 このツールはかつて、約束ではなく計測された回数に対して失敗しており、それは言い過ぎでした。
@@ -291,7 +291,7 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 そうしたものを呼ぶ正直な `mutates: false` の step は、それでも書き込みとしてカウントされてしまいます。
 一般的な HTTP レイヤーのルールでは、それを本物の書き込みと区別できないからです。
 そこで nukadoko は代わりに宣言を信頼します。
-実行が自分自身の request context と page を通じて実際に行った非 GET な呼び出しはいまも数えますが、その回数はもはや判定ではなく receipt 上の記録です。
+実行が自分自身の request context と page を通じて実際に行った非 GET な呼び出しはいまも数えますが、その回数はもはや判定ではなく step record 上の記録です。
 
 ## Reports fill themselves
 
@@ -299,7 +299,7 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 
 従来型の Cucumber の実行がレポートに映す evidence は、チームが自分で仕込んだものです(trace やスクリーンショットのための hook の boilerplate を、プロジェクトごとに書いて保守しています)。
 [Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を emit するだけで、HTML 自体は決してレンダリングしません。
-emitter は、何も仕込まずに、あらゆる receipt からレポートを満たします。
+emitter は、何も仕込まずに、あらゆる step record からレポートを満たします。
 バリデーション済みの result、trace、HTTP log、observed な読み書き、environment と version です。
 その中の 1 つ(バリデーション済みの per-step result)は、レポート側のどんな努力を積んでも足せません。
 従来型の Cucumber は step の返り値を捨ててしまうからです。
@@ -309,21 +309,21 @@ emitter は、何も仕込まずに、あらゆる receipt からレポートを
 1 回の試行と 40 回の試行では直し方が正反対になりますが、それを見分けられるのはレポートの中でここだけです。
 ページ自身が述べたこと(console error、捕捉されないエラー、失敗したリクエスト)の件数が step のそばに置かれるので、ページが 3 件の捕捉されないエラーを投げながら通った step は、誰も attachment を開かなくてもそれを語ります。
 添付される trace はその step 自身のものであり scenario 全体のものではないため、失敗した step はさがし回らずに直接開けます。
-同じ `trace.zip` は receipt の下にも単体で置かれており、Allure を介さずに `npx playwright show-trace <evidence.dir>/trace.zip` で直接開けます。
-receipt も全文がそのまま添付され、それがこの一覧を古びさせずにいる理由です。
-receipt が後から何を得ても、2 つ目の対応表を覚える必要なくレポートに届きます。
+同じ `trace.zip` は step record の下にも単体で置かれており、Allure を介さずに `npx playwright show-trace <evidence.dir>/trace.zip` で直接開けます。
+step record も全文がそのまま添付され、それがこの一覧を古びさせずにいる理由です。
+step record が後から何を得ても、2 つ目の対応表を覚える必要なくレポートに届きます。
 
 あわせて cucumber-messages(NDJSON)の emitter も同梱されており、移行するチームの既存フォーマッタと JUnit ベースの CI をそのまま動かし続けます。
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 [Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
 
 どちらの emitter も設定ゼロで動き、有効化するためのフラグはありません。
-`nukadoko.config.ts` の `allure` と `messages` は、出力先を既定の `.nukadoko/allure-results` と `.nukadoko/messages.ndjson` から移すだけのキーです。
+`nukadoko.config.ts` の `allure` と `messages` は、出力先を既定の `.nukadoko/export/allure-results` と `.nukadoko/export/messages.ndjson` から移すだけのキーです。
 
 nukadoko が書くのは結果であって HTML ではないため、それを描画するのは Allure 3 の CLI です(`npm i -g allure`、または以下のように `npx allure`)。
 
 ```sh
-R=.nukadoko/allure-results
+R=.nukadoko/export/allure-results
 npx allure watch $R --output .nukadoko/allure-report     # live, re-renders as a run writes
 npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
@@ -348,7 +348,7 @@ Allure はこれを省くとカレントディレクトリの `allure-report/` �
 suite の行は依然として scenario 全体の集計を持つので、長い scenario でも、終わるのを待たずその step のどれかが落ちた瞬間に赤くなります。
 待ち受けるポートはランダムです(`--port` で固定できます)。
 `--open` を渡さないかぎり、ブラウザが開くことはありません。
-`nuka init` は `.nukadoko/allure-results/` をあらかじめ作るので、最初の `nuka run` より前から `watch` を起動しておけます。
+`nuka init` は `.nukadoko/export/allure-results/` をあらかじめ作るので、最初の `nuka run` より前から `watch` を起動しておけます。
 ライブ更新の仕組みと、step 単位の粒度が Allure 自身の history や trend にどう跳ね返るかは [Allure emitter](docs/spec.ja.md#allure-emitter) を参照してください。
 
 `allure-results/` は追記のみで、nukadoko がそれを消すことはありません。
@@ -362,14 +362,14 @@ suite の行は依然として scenario 全体の集計を持つので、長い 
 スクリプト化された scenario が壊れるのは、アプリが変わったからであり、テストが間違っていたからではありません。
 nukadoko が作られているのは、この修復のループのためです。
 
-1. agent は `nuka do` を使い、1 step ずつ各 receipt を読んで次の呼び出しを決めながら、目標を適応的に再実行します。
+1. agent は `nuka do` を使い、1 step ずつ各 step record を読んで次の呼び出しを決めながら、目標を適応的に再実行します。
    壊れた scenario をそのまま再生しているのではなく、いま何が通用するのかを見つけ出しているのです。
-2. それらの receipt は、実際にうまくいった手順を記録します。
+2. それらの step record は、実際にうまくいった手順を記録します。
    それは定義上、スクリプト化されたものから逸脱しています。
-   receipt は修復の物語であり、証明ではありません。
+   step record は修復の物語であり、証明ではありません。
    agent は PR の中で、それらをまさにその物語として引用します。
 3. PR は型付き step または feature ファイルを更新し、その証明となるのは修復された scenario が green で通ることです。
-   すなわち scenario の記録とその receipt であり、他のどんな変更とも同じようにレビューされます。
+   すなわち scenario の記録とその step record であり、他のどんな変更とも同じようにレビューされます。
 
 要点は手順 2 です。
 **監査証跡のない self-healing は、スイートが気づかないうちに何もテストしなくなる仕組みそのものです。**
@@ -383,7 +383,7 @@ nukadoko の貢献は、すべての段階が記録を残すことです。
 
 このループが**捕まえられない**のは、スイートが空洞化するもう一つの経路です。
 scenario 自体はそのままに、その `Then` が静かに弱くなっていくというものです。
-receipt が記録するのは実行が何をしたかであって、assertion がいまも何かを意味しているかどうかではありません。
+step record が記録するのは実行が何をしたかであって、assertion がいまも何かを意味しているかどうかではありません。
 その部分はレビューに委ねられたままであり、[What this does not do](#what-this-does-not-do) がそのことをはっきり述べています。
 
 ## Skills for coding agents
@@ -418,13 +418,13 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 この節は、それがある場合のためのものです。
 
 既存の Cucumber + Playwright スイートの移行経路は、import を 1 つ切り替えることです。
-`@cucumber/cucumber` の代わりに `nukadoko/compat` を使い、同じ pattern の構文、hooks、World をそのまま動かしながら、その裏で nukadoko の harness が receipt の計測を始めます。
+`@cucumber/cucumber` の代わりに `nukadoko/compat` を使い、同じ pattern の構文、hooks、World をそのまま動かしながら、その裏で nukadoko の harness が step record の計測を始めます。
 step を `defineStep` に昇格させるかどうかは、そこから先は書き換えではなく step ごとの判断になり、半分だけ昇格したスイートもそのまま通り続けます。
 
 扉はスイートが入ってくる場所であって、留まる場所ではありません。
 compat の step は evidence と `observed` の件数を新たに得ます。
 それは、それまで持っていなかったものです。
-けれども return 値は捨てられ、receipt は `result: null` を記録します。
+けれども return 値は捨てられ、step record は `result: null` を記録します。
 バリデーション済みの result より先にあるものは、すべて手の届かないところに残ります: `nuka check` が feature を突き合わせる契約はなく、依存関係を宣言する `from` もなく、sign-off が述べるのは「step が実行された」ことであって「述べられた契約が保たれた」ことではありません。
 それらこそが昇格させる理由であり、昇格させることがこの扉の目的です。
 
@@ -483,7 +483,7 @@ for this project's end-to-end / acceptance tests.
 
 1. Current state — what test suite exists today: scope, coverage, what
    executes it.
-2. Fit — how typed steps + receipts would change the way an agent runs
+2. Fit — how typed steps + step records would change the way an agent runs
    this suite's checks: which flows become vocabulary, and what the
    explore-execute-decide loop looks like concretely here.
 3. First three migration moves — the first commands to run and the first
@@ -513,13 +513,13 @@ access to a document you need, say so rather than assuming.
 ```yaml
 # excerpt from a CI workflow
 - run: npx nuka check              # PR gate: static, seconds, no browser
-- run: npx nuka run features/      # merge/deploy gate: executes, writes receipts
+- run: npx nuka run features/      # merge/deploy gate: executes, writes step records
 ```
 
 `nuka check` はあらゆる PR に置いてください。
 安価なゲートであり、何かが実行されるより前に落とせます。
 `nuka run` は、実際に真でなければならないゲート、すなわち merge や deploy の側に置いてください。
-実行して receipt の証跡を残すのはこちらだからです。
+実行して step record の証跡を残すのはこちらだからです。
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
 stdout はどちらの場合も NDJSON のままです。
@@ -527,12 +527,12 @@ stdout はどちらの場合も NDJSON のままです。
 **記録を置き換える retry は恒久的にスコープ外であり、「いまはまだ」ではありません。**
 green な scenario は、その待ちが正しい場所に置かれている証拠には一切なりません。
 scenario が必要としたあらゆる待ちは、もっと下流のどこかに偶然置かれていても供給され得たものであり、それらを一切通らない経路だけが、待ちが本来どこに属するかを示せます([Design](#design) を参照)。
-receipt の `polls` フィールドは、すでにそれを正直に保っています。
+step record の `polls` フィールドは、すでにそれを正直に保っています。
 即座に返った 1 回の試行と、20 秒待ち続けた 40 回の試行とを区別します。
 step 全体を通るまで再実行し、勝った試行だけを残す retry は、green な実行を買うためにその区別を捨ててしまいます。
 ここでスコープ外とされているのはまさにこの形です。
 Playwright 自身の `retries` と `testInfo.retry` が取る形であり、最後の試行だけが最終レポートに残ります。
-scenario を複数回走らせながら、すべての試行の記録と receipt を残し、どの試行が通ったかを名指しすることは、これとは別の形です。
+scenario を複数回走らせながら、すべての試行それぞれの記録を残し、どの試行が通ったかを名指しすることは、これとは別の形です。
 この形によって、記録が語れない事実を語ることにはなりません。
 この形をスコープ外にしているわけではありません。
 nukadoko が今日それを行う手段をまだ出荷していないというだけです。
@@ -556,9 +556,9 @@ CI ランナーが並列でどれだけカバーできるかは関係ありま�
 
 **これがやらないこと**
 
-- **Receipts は偽造不可能ではありません。** shell アクセスを持つ agent は、receipt を含めどんなファイルでも書けます。これは secrets と同じ、正直な限界です。nukadoko がなくすのは、agent の **説明** を信頼する必要そのものです。実行と計測はツール側にとどまり、それを語る agent 側にはありません。
+- **Step record は偽造不可能ではありません。** shell アクセスを持つ agent は、step record を含めどんなファイルでも書けます。これは secrets と同じ、正直な限界です。nukadoko がなくすのは、agent の **説明** を信頼する必要そのものです。実行と計測はツール側にとどまり、それを語る agent 側にはありません。
 - **assertion が何かを本当に assert しているかは検査しません。** ある step がその description の主張どおりに正直に動くかどうかは、PR レビューに委ねられます。ツールが保証するのは入出力の形と実行された事実だけです。型付きの契約は、空の assertion をレビューで見つけやすくしますが、それを自動的に拒むものは何もありません。
-- **`mutates` は信頼される宣言であり、network が示す内容から導き直されるものではありません。** 書き込みの検出は HTTP メソッドに基づいており、これは書き込みの意味論そのものではなく、そのためのプロキシです。純粋にクライアント側だけの状態や、GET で mutate してしまうサーバーは、これでは見えません。一方で、意味的には純粋な読み取りを POST 上に実装している step(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)は、一度も行っていない書き込みとしてカウントされてしまいます。この 2 つのケースを一般的な HTTP レイヤーのルールで区別することはできません。だからこそ nukadoko は、その回数で step を失敗させるのをやめました。詳しい議論は [キーワードの意味論](docs/spec.ja.md#キーワードの意味論) を参照してください。その回数はいまも receipt と Allure に記録されるため、誤った `mutates` の宣言は事後に反証可能です。判断を担うのは宣言とレビューです。
+- **`mutates` は信頼される宣言であり、network が示す内容から導き直されるものではありません。** 書き込みの検出は HTTP メソッドに基づいており、これは書き込みの意味論そのものではなく、そのためのプロキシです。純粋にクライアント側だけの状態や、GET で mutate してしまうサーバーは、これでは見えません。一方で、意味的には純粋な読み取りを POST 上に実装している step(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)は、一度も行っていない書き込みとしてカウントされてしまいます。この 2 つのケースを一般的な HTTP レイヤーのルールで区別することはできません。だからこそ nukadoko は、その回数で step を失敗させるのをやめました。詳しい議論は [キーワードの意味論](docs/spec.ja.md#キーワードの意味論) を参照してください。その回数はいまも step record と Allure に記録されるため、誤った `mutates` の宣言は事後に反証可能です。判断を担うのは宣言とレビューです。
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - **CI レポーティングと HTML のレンダリングは組み込まれていません。** レンダリングを担うのは Allure のダッシュボードです(上記)。CI で何が動き何が動かないか、なかでもリトライだけが計画されていない理由は、[Running this in CI](#running-this-in-ci) で扱っています。
 
@@ -585,13 +585,13 @@ description のないスキーマフィールドは、ファイルを見る人�
 あらゆる run の前に出力されていたら、本当に止めるべき行までみんなが読み飛ばすことを覚えてしまうでしょう。
 
 これは、床がいまどこにあるか(語彙のうちどれだけが、まだ compat のままではなく型付きになっているか)から始まります。
-それは、その数がこれまで receipt のディレクトリを読むことでしか見えず、そんなことをする者は誰もいなかったからです。
+それは、その数がこれまで step record のディレクトリを読むことでしか見えず、そんなことをする者は誰もいなかったからです。
 
 ## Design
 
 **設計**
 
-設計の全体、すなわち課題設定、型付き step、キーワードの意味論、receipt、session/environment/secret、sign-off、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
+設計の全体、すなわち課題設定、型付き step、キーワードの意味論、record、session/environment/secret、sign-off、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
 
 English: [README.md](README.md) / [docs/spec.md](docs/spec.md)
 

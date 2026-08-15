@@ -1,40 +1,52 @@
-// Responsibility: the receipt shape from docs/spec.md "Receipts", typed as
-// the discriminated union `status` actually implies — `ReceiptOk` carries
-// `result`, `ReceiptFailed` carries `error`, never both. `session` and
+// Responsibility: the step record shape from docs/spec.md "Records", typed as
+// the discriminated union `status` actually implies — `StepRecordOk` carries
+// `result`, `StepRecordFailed` carries `error`, never both. `session` and
 // `environment` were each widened in turn as their own slices landed instead
 // of being left open from the start — `session` from a `null`-only
 // placeholder to `string | null` (sessions slice), and `environment` from a
 // `"default"`-only placeholder to `string`, plus the optional
 // `target_version`. `kind` and
-// `scenario` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a receipt's origin apart — the
+// `scenario` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a step record's origin apart — the
 // distinction matters for the Allure mapping and sign-off contexts, per
 // docs/spec.md — and `scenario: string | null` carries the owning scenario's
-// id for a `run`-originated receipt, `null` for a `do`-originated one.
+// id for a `run`-originated step record, `null` for a `do`-originated one.
+//
+// This shape was called `Receipt` before this rename. Step-level and
+// scenario-level records both answer the same question, what did this
+// execution actually do, but had used two unrelated words for it: `Receipt`
+// here, `record` for the scenario level (src/run/record-types.ts). One
+// purpose, two vocabularies. The old name also carried little of that
+// meaning on its own: a receipt, in the everyday sense, is proof a
+// transaction happened, not a record of what happened during one. What the
+// old name actually carried was never the name itself: it was the fact that
+// `StepRecordOk.result` had passed the step's own `returns` schema. That
+// fact does not move when the name does, so this rename costs a reader
+// nothing they depended on.
 //
 // `observed` is added now: the
 // network calls the tool itself measured this execution making, never what
-// a step declared. It is required on both `ReceiptOk` and `ReceiptFailed` —
-// unlike `target_version`, there is no "not applicable" case for it, only
-// "zero calls happened" (`{ http_reads: 0, http_writes: 0 }`).
+// a step declared. It is required on both `StepRecordOk` and
+// `StepRecordFailed` — unlike `target_version`, there is no "not applicable"
+// case for it, only "zero calls happened" (`{ http_reads: 0, http_writes:
+// 0 }`).
 //
 // `used` is added now: measured
-// provenance, the receipts `ctx.resultOf` actually read a value from during
-// this execution (docs/spec.md "Receipts"). Optional and omitted when
-// empty — unlike `observed`, "no reads happened" is the overwhelmingly
+// provenance, the step records `ctx.resultOf` actually read a value from
+// during this execution (docs/spec.md "Records"). Optional and omitted
+// when empty — unlike `observed`, "no reads happened" is the overwhelmingly
 // common case (most steps never call `resultOf` at all), so this follows
 // `target_version`'s "absence is the normal case" convention instead.
 //
-// `used`'s own entry shape widens from a bare receipt id string to
-// `{ receipt, step }` now: a `from`
+// `used`'s own entry shape widens from a bare step record id string to
+// `{ record, step }`: a `from`
 // injection (docs/spec.md "Chaining steps") is a second way this array gets
-// populated, alongside `ctx.resultOf`, and docs/spec.md "Receipts" always
-// described the richer shape — "Each entry is `{ "receipt": "rcpt-…", "step":
-// "create-project" }`" — that this field is only now catching up to. `step`
-// is redundant with the cited receipt (resolving it costs one more file
-// read), which is exactly why it is written down anyway: a receipt legible
-// on its own, without being resolved against another local working file, is
-// worth the duplication. Breaking change, no back-compat shim — 0.1 hasn't
-// shipped.
+// populated, alongside `ctx.resultOf`, both citing the richer shape — each
+// entry is `{ "record": "step-…", "step": "create-project" }`. `step`
+// is redundant with the cited step record (resolving it costs one more file
+// read), which is exactly why it is written down anyway: a step record
+// legible on its own, without being resolved against another local working
+// file, is worth the duplication. Breaking change, no back-compat shim —
+// 0.1 hasn't shipped.
 //
 // `sections` is added now: the labels
 // `ctx.section` was called with during this execution, in call order — how
@@ -43,26 +55,27 @@
 // while a premature one would just sit unused). Optional and omitted when
 // empty, the same convention `used` follows for the same reason (most steps
 // never call it). No separate `error.section` field exists on
-// `ReceiptFailed`: a failed step's `sections` array still carries whichever
-// labels it reached before failing, and its last element already answers
-// "which stage was it in" — one fact, one place to read it.
+// `StepRecordFailed`: a failed step's `sections` array still carries
+// whichever labels it reached before failing, and its last element already
+// answers "which stage was it in" — one fact, one place to read it.
 //
 // `sections` widens to `SectionEntry[]` — `{ label, at }` — now: "no
 // start/end timestamps" above was a
 // bet that the shape could wait, and it turned out wrong the first time a
-// receipt was actually read under pressure. A real run left `status:
+// step record was actually read under pressure. A real run left `status:
 // "failed"` sitting next to a `final.png` that showed the target present —
 // `finalize` only screenshots once `run` has already returned or thrown, so
-// the two facts were roughly 8 seconds apart, and nothing on the receipt
-// said so. Read without a clock, that looks like the state flickered; it
-// was misdiagnosed as exactly that. A label alone says a stage was reached,
-// never when relative to anything else this receipt also carries — `at`
-// (ISO 8601, collected by `SectionsCollector` itself, never passed in by a
-// step: a step-supplied time would be a claim, not a measurement) puts every
-// label on the same absolute timeline `started_at`/`finished_at`,
-// `polls`' own `at`, and each `evidence.screenshots[].at` already share, so
-// "did the state actually change" and "was this read taken before it
-// settled" stop being indistinguishable from a receipt alone.
+// the two facts were roughly 8 seconds apart, and nothing on the step
+// record said so. Read without a clock, that looks like the state
+// flickered; it was misdiagnosed as exactly that. A label alone says a
+// stage was reached, never when relative to anything else this step record
+// also carries — `at` (ISO 8601, collected by `SectionsCollector` itself,
+// never passed in by a step: a step-supplied time would be a claim, not a
+// measurement) puts every label on the same absolute timeline
+// `started_at`/`finished_at`, `polls`' own `at`, and each
+// `evidence.screenshots[].at` already share, so "did the state actually
+// change" and "was this read taken before it settled" stop being
+// indistinguishable from a step record alone.
 //
 // `polls` is added now: every `ctx.poll` call
 // that finished during this execution, in completion order rather than call
@@ -71,14 +84,14 @@
 // carry timing (`attempts`, `waited_ms`): the question `polls` exists to
 // answer is a timing one — one attempt at 0ms says a wait was a no-op, many
 // attempts over seconds says something else was genuinely late, and those
-// two looked identical from a receipt for as long as `poll` stayed a pure
-// import that wrote nothing down (docs/spec.md "Context API": "poll was an
-// import for exactly as long as it recorded nothing, and arriving there was
-// the same mistake twice"). `outcome: "failed"` means `fn` itself threw,
-// and that throw still propagates to the step — `polls` records the fact,
-// never swallows it. Present only when non-empty, `used`/`sections`' own
-// convention; a compat step has no `ctx` to call `poll` on, so this field is
-// simply omitted for one, the same way `sections` is.
+// two looked identical from a step record for as long as `poll` stayed a
+// pure import that wrote nothing down (docs/spec.md "Context API": "poll
+// was an import for exactly as long as it recorded nothing, and arriving
+// there was the same mistake twice"). `outcome: "failed"` means `fn` itself
+// threw, and that throw still propagates to the step — `polls` records the
+// fact, never swallows it. Present only when non-empty, `used`/`sections`'
+// own convention; a compat step has no `ctx` to call `poll` on, so this
+// field is simply omitted for one, the same way `sections` is.
 //
 // `PollRecord.at` is added now: a
 // `waited_ms` duration alone has no fixed point to measure from, so a poll
@@ -86,15 +99,15 @@
 // `evidence.screenshots[].at` share — and putting timestamps on only one of
 // "how far" (`sections`) and "how long" (`polls`) would still leave the
 // other unplaceable. `at` is the poll's own start (`pollWithRecording`
-// already measured it as `startedAt`; this only exposes it), so a receipt
-// reader can line up every stage and every wait without opening trace.zip
-// by hand.
+// already measured it as `startedAt`; this only exposes it), so a step
+// record reader can line up every stage and every wait without opening
+// trace.zip by hand.
 //
 // `world` is added now: a compat step's
 // own World reads/writes, measured the same "always on" way `observed` is —
 // deduplicated, in access order, both arrays omitted together (`used`'s own
 // convention) when a step never touched `this` at all. Never present on a
-// typed step's receipt: a typed step has no World to read or write (its
+// typed step's step record: a typed step has no World to read or write (its
 // `run(fixtures, args)` never receives `this`), so its own tally is always empty
 // and this field is always omitted for it — no separate "kind" check is
 // needed to enforce that.
@@ -131,18 +144,18 @@
 // browser context produce, which cucumber-js has no way to hold at all — it
 // has no browser context of its own to measure from. A step can pass
 // (`status: "ok"`) while the page underneath it was throwing the whole time,
-// and before this field that fact left no trace on the receipt at all.
+// and before this field that fact left no trace on the step record at all.
 // Measured by `PageEventsCollector` (src/context/page-events.ts), which also
 // documents *why* each category is shaped the way it is (console limited to
 // `error`, `weberror` never carrying `Error#stack`, the 100-entries-per-
 // category cap reported through the sibling `truncated` field rather than by
 // changing a category's own type). Present on both
-// `ReceiptOk` and `ReceiptFailed` alike, and independent of `status`: a page
-// error is evidence about the page, not a verdict on the step. The whole
-// field, and each of its three categories individually, is omitted when
-// empty — `sections`/`used`/`declared`'s own convention — so a step that
-// never called `ctx.page()`, or did and the page stayed clean, carries no
-// `page_events` key at all.
+// `StepRecordOk` and `StepRecordFailed` alike, and independent of `status`:
+// a page error is evidence about the page, not a verdict on the step. The
+// whole field, and each of its three categories individually, is omitted
+// when empty — `sections`/`used`/`declared`'s own convention — so a step
+// that never called `ctx.page()`, or did and the page stayed clean, carries
+// no `page_events` key at all.
 //
 // `error.kind` and `mutates` are added now: M3's Allure interop needs a machine-readable failure
 // marker (Categories.json can't be generated from `error.message`, free
@@ -156,7 +169,7 @@
 // step_error whenever classification is uncertain, since misnaming a
 // failure as a contract failure is worse than not naming it at all.
 // `mutates` mirrors a step's own
-// `defineStep` declaration (default `true`) so a receipt alone can be
+// `defineStep` declaration (default `true`) so a step record alone can be
 // checked against `observed` without a second lookup into the vocabulary;
 // `null` — not `false` — is a compat step's value, since compat has no
 // `mutates` declaration to report at all (`then-compat-step`'s own warning
@@ -187,7 +200,7 @@
 // scenario — see this file's own `evidence.trace`-adjacent notes below and
 // `ScenarioEvidence` in src/run/record-types.ts). Parsing lives in
 // src/context/trace-actions.ts, which also documents the allowlist that
-// keeps a call's own `params` from ever landing on the receipt whole (a
+// keeps a call's own `params` from ever landing on the step record whole (a
 // `setContent` call's own HTML body is the case that motivated it). Present
 // only when non-empty, `page_events`/`sections`' own convention; capped at
 // 100 entries, `truncated: { actions: <true total> }` reporting the same way
@@ -196,11 +209,11 @@
 // `fixtures` is added now: what a step's own
 // bag actually cost to assemble, once user-defined fixtures
 // (`config.fixtures`) exist to cost anything. Teardown is deliberately not
-// here — it runs *after* a step's own receipt is already closed (this
-// file's own header convention: a receipt is what happened during this one
-// execution), so a teardown failure lands on `ScenarioRecord.teardown_errors`
-// (src/run/record-types.ts) instead, the scenario-level counterpart to this
-// field.
+// here — it runs *after* a step's own step record is already closed (this
+// file's own header convention: a step record is what happened during this
+// one execution), so a teardown failure lands on
+// `ScenarioRecord.teardown_errors` (src/run/record-types.ts) instead, the
+// scenario-level counterpart to this field.
 //
 // `EvidenceMeta.attachments` is added now: the one gap the
 // rest of `evidence` never covered — application-specific evidence (an API
@@ -214,10 +227,11 @@
 // `evidence.screenshots[].at` already follow, so an attachment lands on the
 // same absolute timeline they do. Present only when non-empty; a
 // `evidence.path(name)` call with nothing ever written to the path it
-// returned contributes no entry (docs/spec.md "Receipts": evidence lists
-// only files that exist). `truncated.evidence` (below, ReceiptBase's own
-// field) carries the true total once this list's own 100-entry cap is hit,
-// the same sibling-field convention `truncated.actions` already uses.
+// returned contributes no entry (docs/spec.md "Records": step records list
+// evidence only for files that exist). `truncated.evidence` (below,
+// `StepRecordBase`'s own field) carries the true total once this list's own
+// 100-entry cap is hit, the same sibling-field convention `truncated.actions`
+// already uses.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { HttpOmittedCounts } from "../context/http-omitted.js";
@@ -229,8 +243,8 @@ import type { FixtureUsageEntry } from "../fixture/resolver.js";
 
 export type { FixtureUsageEntry } from "../fixture/resolver.js";
 
-/** The closed set of machine-readable failure causes a receipt's `error` can
- * carry — see this file's own
+/** The closed set of machine-readable failure causes a step record's `error`
+ * can carry — see this file's own
  * header for the classification principle. Each value's own home:
  *
  *   - `args_invalid` — args failed the step's own `args` schema.
@@ -257,7 +271,7 @@ export type ErrorKind =
   | "step_error";
 
 /** One `ctx.section` call's own record (docs/spec.md
- * "Receipts") — a label alone said only *that* execution
+ * "Records") — a label alone said only *that* execution
  * reached a stage, never *when*; `at` is what lets it share one timeline
  * with `polls` and `evidence.screenshots` (see this file's own header for
  * why that gap turned out to matter). */
@@ -271,7 +285,7 @@ export interface SectionEntry {
 }
 
 /** One `ctx.poll` call's own record (docs/spec.md
- * "Receipts"). */
+ * "Records"). */
 export interface PollRecord {
   /** `options.description`, when the call was given one — included in
    * `PollTimeoutError`'s own message too (src/context/poll.ts). */
@@ -297,13 +311,13 @@ export interface PollRecord {
 
 /** One screenshot the harness actually wrote — replaces the former bare
  * file-name string. A second, differently
- * named file used to exist so a failed receipt's evidence was easy to spot,
- * but it was the same buffer as `final.png` written a second time: zero
- * additional information, since `receipt.status` already answers "did this
- * fail", and `finalize` only runs from `dispose` — after `run` has already
- * returned or thrown — so that second copy could show a page that had since
- * changed, without anything on the receipt saying so. `at` is what a second
- * file was standing in for without ever stating it. */
+ * named file used to exist so a failed step record's evidence was easy to
+ * spot, but it was the same buffer as `final.png` written a second time:
+ * zero additional information, since `record.status` already answers "did
+ * this fail", and `finalize` only runs from `dispose` — after `run` has
+ * already returned or thrown — so that second copy could show a page that
+ * had since changed, without anything on the step record saying so. `at`
+ * is what a second file was standing in for without ever stating it. */
 export interface ScreenshotEntry {
   /** The screenshot's file name, relative to `EvidenceMeta.dir` /
    * `ScenarioEvidence.dir` — always `"final.png"`; there is only ever one. */
@@ -331,8 +345,8 @@ export interface EvidenceAttachmentEntry {
 }
 
 export interface EvidenceMeta {
-  /** Receipt directory, relative to the project root (e.g.
-   * ".nukadoko/receipts/rcpt-..."). */
+  /** Step record directory, relative to the project root (e.g.
+   * ".nukadoko/records/steps/step-..."). */
   dir: string;
   /** Present only when a browser was used. */
   trace?: string;
@@ -346,16 +360,17 @@ export interface EvidenceMeta {
   /** Application-specific evidence `evidence.attach`/`evidence.path` added
    * this execution — this file's own header, above. Present
    * only when non-empty; capped at 100 entries, sorted by `at`. The true
-   * total, once that cap is hit, is on the receipt's own top-level
-   * `truncated.evidence` (`ReceiptBase.truncated`, below). */
+   * total, once that cap is hit, is on the step record's own top-level
+   * `truncated.evidence` (`StepRecordBase.truncated`, below), the same
+   * sibling-field convention `truncated.actions` already uses. */
   attachments?: readonly EvidenceAttachmentEntry[];
 }
 
-interface ReceiptBase {
-  receipt_id: string;
+interface StepRecordBase {
+  record_id: string;
   step: string;
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka
-   * run` scenario (docs/spec.md "Receipts": "the same shape whether the step
+   * run` scenario (docs/spec.md "Records": "the same shape whether the step
    * ran inside a scenario or via `do`"). */
   kind: "do" | "run";
   /** Exactly what `--args` deserialized to (`do`) or what the pickle step's
@@ -371,8 +386,8 @@ interface ReceiptBase {
    * (docs/spec.md "Sessions...": no `--session` means a clean start, never
    * an implicit shared session). */
   session: string | null;
-  /** The owning scenario's id for a `run`-originated receipt (`kind: "run"`);
-   * always `null` for a `do`-originated one. */
+  /** The owning scenario's id for a `run`-originated step record
+   * (`kind: "run"`); always `null` for a `do`-originated one. */
   scenario: string | null;
   started_at: string;
   finished_at: string;
@@ -381,10 +396,10 @@ interface ReceiptBase {
    * `ctx.request()` and the page alike — GET/HEAD as reads, everything else
    * as writes. Measured, never declared: this is what run-time keyword
    * enforcement and read-only environments act on (docs/spec.md "Keyword
-   * semantics", "Receipts"). */
+   * semantics", "Records"). */
   observed: ObservedCounts;
   /** Env var names `ctx.requireEnv` was actually called with during this
-   * execution (docs/spec.md "Receipts"). Present only when non-empty;
+   * execution (docs/spec.md "Records"). Present only when non-empty;
    * deduplicated, in read order.
    * Recorded even for a call that throws `MissingEnvError` — measured, not
    * declared, and reading `ctx.env[name]` directly instead leaves no trace
@@ -446,21 +461,22 @@ interface ReceiptBase {
    * its own 100-entry cap — the true total for whichever of
    * the two was actually truncated, the same `{ category: <true total> }`
    * shape `page_events`'s own `truncated` field already uses, `actions`/
-   * `evidence` as this receipt's two categories. Built by `mergeTruncated`
-   * (src/context/evidence.ts), the one place both sources combine into this
-   * single field, so `nuka run`/`nuka do` can never report the two through
-   * two different mechanisms. */
+   * `evidence` as this step record's two categories. Built by
+   * `mergeTruncated` (src/context/evidence.ts), the one place both sources
+   * combine into this single field, so `nuka run`/`nuka do` can never
+   * report the two through two different mechanisms. */
   truncated?: { actions?: number; evidence?: number };
   /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
-   * the counterpart to `observed` a receipt needs to let "declared vs
-   * observed" be checked from the receipt alone. `null` for a compat step:
-   * compat has no `mutates` declaration to
-   * report (`then-compat-step` warns about exactly this gap), so `null` is a
-   * third value, never coerced to `false`. Present on both `ReceiptOk` and
-   * `ReceiptFailed` — the declared/observed comparison matters most for a
-   * run that actually finished. */
+   * the counterpart to `observed` a step record needs to let "declared vs
+   * observed" be checked from the step record alone. `null` for a compat
+   * step: compat has no
+   * `mutates` declaration to
+   * report (`then-compat-step`'s own warning exists for exactly this gap), so
+   * `null` is a third value, never coerced to `false`. Present on both
+   * `StepRecordOk` and `StepRecordFailed` — the declared/observed comparison
+   * matters most for a run that actually finished. */
   mutates: boolean | null;
-  /** The environment's `version` probe result (docs/spec.md "Receipts":
+  /** The environment's `version` probe result (docs/spec.md "Records":
    * optional, "(when probed)"). Present only when the environment configures
    * a probe *and* it resolved to a string within its timeout; omitted — not
    * `null` — when there is no probe, it throws, or it times out, since a
@@ -484,34 +500,34 @@ interface ReceiptBase {
   fixtures?: FixtureUsageEntry[];
 }
 
-export interface ReceiptOk extends ReceiptBase {
+export interface StepRecordOk extends StepRecordBase {
   status: "ok";
   /** Passed the step's `returns` schema; this is the trust anchor
-   * (docs/spec.md "Receipts"). */
+   * (docs/spec.md "Records"). */
   result: unknown;
   /** The earlier executions whose validated results this execution actually
    * read from — through a `from` injection or a `ctx.resultOf` call alike
-   * (docs/spec.md "Receipts"). Present only when non-empty;
-   * deduplicated by receipt id, in read order. `UsedEntry`, not
-   * `UsedEntryWithResult`: an "ok" receipt's own `used` can never carry the upstream's
-   * `result` — the value is already sitting on this step's own
-   * `args`/upstream receipt, and a construction site that tries to hand a
-   * result-bearing entry here fails to compile instead of silently leaking
-   * one. */
+   * (docs/spec.md "Records"). Present only when non-empty;
+   * deduplicated by step record id, in read order. `UsedEntry`, not
+   * `UsedEntryWithResult`: an "ok" step record's own `used` can never carry
+   * the upstream's `result` — the value is already sitting on this step's
+   * own `args`/upstream step record, and a construction site that tries to
+   * hand a result-bearing entry here fails to compile instead of silently
+   * leaking one. */
   used?: UsedEntry[];
 }
 
-export interface ReceiptFailed extends ReceiptBase {
+export interface StepRecordFailed extends StepRecordBase {
   status: "failed";
-  /** `message` is unchanged — the human-readable text this receipt always
-   * had. `kind` is new: a machine-readable
+  /** `message` is unchanged — the human-readable text this step record
+   * always had. `kind` is new: a machine-readable
    * classification alongside it, never a replacement for it. */
   error: { message: string; kind: ErrorKind };
-  /** Same field as `ReceiptOk.used`, but `UsedEntryWithResult`: a failed
-   * step's receipt is exactly where a reader most needs "what upstream
-   * value did this read", without opening a second receipt.json — so
+  /** Same field as `StepRecordOk.used`, but `UsedEntryWithResult`: a failed
+   * step's step record is exactly where a reader most needs "what upstream
+   * value did this read", without opening a second record.json — so
    * `result` is required here, not merely allowed. */
   used?: UsedEntryWithResult[];
 }
 
-export type Receipt = ReceiptOk | ReceiptFailed;
+export type StepRecord = StepRecordOk | StepRecordFailed;

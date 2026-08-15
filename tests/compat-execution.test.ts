@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 // Responsibility: m21b-compat-execution task spec's coverage for the
@@ -59,17 +59,17 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(record.status).toBe("failed");
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain("timed out after 20ms");
-      // m3a-receipt-kinds task spec: identified by type (`CompatTimeoutError`),
-      // never by matching "timed out" in the message — distinct from
-      // "step_error" (an ordinary throw from the same step shape).
-      const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-      expect(receipt.error).toMatchObject({ kind: "timeout" });
+      // Identified by type (`CompatTimeoutError`), never by matching "timed
+      // out" in the message — distinct from "step_error" (an ordinary throw
+      // from the same step shape).
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      expect(stepRecord.error).toMatchObject({ kind: "timeout" });
 
       // The scenario didn't hang on the timed-out step: the next step in
       // the same pickle still got its own record entry (skipped, since the
       // first step already failed).
       expect(record.steps[1].status).toBe("skipped");
-      expect(record.steps[1].receipt).toBeNull();
+      expect(record.steps[1].record).toBeNull();
     });
 
     it("a step finishing well within its own timeout succeeds and clears its own race timer immediately (no leaked Node timer)", async () => {
@@ -118,11 +118,11 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain('"pending"');
       expect(record.steps[0].error.message).toContain("docs/migration.md");
-      // m3a-receipt-kinds task spec: a compat-only shape nukadoko doesn't
-      // implement classifies as "unsupported", never "step_error" (this is
-      // set directly at the point it's detected, not thrown/caught).
-      const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-      expect(receipt.error).toMatchObject({ kind: "unsupported" });
+      // A compat-only shape nukadoko doesn't implement classifies as
+      // "unsupported", never "step_error" (this is set directly at the
+      // point it's detected, not thrown/caught).
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
 
     it('a step returning "skipped" fails with a readable message pointing at docs/migration.md', async () => {
@@ -138,8 +138,8 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain('"skipped"');
       expect(record.steps[0].error.message).toContain("docs/migration.md");
-      const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-      expect(receipt.error).toMatchObject({ kind: "unsupported" });
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
   });
 
@@ -166,8 +166,8 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain("done()");
       expect(record.steps[0].error.message).toContain("docs/migration.md");
-      const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-      expect(receipt.error).toMatchObject({ kind: "unsupported" });
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
   });
 
@@ -188,12 +188,12 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const failedBefore = beforeHooks.find((h: { status: string }) => h.status === "failed");
       expect(failedBefore).toBeDefined();
       expect(failedBefore.error.message).toContain("timed out after 20ms");
-      // m3a-receipt-kinds task spec, decision 2: a hook has no receipt of
-      // its own — the same closed enum lands directly on `record.hooks[]`.
+      // A hook has no step record of its own — the same closed enum lands
+      // directly on `record.hooks[]`.
       expect(failedBefore.error.kind).toBe("timeout");
 
       expect(record.steps[0].status).toBe("skipped");
-      expect(record.steps[0].receipt).toBeNull();
+      expect(record.steps[0].record).toBeNull();
     });
 
     it("a Before hook expecting a done callback fails instead of hanging", async () => {

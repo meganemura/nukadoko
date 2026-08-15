@@ -35,7 +35,7 @@ import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 // ever began.
 
 /** Every fixture actually resolved while assembling one step's bag —
- * receipt-facing (docs/spec.md "Receipts").
+ * step-record-facing (docs/spec.md "Records").
  * Includes every `config.fixtures` entry touched, not only the names the
  * step itself destructured: a fixture built as a side effect of resolving
  * another one is real, measured setup cost, and hiding it would make

@@ -182,7 +182,7 @@ export function createCaptureSink(): { write(chunk: string): boolean; text(): st
 // blanket swallow that could also hide a real warning.
 const SCENARIO_BOUNDARY_LINE = /^scenario \d+\/\d+  /;
 const STEP_PROGRESS_LINE = /^ {2}step \d+\/\d+  /;
-const OUTPUT_LOCATION_LINE = /^(?:receipts|scenarios|allure|messages)\b/;
+const OUTPUT_LOCATION_LINE = /^(?:steps|scenarios|allure|messages)\b/;
 const RUN_SUMMARY_LINE = /^\d+ scenarios?: \d+ passed, \d+ failed {2}\(/;
 
 /** Strips `nuka run`'s own progress-log lines (fb5-run-output task spec)

@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
 // Responsibility: anti-rot proof for examples/migration/README.md (m2e1-
 // migration-example task spec, deliverable 4) -- the shipped, deliberately
 // mid-migration suite (a mix of compat steps and one promoted producer/
-// consumer pair) actually runs green end to end, and the record/receipt
+// consumer pair) actually runs green end to end, and the record/step record
 // shapes the walkthrough quotes as real captured output stay true. Only
 // that mechanical claim is asserted here; the walkthrough's own stage-by-
 // stage narrative is prose a reader enacts by hand, not something this
@@ -70,9 +70,9 @@ async function pointConfigAt(rootDir: string, baseURL: string): Promise<void> {
   );
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("examples/migration", () => {
@@ -106,7 +106,7 @@ describe("examples/migration", () => {
         expect(step.status).toBe("passed");
       }
       // The one Before hook this suite keeps (features/steps/hooks.ts) ran
-      // for every pickle, and reported ok -- no receipt of its own, per
+      // for every pickle, and reported ok -- no step record of its own, per
       // docs/spec.md "Compat steps"/"Running".
       expect(record.hooks).toEqual([{ type: "before", status: "ok" }]);
     }
@@ -123,24 +123,24 @@ describe("examples/migration", () => {
 
     // The undeclared World stash: measured (world.writes/reads) even though
     // no schema validates it.
-    const stashWriteReceipt = await readReceipt(rootDir, stashWriteStep.receipt);
-    expect(stashWriteReceipt.result).toBeNull();
-    expect(stashWriteReceipt.world).toEqual({ reads: [], writes: ["note"] });
-    const stashReadReceipt = await readReceipt(rootDir, stashReadStep.receipt);
-    expect(stashReadReceipt.world).toEqual({ reads: ["note"], writes: [] });
+    const stashWriteStepRecord = await readStepRecord(rootDir, stashWriteStep.record);
+    expect(stashWriteStepRecord.result).toBeNull();
+    expect(stashWriteStepRecord.world).toEqual({ reads: [], writes: ["note"] });
+    const stashReadStepRecord = await readStepRecord(rootDir, stashReadStep.record);
+    expect(stashReadStepRecord.world).toEqual({ reads: ["note"], writes: [] });
 
     // The seeding step: both `observed` (2 POSTs) and `world` (the one
-    // declared key, seededCount) show up on the same receipt -- the exact
+    // declared key, seededCount) show up on the same step record -- the exact
     // claim README.md's "measured for free" section quotes.
-    const seedReceipt = await readReceipt(rootDir, seedStep.receipt);
-    expect(seedReceipt.result).toBeNull();
-    expect(seedReceipt.observed).toEqual({ http_reads: 0, http_writes: 2 });
-    expect(seedReceipt.world).toEqual({ reads: [], writes: ["seededCount"] });
+    const seedStepRecord = await readStepRecord(rootDir, seedStep.record);
+    expect(seedStepRecord.result).toBeNull();
+    expect(seedStepRecord.observed).toEqual({ http_reads: 0, http_writes: 2 });
+    expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
 
     // The RegExp-pattern count assertion: read-only, no World touch.
-    const countReceipt = await readReceipt(rootDir, countStep.receipt);
-    expect(countReceipt.observed).toEqual({ http_reads: 1, http_writes: 0 });
-    expect(countReceipt.world).toBeUndefined();
+    const countStepRecord = await readStepRecord(rootDir, countStep.record);
+    expect(countStepRecord.observed).toEqual({ http_reads: 1, http_writes: 0 });
+    expect(countStepRecord.world).toBeUndefined();
 
     // Scenario 2 (the promoted pair): the producer's validated result is
     // what the consumer reads back through ctx.resultOf.
@@ -150,13 +150,13 @@ describe("examples/migration", () => {
     expect(createStep.text).toContain("is created");
     expect(resultOfStep.text).toContain("resultOf");
 
-    const createReceipt = await readReceipt(rootDir, createStep.receipt);
-    expect(createReceipt.result).toMatchObject({ title: "Read a book", done: false });
-    expect(createReceipt.world).toBeUndefined();
+    const createStepRecord = await readStepRecord(rootDir, createStep.record);
+    expect(createStepRecord.result).toMatchObject({ title: "Read a book", done: false });
+    expect(createStepRecord.world).toBeUndefined();
 
-    const resultOfReceipt = await readReceipt(rootDir, resultOfStep.receipt);
-    expect(resultOfReceipt.used).toEqual([{ receipt: createStep.receipt, step: createReceipt.step }]);
-    expect(resultOfReceipt.result).toEqual({ id: (createReceipt.result as { id: string }).id });
-    expect(resultOfReceipt.world).toBeUndefined();
+    const resultOfStepRecord = await readStepRecord(rootDir, resultOfStep.record);
+    expect(resultOfStepRecord.used).toEqual([{ record: createStep.record, step: createStepRecord.step }]);
+    expect(resultOfStepRecord.result).toEqual({ id: (createStepRecord.result as { id: string }).id });
+    expect(resultOfStepRecord.world).toBeUndefined();
   });
 });

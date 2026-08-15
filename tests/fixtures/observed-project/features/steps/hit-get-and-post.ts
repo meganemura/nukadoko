@@ -2,8 +2,8 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // CLI-only vocabulary (no pattern): one GET then one POST through
-// request, used to prove receipt.observed's `{1, 1}` tally (this
-// task's spec, decision 1: non-GET/HEAD counts as a write).
+// request, used to prove the step record's own `observed` field's `{1, 1}`
+// tally (this task's spec, decision 1: non-GET/HEAD counts as a write).
 export default defineStep({
   description: "Hit the test server with one GET then one POST",
   args: z.object({}),

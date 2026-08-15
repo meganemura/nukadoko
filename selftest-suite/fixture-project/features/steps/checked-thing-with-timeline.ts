@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "nukadoko";
 
 // Separate from checked-thing.ts on purpose: passing.feature (stage 1's own
-// scenario) must keep binding to a step whose receipt carries no
+// scenario) must keep binding to a step whose record carries no
 // sections/polls, so its "one result file per executed step" count stays
 // exactly what it already is. This step exists only for mixed.feature, for
 // the stage 2 child-step-nesting check: its own section/poll calls give

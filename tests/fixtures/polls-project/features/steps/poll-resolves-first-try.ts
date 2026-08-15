@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Resolves on the very first `fn` call — proves a no-op wait's receipt says
+// Resolves on the very first `fn` call — proves a no-op wait's step record says
 // so (attempts: 1, outcome: "resolved"), the whole reason `polls` exists:
-// this and a genuinely slow poll look identical without it (ctx-poll-receipt
+// this and a genuinely slow poll look identical without it (ctx-poll-step-record
 // task spec, test bullet 1).
 export default defineStep({
   pattern: "a step polls and resolves on the first try",

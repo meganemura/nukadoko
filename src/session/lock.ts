@@ -2,9 +2,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SessionLockConflictError } from "./errors.js";
 
-// Responsibility: the advisory lock file at sessions/default/<name>.lock —
+// Responsibility: the advisory lock file at cache/sessions/default/<name>.lock —
 // `{ pid, started_at }` JSON, checked/acquired in `do`'s setup phase (before
-// any receipt is written) and always released in its `finally`.
+// any step record is written) and always released in its `finally`.
 // "Advisory" is deliberate: this is fs-only by design (no daemon,
 // no OS-level flock), so it stops nukadoko's own
 // concurrent `do`/`session clear` calls from colliding, not an arbitrary
@@ -88,7 +88,7 @@ export async function acquireLock(lockPath: string, sessionName: string): Promis
   }
   // Directory 0700: same restricted-permissions rule as the session file
   // itself (docs/spec.md "The state directory"). mkdir's mode only applies
-  // to directories it actually creates, so a pre-existing sessions/default/
+  // to directories it actually creates, so a pre-existing cache/sessions/default/
   // keeps whatever mode it already had.
   await mkdir(path.dirname(lockPath), { recursive: true, mode: 0o700 });
   const info: LockInfo = { pid: process.pid, started_at: new Date().toISOString() };
@@ -99,8 +99,8 @@ export async function acquireLock(lockPath: string, sessionName: string): Promis
  * Releases a lock this process holds. Always called from `do`'s `finally`
  * regardless of how the run ended; a failure
  * here (e.g. the file was already removed by `session clear`) must not
- * itself fail the run whose receipt (or setup error) is already decided, so
- * it is swallowed rather than thrown.
+ * itself fail the run whose step record (or setup error) is already decided,
+ * so it is swallowed rather than thrown.
  */
 export async function releaseLock(lockPath: string): Promise<void> {
   try {

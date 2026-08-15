@@ -27,6 +27,27 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## Unreleased
+
+破壊的変更は 4 つです。
+各項目は「何を直すか」だけを述べます。
+なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+
+- **step record の JSON は、フィールド名と id 接頭辞が変わりました。**
+  step record や scenario record の JSON を読んでいたスクリプトは、現在の名前を読む必要があります: `receipt_id` は `record_id` に、id の接頭辞は `rcpt-` から `step-` に、`used` エントリの参照先フィールドは `receipt` から `record` になりました。
+- **`.nukadoko/` はいまや目的別に 3 つのディレクトリ、`records/`、`export/`、`cache/` に分かれます。**
+  step record 自身のディレクトリはいまや `records/steps/<id>/` の下に、scenario record は `records/scenarios/<id>/` の下にあります。
+  Allure emitter と messages emitter はいまや `export/` の下に書きます。
+  session はいまや `cache/sessions/` の下にあります。
+  `.nukadoko/` は gitignore された作業状態なので、古いディレクトリはそのまま消してかまいません。
+  次の `nuka run` が新しい配置を書くので、そこから何かを移行する必要はありません。
+- **`--use` はいまや `step-...` という id を取ります。**
+  このリリースより前に発行された id は、ツールがもう読まない配置のディレクトリを指します。
+  生産元の step(`nuka do` または `nuka run`)を再実行して、現在の形の id を取り直してください。
+- **既存の acceptance record は作り直しが要ります。**
+  `nuka run` でその feature を再実行し、`nuka accept` し直してください。
+  `nuka tend` は、旧い形式のまま残っている acceptance record を見つけると、それを名指しします(`signoff-record-old-format`)。
+
 ## 0.1.0 から 0.2.0 へ
 
 破壊的変更は 3 つです。
@@ -59,8 +80,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `page` / `request` の前にある `await` と、呼び出しの丸括弧を外してください。
   どちらも今は値であり、関数ではありません。
   このための codemod は同梱されていません。
-- **`evidence.trace` は scenario record から、各 step 自身の receipt に移りました。**
-  scenario record の `evidence.trace` を読んでいたものは、代わりにページを開いた step の receipt を読む必要があります。
+- **`evidence.trace` は scenario record から、各 step 自身の record に移りました。**
+  scenario record の `evidence.trace` を読んでいたものは、代わりにページを開いた step の step record を読む必要があります。
 - **sign-off の記録のファイル名は、いまや条件を含みます。**
   旧来の `<feature-basename>.<date>-<sha>.md` を読んでいたものは、代わりに `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` を読む必要があります。
 

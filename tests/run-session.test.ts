@@ -90,18 +90,19 @@ describe("nuka run --session", () => {
     expect(records[0].session).toBe("sf1");
     expect(records[1].session).toBe("sf1");
 
-    expect(existsSync(path.join(rootDir, ".nukadoko", "sessions", "default", "sf1.json"))).toBe(
-      true,
-    );
+    expect(
+      existsSync(path.join(rootDir, ".nukadoko", "cache", "sessions", "default", "sf1.json")),
+    ).toBe(true);
 
-    const secondReceiptPath = path.join(
+    const secondStepRecordPath = path.join(
       rootDir,
       ".nukadoko",
-      "receipts",
-      records[1].steps[0].receipt,
-      "receipt.json",
+      "records",
+      "steps",
+      records[1].steps[0].record,
+      "record.json",
     );
-    const secondReceipt = JSON.parse(await readFile(secondReceiptPath, "utf8"));
-    expect(secondReceipt.result.cookie).toContain("sid=abc123");
+    const secondStepRecord = JSON.parse(await readFile(secondStepRecordPath, "utf8"));
+    expect(secondStepRecord.result.cookie).toContain("sid=abc123");
   });
 });

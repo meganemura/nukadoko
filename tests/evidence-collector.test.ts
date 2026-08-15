@@ -8,7 +8,7 @@ import { InvalidEvidenceNameError } from "../src/context/errors.js";
 // Responsibility: EvidenceCollector's own contract in isolation (P9 task
 // spec) — attach()'s immediate write, path()'s allocate-without-write,
 // collision avoidance shared between the two, name refusal, the 100-entry
-// cap + truncated count, and reset() at a step boundary. The receipt-level
+// cap + truncated count, and reset() at a step boundary. The step-record-level
 // shape (field omission, redaction, Allure attachment, needs_browser) is
 // proven end to end, through `nuka do`/`nuka run`, in tests/evidence.test.ts
 // — same split as tests/http-omitted.test.ts vs tests/page-network.test.ts.

@@ -13,7 +13,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // leak-secret.ts puts every value it defines into both `result` and an
 // outbound request's URL. The assertion that matters is the *absence* of
 // the raw secret value from all three exits docs/spec.md names —
-// receipt.json, `do`'s stdout copy, and http.jsonl — checked by scanning
+// record.json, `do`'s stdout copy, and http.jsonl — checked by scanning
 // each artifact's actual file/string content, not just a couple of
 // `toContain` calls on a parsed field.
 
@@ -67,7 +67,7 @@ describe("secret redaction (nuka do integration)", () => {
     await removeTempDir(rootDir);
   });
 
-  it("redacts every secret-source value from receipt.json, stdout, and http.jsonl", async () => {
+  it("redacts every secret-source value from record.json, stdout, and http.jsonl", async () => {
     await writeConfig(rootDir, baseURL, []);
 
     const stdout = createCaptureSink();
@@ -81,26 +81,26 @@ describe("secret redaction (nuka do integration)", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
 
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.result).toEqual({
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.result).toEqual({
       apiToken: "{{secret.API_TOKEN}}",
       publicToken: "{{secret.PUBLIC_TOKEN}}",
     });
 
-    const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
-    const receiptText = await readFile(receiptPath, "utf8");
-    const httpLogPath = path.join(rootDir, receipt.evidence.dir, "http.jsonl");
+    const recordPath = path.join(rootDir, stepRecord.evidence.dir, "record.json");
+    const stepRecordText = await readFile(recordPath, "utf8");
+    const httpLogPath = path.join(rootDir, stepRecord.evidence.dir, "http.jsonl");
     const httpLogText = await readFile(httpLogPath, "utf8");
 
     // The raw values must appear nowhere: not in stdout, not in
-    // receipt.json on disk, not in http.jsonl's logged URL.
+    // record.json on disk, not in http.jsonl's logged URL.
     for (const rawValue of [API_TOKEN, PUBLIC_TOKEN]) {
       expect(stdout.text()).not.toContain(rawValue);
-      expect(receiptText).not.toContain(rawValue);
+      expect(stepRecordText).not.toContain(rawValue);
       expect(httpLogText).not.toContain(rawValue);
     }
 
-    expect(receiptText).toContain("{{secret.API_TOKEN}}");
+    expect(stepRecordText).toContain("{{secret.API_TOKEN}}");
     expect(httpLogText).toContain("{{secret.API_TOKEN}}");
     expect(httpLogText).toContain("{{secret.PUBLIC_TOKEN}}");
   });
@@ -116,13 +116,13 @@ describe("secret redaction (nuka do integration)", () => {
     });
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.result).toEqual({
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.result).toEqual({
       apiToken: "{{secret.API_TOKEN}}",
       publicToken: PUBLIC_TOKEN,
     });
 
-    const httpLogPath = path.join(rootDir, receipt.evidence.dir, "http.jsonl");
+    const httpLogPath = path.join(rootDir, stepRecord.evidence.dir, "http.jsonl");
     const httpLogText = await readFile(httpLogPath, "utf8");
 
     // The demoted key's raw value now appears (it is plain, not secret);

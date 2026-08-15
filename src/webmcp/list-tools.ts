@@ -15,9 +15,9 @@ import { assertWebmcpAvailable } from "./errors.js";
 //
 // This module's own browser launch is deliberately standalone rather than
 // going through context/create-context.ts: that module's whole job is
-// wiring a launch into receipts, tracing, and session storageState for a
+// wiring a launch into step records, tracing, and session storageState for a
 // step execution, none of which applies here. This launches, reads, and
-// closes, with no receipt and no persisted state.
+// closes, with no step record and no persisted state.
 //
 // EXPERIMENTAL. See call-tool.ts's own header for the removal condition
 // this mark shares with `experimental_callWebmcpTool`: both are marked for

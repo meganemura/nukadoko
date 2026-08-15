@@ -4,7 +4,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // One of two steps sharing a single `nuka run` pickle's `ctx` — the pair
 // (this file and env-beta.ts) is the reset regression test for
 // `beginStep` (env-reads-and-mutates-doc task spec, completion bullet 5):
-// each step's own required name must land only on its own receipt, never
+// each step's own required name must land only on its own step record, never
 // on its sibling's.
 export default defineStep({
   pattern: "step alpha requires its own env var",

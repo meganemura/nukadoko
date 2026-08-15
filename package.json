@@ -1,7 +1,7 @@
 {
   "name": "nukadoko",
   "version": "0.2.0",
-  "description": "Typed step contracts for Gherkin, so a scenario can be told wrong before it runs. The vocabulary is machine-readable for agents, and every execution leaves a receipt the tool measured rather than the agent reported.",
+  "description": "Typed step contracts for Gherkin, so a scenario can be told wrong before it runs. The vocabulary is machine-readable for agents, and every execution leaves a step record the tool measured rather than the agent reported.",
   "type": "module",
   "bin": {
     "nuka": "./dist/cli.js"

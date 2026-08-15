@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Pure step (no HTTP, no browser): exercises `nuka do`'s "ok" and "args
-// validation failed" receipt paths (the latter by calling it with args
+// validation failed" step record paths (the latter by calling it with args
 // missing `value`).
 export default defineStep({
   description: "Echo the given value back unchanged",

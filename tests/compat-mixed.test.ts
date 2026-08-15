@@ -47,9 +47,9 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("nuka run: typed and compat steps sharing one pickle's context", () => {
@@ -91,20 +91,20 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     }
 
     // ctx.resultOf, unaffected by the compat step sharing the same pickle.
-    const createReceiptId = record.steps[0].receipt as string;
-    const resultOfReceipt = await readReceipt(rootDir, record.steps[1].receipt);
-    expect(resultOfReceipt.result).toEqual({ ok: true });
-    expect(resultOfReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-thing" }]);
+    const createRecordId = record.steps[0].record as string;
+    const resultOfStepRecord = await readStepRecord(rootDir, record.steps[1].record);
+    expect(resultOfStepRecord.result).toEqual({ ok: true });
+    expect(resultOfStepRecord.used).toEqual([{ record: createRecordId, step: "create-thing" }]);
 
-    // The compat step's own receipt: openRequest() + a GET is measured
+    // The compat step's own step record: openRequest() + a GET is measured
     // (observed), same as a typed step's ctx.request() would be.
-    const compatReceipt = await readReceipt(rootDir, record.steps[2].receipt);
-    expect(compatReceipt.result).toBeNull();
-    expect((compatReceipt as { observed: { http_reads: number } }).observed.http_reads).toBe(1);
+    const compatStepRecord = await readStepRecord(rootDir, record.steps[2].record);
+    expect(compatStepRecord.result).toBeNull();
+    expect((compatStepRecord as { observed: { http_reads: number } }).observed.http_reads).toBe(1);
 
     // The typed step's own request context sees the compat step's cookie —
     // proof the two share one underlying Playwright APIRequestContext.
-    const typedReceipt = await readReceipt(rootDir, record.steps[3].receipt);
-    expect((typedReceipt as { result: { cookie: string } }).result.cookie).toContain("sid=abc123");
+    const typedStepRecord = await readStepRecord(rootDir, record.steps[3].record);
+    expect((typedStepRecord as { result: { cookie: string } }).result.cookie).toContain("sid=abc123");
   });
 });

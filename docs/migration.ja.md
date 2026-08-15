@@ -45,7 +45,7 @@ import { Given, When, Then } from "nukadoko/compat";
   `Before` / `After` / `AfterStep` フック内の `result.status === Status.FAILED` は、これで正しく import され比較できるようになります。
 - `DataTable`(`raw()`/`rows()`/`hashes()`/`rowsHash()`/`transpose()`)。
   `table.hashes()` を呼ぶ step は書いたとおりにそのまま動き続けます(摩擦ゼロで、examples/migration 自身のスイートを移行する形で計測済みです)。
-- glue 内の `allure.*` 呼び出し(`attach`/`log`/`link`、ラベル、パラメータ)は、消えるのではなく receipt の `declared` フィールドに入ります。
+- glue 内の `allure.*` 呼び出し(`attach`/`log`/`link`、ラベル、パラメータ)は、消えるのではなく step record の `declared` フィールドに入ります。
 - `setDefaultTimeout(ms)` は、自分の timeout を宣言していない step や hook すべてにその既定値を埋め、cucumber-js と同じく最後に呼んだものが勝ちます。
   一度も呼ばなければ、step は cucumber の 5 秒という既定値を採用する代わりに無制限のままになります。
   スイートが移行しただけで、遅い step のせいで失敗し始めるべきではないからです。
@@ -109,12 +109,12 @@ glue はテキストとして読むだけで、実行はしていません。
   cucumber-js はこの両方に意味を持たせていますが、nukadoko は持たせておらず、step を通過させる代わりにそう伝えます。
 
 `nuka run features/your.feature` でスイートを実行します。
-あらゆる step が receipt を得るようになり、それ以外に何かを変える必要はありません。
+あらゆる step が step record を得るようになり、それ以外に何かを変える必要はありません。
 
 ## 計測されるアップグレード(任意)
 
 自前で Playwright のブラウザや request クライアントを起動する glue は、計測されないまま動き続けます(nukadoko は一切手を触れません)。
-その bootstrapping を `await this.openPage()` / `await this.openRequest()` に置き換えると(混在 scenario の typed step と同じ context に委譲し、scenario ごとに 1 つのブラウザと 1 つのセッションです)、その step の receipt は他のコード変更なしに trace、`http.jsonl` log、`observed` の読み書き件数を得ます。
+その bootstrapping を `await this.openPage()` / `await this.openRequest()` に置き換えると(混在 scenario の typed step と同じ context に委譲し、scenario ごとに 1 つのブラウザと 1 つのセッションです)、その step の step record は他のコード変更なしに trace、`http.jsonl` log、`observed` の読み書き件数を得ます。
 
 ## Stage 1.5: 依存しているものを宣言する
 
@@ -157,7 +157,7 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   1 つの壊れたファイル自身の step が語彙から消えることは、それ以外の方法だと無関係な undefined step の山にしか見えません。
   まず import の失敗を直してください。
   抑え込まれていた findings は、そのファイルが問題なく import できるようになった時点で、本物の `undefined-step` エラーとして再び現れます。
-- receipt は実行時に同じ話を語ります: スイートがより多く typed step に昇格し、その読み手が `from` 経由でそれを読むようになるにつれて(キー名で表せない読みは `resultOf`)、`world`(compat の step のみ)と `declared` が縮んでいきます。
+- step record は実行時に同じ話を語ります: スイートがより多く typed step に昇格し、その読み手が `from` 経由でそれを読むようになるにつれて(キー名で表せない読みは `resultOf`)、`world`(compat の step のみ)と `declared` が縮んでいきます。
 
 ## 戻り道
 
@@ -169,7 +169,7 @@ import の切り替えは可逆であり、それは偶然の産物ではなく�
 それが実際に何を犠牲にするのかは具体的に述べる価値があります。
 「ロックインされる」という言葉が示唆するより、範囲は狭いからです。
 
-昇格させた step が出口で手放すのは、そのスキーマの上に組まれたものすべてです: `args`/`returns` のバリデーション、receipt の `result`、`from` とそれを読む束縛順序のチェック、そして `nuka check` が行う契約チェックです。
+昇格させた step が出口で手放すのは、そのスキーマの上に組まれたものすべてです: `args`/`returns` のバリデーション、step record の `result`、`from` とそれを読む束縛順序のチェック、そして `nuka check` が行う契約チェックです。
 
 手元に残るのは body です。
 `run` は Playwright 自身の `Page` と `APIRequestContext` に対して書かれており、nukadoko は意図的にそれらをラップしません(docs/spec.ja.md の「Out of scope(正直な限界)」を参照)。

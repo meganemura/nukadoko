@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Reads API_TOKEN, then SECOND_KEY, then API_TOKEN again — the receipt's
+// Reads API_TOKEN, then SECOND_KEY, then API_TOKEN again — the step record's
 // own `required_env` order (first-read order) and dedup (a repeat read
 // cited once) are the whole point of this step (env-reads-and-mutates-doc
 // task spec, completion bullets 1-2).

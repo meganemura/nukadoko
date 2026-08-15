@@ -1,7 +1,7 @@
-import type { PollRecord } from "../receipt/types.js";
+import type { PollRecord } from "../record/types.js";
 
 // Responsibility: the completion-order log of `ctx.poll` calls docs/spec.md's
-// "Receipts" (`polls`) describes — same collector shape as sections.ts
+// "Records" (`polls`) describes — same collector shape as sections.ts
 // (record/snapshot/reset), owned and reset by the executor's step boundary
 // (create-context.ts's `beginStep`), never reachable from a step's own `run`
 // beyond the single write-only path `ctx.poll` drives through poll.ts's own
@@ -9,9 +9,9 @@ import type { PollRecord } from "../receipt/types.js";
 //
 // Not deduplicated, the same reasoning sections.ts already gives: each
 // completed poll is a point in this execution's own sequence, not an
-// identity worth citing once the way `used`'s receipt ids are.
+// identity worth citing once the way `used`'s step record ids are.
 //
-// Appended in *completion* order, not call order (docs/spec.md "Receipts"):
+// Appended in *completion* order, not call order (docs/spec.md "Records"):
 // a poll nested inside another poll's own `fn` finishes first, and only a
 // finished poll has `attempts`/`waited_ms` to report at all — recording at
 // call time would have nothing to write down yet.

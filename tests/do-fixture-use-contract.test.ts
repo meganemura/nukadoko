@@ -34,11 +34,11 @@ describe("nuka do: a fixture that never calls use() fails, never hangs", () => {
     );
 
     expect(exitCode).toBe(1);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("failed");
-    expect(receipt.error.kind).toBe("step_error");
-    expect(receipt.error.message).toContain("neverCallsUse");
-    expect(receipt.error.message).toContain("use(");
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("failed");
+    expect(stepRecord.error.kind).toBe("step_error");
+    expect(stepRecord.error.message).toContain("neverCallsUse");
+    expect(stepRecord.error.message).toContain("use(");
   }, 10_000);
 
   it("fails with a named timeout, never hanging, when the function never settles and never calls use()", async () => {
@@ -50,11 +50,11 @@ describe("nuka do: a fixture that never calls use() fails, never hangs", () => {
     );
 
     expect(exitCode).toBe(1);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("failed");
-    expect(receipt.error.message).toContain("stuckFixture");
-    expect(receipt.error.message).toContain("timed out");
-    expect(receipt.error.message).toContain("setup");
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("failed");
+    expect(stepRecord.error.message).toContain("stuckFixture");
+    expect(stepRecord.error.message).toContain("timed out");
+    expect(stepRecord.error.message).toContain("setup");
     // 150ms configured timeout; this assertion is really about "did not
     // hang for the process's own default", proven by the test itself
     // finishing well inside its own timeout budget below.

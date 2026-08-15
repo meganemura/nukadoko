@@ -2,12 +2,12 @@ import { HookType, IdGenerator, TestStepResultStatus, TimeConversion } from "@cu
 import { describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { mapScenario } from "../src/report/messages/map-scenario.js";
-import type { Receipt } from "../src/receipt/types.js";
+import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 
 // Responsibility: unit tests for map-scenario.ts's pure transform (this
 // task's spec, test item 1). No node:fs, no real IdGenerator.uuid(): every
-// receipt is a plain object built in memory, and `newId` is
+// step record is a plain object built in memory, and `newId` is
 // `IdGenerator.incrementing()` so assertions can pin exact ids (this task's
 // spec, decision 11's own reason for threading `newId` through as an
 // argument in the first place). Every `Pickle` comes from parsing an inline
@@ -41,14 +41,14 @@ function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
     finished_at: "2026-08-01T00:00:03.000Z",
     steps: [],
     hooks: [],
-    evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] },
+    evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
     ...overrides,
   };
 }
 
-function baseReceipt(overrides: Partial<Receipt> = {}): Receipt {
+function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
   return {
-    receipt_id: "rcpt-1",
+    record_id: "step-1",
     step: "the cart has items",
     kind: "run",
     args: {},
@@ -59,11 +59,11 @@ function baseReceipt(overrides: Partial<Receipt> = {}): Receipt {
     scenario: "scn-1",
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
-    evidence: { dir: ".nukadoko/receipts/rcpt-1", screenshots: [] },
+    evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [] },
     observed: { http_reads: 0, http_writes: 0 },
     mutates: true,
     ...overrides,
-  } as Receipt;
+  } as StepRecord;
 }
 
 describe("mapScenario (messages): step status mapping", () => {
@@ -78,12 +78,12 @@ describe("mapScenario (messages): step status mapping", () => {
   it.each(CASES)("maps step status %s to %s", (status, expected) => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status, receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status, record: null };
     const record = baseRecord({ steps: [step] });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -97,14 +97,14 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
   it("orders testSteps as before hook -> step -> after hook", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
     const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
     const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
     const record = baseRecord({ steps: [step], hooks: [beforeHook, afterHook] });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -137,7 +137,7 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: { before: "already-assigned-id" },
@@ -150,12 +150,12 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
   it("emits no hook-derived test step when the scenario record has no hooks", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
     const record = baseRecord({ steps: [step], hooks: [] });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -171,13 +171,13 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
   it("gives an after_step hook its own HookType.AFTER_TEST_STEP Hook named AfterStep[<step_index>], not folded onto \"After\"", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
     const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
     const record = baseRecord({ steps: [step], hooks: [afterStepHook] });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -201,7 +201,7 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
   it("orders testSteps as before -> pickle steps -> after_step -> after", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
     const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
     const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
     const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
@@ -209,7 +209,7 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -228,8 +228,8 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: null },
-      { text: "the customer pays", status: "passed", receipt: null },
+      { text: "the cart has items", status: "passed", record: null },
+      { text: "the customer pays", status: "passed", record: null },
     ];
     const hooks: ScenarioHookRecord[] = [
       { type: "after_step", status: "ok", step_index: 0 },
@@ -239,7 +239,7 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -255,8 +255,8 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: null },
-      { text: "the customer pays", status: "passed", receipt: null },
+      { text: "the cart has items", status: "passed", record: null },
+      { text: "the customer pays", status: "passed", record: null },
     ];
     const hooks: ScenarioHookRecord[] = [
       { type: "after_step", status: "ok", step_index: 0 },
@@ -266,7 +266,7 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: { afterStep: { 0: "already-assigned-0", 1: "already-assigned-1" } },
@@ -280,7 +280,7 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
   it("collapses multiple after_step hook records for the same step_index onto one shared Hook id", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
     const hooks: ScenarioHookRecord[] = [
       { type: "after_step", status: "ok", step_index: 0 },
       { type: "after_step", status: "failed", step_index: 0, error: { message: "boom", kind: "step_error" } },
@@ -289,7 +289,7 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -307,15 +307,15 @@ describe("mapScenario (messages): pickleStepId correspondence", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: null },
-      { text: "the customer pays", status: "passed", receipt: null },
-      { text: "the order is confirmed", status: "passed", receipt: null },
+      { text: "the cart has items", status: "passed", record: null },
+      { text: "the customer pays", status: "passed", record: null },
+      { text: "the order is confirmed", status: "passed", record: null },
     ];
     const record = baseRecord({ steps });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -328,16 +328,16 @@ describe("mapScenario (messages): pickleStepId correspondence", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: null },
-      { text: "the customer pays", status: "passed", receipt: null },
-      { text: "the order is confirmed", status: "passed", receipt: null },
-      { text: "an extra step with no pickle counterpart", status: "passed", receipt: null },
+      { text: "the cart has items", status: "passed", record: null },
+      { text: "the customer pays", status: "passed", record: null },
+      { text: "the order is confirmed", status: "passed", record: null },
+      { text: "an extra step with no pickle counterpart", status: "passed", record: null },
     ];
     const record = baseRecord({ steps });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -349,19 +349,19 @@ describe("mapScenario (messages): pickleStepId correspondence", () => {
 });
 
 describe("mapScenario (messages): duration/timestamp", () => {
-  it("uses the receipt's own started_at/finished_at for a step's duration", () => {
+  it("uses the step record's own started_at/finished_at for a step's duration", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
+    const stepRecord = baseStepRecord({
       started_at: "2026-08-01T00:00:00.500Z",
       finished_at: "2026-08-01T00:00:01.500Z",
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", receipt: "rcpt-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
     const record = baseRecord({ steps: [step] });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map([["rcpt-1", receipt]]),
+      stepRecords: new Map([["step-1", stepRecord]]),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -374,22 +374,22 @@ describe("mapScenario (messages): duration/timestamp", () => {
     );
   });
 
-  it("gives a receiptless step duration 0, collapsed to the previous step's own stop", () => {
+  it("gives a step with no step record duration 0, collapsed to the previous step's own stop", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const receipt = baseReceipt({
+    const stepRecord = baseStepRecord({
       started_at: "2026-08-01T00:00:00.500Z",
       finished_at: "2026-08-01T00:00:01.500Z",
     });
     const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", receipt: "rcpt-1" },
-      { text: "the customer pays", status: "skipped", receipt: null },
+      { text: "the cart has items", status: "passed", record: "step-1" },
+      { text: "the customer pays", status: "skipped", record: null },
     ];
     const record = baseRecord({ steps });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map([["rcpt-1", receipt]]),
+      stepRecords: new Map([["step-1", stepRecord]]),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},
@@ -410,14 +410,14 @@ describe("mapScenario (messages): failed step message, no exception", () => {
     const step: ScenarioStepRecord = {
       text: "the cart has items",
       status: "failed",
-      receipt: null,
+      record: null,
       error: { message: "it broke on purpose" },
     };
     const record = baseRecord({ status: "failed", steps: [step] });
 
     const mapped = mapScenario({
       record,
-      receipts: new Map(),
+      stepRecords: new Map(),
       pickle,
       newId: IdGenerator.incrementing(),
       hookIds: {},

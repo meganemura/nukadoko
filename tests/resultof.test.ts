@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // resultof-project — a pure-step project (no browser, no HTTP server, same
 // rationale as run.test.ts's own run-project) covering the whole chain
 // mechanism (m2pre-resultof task spec, scope item 5): a later step reading
-// an earlier step's validated result and it landing on the receipt as
+// an earlier step's validated result and it landing on the step record as
 // provenance (`used`), the same step run twice in one scenario returning the
 // most recent result, the chain never crossing a scenario boundary and never
 // carrying a failed run, `used`'s omission when a step never calls
@@ -35,9 +35,9 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("ctx.resultOf", () => {
@@ -51,7 +51,7 @@ describe("ctx.resultOf", () => {
     await removeTempDir(rootDir);
   });
 
-  it("a step that never calls resultOf has no used field on its receipt (bullet 5, independent of module identity)", async () => {
+  it("a step that never calls resultOf has no used field on its step record (bullet 5, independent of module identity)", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/resultof.feature:3"], {
       rootDir,
@@ -61,13 +61,13 @@ describe("ctx.resultOf", () => {
 
     expect(exitCode).toBe(0);
     // This assertion does not depend on cross-file object identity: it only
-    // checks create-listing's own receipt, which never calls `ctx.resultOf`
+    // checks create-listing's own step record, which never calls `ctx.resultOf`
     // at all — passes regardless of the module-identity mechanics described
     // in this file's header comment.
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    const createReceipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(createReceipt.result).toEqual({ id: "l_first-widget", name: "first-widget" });
-    expect(createReceipt.used).toBeUndefined();
+    const createStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(createStepRecord.result).toEqual({ id: "l_first-widget", name: "first-widget" });
+    expect(createStepRecord.used).toBeUndefined();
   });
 
   it("a later step reads the earlier step's validated result; the read is recorded as used", async () => {
@@ -83,12 +83,12 @@ describe("ctx.resultOf", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const createReceiptId = record.steps[0].receipt as string;
-    const closedReceiptId = record.steps[1].receipt as string;
+    const createRecordId = record.steps[0].record as string;
+    const closedRecordId = record.steps[1].record as string;
 
-    const closedReceipt = await readReceipt(rootDir, closedReceiptId);
-    expect(closedReceipt.result).toEqual({ closed: true, name: "first-widget" });
-    expect(closedReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-listing" }]);
+    const closedStepRecord = await readStepRecord(rootDir, closedRecordId);
+    expect(closedStepRecord.result).toEqual({ closed: true, name: "first-widget" });
+    expect(closedStepRecord.used).toEqual([{ record: createRecordId, step: "create-listing" }]);
   });
 
   it("the same step run twice in one scenario: resultOf returns the most recent result", async () => {
@@ -104,11 +104,11 @@ describe("ctx.resultOf", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(3);
 
-    const secondCreateReceiptId = record.steps[1].receipt as string;
-    const closedReceipt = await readReceipt(rootDir, record.steps[2].receipt as string);
+    const secondCreateRecordId = record.steps[1].record as string;
+    const closedStepRecord = await readStepRecord(rootDir, record.steps[2].record as string);
 
-    expect(closedReceipt.result).toEqual({ closed: true, name: "second" });
-    expect(closedReceipt.used).toEqual([{ receipt: secondCreateReceiptId, step: "create-listing" }]);
+    expect(closedStepRecord.result).toEqual({ closed: true, name: "second" });
+    expect(closedStepRecord.used).toEqual([{ record: secondCreateRecordId, step: "create-listing" }]);
   });
 
   it("resultOf never crosses a scenario boundary, and a failed run is never chained", async () => {
@@ -126,9 +126,9 @@ describe("ctx.resultOf", () => {
     const [failedScenario, freshScenario] = records;
     expect(failedScenario.status).toBe("failed");
     expect(failedScenario.steps[0].status).toBe("failed");
-    const failedReceipt = await readReceipt(rootDir, failedScenario.steps[0].receipt);
-    expect(failedReceipt.status).toBe("failed");
-    expect((failedReceipt as { error: { message: string } }).error.message).toBe(
+    const failedStepRecord = await readStepRecord(rootDir, failedScenario.steps[0].record);
+    expect(failedStepRecord.status).toBe("failed");
+    expect((failedStepRecord as { error: { message: string } }).error.message).toBe(
       "listing creation failed on purpose",
     );
 
@@ -138,12 +138,12 @@ describe("ctx.resultOf", () => {
     // never becomes readable (this task's spec, decision 1).
     expect(freshScenario.status).toBe("passed");
     expect(freshScenario.steps[0].status).toBe("passed");
-    const freshReceipt = await readReceipt(rootDir, freshScenario.steps[0].receipt);
-    expect(freshReceipt.result).toEqual({ closed: false, name: null });
-    expect(freshReceipt.used).toBeUndefined();
+    const freshStepRecord = await readStepRecord(rootDir, freshScenario.steps[0].record);
+    expect(freshStepRecord.result).toEqual({ closed: false, name: null });
+    expect(freshStepRecord.used).toBeUndefined();
   });
 
-  it("a failed step's receipt carries the ctx.resultOf-read value's own result (fb3-used-result task spec)", async () => {
+  it("a failed step's step record carries the ctx.resultOf-read value's own result (fb3-used-result task spec)", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/resultof.feature:12"], {
       rootDir,
@@ -156,12 +156,12 @@ describe("ctx.resultOf", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(2);
 
-    const createReceiptId = record.steps[0].receipt as string;
-    const explodeReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+    const createRecordId = record.steps[0].record as string;
+    const explodeStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
 
-    expect(explodeReceipt.status).toBe("failed");
-    expect(explodeReceipt.used).toEqual([
-      { receipt: createReceiptId, step: "create-listing", result: { id: "l_first-widget", name: "first-widget" } },
+    expect(explodeStepRecord.status).toBe("failed");
+    expect(explodeStepRecord.used).toEqual([
+      { record: createRecordId, step: "create-listing", result: { id: "l_first-widget", name: "first-widget" } },
     ]);
   });
 
@@ -174,8 +174,8 @@ describe("ctx.resultOf", () => {
     });
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.result).toEqual({ closed: false, name: null });
-    expect(receipt.used).toBeUndefined();
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.result).toEqual({ closed: false, name: null });
+    expect(stepRecord.used).toBeUndefined();
   });
 });

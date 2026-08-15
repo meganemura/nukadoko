@@ -14,7 +14,7 @@ import {
 import type { WritableSink } from "../../cli/writable-sink.js";
 import type { ScenarioRecord } from "../../run/record-types.js";
 import { readOwnVersion } from "../../version.js";
-import { readReceiptsForRecord } from "../receipts.js";
+import { readStepRecordsForScenario } from "../step-records.js";
 import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 
 // Responsibility: the I/O half of this emitter — the only module in
@@ -31,7 +31,7 @@ import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 // Why this emitter exists at all: unlike the Allure emitter (nukadoko's own
 // measurement surface), this one
 // is compat-fidelity only — a migrated team's existing formatter/JUnit
-// CI/HTML report keeps working. receipt internals (validated result,
+// CI/HTML report keeps working. step record internals (validated result,
 // observed, mutates, error.kind) never appear here: `TestStepResult`/
 // `TestStepFinished` are `additionalProperties: false` closed schemas with
 // no place to put them, and nothing here smuggles them in via
@@ -237,8 +237,14 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
         return;
       }
       try {
-        const receipts = readReceiptsForRecord(options.rootDir, input.record);
-        const mapped = mapScenario({ record: input.record, receipts, pickle: input.pickle, newId, hookIds });
+        const stepRecords = readStepRecordsForScenario(options.rootDir, input.record);
+        const mapped = mapScenario({
+          record: input.record,
+          stepRecords,
+          pickle: input.pickle,
+          newId,
+          hookIds,
+        });
 
         for (const entry of mapped.newHooks) {
           appendEnvelope({ hook: entry.hook });

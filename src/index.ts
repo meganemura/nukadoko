@@ -26,10 +26,10 @@ export type { PollOptions } from "./context/poll.js";
 export type {
   ErrorKind,
   EvidenceMeta,
-  Receipt,
-  ReceiptFailed,
-  ReceiptOk,
-} from "./receipt/types.js";
+  StepRecord,
+  StepRecordFailed,
+  StepRecordOk,
+} from "./record/types.js";
 export type { Step, StepDefinitionInput } from "./step/define-step.js";
 export { defineStep } from "./step/define-step.js";
 // EXPERIMENTAL: see call-tool.ts's own header for why the name carries the

@@ -66,15 +66,15 @@ const allureBin = path.join(repoRoot, "node_modules", "allure", "cli.js");
 
 // --- NDJSON scenario records (the same "scenario name -> status" shape
 // run-selftest.mjs's own swap track already parses `nuka run`'s stdout
-// into), read here for each step's own text/status/receipt rather than
+// into), read here for each step's own text/status/record rather than
 // just its scenario-level status -- the tab-count check needs a per-step
-// tally, and the receipt-attachment check needs a specific step's own
-// receipt id. ---
+// tally, and the record-attachment check needs a specific step's own
+// record id. ---
 
 interface RunStepRecord {
   readonly text: string;
   readonly status: "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
-  readonly receipt: string | null;
+  readonly record: string | null;
 }
 
 interface RunScenarioRecord {
@@ -351,25 +351,25 @@ Then("every scenario is a tree group and every step is one of its leaves", async
 });
 
 Then(
-  "the failing step's receipt.json attachment is readable and matches its own receipt",
+  "the failing step's record.json attachment is readable and matches its own record",
   async function (this: SelftestWorld) {
     const failingStep = allSteps(parseRunRecords(this.nukaStdout)).find((step) => step.status === "failed");
-    if (failingStep === undefined || failingStep.receipt === null) {
-      throw new Error("expected mixed.feature's run to have exactly one failed step with a receipt");
+    if (failingStep === undefined || failingStep.record === null) {
+      throw new Error("expected mixed.feature's run to have exactly one failed step with a record");
     }
 
     const page = await openStepDetail(this, failingStep.text);
     await page.getByTestId("test-result-tab-attachments").click();
-    await page.getByTestId("test-result-attachment-header").filter({ hasText: "receipt.json" }).click();
+    await page.getByTestId("test-result-attachment-header").filter({ hasText: "record.json" }).click();
 
-    // Not "an attachment named receipt.json exists" -- its own rendered
-    // content must actually name the receipt this run wrote: nukadoko's
+    // Not "an attachment named record.json exists" -- its own rendered
+    // content must actually name the record this run wrote: nukadoko's
     // central artifact must survive the
     // trip to a browser, not merely appear in a file listing.
     const content = await page.getByTestId("code-attachment-content").innerText();
-    if (!content.includes(failingStep.receipt)) {
+    if (!content.includes(failingStep.record)) {
       throw new Error(
-        `expected the receipt.json attachment's own content to contain this step's receipt id "${failingStep.receipt}"; got: ${content}`,
+        `expected the record.json attachment's own content to contain this step's record id "${failingStep.record}"; got: ${content}`,
       );
     }
   },

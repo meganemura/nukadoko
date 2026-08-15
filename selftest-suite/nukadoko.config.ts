@@ -6,10 +6,10 @@ import { defineConfig } from "nukadoko";
 // (the real cucumber-js binary) never reads this file at all: cucumber-js
 // has no concept of nukadoko.config.ts.
 //
-// Running this suite writes THIS project's own `.nukadoko/allure-results/`
-// as a side effect (the "outer" tree, see run-selftest.mjs's header
-// comment for the full inner/outer distinction). That tree is not what
-// this suite's own step assertions check; selftest-suite/fixture-project's
-// is (the "inner" tree, the one the suite's steps drive with `nuka run` as
-// a subprocess).
+// Running this suite writes THIS project's own
+// `.nukadoko/export/allure-results/` as a side effect (the "outer" tree,
+// see run-selftest.mjs's header comment for the full inner/outer
+// distinction). That tree is not what this suite's own step assertions
+// check; selftest-suite/fixture-project's is (the "inner" tree, the one
+// the suite's steps drive with `nuka run` as a subprocess).
 export default defineConfig({});

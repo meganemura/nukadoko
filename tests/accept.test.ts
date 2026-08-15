@@ -63,7 +63,7 @@ describe("nuka accept: a green run", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes a record with the feature's full text, frontmatter, and each step's receipt with evidence stripped", async () => {
+  it("writes a record with the feature's full text, frontmatter, and each step's step record with evidence stripped", async () => {
     const commit = await initGitRepo(rootDir);
 
     const runExit = await runCli(["run", "features/greeting.feature"], {
@@ -108,13 +108,13 @@ describe("nuka accept: a green run", () => {
     expect(frontmatter).toContain("line: 3");
     expect(frontmatter).toMatch(/scenario_id: scn-/);
 
-    // Each step's own receipt, with `evidence` stripped.
+    // Each step's own step record, with `evidence` stripped.
     const blocks = jsonCodeBlocks(content);
     expect(blocks).toHaveLength(2);
-    for (const receipt of blocks) {
-      expect("evidence" in receipt).toBe(false);
-      expect(receipt.status).toBe("ok");
-      expect(typeof receipt.receipt_id).toBe("string");
+    for (const stepRecord of blocks) {
+      expect("evidence" in stepRecord).toBe(false);
+      expect(stepRecord.status).toBe("ok");
+      expect(typeof stepRecord.record_id).toBe("string");
     }
     expect(blocks[0]!.args).toEqual({ name: "Ada" });
 
@@ -462,32 +462,32 @@ describe("nuka accept: declared vs observed (accept-declared-vs-observed task sp
 
     // The fixture's own "the visitor {name} is greeted" step already
     // declares `mutates: false` but never calls `ctx.request()`, so its
-    // receipt's own `observed.http_writes` is 0 — no mismatch to compare
-    // against. Editing that one receipt.json directly is the only way to
+    // step record's own `observed.http_writes` is 0 — no mismatch to compare
+    // against. Editing that one record.json directly is the only way to
     // produce a real declared/observed disagreement without adding network
     // I/O to a fixture whose whole point is running with no server at all.
     const stateDir = path.join(rootDir, ".nukadoko");
-    const scenariosDir = path.join(stateDir, "scenarios");
+    const scenariosDir = path.join(stateDir, "records", "scenarios");
     const scenarioIds = await readdir(scenariosDir);
-    let receiptPath: string | undefined;
+    let stepRecordPath: string | undefined;
     let stepText: string | undefined;
     for (const scenarioId of scenarioIds) {
       const record = JSON.parse(await readFile(path.join(scenariosDir, scenarioId, "record.json"), "utf8")) as {
         feature: string;
-        steps: { text: string; receipt: string | null }[];
+        steps: { text: string; record: string | null }[];
       };
       if (record.feature !== "features/greeting.feature") continue;
       const step = record.steps.find((s) => s.text.includes("greeted"));
-      if (step?.receipt) {
-        receiptPath = path.join(stateDir, "receipts", step.receipt, "receipt.json");
+      if (step?.record) {
+        stepRecordPath = path.join(stateDir, "records", "steps", step.record, "record.json");
         stepText = step.text;
       }
     }
-    if (!receiptPath || !stepText) throw new Error("could not locate the greeting step's own receipt in the fixture run");
+    if (!stepRecordPath || !stepText) throw new Error("could not locate the greeting step's own step record in the fixture run");
 
-    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { observed: { http_reads: number; http_writes: number } };
-    receipt.observed = { http_reads: 0, http_writes: 2 };
-    await writeFile(receiptPath, JSON.stringify(receipt));
+    const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8")) as { observed: { http_reads: number; http_writes: number } };
+    stepRecord.observed = { http_reads: 0, http_writes: 2 };
+    await writeFile(stepRecordPath, JSON.stringify(stepRecord));
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

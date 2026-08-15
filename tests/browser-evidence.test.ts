@@ -92,7 +92,7 @@ describe("createStepContext / ctx.page()", () => {
       expect(evidence.trace).toBe("trace.zip");
       // fb4-evidence-time task spec, item 1: one screenshot only, always
       // named final.png — the former second, per-outcome copy (a "did this
-      // fail" fact `receipt.status` already carries, on a buffer that could
+      // fail" fact the step record's own `status` already carries, on a buffer that could
       // already be stale by the time it was taken) is gone.
       expect(evidence.screenshots).toHaveLength(1);
       expect(evidence.screenshots[0]!.file).toBe("final.png");
@@ -123,7 +123,7 @@ describe("createStepContext / ctx.page()", () => {
       // A step's `run` reaches the browser through `ctx.page()`
       // (`page.context().browser()`), so it can close it (or it can crash)
       // before throwing. `runDo` (src/cli/do.ts) always calls dispose() on
-      // its way to writing the receipt regardless of how `run` ended, so
+      // its way to writing the step record regardless of how `run` ended, so
       // dispose() must never throw here — screenshot/tracing.stop/
       // context.close/browser.close teardown failures are all swallowed
       // (browser-evidence.ts's finalize), and evidence only claims trace.zip

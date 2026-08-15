@@ -16,11 +16,11 @@ import {
 // `page.goto()` to a URL whose query string carries a secret, proving
 // completion condition 5 ("シークレットを含む URL を踏んだとき、actions にも
 // 生値が出ないこと") for both `nuka run` and `nuka do`: `actions` is built
-// from the step's own trace chunk and folded onto the receipt object
+// from the step's own trace chunk and folded onto the step record object
 // *before* the one existing `redact()` call each executor already makes
 // (cli/do.ts, run-scenario.ts), so no separate redaction path was added for
 // it — this test is what pins that down, the same way
-// tests/page-events-receipt.test.ts already does for `page_events`.
+// tests/page-events-step-record.test.ts already does for `page_events`.
 
 const URL_TOKEN = "sekrit-url-token-789";
 
@@ -37,12 +37,12 @@ function startTestServer(): Promise<{ server: Server; baseURL: string }> {
   });
 }
 
-interface StoredReceipt {
+interface StoredStepRecord {
   status: string;
   actions?: Array<{ method: string; url?: string }>;
 }
 
-describe("actions on the receipt: secret redaction", () => {
+describe("actions on the step record: secret redaction", () => {
   let server: Server;
   let baseURL: string;
   let rootDir: string;
@@ -76,25 +76,25 @@ describe("actions on the receipt: secret redaction", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    const receipt = JSON.parse(stdout.text()) as StoredReceipt & { evidence: { dir: string } };
-    expect(receipt.status).toBe("ok");
+    const stepRecord = JSON.parse(stdout.text()) as StoredStepRecord & { evidence: { dir: string } };
+    expect(stepRecord.status).toBe("ok");
 
-    const gotoAction = (receipt.actions ?? []).find((action) => action.method === "goto");
+    const gotoAction = (stepRecord.actions ?? []).find((action) => action.method === "goto");
     expect(gotoAction).toBeDefined();
     expect(gotoAction?.url).toContain("{{secret.URL_TOKEN}}");
     expect(gotoAction?.url).not.toContain(URL_TOKEN);
 
-    // Same three-exits check tests/page-events-receipt.test.ts already runs
+    // Same three-exits check tests/page-events-step-record.test.ts already runs
     // for page_events: the raw token must appear nowhere, not in stdout, not
-    // in receipt.json on disk.
+    // in record.json on disk.
     expect(stdout.text()).not.toContain(URL_TOKEN);
-    const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
-    const receiptText = await readFile(receiptPath, "utf8");
-    expect(receiptText).not.toContain(URL_TOKEN);
-    expect(receiptText).toContain("{{secret.URL_TOKEN}}");
+    const recordPath = path.join(rootDir, stepRecord.evidence.dir, "record.json");
+    const stepRecordText = await readFile(recordPath, "utf8");
+    expect(stepRecordText).not.toContain(URL_TOKEN);
+    expect(stepRecordText).toContain("{{secret.URL_TOKEN}}");
   });
 
-  it("nuka run: the goto action's own url is redacted on the step's own receipt", async () => {
+  it("nuka run: the goto action's own url is redacted on the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/visit-secret-url.feature"], {
@@ -109,21 +109,22 @@ describe("actions on the receipt: secret redaction", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const receiptPath = path.join(
+    const recordPath = path.join(
       rootDir,
       ".nukadoko",
-      "receipts",
-      record.steps[0].receipt as string,
-      "receipt.json",
+      "records",
+      "steps",
+      record.steps[0].record as string,
+      "record.json",
     );
-    const receiptText = await readFile(receiptPath, "utf8");
-    const receipt = JSON.parse(receiptText) as StoredReceipt;
-    expect(receipt.status).toBe("ok");
+    const stepRecordText = await readFile(recordPath, "utf8");
+    const stepRecord = JSON.parse(stepRecordText) as StoredStepRecord;
+    expect(stepRecord.status).toBe("ok");
 
-    const gotoAction = (receipt.actions ?? []).find((action) => action.method === "goto");
+    const gotoAction = (stepRecord.actions ?? []).find((action) => action.method === "goto");
     expect(gotoAction).toBeDefined();
     expect(gotoAction?.url).toContain("{{secret.URL_TOKEN}}");
     expect(gotoAction?.url).not.toContain(URL_TOKEN);
-    expect(receiptText).not.toContain(URL_TOKEN);
+    expect(stepRecordText).not.toContain(URL_TOKEN);
   });
 });

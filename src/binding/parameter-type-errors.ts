@@ -10,7 +10,7 @@
 // one: callers that build a
 // registry from config are expected to treat it that way — `nuka check`
 // reports it as a `parameter-type-invalid` issue, `nuka do`/`nuka run` treat
-// it as a setup failure (stderr + exit 1, no receipt).
+// it as a setup failure (stderr + exit 1, no step record).
 
 export type ParameterTypeCollisionReason = "built-in" | "duplicate";
 

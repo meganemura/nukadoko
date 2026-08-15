@@ -105,7 +105,7 @@ describe("nuka scaffold", () => {
     expect(content).toMatch(/why/i);
   });
 
-  it("fails until implemented: `nuka do` exits 1 with a failed receipt", async () => {
+  it("fails until implemented: `nuka do` exits 1 with a failed step record", async () => {
     await runCli(["scaffold", "send-invite"], {
       rootDir,
       stdout: createCaptureSink(),
@@ -120,9 +120,9 @@ describe("nuka scaffold", () => {
     });
 
     expect(exitCode).toBe(1);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("failed");
-    expect(receipt.error.message).toBe("not implemented: send-invite");
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("failed");
+    expect(stepRecord.error.message).toBe("not implemented: send-invite");
   });
 
   it("rejects a name outside [a-z0-9-]+, writing nothing", async () => {

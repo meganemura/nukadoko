@@ -26,9 +26,9 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // pull in dozens of images, a stylesheet, and a script bundle, and a file
 // that tried to hold all of that would stop being something a reader opens.
 // Everything else is tallied into `httpOmitted` instead of being silently
-// dropped (CLAUDE.md "Nothing breaks silently") — the receipt's own
+// dropped (CLAUDE.md "Nothing breaks silently") — the step record's own
 // `http_omitted` field (create-context.ts's `httpOmittedSnapshot`, wired
-// into the receipt by cli/do.ts and run-scenario.ts) is that tally's own
+// into the step record by cli/do.ts and run-scenario.ts) is that tally's own
 // read side. `observed` (browser-evidence.ts's own `request` listener) is
 // untouched by any of this — it keeps counting every request regardless of
 // what this module goes on to do with it (http-omitted.ts's own header).

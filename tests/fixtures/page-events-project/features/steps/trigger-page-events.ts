@@ -8,8 +8,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 // port (requestfailed — nothing listens on 127.0.0.1:1, so the connection is
 // refused almost immediately, no server or network access required). The
 // token is embedded in both the console text and the failed request's URL
-// so tests/page-events-receipt.test.ts can also prove redaction reaches
-// page_events the same way it already reaches http.jsonl/receipt.json.
+// so tests/page-events-step-record.test.ts can also prove redaction reaches
+// page_events the same way it already reaches http.jsonl/record.json.
 //
 // Waits on the browser context's own events before returning, rather than
 // trusting that setContent()/evaluate() resolving is enough time for them to

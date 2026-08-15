@@ -1,4 +1,4 @@
-// Responsibility: the page-origin evidence docs/spec.md's "Receipts"
+// Responsibility: the page-origin evidence docs/spec.md's "Records"
 // (`page_events`) describes — console errors, uncaught page errors, and
 // failed requests a browser context saw during a step, none of which
 // cucumber-js can hold at all (it has no browser context of its own). Same
@@ -31,13 +31,13 @@
 //
 // Capped at 100 entries per category: a
 // redirect loop or a chatty page can emit thousands of these in one step,
-// and a receipt that tried to hold all of them would stop being something a
-// reader (or an agent) can open. Silently dropping the rest would violate
-// "nothing breaks silently" (CLAUDE.md), so a truncated category's true
-// count is still reported, but never by changing that category's own type:
-// an earlier version reported it by turning the
+// and a step record that tried to hold all of them would stop being
+// something a reader (or an agent) can open. Silently dropping the rest
+// would violate "nothing breaks silently" (CLAUDE.md), so a truncated
+// category's true count is still reported, but never by changing that
+// category's own type: an earlier version reported it by turning the
 // category from a bare array into `{ entries, total, truncated: true }`
-// once the cap was hit, which meant a receipt's own type for
+// once the cap was hit, which meant a step record's own type for
 // `console_errors`/`page_errors`/`failed_requests` depended on how many
 // entries happened to occur. `jq '.page_events.console_errors | length'`
 // then silently returned a different kind of number depending on which
@@ -54,8 +54,8 @@
 // consistent array either way.
 //
 // Redaction is never applied here — deliberately no `SecretSet` parameter,
-// no `redact()` call. The whole receipt (this collector's own snapshot
-// included, once it lands in `ReceiptBase.page_events`) is redacted once, as
+// no `redact()` call. The whole step record (this collector's own snapshot
+// included, once it lands in `StepRecordBase.page_events`) is redacted once, as
 // one object, at the same executor call site that already redacts
 // `observed`/`used`/every other field (cli/do.ts, run-scenario.ts) — adding
 // a second, earlier redaction pass here would let the two disagree about
@@ -100,7 +100,7 @@ export interface FailedRequestEntry {
 
 /** Which of `page_events`'s three categories were truncated, each mapped to
  * its *true* total (how many were actually recorded), never to the number
- * of entries the receipt shows (always <= `MAX_ENTRIES_PER_CATEGORY`).
+ * of entries the step record shows (always <= `MAX_ENTRIES_PER_CATEGORY`).
  * Present on the snapshot only when at least one category was truncated —
  * a category that was not is simply absent here,
  * never present with its own entry count or `false`. */
@@ -110,13 +110,13 @@ export interface PageEventsTruncated {
   failed_requests?: number;
 }
 
-/** The receipt's own `page_events` shape (docs/spec.md "Receipts") — each
- * category is always a bare array (never the truncated entry count, and
+/** The step record's own `page_events` shape (docs/spec.md "Records") —
+ * each category is always a bare array (never the truncated entry count, and
  * never conditionally shaped some other way; see this file's own header),
  * present only when at least one entry of that kind was recorded. `truncated`
  * is the one place a cap being hit is reported.
- * The whole field is omitted from the receipt when all three categories are
- * empty (same convention as `declared`/`sections`/`used`). */
+ * The whole field is omitted from the step record when all three categories
+ * are empty (same convention as `declared`/`sections`/`used`). */
 export interface PageEventsSnapshot {
   console_errors?: readonly ConsoleErrorEntry[];
   page_errors?: readonly PageErrorEntry[];

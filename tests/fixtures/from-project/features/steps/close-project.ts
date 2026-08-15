@@ -4,7 +4,7 @@ import createProject from "./create-project.js";
 
 // Exercises `from` and `ctx.resultOf` reading the *same* upstream step in
 // one execution (m6a-from-core task spec, acceptance test: both paths
-// writing into the same `used` collector still dedupe by receipt id) —
+// writing into the same `used` collector still dedupe by record id) —
 // `from` fills `projectId` (a key name), and `run()` separately calls
 // `ctx.resultOf` for the project's `name`, a value `from`'s key-name shape
 // alone can't express without adding a second args key just to carry it.

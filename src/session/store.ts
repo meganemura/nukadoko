@@ -5,7 +5,7 @@ import type { StorageState } from "./storage-state.js";
 
 // Responsibility: the on-disk read/write of a session's storageState JSON —
 // the one place file permissions and JSON parsing for
-// sessions/default/<name>.json live. Kept separate from lock.ts (a
+// cache/sessions/default/<name>.json live. Kept separate from lock.ts (a
 // different file, a different failure mode: a malformed session file is a
 // setup failure for `do`, a malformed lock file is silently treated as
 // stale) and from manage.ts (`session list`/`clear`, which only need to

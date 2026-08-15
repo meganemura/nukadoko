@@ -26,7 +26,7 @@ import type { FixtureDefinition } from "../fixture/types.js";
 // zod schema only rejects shapes, not cross-entry relationships.
 
 // Same rule and reason as session names (src/session/name.ts): a name is
-// used directly as a sessions/<env>/ directory segment, so anything outside
+// used directly as a cache/sessions/<env>/ directory segment, so anything outside
 // this set — most importantly `.`/`/` — could escape that directory.
 const ENVIRONMENT_NAME_PATTERN = /^[a-z0-9_-]+$/;
 
@@ -335,9 +335,10 @@ export const configSchema = z
      * has it — a handling instruction, not a claim that the key "is a
      * secret" the way an untracked key's membership in a SecretSet is. Both
      * origins share the same `{{secret.NAME}}` token (no separate
-     * `{{redacted.NAME}}`): a receipt reader only ever needs to recognize
-     * one redaction shape. `MIN_REDACTABLE_LENGTH` (src/secrets/types.ts)
-     * still applies to a `redact`-named key exactly as it does to any other
+     * `{{redacted.NAME}}`): a step record reader only ever needs to
+     * recognize one redaction shape. `MIN_REDACTABLE_LENGTH`
+     * (src/secrets/types.ts) still applies to a `redact`-named key exactly
+     * as it does to any other
      * secret (src/secrets/build-secret-set.ts) — src/check/config-check.ts's
      * `secrets-redact-key-too-short` warning exists so that limit doesn't
      * silently defeat an explicit `redact` entry. The same key cannot be
@@ -364,7 +365,7 @@ export const configSchema = z
       })
       .default({ public: [], redact: [] }),
     /** `resultsDir` is root-relative; omitted, it defaults to
-     * `<stateDir>/allure-results` (docs/spec.md "The state directory") —
+     * `<stateDir>/export/allure-results` (docs/spec.md "The state directory") —
      * that default is applied where `stateDir` is resolved (src/cli/run.ts),
      * not here, since this schema alone doesn't know `stateDir`'s final
      * value. No `enabled` key: the
@@ -372,7 +373,7 @@ export const configSchema = z
      * so there is nothing to opt into. No CLI flag either. */
     allure: z.object({ resultsDir: z.string().optional() }).strict().optional(),
     /** `output` is root-relative; omitted, it defaults to
-     * `<stateDir>/messages.ndjson` — that default is applied where
+     * `<stateDir>/export/messages.ndjson` — that default is applied where
      * `stateDir` is resolved (src/cli/run.ts), not here, same split as
      * `allure.resultsDir` above. No `enabled` key: the emitter is always
      * on, same reason as `allure`

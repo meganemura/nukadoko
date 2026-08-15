@@ -27,7 +27,7 @@ import {
 // directly (docs/spec.md "Running": "the agent path"), it never matches
 // pattern text against pickle-step-shaped input, so there is no CLI
 // invocation this claim could go through instead. This is read-only (no
-// receipt/state is written), so it runs directly against the committed
+// step record/state is written), so it runs directly against the committed
 // fixture, same as tests/load-config.test.ts's own convention.
 describe("config.parameterTypes: negation reaches a step's args as a real boolean", () => {
   it("matches `will return`/`will not return`, binds, and validates through the step's own zod schema", async () => {
@@ -80,7 +80,7 @@ describe("config.parameterTypes: negation reaches a step's args as a real boolea
 });
 
 // `nuka check`/`nuka run` both write real state (`nuka run` writes
-// receipts/scenario records under `.nukadoko/`), so — same convention as
+// step records/scenario records under `.nukadoko/`), so — same convention as
 // tests/run.test.ts — this runs against a fresh temp copy, never the
 // committed fixture directly.
 describe("config.parameterTypes: from-dir folds the with/without location-clause variants into one step", () => {
@@ -155,7 +155,7 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
     await removeTempDir(rootDir);
   });
 
-  it("nuka run: the scenario record is still written, the exploding step is failed with receipt: null, and the rest is skipped", async () => {
+  it("nuka run: the scenario record is still written, the exploding step is failed with record: null, and the rest is skipped", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/transformer-throws.feature"], {
@@ -177,21 +177,21 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
 
     const [first, second] = record.steps;
     expect(first.status).toBe("failed");
-    expect(first.receipt).toBeNull();
+    expect(first.record).toBeNull();
     expect(first.error.message).toBe("custom transformer exploded");
 
     expect(second.status).toBe("skipped");
-    expect(second.receipt).toBeNull();
+    expect(second.record).toBeNull();
     expect(second.error).toBeUndefined();
 
     const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
     expect(existsSync(recordPath)).toBe(true);
 
-    // No receipt was ever written for this scenario — the throw happened
+    // No step record was ever written for this scenario — the throw happened
     // before this step's execution phase began (fix-scenario-step-backstop
     // task spec, decision 1), the same "never began" boundary undefined/
     // ambiguous/read-only-declared-refusal already draw.
-    const receiptsDir = path.join(rootDir, ".nukadoko", "receipts");
-    expect(existsSync(receiptsDir)).toBe(false);
+    const stepsDir = path.join(rootDir, ".nukadoko", "records", "steps");
+    expect(existsSync(stepsDir)).toBe(false);
   });
 });

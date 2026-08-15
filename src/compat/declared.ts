@@ -54,7 +54,7 @@ export interface DeclaredParameter {
   readonly value: string;
 }
 
-/** The receipt's own `declared` shape (src/receipt/types.ts) — every field
+/** The step record's own `declared` shape (src/record/types.ts) — every field
  * omitted when empty, the whole object omitted when every field is. */
 export interface DeclaredSnapshot {
   attachments?: string[];

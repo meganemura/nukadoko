@@ -5,7 +5,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // completion condition 6: "落としたものが無い step に http_omitted キーが
 // 出ないこと") — a page load with nothing but its own document response, no
 // image/stylesheet/script and no extra fetch, so `http_omitted` must be
-// absent from this receipt entirely, not present-and-empty.
+// absent from this step record entirely, not present-and-empty.
 export default defineStep({
   description: "Load a page with no assets and nothing left out of http.jsonl (test fixture only)",
   args: z.object({}),

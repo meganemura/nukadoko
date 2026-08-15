@@ -84,7 +84,7 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
     expect(record.steps[0].status).toBe("skipped");
-    expect(record.steps[0].receipt).toBeNull();
+    expect(record.steps[0].record).toBeNull();
 
     const beforeHooks = record.hooks.filter((h: { type: string }) => h.type === "before");
     expect(beforeHooks.some((h: { status: string }) => h.status === "failed")).toBe(true);
@@ -112,15 +112,16 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(unopened.steps[0].error.message).toContain("openPage()");
     expect(unopened.steps[0].error.message).toContain("await this.openPage()");
 
-    const receiptPath = path.join(
+    const stepRecordPath = path.join(
       rootDir,
       ".nukadoko",
-      "receipts",
-      unopened.steps[0].receipt,
-      "receipt.json",
+      "records",
+      "steps",
+      unopened.steps[0].record,
+      "record.json",
     );
-    const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
-    expect(receipt.status).toBe("failed");
+    const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8"));
+    expect(stepRecord.status).toBe("failed");
 
     // attach/log/link are received, not dropped (this task's spec, item 1)
     // — calling all three must not crash existing glue on import switch.

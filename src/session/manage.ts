@@ -6,7 +6,7 @@ import { liveLockOwner } from "./lock.js";
 import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "./paths.js";
 
 // Responsibility: `nuka session list`/`clear`'s actual work — enumerate and
-// delete session files under sessions/<env>/ —
+// delete session files under cache/sessions/<env>/ —
 // kept out of cli/session.ts so it's unit-testable without going through
 // yargs (same split as cli/do.ts vs cli/run-cli.ts). `listSessions` walks
 // every environment's subdirectory; `clearSession`/

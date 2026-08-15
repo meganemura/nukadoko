@@ -150,7 +150,7 @@ export type MatchOutcome =
  * transformer call, and this module deliberately adds none of its own) —
  * src/run/run-scenario.ts calls this function outside any
  * try/catch of its own too, so today that surfaces as an uncaught exception
- * failing the whole `nuka run` invocation, not a per-step failed receipt.
+ * failing the whole `nuka run` invocation, not a per-step failed step record.
  * `nuka check` never reaches this code path at all: src/check/feature-
  * check.ts's own matching only calls `expression.match()`/`RegExp.test()`,
  * never `Argument.getValue()`, so a transformer is only ever invoked at
@@ -208,7 +208,7 @@ export type BindArgsResult =
  * of, is a binding failure: counted as "the
  * step's execution began" (like an args-validation failure), not as "never
  * started" (like undefined/ambiguous), so callers still write a failed
- * receipt for it.
+ * step record for it.
  */
 export function bindStepArgs(
   stepName: string,

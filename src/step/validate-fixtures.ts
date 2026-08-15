@@ -23,7 +23,7 @@ import type { Step } from "./define-step.js";
 // checking style. A pure function returning issues, never throwing and never
 // printing: `nuka check` (src/check/analyze.ts) folds every issue into its
 // own report, and `nuka run`/`nuka do` (src/cli/run.ts, src/cli/do.ts) turn
-// a non-empty result into the same setup-phase, no-receipt-written refusal
+// a non-empty result into the same setup-phase, no-step-record-written refusal
 // ConfigError/a broken `from`/an unknown step name already use — a step
 // whose fixtures cannot be resolved never begins executing at all: the same
 // "never began" outcome an undefined step already gets, never a step

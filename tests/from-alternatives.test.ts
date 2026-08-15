@@ -23,9 +23,9 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("from: injection picks whichever candidate actually ran", () => {
@@ -51,11 +51,11 @@ describe("from: injection picks whichever candidate actually ran", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const createReceiptId = record.steps[0].receipt as string;
-    const archiveReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
-    expect(archiveReceipt.status).toBe("ok");
-    expect(archiveReceipt.args).toEqual({ projectId: "p_acme" });
-    expect(archiveReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-project" }]);
+    const createRecordId = record.steps[0].record as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
+    expect(archiveStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
   });
 
   it("fills projectId from import-project, the exact same consumer step, when only that candidate is bound earlier", async () => {
@@ -70,13 +70,13 @@ describe("from: injection picks whichever candidate actually ran", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const importReceiptId = record.steps[0].receipt as string;
-    const archiveReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
-    expect(archiveReceipt.status).toBe("ok");
+    const importRecordId = record.steps[0].record as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    expect(archiveStepRecord.status).toBe("ok");
     // import-project's own returns key is "projectId", not "id" — proving
     // the injected value came from the *other* candidate's own key name.
-    expect(archiveReceipt.args).toEqual({ projectId: "p_beta" });
-    expect(archiveReceipt.used).toEqual([{ receipt: importReceiptId, step: "import-project" }]);
+    expect(archiveStepRecord.args).toEqual({ projectId: "p_beta" });
+    expect(archiveStepRecord.used).toEqual([{ record: importRecordId, step: "import-project" }]);
   });
 });
 
@@ -146,7 +146,7 @@ describe("nuka run: fails a scenario with two bound candidates before any step r
     await removeTempDir(rootDir);
   });
 
-  it("refuses the whole scenario, no receipts, no browser session ever opened", async () => {
+  it("refuses the whole scenario, no step records, no browser session ever opened", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/chain.feature:11"], { rootDir, stdout, stderr });
@@ -155,9 +155,9 @@ describe("nuka run: fails a scenario with two bound candidates before any step r
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
     // Every step in this pickle is either the failing line or skipped —
-    // none of them ever ran, so none has a receipt.
+    // none of them ever ran, so none has a step record.
     for (const step of record.steps) {
-      expect(step.receipt).toBeNull();
+      expect(step.record).toBeNull();
     }
     const archiveStep = record.steps.find((s: { text: string }) => s.text === "the project is archived");
     expect(archiveStep.status).toBe("failed");
@@ -177,46 +177,46 @@ describe("nuka do --use: either candidate fills the key", () => {
     await removeTempDir(rootDir);
   });
 
-  it("--use a create-project receipt fills projectId via that candidate", async () => {
+  it("--use a create-project step record fills projectId via that candidate", async () => {
     const createStdout = createCaptureSink();
     await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
       rootDir,
       stdout: createStdout,
       stderr: createCaptureSink(),
     });
-    const createReceipt = JSON.parse(createStdout.text());
+    const createStepRecord = JSON.parse(createStdout.text());
 
     const archiveStdout = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", createReceipt.receipt_id],
+      ["do", "archive-project", "--args", "{}", "--use", createStepRecord.record_id],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
 
     expect(exitCode).toBe(0);
-    const archiveReceipt = JSON.parse(archiveStdout.text());
-    expect(archiveReceipt.args).toEqual({ projectId: "p_acme" });
-    expect(archiveReceipt.used).toEqual([{ receipt: createReceipt.receipt_id, step: "create-project" }]);
+    const archiveStepRecord = JSON.parse(archiveStdout.text());
+    expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
+    expect(archiveStepRecord.used).toEqual([{ record: createStepRecord.record_id, step: "create-project" }]);
   });
 
-  it("--use an import-project receipt fills projectId via the other candidate", async () => {
+  it("--use an import-project step record fills projectId via the other candidate", async () => {
     const importStdout = createCaptureSink();
     await runCli(["do", "import-project", "--args", '{"name":"beta"}'], {
       rootDir,
       stdout: importStdout,
       stderr: createCaptureSink(),
     });
-    const importReceipt = JSON.parse(importStdout.text());
+    const importStepRecord = JSON.parse(importStdout.text());
 
     const archiveStdout = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", importReceipt.receipt_id],
+      ["do", "archive-project", "--args", "{}", "--use", importStepRecord.record_id],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
 
     expect(exitCode).toBe(0);
-    const archiveReceipt = JSON.parse(archiveStdout.text());
-    expect(archiveReceipt.args).toEqual({ projectId: "p_beta" });
-    expect(archiveReceipt.used).toEqual([{ receipt: importReceipt.receipt_id, step: "import-project" }]);
+    const archiveStepRecord = JSON.parse(archiveStdout.text());
+    expect(archiveStepRecord.args).toEqual({ projectId: "p_beta" });
+    expect(archiveStepRecord.used).toEqual([{ record: importStepRecord.record_id, step: "import-project" }]);
   });
 
   it("two --use values resolving the same key to different candidates fail setup", async () => {
@@ -226,7 +226,7 @@ describe("nuka do --use: either candidate fills the key", () => {
       stdout: createStdout,
       stderr: createCaptureSink(),
     });
-    const createReceipt = JSON.parse(createStdout.text());
+    const createStepRecord = JSON.parse(createStdout.text());
 
     const importStdout = createCaptureSink();
     await runCli(["do", "import-project", "--args", '{"name":"beta"}'], {
@@ -234,7 +234,7 @@ describe("nuka do --use: either candidate fills the key", () => {
       stdout: importStdout,
       stderr: createCaptureSink(),
     });
-    const importReceipt = JSON.parse(importStdout.text());
+    const importStepRecord = JSON.parse(importStdout.text());
 
     const archiveStdout = createCaptureSink();
     const archiveStderr = createCaptureSink();
@@ -245,15 +245,15 @@ describe("nuka do --use: either candidate fills the key", () => {
         "--args",
         "{}",
         "--use",
-        createReceipt.receipt_id,
+        createStepRecord.record_id,
         "--use",
-        importReceipt.receipt_id,
+        importStepRecord.record_id,
       ],
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
     expect(exitCode).toBe(1);
-    // Setup-phase fatal: no receipt is ever printed to stdout.
+    // Setup-phase fatal: no step record is ever printed to stdout.
     expect(archiveStdout.text()).toBe("");
     expect(archiveStderr.text()).toContain("projectId");
     expect(archiveStderr.text()).toContain("create-project");

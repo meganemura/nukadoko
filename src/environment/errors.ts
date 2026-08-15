@@ -30,7 +30,7 @@ export class UnknownEnvironmentError extends Error {
   }
 }
 
-/** Thrown in `nuka do`'s setup phase (before any receipt is written) when a
+/** Thrown in `nuka do`'s setup phase (before any step record is written) when a
  * mutating step targets an environment whose `policy` is `"read-only"`. */
 export class ReadOnlyEnvironmentError extends Error {
   readonly stepName: string;

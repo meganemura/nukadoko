@@ -154,7 +154,7 @@ describe("nuka describe", () => {
 });
 
 describe("nuka do", () => {
-  it("executes a pure ok step and writes a receipt", async () => {
+  it("executes a pure ok step and writes a step record", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stdout = createCaptureSink();
@@ -167,32 +167,31 @@ describe("nuka do", () => {
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.status).toBe("ok");
-      expect(receipt.step).toBe("echo");
-      expect(receipt.kind).toBe("do");
-      expect(receipt.args).toEqual({ value: "hi" });
-      expect(receipt.result).toEqual({ value: "hi" });
-      expect(receipt.environment).toBe("default");
-      expect(receipt.session).toBeNull();
-      expect(receipt.scenario).toBeNull();
-      expect(receipt.evidence.dir).toBe(path.join(".nukadoko", "receipts", receipt.receipt_id));
-      expect(receipt.evidence.screenshots).toEqual([]);
-      expect(receipt.evidence.trace).toBeUndefined();
-      expect(receipt.evidence.http).toBeUndefined();
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.step).toBe("echo");
+      expect(stepRecord.kind).toBe("do");
+      expect(stepRecord.args).toEqual({ value: "hi" });
+      expect(stepRecord.result).toEqual({ value: "hi" });
+      expect(stepRecord.environment).toBe("default");
+      expect(stepRecord.session).toBeNull();
+      expect(stepRecord.scenario).toBeNull();
+      expect(stepRecord.evidence.dir).toBe(path.join(".nukadoko", "records", "steps", stepRecord.record_id));
+      expect(stepRecord.evidence.screenshots).toEqual([]);
+      expect(stepRecord.evidence.trace).toBeUndefined();
+      expect(stepRecord.evidence.http).toBeUndefined();
       // No network call was ever made (this task's spec, decision 3):
-      // `observed` is still always present on the receipt, at zero.
-      expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 0 });
-      // `echo` declares `mutates: false` explicitly (m3a-receipt-kinds task
-      // spec, decision 3): a typed step's receipt carries that declaration
-      // verbatim, never `null` (`null` is reserved for a compat step, which
-      // has no declaration at all).
-      expect(receipt.mutates).toBe(false);
+      // `observed` is still always present on the step record, at zero.
+      expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 0 });
+      // `echo` declares `mutates: false` explicitly: a typed step's step
+      // record carries that declaration verbatim, never `null` (`null` is
+      // reserved for a compat step, which has no declaration at all).
+      expect(stepRecord.mutates).toBe(false);
 
-      const receiptPath = path.join(rootDir, receipt.evidence.dir, "receipt.json");
-      expect(existsSync(receiptPath)).toBe(true);
-      const onDisk = JSON.parse(await readFile(receiptPath, "utf8"));
-      expect(onDisk).toEqual(receipt);
+      const recordPath = path.join(rootDir, stepRecord.evidence.dir, "record.json");
+      expect(existsSync(recordPath)).toBe(true);
+      const onDisk = JSON.parse(await readFile(recordPath, "utf8"));
+      expect(onDisk).toEqual(stepRecord);
     } finally {
       await removeTempDir(rootDir);
     }
@@ -213,7 +212,7 @@ describe("nuka do", () => {
     }
   });
 
-  it("an unknown flag fails setup: exit 1, stderr names it, no receipt written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+  it("an unknown flag fails setup: exit 1, stderr names it, no step record written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stdout = createCaptureSink();
@@ -232,7 +231,7 @@ describe("nuka do", () => {
     }
   });
 
-  it("writes a failed receipt with exit 1 when args fail schema validation", async () => {
+  it("writes a failed step record with exit 1 when args fail schema validation", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stdout = createCaptureSink();
@@ -243,20 +242,20 @@ describe("nuka do", () => {
       });
 
       expect(exitCode).toBe(1);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.status).toBe("failed");
-      expect(receipt.result).toBeUndefined();
-      expect(receipt.error.message).toBeTruthy();
-      // m3a-receipt-kinds task spec: args validation failure classifies as
-      // "args_invalid", distinct from an ordinary step throw.
-      expect(receipt.error.kind).toBe("args_invalid");
-      expect(existsSync(path.join(rootDir, receipt.evidence.dir, "receipt.json"))).toBe(true);
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.status).toBe("failed");
+      expect(stepRecord.result).toBeUndefined();
+      expect(stepRecord.error.message).toBeTruthy();
+      // args validation failure classifies as "args_invalid", distinct from
+      // an ordinary step throw.
+      expect(stepRecord.error.kind).toBe("args_invalid");
+      expect(existsSync(path.join(rootDir, stepRecord.evidence.dir, "record.json"))).toBe(true);
     } finally {
       await removeTempDir(rootDir);
     }
   });
 
-  it("writes a failed receipt with exit 1 when run throws", async () => {
+  it("writes a failed step record with exit 1 when run throws", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stdout = createCaptureSink();
@@ -267,18 +266,18 @@ describe("nuka do", () => {
       });
 
       expect(exitCode).toBe(1);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.status).toBe("failed");
-      expect(receipt.error.message).toBe("boom");
-      // m3a-receipt-kinds task spec: an ordinary step throw is the
-      // catch-all "step_error", distinct from every contract-layer kind.
-      expect(receipt.error.kind).toBe("step_error");
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.status).toBe("failed");
+      expect(stepRecord.error.message).toBe("boom");
+      // An ordinary step throw is the catch-all "step_error", distinct from
+      // every contract-layer kind.
+      expect(stepRecord.error.kind).toBe("step_error");
     } finally {
       await removeTempDir(rootDir);
     }
   });
 
-  it("writes a failed receipt with exit 1 when the result fails its returns schema", async () => {
+  it("writes a failed step record with exit 1 when the result fails its returns schema", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stdout = createCaptureSink();
@@ -289,18 +288,18 @@ describe("nuka do", () => {
       });
 
       expect(exitCode).toBe(1);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.status).toBe("failed");
-      expect(receipt.error.message).toContain("returns");
-      // m3a-receipt-kinds task spec: a returns-schema failure classifies as
-      // "result_invalid", distinct from "args_invalid"/"step_error".
-      expect(receipt.error.kind).toBe("result_invalid");
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.status).toBe("failed");
+      expect(stepRecord.error.message).toContain("returns");
+      // A returns-schema failure classifies as "result_invalid", distinct
+      // from "args_invalid"/"step_error".
+      expect(stepRecord.error.kind).toBe("result_invalid");
     } finally {
       await removeTempDir(rootDir);
     }
   });
 
-  it("does not create a receipts directory for an unknown step", async () => {
+  it("does not create a step record directory for an unknown step", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stderr = createCaptureSink();
@@ -318,7 +317,7 @@ describe("nuka do", () => {
     }
   });
 
-  it("does not create a receipts directory for malformed --args JSON", async () => {
+  it("does not create a step record directory for malformed --args JSON", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stderr = createCaptureSink();
@@ -348,18 +347,19 @@ describe("nuka do", () => {
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.status).toBe("ok");
-      expect(receipt.result).toEqual({ id: "p_0001", name: "x" });
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
 
-      const receiptPath = path.join(
+      const recordPath = path.join(
         rootDir,
         ".nukadoko",
-        "receipts",
-        receipt.receipt_id,
-        "receipt.json",
+        "records",
+        "steps",
+        stepRecord.record_id,
+        "record.json",
       );
-      expect(existsSync(receiptPath)).toBe(true);
+      expect(existsSync(recordPath)).toBe(true);
     } finally {
       await removeTempDir(rootDir);
     }
@@ -384,7 +384,7 @@ describe("nuka (process)", () => {
     ]);
   });
 
-  it("runs `do` end-to-end via tsx against a fixture project, receipt.json included", async () => {
+  it("runs `do` end-to-end via tsx against a fixture project, record.json included", async () => {
     const cliPath = path.join(repoRoot, "src", "cli.ts");
     const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
     const rootDir = await copyFixtureToTempDir("basic-project");
@@ -397,18 +397,19 @@ describe("nuka (process)", () => {
       );
 
       expect(stderr).toBe("");
-      const receipt = JSON.parse(stdout);
-      expect(receipt.status).toBe("ok");
-      expect(receipt.result).toEqual({ id: "p_0001", name: "x" });
+      const stepRecord = JSON.parse(stdout);
+      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
 
-      const receiptPath = path.join(
+      const recordPath = path.join(
         rootDir,
         ".nukadoko",
-        "receipts",
-        receipt.receipt_id,
-        "receipt.json",
+        "records",
+        "steps",
+        stepRecord.record_id,
+        "record.json",
       );
-      expect(existsSync(receiptPath)).toBe(true);
+      expect(existsSync(recordPath)).toBe(true);
     } finally {
       await removeTempDir(rootDir);
     }

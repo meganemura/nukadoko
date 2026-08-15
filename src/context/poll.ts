@@ -3,7 +3,7 @@
 // there yet. This module no longer exports a runnable `poll`: that was a
 // pure import for exactly as long as it recorded nothing (`import { poll }
 // from "nukadoko"`, src/index.ts), and a wait that
-// leaves no trace cannot be told apart, from a receipt, from one that
+// leaves no trace cannot be told apart, from a step record, from one that
 // returned on its first attempt — the two call for opposite fixes (see
 // docs/spec.md's own "Helpers live as imports..." paragraph: this was the
 // same mistake `ctx.section` made once already, reached from the opposite
@@ -19,8 +19,8 @@ export interface PollOptions {
   /** Delay between poll attempts, in milliseconds. */
   interval?: number;
   /** Human-readable label. Included in `PollTimeoutError`'s message when
-   * this poll times out, and in the receipt's own `polls` entry regardless
-   * of how the poll ended (docs/spec.md "Receipts") — the same label both
+   * this poll times out, and in the step record's own `polls` entry
+   * regardless of how the poll ended (docs/spec.md "Records") — the same label both
    * names the failure and identifies the record of the wait that produced
    * it. */
   description?: string;
@@ -56,7 +56,7 @@ export interface PollOutcome {
   /** ISO 8601 — this poll's own start,
    * derived from the same `startedAt` epoch-ms value already used to compute
    * `waitedMs` below, so the two can never disagree about when this poll
-   * began. Exposed so `PollRecord.at` (src/receipt/types.ts) can place this
+   * began. Exposed so `PollRecord.at` (src/record/types.ts) can place this
    * poll on the same absolute timeline `sections`' own `at` and
    * `evidence.screenshots[].at` already share. */
   readonly at: string;

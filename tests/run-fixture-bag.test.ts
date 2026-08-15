@@ -49,14 +49,14 @@ describe("nuka do: fixture bag's structural refusal", () => {
     await removeTempDir(rootDir);
   });
 
-  it("refuses an unknown fixture name before the step ever runs — no receipt written", async () => {
+  it("refuses an unknown fixture name before the step ever runs — no step record written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "unknown-fixture-step", "--args", "{}"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     // Setup-phase, not the step's own failure: `stdout` never receives a
-    // receipt JSON at all (cli/do.ts's own contract — a setup failure
+    // step record JSON at all (cli/do.ts's own contract — a setup failure
     // writes nothing).
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain('unknown fixture "bogus"');
@@ -92,15 +92,15 @@ describe("nuka do: fixture bag's structural refusal", () => {
     expect(stderr.text()).toContain("destructure");
   });
 
-  it("runs a clean step normally — args/env fixtures resolve, receipt is written, exit 0", async () => {
+  it("runs a clean step normally — args/env fixtures resolve, step record is written, exit 0", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "clean-step", "--args", "{}"], { rootDir, stdout, stderr });
 
     expect(stderr.text()).toBe("");
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
-    expect(receipt.result).toEqual({ ok: true });
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.result).toEqual({ ok: true });
   });
 });

@@ -6,12 +6,12 @@ import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { PollTimeoutError } from "../src/index.js";
 
-// Responsibility: `ctx.poll`'s own retry-loop behavior (ctx-poll-receipt
-// task spec), unchanged from the pre-ctx-poll-receipt `poll` import this
+// Responsibility: `ctx.poll`'s own retry-loop behavior (ctx-poll-step-record
+// task spec), unchanged from the pre-ctx-poll-step-record `poll` import this
 // replaces — only the call site moved (`ctx.poll(fn, options)` instead of
 // `poll(fn, options)`, via a real `ctx` from createStepContext, the same way
 // tests/create-context.test.ts exercises other `ctx` members). What the
-// receipt actually records from a finished poll is tests/polls.test.ts's
+// step record actually records from a finished poll is tests/polls.test.ts's
 // job, not this file's.
 
 interface Job {

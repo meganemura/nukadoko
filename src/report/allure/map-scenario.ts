@@ -10,18 +10,18 @@ import type {
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { ActionEntry } from "../../context/trace-actions.js";
-import type { ErrorKind, PollRecord, Receipt } from "../../receipt/types.js";
+import type { ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module, kept in
 // one identifiable place — `mapStep` turns one pickle step's own record,
-// receipt, and gherkin context into one Allure *test* (not a child of one),
+// step record, and gherkin context into one Allure *test* (not a child of one),
 // `mapHooks` turns a scenario's own before/after hooks into fixtures, and
 // `mapScenarioEvidence` turns whatever browser evidence belongs to the
 // scenario as a whole into a synthetic fixture. No `allure-js-commons`
 // import (not even a type-only one) and no `node:fs`: every input here is
-// already resolved by a caller (emitter.ts reads/redacts receipts itself and
+// already resolved by a caller (emitter.ts reads/redacts step records itself and
 // resolves the project name via identity.ts before calling any function in
 // this file), so every function here can be driven entirely from fixture
 // data in a test, with no real allure-results directory and no disk-
@@ -192,21 +192,23 @@ export interface MapStepInput {
   readonly session: string | null;
   readonly targetVersion?: string;
   readonly record: ScenarioStepRecord;
-  /** The exact in-memory object `run-scenario.ts`'s own `writeReceipt` call
-   * just persisted for this step, or `null` for a step with no receipt of
-   * its own at all (skipped, undefined, ambiguous, or a never-began
-   * refusal) — never a receipt that exists on disk but could not be read
+  /** The exact in-memory object `run-scenario.ts`'s own `writeStepRecord`
+   * call
+   * just persisted for this step, or `null` for a step with no step record
+   * of its own at all (skipped, undefined, ambiguous, or a never-began
+   * refusal) — never a step record that exists on disk but could not be
+   * read
    * back: `pushStepRecord`'s own seam hands the caller
    * the object it already has, so there is nothing to re-read. */
-  readonly receipt: Receipt | null;
+  readonly stepRecord: StepRecord | null;
   /** This step's own 0-based position in both `record.steps` and
    * `pickle.steps` — folded into `identityParameters` below so two steps
    * sharing the exact same text in one scenario still get distinct
    * identities. */
   readonly index: number;
   /** The moment this step's own record was appended (run-scenario.ts's
-   * `pushStepRecord`) — the zero-width anchor for a step with no receipt of
-   * its own, replacing the old "previous step's own stop" anchor a scenario-
+   * `pushStepRecord`) — the zero-width anchor for a step with no step record
+   * of its own, replacing the old "previous step's own stop" anchor a scenario-
    * level test's own child-step timeline used to need: with each step now
    * its own Allure test rather than one child among a scenario's own
    * timeline, there is no longer a parent test to stay ordered *within*. */
@@ -406,7 +408,7 @@ function dedupeLinks(links: readonly MappedLink[]): MappedLink[] {
 }
 
 // --- declared attachments/logs/links/labels/parameters (shared by a step's
-// own `receipt.declared` and a hook's own `record.hooks[].declared`, same
+// own step record `declared` and a hook's own `record.hooks[].declared`, same
 // shape either way) ---
 //
 // `contentTypeForFileName` (and the extension table backing it) lives in
@@ -481,13 +483,14 @@ interface Outcome {
   readonly kind?: ErrorKind;
 }
 
-/** `receipt` is exactly what the caller already has for this step — never a
- * disk read (`MapStepInput.receipt`'s own doc
+/** `stepRecord` is exactly what the caller already has for this step —
+ * never a
+ * disk read (`MapStepInput.stepRecord`'s own doc
  * comment) — so, unlike the scenario = test design this replaced, there is
- * no longer an "unreadable receipt.json" case to fall back for: `receipt`
- * is `null` exactly when `step.receipt` is `null` (a step that never began
+ * no longer an "unreadable record.json" case to fall back for: `stepRecord`
+ * is `null` exactly when `step.record` is `null` (a step that never began
  * at all — skipped, undefined, ambiguous, or a never-began refusal). */
-function resolveStepOutcome(step: ScenarioStepRecord, receipt: Receipt | null): Outcome {
+function resolveStepOutcome(step: ScenarioStepRecord, stepRecord: StepRecord | null): Outcome {
   if (step.status === "passed") {
     return { status: "passed" };
   }
@@ -496,13 +499,13 @@ function resolveStepOutcome(step: ScenarioStepRecord, receipt: Receipt | null): 
   }
   if (step.status === "undefined" || step.status === "ambiguous") {
     // A vocabulary defect, not one of the `ErrorKind`s (there is no
-    // receipt to carry one) — broken, unmarked.
+    // step record to carry one) — broken, unmarked.
     return { status: "broken", message: step.error?.message };
   }
   // step.status === "failed"
-  if (receipt && receipt.status === "failed") {
-    const kind = receipt.error.kind;
-    return { status: statusForKind(kind), message: markedMessage(kind, receipt.error.message), kind };
+  if (stepRecord && stepRecord.status === "failed") {
+    const kind = stepRecord.error.kind;
+    return { status: statusForKind(kind), message: markedMessage(kind, stepRecord.error.message), kind };
   }
   // A step that never began at all despite `status: "failed"` (a never-
   // began refusal, e.g. the read-only declared-mutates rejection) carries
@@ -533,7 +536,7 @@ function resolveHookOutcome(hook: ScenarioHookRecord): Outcome {
 // caller actually asked for, so `"passed"`. `"timed_out"` means the
 // condition the step waited for was never met — the step is reporting its
 // own contract failed to hold, the same "failed" a step's own kind-
-// classified receipt error gets, never "broken". `"failed"` means the
+// classified step record error gets, never "broken". `"failed"` means the
 // poll's own `fn` threw, unrelated to whatever it was polling for — the
 // contract layer failing to reach a verdict, "broken", the same bucket
 // `statusForKind`'s own unclassified kinds fall into.
@@ -563,7 +566,7 @@ interface TimelineEntry {
  * there is no third "broken" bucket to reach for here: `"failed"` means the
  * Playwright call itself (an `expect` wait included) did not resolve the way
  * the step asked it to — the system under test violated the contract, the
- * same distinction the receipt's own `error.kind` already draws — never the
+ * same distinction the step record's own `error.kind` already draws — never the
  * contract layer failing to reach a verdict. */
 function actionOutcomeStatus(outcome: ActionEntry["outcome"]): MappedStatus {
   return outcome === "failed" ? "failed" : "passed";
@@ -572,7 +575,7 @@ function actionOutcomeStatus(outcome: ActionEntry["outcome"]): MappedStatus {
 /** A readable name for one Playwright call — `ms` and `timeout_ms` are
  * deliberately never folded in here: `ms` is already visible as this child
  * step's own width (unlike a poll's `attempts`, which the width alone can't
- * reveal), and `timeout_ms` already lives in the `receipt.json` attachment.
+ * reveal), and `timeout_ms` already lives in the `record.json` attachment.
  * `expect` needs its matcher and target named explicitly
  * (`before.params.expression`/`selector`) — neither is implied by `method`
  * alone, the way `goto`'s own target is implied by `url` — so it gets its
@@ -599,36 +602,36 @@ function actionName(action: ActionEntry): string {
  * the wait was a no-op; `40` means the opposite fix is needed, and duration
  * alone can't tell those apart); an action spans its own `at` through
  * `at + ms`, named by `actionName` above. Deliberately never clamped to the
- * parent step's own start/stop: a receipt whose own timeline runs outside
+ * parent step's own start/stop: a step record whose own timeline runs outside
  * its step's measured window is a real anomaly, not something to hide by
  * clipping it.
  *
  * Same-instant order, when `sections`/`polls`/`actions` land on the exact
  * same millisecond: sections, then polls, then actions, always — a fixed
- * choice made here once so a rerun of the same receipt never reorders the
+ * choice made here once so a rerun of the same step record never reorders the
  * timeline and turns into an unreadable diff. Enforced by
  * `Array.prototype.sort`'s own stability: each category is pushed to
  * `entries` in that same order below, so two entries that tie on `at` keep
  * the order they were pushed in.
  *
- * A truncated `actions` array (`receipt.truncated.actions` present) gets one
+ * A truncated `actions` array (`stepRecord.truncated.actions` present) gets one
  * more child step appended after the sort, naming the cut so a reader
  * scanning only the timeline never mistakes a capped list for the whole
- * story. Placed at the tail on purpose: it names a fact about the receipt as
+ * story. Placed at the tail on purpose: it names a fact about the step record as
  * a whole, not a moment inside the step, so it is appended to the array
  * rather than merged into the `at`-ordered sort above.
  *
  * `source` is narrowed to just the four fields this function actually reads
- * rather than the full `Receipt`, so `mapHooks` below can hand this the
+ * rather than the full `StepRecord`, so `mapHooks` below can hand this the
  * exact same function a `ScenarioHookRecord` — which has `actions`/
  * `truncated` but no `sections`/`polls`/`started_at` of its own (a hook has
  * no `ctx` to call `ctx.section`/`ctx.poll` from) — without a second merge
- * function or a fake `Receipt` shim. `fallbackAnchorMs` is whichever
+ * function or a fake `StepRecord` shim. `fallbackAnchorMs` is whichever
  * timestamp is the right anchor for the caller (a step's own
- * `Date.parse(receipt.started_at)`, or a hook's own collapsed
+ * `Date.parse(stepRecord.started_at)`, or a hook's own collapsed
  * `timestampMs`). */
 function mapTimelineChildSteps(
-  source: Pick<Receipt, "sections" | "polls" | "actions" | "truncated">,
+  source: Pick<StepRecord, "sections" | "polls" | "actions" | "truncated">,
   fallbackAnchorMs: number,
 ): MappedChildStep[] {
   const entries: TimelineEntry[] = [];
@@ -685,7 +688,7 @@ function mapTimelineChildSteps(
 }
 
 /** `page_events`'s three categories as step parameters — visible without
- * opening the `receipt.json` attachment that already carries the same data
+ * opening the `record.json` attachment that already carries the same data
  * in full. A category with no entries is omitted, never shown as `0`. A
  * truncated category (`page_events.truncated.<category>` present) reports
  * the *true* total beside the shown count (`"100 of 4213"`) — the shown
@@ -707,7 +710,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     session,
     targetVersion,
     record,
-    receipt,
+    stepRecord,
     index,
     finishedAt,
     gherkinDocument,
@@ -719,15 +722,16 @@ export function mapStep(input: MapStepInput): MappedStepTest {
   const featureName = gherkinDocument.feature?.name ?? "";
   const stepIds = collectGherkinSteps(gherkinDocument);
 
-  const outcome = resolveStepOutcome(record, receipt);
+  const outcome = resolveStepOutcome(record, stepRecord);
 
   let startMs: number;
   let stopMs: number;
-  if (receipt) {
-    startMs = Date.parse(receipt.started_at);
-    stopMs = Date.parse(receipt.finished_at);
+  if (stepRecord) {
+    startMs = Date.parse(stepRecord.started_at);
+    stopMs = Date.parse(stepRecord.finished_at);
   } else {
-    // A step with no receipt (skipped/undefined/ambiguous, or a never-began
+    // A step with no step record (skipped/undefined/ambiguous, or a
+    // never-began
     // refusal) has no time of its own to report — zero-width, anchored to
     // the moment this step's own record was appended (`MapStepInput.
     // finishedAt`'s own doc comment).
@@ -736,97 +740,105 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     stopMs = t;
   }
 
-  const receiptParameters: MappedParameter[] = [];
+  const stepRecordParameters: MappedParameter[] = [];
   const attachments: MappedAttachment[] = [];
   let declared: MappedDeclared = EMPTY_DECLARED;
   let timelineChildSteps: MappedChildStep[] = [];
 
-  if (receipt) {
-    receiptParameters.push({ name: "receipt", value: receipt.receipt_id });
-    receiptParameters.push({
+  if (stepRecord) {
+    stepRecordParameters.push({ name: "record", value: stepRecord.record_id });
+    stepRecordParameters.push({
       name: "mutates (declared)",
-      value: receipt.mutates === null ? "not declared" : receipt.mutates ? "true" : "false",
+      value: stepRecord.mutates === null ? "not declared" : stepRecord.mutates ? "true" : "false",
     });
-    receiptParameters.push({ name: "http reads (observed)", value: String(receipt.observed.http_reads) });
-    receiptParameters.push({ name: "http writes (observed)", value: String(receipt.observed.http_writes) });
-    if (receipt.world) {
-      receiptParameters.push({ name: "world reads (observed)", value: receipt.world.reads.join(", ") });
-      receiptParameters.push({ name: "world writes (observed)", value: receipt.world.writes.join(", ") });
+    stepRecordParameters.push({ name: "http reads (observed)", value: String(stepRecord.observed.http_reads) });
+    stepRecordParameters.push({ name: "http writes (observed)", value: String(stepRecord.observed.http_writes) });
+    if (stepRecord.world) {
+      stepRecordParameters.push({ name: "world reads (observed)", value: stepRecord.world.reads.join(", ") });
+      stepRecordParameters.push({ name: "world writes (observed)", value: stepRecord.world.writes.join(", ") });
     }
-    if (receipt.used && receipt.used.length > 0) {
-      receiptParameters.push({ name: "used receipts", value: receipt.used.map((entry) => entry.receipt).join(", ") });
+    if (stepRecord.used && stepRecord.used.length > 0) {
+      stepRecordParameters.push({
+        name: "used step records",
+        value: stepRecord.used.map((entry) => entry.record).join(", "),
+      });
     }
-    if (receipt.required_env && receipt.required_env.length > 0) {
-      receiptParameters.push({ name: "required env", value: receipt.required_env.join(", ") });
+    if (stepRecord.required_env && stepRecord.required_env.length > 0) {
+      stepRecordParameters.push({ name: "required env", value: stepRecord.required_env.join(", ") });
     }
-    if (receipt.page_events) {
+    if (stepRecord.page_events) {
       const consoleErrors = pageEventCount(
-        receipt.page_events.console_errors,
-        receipt.page_events.truncated?.console_errors,
+        stepRecord.page_events.console_errors,
+        stepRecord.page_events.truncated?.console_errors,
       );
       if (consoleErrors !== undefined) {
-        receiptParameters.push({ name: "console errors (observed)", value: consoleErrors });
+        stepRecordParameters.push({ name: "console errors (observed)", value: consoleErrors });
       }
-      const pageErrors = pageEventCount(receipt.page_events.page_errors, receipt.page_events.truncated?.page_errors);
+      const pageErrors = pageEventCount(
+        stepRecord.page_events.page_errors,
+        stepRecord.page_events.truncated?.page_errors,
+      );
       if (pageErrors !== undefined) {
-        receiptParameters.push({ name: "page errors (observed)", value: pageErrors });
+        stepRecordParameters.push({ name: "page errors (observed)", value: pageErrors });
       }
       const failedRequests = pageEventCount(
-        receipt.page_events.failed_requests,
-        receipt.page_events.truncated?.failed_requests,
+        stepRecord.page_events.failed_requests,
+        stepRecord.page_events.truncated?.failed_requests,
       );
       if (failedRequests !== undefined) {
-        receiptParameters.push({ name: "failed requests (observed)", value: failedRequests });
+        stepRecordParameters.push({ name: "failed requests (observed)", value: failedRequests });
       }
     }
 
-    // The whole receipt, verbatim, as one JSON attachment — every step whose
-    // receipt exists, success or failure alike, never only the fields this
+    // The whole step record, verbatim, as one JSON attachment — every step
+    // whose
+    // step record exists, success or failure alike, never only the fields
+    // this
     // module happens to map individually below. Already redacted before it
-    // ever reached disk (write-receipt.ts's own callers), so no second
+    // ever reached disk (write-step-record.ts's own callers), so no second
     // redaction pass belongs here.
     attachments.push({
       kind: "buffer",
-      name: "receipt.json",
+      name: "record.json",
       contentType: "application/json",
-      content: JSON.stringify(receipt, null, 2),
+      content: JSON.stringify(stepRecord, null, 2),
       fileExtension: ".json",
     });
 
-    if (receipt.status === "ok" && receipt.result !== null) {
+    if (stepRecord.status === "ok" && stepRecord.result !== null) {
       attachments.push({
         kind: "buffer",
         name: "result",
         contentType: "application/json",
-        content: JSON.stringify(receipt.result, null, 2),
+        content: JSON.stringify(stepRecord.result, null, 2),
         fileExtension: ".json",
       });
     }
-    if (receipt.evidence.http) {
+    if (stepRecord.evidence.http) {
       attachments.push({
         kind: "path",
         name: "http log",
         contentType: "text/plain",
-        path: joinRelative(receipt.evidence.dir, receipt.evidence.http),
+        path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.http),
       });
     }
-    if (receipt.evidence.trace) {
+    if (stepRecord.evidence.trace) {
       attachments.push({
         kind: "path",
         name: "trace",
         contentType: "application/vnd.allure.playwright-trace",
-        path: joinRelative(receipt.evidence.dir, receipt.evidence.trace),
+        path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.trace),
       });
     }
     // `screenshot.at` is never surfaced here — an attachment has no field to
     // put a timestamp on, so `file` (the only part Allure can place) is all
     // this mapping carries forward.
-    for (const screenshot of receipt.evidence.screenshots) {
+    for (const screenshot of stepRecord.evidence.screenshots) {
       attachments.push({
         kind: "path",
         name: screenshot.file,
         contentType: "image/png",
-        path: joinRelative(receipt.evidence.dir, screenshot.file),
+        path: joinRelative(stepRecord.evidence.dir, screenshot.file),
       });
     }
     // Application-specific evidence `evidence.attach`/`.path` produced —
@@ -835,18 +847,18 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     // own extension; an unrecognized extension falls back to
     // `application/octet-stream` rather than a guess this module cannot
     // verify.
-    for (const attachment of receipt.evidence.attachments ?? []) {
+    for (const attachment of stepRecord.evidence.attachments ?? []) {
       attachments.push({
         kind: "path",
         name: attachment.name,
         contentType: contentTypeForFileName(attachment.file),
-        path: joinRelative(receipt.evidence.dir, attachment.file),
+        path: joinRelative(stepRecord.evidence.dir, attachment.file),
       });
     }
 
-    declared = mapDeclared(receipt.declared, receipt.evidence.dir, startMs);
+    declared = mapDeclared(stepRecord.declared, stepRecord.evidence.dir, startMs);
     attachments.push(...declared.attachments);
-    timelineChildSteps = mapTimelineChildSteps(receipt, Date.parse(receipt.started_at));
+    timelineChildSteps = mapTimelineChildSteps(stepRecord, Date.parse(stepRecord.started_at));
   }
 
   // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
@@ -905,7 +917,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     links: dedupeLinks(declared.links),
     parameters: [
       ...buildExampleParameters(gherkinDocument, pickle),
-      ...receiptParameters,
+      ...stepRecordParameters,
       ...declared.parameters,
       ...contextParameters,
       ...identityParameters,
@@ -949,7 +961,7 @@ export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenar
     // width. This is the same reason `hook.trace`'s own child-step timeline
     // below has no `started_at` of its own to anchor a truncation marker to
     // (mapTimelineChildSteps's own doc comment) — `timestampMs` is exactly
-    // what a step's own `Date.parse(receipt.started_at)` would have been if
+    // what a step's own `Date.parse(stepRecord.started_at)` would have been if
     // a hook had one.
     const timestampMs = hook.type === "before" ? scenarioStartMs : scenarioStopMs;
     const declared = mapDeclared(hook.declared, record.evidence.dir, timestampMs);
@@ -962,12 +974,13 @@ export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenar
     const name =
       hook.type === "before" ? "Before" : hook.type === "after" ? "After" : `AfterStep[${hook.step_index}]`;
     // A hook invocation's own trace attachment and `actions` timeline,
-    // mapped exactly the way a step's own `receipt.evidence.trace`/
-    // `receipt.actions` already are (`mapStep`, above) — same contentType,
+    // mapped exactly the way a step's own step record `evidence.trace`/
+    // `actions` already are (`mapStep`, above) — same contentType,
     // same `mapTimelineChildSteps` merge/truncation-marker function, no
     // separate rule for a hook. `hook.trace` is relative to the *scenario's*
-    // own evidence dir, unlike a step's `receipt.evidence.trace`, which is
-    // relative to that step's own receipt dir — `joinRelative` takes
+    // own evidence dir, unlike a step's own step record `evidence.trace`,
+    // which is
+    // relative to that step's own step record dir — `joinRelative` takes
     // whichever dir actually matches its second argument.
     const attachments = [...declared.attachments];
     if (hook.trace) {

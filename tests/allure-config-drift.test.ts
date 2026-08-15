@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildCategories } from "../src/report/allure/categories.js";
 import { buildFailureMarker } from "../src/report/allure/map-scenario.js";
-import type { ErrorKind } from "../src/receipt/types.js";
+import type { ErrorKind } from "../src/record/types.js";
 
 // Responsibility: examples/allure/allurerc.mjs is a hand-copied mirror of
 // src/report/allure/categories.ts's own NAME_BY_KIND -- Allure 3 has no way

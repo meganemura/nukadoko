@@ -11,12 +11,12 @@ import type { WebmcpModelContext } from "./list-tools.js";
 // from the executor is `page`, which already reaches a step as a fixture
 // on its own. `ctx.poll` moved from an import onto the fixture bag once,
 // for a reason that does not apply here: a wait that finishes without being
-// recorded cannot be told apart, from a receipt, from one that returned on
-// its first attempt, and those two call for opposite fixes. Nothing this
+// recorded cannot be told apart, from a step record, from one that returned
+// on its first attempt, and those two call for opposite fixes. Nothing this
 // function reads or calls has that shape: the step that calls it declares
 // its own `args`/`returns` zod schemas, and those are already validated at
 // the run boundary regardless of how the value inside them was produced
-// (docs/spec.md "Context API"), so a step's own receipt already carries
+// (docs/spec.md "Context API"), so a step's own step record already carries
 // whatever this call returned, without this module writing anything new.
 //
 // EXPERIMENTAL, marked by name (`experimental_` first, not last, so it is

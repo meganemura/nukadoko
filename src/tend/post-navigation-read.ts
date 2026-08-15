@@ -34,16 +34,16 @@ import type { TendIssue } from "./types.js";
 // use `poll()` rather than a direct browser wait precisely so a delayed
 // render cannot flake it, and a step written that way is the thing this
 // note exists to tell apart from - not another instance of it. That
-// judgment is a plain timestamp comparison against the receipt's own
+// judgment is a plain timestamp comparison against the step record's own
 // `polls` (never a table of which Playwright method names count as a
 // "read", for the same reason the paragraph above already gives), and it
-// is skipped entirely for a receipt with no `polls` at all - a compat step,
-// a step that never calls `ctx.poll`, or a record from before `polls`
+// is skipped entirely for a step record with no `polls` at all - a compat
+// step, a step that never calls `ctx.poll`, or a record from before `polls`
 // existed all fall back to this note's original behavior, unchanged.
 //
 // Reads only sign-off records (src/tend/record-parse.ts, the same source
 // signoff-rot.ts and signoff-condition-mismatch.ts already walk), never a
-// live run's own receipt - that module's own `EXCLUDED_DIR_NAMES` keeps
+// live run's own step record - that module's own `EXCLUDED_DIR_NAMES` keeps
 // `.nukadoko` out of every walk built on it, this one included, and nothing
 // here changes that list.
 
@@ -76,8 +76,8 @@ const NOT_WORTH_LISTING_ABOVE_MS = 10_000;
 /** One action entry, narrowed only enough to compute a gap from. A record's
  * own JSON can be hand-edited, or written before `actions` existed at all,
  * so nothing here is trusted beyond what these three checks confirm - the
- * same reason `RecordReceiptLike.actions` (record-parse.ts) stays `unknown`
- * rather than `readonly ActionEntry[]` all the way through. */
+ * same reason `EmbeddedStepRecordLike.actions` (record-parse.ts) stays
+ * `unknown` rather than `readonly ActionEntry[]` all the way through. */
 interface ActionLike {
   readonly method: string;
   readonly at: string;
@@ -93,7 +93,7 @@ function isActionLike(value: unknown): value is ActionLike {
 /** One `ctx.poll` record, narrowed only enough to compute its own window
  * from - the same defensive-parse convention `isActionLike` above uses, and
  * for the same reason (a record's own JSON can be hand-edited, or written
- * before `polls` existed at all). The real `PollRecord` (src/receipt/
+ * before `polls` existed at all). The real `PollRecord` (src/record/
  * types.ts) also carries `attempts` and `outcome`, but this note's own
  * judgment never looks at either: a poll that happened to resolve on its
  * first attempt is still a step written to retry, not a step that got
@@ -133,14 +133,14 @@ function isWithinAnyPollWindow(readStartedAt: number, polls: readonly unknown[])
  * frozen `actions`, reports every navigation call immediately followed by
  * another call within `NOT_WORTH_LISTING_ABOVE_MS` of the navigation's own
  * end - unless that next call's own start falls inside a `ctx.poll` window
- * the same receipt's own `polls` recorded (this file's own header). A
- * receipt with no `actions` field at all (a record from before that field
- * existed, or a step that never called `ctx.page()`) is silently out of
- * scope, never an error - `actions` has always been optional on a receipt,
- * and an old record carrying none is the expected case, not a broken one
- * (record-parse.ts's own convention for `condition`). A receipt with no
- * `polls` field simply has nothing to exclude with, and falls back to
- * this note's original behavior unchanged. */
+ * the same step record's own `polls` recorded (this file's own header). A
+ * step record with no `actions` field at all (a record from before that
+ * field existed, or a step that never called `ctx.page()`) is silently out
+ * of scope, never an error - `actions` has always been optional on a step
+ * record, and an old record carrying none is the expected case, not a
+ * broken one (record-parse.ts's own convention for `condition`). A step
+ * record with no `polls` field simply has nothing to exclude with, and
+ * falls back to this note's original behavior unchanged. */
 export function findPostNavigationReads(rootDir: string): TendIssue[] {
   const issues: TendIssue[] = [];
 
@@ -157,11 +157,11 @@ export function findPostNavigationReads(rootDir: string): TendIssue[] {
     const parsed = parseAcceptanceRecord(content, relativePath);
     if (parsed.kind !== "ok") continue; // Not a record, or malformed: another finding's own concern.
 
-    for (const receipt of parsed.record.receipts) {
-      const actions = receipt.actions;
+    for (const stepRecord of parsed.record.stepRecords) {
+      const actions = stepRecord.actions;
       if (!Array.isArray(actions)) continue; // No actions at all - out of scope, not an error (this file's own header).
 
-      const polls = Array.isArray(receipt.polls) ? receipt.polls : [];
+      const polls = Array.isArray(stepRecord.polls) ? stepRecord.polls : [];
 
       for (let index = 0; index < actions.length - 1; index++) {
         const action: unknown = actions[index];
@@ -188,11 +188,11 @@ export function findPostNavigationReads(rootDir: string): TendIssue[] {
         issues.push({
           code: "post-navigation-read",
           message:
-            `${relativePath}: step "${receipt.step}" called "${next.method}" ${gapMs}ms after its own ` +
+            `${relativePath}: step "${stepRecord.step}" called "${next.method}" ${gapMs}ms after its own ` +
             `"${action.method}" finished. Not a judgment: whether that gap was enough depends on how long ` +
             `this application takes to render after "${action.method}", and this tool has no way to know that.`,
           file: relativePath,
-          step: receipt.step,
+          step: stepRecord.step,
         });
       }
     }

@@ -14,14 +14,14 @@ import {
 // Responsibility: http.jsonl's page-origin half, end to end against
 // tests/fixtures/page-network-project (p3b-page-network task spec) — a real
 // chromium page pulling in an image, a stylesheet, and a script (dropped,
-// tallied into the receipt's own `http_omitted`) alongside its own document
+// tallied into the step record's own `http_omitted`) alongside its own document
 // response and an in-page `fetch` carrying a secret (both kept, `via:
 // "page"`), next to one `ctx.request()` call (`via: "request"`) hitting the
 // same `/api/data` path with a different query string — proving neither
 // path double-counts the other's own call (this task's spec, scope item 4)
 // and that `observed` keeps counting every request regardless of what
 // http.jsonl went on to keep (scope item 2). Redaction is proven the same
-// way tests/trace-actions-receipt.test.ts already proves it for `actions`:
+// way tests/trace-actions-step-record.test.ts already proves it for `actions`:
 // a secret embedded in the page-issued fetch's own query string.
 
 const API_TOKEN = "sekrit-network-token-789";
@@ -31,7 +31,7 @@ const API_TOKEN = "sekrit-network-token-789";
 // this only needs to be small and harmless, not a real image.
 const PIXEL_GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64");
 
-interface StoredReceipt {
+interface StoredStepRecord {
   status: string;
   evidence: { dir: string; http?: string };
   observed: { http_reads: number; http_writes: number };
@@ -86,9 +86,9 @@ function startTestServer(): Promise<{ server: Server; baseURL: string }> {
   });
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<StoredReceipt> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8")) as StoredReceipt;
+async function readStepRecord(rootDir: string, recordId: string): Promise<StoredStepRecord> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8")) as StoredStepRecord;
 }
 
 async function readHttpJsonl(
@@ -136,11 +136,11 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    const receipt = JSON.parse(stdout.text()) as StoredReceipt;
-    expect(receipt.status).toBe("ok");
-    expect(receipt.evidence.http).toBe("http.jsonl");
+    const stepRecord = JSON.parse(stdout.text()) as StoredStepRecord;
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.evidence.http).toBe("http.jsonl");
 
-    const lines = await readHttpJsonl(rootDir, receipt.evidence.dir);
+    const lines = await readHttpJsonl(rootDir, stepRecord.evidence.dir);
     // Exactly 3: the document, the page-issued fetch, and the ctx.request()
     // call. The image/stylesheet/script never land here (this task's spec,
     // scope item 2) — no more, and (scope item 4) no duplicate of the
@@ -170,33 +170,33 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     expect(requestEntry?.via).toBe("request");
 
     // The asset drop is never silent: http_omitted names what got left out.
-    expect(receipt.http_omitted).toEqual({ image: 1, stylesheet: 1, script: 1 });
+    expect(stepRecord.http_omitted).toEqual({ image: 1, stylesheet: 1, script: 1 });
 
     // observed counts every request the harness saw, image/stylesheet/
     // script included — it is not narrowed by http.jsonl's own filter (this
     // task's spec, scope item 2 and completion condition 6). Six GETs total:
     // the document, three assets, the page-issued fetch, and the
     // ctx.request() call.
-    expect(receipt.observed).toEqual({ http_reads: 6, http_writes: 0 });
+    expect(stepRecord.observed).toEqual({ http_reads: 6, http_writes: 0 });
 
     // The raw token must appear nowhere: not in stdout, not in http.jsonl or
-    // receipt.json on disk (the same three-exits check tests/secrets.test.ts
+    // record.json on disk (the same three-exits check tests/secrets.test.ts
     // already runs).
     expect(stdout.text()).not.toContain(API_TOKEN);
     const httpJsonlText = await readFile(
-      path.join(rootDir, receipt.evidence.dir, "http.jsonl"),
+      path.join(rootDir, stepRecord.evidence.dir, "http.jsonl"),
       "utf8",
     );
     expect(httpJsonlText).not.toContain(API_TOKEN);
     expect(httpJsonlText).toContain("{{secret.API_TOKEN}}");
-    const receiptText = await readFile(
-      path.join(rootDir, receipt.evidence.dir, "receipt.json"),
+    const stepRecordText = await readFile(
+      path.join(rootDir, stepRecord.evidence.dir, "record.json"),
       "utf8",
     );
-    expect(receiptText).not.toContain(API_TOKEN);
+    expect(stepRecordText).not.toContain(API_TOKEN);
   });
 
-  it("nuka run: via and http_omitted land on the step's own receipt", async () => {
+  it("nuka run: via and http_omitted land on the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/browse-page.feature"], {
@@ -211,15 +211,15 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(receipt.status).toBe("ok");
-    expect(receipt.evidence.http).toBe("http.jsonl");
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.evidence.http).toBe("http.jsonl");
 
-    const httpLines = await readHttpJsonl(rootDir, receipt.evidence.dir);
+    const httpLines = await readHttpJsonl(rootDir, stepRecord.evidence.dir);
     expect(httpLines).toHaveLength(3);
     expect(httpLines.filter((line) => line.via === "page")).toHaveLength(2);
     expect(httpLines.filter((line) => line.via === "request")).toHaveLength(1);
-    expect(receipt.http_omitted).toEqual({ image: 1, stylesheet: 1, script: 1 });
+    expect(stepRecord.http_omitted).toEqual({ image: 1, stylesheet: 1, script: 1 });
   });
 
   it("a step whose page leaves nothing out carries no http_omitted key", async () => {
@@ -231,13 +231,13 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     });
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text()) as StoredReceipt;
-    expect(receipt.status).toBe("ok");
-    expect(receipt.http_omitted).toBeUndefined();
-    expect(Object.keys(receipt)).not.toContain("http_omitted");
+    const stepRecord = JSON.parse(stdout.text()) as StoredStepRecord;
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.http_omitted).toBeUndefined();
+    expect(Object.keys(stepRecord)).not.toContain("http_omitted");
 
     // The lone document response is still recorded, via: "page".
-    const lines = await readHttpJsonl(rootDir, receipt.evidence.dir);
+    const lines = await readHttpJsonl(rootDir, stepRecord.evidence.dir);
     expect(lines).toHaveLength(1);
     expect(lines[0]?.via).toBe("page");
     expect(lines[0]?.url).toBe(`${baseURL}/clean`);

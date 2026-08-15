@@ -4,7 +4,7 @@ import { createHttpOmittedCollector } from "../src/context/http-omitted.js";
 // Responsibility: HttpOmittedCollector's own contract in isolation (p3b-
 // page-network task spec) — record/snapshot/reset, and the "whole field
 // omitted, not merely empty" convention `page_events`'s own collector
-// already follows (tests/page-events.test.ts). The receipt-level shape
+// already follows (tests/page-events.test.ts). The step-record-level shape
 // (field omission, redaction not needed since only counts are carried, both
 // `nuka do` and `nuka run` reaching it) is proven end to end, through a real
 // browser, in tests/page-network.test.ts.

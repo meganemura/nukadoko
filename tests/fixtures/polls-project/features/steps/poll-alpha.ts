@@ -3,8 +3,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // One of two steps sharing a single `nuka run` pickle's `ctx` — the pair
 // (this file and poll-beta.ts) is the reset regression test for
-// `beginStep` (ctx-poll-receipt task spec, test bullet 6): each step's own
-// poll must land only on its own receipt, never on its sibling's.
+// `beginStep` (ctx-poll-step-record task spec, test bullet 6): each step's own
+// poll must land only on its own step record, never on its sibling's.
 export default defineStep({
   pattern: "poll step alpha runs its own poll",
   description: "Calls ctx.poll with a description unique to this step",

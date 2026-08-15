@@ -57,7 +57,7 @@ function deadPid(): number {
 }
 
 function sessionsDir(rootDir: string): string {
-  return path.join(rootDir, ".nukadoko", "sessions", "default");
+  return path.join(rootDir, ".nukadoko", "cache", "sessions", "default");
 }
 
 describe("nuka do --session (request path)", () => {
@@ -90,8 +90,8 @@ describe("nuka do --session (request path)", () => {
       { rootDir, stdout: loginStdout, stderr: createCaptureSink() },
     );
     expect(loginExit).toBe(0);
-    const loginReceipt = JSON.parse(loginStdout.text());
-    expect(loginReceipt.session).toBe("s1");
+    const loginStepRecord = JSON.parse(loginStdout.text());
+    expect(loginStepRecord.session).toBe("s1");
 
     const sessionFile = path.join(sessionsDir(rootDir), "s1.json");
     expect(existsSync(sessionFile)).toBe(true);
@@ -104,11 +104,11 @@ describe("nuka do --session (request path)", () => {
       { rootDir, stdout: whoamiStdout, stderr: createCaptureSink() },
     );
     expect(whoamiExit).toBe(0);
-    const whoamiReceipt = JSON.parse(whoamiStdout.text());
-    expect(whoamiReceipt.result.cookie).toContain("sid=abc123");
+    const whoamiStepRecord = JSON.parse(whoamiStdout.text());
+    expect(whoamiStepRecord.result.cookie).toContain("sid=abc123");
   });
 
-  it("records the given --session name on the receipt", async () => {
+  it("records the given --session name on the step record", async () => {
     const stdout = createCaptureSink();
     await runCli(["do", "login", "--args", "{}", "--session", "s1"], {
       rootDir,
@@ -118,7 +118,7 @@ describe("nuka do --session (request path)", () => {
     expect(JSON.parse(stdout.text()).session).toBe("s1");
   });
 
-  it("receipt.session is null when --session is omitted", async () => {
+  it("the step record's session is null when --session is omitted", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["do", "whoami", "--args", "{}"], {
       rootDir,
@@ -136,7 +136,7 @@ describe("nuka do --session (request path)", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    expect(existsSync(path.join(rootDir, ".nukadoko", "sessions"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "cache", "sessions"))).toBe(false);
   });
 
   it("ignores an existing session's file when --session is omitted (clean start)", async () => {
@@ -169,7 +169,7 @@ describe("nuka do --session (request path)", () => {
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
   });
 
-  it("exits 1 without writing a receipt when the session's lock is held by a live process", async () => {
+  it("exits 1 without writing a step record when the session's lock is held by a live process", async () => {
     const lockPath = path.join(sessionsDir(rootDir), "s2.lock");
     await mkdir(path.dirname(lockPath), { recursive: true });
     await writeFile(
@@ -185,7 +185,7 @@ describe("nuka do --session (request path)", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("s2");
-    expect(existsSync(path.join(rootDir, ".nukadoko", "receipts"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
   });
 
   it("runs (and releases the lock) when the session's lock belongs to a dead pid", async () => {
@@ -208,7 +208,7 @@ describe("nuka do --session (request path)", () => {
     expect(existsSync(lockPath)).toBe(false);
   });
 
-  it("fails setup (exit 1, no receipt) when the session file is malformed JSON", async () => {
+  it("fails setup (exit 1, no step record) when the session file is malformed JSON", async () => {
     const sessionFile = path.join(sessionsDir(rootDir), "s4.json");
     await mkdir(path.dirname(sessionFile), { recursive: true });
     await writeFile(sessionFile, "{not json");
@@ -221,7 +221,7 @@ describe("nuka do --session (request path)", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("s4");
-    expect(existsSync(path.join(rootDir, ".nukadoko", "receipts"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
   });
 });
 

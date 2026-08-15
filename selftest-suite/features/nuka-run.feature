@@ -28,7 +28,7 @@ Feature: nuka run drives a fixture project
     And the fixture project's Allure report is generated and opened in a browser
     Then the tab counts match the step statuses nuka run reported
     And every scenario is a tree group and every step is one of its leaves
-    And the failing step's receipt.json attachment is readable and matches its own receipt
+    And the failing step's record.json attachment is readable and matches its own record
     And the failing step is categorized as "Step error", not "Product errors"
     And the timeline step's section and poll appear as its own child steps
     And the before-hook-stopped scenario's step shows skipped, not failed
@@ -79,4 +79,4 @@ Feature: nuka run drives a fixture project
     Then the step's own trace attachment downloads as a non-empty, readable zip
     And the before hook shows up as a fixture in the report
     And the trace's own goto action appears as a child step
-    And the page_events counts in the report match the step's own receipt
+    And the page_events counts in the report match the step's own record

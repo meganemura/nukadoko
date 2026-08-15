@@ -30,7 +30,7 @@ interface HookRecord {
   readonly actions?: ReadonlyArray<{ readonly url?: string }>;
 }
 
-interface StoredReceipt {
+interface StoredStepRecord {
   readonly actions?: ReadonlyArray<{ readonly url?: string }>;
 }
 
@@ -38,9 +38,9 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<StoredReceipt> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8")) as StoredReceipt;
+async function readStepRecord(rootDir: string, recordId: string): Promise<StoredStepRecord> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8")) as StoredStepRecord;
 }
 
 function actionUrls(actions: ReadonlyArray<{ readonly url?: string }> | undefined): string[] {
@@ -102,8 +102,8 @@ describe("nuka run (hook trace chunks)", () => {
 
     // --- test item 5 (step side): a step's own chunk carries none of the
     // hooks' operations, only its own. ---
-    const step1 = await readReceipt(rootDir, record.steps[0].receipt as string);
-    const step2 = await readReceipt(rootDir, record.steps[1].receipt as string);
+    const step1 = await readStepRecord(rootDir, record.steps[0].record as string);
+    const step2 = await readStepRecord(rootDir, record.steps[1].record as string);
     expect(actionUrls(step1.actions)).toEqual(["data:text/html,step-one"]);
     expect(actionUrls(step2.actions)).toEqual(["data:text/html,step-two"]);
 

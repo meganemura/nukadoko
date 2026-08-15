@@ -90,9 +90,9 @@ export class ReservedWorldKeyDeclaredError extends Error {
  * from inside the accessor's own setter
  * (src/compat/world-instrumentation.ts), so it becomes an ordinary step
  * failure exactly like any other throw from a compat step's own glue
- * function; the write is never recorded into `receipt.world.writes` (thrown
- * before that record happens — a throwaway prototype measured this bug,
- * regularized into this module's own contract). */
+ * function; the write is never recorded into the step record's own
+ * `world.writes` (thrown before that record happens — a throwaway prototype
+ * measured this bug, regularized into this module's own contract). */
 const WORLD_WRITE_VALIDATION_ERROR_BRAND: unique symbol = Symbol.for(
   "nukadoko.worldWriteValidationError",
 );
@@ -130,7 +130,7 @@ export function isWorldWriteValidationError(error: unknown): boolean {
  * `setDefaultTimeout`) fired before `run()` settled (`runWithTimeout`,
  * src/run/run-scenario.ts). Its own class, not a plain `Error`, exists for
  * one reason: make it identifiable at the point it's thrown, before
- * classification. The catch site that turns this into a receipt's/hook
+ * classification. The catch site that turns this into a step record's/hook
  * record's `error.kind`
  * needs to tell a timeout apart from the step's/hook's own throw by type,
  * never by matching `message`'s text — that text is for humans and this

@@ -1,4 +1,4 @@
-// Responsibility: the required-env tally docs/spec.md's "Receipts"
+// Responsibility: the required-env tally docs/spec.md's "Records"
 // (`required_env`) and "Context API" (`ctx.requireEnv`) describe — which
 // env var names an execution actually asked for through `ctx.requireEnv`,
 // the one call site the library controls. Its own file for the same reason
@@ -20,7 +20,7 @@ export interface EnvReadsCollector {
   /** Tallies one `ctx.requireEnv(name)` call by the name it was given —
    * whether that call goes on to return a value or throw `MissingEnvError`.
    * Recorded before the throw (create-context.ts's `requireEnv`), so a
-   * failed-for-missing-env execution's receipt still shows what it asked
+   * failed-for-missing-env execution's step record still shows what it asked
    * for. */
   record(name: string): void;
   /** The names read since the last `reset()` (or since creation),

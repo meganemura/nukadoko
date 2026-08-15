@@ -18,13 +18,13 @@ import {
 // trace-actions-project's own `wait-for-late-element` step, already proven
 // by tests/trace-actions-expect.test.ts to produce a real trace with both
 // calls) through `nuka run` + `nuka accept`, then `nuka tend`, so the note's
-// own gap math runs against an actual measured receipt at least once,
+// own gap math runs against an actual measured step record at least once,
 // per this task's spec ("推測で書かない"). The rest hand-craft an acceptance
 // record's own text directly (the same pattern tests/
 // signoff-condition-mismatch.test.ts already uses for its own "an old
 // record has no condition to compare" case): these exist only to pin down
-// this finding's own boundary math (a gap far enough apart, a receipt with
-// no `actions` at all, a step with no navigation call), which does not need
+// this finding's own boundary math (a gap far enough apart, a step record
+// with no `actions` at all, a step with no navigation call), which does not need
 // a second browser launch to prove.
 
 const LATE_ELEMENT_DELAY_MS = 600;
@@ -73,12 +73,12 @@ const COMMIT = "0".repeat(40);
 /** A hand-assembled acceptance record, matching src/accept/render-record.ts's
  * own shape closely enough for src/tend/record-parse.ts to accept it: valid
  * frontmatter (the four required keys), a "## The scenario as it ran"
- * fenced feature, and one `#### <step>` fenced JSON receipt. Only what this
- * finding's own boundary tests need varies: `receipt` is passed straight
- * through to `JSON.stringify`, so its own `actions` (or lack of one) is
+ * fenced feature, and one `#### <step>` fenced JSON step record. Only what
+ * this finding's own boundary tests need varies: `stepRecord` is passed
+ * straight through to `JSON.stringify`, so its own `actions` (or lack of one) is
  * exactly what src/tend/post-navigation-read.ts reads. */
-function buildRecord(options: { featurePath: string; stepText: string; receipt: Record<string, unknown> }): string {
-  const { featurePath, stepText, receipt } = options;
+function buildRecord(options: { featurePath: string; stepText: string; stepRecord: Record<string, unknown> }): string {
+  const { featurePath, stepText, stepRecord } = options;
   return [
     "---",
     "run_id: run-synthetic",
@@ -111,14 +111,14 @@ function buildRecord(options: { featurePath: string; stepText: string; receipt: 
     `#### ${stepText}`,
     "",
     "```json",
-    JSON.stringify(receipt, null, 2),
+    JSON.stringify(stepRecord, null, 2),
     "```",
     "",
   ].join("\n");
 }
 
 describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
-  describe("a real chromium receipt", () => {
+  describe("a real chromium step record", () => {
     let server: Server;
     let baseURL: string;
     let rootDir: string;
@@ -135,7 +135,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         ].join("\n"),
       );
       // Matches tests/fixtures/tend-signoff-project's own .gitignore:
-      // `.nukadoko` itself (evidence, receipts) and any generated record
+      // `.nukadoko` itself (evidence, step records) and any generated record
       // must never show up as "untracked" once `nuka run` has produced
       // them, or `nuka accept`'s own dirty-tree check refuses every time.
       await writeFile(path.join(rootDir, ".gitignore"), [".nukadoko/", "features/*.md", ""].join("\n"));
@@ -209,7 +209,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step with a wide gap",
-          receipt: {
+          stepRecord: {
             step: "a step with a wide gap",
             status: "ok",
             actions: [
@@ -226,13 +226,13 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
       expect(report.notes.filter((n) => n.code === "post-navigation-read")).toEqual([]);
     });
 
-    it("reports nothing, and does not throw, for a receipt with no actions field at all", async () => {
+    it("reports nothing, and does not throw, for a step record with no actions field at all", async () => {
       await writeFile(
         path.join(rootDir, "no-actions.2026-01-01-0000000.md"),
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step accepted before actions existed",
-          receipt: {
+          stepRecord: {
             step: "a step accepted before actions existed",
             status: "ok",
           },
@@ -249,7 +249,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step that never navigates",
-          receipt: {
+          stepRecord: {
             step: "a step that never navigates",
             status: "ok",
             actions: [
@@ -270,7 +270,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step at the cutoff",
-          receipt: {
+          stepRecord: {
             step: "a step at the cutoff",
             status: "ok",
             actions: [
@@ -286,7 +286,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step past the cutoff",
-          receipt: {
+          stepRecord: {
             step: "a step past the cutoff",
             status: "ok",
             actions: [
@@ -303,13 +303,13 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
       expect(notes.map((n) => n.step)).toEqual(["a step at the cutoff"]);
     });
 
-    it("excludes a read inside a ctx.poll window, but still reports one outside it on the same receipt (fb5-stale-wait-poll task spec)", async () => {
+    it("excludes a read inside a ctx.poll window, but still reports one outside it on the same step record (fb5-stale-wait-poll task spec)", async () => {
       await writeFile(
         path.join(rootDir, "poll-covered.2026-01-01-0000000.md"),
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step with one poll-covered read and one bare read",
-          receipt: {
+          stepRecord: {
             step: "a step with one poll-covered read and one bare read",
             status: "ok",
             actions: [
@@ -347,7 +347,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step whose read starts exactly on the poll window's near edge",
-          receipt: {
+          stepRecord: {
             step: "a step whose read starts exactly on the poll window's near edge",
             status: "ok",
             actions: [
@@ -365,7 +365,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step whose read starts exactly on the poll window's far edge",
-          receipt: {
+          stepRecord: {
             step: "a step whose read starts exactly on the poll window's far edge",
             status: "ok",
             actions: [
@@ -383,7 +383,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step whose read starts 1ms before the poll window",
-          receipt: {
+          stepRecord: {
             step: "a step whose read starts 1ms before the poll window",
             status: "ok",
             actions: [
@@ -401,7 +401,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
         buildRecord({
           featurePath: "features/does-not-exist.feature",
           stepText: "a step whose read starts 1ms after the poll window",
-          receipt: {
+          stepRecord: {
             step: "a step whose read starts 1ms after the poll window",
             status: "ok",
             actions: [

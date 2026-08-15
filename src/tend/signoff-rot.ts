@@ -30,10 +30,20 @@ import type { TendIssue } from "./types.js";
 // has no `returns` schema at all, so "does the frozen result still pass it"
 // has no question to ask — the same reason `render-record.ts`'s own
 // "Declared vs observed" section keeps a compat step's `mutates: null` out
-// of its mismatch count instead of coercing it to "no mismatch". A receipt
-// whose own `status` isn't `"ok"` is skipped the same way (defensive: `nuka
-// accept` only ever freezes a passed scenario, so this should not occur in
-// practice).
+// of its mismatch count instead of coercing it to "no mismatch". A step
+// record whose own `status` isn't `"ok"` is skipped the same way (defensive:
+// `nuka accept` only ever freezes a passed scenario, so this should not
+// occur in practice).
+//
+// A fifth way, checked first and independently of (a)-(d): the record
+// itself predates the current format (`ParsedAcceptanceRecord.isOldFormat`,
+// src/tend/record-parse.ts). Its own step records may still parse, but this
+// tool has no way to know whether whatever else changed between that
+// version and this one silently changed what "matches" means too, so this
+// finding is reported alone and the rest of this record's own checks are
+// skipped for it — one clear instruction (re-run and re-accept) rather than
+// a stale record and today's vocabulary drift reported as if they were the
+// same kind of problem.
 //
 // Every message here points at how to fix it — re-run and re-accept, or
 // revert whatever changed — and never at hand-editing the record itself:
@@ -83,6 +93,15 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
 
     const record = parsed.record;
 
+    if (record.isOldFormat) {
+      issues.push({
+        code: "signoff-record-old-format",
+        message: `${relativePath} was written by an older nukadoko: its embedded step records are missing the record_id field the current format always writes, so it cannot be checked against the current format. ${FIX_HINT}.`,
+        file: relativePath,
+      });
+      continue;
+    }
+
     // (a) the feature this record freezes.
     let currentFeatureSource: string | undefined;
     try {
@@ -108,30 +127,30 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary): TendIss
     // (c)/(d): every step this record cites, independent of (a)/(b) — a
     // step's own contract can go stale whether or not the feature that
     // exercised it is still intact.
-    for (const receipt of record.receipts) {
-      const entry = vocabulary.get(receipt.step);
+    for (const stepRecord of record.stepRecords) {
+      const entry = vocabulary.get(stepRecord.step);
       if (entry === undefined) {
         issues.push({
           code: "signoff-step-missing",
-          message: `${relativePath} cites step "${receipt.step}", which is no longer in the vocabulary. The record is still proving a claim about a step that no longer exists. ${FIX_HINT}.`,
+          message: `${relativePath} cites step "${stepRecord.step}", which is no longer in the vocabulary. The record is still proving a claim about a step that no longer exists. ${FIX_HINT}.`,
           file: relativePath,
-          step: receipt.step,
+          step: stepRecord.step,
         });
         continue;
       }
       if (entry.kind !== "typed") {
         continue; // Compat: no `returns` schema, so no contract to have gone stale.
       }
-      if (receipt.status !== "ok") {
+      if (stepRecord.status !== "ok") {
         continue; // Defensive: `nuka accept` only ever freezes a passed scenario.
       }
-      const outcome = entry.step.returns.safeParse(receipt.result);
+      const outcome = entry.step.returns.safeParse(stepRecord.result);
       if (!outcome.success) {
         issues.push({
           code: "signoff-result-invalid",
-          message: `${relativePath} froze step "${receipt.step}"'s result, which no longer passes its current returns schema (${formatValidationIssues(outcome.error.issues)}). The step's contract changed since this record was accepted. ${FIX_HINT}.`,
+          message: `${relativePath} froze step "${stepRecord.step}"'s result, which no longer passes its current returns schema (${formatValidationIssues(outcome.error.issues)}). The step's contract changed since this record was accepted. ${FIX_HINT}.`,
           file: relativePath,
-          step: receipt.step,
+          step: stepRecord.step,
         });
       }
     }

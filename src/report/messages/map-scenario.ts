@@ -16,18 +16,18 @@ import {
   type TestStepResult,
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
-import type { Receipt } from "../../receipt/types.js";
+import type { StepRecord } from "../../record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord, ScenarioStepStatus } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module:
 // map-scenario.ts is a pure function that
 // assembles one scenario's worth of envelope material and never touches
-// the filesystem — `(record, receipts,
+// the filesystem — `(record, stepRecords,
 // pickle, newId, hookIds) -> cucumber-messages envelope material for one
 // scenario`. No `node:fs` anywhere in this file: every input is already
-// resolved by the caller (src/report/messages/emitter.ts reads receipt.json
-// files via src/report/receipts.ts before calling this), so this module can
+// resolved by the caller (src/report/messages/emitter.ts reads record.json
+// files via src/report/step-records.ts before calling this), so this module can
 // be driven entirely from fixture data in a test, no real NDJSON stream and
 // no real IdGenerator anywhere in the call graph — `newId` is passed in
 // specifically so a test can substitute `IdGenerator.incrementing()` for
@@ -139,8 +139,9 @@ function statusForHook(status: "ok" | "failed"): TestStepResultStatus {
 }
 
 // Duration never negative (round to 0 when
-// duration would otherwise go negative) — a receiptless step pinned to the previous step's
-// own stop is always zero-width by construction, but a real receipt's own
+// duration would otherwise go negative) — a step with no step record pinned
+// to the previous step's
+// own stop is always zero-width by construction, but a real step record's own
 // started_at/finished_at pair is operator-authored input this module has no
 // way to fully trust.
 function buildResult(status: TestStepResultStatus, message: string | undefined, startMs: number, stopMs: number): TestStepResult {
@@ -149,7 +150,7 @@ function buildResult(status: TestStepResultStatus, message: string | undefined, 
     duration: TimeConversion.millisecondsToDuration(Math.max(stopMs - startMs, 0)),
     ...(message !== undefined ? { message } : {}),
     // `exception` is never set: `Exception.
-    // type` is required and record/receipt only ever carry a message, never
+    // type` is required and record/step record only ever carry a message, never
     // a type string worth reporting as fact.
   };
 }
@@ -165,7 +166,7 @@ export interface MappedTestStep {
 
 function mapPickleSteps(
   record: ScenarioRecord,
-  receipts: ReadonlyMap<string, Receipt | null>,
+  stepRecords: ReadonlyMap<string, StepRecord | null>,
   pickleSteps: readonly PickleStep[],
   scenarioStartMs: number,
   testCaseStartedId: string,
@@ -173,13 +174,13 @@ function mapPickleSteps(
 ): MappedTestStep[] {
   let previousStopMs = scenarioStartMs;
   return record.steps.map((step, index): MappedTestStep => {
-    const receipt = step.receipt !== null ? (receipts.get(step.receipt) ?? undefined) : undefined;
+    const stepRecord = step.record !== null ? (stepRecords.get(step.record) ?? undefined) : undefined;
 
     let startMs: number;
     let stopMs: number;
-    if (receipt) {
-      startMs = Date.parse(receipt.started_at);
-      stopMs = Date.parse(receipt.finished_at);
+    if (stepRecord) {
+      startMs = Date.parse(stepRecord.started_at);
+      stopMs = Date.parse(stepRecord.finished_at);
     } else {
       // Same zero-width-pinned-to-previous-stop rule as
       // src/report/allure/map-scenario.ts:483-496 (it would be a bug for
@@ -192,8 +193,8 @@ function mapPickleSteps(
 
     const testStepId = newId();
     const pickleStepId = pickleSteps[index]?.id;
-    const attachments = receipt
-      ? declaredAttachmentPlans(receipt.declared, receipt.evidence.dir, testCaseStartedId, testStepId)
+    const attachments = stepRecord
+      ? declaredAttachmentPlans(stepRecord.declared, stepRecord.evidence.dir, testCaseStartedId, testStepId)
       : [];
 
     return {
@@ -276,11 +277,12 @@ export type NewHookEnvelope =
 
 export interface MapScenarioInput {
   readonly record: ScenarioRecord;
-  /** Already-read receipts, keyed by receipt id — `null` for an id whose
-   * receipt.json couldn't be read/parsed. A step whose own
-   * `record.steps[].receipt` isn't a key here at all is treated the same as
+  /** Already-read step records, keyed by step record id — `null` for an id
+   * whose
+   * record.json couldn't be read/parsed. A step whose own
+   * `record.steps[].record` isn't a key here at all is treated the same as
    * one mapped to `null`. */
-  readonly receipts: ReadonlyMap<string, Receipt | null>;
+  readonly stepRecords: ReadonlyMap<string, StepRecord | null>;
   readonly pickle: Pickle;
   readonly newId: () => string;
   /** The `Hook` id(s) already assigned earlier in this run — `undefined`/
@@ -315,7 +317,7 @@ export interface MappedScenario {
 }
 
 export function mapScenario(input: MapScenarioInput): MappedScenario {
-  const { record, receipts, pickle, newId, hookIds } = input;
+  const { record, stepRecords, pickle, newId, hookIds } = input;
   const scenarioStartMs = Date.parse(record.started_at);
   const scenarioStopMs = Date.parse(record.finished_at);
 
@@ -384,7 +386,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     testCaseStartedId,
     newId,
   );
-  const pickleSteps = mapPickleSteps(record, receipts, pickle.steps, scenarioStartMs, testCaseStartedId, newId);
+  const pickleSteps = mapPickleSteps(record, stepRecords, pickle.steps, scenarioStartMs, testCaseStartedId, newId);
   const afterStepSteps = mapHookSteps(
     afterStepHooks,
     (hook) => afterStepHookIds[hook.step_index!]!,

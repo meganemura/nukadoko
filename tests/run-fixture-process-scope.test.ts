@@ -13,10 +13,10 @@ import {
 // tests/fixtures/user-fixtures-project's `seededDb` fixture ({ scope:
 // "process" }), whose own value carries a module-level build counter — both
 // scenarios in features/process-scope.feature report it as part of their own
-// `result`, so this test reads it straight off each scenario's own receipt
+// `result`, so this test reads it straight off each scenario's own step record
 // rather than a side-channel file (unlike tests/run-fixture-teardown.test.ts,
 // this is squarely inside one `nuka run` invocation, so the ordinary
-// "the tool measured it" receipt path already carries the proof).
+// "the tool measured it" step record path already carries the proof).
 
 describe("nuka run: process-scope fixture is built once, reused by a later scenario", () => {
   let rootDir: string;
@@ -41,30 +41,30 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
       .text()
       .split("\n")
       .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as { steps: { receipt: string }[] });
+      .map((line) => JSON.parse(line) as { steps: { record: string }[] });
     expect(records).toHaveLength(2);
 
-    // Each scenario's own receipt is written to .nukadoko/receipts/<id>/
-    // receipt.json; read both back to check `result.count` and `fixtures`.
+    // Each scenario's own step record is written to .nukadoko/records/steps/<id>/
+    // record.json; read both back to check `result.count` and `fixtures`.
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
-    async function readReceipt(receiptId: string): Promise<any> {
+    async function readStepRecord(recordId: string): Promise<any> {
       const text = await fs.readFile(
-        path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json"),
+        path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json"),
         "utf8",
       );
       return JSON.parse(text);
     }
 
-    const first = await readReceipt(records[0]!.steps[0]!.receipt);
-    const second = await readReceipt(records[1]!.steps[0]!.receipt);
+    const first = await readStepRecord(records[0]!.steps[0]!.record);
+    const second = await readStepRecord(records[1]!.steps[0]!.record);
 
     // The build count seededDb's own setup incremented is 1 both times —
     // it was only ever actually built once.
     expect(first.result.count).toBe(1);
     expect(second.result.count).toBe(1);
 
-    // The receipt's own `fixtures` entry (P5 task spec, scope item 10)
+    // The step record's own `fixtures` entry (P5 task spec, scope item 10)
     // says so directly too: the first scenario's step built it fresh
     // (`reused: false`, `setup_ms`/`at` present); the second's step
     // received the already-built instance (`reused: true`, no `setup_ms`/

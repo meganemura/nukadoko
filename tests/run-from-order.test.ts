@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // browser session") — the same judgment tests/check-from-order.test.ts
 // already covers for `nuka check` (src/check/from-order.ts's own header:
 // one function, two callers), exercised here through the executor instead:
-// a violating scenario never gets any of its steps a receipt (this is what
+// a violating scenario never gets any of its steps a step record (this is what
 // "no browser session is ever opened" actually reduces to — a step's own
 // `run` is the only place `ctx.page()` could be called, and none of them run
 // here), while every other scenario in the same `nuka run` invocation is
@@ -45,12 +45,12 @@ describe("nuka run: from's scenario-order guard", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
-    // `receipt: null` — unlike this exact scenario's pre-m6b behavior (this
+    // `record: null` — unlike this exact scenario's pre-m6b behavior (this
     // step used to actually run and fail args validation with a real
-    // receipt; m6a-from-core's own comment anticipated this: "m6b が入れば、
+    // step record; m6a-from-core's own comment anticipated this: "m6b が入れば、
     // この失敗は実行前に捕まるようになる") — this step's own `run` is never
     // called at all now, so no browser session could ever have been opened.
-    expect(record.steps[0].receipt).toBeNull();
+    expect(record.steps[0].record).toBeNull();
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("archive-project");
     expect(record.steps[0].error.message).toContain("create-project");
@@ -67,13 +67,13 @@ describe("nuka run: from's scenario-order guard", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(2);
     expect(record.steps[0].status).toBe("failed");
-    expect(record.steps[0].receipt).toBeNull();
+    expect(record.steps[0].record).toBeNull();
     expect(record.steps[0].error.message).toContain("only at or after this line");
     // The `create-project` line itself is textually *after* the violation,
     // but it never runs either (this task's spec: "実行せずに失敗させる") —
-    // `"skipped"`, not `"passed"`, and no receipt.
+    // `"skipped"`, not `"passed"`, and no step record.
     expect(record.steps[1].status).toBe("skipped");
-    expect(record.steps[1].receipt).toBeNull();
+    expect(record.steps[1].record).toBeNull();
   });
 
   it("every other scenario in the same feature file still runs normally", async () => {
@@ -95,13 +95,13 @@ describe("nuka run: from's scenario-order guard", () => {
     expect(byLine.get(23).status).toBe("failed");
 
     // Every other scenario — including ones both before and after the
-    // violations in file order — still executed for real, receipts and all.
+    // violations in file order — still executed for real, step records and all.
     for (const line of [3, 7, 14, 19, 27, 30]) {
       const record = byLine.get(line);
       expect(record, `scenario at line ${line}`).toBeDefined();
       expect(record.status, `scenario at line ${line}`).toBe("passed");
       for (const step of record.steps) {
-        expect(step.receipt, `scenario at line ${line}, step "${step.text}"`).not.toBeNull();
+        expect(step.record, `scenario at line ${line}, step "${step.text}"`).not.toBeNull();
       }
     }
   });

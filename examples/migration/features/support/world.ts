@@ -16,7 +16,7 @@ const worldSchemas = {
 export class MigrationWorld extends defineWorld(worldSchemas) {
   /** Written by ../steps/legacy-note-stash.ts, read back by the same file --
    * a plain, undeclared World write, measured (it still shows up in a
-   * receipt's `world.writes`) but not validated, exactly the cucumber-js
+   * step record's `world.writes`) but not validated, exactly the cucumber-js
    * `this.foo = ...` convention compat steps keep. The explicit `= undefined`
    * initializer (not just `note?: string`) matters: it makes `note` a real
    * own property from construction, so it is already instrumented at wrap

@@ -29,7 +29,7 @@ Everything below assumes the project is already initialized. If it isn't yet
 1. Read the vocabulary — `nuka steps --json`, then `nuka describe <step>`
    for the contract of anything that looks relevant.
 2. When an operation is missing, `nuka scaffold <name>`, implement it, and
-   exercise it alone with `nuka do` until its receipt looks right.
+   exercise it alone with `nuka do` until its step record looks right.
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
@@ -41,7 +41,7 @@ Everything below assumes the project is already initialized. If it isn't yet
    commit still checked out, so debugging runs against a dirty tree are
    fine; they simply cannot be accepted.
 6. `nuka run <feature>` until green — when it fails, diagnose from the
-   failed step's own receipt before repeating the whole run (see "When a
+   failed step's own step record before repeating the whole run (see "When a
    run fails").
 7. `nuka accept <feature>`, then commit the record it wrote.
 
@@ -74,7 +74,7 @@ Everything below assumes the project is already initialized. If it isn't yet
 
 1. `nuka scaffold <name>` — kebab-case, one file per step.
 2. Implement it.
-3. `nuka do <step> --args '<json>'` — exercise it alone, check the receipt,
+3. `nuka do <step> --args '<json>'` — exercise it alone, check the step record,
    before it ever touches a feature. Fix and re-run until it does what it's
    supposed to; only move on to the feature-level `nuka run` once every new
    step in the scenario has passed this way on its own.
@@ -96,9 +96,9 @@ shared state its own step, named for what it establishes, and call it once.
 
 A step that declares `from` (see "Chaining a value from an earlier step")
 still runs alone: pass the key in `--args` like any other, or add
-`--use <receipt-id>` to take it from the result of an execution you already
+`--use <step-record-id>` to take it from the result of an execution you already
 have. The upstream step's name never goes on the command line — the cited
-receipt already records which step it belongs to. Repeat `--use` for as
+step record already records which step it belongs to. Repeat `--use` for as
 many upstreams as the step reads.
 
 `mutates` defaults to `true` — a new step is assumed to change state unless
@@ -126,13 +126,13 @@ observed is lost.
 Return more than what a later step cites. Basing `returns` on citation alone
 drops the values this step's own correctness depended on but nothing
 downstream reads — a computed date, a chosen id, a resolved name — and
-those are exactly what a receipt gets read for once something has failed.
+those are exactly what a step record gets read for once something has failed.
 Return them even if the scenario never reads them back; the alternative is
 reconstructing what was actually sent from another system's error message.
-This is also what a downstream failure's own receipt can show you: a
+This is also what a downstream failure's own step record can show you: a
 failed step's `used` entries carry each upstream step's full `result` (see
 "When a run fails"), so whatever this step declined to return is exactly
-what stays missing from that receipt too.
+what stays missing from that step record too.
 
 ## Chaining a value from an earlier step
 
@@ -172,10 +172,10 @@ that reader, not information.
 Judge each operation on one axis: does it mean something to the person
 reading the scenario, not to the code moving data between steps?
 
-- Yes — make it a step. The acceptance record gains a receipt for it.
+- Yes — make it a step. The acceptance record gains a step record for it.
 - No — do not make it a step. Write an ordinary function under
   `features/steps/lib/` and call it from the step that needs the value.
-  What is given up is that helper's own receipt; the HTTP it performs is
+  What is given up is that helper's own step record; the HTTP it performs is
   still counted in the calling step's `observed`, and the `section` fixture
   can still mark how far execution got while running it.
 
@@ -233,7 +233,7 @@ A step that writes to a system whose effect lands elsewhere asynchronously
 isn't finished when the write is accepted — it's finished once that effect
 is visible to whatever runs next. Wait for it there, with the `poll`
 fixture, `poll(fn, { description, timeout, interval })`; give `description` a
-value and the receipt's `polls` carries `attempts`, `waited_ms`, and
+value and the step record's `polls` carries `attempts`, `waited_ms`, and
 `outcome` beside it. That is what separates a wait that actually waited
 from one that returned on its first attempt — the second means the
 condition was never the late one, and something else is, which is a
@@ -254,7 +254,7 @@ to the wait. Wait instead for whatever tells you the observation is safe to
 make at all — a loading flag going false, a count leaving `undefined` — and
 only then read the thing you actually care about. And when that read comes
 back absent, return proof the read was valid alongside it, not the absence
-alone: a bare `false` can't tell whoever reads the receipt later whether
+alone: a bare `false` can't tell whoever reads the step record later whether
 the target really isn't there or the page just wasn't ready to say.
 
 ## Adding your own evidence
@@ -262,7 +262,7 @@ the target really isn't there or the page just wasn't ready to say.
 The automatic evidence (screenshot, trace, `http.jsonl`, `page_events`) never
 covers something application-specific: an API response body, a DB row, a
 generated file's contents. Reach for the `evidence` fixture instead of
-`console.log`-ing it away or writing it to disk with no place on the receipt
+`console.log`-ing it away or writing it to disk with no place on the step record
 to point back at:
 
 ```ts
@@ -273,14 +273,14 @@ async run({ evidence, request }, args) {
 ```
 
 `evidence.attach(name, body)` writes and lists the attachment on the
-receipt's `evidence.attachments` in one call. `evidence.path(name)` only
+step record's `evidence.attachments` in one call. `evidence.path(name)` only
 allocates a path, Playwright's own `outputPath()`, for a step that writes
 with its own tool instead of handing `attach` a buffer directly; only a path
-a step actually wrote to lands on the receipt, so calling `path()` without
+a step actually wrote to lands on the step record, so calling `path()` without
 following through leaves nothing behind, on purpose. Calling either twice
 with the same `name` keeps both files: it never overwrites the first.
 
-Keep secrets out of whatever you hand `attach`. The receipt's own
+Keep secrets out of whatever you hand `attach`. The step record's own
 `name`/`file` strings are redacted like every other field, but a file's own
 contents are not, since redacting arbitrary bytes would corrupt them about
 as often as it would protect them.
@@ -380,17 +380,17 @@ there outright, regardless of what `--env` was given.
 
 ## When a run fails
 
-Before repeating `nuka run <feature>`, read the failed step's own receipt.
+Before repeating `nuka run <feature>`, read the failed step's own step record.
 On a failure, each of that step's `used` entries carries `result`: the
 full validated result of the upstream step it read from, sitting right on
-the receipt that failed. One receipt is usually enough to see what the
-step actually saw and why it didn't hold up — no second receipt.json to
+the step record that failed. One step record is usually enough to see what the
+step actually saw and why it didn't hold up — no second record.json to
 open and cross-reference by hand.
 
 Read it as one timeline rather than a bag of separate fields: `started_at`,
 `finished_at`, `sections[].at`, `polls[].at`, `actions[].at`, and
 `evidence.screenshots[].at` all share the same clock, so sorting them
-together turns the receipt into an ordered account of what happened when.
+together turns the step record into an ordered account of what happened when.
 
 ```sh
 jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finished"}]
@@ -398,7 +398,7 @@ jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finishe
   + (.polls // [] | map({at, event: "poll:\(.description // "poll")"}))
   + (.actions // [] | map({at, event: "action:\(.method) (\(.ms)ms, \(.outcome))"}))
   + (.evidence.screenshots // [] | map({at, event: "screenshot:\(.file)"})))
-  | sort_by(.at)[] | "\(.at)  \(.event)"' receipt.json
+  | sort_by(.at)[] | "\(.at)  \(.event)"' record.json
 ```
 
 `actions` is every Playwright call this step made through the `page`
@@ -408,8 +408,8 @@ with `outcome: "failed"` and a real `ms`, often enough to explain a failure
 without opening the trace viewer at all.
 
 If the step opened a browser (destructured `page`), also check `page_events` on
-that receipt: a console error, an uncaught page error, or a failed request
-recorded there can explain a failure nothing else on the receipt mentions,
+that step record: a console error, an uncaught page error, or a failed request
+recorded there can explain a failure nothing else on the step record mentions,
 since it comes from the page itself rather than anything the step declared.
 
 If an absence claim turns up on that timeline, check whether its own
@@ -426,8 +426,8 @@ show-trace <evidence.dir>/trace.zip`. That trace is this one step's own
 window now, not the whole scenario's recording, so what it shows is exactly
 this failure, nothing earlier in the scenario to scrub past first.
 
-If that receipt only sharpens a hypothesis rather than confirming it, test
-the hypothesis with `nuka do <step> --use <upstream-receipt-id>` instead of
+If that step record only sharpens a hypothesis rather than confirming it, test
+the hypothesis with `nuka do <step> --use <upstream-step-record-id>` instead of
 re-running the scenario. It executes the one step in question — seconds,
 where a full `nuka run` costs minutes — and it still counts toward the
 same three-fix-and-retry-cycles rule described above ("If the same step
@@ -435,7 +435,7 @@ still fails after three fix-and-retry cycles...").
 
 Re-run the whole feature last, once the step itself passes under `do` —
 not as the first thing tried after a failure. Repeating `nuka run` end to
-end is the expensive way to learn what a single receipt, or a single `do`
+end is the expensive way to learn what a single step record, or a single `do`
 call, would already have told you.
 
 ## When accept refuses
@@ -454,7 +454,7 @@ listed, never a guess between them.
 
 ## Keeping records honest over time
 
-A record freezes the feature source and every receipt from the run it
+A record freezes the feature source and every step record from the run it
 accepted — but not the contracts behind them. Change a step's `returns`
 after accepting, edit the feature, or delete a step it cites, and the
 record still sits there claiming a green run it can no longer support.

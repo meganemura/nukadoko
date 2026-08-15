@@ -12,7 +12,7 @@ import {
 } from "allure-js-commons/sdk/reporter";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../../cli/writable-sink.js";
-import type { Receipt } from "../../receipt/types.js";
+import type { StepRecord } from "../../record/types.js";
 import type { ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { redactString } from "../../secrets/redact.js";
 import type { SecretSet } from "../../secrets/types.js";
@@ -70,12 +70,13 @@ import { createAtomicWriter } from "./writer.js";
 // scenario's own `started_at` and every after-hook to its `finished_at`,
 // both zero-width (map-scenario.ts's own `mapHooks`).
 //
-// AllureEmitterOptions carries no `stateDir` of its own: a step's receipt
+// AllureEmitterOptions carries no `stateDir` of its own: a step's own step
+// record
 // is handed to `emitStep` directly by the caller (cli/run.ts, threaded from
 // run-scenario.ts's own `onStepFinished`) — this emitter never reads a
-// receipt.json off disk itself any more, unlike the messages emitter
+// record.json off disk itself any more, unlike the messages emitter
 // (src/report/messages/emitter.ts), which still does via
-// src/report/receipts.ts's `readReceiptsForRecord`.
+// src/report/step-records.ts's `readStepRecordsForScenario`.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -94,11 +95,13 @@ export interface EmitStepInput {
   readonly session: string | null;
   readonly targetVersion?: string;
   readonly record: ScenarioStepRecord;
-  /** The exact in-memory object run-scenario.ts's own `writeReceipt` call
-   * just persisted for this step, or `null` for a step with no receipt of
-   * its own at all — see map-scenario.ts's `MapStepInput.receipt` for the
+  /** The exact in-memory object run-scenario.ts's own `writeStepRecord`
+   * call
+   * just persisted for this step, or `null` for a step with no step record
+   * of its own at all — see map-scenario.ts's `MapStepInput.stepRecord` for
+   * the
    * full reasoning. */
-  readonly receipt: Receipt | null;
+  readonly stepRecord: StepRecord | null;
   readonly index: number;
   readonly finishedAt: Date;
   readonly gherkinDocument: GherkinDocument;
@@ -148,7 +151,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   const environmentInfo: EnvironmentInfo = {
     environment: options.environment,
     // `target_version` is a run-level value: unlike record.json/
-    // receipt.json, nothing has redacted it yet.
+    // step record.json, nothing has redacted it yet.
     ...(options.targetVersion !== undefined
       ? { target_version: redactString(options.targetVersion, options.secrets) }
       : {}),
@@ -265,7 +268,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
           session: input.session,
           targetVersion: input.targetVersion,
           record: input.record,
-          receipt: input.receipt,
+          stepRecord: input.stepRecord,
           index: input.index,
           finishedAt: input.finishedAt,
           gherkinDocument: input.gherkinDocument,

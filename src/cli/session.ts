@@ -8,7 +8,7 @@ import type { WritableSink } from "./writable-sink.js";
 // Responsibility: `nuka session list`/`clear`'s CLI-facing wiring, kept out
 // of run-cli.ts so it's unit-testable without going through yargs (same
 // split as cli/do.ts vs cli/run-cli.ts). Both commands need the project's
-// stateDir (for sessions/<env>/) but never touch its step vocabulary, so
+// stateDir (for cache/sessions/<env>/) but never touch its step vocabulary, so
 // neither loads or discovers steps the way `do`/`steps`/`describe` do.
 // `list` always reports every environment; `clear` takes `--env` (default
 // "default") and only ever touches that one environment's subdirectory:
@@ -82,8 +82,8 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
     return 1;
   }
 
-  // Silent on success, like `rm`: stdout is reserved for `do`'s receipt and
-  // `list`'s listing; a successful `clear` has nothing structured to
+  // Silent on success, like `rm`: stdout is reserved for `do`'s step record
+  // and `list`'s listing; a successful `clear` has nothing structured to
   // report.
   return 0;
 }

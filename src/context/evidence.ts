@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { EvidenceAttachmentEntry } from "../receipt/types.js";
+import type { EvidenceAttachmentEntry } from "../record/types.js";
 import { InvalidEvidenceNameError } from "./errors.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
@@ -22,7 +22,7 @@ import { InvalidEvidenceNameError } from "./errors.js";
 // and nothing is recorded here either; only `snapshot()` (executor-only,
 // called once this execution/step is finished) confirms which allocated
 // paths actually have a file on disk, the same "existence, not book-keeping,
-// decides what's on the receipt" rule `evidence.http`/`evidence.trace`
+// decides what's on the step record" rule `evidence.http`/`evidence.trace`
 // already follow (create-context.ts's own `dispose`).
 //
 // Collision-free naming: one registry backs
@@ -39,7 +39,7 @@ import { InvalidEvidenceNameError } from "./errors.js";
 // (errors.ts) for why refusing was chosen over rewriting it.
 //
 // Capped at `MAX_ATTACHMENTS`, matching page-events.ts's/trace-actions.ts's
-// own 100-entry cap and reported the same way, through the receipt's
+// own 100-entry cap and reported the same way, through the step record's
 // existing top-level `truncated` field (`mergeTruncated`, below) rather than
 // a second, differently-shaped mechanism. Unlike those two collectors,
 // nothing is discarded at record time to bound memory: every entry here is
@@ -78,7 +78,7 @@ export interface EvidenceCollector {
   /** Executor-only: every attachment this step boundary produced, see
    * `EvidenceSnapshot`'s own doc comment. A `path()` call with no matching
    * write on disk by the time this runs contributes nothing (docs/spec.md
-   * "Receipts": evidence lists only files that exist). */
+   * "Records": evidence lists only files that exist). */
   snapshot(): Promise<EvidenceSnapshot>;
   /** Executor-only: clears the name registry and every pending record at a
    * step boundary — same lifetime rule as `sections`/`polls`. */
@@ -146,7 +146,7 @@ export function createEvidenceCollector(dirOf: () => string): EvidenceCollector 
         } catch {
           // Raced away between existsSync and stat — treated the same as
           // never written (this file's own header: existence, not
-          // book-keeping, decides what lands on the receipt).
+          // book-keeping, decides what lands on the step record).
         }
       }
       const merged = [...attachEntries, ...resolvedFromPath].sort((a, b) =>
@@ -167,13 +167,13 @@ export function createEvidenceCollector(dirOf: () => string): EvidenceCollector 
 }
 
 /** Combines this collector's own truncation count with trace-actions.ts's
- * own `{ actions }` truncation record into the receipt's single top-level
- * `truncated` sibling field (`ReceiptBase.truncated`, src/receipt/types.ts)
+ * own `{ actions }` truncation record into the step record's single top-level
+ * `truncated` sibling field (`StepRecordBase.truncated`, src/record/types.ts)
  * — the same object `actions` alone used to be the only member of, now also
  * carrying `evidence` when this collector's own cap was hit too.
  * `undefined` when neither happened, so a caller spreads this in with the
  * same `...(truncated !== undefined ? { truncated } : {})` pattern every
- * other optional receipt field already uses (cli/do.ts, run/run-scenario.ts)
+ * other optional step record field already uses (cli/do.ts, run/run-scenario.ts)
  * — one function, so the two executors can never combine the two sources
  * differently from each other. */
 export function mergeTruncated(

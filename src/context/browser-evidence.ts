@@ -10,7 +10,7 @@ import {
   type LaunchOptions,
   type Page,
 } from "playwright";
-import type { ScreenshotEntry } from "../receipt/types.js";
+import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { StorageState } from "../session/storage-state.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
@@ -31,14 +31,14 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // `finalize` takes no `status` argument — it used to write the same
 // screenshot buffer a second time, under a
 // second name, whenever `status === "failed"`. That second file carried no
-// information `receipt.status` didn't already carry, and because `finalize`
+// information `record.status` didn't already carry, and because `finalize`
 // only ever runs after `run` has returned or thrown, it could be seconds
 // stale relative to the failure it was named for — a real run once measured
 // an ~8s gap, leaving `status: "failed"` sitting next to a screenshot that
 // showed the target present, and that pairing was read as "state is
 // flickering" when it was actually "these two facts are 8 seconds apart and
 // nothing said so". One screenshot, always named `final.png`, with its own
-// `at` (see `ScreenshotEntry`, src/receipt/types.ts) is what replaces it:
+// `at` (see `ScreenshotEntry`, src/record/types.ts) is what replaces it:
 // the timestamp is the information a second file was standing in for
 // without ever stating it.
 //
@@ -80,7 +80,7 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // for this handle's whole lifetime (a chunk needs a started session to
 // begin from), but nothing is ever written from it directly any more.
 // create-context.ts opens and closes a chunk at each step boundary
-// instead, so `evidence.trace` on a receipt is that step's own window, not
+// instead, so `evidence.trace` on a step record is that step's own window, not
 // the whole scenario's — a step that failed can be opened directly instead
 // of scrubbed for out of one long recording (measured directly:
 // `tracing.stop()` throws once a chunk has been used at all, so the two
@@ -185,7 +185,7 @@ export interface BrowserEvidenceHandle {
    * context is the only way `context.storageState()` can succeed at all.
    * Swallows failures (returns `undefined`) rather than throwing: a step can
    * reach the browser via `ctx.page()` and close or crash it before
-   * returning, and losing this snapshot must not cost the receipt (or, per
+   * returning, and losing this snapshot must not cost the step record (or, per
    * docs/spec.md's sessions design, force the session's file to be deleted —
    * `undefined` here means create-context.ts's `dispose` leaves the
    * existing session file untouched). */
@@ -205,7 +205,7 @@ export interface BrowserEvidenceHandle {
    * writing it to `path`. Executor-only; only ever called when a chunk is
    * actually open. Swallows its own failure — the same fault-tolerance
    * `finalize`'s own teardown calls already have, and for the same reason:
-   * losing one step's own trace chunk must not cost that step's receipt
+   * losing one step's own trace chunk must not cost that step's step record
    * (docs/spec.md's "measurement must never break execution"). */
   endStepChunk(path: string): Promise<void>;
   /** Waits for every page-issued http.jsonl append this handle's own
@@ -324,13 +324,13 @@ export async function launchBrowserWithTracing(
       screenshots.push({ file: "final.png", at });
     } catch {
       // The page may already be closed or otherwise unusable after a failed
-      // run; losing a screenshot is not a reason to also lose the receipt.
+      // run; losing a screenshot is not a reason to also lose the step record.
     }
     // Same reasoning for the two teardown calls below: a step can reach the
     // browser via ctx.page() and close (or crash) it before throwing, so
     // context.close/browser.close can each fail on an already-gone context/
     // browser. A browser left half-torn-down is not a reason to also lose
-    // the receipt, so each is swallowed independently and best-effort
+    // the step record, so each is swallowed independently and best-effort
     // teardown continues. `tracing.stop()` is deliberately not called here
     // any more (this file's own header) — the caller (create-context.ts's
     // `dispose`) already closed whatever chunk was open via `endStepChunk`

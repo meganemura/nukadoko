@@ -2,7 +2,7 @@ import { Status } from "allure-js-commons";
 import { describe, expect, it } from "vitest";
 import { buildCategories } from "../src/report/allure/categories.js";
 import { buildFailureMarker, statusForKind } from "../src/report/allure/map-scenario.js";
-import type { ErrorKind } from "../src/receipt/types.js";
+import type { ErrorKind } from "../src/record/types.js";
 
 const ALL_KINDS: readonly ErrorKind[] = [
   "args_invalid",

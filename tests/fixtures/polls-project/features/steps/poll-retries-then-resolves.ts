@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Returns undefined twice, then a value — proves a retried poll's receipt
-// shows attempts >= 2 and waited_ms > 0 (ctx-poll-receipt task spec, test
+// Returns undefined twice, then a value — proves a retried poll's step record
+// shows attempts >= 2 and waited_ms > 0 (ctx-poll-step-record task spec, test
 // bullet 2). interval kept small so this test stays fast.
 export default defineStep({
   pattern: "a step polls and resolves after a few retries",

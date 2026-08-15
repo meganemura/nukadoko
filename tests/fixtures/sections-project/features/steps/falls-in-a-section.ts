@@ -2,9 +2,9 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Reaches two sections, then throws before ever reaching a third — proves a
-// failed step's receipt still carries the sections it reached before
+// failed step's step record still carries the sections it reached before
 // failing (t3-sections task spec, confirmed-decisions item 2; test bullet 3,
-// the requirement's own reason for existing: a failed step's receipt still
+// the requirement's own reason for existing: a failed step's step record still
 // lists the stages it passed through).
 export default defineStep({
   pattern: "a step falls in the middle of a section",

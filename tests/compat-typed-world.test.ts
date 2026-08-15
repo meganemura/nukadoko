@@ -12,11 +12,11 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 // verified own-data-defineProperty variant, `wrapDefinePropertySeeded`).
 //
 //   - Measurement: a compat step's own reads/writes of an ordinary bag
-//     field land on that step's receipt (`receipt.world`), deduplicated, in
+//     field land on that step's step record (`stepRecord.world`), deduplicated, in
 //     access order; a step that never touches the World gets no `world`
 //     field at all.
 //   - Reconcile's own documented limit: an undeclared key created mid-step
-//     is invisible to that same step's own receipt, and only starts being
+//     is invisible to that same step's own step record, and only starts being
 //     measured from the *next* step onward.
 //   - Declaration (`defineWorld`): a valid declared write passes and is
 //     measured; an invalid one fails the step and is never recorded as a
@@ -27,16 +27,16 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 //   - The `#private` integration test proto-typed-world/findings.md's own
 //     central claim rests on: a private field stays reachable through a
 //     method with no crash, alongside ordinary bag-field measurement.
-//   - A typed-only scenario's receipts are unaffected (no `world` field at
+//   - A typed-only scenario's step records are unaffected (no `world` field at
 //     all — a typed step has no `this`).
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("nuka run: typed World measurement + declaration", () => {
@@ -64,24 +64,24 @@ describe("nuka run: typed World measurement + declaration", () => {
     const untouched = records.find((r) => r.scenario.startsWith("a step that never touches"));
 
     expect(measured.status).toBe("passed");
-    const firstIncrement = await readReceipt(rootDir, measured.steps[0].receipt);
+    const firstIncrement = await readStepRecord(rootDir, measured.steps[0].record);
     // Reads visits (0), then writes it (1) — one read, one write, in order.
     expect(firstIncrement.world).toEqual({ reads: ["visits"], writes: ["visits"] });
 
-    const secondIncrement = await readReceipt(rootDir, measured.steps[1].receipt);
+    const secondIncrement = await readStepRecord(rootDir, measured.steps[1].record);
     expect(secondIncrement.world).toEqual({ reads: ["visits"], writes: ["visits"] });
 
-    const finalCheck = await readReceipt(rootDir, measured.steps[2].receipt);
+    const finalCheck = await readStepRecord(rootDir, measured.steps[2].record);
     // Reads only (the assertion step never writes) — deduplicated to one
     // entry despite reading `this.visits` twice in its own `if` condition.
     expect(finalCheck.world).toEqual({ reads: ["visits"], writes: [] });
 
     expect(untouched.status).toBe("passed");
-    const untouchedReceipt = await readReceipt(rootDir, untouched.steps[0].receipt);
-    expect(untouchedReceipt.world).toBeUndefined();
+    const untouchedStepRecord = await readStepRecord(rootDir, untouched.steps[0].record);
+    expect(untouchedStepRecord.world).toBeUndefined();
   });
 
-  it("an undeclared key created mid-step is not in that step's own receipt, but is measured from the next step onward", async () => {
+  it("an undeclared key created mid-step is not in that step's own step record, but is measured from the next step onward", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/measurement.feature"], {
       rootDir,
@@ -94,13 +94,13 @@ describe("nuka run: typed World measurement + declaration", () => {
     const scenario = records.find((r) => r.scenario.startsWith("an undeclared key introduced"));
     expect(scenario.status).toBe("passed");
 
-    const creationReceipt = await readReceipt(rootDir, scenario.steps[0].receipt);
+    const creationStepRecord = await readStepRecord(rootDir, scenario.steps[0].record);
     // The write happened, but the accessor didn't exist yet — not measured,
     // and not recorded at all (proto-typed-world/findings.md's "hole 1").
-    expect(creationReceipt.world).toBeUndefined();
+    expect(creationStepRecord.world).toBeUndefined();
 
-    const readReceiptBody = await readReceipt(rootDir, scenario.steps[1].receipt);
-    expect(readReceiptBody.world).toEqual({ reads: ["freshField"], writes: [] });
+    const readStepRecordBody = await readStepRecord(rootDir, scenario.steps[1].record);
+    expect(readStepRecordBody.world).toEqual({ reads: ["freshField"], writes: [] });
   });
 
   it("a #private field stays reachable through a method (no crash), the central proto-typed-world claim", async () => {
@@ -132,24 +132,23 @@ describe("nuka run: typed World measurement + declaration", () => {
     const invalid = records.find((r) => r.scenario.startsWith("an invalid declared write"));
 
     expect(valid.status).toBe("passed");
-    const writeReceipt = await readReceipt(rootDir, valid.steps[0].receipt);
-    expect(writeReceipt.world).toEqual({ reads: [], writes: ["listing"] });
-    const readBackReceipt = await readReceipt(rootDir, valid.steps[1].receipt);
-    expect(readBackReceipt.world).toEqual({ reads: ["listing"], writes: [] });
+    const writeStepRecord = await readStepRecord(rootDir, valid.steps[0].record);
+    expect(writeStepRecord.world).toEqual({ reads: [], writes: ["listing"] });
+    const readBackStepRecord = await readStepRecord(rootDir, valid.steps[1].record);
+    expect(readBackStepRecord.world).toEqual({ reads: ["listing"], writes: [] });
 
     expect(invalid.status).toBe("failed");
     expect(invalid.steps[0].status).toBe("failed");
     expect(invalid.steps[0].error.message).toContain("listing");
-    const invalidReceipt = await readReceipt(rootDir, invalid.steps[0].receipt);
-    expect(invalidReceipt.status).toBe("failed");
+    const invalidStepRecord = await readStepRecord(rootDir, invalid.steps[0].record);
+    expect(invalidStepRecord.status).toBe("failed");
     // The invalid write must never appear in world.writes (proto-typed-
     // world/findings.md Q1's bug, regularized).
-    expect(invalidReceipt.world).toBeUndefined();
-    // m3a-receipt-kinds task spec: identified by type
-    // (`WorldWriteValidationError`), never by matching the message —
-    // distinct from "step_error" (an ordinary throw from a compat step's
-    // own glue).
-    expect((invalidReceipt as { error: { kind: string } }).error.kind).toBe("world_invalid");
+    expect(invalidStepRecord.world).toBeUndefined();
+    // Identified by type (`WorldWriteValidationError`), never by matching
+    // the message — distinct from "step_error" (an ordinary throw from a
+    // compat step's own glue).
+    expect((invalidStepRecord as { error: { kind: string } }).error.kind).toBe("world_invalid");
   });
 
   it("reassigning a reserved key at run time fails the step with a clear runtime error", async () => {
@@ -166,18 +165,17 @@ describe("nuka run: typed World measurement + declaration", () => {
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("attach");
     expect(record.steps[0].error.message).toContain("reserved");
-    // m3a-receipt-kinds task spec: `ReservedWorldKeyWriteError` isn't one of
-    // the named kinds (only a declared-schema failure, thrown by
-    // `WorldWriteValidationError`, is "world_invalid") — this must stay
-    // "step_error", not be swept into "world_invalid" just because it's
-    // also a World-related throw.
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect((receipt as { error: { kind: string } }).error.kind).toBe("step_error");
+    // `ReservedWorldKeyWriteError` isn't one of the named kinds (only a
+    // declared-schema failure, thrown by `WorldWriteValidationError`, is
+    // "world_invalid") — this must stay "step_error", not be swept into
+    // "world_invalid" just because it's also a World-related throw.
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect((stepRecord as { error: { kind: string } }).error.kind).toBe("step_error");
   });
 });
 
 describe("nuka run: a typed-only scenario is unaffected", () => {
-  it("a typed step's receipt has no world field at all", async () => {
+  it("a typed step's step record has no world field at all", async () => {
     const rootDir = await copyFixtureToTempDir("run-project");
     try {
       const stdout = createCaptureSink();
@@ -191,8 +189,8 @@ describe("nuka run: a typed-only scenario is unaffected", () => {
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("passed");
       for (const step of record.steps) {
-        const receipt = await readReceipt(rootDir, step.receipt);
-        expect(receipt.world).toBeUndefined();
+        const stepRecord = await readStepRecord(rootDir, step.record);
+        expect(stepRecord.world).toBeUndefined();
       }
     } finally {
       await removeTempDir(rootDir);

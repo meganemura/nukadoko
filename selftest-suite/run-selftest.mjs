@@ -36,16 +36,16 @@ import { promisify } from "node:util";
 // Every step in the suite spawns `nuka run` again, as a *subprocess*,
 // against selftest-suite/fixture-project -- a separate, tiny nukadoko
 // project that only exists to be driven this way. That inner `nuka run`'s
-// own `.nukadoko/allure-results/`, under fixture-project/, is what the
-// suite's own step assertions check (features/steps/nuka-run.ts).
+// own `.nukadoko/export/allure-results/`, under fixture-project/, is what
+// the suite's own step assertions check (features/steps/nuka-run.ts).
 //
 // Separately, on track 2 only, `nuka run` is *also* running as the OUTER
-// process (see above), and it writes its own `.nukadoko/allure-results/`
-// directly under selftest-suite/ -- this file never reads that tree, and
-// neither does any step. Two different projects, two different
-// allure-results directories on disk (fixture-project/.nukadoko/... vs
-// selftest-suite/.nukadoko/...), only one of which either track's
-// assertions ever look at.
+// process (see above), and it writes its own
+// `.nukadoko/export/allure-results/` directly under selftest-suite/ --
+// this file never reads that tree, and neither does any step. Two
+// different projects, two different allure-results directories on disk
+// (fixture-project/.nukadoko/... vs selftest-suite/.nukadoko/...), only
+// one of which either track's assertions ever look at.
 //
 // ## "Same results", defined precisely
 //

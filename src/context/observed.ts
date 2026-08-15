@@ -1,5 +1,5 @@
 // Responsibility: the network-write observation tally docs/spec.md's
-// "Keyword semantics" and "Receipts" (`observed`) describe — a single
+// "Keyword semantics" and "Records" (`observed`) describe — a single
 // mutable collector shared by http-log.ts (ctx.request() calls) and
 // browser-evidence.ts (page/browser-context requests) so neither module has
 // to know about the other; both just call `record(method)` on whichever
@@ -11,11 +11,11 @@
 // `beginStep`) — never reachable from a
 // step's own `run`, the same trust-model rule every other evidence-
 // collecting piece of `ctx` already follows (docs/spec.md: a step cannot
-// control its own receipt or evidence collection).
+// control its own step record or evidence collection).
 
 /** Read/write tally for one step boundary — `nuka do`'s whole execution, or
  * one `nuka run` pickle step. Mirrors the
- * receipt's own `observed` shape (docs/spec.md "Receipts"). */
+ * step record's own `observed` shape (docs/spec.md "Records"). */
 export interface ObservedCounts {
   http_reads: number;
   http_writes: number;

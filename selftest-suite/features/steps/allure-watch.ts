@@ -57,7 +57,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureProjectDir = path.resolve(here, "..", "..", "fixture-project");
 const cliPath = path.resolve(here, "..", "..", "..", "dist", "cli.js");
 const allureBin = path.resolve(here, "..", "..", "..", "node_modules", "allure", "cli.js");
-const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "allure-results");
+const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "export", "allure-results");
 // A directory of its own, never fixture-project's `.nukadoko/allure-report`
 // (that one belongs to allure-report.ts's `allure generate`, run only in
 // the separate @allure-report scenario) -- `allure watch` deletes its own

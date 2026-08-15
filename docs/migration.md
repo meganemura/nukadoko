@@ -63,7 +63,7 @@ Everything below that import keeps working, unchanged:
   step calling `table.hashes()` keeps working exactly as written (zero
   friction, measured migrating examples/migration's own suite).
 - `allure.*` calls (`attach`/`log`/`link`, labels, parameters) inside
-  glue: they land in the receipt's `declared` field, not vanishing.
+  glue: they land in the step record's `declared` field, not vanishing.
 - `setDefaultTimeout(ms)`, filling in for any step or hook that didn't
   declare its own timeout, last call winning as in cucumber-js. Never
   calling it leaves steps unbounded rather than adopting cucumber's
@@ -155,7 +155,7 @@ is a list you can work through, not a hunt.
   says so rather than passing the step.
 
 Run the suite with `nuka run features/your.feature`. Every step gets a
-receipt; nothing else has to change for that to start happening.
+step record; nothing else has to change for that to start happening.
 
 ## The measured upgrade (optional)
 
@@ -163,7 +163,7 @@ Glue that launches its own Playwright browser or request client keeps
 working, unmeasured: nukadoko never touches it. Replace that bootstrapping
 with `await this.openPage()` / `await this.openRequest()` (delegating to
 the same context a mixed scenario's typed steps share, one browser and one
-session per scenario), and that step's receipt gains a trace, an
+session per scenario), and that step's step record gains a trace, an
 `http.jsonl` log, and `observed` read/write counts, no other code change.
 
 ## Stage 1.5: declare what you rely on
@@ -234,7 +234,7 @@ step has.
   read as a pile of unrelated undefined steps. Fix the import failure
   first; the suppressed findings reappear as real `undefined-step` errors
   once the file imports cleanly.
-- Receipts tell the same story at run time: `world` (compat steps only) and
+- Step records tell the same story at run time: `world` (compat steps only) and
   `declared` shrink as more of the suite promotes to typed steps whose
   consumers read from them via `from` (or `resultOf` where a key name
   cannot say what is needed).
@@ -252,7 +252,7 @@ no import to switch back. What that actually costs is worth being specific
 about, because it is narrower than "locked in" suggests.
 
 What a promoted step gives up on the way out is everything built on its
-schemas: the `args`/`returns` validation, the receipt's `result`, `from`
+schemas: the `args`/`returns` validation, the step record's `result`, `from`
 and the binding-order check that reads it, and the contract checks
 `nuka check` performs.
 

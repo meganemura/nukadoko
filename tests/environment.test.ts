@@ -23,9 +23,9 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
       });
 
       expect(exitCode).toBe(0);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.environment).toBe("default");
-      expect(receipt.result).toEqual({
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.environment).toBe("default");
+      expect(stepRecord.result).toEqual({
         baseURL: "http://top.example",
         key: "base",
         shared: "fromtop",
@@ -45,9 +45,9 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
       );
 
       expect(exitCode).toBe(0);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.environment).toBe("staging");
-      expect(receipt.result).toEqual({
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.environment).toBe("staging");
+      expect(stepRecord.result).toEqual({
         baseURL: "http://staging.example",
         // .env.staging (the environment's own envFile) is merged *after*
         // the top-level .env.base, so its KEY value wins...
@@ -71,9 +71,9 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
       );
 
       expect(exitCode).toBe(0);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.environment).toBe("no-overrides");
-      expect(receipt.result).toEqual({
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.environment).toBe("no-overrides");
+      expect(stepRecord.result).toEqual({
         baseURL: "http://top.example",
         key: "base",
         shared: "fromtop",
@@ -85,7 +85,7 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
 });
 
 describe("nuka do --env: unknown environment", () => {
-  it("fails setup (exit 1, no receipt directory) for an explicit unknown --env name", async () => {
+  it("fails setup (exit 1, no step record directory) for an explicit unknown --env name", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stderr = createCaptureSink();
@@ -104,7 +104,7 @@ describe("nuka do --env: unknown environment", () => {
 });
 
 describe("nuka do --env: policy: read-only", () => {
-  it("refuses a mutating step with exit 1 and no receipt, naming the step, env, and policy", async () => {
+  it("refuses a mutating step with exit 1 and no step record, naming the step, env, and policy", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stderr = createCaptureSink();
@@ -141,7 +141,7 @@ describe("nuka do --env: policy: read-only", () => {
 });
 
 describe("nuka do --env: version probe", () => {
-  it("records target_version on the receipt when the probe succeeds", async () => {
+  it("records target_version on the step record when the probe succeeds", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stdout = createCaptureSink();
@@ -170,9 +170,9 @@ describe("nuka do --env: version probe", () => {
       );
 
       expect(exitCode).toBe(0);
-      const receipt = JSON.parse(stdout.text());
-      expect(receipt.target_version).toBeUndefined();
-      expect(receipt.status).toBe("ok");
+      const stepRecord = JSON.parse(stdout.text());
+      expect(stepRecord.target_version).toBeUndefined();
+      expect(stepRecord.status).toBe("ok");
       expect(stderr.text()).toContain("probe boom");
       expect(stderr.text()).toContain("probe-throws");
     } finally {

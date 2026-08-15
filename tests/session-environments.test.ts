@@ -17,7 +17,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // session.test.ts; this file only adds the environment dimension.
 
 function sessionsDir(rootDir: string, environment: string): string {
-  return path.join(rootDir, ".nukadoko", "sessions", environment);
+  return path.join(rootDir, ".nukadoko", "cache", "sessions", environment);
 }
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {

@@ -37,9 +37,9 @@ import {
   type FixtureCache,
   type FixtureUsageEntry,
 } from "../fixture/resolver.js";
-import { generateReceiptId } from "../receipt/receipt-id.js";
-import type { ErrorKind, Receipt } from "../receipt/types.js";
-import { writeReceipt } from "../receipt/write-receipt.js";
+import { generateStepRecordId } from "../record/record-id.js";
+import type { ErrorKind, StepRecord } from "../record/types.js";
+import { writeStepRecord } from "../record/write-step-record.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
@@ -63,14 +63,14 @@ import { writeScenarioRecord } from "./write-record.js";
 // browser's
 // trace/screenshots belong to the scenario as a whole (one `dispose()` call,
 // at the very end), while each step's own http.jsonl belongs to that step's
-// receipt dir — reached by calling `contextHandle.beginStep` right before
-// running each step that begins execution.
+// own step record dir — reached by calling `contextHandle.beginStep` right
+// before running each step that begins execution.
 //
 // The two "never began" outcomes (undefined, ambiguous) are resolved
-// *before* a receipt id or directory is created — matching docs/spec.md "an
-// execution that never began must not be citable". Every other failure
+// *before* a step record id or directory is created — matching docs/spec.md
+// "an execution that never began must not be citable". Every other failure
 // (binding, args validation, the step's own throw, returns validation)
-// happens *after* that point and therefore always gets a failed receipt,
+// happens *after* that point and therefore always gets a failed step record,
 // mirroring `nuka do`'s own setup/execution split.
 //
 // A Then-position (`PickleStepType.OUTCOME`) step's own execution is never
@@ -91,11 +91,11 @@ import { writeScenarioRecord } from "./write-record.js";
 // of that check remains (same reasoning as
 // the Then-position paragraph above): a step whose *declared* `mutates` is
 // `true` is refused before it ever runs — a "never began" outcome, alongside
-// undefined/ambiguous, with `receipt: null` and the rest of the scenario
+// undefined/ambiguous, with `record: null` and the rest of the scenario
 // skipped. There is no longer a measured backstop for a step that declares
 // `mutates: false` yet is observed writing anyway — `observed.http_writes`
-// is still tallied and still lands on the receipt (docs/spec.md
-// "Receipts"), it just no longer decides `status`; a wrong declaration stays
+// is still tallied and still lands on the step record (docs/spec.md
+// "Records"), it just no longer decides `status`; a wrong declaration stays
 // visible there and in http.jsonl for a report to catch, rather than failing
 // the run that exposed it.
 //
@@ -107,7 +107,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // pickles; a step's own reader is wired into createStepContext's `resultOf`
 // option as a plain closure over this map, and every value-returning read is
 // reflected back afterward via `contextHandle.usedSnapshot()` onto that
-// step's own receipt (`used`). Only a *typed* step's chain key ever exists
+// step's own step record (`used`). Only a *typed* step's chain key ever exists
 // (compat has no Step object, and no validated result to offer — see below),
 // so this chain is exclusively typed-to-typed provenance, unchanged by
 // compat support (v1 builds no data bridge between compat and
@@ -135,12 +135,12 @@ import { writeScenarioRecord } from "./write-record.js";
 // and all. A compat step's own
 // execution is much simpler than a typed step's: no args/returns schema,
 // so no binding-failure branch and no `chain` entry ever gets written for
-// one (`result: null` always, per docs/spec.md "Receipts": "Compat steps
+// one (`result: null` always, per docs/spec.md "Records": "Compat steps
 // record result: null" — regardless of what the glue function itself
 // returned). Before/After hooks run against that same World, outside any
-// step's own receipt boundary — `contextHandle.beginStep(scenarioDir, ...)`
+// step's own step record boundary — `contextHandle.beginStep(scenarioDir, ...)`
 // before each individual hook invocation redirects http.jsonl logging and
-// the `observed` tally away from any step's own receipt dir. http.jsonl and
+// the `observed` tally away from any step's own step record dir. http.jsonl and
 // `observed` stay scenario-wide and
 // un-attributed to any one hook invocation, a documented v1 limit rather
 // than a bug (neither is measured on, or visible from, any single
@@ -155,9 +155,9 @@ import { writeScenarioRecord } from "./write-record.js";
 // declared collector" right after `instantiateCompatWorld` runs, and reset
 // via its own `beginStep(dir)` at the same points `contextHandle.beginStep`/
 // `worldInstrumentation.beginStep` already are: once per step (redirected to
-// that step's own receipt dir) and once per *individual* Before/After hook
+// that step's own step record dir) and once per *individual* Before/After hook
 // invocation (redirected to `scenarioDir`, read right after that hook
-// returns/throws) — kind-independent (a typed step's receipt gets this
+// returns/throws) — kind-independent (a typed step's step record gets this
 // exactly like a compat step's does, since both the registered allure-js
 // `TestRuntime` and a compat World's own attach/log/link read the same
 // active pointer).
@@ -209,22 +209,22 @@ function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): 
 }
 
 /** One pickle's own result chain: which Step object most recently finished
- * with `status: "ok"`, and what its validated result, receipt id, and own
- * step name were. `stepName` is carried alongside `receiptId` so a `used` entry
- * built from this chain — whether through `ctx.resultOf` or a `from`
- * injection — can cite the step name docs/spec.md "Receipts" asks for
+ * with `status: "ok"`, and what its validated result, step record id, and
+ * own step name were. `stepName` is carried alongside `recordId` so a `used`
+ * entry built from this chain — whether through `ctx.resultOf` or a `from`
+ * injection — can cite the step name docs/spec.md "Records" asks for
  * without a second vocabulary lookup. */
 interface ChainEntry {
   readonly result: unknown;
-  readonly receiptId: string;
+  readonly recordId: string;
   readonly stepName: string;
 }
 
 /** Everything the Allure emitter needs to write one step's own test the
  * moment that step finishes — never
- * batched to scenario end. `receipt` is the exact in-memory object
+ * batched to scenario end. `stepRecord` is the exact in-memory object
  * `pushStepRecord`'s own caller already has (`finishExecutedStep`'s
- * `redactedReceipt`, or the general backstop catch's own), never a second
+ * `redactedStepRecord`, or the general backstop catch's own), never a second
  * disk read; `null` for a step that never opened one at all (skipped,
  * undefined, ambiguous, or a never-began refusal). `index` is this step's
  * own 0-based position in `record.steps` (and, by construction, in
@@ -236,7 +236,7 @@ interface ChainEntry {
 export interface StepFinishedInfo {
   readonly scenarioId: string;
   readonly record: ScenarioStepRecord;
-  readonly receipt: Receipt | null;
+  readonly stepRecord: StepRecord | null;
   readonly index: number;
   readonly finishedAt: Date;
 }
@@ -281,7 +281,7 @@ export interface RunScenarioOptions {
    * `undefined` means no restriction. A step
    * declared `mutates: false` that is nonetheless measured writing is no
    * longer demoted for it — the
-   * declaration is trusted, and `observed.http_writes` on its receipt is
+   * declaration is trusted, and `observed.http_writes` on its step record is
    * where a wrong one stays visible instead. */
   readonly policy: "read-only" | undefined;
   readonly targetVersion: string | undefined;
@@ -338,7 +338,7 @@ export interface RunScenarioOptions {
    * see that function's own header for why every step-record append site
    * funnels through it instead of calling this directly. */
   readonly onStepEnd?: (info: StepProgressInfo) => void;
-  /** Reports one pickle step's own finished record, receipt, and moment —
+  /** Reports one pickle step's own finished record, step record, and moment —
    * unlike `onStepEnd` above,
    * never gated on `--quiet` (that flag silences only the terminal's own
    * progress line; the report's own granularity should not depend on a
@@ -495,7 +495,7 @@ function hookChunkFileName(
  * `from` deliberately does not have.
  *
  * Mutates `value` in place (the same object `began.rawArgs` already points
- * at — the receipt's own `args` should show what the step
+ * at — the step record's own `args` should show what the step
  * actually ran with, injected keys included — otherwise a reader could never
  * tell an injected value apart from one that was simply never validated).
  * Every key it *does* fill is reported to `recordUsed` — the same collector `ctx.resultOf` itself writes into, so a step
@@ -512,7 +512,7 @@ function injectFrom(
   step: Step,
   chain: ReadonlyMap<Step, ChainEntry>,
   stepNameOf: ReadonlyMap<Step, string>,
-  recordUsed: (receiptId: string, stepName: string, result: unknown) => void,
+  recordUsed: (recordId: string, stepName: string, result: unknown) => void,
 ): Map<string, string> {
   const stillMissing = new Map<string, string>();
   for (const [key, entry] of Object.entries(step.from)) {
@@ -546,7 +546,7 @@ function injectFrom(
 
     const { upstreamKey, chainEntry } = present[0]!;
     value[key] = (chainEntry.result as Record<string, unknown>)[upstreamKey];
-    recordUsed(chainEntry.receiptId, chainEntry.stepName, chainEntry.result);
+    recordUsed(chainEntry.recordId, chainEntry.stepName, chainEntry.result);
   }
   return stillMissing;
 }
@@ -593,7 +593,7 @@ function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number):
 }
 
 /** cucumber-js interprets the string returns `"pending"`/`"skipped"`
- * as their own outcomes; nukadoko's receipt/record schema has no such status
+ * as their own outcomes; nukadoko's step/scenario record schema has no such status
  * (implementing it for real is out of scope here), so
  * rather than silently passing through as success, a step/hook that returns
  * one of these two strings is failed with a message a migrator can act on.
@@ -757,7 +757,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const fixtureScenarioCache = createFixtureCache();
 
   const scenarioId = generateScenarioId();
-  const relativeScenarioDir = path.join(config.stateDir, "scenarios", scenarioId);
+  const relativeScenarioDir = path.join(config.stateDir, "records", "scenarios", scenarioId);
   const scenarioDir = path.join(rootDir, relativeScenarioDir);
   await mkdir(scenarioDir, { recursive: true });
   // This pickle's own step keywords, for each step's own trace chunk title
@@ -791,7 +791,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   if (orderIssues.length > 0 || unfillableKeyIssues.length > 0) {
     // Mirrors the existing undefined-step shape (docs/spec.md "an execution
     // that never began must not be citable"): every pickle step still gets
-    // its own `steps` entry, `receipt: null` throughout since nothing ever
+    // its own `steps` entry, `record: null` throughout since nothing ever
     // began, and the scenario itself is `status: "failed"` like any other
     // failed scenario — cli/run.ts's own exit-code logic
     // (`record.status !== "passed"`) needs no change to reach the same
@@ -809,12 +809,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const stepRecords: ScenarioStepRecord[] = pickle.steps.map((pickleStep, index) => {
       const messages = issuesByStepIndex.get(index);
       if (messages === undefined) {
-        return { text: pickleStep.text, status: "skipped", receipt: null };
+        return { text: pickleStep.text, status: "skipped", record: null };
       }
       return {
         text: pickleStep.text,
         status: "failed",
-        receipt: null,
+        record: null,
         error: { message: messages.join("; ") },
       };
     });
@@ -892,23 +892,23 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * (skipped by an earlier failure, undefined, ambiguous, or refused by the
    * read-only policy) — there is no "how long did it take" for work that
    * never started; the two backstop call sites (a step that threw before or
-   * after its own receipt began) pass whatever real elapsed time they each
+   * after its own step record began) pass whatever real elapsed time they each
    * have. `stepIndex` is this array's own length right after the push, not
    * the pickle's own step index — the two agree under normal operation
    * (exactly one push per iteration of the loop below), and the array's own
    * length is what a progress-line reader actually wants: "which line is
    * this, out of how many so far", not a 0-based array position.
    *
-   * `receipt` is the exact
-   * in-memory object the two receipt-writing call sites already redacted and
-   * wrote to disk, handed straight through to `onStepFinished` — `null` for
-   * every other call site, none of which ever opened a receipt at all.
+   * `stepRecord` is the exact
+   * in-memory object the two step-record-writing call sites already redacted
+   * and wrote to disk, handed straight through to `onStepFinished` — `null`
+   * for every other call site, none of which ever opened one at all.
    * `finishedAt` is captured right here, on every call, the moment this
    * step's own record is appended — this is what "the moment this step
    * finished" means for
-   * every step, not only the ones with a receipt.
+   * every step, not only the ones with a step record.
    */
-  function pushStepRecord(record: ScenarioStepRecord, durationMs: number, receipt: Receipt | null = null): void {
+  function pushStepRecord(record: ScenarioStepRecord, durationMs: number, stepRecord: StepRecord | null = null): void {
     stepRecords.push(record);
     const finishedAt = new Date();
     onStepEnd?.({
@@ -921,7 +921,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     onStepFinished?.({
       scenarioId,
       record,
-      receipt,
+      stepRecord,
       index: stepRecords.length - 1,
       finishedAt,
     });
@@ -931,11 +931,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * Shared by the typed and compat branches below: records this
    * step in `chain` when `chainKey` is given and the final status is `"ok"`
    * (typed only — `undefined` for a compat step, since
-   * a World is shared compat-to-compat only), then builds, redacts, and writes the receipt
+   * a World is shared compat-to-compat only), then builds, redacts, and writes the
+   * step record
    * and this step's own scenario-record entry. `observed.http_writes` (every
    * network path this ctx opens tallies into whichever kind of step opened
-   * it, typed or compat alike) is recorded on every receipt below regardless
-   * of position or policy, but no longer demotes `status` from it
+   * it, typed or compat alike) is recorded on every step record below
+   * regardless of position or policy, but no longer demotes `status` from it
    * (measurement stays a record, never a
    * verdict — see this file's own header). A closure over this function's
    * own `chain`/`contextHandle`/`environment`/`policy`/`targetVersion`/
@@ -946,7 +947,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    */
   async function finishExecutedStep(
     pickleStep: PickleStep,
-    begun: { readonly receiptId: string; readonly receiptDir: string; readonly relativeReceiptDir: string },
+    begun: { readonly recordId: string; readonly recordDir: string; readonly relativeRecordDir: string },
     stepStartedAt: Date,
     outcomeStepName: string,
     initialStatus: "ok" | "failed",
@@ -971,18 +972,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const errorKind = initialErrorKind;
 
     // Closes this step's own trace chunk, if one is open, *before* anything
-    // below reads from `begun.receiptDir` —
+    // below reads from `begun.recordDir` —
     // the reason this is a dedicated call rather than left to the next
     // `beginStep` (which only runs once the next step, or a hook boundary,
-    // starts, well after this step's own receipt is already written): a
+    // starts, well after this step's own step record is already written): a
     // step's own `evidence.trace` has to be knowable *now*, from this
     // step's own chunk having already been written to disk.
     await contextHandle.endStep();
-    const traceEvidence = await collectTraceEvidence(begun.receiptDir, onUnknownTraceVersion);
+    const traceEvidence = await collectTraceEvidence(begun.recordDir, onUnknownTraceVersion);
 
     // `observed.http_writes`/`http_reads` are tallied every occurrence,
-    // typed or compat alike, and always land on the receipt below — this is
-    // a record, not a verdict: nukadoko no
+    // typed or compat alike, and always land on the step record below — this
+    // is a record, not a verdict: nukadoko no
     // longer demotes `status` for what a step's execution measured, whether
     // that step is bound in Then position or running under a read-only
     // policy. What's left of that enforcement is entirely declared: the
@@ -1000,7 +1001,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // began, in completion order — same
     // "read after execution, whatever the outcome" shape as `sectionLabels`
     // right above; a poll that timed out or whose `fn` threw is exactly the
-    // record a failed step's receipt needs.
+    // record a failed step's step record needs.
     const pollRecords = contextHandle.pollsSnapshot();
     // Env var names `ctx.requireEnv` was called with since the current step
     // boundary began, including a call that went on to throw
@@ -1032,7 +1033,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // What this step (kind-independent) declared through the allure-js
     // runtime shim or a compat World's own attach/log/link — `undefined`
     // when nothing was ever recorded
-    // this step, omitted from the receipt the same way `used`/`world` are.
+    // this step, omitted from the step record the same way `used`/`world` are.
     const declared = declaredCollector.snapshot();
     // Application-specific evidence `evidence.attach`/`.path` produced since
     // the current step boundary began — only a typed step's
@@ -1041,7 +1042,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // "after execution, whatever the outcome" way as every snapshot above.
     const evidenceSnapshot = await contextHandle.evidenceSnapshot();
     // Combines `traceEvidence`'s own `{ actions }` truncation with
-    // `evidenceSnapshot`'s into the receipt's single
+    // `evidenceSnapshot`'s into the step record's single
     // top-level `truncated` field — see `mergeTruncated`'s own doc comment
     // (src/context/evidence.ts) for why this is one shared function rather
     // than two independent spreads.
@@ -1050,16 +1051,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Only a step whose *final* status is "ok" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
     if (status === "ok" && chainKey !== undefined) {
-      chain.set(chainKey, { result, receiptId: begun.receiptId, stepName: outcomeStepName });
+      chain.set(chainKey, { result, recordId: begun.recordId, stepName: outcomeStepName });
     }
 
     const stepFinishedAt = new Date();
-    const httpLogExists = existsSync(path.join(begun.receiptDir, "http.jsonl"));
+    const httpLogExists = existsSync(path.join(begun.recordDir, "http.jsonl"));
 
-    const receipt: Receipt =
+    const stepRecord: StepRecord =
       status === "ok"
         ? {
-            receipt_id: begun.receiptId,
+            record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
             args: rawArgs,
@@ -1072,7 +1073,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             started_at: stepStartedAt.toISOString(),
             finished_at: stepFinishedAt.toISOString(),
             evidence: {
-              dir: begun.relativeReceiptDir,
+              dir: begun.relativeRecordDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
@@ -1081,9 +1082,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             observed,
             mutates,
             // `omitUsedResults`: an
-            // "ok" receipt keeps `used`'s original `{ receipt, step }` shape
-            // — the upstream's own result is only worth a second look on a
-            // *failed* receipt, the failed branch just below.
+            // "ok" step record keeps `used`'s original `{ record, step }`
+            // shape — the upstream's own result is only worth a second look
+            // on a *failed* step record, the failed branch just below.
             ...(usedEntries.length > 0 ? { used: omitUsedResults(usedEntries) } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
@@ -1099,7 +1100,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
-            receipt_id: begun.receiptId,
+            record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
             args: rawArgs,
@@ -1119,7 +1120,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             started_at: stepStartedAt.toISOString(),
             finished_at: stepFinishedAt.toISOString(),
             evidence: {
-              dir: begun.relativeReceiptDir,
+              dir: begun.relativeRecordDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
@@ -1128,9 +1129,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             observed,
             mutates,
             // Unstripped here, unlike the "ok" branch above: a failed
-            // step's receipt is exactly
+            // step's step record is exactly
             // where a reader most needs "what upstream value did this read",
-            // without opening a second receipt.json to find out.
+            // without opening a second record.json to find out.
             ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
             ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
@@ -1146,11 +1147,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           };
 
-    // Redacted once, as one object, same as `nuka do`: receipt.json must
+    // Redacted once, as one object, same as `nuka do`: record.json must
     // never be able to disagree with the
     // scenario record about what got redacted.
-    const redactedReceipt = redact(receipt, secrets) as Receipt;
-    await writeReceipt(begun.receiptDir, redactedReceipt);
+    const redactedStepRecord = redact(stepRecord, secrets) as StepRecord;
+    await writeStepRecord(begun.recordDir, redactedStepRecord);
 
     if (status === "failed") {
       scenarioFailed = true;
@@ -1159,11 +1160,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       {
         text: pickleStep.text,
         status: status === "ok" ? "passed" : "failed",
-        receipt: begun.receiptId,
+        record: begun.recordId,
         ...(status === "failed" ? { error: { message: errorMessage } } : {}),
       },
       stepFinishedAt.getTime() - stepStartedAt.getTime(),
-      redactedReceipt,
+      redactedStepRecord,
     );
   }
 
@@ -1213,7 +1214,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     (hook) => hook.type === "after_step" && hookApplies(hook.tags, pickleTags),
   );
 
-  // Hooks get their own boundary, never a step's own receipt dir
+  // Hooks get their own boundary, never a step's own step record dir
   // (a hook's own network stays outside any step
   // boundary) — redirected to the scenario dir itself, the same place
   // `httpLogDir` already starts out pointed at before any step's own
@@ -1230,7 +1231,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Same per-boundary point for the World's own instrumentation — a
     // Before hook's own World reads/writes get tallied here but are
     // discarded by the next `beginStep()` call (the next Before hook, or
-    // step 1's own), so they are never attributed to any step's receipt,
+    // step 1's own), so they are never attributed to any step's step record,
     // the same isolation `observed`/`used` already give hooks.
     worldInstrumentation.beginStep();
     // Each hook gets its own declared
@@ -1322,7 +1323,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * branch, and the general per-step backstop catch's `began !== null` arm.
    * A step that never began at all (undefined, ambiguous, the read-only
    * declared-mutates refusal, or the backstop's own `began === null` arm)
-   * has no receipt and no "after" for this hook to run at, so none of those
+   * has no step record and no "after" for this hook to run at, so none of those
    * call this function — the same reasoning already covers a step this
    * scenario skipped outright (the `if (scenarioFailed)` check at the very
    * top of the loop below never reaches this function either, since it
@@ -1355,10 +1356,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     for (const hook of afterStepHooks) {
       // Same boundary redirect as the Before/After loops (this file's own
       // header): a hook's own
-      // network activity stays outside any step's own receipt boundary.
+      // network activity stays outside any step's own step record boundary.
       // Without this, an AfterStep hook's own requests would keep writing
       // into the step it just ran after's own http.jsonl, even though that
-      // step's receipt (and its `observed` tally) was already built and
+      // step's step record (and its `observed` tally) was already built and
       // written by `finishExecutedStep` before this function is ever
       // called. `stepIndex` is folded into both the title and the chunk
       // file name — this same hook can run again
@@ -1437,13 +1438,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // one already failed never executes, so it never reaches any of the
       // three `runAfterStepHooks` call sites below either — this `continue`
       // is exactly where that "no after for a skipped step" boundary lives.
-      pushStepRecord({ text: pickleStep.text, status: "skipped", receipt: null }, 0);
+      pushStepRecord({ text: pickleStep.text, status: "skipped", record: null }, 0);
       continue;
     }
 
     // General per-step backstop: everything from matching this step's text
     // through
-    // writing its receipt sits inside the try below, so ANY unexpected
+    // writing its step record sits inside the try below, so ANY unexpected
     // throw still leaves this pickle's own scenario record written
     // (docs/spec.md "Running": once a pickle begins executing, every step
     // gets a record entry) instead of crashing the whole `nuka run`
@@ -1459,39 +1460,39 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // refusal) — each keeps its own branch, unchanged; this is only the
     // last net underneath all of them. `began` mirrors the exact point
     // (marked below) this function already
-    // treats as "a receipt is always written from here on": a throw
-    // before it is "never began" (`receipt: null`, the same family as
+    // treats as "a step record is always written from here on": a throw
+    // before it is "never began" (`record: null`, the same family as
     // undefined/ambiguous/the read-only declared-mutates refusal just
-    // below), while a throw at or after it still gets a receipt written,
-    // exactly like any other execution-phase failure this function
-    // already handles inline.
+    // below), while a throw at or after it still gets a step record
+    // written, exactly like any other execution-phase failure this
+    // function already handles inline.
     //
     // This iteration's own start, read by the
     // `began === null` arm of the backstop catch below — the one step
     // outcome with no more precise start time available (nothing "began"
     // yet in the sense above), so its own progress line reports elapsed
-    // time since matching this step started rather than since some receipt
-    // that was never opened.
+    // time since matching this step started rather than since some step
+    // record that was never opened.
     const stepLoopStartedAt = new Date();
     let began: {
-      readonly receiptId: string;
-      readonly receiptDir: string;
-      readonly relativeReceiptDir: string;
+      readonly recordId: string;
+      readonly recordDir: string;
+      readonly relativeRecordDir: string;
       readonly stepName: string;
       readonly startedAt: Date;
       // This step's own declared `mutates` (typed) or `null` (compat) —
       // carried on `began` so the general backstop catch below (which has
       // no `entry` in scope of its own) can still put the right value on a
-      // receipt it has to write.
+      // step record it has to write.
       readonly mutates: boolean | null;
       rawArgs: unknown;
     } | null = null;
     // Every `config.fixtures` entry this step's own bag actually resolved —
     // hoisted to this scope, alongside
     // `began`, so the general backstop catch below can still put it on the
-    // receipt it writes for an unexpected throw that happens *after*
+    // step record it writes for an unexpected throw that happens *after*
     // fixture resolution succeeded but before `finishExecutedStep` runs.
-    // `[]` (hence omitted on the receipt) for a compat step, or a typed
+    // `[]` (hence omitted on the step record) for a compat step, or a typed
     // step whose own fixture resolution never ran at all (undefined/
     // ambiguous/binding failure/args validation failure).
     let fixtureUsage: FixtureUsageEntry[] = [];
@@ -1505,7 +1506,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "undefined",
-            receipt: null,
+            record: null,
             error: { message: undefinedStepMessage(pickleStep.text) },
           },
           0,
@@ -1519,7 +1520,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "ambiguous",
-            receipt: null,
+            record: null,
             error: { message: ambiguousStepMessage(pickleStep.text, outcome.stepNames) },
           },
           0,
@@ -1537,8 +1538,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       if (entry.kind === "typed") {
         // Read-only policy, declared-mutates refusal: a "never began"
         // outcome, alongside undefined/
-        // ambiguous above — no receipt id or directory is created, and the
-        // rest of the scenario is skipped, matching cli/do.ts's own
+        // ambiguous above — no step record id or directory is created, and
+        // the rest of the scenario is skipped, matching cli/do.ts's own
         // setup-phase refusal for the same policy. `mutates: false` steps
         // are unaffected regardless of policy — and so is a step that goes
         // on to actually write
@@ -1554,7 +1555,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             {
               text: pickleStep.text,
               status: "failed",
-              receipt: null,
+              record: null,
               error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
             },
             0,
@@ -1562,23 +1563,23 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           continue;
         }
 
-        // --- This step's execution has begun: a receipt is always written
-        // from here, whatever happens (mirrors cli/do.ts's own execution
-        // phase). ---
-        const receiptId = generateReceiptId();
-        const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
-        const receiptDir = path.join(rootDir, relativeReceiptDir);
-        await mkdir(receiptDir, { recursive: true });
+        // --- This step's execution has begun: a step record is always
+        // written from here, whatever happens (mirrors cli/do.ts's own
+        // execution phase). ---
+        const recordId = generateStepRecordId();
+        const relativeRecordDir = path.join(config.stateDir, "records", "steps", recordId);
+        const recordDir = path.join(rootDir, relativeRecordDir);
+        await mkdir(recordDir, { recursive: true });
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — the trace chunk `ctx.page()` opens lazily
         // during this step, if it does, self-identifies the same way.
-        await contextHandle.beginStep(receiptDir, stepChunkTitle(stepKeywords, pickleStep));
+        await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));
         worldInstrumentation.beginStep();
-        declaredCollector.beginStep(receiptDir);
+        declaredCollector.beginStep(recordDir);
         began = {
-          receiptId,
-          receiptDir,
-          relativeReceiptDir,
+          recordId,
+          recordDir,
+          relativeRecordDir,
           stepName: outcome.stepName,
           startedAt: new Date(),
           mutates: entry.step.mutates,
@@ -1678,7 +1679,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
         await finishExecutedStep(
           pickleStep,
-          { receiptId, receiptDir, relativeReceiptDir },
+          { recordId, recordDir, relativeRecordDir },
           stepStartedAt,
           outcome.stepName,
           status,
@@ -1696,19 +1697,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // positional arguments —
         // no args/returns schema exists to validate against, so there is no
         // binding-failure branch here the way there is for a typed step.
-        const receiptId = generateReceiptId();
-        const relativeReceiptDir = path.join(config.stateDir, "receipts", receiptId);
-        const receiptDir = path.join(rootDir, relativeReceiptDir);
-        await mkdir(receiptDir, { recursive: true });
+        const recordId = generateStepRecordId();
+        const relativeRecordDir = path.join(config.stateDir, "records", "steps", recordId);
+        const recordDir = path.join(rootDir, relativeRecordDir);
+        await mkdir(recordDir, { recursive: true });
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — same as the typed branch above.
-        await contextHandle.beginStep(receiptDir, stepChunkTitle(stepKeywords, pickleStep));
+        await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));
         worldInstrumentation.beginStep();
-        declaredCollector.beginStep(receiptDir);
+        declaredCollector.beginStep(recordDir);
         began = {
-          receiptId,
-          receiptDir,
-          relativeReceiptDir,
+          recordId,
+          recordDir,
+          relativeRecordDir,
           stepName: outcome.stepName,
           startedAt: new Date(),
           // Compat has no `mutates` declaration at all — `null`, never
@@ -1718,8 +1719,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         };
 
         // Positional args: the matched values, then — when the pickle step
-        // carries a table or docstring — one more argument. The receipt's
-        // own `args` stays JSON-plain
+        // carries a table or docstring — one more argument. The step
+        // record's own `args` stays JSON-plain
         // (`string[][]`/`string`); the *function call* gets a richer
         // `DataTable` wrapping those same rows (a raw `string[][]` would
         // break existing glue calling
@@ -1788,13 +1789,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         }
 
         // `result: null` unconditionally on a non-throwing run (docs/
-        // spec.md "Receipts": "Compat steps record result: null") — never
+        // spec.md "Records": "Compat steps record result: null") — never
         // whatever `fn` itself happened to return, and no `chain` entry
         // (compat has no validated result to make citable via
         // `ctx.resultOf`, and no Step object to key one on).
         await finishExecutedStep(
           pickleStep,
-          { receiptId, receiptDir, relativeReceiptDir },
+          { recordId, recordDir, relativeRecordDir },
           stepStartedAt,
           outcome.stepName,
           status,
@@ -1811,9 +1812,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     } catch (error) {
       // The backstop itself (see the comment above `began`): anything that
       // threw without ever being turned into a `status`/`errorMessage` pair
-      // above lands here. `began` says whether this step's own receipt phase
-      // had started by then, so the same "never began" vs "always gets a
-      // receipt" boundary this function already draws elsewhere still holds.
+      // above lands here. `began` says whether this step's own step record
+      // phase had started by then, so the same "never began" vs "always
+      // gets a step record" boundary this function already draws elsewhere
+      // still holds.
       scenarioFailed = true;
       const message = error instanceof Error ? error.message : String(error);
       if (began === null) {
@@ -1821,55 +1823,56 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "failed",
-            receipt: null,
+            record: null,
             error: { message },
           },
           Date.now() - stepLoopStartedAt.getTime(),
         );
       } else {
         // Same "close this step's own chunk before reading anything from
-        // its receipt dir" call `finishExecutedStep` makes (this file's own
+        // its step record dir" call `finishExecutedStep` makes (this
+        // file's own
         // header) — a chunk can be open here
         // too: `began !== null` means this step's own `beginStep` already
         // ran, so `ctx.page()` could already have opened one before the
         // uncaught throw this backstop exists for.
         await contextHandle.endStep();
-        const traceEvidence = await collectTraceEvidence(began.receiptDir, onUnknownTraceVersion);
+        const traceEvidence = await collectTraceEvidence(began.recordDir, onUnknownTraceVersion);
         const stepFinishedAt = new Date();
-        const httpLogExists = existsSync(path.join(began.receiptDir, "http.jsonl"));
+        const httpLogExists = existsSync(path.join(began.recordDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
         const usedEntries = contextHandle.usedSnapshot();
         // Same backstop-only read as `observed`/`used` just above —
         // whatever labels this step
-        // reached before the uncaught throw still belong on its receipt.
+        // reached before the uncaught throw still belong on its step record.
         const sectionLabels = contextHandle.sectionsSnapshot();
         // Same backstop-only read again, for `polls` — a poll this step
         // was mid-wait on when the uncaught throw
         // hit still finished (`finally` in poll.ts's own loop guarantees
-        // that), so its own record still belongs on this receipt.
+        // that), so its own record still belongs on this step record.
         const pollRecords = contextHandle.pollsSnapshot();
         // Same backstop-only read again, for `required_env` — whatever
         // names this step
-        // required before the uncaught throw still belong on its receipt.
+        // required before the uncaught throw still belong on its step record.
         const requiredEnv = contextHandle.envReadsSnapshot();
         // Same backstop-only read again, for `page_events` — whatever the
         // browser context already saw before the
-        // uncaught throw still belongs on this receipt.
+        // uncaught throw still belongs on this step record.
         const pageEvents = contextHandle.pageEventsSnapshot();
         // Same backstop-only read again, for `http_omitted` — whatever the
         // page already left
         // out of http.jsonl before the uncaught throw still belongs on this
-        // receipt.
+        // step record.
         const httpOmitted = contextHandle.httpOmittedSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
         // Same backstop-only read again, for `evidence.attach`/`.path` —
         // whatever this step already wrote before the
-        // uncaught throw still belongs on its receipt.
+        // uncaught throw still belongs on its step record.
         const evidenceSnapshot = await contextHandle.evidenceSnapshot();
         const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
-        const receipt: Receipt = {
-          receipt_id: began.receiptId,
+        const stepRecord: StepRecord = {
+          record_id: began.recordId,
           step: began.stepName,
           kind: "run",
           args: began.rawArgs,
@@ -1886,7 +1889,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           started_at: began.startedAt.toISOString(),
           finished_at: stepFinishedAt.toISOString(),
           evidence: {
-            dir: began.relativeReceiptDir,
+            dir: began.relativeRecordDir,
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
             ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
@@ -1908,24 +1911,24 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           ...(truncated !== undefined ? { truncated } : {}),
           // `fixtureUsage` (hoisted above, alongside `began`): whatever this
           // step's own bag had already resolved before the uncaught throw
-          // this backstop exists for still belongs on its receipt.
+          // this backstop exists for still belongs on its step record.
           ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
         };
-        const redactedReceipt = redact(receipt, secrets) as Receipt;
-        await writeReceipt(began.receiptDir, redactedReceipt);
+        const redactedStepRecord = redact(stepRecord, secrets) as StepRecord;
+        await writeStepRecord(began.recordDir, redactedStepRecord);
         pushStepRecord(
           {
             text: pickleStep.text,
             status: "failed",
-            receipt: began.receiptId,
+            record: began.recordId,
             error: { message },
           },
           stepFinishedAt.getTime() - began.startedAt.getTime(),
-          redactedReceipt,
+          redactedStepRecord,
         );
         // `began !== null`: this step's own execution had already begun (a
-        // receipt was written above) before the uncaught throw this backstop
-        // exists for — so, unlike the `began === null` arm just above (never
+        // step record was written above) before the uncaught throw this
+        // backstop exists for — so, unlike the `began === null` arm just above (never
         // began at all), this step did execute, and AfterStep runs after it
         // exactly like the typed/compat branches' own calls further up.
         await runAfterStepHooks(stepIndex, "failed");
@@ -2087,8 +2090,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       screenshots: browserEvidence.screenshots,
       // No scenario-level `trace` any more:
       // the whole-scenario recording this used to report is retired, split
-      // into each step's own `receipt.evidence.trace` instead (this file's
-      // own header). `ScenarioEvidence.trace` (record-types.ts) stays typed
+      // into each step's own step record `evidence.trace` instead (this
+      // file's own header). `ScenarioEvidence.trace` (record-types.ts) stays typed
       // as optional for src/report/**'s own sake, but this executor never
       // sets it any more.
     },

@@ -8,11 +8,11 @@ import {
   selectAcceptableRun,
   type RunCondition,
 } from "../accept/select-run.js";
-import { MissingReceiptError, renderAcceptanceRecord, type AcceptedScenario } from "../accept/render-record.js";
+import { MissingStepRecordError, renderAcceptanceRecord, type AcceptedScenario } from "../accept/render-record.js";
 import { loadConfig } from "../config/load-config.js";
 import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment, type ResolvedEnvironment } from "../environment/resolve-environment.js";
 import { parseFeatureSource } from "../feature/load-features.js";
-import { readReceiptsForRecord } from "../report/receipts.js";
+import { readStepRecordsForScenario } from "../report/step-records.js";
 import { listDirtyPaths, probeGitState } from "../run/probe-git.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -22,8 +22,8 @@ import type { WritableSink } from "./writable-sink.js";
 // run-cli.ts so it's unit-testable without going through yargs (same split
 // as every other command). `accept` never executes
 // anything — src/run/run-scenario.ts is untouched by this file — it only
-// reads what `nuka run` already wrote (record.json/receipt.json under
-// `<stateDir>/scenarios/*`) and, if every one of the spec's seven refusal
+// reads what `nuka run` already wrote (record.json/step record.json under
+// `<stateDir>/records/scenarios/*`) and, if every one of the spec's seven refusal
 // conditions is clear, writes one markdown file beside the feature.
 //
 // The seven refusal conditions (docs/spec.md's own "refusal conditions" list) are checked in the order
@@ -160,7 +160,7 @@ function formatDirtyTreeRefusal(dirtyPaths: readonly string[], stateDir: string)
       : `nuka accept: the working tree is dirty, including paths under the state directory (${stateDir}/).`;
 
   return (
-    `${scopeSentence} That is where nukadoko writes on every \`nuka run\` (receipts, scenario records). ` +
+    `${scopeSentence} That is where nukadoko writes on every \`nuka run\` (step records, scenario records). ` +
     `\`nuka init\` gitignores it for that reason, so this project's .gitignore may be missing that entry, ` +
     `or ${stateDir}/ may be tracked on purpose. ${cta}`
   );
@@ -358,7 +358,7 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   const sortedGroup = [...group].sort((a, b) => a.line - b.line);
   const scenarios: AcceptedScenario[] = sortedGroup.map((record) => ({
     record,
-    receipts: readReceiptsForRecord(rootDir, record),
+    stepRecords: readStepRecordsForScenario(rootDir, record),
   }));
 
   let content: string;
@@ -377,7 +377,7 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
       scenarios,
     });
   } catch (error) {
-    if (error instanceof MissingReceiptError) {
+    if (error instanceof MissingStepRecordError) {
       stderr.write(`nuka accept: ${error.message}\n`);
       return 1;
     }

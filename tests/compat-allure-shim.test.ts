@@ -13,8 +13,8 @@ import {
 // Responsibility: m2d-allure-shim task spec's own coverage — the allure-js
 // runtime shim (src/compat/allure-runtime.ts) and the declared bucket it and
 // the World channel (src/compat/world.ts) both write into (src/compat/
-// declared.ts), surfaced on the receipt/hook-record's own `declared` field
-// (src/receipt/types.ts, src/run/record-types.ts):
+// declared.ts), surfaced on the step record/hook-record's own `declared` field
+// (src/record/types.ts, src/run/record-types.ts):
 //
 //   - compat glue calling the allure-js facade directly (the door's own
 //     main path — no import switch, `import ... from "allure-js-commons"`
@@ -22,21 +22,21 @@ import {
 //   - the World channel (`this.attach`/`log`/`link`, held-but-unread since
 //     m2b-compat-execution) now wired to the same collector;
 //   - a Before hook's own declared data landing on `record.hooks[].declared`
-//     instead of any step's own receipt;
+//     instead of any step's own step record;
 //   - a *typed* step importing the facade directly, proving collection is
 //     kind-independent;
 //   - a scenario with no facade/World-channel calls at all getting no
 //     `declared` field;
 //   - a declared label whose value is a configured secret getting redacted
-//     the same way any other receipt string does.
+//     the same way any other step record string does.
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("nuka run: allure-js runtime shim and the declared bucket", () => {
@@ -64,8 +64,8 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.declared).toEqual({
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.declared).toEqual({
       // ".txt": the fixture's own `attachment("evidence", "...", "text/plain")`
       // declares a contentType but no fileExtension — src/compat/allure-
       // runtime.ts now falls back to declared.ts's own
@@ -79,9 +79,9 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
       logs: ["a logged sub-step: passed", "a nested step: passed"],
     });
 
-    const receiptDir = path.join(rootDir, (receipt.evidence as { dir: string }).dir);
-    expect(existsSync(path.join(receiptDir, "evidence.txt"))).toBe(true);
-    const attachmentContent = await readFile(path.join(receiptDir, "evidence.txt"), "utf8");
+    const recordDir = path.join(rootDir, (stepRecord.evidence as { dir: string }).dir);
+    expect(existsSync(path.join(recordDir, "evidence.txt"))).toBe(true);
+    const attachmentContent = await readFile(path.join(recordDir, "evidence.txt"), "utf8");
     expect(attachmentContent).toBe("hello from compat");
   });
 
@@ -97,18 +97,18 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.declared).toEqual({
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.declared).toEqual({
       attachments: ["attachment.txt"],
       links: [{ url: "https://example.com/world-link", name: "world link" }],
       logs: ["a logged world line"],
     });
 
-    const receiptDir = path.join(rootDir, (receipt.evidence as { dir: string }).dir);
-    expect(existsSync(path.join(receiptDir, "attachment.txt"))).toBe(true);
+    const recordDir = path.join(rootDir, (stepRecord.evidence as { dir: string }).dir);
+    expect(existsSync(path.join(recordDir, "attachment.txt"))).toBe(true);
   });
 
-  it("a Before hook's own declared data lands on record.hooks[].declared, not the step's own receipt", async () => {
+  it("a Before hook's own declared data lands on record.hooks[].declared, not the step's own step record", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/hook-declared.feature"], {
       rootDir,
@@ -130,14 +130,14 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
       labels: [{ name: "hook-owner", value: "team-nukadoko" }],
     });
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.declared).toBeUndefined();
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.declared).toBeUndefined();
 
     const scenarioDir = path.join(rootDir, record.evidence.dir);
     expect(existsSync(path.join(scenarioDir, "hook-evidence.txt"))).toBe(true);
   });
 
-  it("a typed step importing the allure facade directly still gets declared on its own receipt (kind-independent)", async () => {
+  it("a typed step importing the allure facade directly still gets declared on its own step record (kind-independent)", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/typed-declared.feature"], {
       rootDir,
@@ -149,12 +149,12 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.declared).toEqual({
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.declared).toEqual({
       labels: [{ name: "typed-owner", value: "team-nukadoko" }],
     });
-    // Never present on a typed step's receipt (src/receipt/types.ts).
-    expect(receipt.world).toBeUndefined();
+    // Never present on a typed step's step record (src/record/types.ts).
+    expect(stepRecord.world).toBeUndefined();
   });
 
   it("a scenario with no facade/World-channel calls at all gets no declared field", async () => {
@@ -169,12 +169,12 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.declared).toBeUndefined();
-    expect(Object.keys(receipt)).not.toContain("declared");
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.declared).toBeUndefined();
+    expect(Object.keys(stepRecord)).not.toContain("declared");
   });
 
-  it("a declared label whose value is a configured secret is redacted, same as any other receipt string", async () => {
+  it("a declared label whose value is a configured secret is redacted, same as any other step record string", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/secret-declared.feature"], {
       rootDir,
@@ -186,21 +186,22 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.declared).toEqual({
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.declared).toEqual({
       labels: [{ name: "token", value: "{{secret.SHIM_SECRET}}" }],
     });
 
-    const receiptPath = path.join(
+    const stepRecordPath = path.join(
       rootDir,
       ".nukadoko",
-      "receipts",
-      record.steps[0].receipt,
-      "receipt.json",
+      "records",
+      "steps",
+      record.steps[0].record,
+      "record.json",
     );
-    const receiptText = await readFile(receiptPath, "utf8");
-    expect(receiptText).toContain("{{secret.SHIM_SECRET}}");
-    expect(receiptText).not.toContain("sekrit-declared-456");
+    const stepRecordText = await readFile(stepRecordPath, "utf8");
+    expect(stepRecordText).toContain("{{secret.SHIM_SECRET}}");
+    expect(stepRecordText).not.toContain("sekrit-declared-456");
 
     const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
     const recordText = await readFile(recordPath, "utf8");

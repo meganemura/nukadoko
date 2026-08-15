@@ -21,10 +21,10 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
-import { generateReceiptId } from "../receipt/receipt-id.js";
-import { readReceiptById } from "../receipt/read-receipt.js";
-import type { ErrorKind, Receipt } from "../receipt/types.js";
-import { writeReceipt } from "../receipt/write-receipt.js";
+import { generateStepRecordId } from "../record/record-id.js";
+import { readStepRecordById } from "../record/read-step-record.js";
+import type { ErrorKind, StepRecord } from "../record/types.js";
+import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact } from "../secrets/redact.js";
@@ -48,23 +48,25 @@ import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: `nuka do`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs (same split as vocabulary.ts).
-// Two phases, matching docs/spec.md's "Running"/"Receipts" split exactly:
+// Two phases, matching docs/spec.md's "Running"/"Records" split exactly:
 //
 //   1. Setup — malformed --args JSON, an unknown step name, a config/
 //      discovery error, an unknown `--env` name, a mutating step against a
 //      `policy: "read-only"` environment, an invalid `--session` name, a
 //      lock held by another live process, a malformed session file, a bad
-//      `--use <receipt-id>` (unknown id, a non-`"ok"` receipt, a receipt
-//      whose step names none of this step's `from` entries, or a missing
+//      `--use <record-id>` (unknown id, a non-`"ok"` step record, a step
+//      record whose step names none of this step's `from` entries, or a
+//      missing
 //      result key), or two `--use` values filling the
 //      same `from` key from two different candidate producers (the one
 //      ambiguity a scenario's own
 //      from-order guard would refuse that `nuka do` has no such guard to
-//      catch by itself). None of these write a receipt: the run never
-//      started, so there is nothing to attest to (a receipt for an execution
+//      catch by itself). None of these write a step record: the run never
+//      started, so there is nothing to attest to (a step record for an
+//      execution
 //      that never began would let a nonexistent run be cited later as if it
 //      had happened).
-//   2. Execution — from here a receipt is always written, whatever
+//   2. Execution — from here a step record is always written, whatever
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
 //      a step whose args and returns both validate and whose `run` doesn't
@@ -72,7 +74,7 @@ import type { WritableSink } from "./writable-sink.js";
 //      only ever sees the step's *declared* `mutates`, and that declaration
 //      is trusted — an otherwise-"ok" run
 //      that observed a network write in a read-only environment is no
-//      longer demoted for it; `receipt.observed` still records what
+//      longer demoted for it; `record.observed` still records what
 //      happened, it just doesn't decide `status` any more. `--use`'s own
 //      values, already resolved and validated in setup above, are actually
 //      applied here — merged into `parsedArgs` (`--args` still wins for a
@@ -84,7 +86,7 @@ import type { WritableSink } from "./writable-sink.js";
 // config loads and before anything session-related, because session paths
 // are now per-environment — the resolved
 // environment's name, not the raw `--env` string, is what every later
-// sessions/<env>/ path uses. The version probe runs once, at the very top of
+// cache/sessions/<env>/ path uses. The version probe runs once, at the very top of
 // the execution phase: metadata about the target, never
 // reachable from a step's own `run`, and its failure/timeout never fails the
 // run — only `target_version` is omitted, with one stderr warning line.
@@ -98,11 +100,11 @@ import type { WritableSink } from "./writable-sink.js";
 // covering every return path below it.
 //
 // This is also the one place a run's SecretSet is built and the one place a
-// receipt gets redacted:
+// step record gets redacted:
 // env is loaded and classified at the top of the execution phase against the
 // *effective* envFiles (top-level + the resolved environment's own), and
-// the finished receipt is redacted
-// once, as a whole object, before either receipt.json or the stdout copy is
+// the finished step record is redacted
+// once, as a whole object, before either record.json or the stdout copy is
 // written from it — never twice, independently, which could let the two
 // drift apart.
 
@@ -119,9 +121,9 @@ export interface RunDoOptions {
    * require a matching `environments` entry.
    */
   env: string | null;
-  /** `--use <receipt-id>` (repeatable), in the order given (docs/spec.md
+  /** `--use <record-id>` (repeatable), in the order given (docs/spec.md
    * "Single steps (the agent path)"): each fills whichever
-   * of this step's own `from` keys that receipt's step is named by. Empty
+   * of this step's own `from` keys that step record's step is named by. Empty
    * when `--use` was never given — the common case, and unrelated to `from`
    * being empty too (a step can have `from` entries and simply be run with
    * every key passed through `--args` instead, same as under a scenario). */
@@ -228,7 +230,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // step by name — a compat step has no typed contract (no args/returns
     // schema, no validated result), so there is nothing for `nuka do` to
     // validate or run in isolation (docs/spec.md "What compat steps lack").
-    // This is a setup failure, not an execution one: no receipt is written.
+    // This is a setup failure, not an execution one: no step record is written.
     if (entry.kind === "compat") {
       stderr.write(
         `Step "${name}" is a compat step and has no typed contract, so it cannot be run individually; promote it to defineStep to run it via \`nuka do\` (docs/spec.md "What compat steps lack")\n`,
@@ -256,7 +258,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // all") — an unregistered upstream, an args/returns key `from` names
     // that doesn't actually exist, or an upstream that isn't even a Step.
     // Fatal like ConfigError/DuplicateStepError above: this step's execution
-    // never began, so no receipt is written for it.
+    // never began, so no step record is written for it.
     const fromIssues = validateStepFrom(name, entry.step, isRegisteredStep);
     if (fromIssues.length > 0) {
       stderr.write(`${formatFromIssues(fromIssues)}\n`);
@@ -289,9 +291,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
-    // `--use <receipt-id>` (docs/spec.md "Single steps
+    // `--use <record-id>` (docs/spec.md "Single steps
     // (the agent path)") — resolved fully here, in setup: an unknown id, a
-    // non-`"ok"` receipt, a receipt whose step names none of this step's
+    // non-`"ok"` step record, a step record whose step names none of this
+    // step's
     // `from` entries, or a missing result key are each a setup failure, the
     // same family as the `from` structural check just above. Only
     // validated/read here, not yet applied — applying it (and recording it
@@ -300,9 +303,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // actually exists; this loop just fails fast before anything is written
     // if any `--use` value is bad.
     const resolvedUses: ResolveUseSuccess[] = [];
-    for (const receiptId of use) {
-      const resolved = resolveUse(receiptId, entry.step, stepNameOf, (id) =>
-        readReceiptById(rootDir, config.stateDir, id),
+    for (const recordId of use) {
+      const resolved = resolveUse(recordId, entry.step, stepNameOf, (id) =>
+        readStepRecordById(rootDir, config.stateDir, id),
       );
       if (!resolved.ok) {
         stderr.write(`${resolved.message}\n`);
@@ -319,11 +322,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // scenario, no pickle, nothing for `checkFromOrder` to walk), so this is
     // the only place left to catch it. Every key filled by more than one
     // `resolvedUses` entry must trace back to the *same* producer step
-    // (`resolved.used.step`, already the receipt's own step name — every key
-    // one `resolveUse` call fills comes from that one receipt, so it is also
+    // (`resolved.used.step`, already the step record's own step name — every
+    // key
+    // one `resolveUse` call fills comes from that one step record, so it is
+    // also
     // that fill's own candidate producer); two different producers for one
     // key is refused here, before anything is written. Two different
-    // receipts of the *same* producer filling the same key is a different,
+    // step records of the *same* producer filling the same key is a different,
     // pre-existing case, unrelated and unchanged here — the
     // application loop below already resolves it by taking the first one, as
     // it always has.
@@ -345,7 +350,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     // Read-only refusal is a setup failure, not an execution failure: the
     // step never runs, so nothing was
-    // executed, so no receipt is written — writing one would let a run that
+    // executed, so no step record is written — writing one would let a run that
     // never happened be cited later as if it had. Read-only steps
     // (`mutates: false`) are unaffected regardless of policy.
     if (resolvedEnv.policy === "read-only" && entry.step.mutates) {
@@ -355,9 +360,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
-    // --- Execution phase: a receipt is always written from here on. ---
-    const receiptId = generateReceiptId();
-    const relativeDir = path.join(config.stateDir, "receipts", receiptId);
+    // --- Execution phase: a step record is always written from here on. ---
+    const recordId = generateStepRecordId();
+    const relativeDir = path.join(config.stateDir, "records", "steps", recordId);
     const evidenceDir = path.join(rootDir, relativeDir);
     await mkdir(evidenceDir, { recursive: true });
 
@@ -450,13 +455,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             filledAnyKey = true;
           }
         }
-        // Only a receipt actually drawn from lands in `used` (docs/spec.md
-        // "Single steps (the agent path)": "the receipt ids actually drawn
-        // from land in this execution's own `used`") — one whose every
+        // Only a step record actually drawn from lands in `used` (docs/spec.md
+        // "Single steps (the agent path)": the step record ids actually
+        // drawn from land in this execution's own `used`) — one whose every
         // matching key was already overridden by `--args` contributed
         // nothing to this run, so it is not cited.
         if (filledAnyKey) {
-          contextHandle.recordUsed(resolved.used.receipt, resolved.used.step, resolved.used.result);
+          contextHandle.recordUsed(resolved.used.record, resolved.used.step, resolved.used.result);
         }
       }
     }
@@ -474,7 +479,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // run-scenario.ts).
     let errorKind: ErrorKind | undefined;
     // Every `config.fixtures` entry this step's own bag actually resolved —
-    // `[]` (hence omitted on the receipt)
+    // `[]` (hence omitted on the step record)
     // when args validation failed before fixture resolution ever ran.
     let fixtureUsage: FixtureUsageEntry[] = [];
 
@@ -537,7 +542,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // Every `ctx.poll` call that finished during this execution, read the
     // same "after execution, whatever its outcome" way `sections` is right
     // above — a poll that timed out or whose `fn` threw still finished, in
-    // the sense that matters here, and its own record is what a receipt for
+    // the sense that matters here, and its own record is what a step record for
     // a failed step needs most.
     const polls = contextHandle.pollsSnapshot();
     // Recorded even on a `MissingEnvError` failure (that throw happens
@@ -545,7 +550,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // "read the tally after execution, whatever its outcome" shape as
     // `observed`/`sections`.
     const requiredEnv = contextHandle.envReadsSnapshot();
-    // Every receipt `--use` actually drew a value from, in the order given
+    // Every step record `--use` actually drew a value from, in the order given
     // — the same collector `ctx.resultOf`
     // itself would write into, read the same "after execution" way
     // `observed`/`sections`/`requiredEnv` are, right above. Under `do`,
@@ -601,7 +606,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // Last resort: browser-evidence.ts and create-context.ts's own dispose
       // already swallow their teardown failures, but this catch is the final
       // backstop so a failure neither of them anticipated still can't take
-      // the receipt down with it (docs/spec.md "Receipts": a receipt is
+      // the step record down with it (docs/spec.md "Records": a step record is
       // written for every execution that started). No evidence file is known
       // to exist in that case, so none is listed, and there is nothing to
       // persist for the session either.
@@ -615,7 +620,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // out of it here.
     const traceEvidence = await collectTraceEvidence(evidenceDir, createTraceVersionWarner(stderr));
     // Combines `traceEvidence`'s own `{ actions }` truncation with
-    // `evidenceSnapshot`'s into the receipt's single
+    // `evidenceSnapshot`'s into the step record's single
     // top-level `truncated` field — see `mergeTruncated`'s own doc comment
     // (src/context/evidence.ts) for why this is one shared function rather
     // than two independent spreads.
@@ -633,16 +638,16 @@ export async function runDo(options: RunDoOptions): Promise<number> {
           storageStateToPersist,
         );
       } catch {
-        // Persisting the session must not cost the receipt, mirroring
+        // Persisting the session must not cost the step record, mirroring
         // dispose()'s own fault tolerance above; a write failure here just
         // leaves the session's previous file (if any) in place.
       }
     }
 
-    const receipt: Receipt =
+    const stepRecord: StepRecord =
       status === "ok"
         ? {
-            receipt_id: receiptId,
+            record_id: recordId,
             step: name,
             kind: "do",
             args: parsedArgs,
@@ -662,7 +667,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             observed,
             mutates: entry.step.mutates,
             // `omitUsedResults`: an
-            // "ok" receipt keeps `used`'s original `{ receipt, step }` shape
+            // "ok" step record keeps `used`'s original `{ record, step }` shape
             // — see the failed branch just below for the case that keeps
             // the upstream's own result.
             ...(used.length > 0 ? { used: omitUsedResults(used) } : {}),
@@ -676,7 +681,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
-            receipt_id: receiptId,
+            record_id: recordId,
             step: name,
             kind: "do",
             args: parsedArgs,
@@ -702,9 +707,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             },
             observed,
             // Unstripped here, unlike the "ok" branch above: a failed
-            // step's receipt is
+            // step's step record is
             // exactly where a reader most needs "what upstream value did
-            // this `--use` draw on", without opening a second receipt.json.
+            // this `--use` draw on", without opening a second record.json.
             ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
             ...(polls.length > 0 ? { polls } : {}),
@@ -718,15 +723,15 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     // Redacted once, as one object — args/result/error.message and every
     // other field alike — then that single redacted object is what both
-    // exits show: receipt.json and the
+    // exits show: record.json and the
     // stdout copy must never be able to disagree about what got redacted.
     // `redact` is structurally shape-preserving (only string leaves ever
     // change), so this cast just tells the compiler what's already true.
-    const redactedReceipt = redact(receipt, secrets) as Receipt;
+    const redactedStepRecord = redact(stepRecord, secrets) as StepRecord;
 
-    await writeReceipt(evidenceDir, redactedReceipt);
+    await writeStepRecord(evidenceDir, redactedStepRecord);
 
-    stdout.write(`${JSON.stringify(redactedReceipt, null, 2)}\n`);
+    stdout.write(`${JSON.stringify(redactedStepRecord, null, 2)}\n`);
     return status === "ok" ? 0 : 1;
   } finally {
     // Released regardless of which path above returned — setup failure,

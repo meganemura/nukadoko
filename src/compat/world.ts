@@ -170,7 +170,7 @@ export function setWorldConstructor(ctor: WorldConstructor): void {
 /** What `instantiateWorldForPickle` hands back: the constructed World a
  * compat step/hook runs against, plus the instrumentation handle
  * src/run/run-scenario.ts calls at each step boundary (`beginStep()`) and
- * reads (`snapshot()`) to build that step's receipt's `world` field. Two
+ * reads (`snapshot()`) to build that step's step record's `world` field. Two
  * separate values rather than one augmented object: the instrumentation
  * handle is executor-only, the same
  * "a step cannot see or reset its own observation" rule create-context.ts's

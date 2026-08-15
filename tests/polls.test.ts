@@ -4,21 +4,21 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `ctx.poll`'s receipt-side recording end to end, against
-// tests/fixtures/polls-project (ctx-poll-receipt task spec) — a no-op wait
+// Responsibility: `ctx.poll`'s step-record-side recording end to end, against
+// tests/fixtures/polls-project (ctx-poll-step-record task spec) — a no-op wait
 // (attempts: 1) reading differently from a genuinely retried one (attempts
 // >= 2, waited_ms > 0), a timed-out or throwing poll still landing on the
-// failed step's own receipt (the whole reason this field exists), omission
+// failed step's own step record (the whole reason this field exists), omission
 // when a step never calls it, the `beginStep` reset not letting one step's
 // polls bleed into a sibling's within the same `nuka run` pickle, `nuka do`
 // recording the same way `nuka run` does, and completion order (not call
 // order) for more than one poll in a single step. `tests/poll.test.ts`
 // covers `ctx.poll`'s own retry-loop behavior; this file is only about what
-// lands on the receipt.
+// lands on the step record.
 //
 // Each entry's own `at` (fb4-evidence-time task spec, item 4) is checked via
 // `expectPollAt` below: not just that it parses as a date, but that it falls
-// inside the receipt's own `started_at`/`finished_at` span — the same
+// inside the step record's own `started_at`/`finished_at` span — the same
 // ordering check `tests/sections.test.ts` applies to `sections`, since both
 // exist to share one timeline.
 
@@ -26,19 +26,19 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
-/** Checks every `receipt.polls[].at` both parses as a date and falls inside
- * this same receipt's `started_at`/`finished_at` span (fb4-evidence-time
+/** Checks every `stepRecord.polls[].at` both parses as a date and falls inside
+ * this same step record's `started_at`/`finished_at` span (fb4-evidence-time
  * task spec: value ordering, not only format — see this file's own
  * header). */
-function expectPollAtWithinReceipt(receipt: Record<string, unknown>): void {
-  const polls = receipt.polls as Array<{ at: string }> | undefined;
-  const startedAt = Date.parse(receipt.started_at as string);
-  const finishedAt = Date.parse(receipt.finished_at as string);
+function expectPollAtWithinStepRecord(stepRecord: Record<string, unknown>): void {
+  const polls = stepRecord.polls as Array<{ at: string }> | undefined;
+  const startedAt = Date.parse(stepRecord.started_at as string);
+  const finishedAt = Date.parse(stepRecord.finished_at as string);
   for (const entry of polls ?? []) {
     const at = Date.parse(entry.at);
     expect(Number.isNaN(at)).toBe(false);
@@ -47,7 +47,7 @@ function expectPollAtWithinReceipt(receipt: Record<string, unknown>): void {
   }
 }
 
-describe("ctx.poll receipts", () => {
+describe("ctx.poll step records", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -69,11 +69,11 @@ describe("ctx.poll receipts", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(receipt.polls).toEqual([
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(stepRecord.polls).toEqual([
       { at: expect.any(String), attempts: 1, waited_ms: expect.any(Number), outcome: "resolved" },
     ]);
-    expectPollAtWithinReceipt(receipt);
+    expectPollAtWithinStepRecord(stepRecord);
   });
 
   it("nuka run: a poll that retries records attempts >= 2 and waited_ms > 0", async () => {
@@ -86,8 +86,8 @@ describe("ctx.poll receipts", () => {
 
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    const polls = receipt.polls as Array<{ attempts: number; waited_ms: number; outcome: string }>;
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const polls = stepRecord.polls as Array<{ attempts: number; waited_ms: number; outcome: string }>;
     expect(polls).toHaveLength(1);
     expect(polls[0]!.attempts).toBeGreaterThanOrEqual(2);
     expect(polls[0]!.waited_ms).toBeGreaterThan(0);
@@ -105,9 +105,9 @@ describe("ctx.poll receipts", () => {
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(receipt.status).toBe("failed");
-    const polls = receipt.polls as Array<{ outcome: string }>;
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(stepRecord.status).toBe("failed");
+    const polls = stepRecord.polls as Array<{ outcome: string }>;
     expect(polls).toHaveLength(1);
     expect(polls[0]!.outcome).toBe("timed_out");
   });
@@ -123,15 +123,15 @@ describe("ctx.poll receipts", () => {
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(receipt.status).toBe("failed");
-    const polls = receipt.polls as Array<{ attempts: number; outcome: string }>;
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(stepRecord.status).toBe("failed");
+    const polls = stepRecord.polls as Array<{ attempts: number; outcome: string }>;
     expect(polls).toHaveLength(1);
     expect(polls[0]!.outcome).toBe("failed");
     expect(polls[0]!.attempts).toBe(1);
   });
 
-  it("nuka run: a step that never calls ctx.poll has no polls key on its receipt", async () => {
+  it("nuka run: a step that never calls ctx.poll has no polls key on its step record", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/polls.feature:15"], {
       rootDir,
@@ -142,9 +142,9 @@ describe("ctx.poll receipts", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    expect(receipt.polls).toBeUndefined();
-    expect(Object.keys(receipt)).not.toContain("polls");
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    expect(stepRecord.polls).toBeUndefined();
+    expect(Object.keys(stepRecord)).not.toContain("polls");
   });
 
   it("nuka run: polls do not bleed across steps sharing one scenario's ctx (beginStep reset regression)", async () => {
@@ -160,10 +160,10 @@ describe("ctx.poll receipts", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const alphaReceipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    const betaReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
 
-    expect(alphaReceipt.polls).toEqual([
+    expect(alphaStepRecord.polls).toEqual([
       {
         description: "alpha-only",
         at: expect.any(String),
@@ -172,7 +172,7 @@ describe("ctx.poll receipts", () => {
         outcome: "resolved",
       },
     ]);
-    expect(betaReceipt.polls).toEqual([
+    expect(betaStepRecord.polls).toEqual([
       {
         description: "beta-only",
         at: expect.any(String),
@@ -181,8 +181,8 @@ describe("ctx.poll receipts", () => {
         outcome: "resolved",
       },
     ]);
-    expectPollAtWithinReceipt(alphaReceipt);
-    expectPollAtWithinReceipt(betaReceipt);
+    expectPollAtWithinStepRecord(alphaStepRecord);
+    expectPollAtWithinStepRecord(betaStepRecord);
   });
 
   it("nuka run: multiple polls in one step land in completion order, not call order", async () => {
@@ -195,8 +195,8 @@ describe("ctx.poll receipts", () => {
 
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt as string);
-    const polls = receipt.polls as Array<{ description?: string }>;
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const polls = stepRecord.polls as Array<{ description?: string }>;
     expect(polls).toHaveLength(2);
     // The outer poll is called first, but its own `fn` awaits the inner
     // poll before returning — the inner poll finishes first and is recorded
@@ -204,7 +204,7 @@ describe("ctx.poll receipts", () => {
     expect(polls.map((entry) => entry.description)).toEqual(["inner", "outer"]);
   });
 
-  it("nuka do: ctx.poll calls land on the receipt the same way as under nuka run", async () => {
+  it("nuka do: ctx.poll calls land on the step record the same way as under nuka run", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["do", "poll-resolves-first-try", "--args", "{}"], {
       rootDir,
@@ -213,15 +213,15 @@ describe("ctx.poll receipts", () => {
     });
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
-    expect(receipt.polls).toEqual([
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.polls).toEqual([
       { at: expect.any(String), attempts: 1, waited_ms: expect.any(Number), outcome: "resolved" },
     ]);
-    expectPollAtWithinReceipt(receipt);
+    expectPollAtWithinStepRecord(stepRecord);
   });
 
-  it("nuka do: a step that never calls ctx.poll has no polls key on its receipt", async () => {
+  it("nuka do: a step that never calls ctx.poll has no polls key on its step record", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["do", "no-polls", "--args", "{}"], {
       rootDir,
@@ -230,8 +230,8 @@ describe("ctx.poll receipts", () => {
     });
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
-    expect(receipt.polls).toBeUndefined();
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.polls).toBeUndefined();
   });
 });

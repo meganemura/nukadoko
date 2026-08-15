@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderAcceptanceRecord, type AcceptedScenario, type RenderAcceptanceRecordOptions } from "../src/accept/render-record.js";
-import type { Receipt } from "../src/receipt/types.js";
+import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 
 // Responsibility: unit tests for render-record.ts's `renderHook`/`hookLabel`
@@ -30,7 +30,7 @@ function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
     finished_at: "2026-08-01T00:00:03.000Z",
     steps: [],
     hooks: [],
-    evidence: { dir: ".nukadoko/scenarios/scn-1", screenshots: [] },
+    evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
     ...overrides,
   };
 }
@@ -48,7 +48,7 @@ function baseOptions(hooks: readonly ScenarioHookRecord[]): RenderAcceptanceReco
     environment: "default",
     targetVersion: undefined,
     browser: undefined,
-    scenarios: [{ record, receipts: new Map() }],
+    scenarios: [{ record, stepRecords: new Map() }],
   };
 }
 
@@ -99,14 +99,19 @@ describe("renderAcceptanceRecord: hook labels (t7-afterstep-consumers task spec,
 
 // Responsibility: unit tests for renderDeclaredVsObserved (accept-declared-
 // vs-observed task spec) — the record's own tail section that compares each
-// step's own receipt.mutates (declared) against receipt.observed.http_writes
-// (measured), without ever changing whether renderAcceptanceRecord itself
-// throws or what cli/accept.ts does with its result (this module never
-// decides refusal; see render-record.ts's own header).
+// step's own step record mutates (declared) against step record
+// observed.http_writes (measured), without ever changing whether
+// renderAcceptanceRecord itself throws or what cli/accept.ts does with its
+// result (this module never decides refusal; see render-record.ts's own
+// header).
 
-function makeReceipt(overrides: { mutates: boolean | null; observed: { http_reads: number; http_writes: number }; receiptId?: string }): Receipt {
+function makeStepRecord(overrides: {
+  mutates: boolean | null;
+  observed: { http_reads: number; http_writes: number };
+  recordId?: string;
+}): StepRecord {
   return {
-    receipt_id: overrides.receiptId ?? "rcpt-1",
+    record_id: overrides.recordId ?? "step-1",
     step: "some.step",
     kind: "run",
     args: {},
@@ -115,7 +120,7 @@ function makeReceipt(overrides: { mutates: boolean | null; observed: { http_read
     scenario: "scn-1",
     started_at: "2026-08-01T00:00:00.000Z",
     finished_at: "2026-08-01T00:00:01.000Z",
-    evidence: { dir: ".nukadoko/receipts/rcpt-1", screenshots: [] },
+    evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [] },
     observed: overrides.observed,
     mutates: overrides.mutates,
     status: "ok",
@@ -123,16 +128,16 @@ function makeReceipt(overrides: { mutates: boolean | null; observed: { http_read
   };
 }
 
-function stepRecord(text: string, receiptId: string): ScenarioStepRecord {
-  return { text, status: "passed", receipt: receiptId };
+function scenarioStep(text: string, recordId: string): ScenarioStepRecord {
+  return { text, status: "passed", record: recordId };
 }
 
 function scenarioWithSteps(
   steps: readonly ScenarioStepRecord[],
-  receipts: ReadonlyMap<string, Receipt | null>,
+  stepRecords: ReadonlyMap<string, StepRecord | null>,
   overrides: Partial<ScenarioRecord> = {},
 ): AcceptedScenario {
-  return { record: baseRecord({ steps, ...overrides }), receipts };
+  return { record: baseRecord({ steps, ...overrides }), stepRecords };
 }
 
 function optionsFor(scenarios: readonly AcceptedScenario[]): RenderAcceptanceRecordOptions {
@@ -161,10 +166,10 @@ function declaredVsObservedSection(markdown: string): string {
 
 describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-observed task spec)", () => {
   it("lists a step that declared mutates: false and was measured making writes", () => {
-    const receipts = new Map<string, Receipt | null>([
-      ["r-1", makeReceipt({ receiptId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 2 } })],
+    const stepRecords = new Map<string, StepRecord | null>([
+      ["r-1", makeStepRecord({ recordId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 2 } })],
     ]);
-    const scenario = scenarioWithSteps([stepRecord("the todo list is fetched", "r-1")], receipts, {
+    const scenario = scenarioWithSteps([scenarioStep("the todo list is fetched", "r-1")], stepRecords, {
       scenario: "a visitor browses",
     });
 
@@ -176,10 +181,10 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
   });
 
   it("omits a step that declared mutates: false but was measured making zero writes", () => {
-    const receipts = new Map<string, Receipt | null>([
-      ["r-1", makeReceipt({ receiptId: "r-1", mutates: false, observed: { http_reads: 3, http_writes: 0 } })],
+    const stepRecords = new Map<string, StepRecord | null>([
+      ["r-1", makeStepRecord({ recordId: "r-1", mutates: false, observed: { http_reads: 3, http_writes: 0 } })],
     ]);
-    const scenario = scenarioWithSteps([stepRecord("the todo list is fetched", "r-1")], receipts);
+    const scenario = scenarioWithSteps([scenarioStep("the todo list is fetched", "r-1")], stepRecords);
 
     const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
 
@@ -188,10 +193,10 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
   });
 
   it("omits a step that declared mutates: true even though it was measured making writes", () => {
-    const receipts = new Map<string, Receipt | null>([
-      ["r-1", makeReceipt({ receiptId: "r-1", mutates: true, observed: { http_reads: 0, http_writes: 3 } })],
+    const stepRecords = new Map<string, StepRecord | null>([
+      ["r-1", makeStepRecord({ recordId: "r-1", mutates: true, observed: { http_reads: 0, http_writes: 3 } })],
     ]);
-    const scenario = scenarioWithSteps([stepRecord("the todo is created", "r-1")], receipts);
+    const scenario = scenarioWithSteps([scenarioStep("the todo is created", "r-1")], stepRecords);
 
     const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
 
@@ -200,10 +205,10 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
   });
 
   it("still writes the section, with an explicit zero-mismatch sentence, when nothing disagrees", () => {
-    const receipts = new Map<string, Receipt | null>([
-      ["r-1", makeReceipt({ receiptId: "r-1", mutates: true, observed: { http_reads: 0, http_writes: 1 } })],
+    const stepRecords = new Map<string, StepRecord | null>([
+      ["r-1", makeStepRecord({ recordId: "r-1", mutates: true, observed: { http_reads: 0, http_writes: 1 } })],
     ]);
-    const scenario = scenarioWithSteps([stepRecord("the todo is created", "r-1")], receipts);
+    const scenario = scenarioWithSteps([scenarioStep("the todo is created", "r-1")], stepRecords);
 
     const markdown = renderAcceptanceRecord(optionsFor([scenario]));
 
@@ -217,10 +222,10 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
   });
 
   it("excludes a compat step (mutates: null) from the mismatch list and counts it separately", () => {
-    const receipts = new Map<string, Receipt | null>([
-      ["r-1", makeReceipt({ receiptId: "r-1", mutates: null, observed: { http_reads: 0, http_writes: 5 } })],
+    const stepRecords = new Map<string, StepRecord | null>([
+      ["r-1", makeStepRecord({ recordId: "r-1", mutates: null, observed: { http_reads: 0, http_writes: 5 } })],
     ]);
-    const scenario = scenarioWithSteps([stepRecord("a compat step runs", "r-1")], receipts);
+    const scenario = scenarioWithSteps([scenarioStep("a compat step runs", "r-1")], stepRecords);
 
     const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
 
@@ -233,20 +238,28 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
   });
 
   it("pluralizes the compat-step count and rolls up mismatches from every scenario into one section", () => {
-    const receipts = new Map<string, Receipt | null>([
-      ["r-1", makeReceipt({ receiptId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 1 } })],
-      ["r-2", makeReceipt({ receiptId: "r-2", mutates: false, observed: { http_reads: 0, http_writes: 4 } })],
-      ["r-3", makeReceipt({ receiptId: "r-3", mutates: null, observed: { http_reads: 0, http_writes: 0 } })],
-      ["r-4", makeReceipt({ receiptId: "r-4", mutates: null, observed: { http_reads: 0, http_writes: 0 } })],
+    const stepRecords = new Map<string, StepRecord | null>([
+      ["r-1", makeStepRecord({ recordId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 1 } })],
+      ["r-2", makeStepRecord({ recordId: "r-2", mutates: false, observed: { http_reads: 0, http_writes: 4 } })],
+      ["r-3", makeStepRecord({ recordId: "r-3", mutates: null, observed: { http_reads: 0, http_writes: 0 } })],
+      ["r-4", makeStepRecord({ recordId: "r-4", mutates: null, observed: { http_reads: 0, http_writes: 0 } })],
     ]);
-    const scenarioA = scenarioWithSteps([stepRecord("step one", "r-1"), stepRecord("step three", "r-3")], receipts, {
-      scenario_id: "scn-a",
-      scenario: "scenario A",
-    });
-    const scenarioB = scenarioWithSteps([stepRecord("step two", "r-2"), stepRecord("step four", "r-4")], receipts, {
-      scenario_id: "scn-b",
-      scenario: "scenario B",
-    });
+    const scenarioA = scenarioWithSteps(
+      [scenarioStep("step one", "r-1"), scenarioStep("step three", "r-3")],
+      stepRecords,
+      {
+        scenario_id: "scn-a",
+        scenario: "scenario A",
+      },
+    );
+    const scenarioB = scenarioWithSteps(
+      [scenarioStep("step two", "r-2"), scenarioStep("step four", "r-4")],
+      stepRecords,
+      {
+        scenario_id: "scn-b",
+        scenario: "scenario B",
+      },
+    );
 
     const markdown = renderAcceptanceRecord(optionsFor([scenarioA, scenarioB]));
 

@@ -5,6 +5,37 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Breaking
+
+- **The step-level record is called a step record now, not a receipt.**
+  Step-level and scenario-level records answered the same question under
+  two unrelated words: `Receipt` here, `record` for the scenario level.
+  This folds them into one vocabulary, distinguished by grain (`step
+  record` / `scenario record`) only where the distinction matters. What
+  the old name carried was never the name itself: it was the fact that a
+  step record's `result` had passed the step's own `returns` schema, and
+  that fact does not move when the name does, so nothing is lost by the
+  rename.
+- **`.nukadoko/` now splits into `records/`, `export/`, and `cache/`, by
+  purpose.** `records/` is the tool's own measurement of a run
+  (`records/steps/<id>/`, `records/scenarios/<id>/`), never committed.
+  `export/` (`export/allure-results/`, `export/messages.ndjson`) is
+  derived output for a reader outside nukadoko, safe to delete since the
+  next run rebuilds it. `cache/` (`cache/sessions/`) is not a record of
+  anything that happened, only work avoided, so deleting it costs a
+  login, never correctness. See
+  [Artifacts](docs/spec.md#artifacts).
+- **A step record's own field names and id prefix changed.** `receipt_id`
+  is now `record_id`, the `rcpt-` id prefix is now `step-`, and a `used`
+  entry's `receipt` key is now `record`.
+- **An existing acceptance record needs re-creating.** It embeds each
+  step's own record verbatim, so the field-name and prefix change above
+  lands inside it too. `nuka run` the feature again and `nuka accept` it;
+  `nuka tend` reports `signoff-record-old-format` for one it still finds
+  in the old shape.
+
 ## 0.2.0 — 2026-08-15
 
 ### Breaking

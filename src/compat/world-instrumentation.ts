@@ -43,7 +43,8 @@ import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.
 // `observed`/`used` (src/context/observed.ts, src/context/used.ts): a
 // hook's own World reads/writes accumulate against the tally, then that
 // tally is zeroed again before the first real step ever gets its snapshot,
-// so a hook's own World access is never attributed to any step's receipt.
+// so a hook's own World access is never attributed to any step's own step
+// record.
 //
 // Reserved keys (verified against `@cucumber/cucumber`'s own published
 // world.d.ts/world.js): `attach`/`log`/`link`/`parameters` are, at run time,
@@ -160,7 +161,8 @@ export function instrumentWorld<T extends object>(
           const result = schema.safeParse(value);
           if (!result.success) {
             // Thrown *before* `recordWrite` — an invalid write must never
-            // appear in `receipt.world.writes`. (An early prototype pushed
+            // appear in the step record's own `world.writes`. (An early
+            // prototype pushed
             // to the writes list before running `safeParse`, so a write
             // that failed validation still showed up there; this ordering
             // is the fix.)

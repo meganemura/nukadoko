@@ -130,6 +130,34 @@ describe("nuka tend: sign-off rot (m8b-tend-signoff-rot)", () => {
     expect(invalid[0]!.message).not.toMatch(/hand-edit|edit the record/i);
   });
 
+  it("reports a record written before record_id existed as old-format, telling the reader to re-run and re-accept, and skips its other checks", async () => {
+    // No migration code is written for this (task spec: the user re-runs and
+    // re-accepts). This test stands in for that older tool version by taking
+    // a record `nuka accept` really produced and removing the one field
+    // every step record it now writes always carries — the same fact
+    // `findSignoffRot`'s own detection tests for — rather than hand-rolling
+    // a record shape this codebase's own writer never produces.
+    const original = await readFile(path.join(rootDir, recordPath), "utf8");
+    const withoutRecordIds = original.replace(/```json\n([\s\S]*?)\n```/g, (block, jsonText: string) => {
+      const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+      if (!("record_id" in parsed)) return block; // A hook's own JSON block never had one.
+      delete parsed.record_id;
+      return `\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``;
+    });
+    expect(withoutRecordIds).not.toBe(original); // Proves the fixture's record actually had step blocks to strip.
+    await writeFile(path.join(rootDir, recordPath), withoutRecordIds);
+
+    const { report, exitCode } = await runTend(rootDir);
+    expect(exitCode).toBe(1);
+
+    expect(report.errors).toHaveLength(1);
+    const oldFormat = report.errors[0]!;
+    expect(oldFormat.code).toBe("signoff-record-old-format");
+    expect(oldFormat.file).toBe(recordPath);
+    expect(oldFormat.message).toMatch(/nuka run/);
+    expect(oldFormat.message).toMatch(/nuka accept/);
+  });
+
   it("reports an unparseable record as an error, naming the file, without touching the healthy one", async () => {
     await writeFile(
       path.join(featuresDir, "broken.2026-01-01-abc1234.md"),

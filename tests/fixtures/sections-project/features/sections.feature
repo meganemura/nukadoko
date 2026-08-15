@@ -1,6 +1,6 @@
 Feature: ctx.section records which stage a step reached
 
-  Scenario: three ctx.section calls land on the receipt in call order
+  Scenario: three ctx.section calls land on the step record in call order
     Given a step with three sections runs
 
   Scenario: a step that never calls ctx.section has no sections field

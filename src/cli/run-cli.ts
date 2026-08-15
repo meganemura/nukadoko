@@ -38,7 +38,7 @@ import type { WritableSink } from "./writable-sink.js";
 // (config/discovery errors, unknown step name) — into stderr output plus a
 // non-zero exit code, without ever calling `process.exit` itself. That is
 // `cli.ts`'s job, so this function stays callable directly from tests.
-// `do`'s own setup/execution split and receipt writing lives in cli/do.ts;
+// `do`'s own setup/execution split and step record writing lives in cli/do.ts;
 // `session`'s own list/clear logic lives in cli/session.ts; `init`/
 // `scaffold`'s own generation logic lives in cli/init.ts and
 // cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin
@@ -96,7 +96,7 @@ interface DoArgs {
   args?: string;
   session?: string;
   env?: string;
-  /** `--use <receipt-id>` (repeatable) — yargs' `array: true` collects
+  /** `--use <record-id>` (repeatable) — yargs' `array: true` collects
    * every occurrence into this list, in the order given, rather than only
    * keeping the last one. */
   use?: string[];
@@ -184,7 +184,7 @@ export async function runCli(
   // dispatch are separate steps in yargs' internals; a custom `.fail()`
   // callback that doesn't throw just falls through to dispatch). Every
   // handler here overwrites the shared `exitCode` with its own result and
-  // may perform real side effects (writing a receipt, clearing a session),
+  // may perform real side effects (writing a step record, clearing a session),
   // so letting it run would silence the failure and let an unparsed
   // invocation take real action. `argsFailed` is set synchronously inside
   // `.fail()`, which — because validation always runs before dispatch, see
@@ -304,7 +304,7 @@ export async function runCli(
 
   const doCommand: CommandModule<Record<string, never>, DoArgs> = {
     command: "do <name>",
-    describe: "execute one typed step; receipt to stdout",
+    describe: "execute one typed step; step record to stdout",
     builder: (y: Argv) =>
       y
         .positional("name", {
@@ -329,7 +329,7 @@ export async function runCli(
           type: "string",
           array: true,
           describe:
-            "receipt id whose result fills this step's `from` keys (repeatable; --args still wins for a key it also sets)",
+            "step record id whose result fills this step's `from` keys (repeatable; --args still wins for a key it also sets)",
         })
         // `--args` lost its `demandOption`: once `--use` is given,
         // "arguments come from the chain" is already stated, so making the
@@ -338,7 +338,7 @@ export async function runCli(
         // is what still refuses the case that matters — neither flag given
         // — kept in the same yargs layer `demandOption` used to occupy
         // (not moved into do.ts) so a bad invocation still fails before any
-        // receipt-writing setup runs, exactly as it did before.
+        // step-record-writing setup runs, exactly as it did before.
         //
         // `--args` is deliberately not made unconditionally optional: doing
         // so would let a typo'd `nuka do <step>` (missing `--args`
@@ -375,7 +375,7 @@ export async function runCli(
 
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
     command: "run <feature>",
-    describe: "execute scenarios from a feature file or a directory of them; receipts + scenario records",
+    describe: "execute scenarios from a feature file or a directory of them; step records + scenario records",
     builder: (y: Argv) =>
       y
         .positional("feature", {

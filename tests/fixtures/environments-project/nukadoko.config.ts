@@ -9,7 +9,7 @@ import { defineConfig } from "./nukadoko-shim.js";
 // are demoted via `secrets.public`: a copied-fixture temp directory (see
 // tests/helpers/fixtures.ts) is never itself a git repository with these
 // files tracked, so without this they would classify as secret sources and
-// get redacted out of the very receipts these tests assert on — this
+// get redacted out of the very step records these tests assert on — this
 // fixture is about environment layering, not secrets classification.
 export default defineConfig({
   baseURL: "http://top.example",

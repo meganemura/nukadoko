@@ -47,20 +47,20 @@ import type { Step } from "./step/define-step.js";
 // exactly that (`import { poll } from "nukadoko"`) — until the same
 // mistake `section` made once already (see below) showed up again from the
 // other direction: a wait that finishes without being recorded cannot be
-// told apart, from a receipt, from one that returned on its first attempt,
-// and those two call for opposite fixes. `poll` therefore became a fixture
-// too; see `PollRecord`/`polls` (src/receipt/types.ts) for where a finished
-// call now lands.
+// told apart, from a step record, from one that returned on its first
+// attempt, and those two call for opposite fixes. `poll` therefore became a
+// fixture too; see `PollRecord`/`polls` (src/record/types.ts) for where a
+// finished call now lands.
 //
 // `section` reverses an earlier decision that left it out: that decision
 // withheld it because it would have been a no-op until a progress-log
 // feature existed. That feature exists now (src/run/progress-log.ts —
 // `nuka run`'s own stderr progress lines), but `section`'s own destination
-// turned out to be the receipt, not that live log: `sections: string[]`
-// (docs/spec.md "Receipts",
-// src/context/sections.ts) lets a failed step's receipt say which stage it
-// reached, a fact this file's own read (accept, a report, an agent
-// re-reading a receipt later) needs regardless of whether anyone was
+// turned out to be the step record, not that live log: `sections: string[]`
+// (docs/spec.md "Records",
+// src/context/sections.ts) lets a failed step's step record say which stage
+// it reached, a fact this file's own read (accept, a report, an agent
+// re-reading a step record later) needs regardless of whether anyone was
 // watching stderr while the step ran. It is a bare label-in, nothing-out
 // call (no span, no timing) on purpose: a function that wraps a block would
 // have to decide what nesting, async boundaries, and early `return`s inside
@@ -68,7 +68,7 @@ import type { Step } from "./step/define-step.js";
 //
 // `expect` is deliberately not a fixture: a step imports it directly,
 // `import { expect } from "playwright/test"`.
-// Assertion evidence already reaches the receipt through the trace
+// Assertion evidence already reaches the step record through the trace
 // (`actions`, src/context/trace-actions.ts), so `expect` needs
 // nothing the executor injects; adding it here would be a member with
 // nothing behind it but Playwright's own already-public export, violating
@@ -80,13 +80,13 @@ import type { Step } from "./step/define-step.js";
 // (`context.newPage()`) while staying inside the one browser context the
 // executor already owns and measures. `browser` itself would let a step
 // call `browser.newContext()` and mint a context the executor never sees —
-// unmeasured, untraced, outside every receipt this run writes. Not
+// unmeasured, untraced, outside every step record this run writes. Not
 // exporting the name is what keeps that always unreachable through the bag,
 // rather than a rule a step has to remember not to break.
 //
 // `evidence` is the fixture-shaped counterpart to Playwright's own
 // `testInfo.attach()`/`testInfo.outputPath()`: every automatic evidence
-// field on a receipt (trace, screenshots, http.jsonl, page_events, ...) is
+// field on a step record (trace, screenshots, http.jsonl, page_events, ...) is
 // something the harness collects on its own, and nothing existed for the
 // application-specific evidence only a step can produce — an API response
 // body, a DB snapshot, a generated file's contents. `attach`/`path` are two
@@ -140,15 +140,15 @@ export interface StepFixtures {
    * never becomes readable, since only a
    * validated (`returns`-schema-passing) result ever enters the chain. Every
    * read that returns a value is measured: the executor records it as
-   * provenance on this execution's own receipt (`used`), so the dependency
+   * provenance on this execution's own step record (`used`), so the dependency
    * is visible twice — as a static `import` of `step`, and at run time in
-   * the receipt chain (docs/spec.md "Receipts"). */
+   * the step record chain (docs/spec.md "Records"). */
   readonly resultOf: <S extends Step>(step: S) => z.infer<S["returns"]> | undefined;
   /** Marks that execution has reached stage `label`. Synchronous and void:
    * there is no matching "end" call and
    * no return value, so calling it costs nothing to place before an
    * `await`, inside a loop, or right before a step throws. Every call is
-   * appended, in call order, to this execution's receipt under
+   * appended, in call order, to this execution's step record under
    * `sections`; a step that never calls it gets no `sections` key at all
    * (empty is omitted, the same convention `used` already follows). */
   readonly section: (label: string) => void;
@@ -157,19 +157,19 @@ export interface StepFixtures {
    * 30_000ms) is reached; throws `PollTimeoutError` (src/context/poll.ts)
    * if it is. `fn`'s own throw propagates unchanged. Every completed call —
    * resolved, timed out, or `fn` itself threw — is recorded on this
-   * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
+   * execution's step record under `polls` (docs/spec.md "Records"): how many
    * attempts it took, how long it waited, and how it ended. */
   readonly poll: <T>(fn: () => Promise<T | undefined>, options?: PollOptions) => Promise<T>;
   /** The application-specific evidence fixture (this file's
    * own header) — `attach(name, body)` writes `body` (`string | Uint8Array`)
    * to this execution's own evidence directory and records
-   * `{ name, file, at }` on the receipt's `evidence.attachments` (docs/
-   * spec.md "Receipts"); calling it twice with the same `name` keeps both
+   * `{ name, file, at }` on the step record's `evidence.attachments` (docs/
+   * spec.md "Records"); calling it twice with the same `name` keeps both
    * files, never overwriting the first. `path(name)` allocates a
    * collision-free absolute path under that same directory without writing
    * anything — Playwright's own `testInfo.outputPath()` — and only a path
    * that actually has a file on it by the time this execution ends is
-   * listed on the receipt. Both throw `InvalidEvidenceNameError` (src/
+   * listed on the step record. Both throw `InvalidEvidenceNameError` (src/
    * context/errors.ts) for a `name` containing a path separator or equal to
    * `"."`/`".."`/`""`: refused, never silently rewritten. Capped at 100
    * attachments per execution, the true total reported on
@@ -236,15 +236,15 @@ export interface StepContext {
    * never becomes readable, since only a
    * validated (`returns`-schema-passing) result ever enters the chain. Every
    * read that returns a value is measured: the executor records it as
-   * provenance on this execution's own receipt (`used`), so the dependency
+   * provenance on this execution's own step record (`used`), so the dependency
    * is visible twice — as a static `import` of `step`, and at run time in
-   * the receipt chain (docs/spec.md "Receipts"). */
+   * the step record chain (docs/spec.md "Records"). */
   resultOf<S extends Step>(step: S): z.infer<S["returns"]> | undefined;
   /** Marks that execution has reached stage `label`. Synchronous and void:
    * there is no matching "end" call and
    * no return value, so calling it costs nothing to place before an
    * `await`, inside a loop, or right before a step throws. Every call is
-   * appended, in call order, to this execution's receipt under
+   * appended, in call order, to this execution's step record under
    * `sections`; a step that never calls it gets no `sections` key at all
    * (empty is omitted, the same convention `used` already follows). */
   section(label: string): void;
@@ -253,7 +253,7 @@ export interface StepContext {
    * 30_000ms) is reached; throws `PollTimeoutError` (src/context/poll.ts)
    * if it is. `fn`'s own throw propagates unchanged. Every completed call —
    * resolved, timed out, or `fn` itself threw — is recorded on this
-   * execution's receipt under `polls` (docs/spec.md "Receipts"): how many
+   * execution's step record under `polls` (docs/spec.md "Records"): how many
    * attempts it took, how long it waited, and how it ended. */
   poll<T>(fn: () => Promise<T | undefined>, options?: PollOptions): Promise<T>;
   /** The application-specific evidence fixture — see

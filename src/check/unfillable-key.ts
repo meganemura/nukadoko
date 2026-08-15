@@ -104,7 +104,7 @@ export function checkUnfillableKeys(
     // on this line is left alone rather than risk reporting the same
     // certain failure under a second code, or — for src/run/run-scenario.ts's
     // shared guard — pre-empting a binding failure that must still produce a
-    // real (non-null) receipt, exactly as it always has.
+    // real (non-null) step record, exactly as it always has.
     const attachment = pickleStep.argument;
     const hasAttachment = attachment?.dataTable !== undefined || attachment?.docString !== undefined;
     if (hasAttachment && attachmentFillsKey === undefined) {

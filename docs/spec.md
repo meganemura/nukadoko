@@ -1,6 +1,6 @@
 # nukadoko specification
 
-> nukadoko, a living pickling bed for your Gherkin: typed steps, receipts, and an agent-first CLI.
+> nukadoko, a living pickling bed for your Gherkin: typed steps, step records, and an agent-first CLI.
 
 Status: M1 (engine core) implemented (`steps`/`describe`/`do`/`run`/
 `check`/`init`/`scaffold`, sessions, environments, secrets). M2 (compat,
@@ -20,15 +20,15 @@ nukadoko is an agent-first engine that runs Gherkin. Humans write and review the
 artifacts (feature files, typed step definitions, sign-off records) and
 agents execute them. Everything about the runtime is optimized for an agent's
 trial-and-error loop: every step has a typed contract, every step can be run
-on its own from the CLI, and every execution leaves a receipt the tool
-wrote rather than the agent. Not a receipt the agent *cannot* forge (an
+on its own from the CLI, and every execution leaves a step record the tool
+wrote rather than the agent. Not a step record the agent *cannot* forge (an
 agent with shell access can write any file) but one it never had to be
 asked to produce (see "Out of scope").
 
 Agent-first is a design constraint, not a slogan. An agent must be able to
 complete the whole loop unassisted: discover the vocabulary
 (`nuka steps --json`), read a contract (`nuka describe`, schemas as JSON
-Schema), execute one step (`nuka do`, receipt on stdout, meaningful exit
+Schema), execute one step (`nuka do`, step record on stdout, meaningful exit
 code), read the validated result, and decide the next call. When the
 vocabulary lacks an operation, the agent scaffolds and implements a new step
 and a human reviews the PR. Every interface has a machine-readable form
@@ -64,7 +64,7 @@ nukadoko deliberately owns as little as possible:
 | Pretty reports | Allure: nukadoko emits `allure-results`, never renders HTML |
 | Approval of what-would-prove-what | git: PR review of features and step definitions, CODEOWNERS |
 | **Typed step contracts** | **nukadoko** |
-| **Execution and measurement (receipts)** | **nukadoko** |
+| **Execution and measurement (records)** | **nukadoko** |
 | **Sessions, environments, secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
 | **Sign-off records** | **nukadoko** |
@@ -90,6 +90,40 @@ artifact behind.
 nukadoko closes both: the vocabulary of operations is committed, typed, and
 reviewed; execution is owned by the tool, which measures what happened
 instead of trusting anyone's account of it.
+
+## Artifacts
+
+Everything nukadoko touches falls into one of five kinds, by who writes it,
+whether it belongs in the repository, and how long it is meant to live:
+
+| Purpose | Artifact | Written by | Committed | Lifetime | Read by |
+|---|---|---|---|---|---|
+| Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
+| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>` | the tool | no | one run | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
+| Sign-off | `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
+| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` | the tool | no | disposable | other tools |
+| Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
+
+The table names files; the distinctions behind the columns are what answer
+"what happens if this is deleted" and "who gets to change it":
+
+- **Export is disposable because it is derived.** Delete it and the next
+  `nuka run` writes a fresh one: it exists for a reader outside nukadoko
+  (Allure's own CLI, a CI formatter), never for nukadoko itself.
+- **Cache is disposable for a different reason.** It is not a record of
+  anything that happened, only work avoided: a session file lets a later
+  call skip logging in again. Deleting it costs a login, never correctness.
+- **Only Contract and Sign-off are committed.** One is the promise a human
+  wrote and reviewed; the other is the claim the tool froze once that
+  promise ran green. Measurement is never committed: `nuka init` gitignores
+  the state directory it lives under, because a working record of one run
+  has nothing to say about the next one.
+- **Step records and scenario records share one row.** They differ only in
+  grain: a scenario's own record and each of its steps' own records answer
+  the same question at two resolutions, not two different ones. `nuka do`
+  has no scenario to write one for, so only the step side exists there; the
+  word for both is "record", and the file split is a grain, not a second
+  concept.
 
 ## Typed steps
 
@@ -204,8 +238,8 @@ export default defineStep({
   rule drops every value this step's own correctness depends on but
   nothing downstream reads (the date it computed, the id it picked, the
   name it resolved before sending), and those are precisely the values a
-  receipt is interrogated for once a run has gone wrong. Returned, they
-  are on the receipt as validated facts and the question "what did it
+  step record is interrogated for once a run has gone wrong. Returned, they
+  are on the step record as validated facts and the question "what did it
   actually send" has an answer; withheld, the answer has to be
   reconstructed from an error message written by someone else's system.
   This is `observed` and `sections`' own measure-and-keep reasoning
@@ -214,12 +248,12 @@ export default defineStep({
   empty string) is ambiguous in exactly the way its presence-claiming
   counterpart is not: the target may genuinely not be there, or the page
   may simply not have finished rendering yet, and those two situations
-  produce the identical value on the receipt unless the step says
+  produce the identical value on the step record unless the step says
   otherwise. A step whose `returns` can carry absence should carry, beside
   it, whatever proves the read itself was valid: that the page had
   reached a state where absence was a real answer rather than a symptom of
   asking too soon. Without that, every hypothesis a reviewer could form
-  from the receipt is equally consistent with it, which is what
+  from the step record is equally consistent with it, which is what
   unfalsifiable means in practice. Presence needs no such companion:
   `visible: true` is its own proof that the read landed on a rendered
   page, since neither a hidden nor an unrendered element can produce
@@ -230,7 +264,7 @@ export default defineStep({
   holds" is satisfied by the same `false` an unrendered page also
   produces, so a scenario asserting it can go green while the page never
   finished loading: green for the wrong reason, indistinguishable from
-  green for the right one without readiness evidence on the receipt. A
+  green for the right one without readiness evidence on the step record. A
   tool whose purpose is tying acceptance criteria to an execution that
   either happened or did not cannot treat that as a minor gap; it is the
   gap.
@@ -243,10 +277,10 @@ export default defineStep({
   `rationale` is why it is implemented this way and what was tried and
   rejected, the information an agent needs before deciding it may rewrite
   the step. It never appears in `nuka steps`' listing (only
-  `nuka describe` shows it) and never in a receipt: a receipt records one
-  execution, and rationale is a property of the contract that would be
-  identical in every receipt for the step, not something that execution
-  produced.
+  `nuka describe` shows it) and never in a step record: a step record
+  records one execution, and rationale is a property of the contract that
+  would be identical in every record for the step, not something that
+  execution produced.
 - The `run` body is free TypeScript on the fixtures it destructured.
   Composition is importing another step module and calling its `run` with
   the same fixture bag. Shared helpers live in ordinary modules (e.g.
@@ -317,7 +351,7 @@ The fixture names:
   only ever sees the merged result, never `config.envFiles`'s list. `env`
   stays for the rare step that wants every key at once. Every name
   `requireEnv` is called with, whether that call finds a value or throws,
-  is recorded on the receipt's `required_env` (see "Receipts"), in read
+  is recorded on the step record's `required_env` (see "Records"), in read
   order, deduplicated. Reading the same value straight off `env` leaves no
   trace: that path is a plain object, and the library never sees it.
 - `baseURL`: the configured baseURL, for the occasional URL assembled by
@@ -340,8 +374,8 @@ The fixture names:
   exists to catch.
 - `section(label: string): void`: marks that execution has reached a
   named stage; synchronous, no return value, no matching "end" call. Every
-  call is appended, in call order, to the receipt's `sections` (see
-  "Receipts"); a step that never calls it gets no `sections` key at all,
+  call is appended, in call order, to the step record's `sections` (see
+  "Records"); a step that never calls it gets no `sections` key at all,
   the same convention `used` follows. It is a bare marker rather than a
   function that wraps a block (`section(label, fn)`) on purpose: a
   wrapping form would have to decide what nesting, an early `return`, and
@@ -352,8 +386,9 @@ The fixture names:
   submit-poll-fetch loop for a state that has been asked for but is not
   there yet: `fn` returns `undefined` until it is, and its first defined
   value is what `poll` returns; the `timeout` budget running out first
-  throws `PollTimeoutError` instead. Every completed call lands on the receipt's `polls`
-  (see "Receipts") with how many attempts it took, how long it waited, and
+  throws `PollTimeoutError` instead. Every completed call lands on the step
+  record's `polls` (see "Records") with how many attempts it took, how long
+  it waited, and
   how it ended. What `fn` polls for is a contract choice, not an
   implementation detail: it cannot be the observed target's own presence,
   because a target whose correct passing state is absence becomes
@@ -366,8 +401,8 @@ The fixture names:
   only once that has resolved. A wait taken on the browser directly
   instead, through `page.waitForSelector` or `waitForLoadState`, waits the
   same way but leaves nothing behind: going through `poll` is what puts
-  `at`, `attempts`, `waited_ms`, and `outcome` on the receipt, which is the
-  only way to tell "resolved on the first attempt, the wait did nothing"
+  `at`, `attempts`, `waited_ms`, and `outcome` on the step record, which is
+  the only way to tell "resolved on the first attempt, the wait did nothing"
   apart from "resolved four seconds in" after the fact. That is the same
   self-reported/measured line the Allure emitter already draws with its
   `declared:` prefix (see "Allure emitter"), drawn here between a wait
@@ -378,12 +413,12 @@ The fixture names:
   application-specific evidence only a step can produce, an API response
   body, a DB snapshot, a generated file's contents. `attach` writes `body`
   (`string | Uint8Array`) into this execution's own evidence directory and
-  records it on the receipt's `evidence.attachments` (see "Receipts");
+  records it on the step record's `evidence.attachments` (see "Records");
   calling it twice with the same `name` keeps both files, never overwriting
   the first. `path` is Playwright's own `testInfo.outputPath()`: it
   allocates a collision-free absolute path under that same directory
   without writing anything, and only a path a step actually wrote to by the
-  time execution ends is listed on the receipt (`path()` alone, with
+  time execution ends is listed on the step record (`path()` alone, with
   nothing ever written there, contributes nothing). Both methods sit on one
   object rather than two separate fixtures because both need exactly the
   same thing from the executor (which directory this step's own evidence
@@ -417,8 +452,8 @@ with a cost, and it is stated as one (see "Out of scope").
 from "playwright/test"`, and asserts with it exactly as a Playwright test
 would. This follows from the same rule every other fixture answers to: a
 fixture carries only what the executor must inject, and `expect` needs
-nothing the executor owns (assertion evidence already reaches the receipt
-through the trace, `actions`, see "Receipts"), so making it a fixture would
+nothing the executor owns (assertion evidence already reaches the step
+record through the trace, `actions`, see "Records"), so making it a fixture would
 add a member with nothing behind it but Playwright's own already-public
 export.
 
@@ -427,7 +462,7 @@ omission. `context` is a fixture (the one `page` already belongs to,
 nothing new to launch), so a step that needs a second tab reaches for it
 via `context.newPage()`. `browser` itself would let a step call
 `browser.newContext()` and mint a context the executor never sees:
-unmeasured, untraced, outside every receipt the run writes. Leaving the
+unmeasured, untraced, outside every step record the run writes. Leaving the
 name out of the bag is what keeps that path always unreachable, rather
 than a convention a step has to remember not to break.
 
@@ -675,7 +710,7 @@ is not a rule against fixtures touching the browser: generating
 never says otherwise. It only ever names which fixtures do, so a reader
 decides whether a given one belongs on that list.
 
-An execution's own receipt carries `fixtures` (present only when non-
+An execution's own step record carries `fixtures` (present only when non-
 empty): every `config.fixtures` entry that execution's own bag resolution
 actually touched, `{ "name", "scope", "setup_ms"?, "at"?, "reused" }`.
 `setup_ms`/`at` are present only when this call actually built the
@@ -872,7 +907,7 @@ older shape, now the exception rather than the house style).
 
 Under `nuka do` there is no scenario and therefore no chain, so a `from`
 key arrives one of two ways: passed in `--args` like any other, or taken
-from an earlier execution's receipt with `--use` (see "Single steps"). A
+from an earlier execution's step record with `--use` (see "Single steps"). A
 step's contract does not change between the two paths; only where the
 value comes from does.
 
@@ -887,7 +922,7 @@ exists only to move an id (`And the project's billing page is fetched`)
 and means nothing to the reader the feature was written for. When an
 operation has no value to that reader, it should not be a step at all:
 make it an ordinary function under `features/steps/lib/` and call it from
-the step that needs it. What is given up is that helper's own receipt; the
+the step that needs it. What is given up is that helper's own step record; the
 HTTP it performs is still counted in `observed`, and `section` can
 still mark where execution went. Granularity of the record against
 legibility of the feature is a judgment the step author makes per case,
@@ -897,10 +932,10 @@ Chaining is where declaration and measurement meet, and it meets
 differently than `mutates` does (see "Keyword semantics"). There, the
 measurement is a proxy (HTTP method standing in for write semantics), so
 the tool records both and reconciles neither. Here there is no proxy:
-which receipt a value came from is exactly known. And because `from`
+which step record a value came from is exactly known. And because `from`
 drives the execution rather than describing it, the declaration and what
 happened cannot drift apart, so there is nothing to reconcile in the first
-place. `used` on the receipt (see "Receipts") is therefore not a check on
+place. `used` on the step record (see "Records") is therefore not a check on
 the declaration; it answers the question the declaration cannot: not
 which step supplied the value, which was decided when the file was
 written, but which *execution* of it did, which is only ever decided at
@@ -925,7 +960,7 @@ what a declaration settles is layered:
 - **Read-only environments refuse a declared-mutating step before it
   runs**: the one place the declaration gates execution rather than
   drawing review's attention.
-- **At run time**, the receipt records what the execution actually did:
+- **At run time**, the step record records what the execution actually did:
   every network call the tool saw (through the `request` fixture and the
   page alike), with non-GET/HEAD calls counted as observed writes, next to
   `mutates` (declared). That count settles nothing on its own anymore:
@@ -955,7 +990,7 @@ what a declaration settles is layered:
   where the tool's authority over this particular fact actually ends.
 - Falsifiable does not mean checked: nukadoko never runs that reconciliation
   itself, even though `mutates` and `observed` already sit on the same
-  receipt so an operator can compare them without a second artifact. No
+  step record so an operator can compare them without a second artifact. No
   `nuka run` or `nuka check` output claims a mismatch between the two.
   Automating that claim would mean trusting the same HTTP-method proxy as
   settled fact (a GraphQL call, an RPC-over-POST call, or a vendor API that
@@ -1018,14 +1053,14 @@ import { Given, When, Then } from "nukadoko/compat";
   accepts (`Before(fn)`, `Before({ tags }, fn)`, `Before("@tag", fn)`),
   receive cucumber's own hook parameter, filter on `@tag` / `not @tag`
   only (anything fancier fails loudly rather than mismatching silently),
-  appear in the scenario record's `hooks` array rather than as receipts,
-  and their network traffic sits outside any step's boundary: http.jsonl
+  appear in the scenario record's `hooks` array rather than as their own
+  step records, and their network traffic sits outside any step's boundary: http.jsonl
   and the observed read/write tally stay scenario-wide, never attributed to
   one hook invocation. The Playwright trace does not, though. Every
   individual Before/After/AfterStep call that touches `this.openPage()`
   gets its own trace chunk and `actions` list, on that same `hooks` array
-  entry (`trace`/`actions`/`truncated`, the same shape a step's own receipt
-  carries, see "Receipts"), isolated from every step's own chunk and from
+  entry (`trace`/`actions`/`truncated`, the same shape a step's own record
+  carries, see "Records"), isolated from every step's own chunk and from
   its sibling hooks'. A hook invocation still carries no `sections`/`polls`,
   since a hook has no fixture bag of its own to call `section`/`poll`
   from. Only `actions`, read back out of the chunk itself rather than from
@@ -1055,7 +1090,7 @@ import { Given, When, Then } from "nukadoko/compat";
   for anything that didn't declare its own; leaving it uncalled keeps steps
   unbounded rather than importing cucumber's five-second ceiling, which
   would fail slow suites for no reason but migrating.
-- The World is measured, always: every compat step's receipt records
+- The World is measured, always: every compat step's step record records
   which World keys it read and wrote, in access order: the data flow
   `this.foo` used to hide. The measured surface is the bag's own data
   properties; `#private` state never appears there, by construction: a
@@ -1066,10 +1101,10 @@ import { Given, When, Then } from "nukadoko/compat";
   `attach`/`log`/`link`/`parameters` are reserved: never measured, never
   declarable, and clobbering one is an error instead of a silent break.
 - Because the harness owns the browser and request objects, compat steps
-  already get measured receipts (status, timing, trace, screenshots, HTTP
+  already get measured step records (status, timing, trace, screenshots, HTTP
   log) with zero code change.
 - What compat steps lack: typed contracts, a validated `result` in the
-  receipt, and single-step CLI execution. Promoting a hot step to
+  step record, and single-step CLI execution. Promoting a hot step to
   `defineStep` is the upgrade, one step at a time.
 - The door's width is measured, not asserted. Eight public cucumber-js
   suites were audited against it (their glue read as text, never run), and
@@ -1135,8 +1170,8 @@ nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--qui
 `@cucumber/gherkin` compiles the file into pickles: flat, self-contained
 scenarios with Background merged, Scenario Outline expanded, and tables
 attached. nukadoko matches each pickle step against the committed patterns and
-executes the steps in order. One receipt per step; one scenario record
-(feature path, scenario name, ordered receipt ids, per-step status) per
+executes the steps in order. One step record per step; one scenario record
+(feature path, scenario name, ordered step record ids, per-step status) per
 pickle.
 
 `nuka run` also takes a directory in place of a single feature file:
@@ -1192,9 +1227,9 @@ to reveal several runs later, once the road has already been taken.
 Steps in one pickle share one context (the World semantics Cucumber users
 expect): a Background that logs in hands its browser and cookies to every
 later step. A failed step skips the rest of the scenario, and skipped steps
-get no receipt (an execution that never began must not be citable; the
+get no step record (an execution that never began must not be citable; the
 scenario record is what says "skipped"). Evidence follows its natural scope:
-each step's receipt carries that step's own http.jsonl and its own
+each step's record carries that step's own http.jsonl and its own
 Playwright trace alike. The trace used to span the whole shared context and
 live in the scenario's own directory instead, one file, opened once at the
 first step whose bag named `page` and closed once at the end. It is cut at
@@ -1216,8 +1251,8 @@ call took. Only a page's `document`/XHR/`fetch` requests are recorded that
 way (a single page load can pull in dozens of images, a stylesheet, and a
 script bundle, and a file trying to hold all of that would stop being
 something a reader opens), but nothing about the drop is silent: what got
-left out lands on the receipt itself, by resource type, as `http_omitted`
-(see "Receipts"). `observed` is untouched by any of this: it keeps counting
+left out lands on the step record itself, by resource type, as `http_omitted`
+(see "Records"). `observed` is untouched by any of this: it keeps counting
 every request the page makes, image and script traffic included, because it
 answers a different question than http.jsonl does, and the two counts are
 not expected to match.
@@ -1238,10 +1273,10 @@ vocabulary growth.
 
 ```sh
 nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
-nuka do archive-project --use rcpt-20260801-143022-a1b2
+nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
-Executes one typed step and prints its receipt to stdout (exit 0 on ok, 1 on
+Executes one typed step and prints its step record to stdout (exit 0 on ok, 1 on
 failed). This is the adaptive loop: the agent reads the validated result and
 decides the next call. The agent can only choose which step to call with
 which args; it cannot choose what gets recorded. There is deliberately no
@@ -1249,19 +1284,19 @@ grouping label on `do`: ad-hoc sequences are working records, not evidence.
 Anything worth attesting to is expressed as a scenario and proven by
 `nuka run` (see Self-healing).
 
-`--use <receipt-id>` (repeatable) supplies the step's `from` keys from an
+`--use <step-record-id>` (repeatable) supplies the step's `from` keys from an
 earlier execution instead of the chain a scenario would have provided (see
 "Chaining steps"). The upstream step's name is not written on the command
-line because the receipt already carries it: nukadoko reads which step that
-receipt records, finds the `from` entries pointing at it, and takes the
-named keys out of its stored `result`. A receipt for a step this one does
-not declare a `from` on is an error rather than a silent no-op, as is a
-receipt whose execution failed: a failed step never produced a validated
-result to read. `--args` still wins over `--use` for the same key, the same
-way a pattern capture wins inside a scenario. The receipt ids actually
-drawn from land in this execution's own `used`, so a chain assembled by
-hand across several `do` calls is as traceable afterwards as one a scenario
-drove.
+line because the step record already carries it: nukadoko reads which step
+that record belongs to, finds the `from` entries pointing at it, and takes
+the named keys out of its stored `result`. A step record for a step this
+one does not declare a `from` on is an error rather than a silent no-op, as
+is a step record whose execution failed: a failed step never produced a
+validated result to read. `--args` still wins over `--use` for the same
+key, the same way a pattern capture wins inside a scenario. The record ids
+actually drawn from land in this execution's own `used`, so a chain
+assembled by hand across several `do` calls is as traceable afterwards as
+one a scenario drove.
 
 What crosses with `--use` is the value itself, not a guarantee that
 whatever it names is still there: a path an upstream step returned can
@@ -1285,14 +1320,19 @@ whose own setup is a no-op the second time it runs, and the fix is in the
 feature rather than in the engine: establish the state once, in the step
 whose name says it does, instead of once per step.
 
-## Receipts
+## Records
 
-A receipt is the tool's own measurement of one step execution: the same
-shape whether the step ran inside a scenario or via `do`.
+A step record is the tool's own measurement of one step execution: the same
+shape whether the step ran inside a scenario or via `do`. A scenario record
+(see "Running") answers the same question one grain up: what a pickle's own
+run actually did, over its ordered steps rather than over one execution
+alone. The two are one concept read at two resolutions, not two different
+ones: a scenario record's own `steps` array names each step's record by id,
+so a reader can open either first and reach the other from it.
 
 ```json
 {
-  "receipt_id": "rcpt-20260801-143022-a1b2",
+  "record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
   "kind": "do",
   "args": { "name": "acme" },
@@ -1307,7 +1347,7 @@ shape whether the step ran inside a scenario or via `do`.
   "started_at": "...",
   "finished_at": "...",
   "evidence": {
-    "dir": ".nukadoko/receipts/rcpt-20260801-143022-a1b2",
+    "dir": ".nukadoko/records/steps/step-20260801-143022-a1b2",
     "trace": "trace.zip",
     "screenshots": [{ "file": "final.png", "at": "..." }],
     "http": "http.jsonl"
@@ -1333,7 +1373,7 @@ shape whether the step ran inside a scenario or via `do`.
 - Evidence is collected by the harness, never reported by the step: Playwright
   tracing and screenshots when the browser is used, every `request` fixture
   call and the page's own document/XHR/fetch traffic alike logged to
-  http.jsonl, the receipt itself as the primary record.
+  http.jsonl, the step record itself as the primary one.
 - `evidence.screenshots` is at most one entry, `{ "file": "final.png", "at":
   "..." }`: a browser-using execution's evidence used to be two files, the
   same buffer saved under a second name whenever the step failed. That cost
@@ -1362,9 +1402,9 @@ shape whether the step ran inside a scenario or via `do`.
   shape alone. Only `document`, `xhr`, and `fetch` requests (Playwright's own
   `request.resourceType()`) ever reach http.jsonl for page traffic; a real
   page load can pull in dozens of images, stylesheets, and scripts that
-  nobody reading a receipt for acceptance purposes traces one by one, and a
-  file trying to hold all of them would stop being something a reader opens
-  at all.
+  nobody reading a step record for acceptance purposes traces one by one,
+  and a file trying to hold all of them would stop being something a reader
+  opens at all.
 - `evidence.attachments` (present only when non-empty) lists what
   `evidence.attach`/`evidence.path` actually wrote this execution (see
   "Context API"), each `{ "name", "file", "at" }`: `name` is what the step
@@ -1388,7 +1428,7 @@ shape whether the step ran inside a scenario or via `do`.
   rewritten into something safe. Capped at 100 entries, sorted by `at`, the
   same convention `page_events`/`actions` already use; the true total, once
   that cap is hit, lands on `truncated.evidence` (below), the same sibling
-  field `truncated.actions` already uses. The receipt's `name`/`file`
+  field `truncated.actions` already uses. The step record's `name`/`file`
   strings pass through the same single redaction pass every other field
   does; the attachment's own file *contents* are never redacted (redacting
   arbitrary bytes would as often corrupt them as protect them). What
@@ -1405,55 +1445,55 @@ shape whether the step ran inside a scenario or via `do`.
   is a bug.
 - `used` (present only when non-empty) lists the earlier executions whose
   results this one drew a value from: through a `from` injection, a
-  `resultOf` call, or a `--use` receipt on `nuka do`. Every path runs
+  `resultOf` call, or a `--use` step record on `nuka do`. Every path runs
   through library code, so the reads are measured, not declared. Each entry
-  is `{ "receipt": "rcpt-…", "step": "create-project" }`: the step name is
-  redundant with the cited receipt and is written down anyway, because a
-  receipt that has to be resolved against other files to be read is a worse
-  acceptance record than one that is legible alone, and the file it would
-  be resolved against is a local working record that a sign-off (see
-  Sign-off) long outlives. Entries are deduplicated by receipt id, in the
+  is `{ "record": "step-…", "step": "create-project" }`: the step name is
+  redundant with the cited step record and is written down anyway, because
+  a record that has to be resolved against other files to be read is worse
+  for a reader than one that is legible alone, and the file it would be
+  resolved against is a local working record that a sign-off (see
+  Sign-off) long outlives. Entries are deduplicated by record id, in the
   order first read. The dependency is thus visible twice over: statically
-  as `from` or an import, at run time as provenance in the receipt chain.
-  Which upstream *step* a value came from was settled when the step file
-  was written; which *execution* of it supplied the value is knowable only
-  here.
-- On a **failed** step's receipt only, each `used` entry additionally
-  carries `result`: the upstream receipt's full validated result, sitting
-  right beside the id/step pointer. This is what lets one failed receipt be
-  read alone instead of opening a second receipt.json just to see what the
-  step actually saw. An `ok` receipt's `used` entries never carry `result`:
-  the value that mattered is already sitting on that step's own `result`
-  (or on its `args`, if it came in through `from`), so repeating the
-  upstream one there would only be redundant. The whole result, not
-  narrowed to the one key a `from` injection or `resultOf` call happened to
-  read: diagnosing a failure needs *why* the upstream value came out this
-  way, not which key was cited: narrowing to the cited key would recreate,
-  on the receipt side, the same citation-only trap "return more than what a
-  later step cites" (see Typed steps) already warns against. That also
-  means this field can only carry what the upstream step's own `returns`
-  schema kept in the first place: a `returns` that dropped a value drops it
-  from here too.
+  as `from` or an import, at run time as provenance in the step record
+  chain. Which upstream *step* a value came from was settled when the step
+  file was written; which *execution* of it supplied the value is knowable
+  only here.
+- On a **failed** step's record only, each `used` entry additionally
+  carries `result`: the upstream step record's full validated result,
+  sitting right beside the id/step pointer. This is what lets one failed
+  step record be read alone instead of opening a second `record.json` just
+  to see what the step actually saw. An `ok` step's `used` entries never
+  carry `result`: the value that mattered is already sitting on that
+  step's own `result` (or on its `args`, if it came in through `from`), so
+  repeating the upstream one there would only be redundant. The whole
+  result, not narrowed to the one key a `from` injection or `resultOf` call
+  happened to read: diagnosing a failure needs *why* the upstream value
+  came out this way, not which key was cited: narrowing to the cited key
+  would recreate, on the step record side, the same citation-only trap
+  "return more than what a later step cites" (see Typed steps) already
+  warns against. That also means this field can only carry what the
+  upstream step's own `returns` schema kept in the first place: a
+  `returns` that dropped a value drops it from here too.
 - `sections` (present only when non-empty) lists the `section` calls
   made during this execution, each `{ "label": "...", "at": "..." }`, in
   call order. Not deduplicated, unlike `used`: a label entered twice (a
   loop, a retry) was entered twice, and the array should read that way,
-  where `used` names a receipt id once because an id is an identity worth
-  citing once, not a point in a sequence. `at` was left off at first, on the
-  reasoning that the question `sections` answers is where execution
+  where `used` names a step record id once because an id is an identity
+  worth citing once, not a point in a sequence. `at` was left off at first,
+  on the reasoning that the question `sections` answers is where execution
   stopped, not where it was slow. That turned out to be only half true. A
   label alone says a stage was reached, never *when* relative to anything
-  else this same receipt carries, and a real run surfaced exactly the gap
+  else this same record carries, and a real run surfaced exactly the gap
   that leaves: a `status: "failed"` sitting next to a `final.png` that
   showed the target still present, roughly eight seconds apart, with
-  nothing on the receipt saying so: read at face value, that looks like
+  nothing on the record saying so: read at face value, that looks like
   the state was flickering, and it was misdiagnosed as exactly that. `at`
   (ISO 8601, taken by the collector itself when `section` is called,
   never supplied by the step) puts every label on the same absolute
   timeline `started_at`/`finished_at`, `polls`' own `at`, and
   `evidence.screenshots[].at` already share, so "did the state actually
   change" and "was this read taken before it settled" stop being
-  indistinguishable from a receipt alone. A failed step's `sections` still
+  indistinguishable from a step record alone. A failed step's `sections` still
   holds whichever labels it reached before the failure, and that array's
   last element already answers "which stage was it in": there is no
   separate `error.section` field putting the same fact in a second place.
@@ -1467,8 +1507,8 @@ shape whether the step ran inside a scenario or via `do`.
   `timed_out`, or `failed` when the predicate itself threw. In completion
   order rather than call order: a nested poll finishes before the one
   containing it, and only a finished poll has counts to state. A timed-out
-  poll is recorded like any other, since the receipt of the step that
-  failed on that timeout is exactly where the numbers are wanted. Unlike
+  poll is recorded like any other, since that step's own record is exactly
+  where the numbers are wanted. Unlike
   `sections`, `polls` always carried timing beyond a bare label, because
   the question it exists for is a timing question: one attempt at 0ms says
   the condition was already true and the wait was a no-op, forty attempts
@@ -1484,7 +1524,7 @@ shape whether the step ran inside a scenario or via `do`.
   the order first read: the same measured-not-declared shape `used` and
   `sections` already have, since `requireEnv` is the one call site the
   library controls. Recorded before a missing key throws, so a
-  `MissingEnvError` failure's receipt still shows what the step asked for.
+  `MissingEnvError` failure's record still shows what the step asked for.
   Only names are recorded, never values: a value can be a secret. A step
   that reads `env[name]` directly leaves no trace here: this field
   counts only what passed through `requireEnv`, never a plain object read
@@ -1502,7 +1542,7 @@ shape whether the step ran inside a scenario or via `do`.
   it go unrecorded. cucumber-js has no browser context of its own to hold
   any of this: a step can pass (`status: "ok"`)
   while the page underneath it was throwing the whole time, and before this
-  field nothing on the receipt said so. Each category is present only when
+  field nothing on the record said so. Each category is present only when
   it recorded at least one entry, and is always a bare array, never
   something whose own type depends on how many entries it holds:
   `console_errors`, each entry `{ "text", "location": { "url", "lineNumber",
@@ -1513,8 +1553,8 @@ shape whether the step ran inside a scenario or via `do`.
   taken by the collector itself, the same measured, never declared
   convention `sections`/`polls` already follow. Capped at 100 entries per
   category: a redirect loop or a chatty page can produce thousands of these
-  in one step, and a receipt trying to hold all of them would stop being
-  something a reader can open. A category that hits the cap stays a bare
+  in one step, and a step record trying to hold all of them would stop
+  being something a reader can open. A category that hits the cap stays a bare
   array (still capped at 100) and instead adds its own name to a sibling
   `truncated` object on `page_events`, mapped to its true total, present
   only when at least one category was actually truncated:
@@ -1527,7 +1567,7 @@ shape whether the step ran inside a scenario or via `do`.
   once, in one place. Redacted the same way every other field is: a secret
   can land in console text or a failed request's URL as easily as it can
   anywhere else, so no separate redaction path exists for this field.
-  Present on both a successful and a failed step's receipt alike: a page
+  Present on both a successful and a failed step's record alike: a page
   error is evidence about the page, not a verdict on the step.
 - `actions` (present only when non-empty) is read out of this step's own
   trace chunk (`evidence.trace`, above): every Playwright call the step made
@@ -1547,8 +1587,8 @@ shape whether the step ran inside a scenario or via `do`.
   timestamp, landing `actions` on the same timeline `sections`/`polls`/
   `evidence.screenshots[].at` already share. The five optional fields are an
   allowlist, not everything the call carried: a `setContent` call's own HTML
-  body, for one, can run to kilobytes, and nothing a receipt is for needs it
-  when trace.zip already has the whole thing. Capped at 100 entries, same
+  body, for one, can run to kilobytes, and nothing a step record is for
+  needs it when trace.zip already has the whole thing. Capped at 100 entries, same
   convention as `page_events`, with the same sibling `truncated` field
   reporting the true total when the cap is hit: `"truncated": { "actions":
   214 }`. `evidence.attachments`' own truncation (above) reports through
@@ -1568,10 +1608,10 @@ shape whether the step ran inside a scenario or via `do`.
   recorded`), because a silently empty `actions` sitting next to a
   `evidence.trace` that plainly exists would otherwise read as "nothing
   happened" rather than "this build could not read it".
-- A Before/After/AfterStep hook has no receipt of its own (see "Compat steps"), so
-  its own trace evidence lands on that invocation's own entry in the
-  scenario record's `hooks` array instead: `trace` (relative to the
-  scenario's own directory, not a receipt dir, since a hook has none),
+- A Before/After/AfterStep hook has no step record of its own (see "Compat
+  steps"), so its own trace evidence lands on that invocation's own entry in
+  the scenario record's `hooks` array instead: `trace` (relative to the
+  scenario's own directory, not a step record dir, since a hook has none),
   `actions`, and `truncated`, in exactly the shape above, present under
   exactly the same rules. A hook invocation carries no `sections`/`polls`
   alongside them: both come from a typed step's `section`/`poll` fixtures,
@@ -1585,12 +1625,14 @@ shape whether the step ran inside a scenario or via `do`.
   entry this step's own bag resolution actually touched, `{ "name",
   "scope", "setup_ms"?, "at"?, "reused" }` (see "Fixtures" for the full
   shape and why `setup_ms`/`at` are only present on a freshly built entry).
-  Teardown itself is not on this list: it runs after this receipt is
+  Teardown itself is not on this list: it runs after this step record is
   already closed, so a `scenario`-scope fixture's own teardown failure
   lands on the scenario record's `teardown_errors` instead (see
   "Fixtures").
-- Receipts live under the state directory (`.nukadoko/`, gitignored). They are
-  local working records; the durable artifacts are sign-offs.
+- Step records live under `.nukadoko/records/steps/<id>/`, scenario records
+  under `.nukadoko/records/scenarios/<id>/` (see "Artifacts"). Both are
+  local working measurements; the durable artifacts built from them are
+  sign-offs.
 
 ## Sessions, environments, secrets
 
@@ -1601,7 +1643,7 @@ The execution infrastructure Cucumber never had:
   means a clean start; there is no implicit shared state. No daemon.
 - **Environments** name deployment targets: per-environment `baseURL`,
   `envFiles`, `policy: "read-only"` (refuses mutating steps), and an optional
-  `version` probe recorded on every receipt as `target_version`. A sign-off
+  `version` probe recorded on every step record as `target_version`. A sign-off
   freezes both, so a record names the deployment it was green against.
 - **Secrets**: git is the classifier for *origin*. An env file git does
   not track (ignored or untracked, never distinguished) is a secret
@@ -1619,11 +1661,11 @@ The execution infrastructure Cucumber never had:
   report someone pastes, an agent's own conversation transcript) just
   because the repository already has it. Both origins share one token,
   `{{secret.NAME}}`: there is no second `{{redacted.NAME}}` marker, so a
-  receipt reader only ever has to recognize one redaction shape. The same
-  key cannot be named in both `public` and `redact`: that is a config
+  step record reader only ever has to recognize one redaction shape. The
+  same key cannot be named in both `public` and `redact`: that is a config
   error, since the two lists give opposite instructions for one key.
-  Secret values, from either origin, are redacted wherever a receipt is
-  emitted (receipt.json, `do`'s stdout copy, http.jsonl), applied by the
+  Secret values, from either origin, are redacted wherever a step record is
+  emitted (`record.json`, `do`'s stdout copy, http.jsonl), applied by the
   executor at write time, never controllable from a step's `run`. Honest
   limits: values shorter than 4 characters are never redacted (this floor
   applies to a `redact`-named value exactly as it does to any other
@@ -1772,28 +1814,29 @@ export default defineConfig({
 ### The state directory
 
 Everything nukadoko writes at run time lives under `.nukadoko/` (gitignored by
-`init`); none of it is meant to be committed:
+`init`); none of it is meant to be committed. It splits into three
+directories, by purpose (see "Artifacts"):
 
-- `receipts/<id>/`: one directory per receipt: the receipt JSON and its
-  evidence files (trace.zip, screenshots, http.jsonl)
-- `scenarios/<id>/`: one directory per scenario run: `record.json`, the
-  scenario's own final screenshot, and one trace chunk per Before/After/
+- `records/steps/<id>/`: one directory per step record: the record JSON
+  and its evidence files (trace.zip, screenshots, http.jsonl)
+- `records/scenarios/<id>/`: one directory per scenario run: `record.json`,
+  the scenario's own final screenshot, and one trace chunk per Before/After/
   AfterStep hook invocation that touched the browser (named uniquely per
   invocation, e.g. `hook-before-0.zip`, `hook-after_step-1-2.zip`, since
   more than one hook can share this one directory, unlike a step, which
-  never shares its own `receipts/<id>/`), mirroring Playwright's own
+  never shares its own `records/steps/<id>/`), mirroring Playwright's own
   per-test `test-results/` convention one level up. No whole-scenario
   trace.zip here: each step's own trace lives under that step's own
-  `receipts/<id>/` instead (see "Running")
-- `sessions/<env>/<name>.json`: storageState; live credentials in
+  `records/steps/<id>/` instead (see "Running")
+- `cache/sessions/<env>/<name>.json`: storageState; live credentials in
   plaintext, created with restricted permissions
-- `allure-results/`: the emitter's output, appended to across runs and
-  safe to delete whenever a fresh Allure launch is wanted; `init` also
+- `export/allure-results/`: the emitter's output, appended to across runs
+  and safe to delete whenever a fresh Allure launch is wanted; `init` also
   creates it empty, since Allure's own CLI refuses to start against a
   missing directory but accepts an empty one, letting `allure watch` already
   be running before the first `nuka run`
-- `messages.ndjson`: the messages emitter's output, one stream per run;
-  truncated at the start of every `nuka run` (see "Messages emitter")
+- `export/messages.ndjson`: the messages emitter's output, one stream per
+  run; truncated at the start of every `nuka run` (see "Messages emitter")
 
 The durable artifacts live in the repository instead: feature files, typed
 steps, and sign-off records.
@@ -1803,8 +1846,8 @@ steps, and sign-off records.
 A sign-off records that an agreed scenario ran green at a named commit. It
 exists for acceptance (confirming once that a ticket's criteria are met),
 not for regression. The scenario is written from the ticket's acceptance
-criteria, run until it is green, and then kept as a record; re-running it
-later is not the point, and nothing in nukadoko re-runs it.
+criteria, run until it is green, and then kept as an acceptance record;
+re-running it later is not the point, and nothing in nukadoko re-runs it.
 
 ```sh
 nuka run acceptance/PROJ-123.feature     # execute, as often as needed
@@ -1876,13 +1919,14 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   before this existed carries no such section: `nuka tend` treats that as
   "condition unknown", never guesses at one, and never lets a note compare
   it against anything (see "Tending").
-- It carries the feature's full text, the scenario record, and each step's
-  receipt with evidence stripped: traces and screenshots stay in
+- The acceptance record is built by the tool from the run it freezes: the
+  feature's full text, the scenario record, and each step's own step
+  record with evidence stripped (traces and screenshots stay in
   `.nukadoko/`, and a CI artifact is where they belong when they are
-  wanted at all. The copy is made by the tool, never transcribed by a
-  human: transcription would demote a measurement back to a claim.
+  wanted at all). Never transcribed by a human: transcription would demote
+  a measurement back to a claim.
 - The record's own tail carries one more section, "Declared vs observed":
-  every step across every scenario in the record whose receipt declared
+  every step across every scenario in the record whose step record declared
   `mutates: false` but was measured making at least one write
   (`observed.http_writes > 0`, see Keyword semantics), stated as a raw
   fact (declared value beside the observed count), never a verdict. It
@@ -1923,7 +1967,7 @@ What an agent does when a ticket's acceptance criteria are handed to it:
 1. Read the vocabulary: `nuka steps --json`, then `nuka describe <step>`
    for the contract of anything that looks relevant.
 2. When an operation is missing, `nuka scaffold <name>`, implement it, and
-   exercise it alone with `nuka do` until its receipt looks right.
+   exercise it alone with `nuka do` until its step record looks right.
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
@@ -1947,14 +1991,14 @@ mechanical, and the tool refuses rather than let them go wrong quietly.
 ## Allure emitter
 
 `nuka run` writes one Allure test result per *step*, the moment that step
-finishes, to the `allure-results/` directory (Allure 2 file format, readable
-by both Allure 2 and 3): nukadoko's only presentation layer; nukadoko itself
-renders nothing.
+finishes, to the `export/allure-results/` directory (Allure 2 file format,
+readable by both Allure 2 and 3): nukadoko's only presentation layer;
+nukadoko itself renders nothing.
 
-- The output location defaults to `.nukadoko/allure-results/` (the state
-  directory's own `allure-results/`, above); `allure.resultsDir` in
-  `nukadoko.config.ts` moves it to any other root-relative path. There is no
-  `enabled` flag and no CLI flag: the emitter always runs, so zero
+- The output location defaults to `.nukadoko/export/allure-results/` (the
+  state directory's own `export/allure-results/`, above); `allure.resultsDir`
+  in `nukadoko.config.ts` moves it to any other root-relative path. There is
+  no `enabled` flag and no CLI flag: the emitter always runs, so zero
   configuration already produces a full report. It is skipped only when a
   `nuka run` invocation selects zero pickles (no `allure-results/` is
   created at all in that case), the same reason BeforeAll/AfterAll are
@@ -1970,8 +2014,8 @@ renders nothing.
   had a result for. Now each step's own result lands the moment that step
   finishes, so a dashboard already open updates step by step rather than
   scenario by scenario; landing latency was measured at 150-351ms. `nuka
-  init` creates `.nukadoko/allure-results/` empty up front for exactly this
-  (see "The state directory"), so `allure watch` can already be running
+  init` creates `.nukadoko/export/allure-results/` empty up front for
+  exactly this (see "The state directory"), so `allure watch` can already be running
   before the first `nuka run` even starts. `categories.json`/
   `environment.properties` are written once, at the very start of the run,
   before the first step starts. Running `allure generate` against the
@@ -2003,28 +2047,28 @@ renders nothing.
   is emitted too, always under a name prefixed `declared:`; that prefix is
   the one place where provenance (measured by nukadoko vs. self-reported by
   the step) survives once everything is sitting in the same result file.
-- Every step whose receipt exists, passing or failing alike, also gets that
-  whole receipt attached verbatim, as `receipt.json`. It is the same object
-  that reached disk (already redacted there, so nothing here redacts it a
-  second time), attached whole rather than picked apart field by field, on
-  purpose: a field added to `receipt.json` later shows up in the report on
-  its own, with no emitter change needed to carry it there. The individually
-  mapped fields below stay too, since a reader who wants one fact should not
-  have to open an attachment to get it; `receipt.json` is the fallback that
-  keeps the report complete even where an individual mapping was never
-  written.
-- A step's own `sections`, `polls`, and `actions` (see Receipts) become one
+- Every step whose record exists, passing or failing alike, also gets that
+  whole step record attached verbatim, as `record.json`. It is the same
+  object that reached disk (already redacted there, so nothing here
+  redacts it a second time), attached whole rather than picked apart field
+  by field, on purpose: a field added to `record.json` later shows up in
+  the report on its own, with no emitter change needed to carry it there.
+  The individually mapped fields below stay too, since a reader who wants
+  one fact should not have to open an attachment to get it; `record.json`
+  is the fallback that keeps the report complete even where an individual
+  mapping was never written.
+- A step's own `sections`, `polls`, and `actions` (see Records) become one
   child-step timeline nested directly under that step's own test, one level
   shallower than before this change (a step used to be nested inside a
   scenario's test itself, and the timeline nested inside that). Merged in
   ascending `at` order; two entries that land on the exact same millisecond
   keep a fixed order, `sections` before `polls` before `actions`, so a
-  rerun of the same receipt never reshuffles the timeline into an
+  rerun of the same step record never reshuffles the timeline into an
   unreadable diff. A section
   renders as a zero-width marker named after its own label. A poll spans
   its own start through `waited_ms` later, named `<description>
   (<attempts> attempts)`, so a wait that resolved in one attempt reads
-  differently from one that took forty without opening the receipt: the
+  differently from one that took forty without opening the step record: the
   duration alone cannot tell those two apart, and the count is the one fact
   only the name can carry here. A poll's own outcome sets the child step's
   status: `resolved` is passed, `timed_out` is failed (the condition it
@@ -2038,11 +2082,11 @@ renders nothing.
   the way a `goto`'s own target is implied by `url`. Neither `ms` nor
   `timeout_ms` ever lands in the name: `ms` is already visible as the child
   step's own width, the same reason `page_events`'s counts stay off step
-  names too, and `timeout_ms` stays in the `receipt.json` attachment. An
+  names too, and `timeout_ms` stays in the `record.json` attachment. An
   action's own `outcome` sets the child step's status, passed or failed,
   no third bucket: unlike a poll, a Playwright call either resolved the way
   the step asked or it did not. When `actions` itself was capped at 100
-  entries (see Receipts, `truncated.actions`), the timeline gets one more
+  entries (see Records, `truncated.actions`), the timeline gets one more
   child step at its own tail, zero-width and passed, naming the cut (e.g.
   `... 4113 more actions not shown`), for the same reason `page_events`'s
   own `truncated` field exists: a reader scanning only the timeline must
@@ -2061,12 +2105,12 @@ renders nothing.
   touched `this.openPage()` gets neither: no trace attachment, no timeline
   entries, the same "nothing to show" a step that never destructured
   `page` already gets.
-- `page_events` (see Receipts) surfaces as up to three more parameters,
+- `page_events` (see Records) surfaces as up to three more parameters,
   `console errors (observed)`, `page errors (observed)`, `failed requests
   (observed)`, one per category that recorded at least one entry, so a
-  reader sees the count without opening the `receipt.json` attachment that
+  reader sees the count without opening the `record.json` attachment that
   already carries every entry in full. A category the collector truncated
-  (see Receipts, `page_events.truncated`) reports its true total beside the
+  (see Records, `page_events.truncated`) reports its true total beside the
   shown count, e.g. `100 of 4213`: the shown count alone would understate
   what actually happened.
 - A step's parameters carry its declaration and what was actually observed
@@ -2087,7 +2131,7 @@ renders nothing.
   own `historyId` apart on purpose (see below), not to surface anything to
   a reader.
 - A failed step's message is prefixed `[nukadoko.failure=<kind>]`, naming
-  the same `error.kind` its receipt already carries; the same `error.kind`
+  the same `error.kind` its step record already carries; the same `error.kind`
   is also written as a `nukadoko.failure` result label. The two Allure
   generations turn that into a category by different paths, and they need
   different things from a user.
@@ -2148,7 +2192,7 @@ renders nothing.
   note (see "Tending"), both read from what was actually accepted rather
   than from a chain of report entries that would have to trust a step's
   identity to be right.
-- Ad-hoc `do` receipts are working records, not test results, and do not
+- Ad-hoc `do` step records are working records, not test results, and do not
   appear on the dashboard: what an exploration proves is expressed by
   repairing or writing a scenario, and that scenario run is what Allure
   shows.
@@ -2167,8 +2211,8 @@ renders nothing.
   headless browser against it. What that confirmed: the report's own pass/failed/
   skipped counts match what `nuka run` itself reported, each scenario
   renders as its own tree group and each step as one of that group's
-  leaves, a failed step's `receipt.json` attachment is present and its own
-  content is readable (naming that step's own receipt id), `nuka init`'s
+  leaves, a failed step's `record.json` attachment is present and its own
+  content is readable (naming that step's own record id), `nuka init`'s
   own `allurerc.mjs` (above) actually sorts a failure into its own category
   rather than Allure 3's default "Product errors", and a step's own
   `sections`/`polls` render as its own child steps, one level under that
@@ -2197,7 +2241,7 @@ output, and its job is compat fidelity rather than measurement surplus.
 
 `nuka run` writes one cucumber messages stream (NDJSON, one envelope per
 line, via `@cucumber/messages`) per invocation, defaulting to
-`.nukadoko/messages.ndjson`; `messages.output` in `nukadoko.config.ts`
+`.nukadoko/export/messages.ndjson`; `messages.output` in `nukadoko.config.ts`
 moves it to any other root-relative path. There is no `enabled` flag and
 no CLI flag, the same as Allure: the emitter always runs, and it is
 skipped only when a `nuka run` invocation selects zero pickles.
@@ -2213,7 +2257,7 @@ skipped only when a `nuka run` invocation selects zero pickles.
   fidelity, full stop: its only job is that a migrated suite's existing
   formatters and JUnit-based CI keep reading a nukadoko-produced run the
   way they read a classic cucumber-js one.
-- Receipt internals stay out of the stream entirely: no validated result,
+- Step record internals stay out of the stream entirely: no validated result,
   no `mutates`, no `observed` counts, no `error.kind`. `TestStepResult` and
   `TestStepFinished` are closed schemas (`additionalProperties: false`)
   with no field for any of them, and there is no smuggling them in through
@@ -2254,7 +2298,7 @@ parameters have no slot in the protocol's closed schema and are dropped;
 no `stepDefinition` envelope is emitted, because the record keeps no
 location for a step's own definition and emitting one anyway would be a
 fabricated fact; and `TestStepResult.exception` is never set, since the
-protocol requires `Exception.type` and a receipt only ever carries a
+protocol requires `Exception.type` and a step record only ever carries a
 message: the reason a failed step's JUnit `<failure>` is body-only.
 
 ## Self-healing, audited
@@ -2263,13 +2307,13 @@ When a scripted scenario breaks (the app changed, the pattern no longer
 matches reality), the repair loop is:
 
 1. An agent re-runs the goal adaptively via `nuka do`, one step at a time,
-   reading each receipt to decide the next call.
-2. The receipts record what actually worked: a sequence that deviates from
-   the scripted scenario. They are the narrative, not the proof: the agent
-   may cite them in the PR as the story of the repair.
+   reading each step record to decide the next call.
+2. The step records record what actually worked: a sequence that deviates
+   from the scripted scenario. They are the narrative, not the proof: the
+   agent may cite them in the PR as the story of the repair.
 3. The PR updates the typed steps and/or the feature file, and its proof is
-   the repaired scenario running green: a scenario record and its
-   receipts, reviewed like any other change. Attestation always flows
+   the repaired scenario running green: a scenario record and its step
+   records, reviewed like any other change. Attestation always flows
    through the scenario, never through an ad-hoc sequence.
 
 nukadoko's contribution is that every stage leaves a record; the authoring is an
@@ -2317,17 +2361,17 @@ do need acting on):
   (`rationale`, a `.describe()` on each schema field) is actually
   declared.
 
-It exists because the information was already there and unread. A receipt's
-`world` and `declared` counts do shrink as a suite promotes, which is true
-and useless as a way for a person to see progress: nobody reads a directory
-of receipts to work out how far along they are. Stating it once, in the
+It exists because the information was already there and unread. A step
+record's `world` and `declared` counts do shrink as a suite promotes, which
+is true and useless as a way for a person to see progress: nobody reads a
+directory of step records to work out how far along they are. Stating it once, in the
 command whose whole subject is the health of the bed, is what makes it
 something anyone actually sees.
 
 What it looks at, and why each one is rot rather than style:
 
 - **A sign-off that no longer matches the code it froze.** A record
-  carries the feature source it accepted and every receipt from that run.
+  carries the feature source it accepted and every step record from that run.
   If a frozen `result` no longer passes its step's current `returns`
   schema, or the frozen feature source no longer matches the file it was
   taken from, or a step it cites is gone from the vocabulary, then the
@@ -2402,26 +2446,26 @@ What it looks at, and why each one is rot rather than style:
   `pattern-unbound` would most mislead someone about. Naming the
   directory in `additionalFeatureDirs` is what actually fixes it.
 - **A step whose own trace shows another call landing close behind a
-  navigation call.** Read from a frozen sign-off record's receipt alone,
-  never a live run's (`.nukadoko` stays out of this walk the same way it
-  does every other one here): for each `goto`, `reload`, `goBack`, or
-  `goForward` in that receipt's own `actions`, the gap to whatever call
-  the step made next. A read that lands inside the same receipt's own
-  `ctx.poll` window is left out: a step written to `poll()` the way the
-  doctrine in "Context API" already asks for is retrying by construction,
-  not the thing this note exists to tell apart from it. What is reported
-  is only the gap itself, never a verdict: how long a page takes to
-  render after a navigation is nothing this tool measures, and no table
-  of which Playwright calls auto-wait is built to guess at it, since a
+  navigation call.** Read from a frozen sign-off record's step record
+  alone, never a live run's (`.nukadoko` stays out of this walk the same
+  way it does every other one here): for each `goto`, `reload`, `goBack`,
+  or `goForward` in that step record's own `actions`, the gap to whatever
+  call the step made next. A read that lands inside the same step
+  record's own `ctx.poll` window is left out: a step written to `poll()`
+  the way the doctrine in "Context API" already asks for is retrying by
+  construction, not the thing this note exists to tell apart from it. What
+  is reported is only the gap itself, never a verdict: how long a page
+  takes to render after a navigation is nothing this tool measures, and no
+  table of which Playwright calls auto-wait is built to guess at it, since a
   table like that would describe a dependency's own semantics rather than
   something this tool measured, and go stale the moment that dependency
-  changed. A receipt with no `actions` at all, the shape a record written
-  before that field existed still carries, is silently out of scope, not
-  an error.
+  changed. A step record with no `actions` at all, the shape a record
+  written before that field existed still carries, is silently out of
+  scope, not an error.
 
 This last finding is the plainest reason the whole list above lives on
-`tend` and not `check`. The step it names already ran green, and its
-receipt already froze that pass; nothing about it is broken today, and no
+`tend` and not `check`. The step it names already ran green, and its step
+record already froze that pass; nothing about it is broken today, and no
 run is blocked by it. What changed is only that the tool can now see a
 fact about how that pass happened, not that the pass stopped being real.
 `check` exists to answer whether a run can proceed right now, so a step
@@ -2446,7 +2490,7 @@ The npm package is `nukadoko`; the one command it installs is `nuka`.
 
 ```
 nuka run <feature[:line]|dir>
-                              execute scenarios; receipts + allure-results.
+                              execute scenarios; step records + allure-results.
                               :line runs one scenario, for iteration only — a
                               partial run can never be accepted. A directory
                               is walked recursively for .feature files, in
@@ -2461,8 +2505,8 @@ nuka run <feature[:line]|dir>
                               line; --quiet drops the progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always
-nuka do <step> [--args '<json>'] [--use <receipt-id>]
-                              execute one typed step; receipt to stdout.
+nuka do <step> [--args '<json>'] [--use <step-record-id>]
+                              execute one typed step; step record to stdout.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
@@ -2572,8 +2616,8 @@ never actually read.
   promise covers compat assets: switching the import back leaves a plain
   cucumber-js suite. `defineStep` has no import to switch back to. A
   promoted step's body still moves (it is written against Playwright's own
-  objects, by the same choice stated below), but its schemas, its receipt's
-  `result`, `from` and the binding-order check reading it, and every
+  objects, by the same choice stated below), but its schemas, its step
+  record's `result`, `from` and the binding-order check reading it, and every
   contract check built on those do not, and nothing here converts one back.
   Stated as a limit rather than a gap to close: the conversion is per-step
   and mechanical, and the import's reversibility exists to make adoption's
@@ -2596,7 +2640,7 @@ never actually read.
 
 ## Roadmap
 
-- **M1 (engine core)**: `defineStep`, `do`, `run` over pickles, receipts,
+- **M1 (engine core)**: `defineStep`, `do`, `run` over pickles, step records,
   sessions/environments, `check`, `init`. Secrets onboarding redesigned.
 - **M2 (compat API)**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
@@ -2628,7 +2672,7 @@ never actually read.
   lying the moment the command changes.
 - **M6 (chained arguments)**: `from`, the scenario-order check `nuka check`
   and `nuka run` share, `--use` on `do`, and a `used` entry that names the
-  step beside the receipt it cites. Where a step's inputs come from stops
+  step beside the step record it cites. Where a step's inputs come from stops
   being prose inside a `run` body and becomes a declaration the tool reads
   (see "Chaining steps").
 - **M7 (tending)**: `nuka tend`, the findings that are about rot rather

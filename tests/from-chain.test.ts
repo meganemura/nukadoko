@@ -7,7 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: `from` end to end (m6a-from-core task spec) against
 // tests/fixtures/from-project — the scenario path's injection mechanism
 // (docs/spec.md "Chaining steps"), the `used` shape it feeds into
-// (`{ receipt, step }`), `ctx.resultOf`'s unregistered-Step throw, and
+// (`{ record, step }`), `ctx.resultOf`'s unregistered-Step throw, and
 // `from`'s own startup-fatal check under `nuka do`. `ctx.resultOf`'s
 // "recorded as used"/"most recent wins"/"never crosses a scenario boundary"
 // behavior is already covered by tests/resultof.test.ts (updated for the new
@@ -19,9 +19,9 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("from: scenario-path injection", () => {
@@ -48,19 +48,19 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const createReceiptId = record.steps[0].receipt as string;
-    const archiveReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+    const createRecordId = record.steps[0].record as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
 
-    expect(archiveReceipt.status).toBe("ok");
-    // The injected value lands on the receipt's own `args` — the step
-    // actually ran with it, so the receipt should say so (this task's spec:
+    expect(archiveStepRecord.status).toBe("ok");
+    // The injected value lands on the step record's own `args` — the step
+    // actually ran with it, so the step record should say so (this task's spec:
     // a reader must be able to tell an injected value apart from one that
     // was never validated at all).
-    expect(archiveReceipt.args).toEqual({ projectId: "p_acme" });
-    expect(archiveReceipt.result).toEqual({ archived: true, projectId: "p_acme" });
-    // `used` cites the upstream receipt in the new `{ receipt, step }` shape
+    expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
+    expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme" });
+    // `used` cites the upstream step record in the new `{ record, step }` shape
     // (this task's spec, item 5).
-    expect(archiveReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-project" }]);
+    expect(archiveStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
   });
 
   it("a captured value wins over from; no injection means no used entry", async () => {
@@ -75,13 +75,13 @@ describe("from: scenario-path injection", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const archiveReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
-    expect(archiveReceipt.args).toEqual({ projectId: "explicit-id" });
-    expect(archiveReceipt.result).toEqual({ archived: true, projectId: "explicit-id" });
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    expect(archiveStepRecord.args).toEqual({ projectId: "explicit-id" });
+    expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "explicit-id" });
     // The pattern captured `projectId` itself, so `from` never fired and
-    // `used` is omitted (docs/spec.md "Receipts": present only when non-
+    // `used` is omitted (docs/spec.md "Records": present only when non-
     // empty).
-    expect(archiveReceipt.used).toBeUndefined();
+    expect(archiveStepRecord.used).toBeUndefined();
   });
 
   it("the upstream hasn't run yet: m6b-from-check's pre-execution guard now catches this before the step ever runs", async () => {
@@ -108,9 +108,9 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
     expect(record.steps[0].status).toBe("failed");
-    // `receipt: null`, not a real receipt id — this step's own `run` never
+    // `record: null`, not a real record id — this step's own `run` never
     // executed at all (this task's spec: "実行せずに失敗させる").
-    expect(record.steps[0].receipt).toBeNull();
+    expect(record.steps[0].record).toBeNull();
     const message = record.steps[0].error.message as string;
     expect(message).toContain("projectId");
     expect(message).toContain("create-project");
@@ -129,11 +129,11 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(3);
 
-    const secondCreateReceiptId = record.steps[1].receipt as string;
-    const archiveReceipt = await readReceipt(rootDir, record.steps[2].receipt as string);
+    const secondCreateRecordId = record.steps[1].record as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[2].record as string);
 
-    expect(archiveReceipt.args).toEqual({ projectId: "p_second" });
-    expect(archiveReceipt.used).toEqual([{ receipt: secondCreateReceiptId, step: "create-project" }]);
+    expect(archiveStepRecord.args).toEqual({ projectId: "p_second" });
+    expect(archiveStepRecord.used).toEqual([{ record: secondCreateRecordId, step: "create-project" }]);
   });
 
   it("from and ctx.resultOf reading the same upstream in one execution still dedupe in used", async () => {
@@ -148,17 +148,17 @@ describe("from: scenario-path injection", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const createReceiptId = record.steps[0].receipt as string;
-    const closeReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+    const createRecordId = record.steps[0].record as string;
+    const closeStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
 
-    expect(closeReceipt.result).toEqual({ closed: true, projectId: "p_acme", projectName: "acme" });
+    expect(closeStepRecord.result).toEqual({ closed: true, projectId: "p_acme", projectName: "acme" });
     // One entry, not two: `from`'s own injection and this step's own
-    // `ctx.resultOf(createProject)` call both read the exact same receipt,
+    // `ctx.resultOf(createProject)` call both read the exact same stepRecord,
     // and both write into the same collector (this task's spec, item 5).
-    expect(closeReceipt.used).toEqual([{ receipt: createReceiptId, step: "create-project" }]);
+    expect(closeStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
   });
 
-  it("a failed step's receipt carries the from-injected value's own result (fb3-used-result task spec)", async () => {
+  it("a failed step's step record carries the from-injected value's own result (fb3-used-result task spec)", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/chain.feature:33"], {
       rootDir,
@@ -171,14 +171,14 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(2);
 
-    const createReceiptId = record.steps[0].receipt as string;
-    const explodeReceipt = await readReceipt(rootDir, record.steps[1].receipt as string);
+    const createRecordId = record.steps[0].record as string;
+    const explodeStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
 
-    expect(explodeReceipt.status).toBe("failed");
+    expect(explodeStepRecord.status).toBe("failed");
     // The upstream's own full validated result, not just the `projectId` key
     // `from` happened to read (this task's spec, decision 3).
-    expect(explodeReceipt.used).toEqual([
-      { receipt: createReceiptId, step: "create-project", result: { id: "p_acme", name: "acme" } },
+    expect(explodeStepRecord.used).toEqual([
+      { record: createRecordId, step: "create-project", result: { id: "p_acme", name: "acme" } },
     ]);
   });
 });
@@ -203,9 +203,9 @@ describe("ctx.resultOf: unregistered Step throws", () => {
     );
 
     expect(exitCode).toBe(1);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("failed");
-    expect(receipt.error.message).toContain("discovery never registered");
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("failed");
+    expect(stepRecord.error.message).toContain("discovery never registered");
   });
 });
 
@@ -220,7 +220,7 @@ describe("from: unregistered upstream is a startup fatal under nuka do", () => {
     await removeTempDir(rootDir);
   });
 
-  it("refuses to execute the step at all; no receipt, stderr names the problem", async () => {
+  it("refuses to execute the step at all; no step record, stderr names the problem", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
@@ -230,7 +230,7 @@ describe("from: unregistered upstream is a startup fatal under nuka do", () => {
 
     expect(exitCode).toBe(1);
     // Setup-phase fatal, same family as ConfigError/DuplicateStepError: no
-    // receipt is ever printed to stdout.
+    // step record is ever printed to stdout.
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("archive-project-unregistered-from");
     expect(stderr.text()).toContain("never registered");

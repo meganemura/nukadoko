@@ -8,7 +8,7 @@ import createTodo from "./create-todo.js";
 // project's own read-thing-via-resultof.ts fixture demonstrates. No World,
 // no stash: the dependency is visible twice now, statically as this file's
 // own import of create-todo.js and at run time as `used` on this step's
-// receipt.
+// step record.
 export default defineStep({
   pattern: "the created todo id is read back via resultOf",
   description: "Read the previous step's validated result through resultOf",

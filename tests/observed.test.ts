@@ -14,7 +14,7 @@ import {
 // Responsibility: measured mutates end to end against tests/fixtures/
 // observed-project — a real local http server, exercised through both
 // `nuka do` and `nuka run` (this task's spec's m2pre-observed spec, scope
-// item 6): the request-side `{1, 1}` tally landing on a receipt, and — since
+// item 6): the request-side `{1, 1}` tally landing on a step record, and — since
 // t2-trust-declaration — that a declared `mutates: false` step's own
 // occurrence is never failed by what it actually observed writing, whether
 // it is bound in Then position or run under a `policy: "read-only"`
@@ -64,7 +64,7 @@ describe("measured mutates: request-side observed counts", () => {
     await removeTempDir(rootDir);
   });
 
-  it("nuka do: one GET and one POST land on the receipt as observed {1, 1}", async () => {
+  it("nuka do: one GET and one POST land on the step record as observed {1, 1}", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "hit-get-and-post", "--args", "{}"], {
@@ -75,9 +75,9 @@ describe("measured mutates: request-side observed counts", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
-    expect(receipt.observed).toEqual({ http_reads: 1, http_writes: 1 });
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.observed).toEqual({ http_reads: 1, http_writes: 1 });
   });
 
   it("nuka run: a Then-position step observing only reads passes", async () => {
@@ -106,7 +106,7 @@ describe("measured mutates: request-side observed counts", () => {
   });
 
   // Before t2-trust-declaration this scenario failed: a Then-position step's
-  // own measured write demoted its receipt regardless of what it declared,
+  // own measured write demoted its step record regardless of what it declared,
   // and skipped the rest of the scenario. The step here now declares
   // `mutates: false` (tests/fixtures/observed-project/features/steps/
   // a-write-happens.ts) — nukadoko trusts that declaration instead of the
@@ -128,17 +128,17 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].status).toBe("passed");
     expect(record.steps[2].status).toBe("passed");
 
-    // The write is still measured and still lands on the receipt (this
+    // The write is still measured and still lands on the step record (this
     // task's spec, decision 5: the record is unchanged) — only whether it
     // fails the step changed.
-    const receipt = JSON.parse(
+    const stepRecord = JSON.parse(
       await readFile(
-        path.join(rootDir, ".nukadoko", "receipts", record.steps[1].receipt, "receipt.json"),
+        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[1].record, "record.json"),
         "utf8",
       ),
     );
-    expect(receipt.status).toBe("ok");
-    expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
   // Before t2-trust-declaration this was the "lie backstop": a declared
@@ -155,9 +155,9 @@ describe("measured mutates: request-side observed counts", () => {
     );
 
     expect(exitCode).toBe(0);
-    const receipt = JSON.parse(stdout.text());
-    expect(receipt.status).toBe("ok");
-    expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
   // `nuka run` against a read-only environment (this task's spec, decision
@@ -179,16 +179,16 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps).toHaveLength(2);
 
     expect(record.steps[0].status).toBe("failed");
-    // Never began: no receipt was written for it (docs/spec.md: "an
+    // Never began: no step record was written for it (docs/spec.md: "an
     // execution that never began must not be citable").
-    expect(record.steps[0].receipt).toBeNull();
+    expect(record.steps[0].record).toBeNull();
     expect(record.steps[0].error.message).toContain("declared-mutating-step");
     expect(record.steps[0].error.message).toContain("mutates state");
     expect(record.steps[0].error.message).toContain("readonly");
     expect(record.steps[0].error.message).toContain("read-only");
 
     expect(record.steps[1].status).toBe("skipped");
-    expect(record.steps[1].receipt).toBeNull();
+    expect(record.steps[1].record).toBeNull();
   });
 
   // Before t2-trust-declaration this was `nuka run`'s own version of the
@@ -208,13 +208,13 @@ describe("measured mutates: request-side observed counts", () => {
 
     expect(record.steps[0].status).toBe("passed");
 
-    const receipt = JSON.parse(
+    const stepRecord = JSON.parse(
       await readFile(
-        path.join(rootDir, ".nukadoko", "receipts", record.steps[0].receipt, "receipt.json"),
+        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[0].record, "record.json"),
         "utf8",
       ),
     );
-    expect(receipt.status).toBe("ok");
-    expect(receipt.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 });

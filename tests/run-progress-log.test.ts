@@ -123,7 +123,7 @@ describe("nuka run: progress output (fb5-run-output task spec)", () => {
     expect(scenarioBoundaryLines(stderr.text())).toHaveLength(0);
 
     const text = stderr.text();
-    expect(text).toContain("receipts");
+    expect(text).toContain("steps");
     expect(text).toContain("scenarios");
     expect(text).toContain("allure");
     expect(text).toContain("messages");
@@ -146,7 +146,7 @@ describe("nuka run: progress output (fb5-run-output task spec)", () => {
     // "0 scenarios: ...", which a bare `.not.toContain("scenarios")` would
     // wrongly flag.
     const lines = nonEmptyLines(stderr.text());
-    expect(lines.some((line) => line.startsWith("receipts"))).toBe(false);
+    expect(lines.some((line) => line.startsWith("steps"))).toBe(false);
     expect(lines.some((line) => line.startsWith("scenarios "))).toBe(false);
     expect(lines.some((line) => line.startsWith("allure"))).toBe(false);
     expect(lines.some((line) => line.startsWith("messages"))).toBe(false);
@@ -184,8 +184,8 @@ describe("nuka run: progress output (fb5-run-output task spec)", () => {
     // The default locations are named nowhere — the config moved the
     // output, this line reports where it actually landed, not where it
     // would have landed by default.
-    expect(text).not.toContain(".nukadoko/allure-results");
-    expect(text).not.toContain(".nukadoko/messages.ndjson");
+    expect(text).not.toContain(".nukadoko/export/allure-results");
+    expect(text).not.toContain(".nukadoko/export/messages.ndjson");
   });
 
   it("stdout carries only the NDJSON scenario records; every non-empty line parses, one per scenario", async () => {
@@ -223,16 +223,16 @@ describe("nuka run: progress output (fb5-run-output task spec)", () => {
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("2 scenarios: 1 passed, 1 failed");
 
-    const receiptsLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("receipts"));
+    const stepsLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("steps"));
     const scenariosLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("scenarios"));
-    expect(receiptsLine).toBeDefined();
+    expect(stepsLine).toBeDefined();
     expect(scenariosLine).toBeDefined();
-    // Both scenarios reach their own receipt-writing step (this file's own
-    // header) — the first because it passes outright, the second because a
-    // binding failure still writes a receipt (docs/spec.md: "an execution
-    // that never began" only covers undefined/ambiguous/never-began steps,
-    // not a matched step that fails to bind).
-    expect(receiptsLine).toMatch(/\b2\s*$/);
+    // Both scenarios reach their own step-record-writing step (this file's
+    // own header) — the first because it passes outright, the second because
+    // a binding failure still writes a step record (docs/spec.md: "an
+    // execution that never began" only covers undefined/ambiguous/never-began
+    // steps, not a matched step that fails to bind).
+    expect(stepsLine).toMatch(/\b2\s*$/);
     expect(scenariosLine).toMatch(/\b2\s*$/);
   });
 });

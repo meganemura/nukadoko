@@ -21,7 +21,7 @@ import { extensionForMediaType, getActiveDeclaredCollector, normalizeFileExtensi
 // ignored-kind list is below):
 //   - `metadata` -> declared.labels / .links / .parameters (this message's
 //     own `description`/`descriptionHtml`/`testCaseId`/`historyId`/
-//     `displayName` fields are dropped: no receipt field exists for them
+//     `displayName` fields are dropped: no step record field exists for them
 //     yet).
 //   - `step_start` + `step_stop` -> one `declared.logs` entry each, paired
 //     LIFO on this instance's own stack (nesting is unlikely in practice via

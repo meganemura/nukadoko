@@ -5,7 +5,7 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // Responsibility: pick the one `nuka run` invocation `nuka accept <feature>`
 // is allowed to freeze (docs/spec.md "Sign-off" — identifying the target run
 // and the refusal conditions around it). Reads every
-// `record.json` under `<stateDir>/scenarios/*`
+// `record.json` under `<stateDir>/records/scenarios/*`
 // (there is no index of them anywhere else), keeps only the ones naming this
 // feature, groups by `run_id` (one `nuka run` invocation's worth), and
 // answers "which group, if any, may be accepted" — never *how* to report a
@@ -180,7 +180,7 @@ export function listConditionsWithGreenRun(
 }
 
 /** Reads every `record.json` this project has ever written, across every
- * run and every feature — a missing `scenarios/` directory (never run
+ * run and every feature — a missing `records/scenarios/` directory (never run
  * anything yet) is not an error, just an empty answer, the same fail-open
  * convention src/feature/load-features.ts's own `walkFeatureFiles` uses for
  * a missing `featuresDir`. A scenario directory whose `record.json` is
@@ -188,7 +188,7 @@ export function listConditionsWithGreenRun(
  * one corrupt/half-written directory (e.g. a run killed mid-write) must not
  * make every other feature's own accept impossible. */
 export function loadAllScenarioRecords(rootDir: string, stateDir: string): ScenarioRecord[] {
-  const scenariosDir = path.join(rootDir, stateDir, "scenarios");
+  const scenariosDir = path.join(rootDir, stateDir, "records", "scenarios");
 
   let entries;
   try {
@@ -205,8 +205,9 @@ export function loadAllScenarioRecords(rootDir: string, stateDir: string): Scena
       records.push(JSON.parse(raw) as ScenarioRecord);
     } catch {
       // Unreadable/unparsable record.json for this one scenario directory —
-      // same "collapse to absent, keep going" stance src/receipt/
-      // read-receipt.ts already takes for a single receipt.json.
+      // same "collapse to absent, keep going" stance src/record/
+      // read-step-record.ts already takes for a single step record's own
+      // record.json.
     }
   }
   return records;

@@ -4,7 +4,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // One of two steps sharing a single `nuka run` pickle's `ctx` — the pair
 // (this file and section-beta.ts) is the reset regression test for
 // `beginStep` (t3-sections task spec, decision 4; test bullet 4): each
-// step's own label must land only on its own receipt, never on its
+// step's own label must land only on its own step record, never on its
 // sibling's.
 export default defineStep({
   pattern: "step alpha runs its own section",

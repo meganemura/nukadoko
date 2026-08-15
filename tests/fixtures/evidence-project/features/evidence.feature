@@ -1,15 +1,15 @@
 Feature: evidence.attach / evidence.path let a step add its own evidence
 
-  Scenario: attach() writes and lands on the receipt with at
+  Scenario: attach() writes and lands on the step record with at
     Given a step attaches orders.json
 
   Scenario: the same name attached twice keeps both files
     Given a step attaches the same name twice
 
-  Scenario: path() alone, unwritten, is omitted from the receipt
+  Scenario: path() alone, unwritten, is omitted from the step record
     Given a step allocates a path but never writes to it
 
-  Scenario: path() followed by a real write lands on the receipt
+  Scenario: path() followed by a real write lands on the step record
     Given a step writes to its own allocated path
 
   Scenario: path() twice with the same name returns two different paths

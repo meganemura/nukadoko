@@ -54,7 +54,7 @@ import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: `nuka run`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs (same split as cli/do.ts). Two
-// phases, matching docs/spec.md's "Running"/"Receipts" split exactly —
+// phases, matching docs/spec.md's "Running"/"Records" split exactly —
 // generalized from cli/do.ts's own split to every pickle this invocation
 // selects (one feature file's worth, or every
 // `.feature` file under a directory target folded into this same one
@@ -77,7 +77,7 @@ import type { WritableSink } from "./writable-sink.js";
 //
 // The version probe, `ctx.env`, and the run's SecretSet are each computed
 // exactly once, at the top of the execution phase — every scenario record
-// and every step receipt in this run shares the same `target_version`,
+// and every step record in this run shares the same `target_version`,
 // `env`, and redaction rules. The session's lock, when `--session` is
 // given, is acquired once for the whole run and always released in
 // `finally`, covering every scenario rather than one lock per scenario.
@@ -546,11 +546,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // a BeforeAll failure or a mid-loop storageState read failure can
       // leave this run with fewer scenario records than pickles selected,
       // and the summary line must say what actually happened, not what was
-      // asked for. `receiptsWritten` sums every step across every one of
-      // those records whose own `receipt` is non-null.
+      // asked for. `stepRecordsWritten` sums every step across every one of
+      // those records whose own `record` is non-null.
       let scenariosWritten = 0;
       let scenariosPassed = 0;
-      let receiptsWritten = 0;
+      let stepRecordsWritten = 0;
 
       // Skipped entirely for a run that selects zero pickles: no pickle
       // selected means BeforeAll/AfterAll never run —
@@ -573,8 +573,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // itself) is available for the output-location line near this
       // function's own `return` too,
       // whether or not the emitter that writes there actually succeeds.
-      const allureResultsDirRel = config.allure?.resultsDir ?? path.join(config.stateDir, "allure-results");
-      const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "messages.ndjson");
+      const allureResultsDirRel =
+        config.allure?.resultsDir ?? path.join(config.stateDir, "export", "allure-results");
+      const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "export", "messages.ndjson");
 
       // See this file's own header for why this is gated on `hasPickles`,
       // why construction and
@@ -761,7 +762,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           if (record.status === "passed") {
             scenariosPassed += 1;
           }
-          receiptsWritten += record.steps.filter((step) => step.receipt !== null).length;
+          stepRecordsWritten += record.steps.filter((step) => step.record !== null).length;
           // A `"scenario"`-scope fixture's own teardown failure — already
           // recorded on `record.teardown_
           // errors` (src/run/run-scenario.ts); announced here too, on
@@ -837,7 +838,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
       // Where this run actually
       // wrote, then a one-line summary — both unconditional, `--quiet`
-      // included (see this file's own header). `receipts`/`scenarios` are
+      // included (see this file's own header). `steps`/`scenarios` are
       // gated on `scenariosWritten > 0`, not `hasPickles`: a BeforeAll
       // failure leaves `hasPickles` true with zero scenario records ever
       // written, and this table only ever names what this run actually
@@ -850,14 +851,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(scenariosWritten > 0
           ? [
               {
-                label: "receipts",
-                relativePath: path.join(config.stateDir, "receipts"),
+                label: "steps",
+                relativePath: path.join(config.stateDir, "records", "steps"),
                 kind: "dir" as const,
-                count: receiptsWritten,
+                count: stepRecordsWritten,
               },
               {
                 label: "scenarios",
-                relativePath: path.join(config.stateDir, "scenarios"),
+                relativePath: path.join(config.stateDir, "records", "scenarios"),
                 kind: "dir" as const,
                 count: scenariosWritten,
               },

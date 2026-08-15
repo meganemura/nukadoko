@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// `evidence.attach` writes immediately and lands on the receipt with `at`
+// `evidence.attach` writes immediately and lands on the step record with `at`
 // (P9 task spec, test bullet 1) — also the step `nuka steps --json` reads
 // to prove `needs: ["evidence"]`/`needs_browser: false` (test bullet 9),
 // since it destructures nothing else.

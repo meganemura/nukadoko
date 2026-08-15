@@ -7,12 +7,12 @@ import type { ObservedCollector } from "./observed.js";
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
 // http.jsonl — one JSON object per line, method/url/status/duration_ms/via
-// only (never request/response bodies: docs/spec.md "Receipts" says
+// only (never request/response bodies: docs/spec.md "Records" says
 // evidence is collected by the harness, not asserted by the step). `url` is
 // the one field that can carry a secret (e.g. a token in a query string): it
 // is redacted at the same point the line is built, before it ever reaches
 // disk — one of the three exits docs/spec.md "Secrets" requires redaction
-// at, alongside receipt.json and `do`'s stdout copy (both handled by
+// at, alongside record.json and `do`'s stdout copy (both handled by
 // cli/do.ts).
 //
 // `via` is added now: a page's own document/xhr/fetch traffic now lands on
@@ -27,7 +27,7 @@ import type { ObservedCollector } from "./observed.js";
 // module never creates, only writes to — create-context.ts owns and resets
 // it): GET/HEAD counts as a read, anything else as a write, the same
 // measured-not-declared fact docs/spec.md "Keyword semantics" and
-// "Receipts" (`observed`) describe.
+// "Records" (`observed`) describe.
 //
 // A manual per-method wrapper, not a Proxy: Playwright's client classes are
 // plain JS objects/prototypes as far as this package can see, but a Proxy
@@ -40,11 +40,12 @@ import type { ObservedCollector } from "./observed.js";
 // context (create-context.ts) can redirect where the *next* logged call
 // lands without recreating the wrapped context itself: a pickle's steps
 // share one ctx (and therefore one memoized request context, cookies
-// intact), but each step's http.jsonl must land in that step's own receipt
+// intact), but each step's http.jsonl must land in that step's own step
+// record
 // dir — the executor advances the getter's target at each step boundary;
 // this module just reads it at call time.
 
-/** One http.jsonl line (docs/spec.md "Receipts"). `via` names which path
+/** One http.jsonl line (docs/spec.md "Records"). `via` names which path
  * produced it — `"request"` for a call made through `ctx.request()`,
  * `"page"` for one the page itself
  * made (page-http-log.ts). Always present, on every entry either path

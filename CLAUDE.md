@@ -5,7 +5,7 @@ Project context for agent sessions working in this repository.
 ## What this is
 
 nukadoko is an agent-first engine that runs Gherkin: typed step contracts,
-tool-measured execution records (receipts), and sign-offs. The design source
+tool-measured execution records (step records), and sign-offs. The design source
 of truth is `docs/spec.md` — read it before changing behavior.
 
 **What it is for.** Implementations are increasingly generated: someone
@@ -39,7 +39,7 @@ compat gap detection in `nuka check` (the migration skill's prerequisite)
 are all implemented, closing out M1-M5. M6 (chained arguments) is
 implemented too: `from` on `defineStep`, the binding-order check `nuka
 check` and `nuka run` share, `nuka do --use`, and `used` naming the step
-beside each receipt. M7 (tending) is in: `nuka tend`, for what is rotting
+beside each step record. M7 (tending) is in: `nuka tend`, for what is rotting
 rather than what is broken — kept off `nuka check` so that command stays
 worth stopping for. Still unimplemented: the AI-assisted glue converter and
 scenario harvesting.

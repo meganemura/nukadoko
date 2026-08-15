@@ -43,9 +43,9 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function readReceipt(rootDir: string, receiptId: string): Promise<Record<string, unknown>> {
-  const receiptPath = path.join(rootDir, ".nukadoko", "receipts", receiptId, "receipt.json");
-  return JSON.parse(await readFile(receiptPath, "utf8"));
+async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
+  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("nuka run: compat step execution", () => {
@@ -93,28 +93,28 @@ describe("nuka run: compat step execution", () => {
       expect(step.status).toBe("passed");
     }
 
-    const firstReceipt = await readReceipt(rootDir, patterns.steps[0].receipt);
-    expect(firstReceipt.result).toBeNull();
-    expect(firstReceipt.args).toEqual(["acme"]);
-    // m3a-receipt-kinds task spec, decision 3: compat has no `mutates`
-    // declaration at all — `null`, never coerced to `false`.
-    expect(firstReceipt.mutates).toBeNull();
+    const firstStepRecord = await readStepRecord(rootDir, patterns.steps[0].record);
+    expect(firstStepRecord.result).toBeNull();
+    expect(firstStepRecord.args).toEqual(["acme"]);
+    // Compat has no `mutates` declaration at all — `null`, never coerced to
+    // `false`.
+    expect(firstStepRecord.mutates).toBeNull();
 
     // RegExp capture arrives as a plain string, unlike a typed step's
     // coerced `{int}`.
-    const secondReceipt = await readReceipt(rootDir, patterns.steps[1].receipt);
-    expect(secondReceipt.args).toEqual(["3"]);
+    const secondStepRecord = await readStepRecord(rootDir, patterns.steps[1].record);
+    expect(secondStepRecord.args).toEqual(["3"]);
 
     // Proves asymmetry #2 closed: the compat-registered `legacyBoolean`
     // parameter type transformed "yes" -> true before matching/args ever
     // reached the glue function.
-    const thirdReceipt = await readReceipt(rootDir, patterns.steps[2].receipt);
-    expect(thirdReceipt.args).toEqual([true]);
-    expect(thirdReceipt.result).toBeNull();
+    const thirdStepRecord = await readStepRecord(rootDir, patterns.steps[2].record);
+    expect(thirdStepRecord.args).toEqual([true]);
+    expect(thirdStepRecord.result).toBeNull();
 
     expect(table.status).toBe("passed");
-    const tableReceipt = await readReceipt(rootDir, table.steps[0].receipt);
-    expect(tableReceipt.args).toEqual([
+    const tableStepRecord = await readStepRecord(rootDir, table.steps[0].record);
+    expect(tableStepRecord.args).toEqual([
       [
         ["name", "age"],
         ["alice", "30"],
@@ -123,11 +123,11 @@ describe("nuka run: compat step execution", () => {
     ]);
 
     expect(docstring.status).toBe("passed");
-    const docstringReceipt = await readReceipt(rootDir, docstring.steps[0].receipt);
-    expect(docstringReceipt.args).toEqual(["hello docstring"]);
+    const docstringStepRecord = await readStepRecord(rootDir, docstring.steps[0].record);
+    expect(docstringStepRecord.args).toEqual(["hello docstring"]);
   });
 
-  it("a throwing compat step fails with a receipt and skips the rest of the scenario", async () => {
+  it("a throwing compat step fails with a step record and skips the rest of the scenario", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/compat-throw.feature"], {
       rootDir,
@@ -141,23 +141,23 @@ describe("nuka run: compat step execution", () => {
 
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toBe("legacy failure on purpose");
-    const failedReceipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(failedReceipt.status).toBe("failed");
-    expect((failedReceipt as { error: { message: string } }).error.message).toBe(
+    const failedStepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(failedStepRecord.status).toBe("failed");
+    expect((failedStepRecord as { error: { message: string } }).error.message).toBe(
       "legacy failure on purpose",
     );
-    // m3a-receipt-kinds task spec: a compat step's own throw classifies as
-    // "step_error" the same way a typed step's does — `classifyCaughtError`
-    // only distinguishes `CompatTimeoutError`/`WorldWriteValidationError`
-    // from an ordinary throw, and an ordinary `Error` is neither.
-    expect((failedReceipt as { error: { kind: string } }).error.kind).toBe("step_error");
+    // A compat step's own throw classifies as "step_error" the same way a
+    // typed step's does — `classifyCaughtError` only distinguishes
+    // `CompatTimeoutError`/`WorldWriteValidationError` from an ordinary
+    // throw, and an ordinary `Error` is neither.
+    expect((failedStepRecord as { error: { kind: string } }).error.kind).toBe("step_error");
 
     expect(record.steps[1].status).toBe("skipped");
-    expect(record.steps[1].receipt).toBeNull();
+    expect(record.steps[1].record).toBeNull();
   });
 
   // Before t2-trust-declaration, this same fixture failed: a Then-position
-  // step's own measured write demoted its receipt regardless of any
+  // step's own measured write demoted its step record regardless of any
   // declaration, and compat has no `mutates` declaration at all, so it
   // could never opt out. Now that the measured Then-position check is gone
   // entirely (this file's own header), a compat step bound in Then position
@@ -176,10 +176,10 @@ describe("nuka run: compat step execution", () => {
     expect(record.status).toBe("passed");
     expect(record.steps[0].status).toBe("passed");
 
-    const receipt = await readReceipt(rootDir, record.steps[0].receipt);
-    expect(receipt.status).toBe("ok");
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    expect(stepRecord.status).toBe("ok");
     // The measured tally is unchanged by this task (this file's own header)
     // — only whether it fails the step changed.
-    expect((receipt as { observed: { http_writes: number } }).observed.http_writes).toBe(1);
+    expect((stepRecord as { observed: { http_writes: number } }).observed.http_writes).toBe(1);
   });
 });

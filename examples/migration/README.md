@@ -7,7 +7,7 @@ section with something real instead of prose -- the claim that adopting
 nukadoko is a gradual door, not an all-or-nothing rewrite. A smoke test,
 [`tests/examples-migration.test.ts`](../../tests/examples-migration.test.ts),
 keeps this example honest: the suite below runs green end to end, and the
-record/receipt shapes this walkthrough quotes as real captured output are
+record shapes this walkthrough quotes as real captured output are
 exactly what a fresh run of it produces.
 
 This directory ships **already mid-migration**, on purpose -- that is the
@@ -213,7 +213,7 @@ node ../../dist/cli.js run features/migration.feature
 ```
 
 Real captured output, one JSON line per scenario (reformatted here for
-readability; `scenario_id`/`receipt` ids and timestamps will differ on your
+readability; `scenario_id`/`record` ids and timestamps will differ on your
 own run):
 
 ```json
@@ -221,10 +221,10 @@ own run):
   "scenario": "legacy glue seeds todos, stashes a note, and asserts the count",
   "status": "passed",
   "steps": [
-    { "text": "a legacy note \"seed run\" is stashed", "status": "passed", "receipt": "rcpt-...-2mxm" },
-    { "text": "the following legacy todos are seeded:", "status": "passed", "receipt": "rcpt-...-hkkk" },
-    { "text": "the todo list has 2 todos", "status": "passed", "receipt": "rcpt-...-i8jo" },
-    { "text": "the stashed note reads \"seed run\"", "status": "passed", "receipt": "rcpt-...-zpj1" }
+    { "text": "a legacy note \"seed run\" is stashed", "status": "passed", "record": "step-...-2mxm" },
+    { "text": "the following legacy todos are seeded:", "status": "passed", "record": "step-...-hkkk" },
+    { "text": "the todo list has 2 todos", "status": "passed", "record": "step-...-i8jo" },
+    { "text": "the stashed note reads \"seed run\"", "status": "passed", "record": "step-...-zpj1" }
   ],
   "hooks": [{ "type": "before", "status": "ok" }]
 }
@@ -232,8 +232,8 @@ own run):
   "scenario": "a promoted producer feeds a typed consumer via resultOf",
   "status": "passed",
   "steps": [
-    { "text": "a todo titled \"Read a book\" is created", "status": "passed", "receipt": "rcpt-...-4kfn" },
-    { "text": "the created todo id is read back via resultOf", "status": "passed", "receipt": "rcpt-...-9x9l" }
+    { "text": "a todo titled \"Read a book\" is created", "status": "passed", "record": "step-...-4kfn" },
+    { "text": "the created todo id is read back via resultOf", "status": "passed", "record": "step-...-9x9l" }
   ],
   "hooks": [{ "type": "before", "status": "ok" }]
 }
@@ -242,18 +242,18 @@ own run):
 Green -- exit `0` -- with nothing rewritten but the import and one hook
 body. `hooks: [{ "type": "before", "status": "ok" }]` on both records is
 this suite's one Before hook, reported once per scenario; a hook never gets
-a receipt of its own (docs/spec.md "Running": it runs against the pickle's
+a step record of its own (docs/spec.md "Running": it runs against the pickle's
 shared World, outside any step's own boundary).
 
 ## Measured for free
 
 Nothing above asked for measurement -- it came from switching the import.
-The seeding step's own receipt (`rcpt-...-hkkk` above), real captured
+The seeding step's own step record (`step-...-hkkk` above), real captured
 output (`evidence`/`environment`/`session`/timestamps trimmed for space):
 
 ```json
 {
-  "receipt_id": "rcpt-20260802-141751-hkkk",
+  "record_id": "step-20260802-141751-hkkk",
   "step": "compat: the following legacy todos are seeded:",
   "kind": "run",
   "result": null,
@@ -264,8 +264,8 @@ output (`evidence`/`environment`/`session`/timestamps trimmed for space):
 ```
 
 `result: null` is honest -- this is still a compat step, with no validated
-contract (docs/spec.md "Receipts": "Compat steps record result: null").
-Everything else on this receipt is new, for free, from the import switch
+contract (docs/spec.md "Records": "Compat steps record result: null").
+Everything else on this step record is new, for free, from the import switch
 alone: `observed` is the 2 POSTs the harness itself watched this execution
 make through `this.request`, and `world` is the one World key this step
 touched, in access order -- the data flow a plain `this.foo = ...` used to
@@ -286,7 +286,7 @@ export class MigrationWorld extends defineWorld(worldSchemas) {
 ```
 
 `seededCount` is this suite's one promoted World key -- from here on, every
-write to it is validated, not just measured; the receipt above already
+write to it is validated, not just measured; the step record above already
 shows it in `world.writes`, the same way an undeclared key would. The
 difference is enforcement, not visibility: as a hands-on check, temporarily
 change `seed-legacy-todos.ts`'s own `this.seededCount = rows.length;` to
@@ -305,13 +305,13 @@ output from doing exactly that:
 }
 ```
 
-exit `1`, no receipt recorded for that invalid write (docs/spec.md "Compat
+exit `1`, no step record recorded for that invalid write (docs/spec.md "Compat
 steps": "a write that fails its schema fails the step and is never
 recorded as a write"). Revert the edit and it is Stage 1's green run again.
 
 `note`, meanwhile, stays exactly as undeclared as it was in Stage 1 --
 `features/steps/legacy-note-stash.ts` writes and reads it with a plain
-`this.note = ...`, no schema, no promotion. Its own receipt still shows
+`this.note = ...`, no schema, no promotion. Its own step record still shows
 `"world": { "reads": [], "writes": ["note"] }` -- measured like any other
 World access -- but nothing validates it, and nothing has to, yet.
 Migrating a World one key at a time, not all-or-nothing, is the point of
@@ -361,12 +361,12 @@ export default defineStep({
 
 Producer before consumer, deliberately -- migration-knowhow's own
 recommended order: a consumer can only read a validated result once one
-exists. The two receipts from the same `nuka run` above (`rcpt-...-4kfn`
-and `rcpt-...-9x9l`), trimmed the same way:
+exists. The two step records from the same `nuka run` above (`step-...-4kfn`
+and `step-...-9x9l`), trimmed the same way:
 
 ```json
 {
-  "receipt_id": "rcpt-20260802-141751-4kfn",
+  "record_id": "step-20260802-141751-4kfn",
   "step": "create-todo",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90", "title": "Read a book", "done": false },
   "status": "ok",
@@ -376,18 +376,18 @@ and `rcpt-...-9x9l`), trimmed the same way:
 
 ```json
 {
-  "receipt_id": "rcpt-20260802-141751-9x9l",
+  "record_id": "step-20260802-141751-9x9l",
   "step": "read-created-todo-id",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90" },
   "status": "ok",
   "observed": { "http_reads": 0, "http_writes": 0 },
-  "used": ["rcpt-20260802-141751-4kfn"]
+  "used": [{ "record": "step-20260802-141751-4kfn", "step": "create-todo" }]
 }
 ```
 
 `used` is the proof: the consumer made no network call of its own
 (`observed` is all zeros) and never touched a World -- there is no World
-field here at all, for either receipt, because a typed step's `run`
+field here at all, for either step record, because a typed step's `run`
 never receives `this` -- it read the producer's own validated `id`
 straight through the `resultOf` fixture, and that read is recorded by the
 tool, not declared by either step. This pair is this suite's fully-migrated

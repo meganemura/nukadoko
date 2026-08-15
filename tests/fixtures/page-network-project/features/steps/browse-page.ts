@@ -9,7 +9,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // left out of http.jsonl and tallied into `http_omitted` instead — this
 // task's spec, scope item 2), then an in-page `fetch` whose own query
 // string carries a secret, the same redaction proof
-// tests/trace-actions-receipt.test.ts already runs for `actions[].url`.
+// tests/trace-actions-step record.test.ts already runs for `actions[].url`.
 // `source=request`/`source=page` on the shared `/api/data` path is what lets
 // the test tell the two entries apart and confirm neither path double-counts
 // the other's own call (this task's spec, scope item 4: "実測で確認すること").
