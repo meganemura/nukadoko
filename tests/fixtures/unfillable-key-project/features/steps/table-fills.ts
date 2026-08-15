@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Baseline (m7b-unfillable-key task spec): the pattern captures nothing, but
+// Baseline: the pattern captures nothing, but
 // the table attached to this pickle line is the one thing that fills the
 // required key — src/check/feature-check.ts's own "exactly one unconsumed
 // required key" rule (`table-docstring-key-mismatch`) resolves this to

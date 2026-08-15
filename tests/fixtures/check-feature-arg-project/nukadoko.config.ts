@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// m5b-check-feature-arg task spec: exercises `nuka check [feature]`. Two
+// Exercises `nuka check [feature]`. Two
 // feature files on purpose — `features/inside.feature` (under the default
 // featuresDir, walked whenever no argument is given) and
 // `acceptance/outside.feature` (deliberately outside it, the way

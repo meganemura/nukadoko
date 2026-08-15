@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Second scenario in session-flow.feature: a *fresh* ctx (this task's spec,
-// decision 8: one ctx per scenario), so the only way this request context
+// Second scenario in session-flow.feature: a *fresh* ctx (one ctx per
+// scenario), so the only way this request context
 // can carry the first scenario's cookie is via the --session file cli/
 // run.ts re-reads at this scenario's own start.
 export default defineStep({

@@ -61,7 +61,7 @@ describe("discoverSteps", () => {
     expect(compatParameterTypes).toEqual([]);
   });
 
-  // Module identity (m2pre-module-identity task spec): discoverSteps() loads
+  // Module identity: discoverSteps() loads
   // every file through one shared tsx module registration for the whole
   // discovery run, so a step file's own relative import of another step
   // file resolves to the exact same object discoverSteps() itself put in
@@ -85,7 +85,7 @@ describe("discoverSteps", () => {
   });
 });
 
-// p10-step-discovery task spec: discovery now walks .ts/.mts/.js/.mjs
+// Discovery now walks .ts/.mts/.js/.mjs
 // (previously .ts only), skips node_modules and any dot-directory at every
 // depth, excludes .d.ts/.d.mts declarations, and never imports a .cjs file
 // (it names it instead, via unsupportedExtensionFiles, for nuka check to
@@ -135,7 +135,7 @@ describe("discoverSteps: extensions, node_modules, dot-directories (p10-step-dis
   });
 });
 
-// m21a-compat-gap-detect task spec: `{ tolerateImportFailures: true }` lets
+// `{ tolerateImportFailures: true }` lets
 // discovery survive a broken glue file instead of rejecting the whole call
 // — the mode `nuka check` (src/check/analyze.ts) uses so one broken file
 // doesn't take down the entire report the way it still does for

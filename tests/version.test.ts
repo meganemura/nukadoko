@@ -10,7 +10,7 @@ import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot } from "
 const execFileAsync = promisify(execFile);
 
 // Responsibility: src/version.ts's readOwnVersion(), and the two places it
-// feeds (own-version task spec) — `nuka --version` (src/cli/run-cli.ts) and
+// feeds — `nuka --version` (src/cli/run-cli.ts) and
 // the cucumber-messages `Meta.implementation.version` field (covered
 // instead in messages-emitter.test.ts, alongside that emitter's other
 // fields, rather than duplicated here).

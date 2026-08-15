@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: m21a-compat-gap-detect task spec's check-integration
+// Responsibility: check-integration
 // tests — a broken glue file becomes a `step-file-import-failed` report
 // entry instead of taking the whole `nuka check` run down (decision 4), the
 // `undefined-step` noise that failure would otherwise cause is suppressed

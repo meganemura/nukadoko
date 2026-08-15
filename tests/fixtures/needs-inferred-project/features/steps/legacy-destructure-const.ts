@@ -3,8 +3,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Pre-migration shape, aliasing the whole first argument mid-body and then
 // destructuring *that* (`const { page, section } = ctx`) instead of naming
-// fixtures on `run`'s own first argument — the second recognized shape this
-// task's spec asks the scan to catch, alongside plain and optional-chained
+// fixtures on `run`'s own first argument — the second recognized shape the
+// extraction scan also catches, alongside plain and optional-chained
 // member access. Never actually runs.
 export default defineStep({
   pattern: "a legacy destructure const step runs",

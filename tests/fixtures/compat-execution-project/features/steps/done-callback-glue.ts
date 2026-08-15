@@ -1,6 +1,6 @@
 import { When } from "../../nukadoko-compat-shim.js";
 
-// m21b-compat-execution task spec, item 5: this function declares one more
+// This function declares one more
 // parameter (`done`) than it is actually called with (this step captures
 // nothing) — cucumber-js's own signal for a `done`-callback-style step.
 // nukadoko never provides a `done` argument, so calling `done()` here would

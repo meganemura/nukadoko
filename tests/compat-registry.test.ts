@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Given, Then, When, drainCompatSteps } from "../src/compat/registry.js";
 
 // Responsibility: unit coverage for src/compat/registry.ts's step
-// registration shapes (m2.1a-compat-registration task spec, decision 2) — in
+// registration shapes — in
 // particular the 3-argument form (`Given(pattern, options, fn)`) that
 // cucumber-js accepts and compat previously silently misread as the
 // 2-argument form, registering the options object itself as `fn` and

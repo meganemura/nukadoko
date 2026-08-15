@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 import createProject from "./create-project.js";
 
-// fb3-used-result task spec: same `from` shape as archive-project.ts, but
+// Same `from` shape as archive-project.ts, but
 // always fails after reading the injected value — proves a *failed*
 // step record's `used[].result` carries the upstream's full validated result,
 // not merely the `{ record, step }` pointer `used` has always carried.

@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka do --env`'s wiring (this task's spec, scope items
-// 2-6) exercised end to end against tests/fixtures/environments-project —
+// Responsibility: `nuka do --env`'s wiring exercised end to end against
+// tests/fixtures/environments-project —
 // baseURL/envFiles layering, unknown-environment setup failure,
 // `policy: "read-only"` refusal, and the `version` probe (success/throw).
 // Session-scoping-by-environment tests live in their own file

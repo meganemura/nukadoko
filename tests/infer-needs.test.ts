@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { inferNeeds } from "../src/step/infer-needs.js";
 
 // Responsibility: unit tests for src/step/infer-needs.ts's pure scan, run
-// in-process against plain functions (fb5-needs-inferred task spec) — the
+// in-process against plain functions — the
 // same "in-memory first" split tests/fixture-names.test.ts's own header
 // established, with the end-to-end path (a real, un-migrated step read
 // through `nuka steps --json`, including the required ground-truth

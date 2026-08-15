@@ -2,8 +2,8 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Second step in transformer-throws.feature — always skipped, since the
-// scenario's first step never even reaches matching's "matched" outcome
-// (fix-scenario-step-backstop task spec). Exists so the scenario has a step
+// scenario's first step never even reaches matching's "matched" outcome.
+// Exists so the scenario has a step
 // whose own "skipped" record this task's test can assert on.
 export default defineStep({
   pattern: "this step never runs",

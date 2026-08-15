@@ -4,8 +4,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAtomicWriter } from "../src/report/allure/writer.js";
 
-// Responsibility: exercises all seven Writer methods (this task's spec, test
-// item 4) and asserts both halves of "atomic": the final file exists with
+// Responsibility: exercises all seven Writer methods and asserts both
+// halves of "atomic": the final file exists with
 // the right content, and no `.tmp` leftover remains once the call returns.
 
 function listNonTempFiles(dir: string): string[] {

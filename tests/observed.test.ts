@@ -13,8 +13,8 @@ import {
 
 // Responsibility: measured mutates end to end against tests/fixtures/
 // observed-project — a real local http server, exercised through both
-// `nuka do` and `nuka run` (this task's spec's m2pre-observed spec, scope
-// item 6): the request-side `{1, 1}` tally landing on a step record, and — since
+// `nuka do` and `nuka run`: the request-side `{1, 1}` tally landing on a
+// step record, and — since
 // t2-trust-declaration — that a declared `mutates: false` step's own
 // occurrence is never failed by what it actually observed writing, whether
 // it is bound in Then position or run under a `policy: "read-only"`
@@ -128,8 +128,8 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].status).toBe("passed");
     expect(record.steps[2].status).toBe("passed");
 
-    // The write is still measured and still lands on the step record (this
-    // task's spec, decision 5: the record is unchanged) — only whether it
+    // The write is still measured and still lands on the step record (the
+    // record is unchanged) — only whether it
     // fails the step changed.
     const stepRecord = JSON.parse(
       await readFile(
@@ -160,11 +160,11 @@ describe("measured mutates: request-side observed counts", () => {
     expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
-  // `nuka run` against a read-only environment (this task's spec, decision
-  // 3): the gap the previous slice surfaced — `nuka run` never looked at
+  // `nuka run` against a read-only environment: the gap the previous slice
+  // surfaced — `nuka run` never looked at
   // `policy` at all — closed the same way `nuka do` already handles it. A
   // declared `mutates: true` step is still refused before it ever runs
-  // (t2-trust-declaration task spec keeps this half unchanged); a declared
+  // (t2-trust-declaration keeps this half unchanged); a declared
   // `mutates: false` lie is no longer backstopped — see the test below.
   it("nuka run: a declared-mutating step is refused before it runs in a read-only environment; the rest of the scenario is skipped", async () => {
     const stdout = createCaptureSink();

@@ -4,9 +4,9 @@ import type { StepSummary } from "../src/cli/vocabulary.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka steps --json`/text end-to-end for `needs_inferred`
-// (fb5-needs-inferred task spec) — against tests/fixtures/needs-inferred-
+// — against tests/fixtures/needs-inferred-
 // project, a project of exclusively pre-migration (`run(ctx, args)`) steps
-// plus one migrated twin (this task's spec's own required ground-truth
+// plus one migrated twin (a required ground-truth
 // regression), and against the pre-existing tests/fixtures/fixture-bag-
 // project for the "inference itself also fails" case (a destructured
 // prop's own default value/rest property throws a different error shape,
@@ -31,8 +31,7 @@ describe("nuka steps --json: needs_inferred for a pre-migration step", () => {
     expect(step).not.toHaveProperty("needs_browser");
     expect(step?.needs_inferred).toEqual(["page"]);
     // A step whose own needs couldn't be read is still an incomplete
-    // answer, guess or not (fb5-loader-visibility task spec's own exit-1
-    // rule, unchanged by this task — decision 4).
+    // answer, guess or not (the same exit-1 rule, unchanged here).
     expect(exitCode).toBe(1);
   });
 

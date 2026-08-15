@@ -7,7 +7,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec's own completion condition 5 — a `"process"`-
+// Responsibility: a `"process"`-
 // scope fixture is built exactly once across two scenarios in the same
 // `nuka run` invocation, and reused (never rebuilt) by the second. Against
 // tests/fixtures/user-fixtures-project's `seededDb` fixture ({ scope:
@@ -64,8 +64,8 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
     expect(first.result.count).toBe(1);
     expect(second.result.count).toBe(1);
 
-    // The step record's own `fixtures` entry (P5 task spec, scope item 10)
-    // says so directly too: the first scenario's step built it fresh
+    // The step record's own `fixtures` entry says so directly too: the
+    // first scenario's step built it fresh
     // (`reused: false`, `setup_ms`/`at` present); the second's step
     // received the already-built instance (`reused: true`, no `setup_ms`/
     // `at` — their absence is what tells "reused, hence fast" apart from

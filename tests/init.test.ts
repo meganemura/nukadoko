@@ -18,7 +18,7 @@ import {
   repoRoot,
 } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka init` (m1-init-scaffold task spec, decision 1) — all
+// Responsibility: `nuka init` — all
 // generated artifacts plus its self-check in an empty directory, --base-url
 // threading into the generated config, the all-or-nothing refusal when
 // nukadoko.config.ts already exists, and the .gitignore append (both the
@@ -27,7 +27,7 @@ import {
 // package so the self-check's own `loadConfig`/`discoverSteps` can actually
 // resolve the generated config's `import { defineConfig } from "nukadoko"`.
 //
-// init-allurerc task spec: also `allurerc.mjs`'s own generation (content
+// Also `allurerc.mjs`'s own generation (content
 // built from `buildCategories()`, never a second hand-typed copy of its
 // names), the six-extension existing-config check that keeps `init` from
 // ever laying a second, competing Allure config over one already there, and
@@ -186,7 +186,7 @@ describe("nuka init", () => {
     // A typed step placed under the non-default featuresDir is what proves
     // the self-check (and later `nuka steps`/`nuka do`) actually discover
     // from `config.featuresDir` rather than the schema's own default
-    // ("features") — this task's spec: the self-check looks at that
+    // ("features") — the self-check looks at that
     // directory.
     await writeFile(
       path.join(rootDir, "e2e", "steps", "ping.ts"),
@@ -365,7 +365,7 @@ describe("nuka init: allurerc.mjs", () => {
 
 const execFileAsync = promisify(execFile);
 
-describe("nuka init: allurerc.mjs is actually read by `allure generate` (init-allurerc task spec)", () => {
+describe("nuka init: allurerc.mjs is actually read by `allure generate`", () => {
   let rootDir: string;
 
   beforeEach(async () => {

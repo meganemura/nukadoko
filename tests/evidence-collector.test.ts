@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEvidenceCollector, mergeTruncated } from "../src/context/evidence.js";
 import { InvalidEvidenceNameError } from "../src/context/errors.js";
 
-// Responsibility: EvidenceCollector's own contract in isolation (P9 task
-// spec) — attach()'s immediate write, path()'s allocate-without-write,
+// Responsibility: EvidenceCollector's own contract in isolation —
+// attach()'s immediate write, path()'s allocate-without-write,
 // collision avoidance shared between the two, name refusal, the 100-entry
 // cap + truncated count, and reset() at a step boundary. The step-record-level
 // shape (field omission, redaction, Allure attachment, needs_browser) is

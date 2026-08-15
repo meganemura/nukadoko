@@ -5,12 +5,11 @@ import { mapScenario } from "../src/report/messages/map-scenario.js";
 import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 
-// Responsibility: unit tests for map-scenario.ts's pure transform (this
-// task's spec, test item 1). No node:fs, no real IdGenerator.uuid(): every
+// Responsibility: unit tests for map-scenario.ts's pure transform. No
+// node:fs, no real IdGenerator.uuid(): every
 // step record is a plain object built in memory, and `newId` is
-// `IdGenerator.incrementing()` so assertions can pin exact ids (this task's
-// spec, decision 11's own reason for threading `newId` through as an
-// argument in the first place). Every `Pickle` comes from parsing an inline
+// `IdGenerator.incrementing()` so assertions can pin exact ids. Every
+// `Pickle` comes from parsing an inline
 // feature source string with the existing src/feature/load-features.ts
 // entry point (no `.feature` file on disk needed) — this module never reads
 // a `GherkinDocument` itself, but a real `Pickle`'s own `steps[].id` is what
@@ -167,7 +166,7 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
   });
 });
 
-describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task spec, test item 1)", () => {
+describe("mapScenario (messages): after_step hooks", () => {
   it("gives an after_step hook its own HookType.AFTER_TEST_STEP Hook named AfterStep[<step_index>], not folded onto \"After\"", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
@@ -190,8 +189,8 @@ describe("mapScenario (messages): after_step hooks (t7-afterstep-consumers task 
     expect(newHook.hook.type).toBe(HookType.AFTER_TEST_STEP);
 
     // Detectable both by count (one hook-derived test step alongside the
-    // one pickle-step test step) and by which step it names (this task's
-    // spec, test criterion: detectable not just by count, but in a form
+    // one pickle-step test step) and by which step it names (detectable
+    // not just by count, but in a form
     // that shows which step it follows).
     expect(mapped.steps).toHaveLength(2);
     const afterStepTestStep = mapped.steps.find((s) => s.testStep.hookId !== undefined)!;

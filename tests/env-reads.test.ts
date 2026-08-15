@@ -5,8 +5,8 @@ import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `ctx.requireEnv`'s step-record-side measurement end to end
-// against tests/fixtures/env-reads-project (env-reads-and-mutates-doc task
-// spec, item A) — read order + dedup landing on `required_env`, omission
+// against tests/fixtures/env-reads-project — read order + dedup landing on
+// `required_env`, omission
 // when a step never calls `requireEnv`, a `MissingEnvError` failure's
 // step record still carrying the name it asked for (the requirement's own
 // reason for existing), the reset at `beginStep` not letting one step's

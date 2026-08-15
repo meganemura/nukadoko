@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka accept` end to end (m4b-accept task spec's own
-// testing note) against accept-project — a pure-step fixture (no browser, no HTTP server,
+// Responsibility: `nuka accept` end to end against accept-project — a
+// pure-step fixture (no browser, no HTTP server,
 // same reasoning as tests/fixtures/run-project) whose only job is producing
 // green/red/partial runs for `nuka accept` to react to. The fixture's own
 // `.gitignore` (`.nukadoko/`, `features/*.md`) is not incidental: without
@@ -85,7 +85,7 @@ describe("nuka accept: a green run", () => {
     expect(stderr.text()).toBe("");
 
     const relativePath = stdout.text().trim();
-    // accept-condition task spec: the filename now bakes the condition in
+    // The filename now bakes the condition in
     // (environment, then the browser segment — "no-browser" here, since
     // this fixture's own steps never destructure page/context).
     expect(relativePath).toMatch(
@@ -118,7 +118,7 @@ describe("nuka accept: a green run", () => {
     }
     expect(blocks[0]!.args).toEqual({ name: "Ada" });
 
-    // The record's own tail (accept-declared-vs-observed task spec): none of
+    // The record's own tail: none of
     // this fixture's steps make an HTTP call, so the section still exists
     // but reports zero mismatches rather than being omitted.
     expect(content).toContain("## Declared vs observed");
@@ -259,7 +259,7 @@ describe("nuka accept: refusal conditions", () => {
 
     expect(acceptExit).toBe(1);
     expect(stderr.text()).toMatch(/dirty/i);
-    // accept-names-the-state-dir task spec: this fixture's own .gitignore
+    // This fixture's own .gitignore
     // already excludes `.nukadoko/` (this file's own header comment), so
     // the only dirty path here is the unrelated scratch.txt above. The
     // state-directory sentence must not appear when nothing measured is
@@ -268,8 +268,8 @@ describe("nuka accept: refusal conditions", () => {
     expect(await mdFilesIn(featuresDir)).toEqual([]);
   });
 
-  it("refuses on a dirty working tree caused by an untracked-in-.gitignore state directory, and names it (accept-names-the-state-dir task spec)", async () => {
-    // Reproduces the loop the task spec describes: a project whose
+  it("refuses on a dirty working tree caused by an untracked-in-.gitignore state directory, and names it", async () => {
+    // Reproduces the loop this fixture exists for: a project whose
     // .gitignore never picked up the `.nukadoko/` entry `nuka init` writes
     // automatically, so nukadoko's own state directory shows up as
     // ordinary dirty content after every run instead of being invisible to
@@ -352,7 +352,7 @@ describe("nuka accept: refusal conditions", () => {
 
     expect(acceptExit).toBe(1);
     expect(stderr.text()).toMatch(/not all green/);
-    // partial-run-visibility task spec: a "red" refusal names what it read
+    // A "red" refusal names what it read
     // to decide (docs/spec.md "Sign-off") — the run_id, not just "a run".
     expect(stderr.text()).toContain(`run_id ${runId}`);
     expect(stderr.text()).toContain("it fails partway through (line 3) failed");
@@ -377,7 +377,7 @@ describe("nuka accept: refusal conditions", () => {
 
     expect(acceptExit).toBe(1);
     expect(stderr.text()).toMatch(/partial/);
-    // partial-run-visibility task spec: names the line the most recent
+    // Names the line the most recent
     // partial run actually touched, out of the feature's own total.
     expect(stderr.text()).toContain("covered line 3 of 2 scenarios");
     expect(await mdFilesIn(featuresDir)).toEqual([]);
@@ -439,7 +439,7 @@ describe("nuka accept: overwrite semantics", () => {
   });
 });
 
-describe("nuka accept: declared vs observed (accept-declared-vs-observed task spec)", () => {
+describe("nuka accept: declared vs observed", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -510,7 +510,7 @@ describe("nuka accept: declared vs observed (accept-declared-vs-observed task sp
   });
 });
 
-describe("nuka accept: after a directory run (run-directory-target task spec)", () => {
+describe("nuka accept: after a directory run", () => {
   let rootDir: string;
   let featuresDir: string;
 

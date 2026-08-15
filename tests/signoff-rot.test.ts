@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka tend`'s sign-off-rot finding (m8b-tend-signoff-rot
-// task spec) end to end — the one tend finding that is an `error`, not a
+// Responsibility: `nuka tend`'s sign-off-rot finding end to end — the one
+// tend finding that is an `error`, not a
 // note (docs/spec.md "Tending"). Every corrupting edit here is applied
 // *after* a real `nuka run` + `nuka accept` cycle against
 // tend-signoff-project, never a hand-assembled record: src/accept/
@@ -131,7 +131,7 @@ describe("nuka tend: sign-off rot (m8b-tend-signoff-rot)", () => {
   });
 
   it("reports a record written before record_id existed as old-format, telling the reader to re-run and re-accept, and skips its other checks", async () => {
-    // No migration code is written for this (task spec: the user re-runs and
+    // No migration code is written for this (the user re-runs and
     // re-accepts). This test stands in for that older tool version by taking
     // a record `nuka accept` really produced and removing the one field
     // every step record it now writes always carries — the same fact

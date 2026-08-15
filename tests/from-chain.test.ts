@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `from` end to end (m6a-from-core task spec) against
+// Responsibility: `from` end to end against
 // tests/fixtures/from-project — the scenario path's injection mechanism
 // (docs/spec.md "Chaining steps"), the `used` shape it feeds into
 // (`{ record, step }`), `ctx.resultOf`'s unregistered-Step throw, and
@@ -53,13 +53,12 @@ describe("from: scenario-path injection", () => {
 
     expect(archiveStepRecord.status).toBe("ok");
     // The injected value lands on the step record's own `args` — the step
-    // actually ran with it, so the step record should say so (this task's spec:
-    // a reader must be able to tell an injected value apart from one that
+    // actually ran with it, so the step record should say so (a reader must
+    // be able to tell an injected value apart from one that
     // was never validated at all).
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme" });
-    // `used` cites the upstream step record in the new `{ record, step }` shape
-    // (this task's spec, item 5).
+    // `used` cites the upstream step record in the new `{ record, step }` shape.
     expect(archiveStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
   });
 
@@ -85,8 +84,8 @@ describe("from: scenario-path injection", () => {
   });
 
   it("the upstream hasn't run yet: m6b-from-check's pre-execution guard now catches this before the step ever runs", async () => {
-    // This scenario used to actually run and fail args validation (this
-    // task's spec, item 4's own message-quality bullet) — m6a-from-core's
+    // This scenario used to actually run and fail args validation —
+    // m6a-from-core's
     // own comment on this exact fixture line anticipated the change: "m6b
     // が入れば、この失敗は実行前に捕まるようになる。ここでは最後の砦。"
     // m6b-from-check landed, so this is no longer the last line of defense;
@@ -109,7 +108,7 @@ describe("from: scenario-path injection", () => {
     expect(record.steps).toHaveLength(1);
     expect(record.steps[0].status).toBe("failed");
     // `record: null`, not a real record id — this step's own `run` never
-    // executed at all (this task's spec: "実行せずに失敗させる").
+    // executed at all.
     expect(record.steps[0].record).toBeNull();
     const message = record.steps[0].error.message as string;
     expect(message).toContain("projectId");
@@ -154,11 +153,11 @@ describe("from: scenario-path injection", () => {
     expect(closeStepRecord.result).toEqual({ closed: true, projectId: "p_acme", projectName: "acme" });
     // One entry, not two: `from`'s own injection and this step's own
     // `ctx.resultOf(createProject)` call both read the exact same stepRecord,
-    // and both write into the same collector (this task's spec, item 5).
+    // and both write into the same collector.
     expect(closeStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
   });
 
-  it("a failed step's step record carries the from-injected value's own result (fb3-used-result task spec)", async () => {
+  it("a failed step's step record carries the from-injected value's own result", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/chain.feature:33"], {
       rootDir,
@@ -176,7 +175,7 @@ describe("from: scenario-path injection", () => {
 
     expect(explodeStepRecord.status).toBe("failed");
     // The upstream's own full validated result, not just the `projectId` key
-    // `from` happened to read (this task's spec, decision 3).
+    // `from` happened to read.
     expect(explodeStepRecord.used).toEqual([
       { record: createRecordId, step: "create-project", result: { id: "p_acme", name: "acme" } },
     ]);
@@ -257,8 +256,8 @@ describe("nuka steps --json: from is exposed", () => {
     const archive = report.steps.find((s) => s.name === "archive-project");
     expect(archive?.from).toEqual({ projectId: { step: "create-project", key: "id" } });
 
-    // A step with no `from` at all omits the field entirely (this task's
-    // spec: same "absent when empty" convention as `rationale`/`used`).
+    // A step with no `from` at all omits the field entirely (same "absent
+    // when empty" convention as `rationale`/`used`).
     const create = report.steps.find((s) => s.name === "create-project");
     expect(create).not.toHaveProperty("from");
   });

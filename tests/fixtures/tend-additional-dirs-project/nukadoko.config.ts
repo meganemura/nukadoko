@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// tests/scan-dirs.test.ts's fixture (fb3-scan-dirs task spec): `accepted/`
+// tests/scan-dirs.test.ts's fixture: `accepted/`
 // binds inspect-widget.ts's only pattern and is deliberately outside
 // `featuresDir` (skills/acceptance/SKILL.md's own recommendation for an
 // accepted feature) — `additionalFeatureDirs` is what keeps `nuka tend`'s

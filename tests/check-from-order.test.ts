@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka check`'s scenario-order check (m6b-from-check task
-// spec, item 1; docs/spec.md "Chaining steps"' "Declaring `from` buys a
+// Responsibility: `nuka check`'s scenario-order check (docs/spec.md
+// "Chaining steps"' "Declaring `from` buys a
 // check that costs nothing to be sure about" paragraph) — every silent case
 // (capture wins, table/docstring wins, optional key, upstream bound earlier,
 // Background) and every reported case (upstream missing entirely, upstream
@@ -49,8 +49,7 @@ describe("nuka check: from's scenario-order check", () => {
     );
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain("only at or after this line, never before it");
-    // Distinct wording from the "missing" case above (same code, per this
-    // task's spec: "code は分けなくてよい").
+    // Distinct wording from the "missing" case above (same code).
     expect(issues[0]!.message).not.toContain("never bound anywhere in this scenario");
   });
 

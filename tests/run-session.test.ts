@@ -13,7 +13,7 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: `--session` propagation *between scenarios of the same
-// run* (this task's spec, scope item 4's "--session" test, decision 8: a
+// run* (a
 // fresh ctx per scenario, storageState carried only via the session file).
 // session-flow.feature's two scenarios each get their own ctx; the second
 // can only see the first's cookie by cli/run.ts re-reading the session file

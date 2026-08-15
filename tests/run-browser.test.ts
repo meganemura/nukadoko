@@ -12,14 +12,13 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: the Background + browser round trip this task's spec asks
-// for, rewritten for p3a-trace-per-step (trace is now per-step, not per-
+// Responsibility: the Background + browser round trip, rewritten
+// for p3a-trace-per-step (trace is now per-step, not per-
 // scenario) — a Background step opens the browser and picks up a cookie,
-// the scenario's own step reuses the *same* browser context to see it (this
-// task's spec, decision "Steps in one pickle share one context"), and each
+// the scenario's own step reuses the *same* browser context to see it
+// (steps in one pickle share one context), and each
 // step's own trace.zip now lands in *that step's own* step record dir, carrying
-// only that step's own operations (p3a-trace-per-step task spec, completion
-// condition 2) — the scenario record itself carries no trace of its own any
+// only that step's own operations — the scenario record itself carries no trace of its own any
 // more (completion condition: "シナリオ全体の1本は無くなった"). A second
 // scenario in the same feature file (a step that never calls `ctx.page()`,
 // run right after the Background already launched the browser for an
@@ -110,7 +109,7 @@ describe("nuka run (Background + browser)", () => {
     expect(record.steps[0].status).toBe("passed");
     expect(record.steps[1].status).toBe("passed");
 
-    // The scenario-long trace is gone (p3a-trace-per-step task spec): no
+    // The scenario-long trace is gone: no
     // single file spans the whole scenario any more, only the scenario's
     // own final screenshot does.
     expect(record.evidence.trace).toBeUndefined();

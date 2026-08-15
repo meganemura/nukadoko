@@ -11,13 +11,13 @@ import {
   removeTempDir,
 } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka scaffold <name>` (m1-init-scaffold task spec,
-// decision 2) — the generated template's shape and its "fails until
+// Responsibility: `nuka scaffold <name>` — the generated template's shape
+// and its "fails until
 // implemented" contract, name validation, the existing-file refusal, and
 // the config-load-failure path scaffold shares with every other command
-// that needs config (decision 3). Every test here runs `nuka init` first in
+// that needs config. Every test here runs `nuka init` first in
 // `beforeEach`, so the very first test below — scaffold immediately after
-// init, then `nuka steps` seeing the new name — *is* this task's spec's
+// init, then `nuka steps` seeing the new name — *is* the
 // required "init directly followed by scaffold, then steps" integration
 // walkthrough, not a separate fixture.
 
@@ -81,7 +81,7 @@ describe("nuka scaffold", () => {
   });
 
   it("explains rationale in the generated template: why nuka tend wants it, and how it differs from description", async () => {
-    // cli-messages-name-the-cause task spec, item 3: `nuka tend` flags a
+    // `nuka tend` flags a
     // scaffolded step's missing rationale (`step-rationale-missing`,
     // src/tend/missing-rationale.ts) the moment it exists, but the template
     // that generated it never said the field existed at all. A guide

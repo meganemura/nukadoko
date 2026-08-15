@@ -14,7 +14,7 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: anti-rot proof for examples/todo/README.md's two central,
-// checkable claims (examples-todo task spec, deliverable 4) -- run the
+// checkable claims -- run the
 // actual example project against the actual app, in both its v1 and v2
 // shape, so the walkthrough's story ("the feature runs green" / "the field
 // rename breaks it") can't silently stop being true. Only that mechanical

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Baseline (m7b-unfillable-key task spec): the key is optional, so the
+// Baseline: the key is optional, so the
 // schema itself already says absent is fine — no capture, table/docstring,
 // or from needed at all, and this is the fourth silent path.
 export default defineStep({

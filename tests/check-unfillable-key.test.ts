@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka check`'s new static check (m7b-unfillable-key task
-// spec) — a required args key that no named capture, table/docstring, or
+// Responsibility: `nuka check`'s new static check — a required args key
+// that no named capture, table/docstring, or
 // declared `from` on a pickle line could ever fill is a statically certain
 // args-validation failure (docs/spec.md "Typed steps": "statically checkable
-// in both directions"). Every silent boundary the task spec enumerates gets
+// in both directions"). Every silent boundary gets
 // its own assertion here (capture fills it, table/docstring fills it, from
 // declares it, the key is optional, the line is compat, the line is
 // undefined-step/ambiguous-step) alongside the one genuinely reported case,
@@ -44,7 +44,7 @@ describe("nuka check: unfillable required args keys", () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain('"serial"');
     expect(issues[0]!.step).toBe("unfillable");
-    // The message names all four remedies (this task's spec: there is no
+    // The message names all four remedies (there is no
     // fifth way to fill a required key, so the list is a fact, not a guess).
     expect(issues[0]!.message).toContain("named capture");
     expect(issues[0]!.message).toContain("table/docstring");

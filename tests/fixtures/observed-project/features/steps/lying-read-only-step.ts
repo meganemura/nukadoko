@@ -3,7 +3,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Declares `mutates: false` (a lie) but issues a POST under a read-only
 // environment via `nuka run`, the same shape read-only-lie.ts already proves
-// for `nuka do`. t2-trust-declaration task spec: the declaration is trusted
+// for `nuka do`. The declaration is trusted
 // over what execution measures, so this now succeeds; only a declared
 // `mutates: true` step is still refused, before it runs. Kept as its own
 // step/pattern rather than reusing read-only-lie.ts, since that file is

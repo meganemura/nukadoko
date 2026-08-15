@@ -4,7 +4,7 @@ import { defineStep, type Step } from "../src/step/define-step.js";
 import { registeredStepPredicate, validateStepFrom } from "../src/step/validate-from.js";
 
 // Responsibility: unit tests for src/step/validate-from.ts's pure functions
-// (m6a-from-core task spec, item 3) — no discovery, no tsx, no filesystem:
+// — no discovery, no tsx, no filesystem:
 // every `Step` is a plain `defineStep(...)` call in memory. This is the
 // runtime backstop the type layer (src/step/define-step.ts's `FromMap`)
 // can't fully cover on its own (that file's own header names what it does

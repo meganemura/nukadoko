@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `additionalFeatureDirs` end to end (fb3-scan-dirs task
-// spec) — the config field that widens what `nuka check` (no argument) and
+// Responsibility: `additionalFeatureDirs` end to end — the config field
+// that widens what `nuka check` (no argument) and
 // `nuka tend` scan without adding anything to what `nuka run` (no argument)
-// executes. Four things this task spec asks for, each with its own `it`
+// executes. Four things are covered here, each with its own `it`
 // block below: (1) it makes `pattern-unbound` stop misreporting a step bound
 // only from an accepted feature outside `featuresDir`, with an unchanged
 // regression case proving the unset default is untouched; (2) a configured-
@@ -68,7 +68,7 @@ describe("additionalFeatureDirs (fb3-scan-dirs)", () => {
       expect(missing[0]!.file).toBe("ghost-dir");
       expect(missing[0]!.message).toContain("ghost-dir");
       // A note, not an error — a missing additionalFeatureDirs entry must
-      // not fail `nuka tend`'s exit code (this task's spec, decision 2: only
+      // not fail `nuka tend`'s exit code (only
       // sign-off rot is an error there).
       expect(report.errors).toEqual([]);
     });

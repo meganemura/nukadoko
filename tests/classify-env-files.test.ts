@@ -9,8 +9,8 @@ import { copyFixtureToTempDir, removeTempDir, repoRoot } from "./helpers/fixture
 // tests exercise the three cases that follow from that, directly against
 // this repository's own git state, rather than spinning up throwaway git
 // repos:
-//   - tracked: an already-committed fixture path, used directly (this task
-//     spec's own guidance) — classifyEnvFiles doesn't care about a file's
+//   - tracked: an already-committed fixture path, used directly —
+//     classifyEnvFiles doesn't care about a file's
 //     content or format, only whether git tracks that path.
 //   - secret source via gitignore: a fixture copied into
 //     tests/.tmp-fixtures, which .gitignore excludes wholesale, so any path

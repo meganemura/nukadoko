@@ -2,8 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // `evidence.path(name)` alone, with nothing ever written to the returned
-// path, must contribute nothing to the step record (P9 task spec, test bullet
-// 3: "path() を呼んだだけで書かなかったら record に載らない").
+// path, must contribute nothing to the step record.
 export default defineStep({
   pattern: "a step allocates a path but never writes to it",
   description: "Calls evidence.path once, writes nothing",

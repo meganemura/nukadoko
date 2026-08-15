@@ -10,8 +10,8 @@ import { copyExampleToTempDir, removeTempDir, repoRoot, stripRunProgressLines } 
 
 const execFileAsync = promisify(execFile);
 
-// Responsibility: anti-rot proof for examples/migration/README.md (m2e1-
-// migration-example task spec, deliverable 4) -- the shipped, deliberately
+// Responsibility: anti-rot proof for examples/migration/README.md -- the
+// shipped, deliberately
 // mid-migration suite (a mix of compat steps and one promoted producer/
 // consumer pair) actually runs green end to end, and the record/step record
 // shapes the walkthrough quotes as real captured output stay true. Only

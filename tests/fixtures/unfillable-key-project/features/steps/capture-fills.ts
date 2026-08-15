@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Baseline (m7b-unfillable-key task spec): the required key is filled by a
+// Baseline: the required key is filled by a
 // named capture in the matched pattern itself — the first of the four fill
 // paths docs/spec.md "Typed steps" describes, and the one the new check must
 // stay silent for.

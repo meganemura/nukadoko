@@ -15,7 +15,7 @@ import { createCaptureSink } from "./helpers/fixtures.js";
 // reads the real files it writes back off disk. No `.feature` file on disk
 // is needed either: `parseFeatureSource` takes source text directly.
 //
-// allure-step-as-test task spec: rewritten around the new three-call shape
+// Rewritten around the new three-call shape
 // (`beginScenario`/`emitStep`/`endScenario` replacing the old single
 // `emitScenario`) — step = test now (decision 1), so most assertions that
 // used to read "the one scenario test" now read one of possibly several
@@ -235,7 +235,7 @@ describe("createAllureEmitter", () => {
       expect(names).toContain("Given the cart has items");
       expect(names).toContain("Then the total is correct");
       // Exactly the two steps this scenario has — no third "scenario" test
-      // exists any more (this task's spec, decision 1).
+      // exists any more.
       expect(names.filter((name) => name?.includes("cart") || name?.includes("total"))).toHaveLength(2);
     });
 
@@ -279,8 +279,8 @@ describe("createAllureEmitter", () => {
       expect(step1.parameters).toContainEqual({ name: "mutates (declared)", value: "true" });
 
       expect(step1.links).toContainEqual({ url: "https://issue.example/1", name: "issue-1" });
-      // step1's own declared link never leaks onto step2's own test — this
-      // task's spec, decision 1: declared data is step-scoped now, not
+      // step1's own declared link never leaks onto step2's own test —
+      // declared data is step-scoped now, not
       // aggregated across the whole scenario the way it used to be.
       expect(step2.links ?? []).not.toContainEqual(expect.objectContaining({ url: "https://issue.example/1" }));
 
@@ -288,8 +288,8 @@ describe("createAllureEmitter", () => {
       expect(attachmentNames).toEqual(["declared: note.txt", "http log", "record.json", "result", "trace"]);
       const traceAttachment = step1.attachments!.find((a) => a.name === "trace") as { type: string; source?: string };
       expect(traceAttachment.type).toBe("application/vnd.allure.playwright-trace");
-      // Step1's own trace never leaks onto step2's own test — this task's
-      // spec, decision 2: a step's own step record evidence.trace attaches to
+      // Step1's own trace never leaks onto step2's own test — a step's own
+      // step record evidence.trace attaches to
       // that step's own test only.
       expect(step2.attachments!.map((a) => a.name)).not.toContain("trace");
       // Neither step carries the *scenario's* own trace/screenshot — those
@@ -347,7 +347,7 @@ describe("createAllureEmitter", () => {
       expect(beforeContainer.befores[0]!.status).toBe("passed");
       expect(afterContainer.afters[0]!.status).toBe("passed");
       // A hook's own declared parameter lands on that hook's own fixture
-      // (this task's spec: there is no test left to bubble it onto).
+      // (there is no test left to bubble it onto).
       expect(beforeContainer.befores[0]!.parameters).toContainEqual({ name: "hook-param", value: "y" });
     });
 
@@ -366,7 +366,7 @@ describe("createAllureEmitter", () => {
     });
   });
 
-  it("writes a hook's own trace as a real attachment on its fixture, and its actions as a real child step (p3d-hook-trace task spec)", () => {
+  it("writes a hook's own trace as a real attachment on its fixture, and its actions as a real child step", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
 
@@ -424,7 +424,7 @@ describe("createAllureEmitter", () => {
     expect(fixture.steps.map((s) => s.name)).toEqual(["goto data:text/html,before-hook"]);
   });
 
-  describe("identity: no history across runs, scenarios, or steps (this task's spec, decision 4)", () => {
+  describe("identity: no history across runs, scenarios, or steps", () => {
     function emitOnce(input: Partial<EmitStepInput> & Pick<EmitStepInput, "record" | "stepRecord" | "gherkinDocument" | "pickle">): void {
       emitter.beginScenario();
       emitter.emitStep(baseStepInput(input));
@@ -461,8 +461,8 @@ describe("createAllureEmitter", () => {
       const results = readResultFiles(resultsDir) as { name: string; fullName: string; testCaseId: string }[];
       const rowResults = results.filter((r) => r.name.startsWith("Given a"));
       expect(rowResults).toHaveLength(2);
-      // No `templateName`/explicit `testCaseId` computation any more (this
-      // task's spec, decision 4: the old "share one testCaseId across every
+      // No `templateName`/explicit `testCaseId` computation any more (the
+      // old "share one testCaseId across every
       // row" design existed to serve history/trend continuity, which this
       // task deliberately withdraws) — each row's own pickle-substituted
       // step text ("a guest customer" vs "a member customer") already makes
@@ -661,7 +661,7 @@ describe("createAllureEmitter", () => {
       expect(test.labels?.some((l) => l.name === "nukadoko.failure")).toBe(false);
     });
 
-    it("marks a failing before hook's own fixture, but leaves the skipped steps it stops from running with no message of their own (this task's spec's own documented trade-off: step = test drops the old scenario-wide worst-of red test)", () => {
+    it("marks a failing before hook's own fixture, but leaves the skipped steps it stops from running with no message of their own (step = test drops the old scenario-wide worst-of red test)", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
       const beforeHook: ScenarioHookRecord = {

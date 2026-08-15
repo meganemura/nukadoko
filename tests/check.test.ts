@@ -48,8 +48,8 @@ describe("nuka check", () => {
         expect.objectContaining({ code: "then-mutates" }),
       ]),
     );
-    // secrets-public-key-unknown moved to `nuka tend` (m8d-move-to-tend
-    // task spec) — this fixture's config still names an undefined
+    // secrets-public-key-unknown moved to `nuka tend` — this fixture's
+    // config still names an undefined
     // secrets.public key (tests/tend-moved-findings.test.ts's own fixture
     // reuse), but `check` no longer reports it.
     expect(report.warnings.some((issue: { code: string }) => issue.code === "secrets-public-key-unknown")).toBe(

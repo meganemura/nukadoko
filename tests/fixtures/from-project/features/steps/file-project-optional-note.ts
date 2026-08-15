@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 import createProject from "./create-project.js";
 
-// m6b-from-check task spec acceptance case: an *optional* `from` key with no
+// An *optional* `from` key with no
 // earlier upstream is silent, on purpose (docs/spec.md "Chaining steps":
 // "An optional key with neither is silent — the schema already said the
 // value may be absent"). `projectId` is never captured by this step's own

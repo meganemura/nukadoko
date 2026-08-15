@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createPageEventsCollector } from "../src/context/page-events.js";
 
-// Responsibility: PageEventsCollector's own contract in isolation (P0-page-
-// events task spec, item 7: "コレクタ単体: 3 種の記録、reset()、上限と
-// truncated") — the one part of this task that a real browser is a poor way
+// Responsibility: PageEventsCollector's own contract in isolation —
+// the one part of this task that a real browser is a poor way
 // to prove, since the truncation case needs 101+ events in one category and
 // a real browser producing that many is slow and, at that volume, likely
 // flaky. The step-record-level shape (field omission, redaction, both `nuka do`
@@ -112,8 +111,8 @@ describe("PageEventsCollector", () => {
     }
 
     const snapshot = collector.snapshot();
-    // The category itself never changes shape once truncated (fix-union
-    // task spec, item 2): still a bare array, capped at 100, never
+    // The category itself never changes shape once truncated: still a bare
+    // array, capped at 100, never
     // `{ entries, total, truncated }`.
     expect(Array.isArray(snapshot?.page_errors)).toBe(true);
     expect(snapshot?.page_errors).toHaveLength(100);

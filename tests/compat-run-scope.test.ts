@@ -8,7 +8,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: m22-compat-run-scope task spec's end-to-end coverage —
+// Responsibility: end-to-end coverage —
 // `setDefaultTimeout` (item 1) actually reaching compat step/hook execution
 // as a fallback timeout, and `BeforeAll`/`AfterAll` (item 2) actually
 // running around `nuka run`'s own scenario loop, once per run, skipped
@@ -215,7 +215,7 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
     expect(stderr.text()).toContain('Hook "BeforeAll" timed out after 20ms');
 
     // Zero scenario records: BeforeAll's failure means the scenario never
-    // began (this task's spec: not a single scenario runs).
+    // began (not a single scenario runs).
     expect(stdout.text()).toBe("");
 
     const log = (globalThis as Record<string, unknown>).__nukadokoRunAllHooksTimeoutLog as string[];

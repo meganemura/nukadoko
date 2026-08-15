@@ -9,7 +9,7 @@ import {
 import { fixture } from "./helpers/fixtures.js";
 
 // Responsibility: unit tests for src/step/fixture-names.ts's pure
-// extraction, plus this task's spec's own required regression test — a
+// extraction, plus a required regression test — a
 // representative step loaded through the real discovery path (tsx's
 // `register().import()`, not a plain in-process function) asserting the
 // names extracted from its real, esbuild-transformed `fn.toString()` match
@@ -75,7 +75,7 @@ describe("fixtureParameterNames: in-process extraction", () => {
   });
 });
 
-describe("fixtureParameterNames: tsx-loaded regression (p4a-fixture-bag task spec)", () => {
+describe("fixtureParameterNames: tsx-loaded regression", () => {
   it("reads a representative step's own fixture names through the real tsx discovery path", async () => {
     const { vocabulary } = await discoverSteps(fixture("fixture-bag-project"), "features");
     const entry = vocabulary.get("clean-step");

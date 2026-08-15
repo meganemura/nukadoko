@@ -1,8 +1,8 @@
 // @ts-nocheck
 // esbuild flags the redeclaration below as an early ECMAScript error before
-// this step's own body ever runs (fb5-import-error-line task spec:
-// "fixture bag の名前を関数直下で再宣言する形は esbuild / tsc / @babel/parser
-// の 3 実装が独立に早期エラーにする") — this file exists only to give
+// this step's own body ever runs (redeclaring a fixture-bag name directly
+// under the function is independently treated as an early error by
+// esbuild, tsc, and @babel/parser alike) — this file exists only to give
 // `nuka check` a location-bearing import failure to extract `line` from.
 // The `@ts-nocheck` above is what keeps this file out of `npm run
 // typecheck`'s own complaint about the very same redeclaration (TS2451):

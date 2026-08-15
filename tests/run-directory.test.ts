@@ -4,7 +4,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run <dir>` end to end against run-directory-project
-// (run-directory-target task spec) — a directory target folded into the
+// — a directory target folded into the
 // same one invocation a single feature file already gets. run.test.ts
 // covers everything about a single-file target (matching/skip/record
 // mechanics); this file only covers what changes once the positional names
@@ -46,13 +46,13 @@ describe("nuka run <dir>", () => {
     expect(records.map((r) => r.feature).sort()).toEqual(["features/multi/alpha.feature", "features/multi/beta.feature"]);
     expect(records.every((r) => r.status === "passed")).toBe(true);
 
-    // One run_id shared by every record in this invocation (this task's
-    // spec, decision 5: N feature files flow into the same one run).
+    // One run_id shared by every record in this invocation (N feature
+    // files flow into the same one run).
     const runIds = new Set(records.map((r) => r.run_id));
     expect(runIds.size).toBe(1);
 
-    // One summary line, counting across both files (this task's spec,
-    // decision 6: the progress counter runs through the whole invocation).
+    // One summary line, counting across both files (the progress counter
+    // runs through the whole invocation).
     expect(stderr.text()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
     expect(stderr.text()).toMatch(/scenario 1\/2 {2}features\/multi\/alpha\.feature:3/);
     expect(stderr.text()).toMatch(/scenario 2\/2 {2}features\/multi\/beta\.feature:3/);

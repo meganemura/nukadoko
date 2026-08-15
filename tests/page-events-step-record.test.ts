@@ -10,7 +10,7 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: page_events end to end against tests/fixtures/
-// page-events-project (P0-page-events task spec) — a real chromium page
+// page-events-project — a real chromium page
 // producing a console error, an uncaught error, and a failed request, all
 // three landing on the step record under both `nuka do` and `nuka run`
 // (completion condition 3: neither path alone), redacted the same way

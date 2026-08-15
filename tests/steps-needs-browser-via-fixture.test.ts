@@ -3,7 +3,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import type { StepSummary } from "../src/cli/vocabulary.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec's own completion condition 6 — `needs_
+// Responsibility: `needs_
 // browser` is `true` for a step that reaches `page` only *through* a
 // fixture (never directly), the transitive closure src/step/step-needs.ts's
 // `stepNeeds` now takes over the fixture dependency graph (scope item 11).

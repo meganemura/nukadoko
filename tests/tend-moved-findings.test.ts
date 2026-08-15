@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: m8d-move-to-tend task spec — three findings that used to
+// Responsibility: three findings that used to
 // be `nuka check` warnings (`parameter-type-support-origin`,
 // `secrets-public-key-unknown`, `secrets-redact-key-unknown`) now surface as
 // `nuka tend` notes instead, same code, same detection, only the command
@@ -94,7 +94,7 @@ describe("nuka tend: findings moved from nuka check", () => {
     expect(unknownRedactKey.message).toContain("UNKNOWN_REDACT_KEY");
 
     // secrets-redact-key-too-short means plaintext reaches a log the moment
-    // the run starts — this task's spec keeps it on `check`, not `tend`.
+    // the run starts — it stays on `check`, not `tend`.
     expect(
       report.notes.some((issue: { code: string }) => issue.code === "secrets-redact-key-too-short"),
     ).toBe(false);

@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// p10-step-discovery task spec, scope 3: featuresDir exists on disk (so
+// featuresDir exists on disk (so
 // features-dir-missing does not also fire) but holds nothing discovery can
 // import -- only this README, which no walked extension matches. `nuka
 // check` must report no-step-files-found and name the directory it walked,

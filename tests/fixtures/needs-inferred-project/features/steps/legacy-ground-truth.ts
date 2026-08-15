@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// This task's spec's own required regression: pre-migration form of
+// A required regression: pre-migration form of
 // migrated-ground-truth.ts, right below in this same directory — its own
 // `needs_inferred` must equal that step's `needs` exactly (this is the
 // feature's whole reason to exist: a reader gets the same answer whether a

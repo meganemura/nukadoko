@@ -6,9 +6,9 @@ import { defineStep } from "../../nukadoko-shim.js";
 // import()`" mistake docs/spec.md "Chaining steps" and
 // src/step/validate-from.ts's own header describe. This step is bound in
 // two feature files on purpose (one.feature, two.feature): the structural
-// finding below must still be reported exactly once (m6f-check-structural-
-// from task spec's own dedup requirement), since it is a property of this
-// step's own declaration, not of either scenario that happens to use it.
+// finding below must still be reported exactly once, since it is a
+// property of this step's own declaration, not of either scenario that
+// happens to use it.
 const neverDiscovered = defineStep({
   description: "not discovered on purpose — never exported as any file's default",
   args: z.object({}),

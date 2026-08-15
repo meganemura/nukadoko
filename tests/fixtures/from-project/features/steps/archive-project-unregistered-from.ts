@@ -15,7 +15,7 @@ const neverDiscovered = defineStep({
 });
 
 // CLI-only vocabulary (no `pattern` at all — docs/spec.md "Typed steps"
-// allows this) for m6a-from-core task spec's own acceptance test: `from`
+// allows this): `from`
 // naming an unregistered Step must refuse to execute at all, via `nuka do`.
 export default defineStep({
   description: "from names a Step discovery never registered, on purpose (m6a-from-core fixture)",

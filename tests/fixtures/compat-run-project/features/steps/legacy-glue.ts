@@ -1,7 +1,7 @@
 import { Given, Then, When, defineParameterType } from "../../nukadoko-compat-shim.js";
 
-// Custom parameter type registered from compat ("support") code (m2b-
-// compat-execution task spec, item 2): proves a compat-origin
+// Custom parameter type registered from compat ("support") code — proves a
+// compat-origin
 // `defineParameterType` merges into the same registry `nuka run` uses to
 // match — the pattern below could not match "the legacy flag is yes"
 // without it (closing m2a-compat-registry's "temporary asymmetry #2":
@@ -13,13 +13,13 @@ defineParameterType({
   transformer: (value: string) => value === "yes",
 });
 
-// String pattern, `{string}` built-in capture (this task's spec, item 3:
-// positional args, no named-capture requirement).
+// String pattern, `{string}` built-in capture (positional args, no
+// named-capture requirement).
 Given("a legacy project {string} exists", function (name: string) {
   return { name };
 });
 
-// RegExp pattern (this task's spec, item 1: string and RegExp patterns
+// RegExp pattern (string and RegExp patterns
 // alike) — its capture group arrives as a plain string (RegExp semantics),
 // unlike a typed step's coerced `{int}`.
 When(/^a legacy request is made with (\d+) items$/, function (count: string) {
@@ -44,7 +44,7 @@ When("a legacy table is provided:", function (table: { hashes(): Record<string, 
   }
 });
 
-// Docstring arrives as a plain string (this task's spec, item 3).
+// Docstring arrives as a plain string.
 When("a legacy docstring is provided:", function (text: string) {
   if (text !== "hello docstring") {
     throw new Error(`unexpected docstring: ${text}`);

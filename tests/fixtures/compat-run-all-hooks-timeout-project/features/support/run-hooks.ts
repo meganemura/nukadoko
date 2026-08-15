@@ -13,23 +13,22 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Registered first: outlives its own 20ms timeout (m22-compat-run-scope
-// task spec, item 2: BeforeAll({ timeout }, fn)'s own timeout takes
-// effect), recording its own start before the sleep that outlives it.
+// Registered first: outlives its own 20ms timeout (BeforeAll({ timeout },
+// fn)'s own timeout takes effect), recording its own start before the
+// sleep that outlives it.
 BeforeAll({ timeout: 20 }, async function () {
   record("beforeAll-first");
   await sleep(500);
 });
 
-// Registered second: must never run at all (this task's spec: the first
+// Registered second: must never run at all (the first
 // failure aborts the rest) — the log below must not contain
 // "beforeAll-second".
 BeforeAll(function () {
   record("beforeAll-second");
 });
 
-// Must still be attempted despite BeforeAll's own failure (this task's
-// spec: AfterAll is still attempted even so).
+// Must still be attempted despite BeforeAll's own failure.
 AfterAll(function () {
   record("afterAll");
 });

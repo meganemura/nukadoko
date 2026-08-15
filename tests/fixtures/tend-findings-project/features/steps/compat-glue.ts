@@ -8,8 +8,8 @@ Given("a shout {used-type} is heard", function () {
   return {};
 });
 
-// Proves pattern-unbound.ts's own scope note: "compat step は対象外" (this
-// task's spec) — this pattern is never bound by any feature line either,
+// Proves pattern-unbound.ts's own scope note: "compat step は対象外" —
+// this pattern is never bound by any feature line either,
 // which would trip `pattern-unbound` if it were a typed step the way
 // unbound-step.ts is, but compat steps are unused mid-migration by design
 // (docs/spec.md "Compat steps") and must produce nothing here.

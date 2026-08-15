@@ -3,7 +3,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 import createProject from "./create-project.js";
 import importProject from "./import-project.js";
 
-// m7a-from-alternatives task spec acceptance case: an *optional* key with
+// An *optional* key with
 // several candidate producers is silent when none is bound (m6b-from-check's
 // own rule, unaffected by having more than one candidate) but still errors
 // when two or more are bound earlier — docs/spec.md "Chaining steps": "Two

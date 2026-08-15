@@ -16,7 +16,7 @@ import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../
 // feature source string with the existing src/feature/load-features.ts
 // entry point (no `.feature` file on disk needed).
 //
-// allure-step-as-test task spec: rewritten around `mapStep` (one step -> one
+// Rewritten around `mapStep` (one step -> one
 // Allure test, decision 1) replacing the old `mapScenario` (one scenario ->
 // one test, every step a child of it). `mapHooks`/`mapScenarioEvidence`
 // (also exported now, this task) are exercised directly rather than through
@@ -238,7 +238,7 @@ describe("mapStep: statusDetails / nukadoko.failure label, per step now (M3-C sp
 });
 
 describe("mapStep: zero-width time for a step with no step record", () => {
-  it("pins to the caller's own finishedAt (this task's spec, decision 2 — no scenario timeline to anchor within any more)", () => {
+  it("pins to the caller's own finishedAt (no scenario timeline to anchor within any more)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepRecord = {
@@ -279,7 +279,7 @@ describe("mapStep: zero-width time for a step with no step record", () => {
   });
 });
 
-describe("mapStep: identity-breaking parameters (this task's spec, decision 4)", () => {
+describe("mapStep: identity-breaking parameters", () => {
   it("carries nukadoko.run/nukadoko.scenario/nukadoko.step, each mode: hidden and not excluded", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -432,7 +432,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
     expect(mapped[0]!.declaredParameters).toContainEqual({ name: "hook-param", value: "y" });
   });
 
-  it("has no home for a hook's own declared link or label (this task's spec: a fixture has neither in the Allure model)", () => {
+  it("has no home for a hook's own declared link or label (a fixture has neither in the Allure model)", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
       status: "ok",
@@ -719,7 +719,7 @@ describe("mapStep: declared parameters", () => {
   });
 });
 
-// --- p2-allure-measurement task spec: sections + polls timeline, page_events
+// --- sections + polls timeline, page_events
 // parameters, and the full-step-record attachment ---
 
 describe("mapStep: sections + polls merged into one child-step timeline", () => {
@@ -834,7 +834,7 @@ describe("mapStep: poll outcome -> status/startMs/stopMs, all three outcomes", (
       started_at: "2026-08-01T00:00:01.000Z",
       finished_at: "2026-08-01T00:00:01.500Z",
       // Outside the step record's own started_at/finished_at window: a real
-      // anomaly this task's spec says to report as-is, not clip.
+      // anomaly reported as-is, not clipped.
       sections: [{ label: "before the step even started", at: "2026-08-01T00:00:00.000Z" }],
     });
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
@@ -848,7 +848,7 @@ describe("mapStep: poll outcome -> status/startMs/stopMs, all three outcomes", (
   });
 });
 
-// --- p3c-allure-actions task spec: actions merged into the same
+// --- actions merged into the same
 // sections/polls timeline, plus the truncation marker ---
 
 describe("mapStep: actions merged into the sections/polls timeline", () => {
@@ -1012,7 +1012,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
   });
 });
 
-describe("mapHooks: hook trace/actions (p3d-hook-trace task spec)", () => {
+describe("mapHooks: hook trace/actions", () => {
   it("attaches a hook's own trace with the playwright-trace contentType, relative to the scenario's evidence dir", () => {
     const hook: ScenarioHookRecord = { type: "before", status: "ok", trace: "hook-before-0.zip" };
     const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
@@ -1122,7 +1122,7 @@ describe("mapStep: page_events as step parameters", () => {
   });
 });
 
-describe("mapStep: step record evidence.attachments (P9 task spec)", () => {
+describe("mapStep: step record evidence.attachments", () => {
   it("maps each attachment by name, guessing contentType from file's own extension, relative to evidence.dir", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;

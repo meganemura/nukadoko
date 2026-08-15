@@ -4,8 +4,8 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check`'s fixture-bag structural check
 // (src/step/validate-fixtures.ts's `validateStepFixtures`, wired into
-// src/check/analyze.ts — p4a-fixture-bag task spec, scope item 3: "nuka
-// check と nuka run が同じ検査を共有する形にすること") — the same shape
+// src/check/analyze.ts, so `nuka check` and `nuka run` share the same
+// validation) — the same shape
 // tests/check-structural-from.test.ts already proves for `from`'s own
 // structural check, applied to fixture names instead.
 

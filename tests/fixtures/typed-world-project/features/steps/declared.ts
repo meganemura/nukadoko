@@ -15,8 +15,8 @@ Then("the declared listing reads back {string}", function (this: CustomWorld, ex
 
 // Deliberately the wrong shape at run time (`id` is a number, not a
 // string) — the cast is what lets this compile; the zod schema, not
-// TypeScript, is what actually catches it (m2c-typed-world task spec, item
-// 2: an invalid declared write throws, and is never recorded as a write).
+// TypeScript, is what actually catches it (an invalid declared write
+// throws, and is never recorded as a write).
 Then("the declared listing is set invalidly", function (this: CustomWorld) {
   this.listing = { id: 42 } as unknown as CustomWorld["listing"];
 });

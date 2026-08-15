@@ -4,7 +4,7 @@ import { defineStep, type Step } from "../src/step/define-step.js";
 import { formatFixtureIssues, validateStepFixtures } from "../src/step/validate-fixtures.js";
 
 // Responsibility: unit tests for src/step/validate-fixtures.ts's pure
-// functions (p4a-fixture-bag task spec, scope item 3) — no discovery, no
+// functions — no discovery, no
 // tsx, no filesystem, mirroring tests/validate-from.test.ts's own shape for
 // the same reasons that file's header gives: most cases here reach the
 // runtime check by bypassing the type system (`as any`/`as unknown as

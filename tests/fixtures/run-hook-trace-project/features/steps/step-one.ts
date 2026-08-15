@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Navigates to a "data:" URL unique to this step (p3d-hook-trace task spec
-// test item 5) — proves this step's own trace chunk carries only this
+// Navigates to a "data:" URL unique to this step — proves this step's own
+// trace chunk carries only this
 // navigation, never the Before hook's or the AfterStep hook's.
 export default defineStep({
   pattern: "the first step touches the browser",

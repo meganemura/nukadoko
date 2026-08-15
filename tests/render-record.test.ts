@@ -4,7 +4,7 @@ import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 
 // Responsibility: unit tests for render-record.ts's `renderHook`/`hookLabel`
-// (t7-afterstep-consumers task spec, item 2) — a non-exhaustive ternary used
+// — a non-exhaustive ternary used
 // to render every `"after_step"` hook as "After hook", silently dropping
 // which step it ran after. These tests cover the runtime fix (all three hook
 // types get distinct labels; `after_step`'s own label carries `step_index`)
@@ -59,7 +59,7 @@ function headings(markdown: string): string[] {
   return markdown.split("\n").filter((line) => line.startsWith("#### "));
 }
 
-describe("renderAcceptanceRecord: hook labels (t7-afterstep-consumers task spec, test item 2)", () => {
+describe("renderAcceptanceRecord: hook labels", () => {
   it("labels a before hook and an after hook distinctly", () => {
     const hooks: ScenarioHookRecord[] = [
       { type: "before", status: "ok" },
@@ -97,8 +97,8 @@ describe("renderAcceptanceRecord: hook labels (t7-afterstep-consumers task spec,
   });
 });
 
-// Responsibility: unit tests for renderDeclaredVsObserved (accept-declared-
-// vs-observed task spec) — the record's own tail section that compares each
+// Responsibility: unit tests for renderDeclaredVsObserved —
+// the record's own tail section that compares each
 // step's own step record mutates (declared) against step record
 // observed.http_writes (measured), without ever changing whether
 // renderAcceptanceRecord itself throws or what cli/accept.ts does with its
@@ -164,7 +164,7 @@ function declaredVsObservedSection(markdown: string): string {
   return markdown.slice(idx);
 }
 
-describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-observed task spec)", () => {
+describe("renderAcceptanceRecord: Declared vs observed", () => {
   it("lists a step that declared mutates: false and was measured making writes", () => {
     const stepRecords = new Map<string, StepRecord | null>([
       ["r-1", makeStepRecord({ recordId: "r-1", mutates: false, observed: { http_reads: 0, http_writes: 2 } })],
@@ -263,8 +263,7 @@ describe("renderAcceptanceRecord: Declared vs observed (accept-declared-vs-obser
 
     const markdown = renderAcceptanceRecord(optionsFor([scenarioA, scenarioB]));
 
-    // One roll-up section, not one per scenario (task spec: not scattered
-    // one per scenario).
+    // One roll-up section, not one per scenario.
     expect(markdown.split("## Declared vs observed")).toHaveLength(2);
     const section = declaredVsObservedSection(markdown);
     expect(section).toContain('- "step one" (scenario "scenario A"): declared mutates: false, observed 1 write');

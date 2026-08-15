@@ -225,7 +225,7 @@ describe("configSchema: browser", () => {
     }
   });
 
-  it("rejects a non-object value (t6-config-browser task spec: zod checks only 'is this an object')", () => {
+  it("rejects a non-object value (zod checks only 'is this an object')", () => {
     expect(configSchema.safeParse({ browser: "headless" }).success).toBe(false);
     expect(configSchema.safeParse({ browser: 42 }).success).toBe(false);
     expect(configSchema.safeParse({ browser: true }).success).toBe(false);
@@ -233,9 +233,9 @@ describe("configSchema: browser", () => {
   });
 });
 
-// Responsibility: p6-browser-type task spec's own schema-level tests — the
-// "closed set of values" half of scope item 4 ("`config.browserType` が閉じた
-// 集合の値であることは zod のスキーマが弾く。それで十分。"). Whether firefox/
+// Responsibility: schema-level tests — that `config.browserType` is
+// restricted to a closed set of values is caught by zod's schema, and
+// that's enough. Whether firefox/
 // webkit are actually *installed* is not this schema's concern (that can
 // only be learned by launching, not by reading config) and is left to
 // Playwright's own error at launch time; see src/context/browser-evidence.ts.
@@ -502,7 +502,7 @@ describe("configSchema: fixtures", () => {
     }
   });
 
-  // p8-scope-rename task spec: `"run"` was the pre-rename spelling of what
+  // `"run"` was the pre-rename spelling of what
   // is now `"process"` — since this package is still unpublished, there is
   // no backward-compat door left open for it, on purpose (two names for the
   // same scope is exactly the ambiguity the rename exists to remove).

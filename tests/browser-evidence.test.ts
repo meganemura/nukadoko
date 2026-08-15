@@ -11,8 +11,8 @@ import { createStepContext } from "../src/context/create-context.js";
 
 // Whether to run at all: computed once at module load (top-level await), so
 // `it.skipIf` below sees the real answer instead of the pre-`beforeAll`
-// default a hook-based check would leave it at during test collection. Per
-// the task spec: chromium is expected to already be installed
+// default a hook-based check would leave it at during test collection.
+// chromium is expected to already be installed
 // (`npx playwright install chromium`); this is only a safety net for an
 // environment where that step is genuinely impossible.
 async function isChromiumAvailable(): Promise<boolean> {
@@ -28,7 +28,7 @@ async function isChromiumAvailable(): Promise<boolean> {
 const chromiumAvailable = await isChromiumAvailable();
 
 // Same reasoning as `isChromiumAvailable` above, but for a *headed* launch
-// specifically (t6-config-browser task spec, tests): a CI runner can have
+// specifically: a CI runner can have
 // chromium installed yet no display server to open a window on (a plain
 // Linux runner with no Xvfb), which is a `headless: false` launch failing
 // while `headless: true` still succeeds. Checked separately, and only when
@@ -90,7 +90,7 @@ describe("createStepContext / ctx.page()", () => {
       const afterDispose = Date.now();
 
       expect(evidence.trace).toBe("trace.zip");
-      // fb4-evidence-time task spec, item 1: one screenshot only, always
+      // One screenshot only, always
       // named final.png — the former second, per-outcome copy (a "did this
       // fail" fact the step record's own `status` already carries, on a buffer that could
       // already be stale by the time it was taken) is gone.
@@ -99,7 +99,7 @@ describe("createStepContext / ctx.page()", () => {
       const at = Date.parse(evidence.screenshots[0]!.at);
       expect(Number.isNaN(at)).toBe(false);
       // `at` was measured somewhere inside this very `dispose()` call — a
-      // real bound, not merely "parses as a date" (this task's spec: value
+      // real bound, not merely "parses as a date" (value
       // ordering, not only format).
       expect(at).toBeGreaterThanOrEqual(beforeDispose);
       expect(at).toBeLessThanOrEqual(afterDispose);
@@ -111,8 +111,7 @@ describe("createStepContext / ctx.page()", () => {
       const pngFiles = (await readdir(evidenceDir)).filter((name) => name.endsWith(".png"));
       expect(pngFiles).toEqual(["final.png"]);
       // A browser context was opened, so there is always something to
-      // persist for a session, even one with no cookies yet (this task's
-      // spec, decision 2).
+      // persist for a session, even one with no cookies yet.
       expect(storageState).toBeDefined();
     },
   );
@@ -152,7 +151,7 @@ describe("createStepContext / ctx.page()", () => {
   );
 
   if (!chromiumAvailable) {
-    // Surfaced in the implementer's report, per the task spec: only skip
+    // Warns rather than silently skipping: only skip
     // when chromium is genuinely unavailable in this environment.
     console.warn(
       "browser-evidence.test.ts: chromium unavailable, browser-path tests skipped",
@@ -165,7 +164,7 @@ describe("createStepContext / ctx.page()", () => {
 });
 
 // Responsibility: config.browser reaching the real chromium.launch call
-// unmodified (t6-config-browser task spec, decision 4 and tests) — measured
+// unmodified — measured
 // through the browser it actually launches, not assumed from Playwright's
 // own documented default. A launched chromium reports "HeadlessChrome" in
 // its own User-Agent string when headless and a plain "Chrome" one when
@@ -203,8 +202,8 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
   );
 
   it.skipIf(!headedChromiumAvailable)(
-    // Also sets `browserType: "chromium"` explicitly (p6-browser-type task
-    // spec, scope item 6: "config.browser（LaunchOptions）と併用できること") —
+    // Also sets `browserType: "chromium"` explicitly (can be used together
+    // with config.browser) —
     // config.browser still reaches launch unmodified when a project names
     // its engine explicitly, not only when browserType is left to default.
     "launches headed when config.browser: { headless: false }, alongside an explicit browserType",
@@ -225,10 +224,9 @@ describe("createStepContext / ctx.page(): config.browser controls headless", () 
   );
 });
 
-// Responsibility: p6-browser-type task spec's own runtime tests — kept to
-// exactly the two cases the spec itself pins down as chromium-only-safe
-// ("エンジン選択の配線は「chromium を明示的に選んだ場合」と「未知の値を拒む
-// 場合」で固定できる"): explicitly selecting "chromium" (the config-load
+// Responsibility: runtime tests — kept to
+// exactly the two cases pinned down as chromium-only-safe: explicitly
+// selecting "chromium" (the config-load
 // half of "unknown value" lives in tests/load-config.test.ts instead, since
 // it needs no browser at all). Firefox/webkit are deliberately not
 // exercised here — this environment has neither binary installed (by this
@@ -281,7 +279,7 @@ describe("createStepContext / ctx.page(): browserType", () => {
   });
 });
 
-// Responsibility: proves config.browserContext (context-options task spec)
+// Responsibility: proves config.browserContext
 // actually reaches browser.newContext() rather than only passing schema
 // validation — measured by spying on the newContext method of the real
 // Browser instance chromium.launch() returns, and reading the arguments it
@@ -361,11 +359,11 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
   );
 });
 
-// Responsibility: the page-side half of measured mutates (m2pre-observed
-// task spec, scope item 2 and decision 2) — a real local http server, so
+// Responsibility: the page-side half of measured mutates — a real local
+// http server, so
 // `ctx.page()` can issue a genuine GET (navigation) and POST (in-page
 // fetch), proving `observedCounts()` tallies both. Also now the page-origin
-// half of http.jsonl itself (p3b-page-network task spec, scope item 1): a
+// half of http.jsonl itself: a
 // navigation and an in-page `fetch` are both `document`/`fetch`
 // resourceTypes, so both are expected to land on http.jsonl, each marked
 // `via: "page"` — the assertion this block used to make (that page traffic
@@ -417,7 +415,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
 
       const { evidence } = await dispose();
       // Both the navigation (`document`) and the in-page `fetch` land on
-      // http.jsonl now (this task's spec, scope item 1) — `observed` above
+      // http.jsonl now — `observed` above
       // is unchanged by that; the two fields answer different questions
       // (this file's own header).
       expect(evidence.http).toBe("http.jsonl");
@@ -436,7 +434,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
 });
 
 // Responsibility: proves the browser-context half of docs/spec.md "Context
-// API"'s baseURL wiring (m2pre-ctx-surface task spec, decision 3) —
+// API"'s baseURL wiring —
 // `page.goto("/path")` must resolve against `config.baseURL` without the
 // step assembling the full URL itself, unlike `ctx.request()`'s own baseURL
 // handling (already covered by create-context.test.ts). Own server, own

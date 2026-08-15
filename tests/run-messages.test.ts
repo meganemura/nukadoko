@@ -10,8 +10,8 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run` -> messages.ndjson wiring, end to end (m3c-
-// messages-emitter spec-b task spec, test item 2). The mapping itself —
+// Responsibility: `nuka run` -> messages.ndjson wiring, end to end. The
+// mapping itself —
 // envelope shapes, identity, attachment handling — is already covered by
 // src/report/messages/**'s own spec-a tests; this file only proves what
 // cli/run.ts adds on top: the default output location, config.messages.
@@ -44,7 +44,7 @@ describe("nuka run: messages.ndjson wiring", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes .nukadoko/export/messages.ndjson by default: every line parses, and every envelope kind this task's spec names is present", async () => {
+  it("writes .nukadoko/export/messages.ndjson by default: every line parses, and every envelope kind expected is present", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/passing.feature"], {
@@ -54,8 +54,8 @@ describe("nuka run: messages.ndjson wiring", () => {
     });
 
     expect(exitCode).toBe(0);
-    // stdout/exit code are unchanged by the emitter (this task's spec, item
-    // 2) — the same one-record-line assertion run.test.ts's own "runs a
+    // stdout/exit code are unchanged by the emitter — the same
+    // one-record-line assertion run.test.ts's own "runs a
     // pure-step scenario to completion" test makes.
     expect(stripRunProgressLines(stderr.text())).toBe("");
     const stdoutLines = stdout.text().split("\n").filter((line) => line.length > 0);

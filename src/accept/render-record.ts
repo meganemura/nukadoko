@@ -69,9 +69,8 @@ function yamlScalar(value: string): string {
 /** One scenario this run accepted, plus everything its own section needs:
  * the record itself and every step record its steps reference, already read
  * from disk and already keyed by step record id (src/report/step-records.ts's
- * own `readStepRecordsForScenario` — reused, not reimplemented, per this
- * task's spec's own "don't touch" list extending in spirit to "don't
- * duplicate an existing reader either"). */
+ * own `readStepRecordsForScenario` — reused here rather than reimplemented,
+ * so there is only one reader of step records on disk). */
 export interface AcceptedScenario {
   readonly record: ScenarioRecord;
   readonly stepRecords: ReadonlyMap<string, StepRecord | null>;

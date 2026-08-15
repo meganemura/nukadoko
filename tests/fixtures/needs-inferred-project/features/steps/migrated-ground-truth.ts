@@ -3,7 +3,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Post-migration twin of legacy-ground-truth.ts, right above in this same
 // directory — same two fixtures (`page`, `env`), now properly destructured.
-// This task's spec's own required regression test asserts this step's own
+// A required regression test asserts this step's own
 // `needs` equals legacy-ground-truth's `needs_inferred` exactly. Never
 // actually runs.
 export default defineStep({

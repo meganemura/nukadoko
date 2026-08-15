@@ -12,14 +12,14 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka tend`'s `post-navigation-read` note (fb5-stale-wait-
-// note task spec) end to end. One test runs a real chromium navigation
+// Responsibility: `nuka tend`'s `post-navigation-read` note end to end. One
+// test runs a real chromium navigation
 // followed immediately by a real `expect()` call (tests/fixtures/
 // trace-actions-project's own `wait-for-late-element` step, already proven
 // by tests/trace-actions-expect.test.ts to produce a real trace with both
 // calls) through `nuka run` + `nuka accept`, then `nuka tend`, so the note's
 // own gap math runs against an actual measured step record at least once,
-// per this task's spec ("推測で書かない"). The rest hand-craft an acceptance
+// rather than guessed. The rest hand-craft an acceptance
 // record's own text directly (the same pattern tests/
 // signoff-condition-mismatch.test.ts already uses for its own "an old
 // record has no condition to compare" case): these exist only to pin down
@@ -168,7 +168,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
       const recordPath = acceptStdout.text().trim();
 
       const { report, exitCode } = await runTendJson(rootDir);
-      // A note never sets tend's own exit code (this task's spec, item 4).
+      // A note never sets tend's own exit code.
       expect(exitCode).toBe(0);
 
       const notes = report.notes.filter((n) => n.code === "post-navigation-read");
@@ -186,7 +186,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
       expect(gapMsText).toBeDefined();
       expect(Number(gapMsText)).toBeGreaterThanOrEqual(0);
       expect(Number(gapMsText)).toBeLessThan(10_000);
-      // Not a verdict (this task's spec, item 3, "断定しない"), the same
+      // Not a verdict, the same
       // wording fixture-touches-app.ts's own note already uses.
       expect(notes[0]!.message).toContain("Not a judgment");
     });
@@ -303,7 +303,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
       expect(notes.map((n) => n.step)).toEqual(["a step at the cutoff"]);
     });
 
-    it("excludes a read inside a ctx.poll window, but still reports one outside it on the same step record (fb5-stale-wait-poll task spec)", async () => {
+    it("excludes a read inside a ctx.poll window, but still reports one outside it on the same step record", async () => {
       await writeFile(
         path.join(rootDir, "poll-covered.2026-01-01-0000000.md"),
         buildRecord({
@@ -322,7 +322,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
               // - reported, same as before this task shipped.
               { method: "click", at: "2026-01-01T00:00:05.100Z", ms: 5 },
             ],
-            // `attempts: 1` on purpose (this task's spec, decision 2): a poll
+            // `attempts: 1` on purpose: a poll
             // that resolved on its first check is still a step written to
             // retry, so it excludes the read it covers exactly the same as
             // one that actually retried.
@@ -337,7 +337,7 @@ describe("nuka tend: post-navigation-read (fb5-stale-wait-note)", () => {
       expect(notes[0]!.message).toContain('"click"');
     });
 
-    it("resolves a read landing exactly on either edge of a poll window toward excluding it (this task's spec, decision 3)", async () => {
+    it("resolves a read landing exactly on either edge of a poll window toward excluding it", async () => {
       // One shared poll window: 00:00:01.000Z through 00:00:01.100Z
       // (waited_ms: 100).
       const poll = { at: "2026-01-01T00:00:01.000Z", attempts: 1, waited_ms: 100, outcome: "resolved" };

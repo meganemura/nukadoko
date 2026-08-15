@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 import createListing from "./create-listing.js";
 
-// fb3-used-result task spec: reads the upstream listing via `ctx.resultOf`,
+// Reads the upstream listing via `ctx.resultOf`,
 // then always fails — the `ctx.resultOf` counterpart to from-project's own
 // archive-project-fails.ts, proving the same result-on-failed-`used`
 // behavior holds for a `ctx.resultOf` read, not only a `from` injection.

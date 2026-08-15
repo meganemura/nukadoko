@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: m2b-compat-execution task spec's World + Before/After hook
+// Responsibility: World + Before/After hook
 // coverage — `setWorldConstructor` with a custom field, the unopened-getter
 // error, tag-filtered hooks (including `not @tag`), a failing Before
 // skipping every step while `record.hooks` still shows it, After running
@@ -61,7 +61,7 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(excluded.hooks.filter((h: { type: string }) => h.type === "before")).toHaveLength(1);
 
     // Every scenario in this feature also gets the untagged After hook
-    // (this task's spec, item 5: After always attempts to run).
+    // (After always attempts to run).
     for (const record of [untagged, tagged, excluded]) {
       expect(record.hooks.filter((h: { type: string }) => h.type === "after")).toEqual([
         { type: "after", status: "ok" },
@@ -123,7 +123,7 @@ describe("nuka run: World + Before/After hooks", () => {
     const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8"));
     expect(stepRecord.status).toBe("failed");
 
-    // attach/log/link are received, not dropped (this task's spec, item 1)
+    // attach/log/link are received, not dropped
     // — calling all three must not crash existing glue on import switch.
     expect(heldDeclarations.status).toBe("passed");
     expect(heldDeclarations.steps[0].status).toBe("passed");

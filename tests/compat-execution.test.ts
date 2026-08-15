@@ -9,7 +9,7 @@ async function readStepRecord(rootDir: string, recordId: string): Promise<Record
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
-// Responsibility: m21b-compat-execution task spec's coverage for the
+// Responsibility: coverage for the
 // execution-time "silent behavior change" closures — a compat step's/hook's
 // own `{ timeout }` is actually enforced (items 1-2), Before/After hooks
 // receive a real `HookParameter` instead of zero arguments (item 3), a
@@ -249,7 +249,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(before.declared.logs).toContain("before:feature=hook parameter coverage");
       expect(before.declared.logs).toContain("before:pickle=a passing scenario");
       // nukadoko's own scenario id, not a cucumber message id — just a
-      // non-empty string is what this proves (this task's spec, item 3).
+      // non-empty string is what this proves.
       expect(before.declared.logs).toContain("before:testCaseStartedId=string");
       expect(before.declared.logs).toContain("before:willBeRetried=false");
     });
@@ -286,11 +286,11 @@ describe("nuka run: compat step/hook execution honesty", () => {
     });
   });
 
-  // t7-compat-status-afterstep task spec, item 1: `nukadoko/compat`'s own
+  // `nukadoko/compat`'s own
   // `Status` re-export actually works in a real After hook's own
   // `result.status === Status.FAILED` branch — not just that `Status`
   // imports (tests/compat-status.test.ts already covers that in isolation).
-  describe("Status (t7-compat-status-afterstep task spec, item 1)", () => {
+  describe("Status", () => {
     it("result.status === Status.FAILED is false for a passing scenario", async () => {
       const stdout = createCaptureSink();
       const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {

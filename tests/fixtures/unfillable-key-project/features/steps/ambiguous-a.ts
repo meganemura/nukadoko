@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Ambiguous-step boundary (m7b-unfillable-key task spec): a line that
+// Ambiguous-step boundary: a line that
 // resolves to 2+ steps already gets its own `ambiguous-step` error
 // (src/check/feature-check.ts) — this task's new check must stay silent
 // about `serialA`'s own unfillable required key rather than double-report

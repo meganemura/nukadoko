@@ -12,7 +12,7 @@ import {
 
 // Responsibility: `nuka run` end to end against run-project — a pure-step
 // fixture (no browser, no HTTP server) covering matching/skip/record
-// mechanics on their own (m1-run task spec, scope item 4). Browser evidence,
+// mechanics on their own. Browser evidence,
 // `--session` propagation, and secret redaction each get their own file
 // (run-browser.test.ts, run-session.test.ts, run-secrets.test.ts) since they
 // need their own fixture project and/or a real server or chromium.
@@ -80,8 +80,8 @@ describe("nuka run", () => {
       expect(stepRecord.scenario).toBe(record.scenario_id);
       expect(stepRecord.environment).toBe("default");
       expect(stepRecord.session).toBeNull();
-      // A pure step makes no network calls at all (this task's spec,
-      // decision 3): `observed` is still always present, at zero.
+      // A pure step makes no network calls at all: `observed` is still
+      // always present, at zero.
       expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 0 });
     }
 
@@ -241,7 +241,7 @@ describe("nuka run", () => {
     expect(await readdir(scenariosDir)).toHaveLength(1);
   });
 
-  it("stderr announces a partial run when :line is given, naming the selected/total scenario counts, without touching stdout's record JSON (partial-run-visibility task spec)", async () => {
+  it("stderr announces a partial run when :line is given, naming the selected/total scenario counts, without touching stdout's record JSON", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/lines.feature:6"], {
@@ -261,7 +261,7 @@ describe("nuka run", () => {
     expect(record.scenario).toBe("second scenario");
   });
 
-  it("stderr says nothing about a partial run when no :line is given (partial-run-visibility task spec)", async () => {
+  it("stderr says nothing about a partial run when no :line is given", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/lines.feature"], {
       rootDir,
@@ -330,7 +330,7 @@ describe("nuka run", () => {
   });
 });
 
-// p10-step-discovery task spec, scope 5: a project whose step definitions
+// A project whose step definitions
 // are plain .js/.mjs, not .ts -- discovery only walked .ts before this
 // task, so a suite like this one was invisible to it and every scenario
 // failed as "undefined step" instead of naming the real cause. Its own

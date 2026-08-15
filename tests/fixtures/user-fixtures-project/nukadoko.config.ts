@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 
-// P5 task spec's own fixture module — every fixture here writes one JSON
+// A fixture module — every fixture here writes one JSON
 // line per lifecycle event to fixture-log.jsonl, right beside this file, so
 // tests/run-fixture-teardown.test.ts (and its sibling files) can read back
 // what actually happened without needing to see into a separately tsx-
@@ -26,8 +26,9 @@ export default defineConfig({
   fixtureTimeout: 2_000,
   fixtures: defineFixtures({
     // Scenario scope (default, omitted): rebuilt per scenario, torn down at
-    // that scenario's own end. Teardown's own conditional cleanup (`.claude-
-    // team/playwright-native-design.md` 5 節's own example) is reproduced
+    // that scenario's own end. Teardown's own conditional cleanup (a
+    // fixture's `use()` return value carries whether the step passed or
+    // failed, so cleanup can branch on it) is reproduced
     // here exactly: a "failed" outcome keeps the tenant around (for
     // inspection); only "passed" destroys it.
     tenant: async ({}, use) => {
@@ -51,8 +52,8 @@ export default defineConfig({
       },
       { scope: "process" },
     ],
-    // Never calls use() at all — P5 task spec, scope item 7's own "use() を
-    // 呼び忘れた" case: `nuka do`/`nuka run` must refuse loudly, naming this
+    // Never calls use() at all — the "forgot to call use()" case: `nuka
+    // do`/`nuka run` must refuse loudly, naming this
     // fixture, rather than hanging.
     neverCallsUse: async () => {
       log({ fixture: "neverCallsUse", phase: "setup-returned-without-use" });

@@ -11,13 +11,13 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: m2b-compat-execution task spec's compat-only scenario e2e
+// Responsibility: compat-only scenario e2e
 // coverage — `nuka run` actually matching and executing a compat step
 // (closing m2a-compat-registry's two temporary asymmetries): string/RegExp
 // patterns, a compat-registered custom parameter type, table (as a
 // DataTable)/docstring as the trailing positional argument, a throwing step,
 // and a Then-position compat step that observes a network write and passes
-// anyway (t2-trust-declaration task spec: compat has no `mutates` to trust,
+// anyway (compat has no `mutates` to trust,
 // so the old measured Then-position check — now gone entirely — never had a
 // declaration to fall back on either way).
 

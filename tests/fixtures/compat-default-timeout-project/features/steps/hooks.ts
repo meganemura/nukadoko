@@ -1,9 +1,8 @@
 import { Before, When } from "../../nukadoko-compat-shim.js";
 
 // Same default-timeout-vs-own-timeout coverage as ../steps/timeout-glue.ts,
-// for a scenario-level Before hook instead of a step (m22-compat-run-scope
-// task spec, item 1: the default timeout applies to both compat steps and
-// hooks).
+// for a scenario-level Before hook instead of a step (the default timeout
+// applies to both compat steps and hooks).
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { getDefaultTimeoutMs, setDefaultTimeout } from "../src/compat/registry.js";
 
 // Responsibility: unit coverage for src/compat/registry.ts's
-// `setDefaultTimeout`/`getDefaultTimeoutMs` (m22-compat-run-scope task spec,
-// item 1) — a single overwritable value, not a per-file queue like
+// `setDefaultTimeout`/`getDefaultTimeoutMs` — a single overwritable value,
+// not a per-file queue like
 // `drainCompatSteps`, so "starts undefined" only holds reliably in a test
 // file of its own: vitest isolates each test file's own module registry by
 // default (vitest.config.ts sets no `isolate: false`), so this file's own

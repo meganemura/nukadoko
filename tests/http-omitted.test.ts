@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createHttpOmittedCollector } from "../src/context/http-omitted.js";
 
-// Responsibility: HttpOmittedCollector's own contract in isolation (p3b-
-// page-network task spec) — record/snapshot/reset, and the "whole field
+// Responsibility: HttpOmittedCollector's own contract in isolation —
+// record/snapshot/reset, and the "whole field
 // omitted, not merely empty" convention `page_events`'s own collector
 // already follows (tests/page-events.test.ts). The step-record-level shape
 // (field omission, redaction not needed since only counts are carried, both

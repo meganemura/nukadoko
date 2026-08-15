@@ -3,9 +3,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Requires a key that has no value in .env — `ctx.requireEnv` records the
 // name before it throws `MissingEnvError` (create-context.ts's own
-// requireEnv), so the failed step record still shows what this step asked for
-// (env-reads-and-mutates-doc task spec, completion bullet 4, the
-// requirement's own reason for existing).
+// requireEnv), so the failed step record still shows what this step asked
+// for.
 export default defineStep({
   pattern: "a step requires a missing env var",
   description: "Calls ctx.requireEnv with a key that has no value",

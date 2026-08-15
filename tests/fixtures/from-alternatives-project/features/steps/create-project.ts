@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // One of two mutually exclusive producers for `archive-project.ts`'s own
-// `projectId` (m7a-from-alternatives task spec) — a scenario creates a
+// `projectId` — a scenario creates a
 // project directly, and this is that path.
 export default defineStep({
   pattern: "a project {name:string} is created",

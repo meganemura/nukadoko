@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// 105 distinct attachments in one execution — more than the 100-entry cap
-// (P9 task spec, test bullet 6): the step record must still cap
+// 105 distinct attachments in one execution — more than the 100-entry cap:
+// the step record must still cap
 // `evidence.attachments` at 100 while reporting the true total (105) on
 // `truncated.evidence`, the same convention `truncated.actions` already
 // uses. A loop calling `attach` unintentionally is exactly the accident

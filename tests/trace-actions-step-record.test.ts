@@ -12,10 +12,10 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: `actions` end to end against tests/fixtures/
-// trace-actions-project (p3a-trace-per-step task spec) — a real chromium
-// `page.goto()` to a URL whose query string carries a secret, proving
-// completion condition 5 ("シークレットを含む URL を踏んだとき、actions にも
-// 生値が出ないこと") for both `nuka run` and `nuka do`: `actions` is built
+// trace-actions-project — a real chromium
+// `page.goto()` to a URL whose query string carries a secret, proving that
+// visiting it leaves no raw value in `actions` either, for both `nuka run`
+// and `nuka do`: `actions` is built
 // from the step's own trace chunk and folded onto the step record object
 // *before* the one existing `redact()` call each executor already makes
 // (cli/do.ts, run-scenario.ts), so no separate redaction path was added for

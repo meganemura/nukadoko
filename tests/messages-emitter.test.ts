@@ -10,7 +10,7 @@ import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../
 import { readOwnVersion } from "../src/version.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
-// Responsibility: integration tests (this task's spec, test item 2) —
+// Responsibility: integration tests —
 // drives the real `createMessagesEmitter` end to end against fixture
 // record.json/step record.json data (built here as plain objects, not by
 // actually running a scenario) and reads the real NDJSON file it writes
@@ -32,7 +32,7 @@ const FEATURE_SOURCE = `Feature: Checkout
       | member |
 `;
 
-// A second, unrelated feature (run-directory-target task spec: a directory
+// A second, unrelated feature (a directory
 // target's own `begin()` call carries more than one feature) — just one
 // scenario, enough to prove `begin()` writes a second (source,
 // gherkinDocument, pickle) group rather than only ever the first.
@@ -198,7 +198,7 @@ describe("createMessagesEmitter", () => {
       }
     });
 
-    it("sets meta.implementation to nukadoko's own name and package.json version (own-version task spec)", () => {
+    it("sets meta.implementation to nukadoko's own name and package.json version", () => {
       const meta = envelopes.find((e) => e.meta)!.meta!;
       expect(meta.implementation.name).toBe("nukadoko");
       expect(meta.implementation.version).toBe(readOwnVersion());

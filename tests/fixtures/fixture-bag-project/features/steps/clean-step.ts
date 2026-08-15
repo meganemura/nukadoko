@@ -3,8 +3,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // The well-formed control case: destructures two real fixtures (renamed
 // `env` to `environment` — proves a rename, `{ env: environment }`, still
-// extracts correctly, per the "実測" this task's spec cites for Playwright's
-// own extraction), no `nuka check`/`nuka run`/`nuka do` issue at all. This
+// extracts correctly, matching Playwright's own fixture-renaming behavior),
+// no `nuka check`/`nuka run`/`nuka do` issue at all. This
 // is also this fixture project's tsx-loaded regression case
 // (tests/fixture-names.test.ts): a representative step loaded through the
 // real discovery path, asserting `fixtureParameterNames` reads back exactly

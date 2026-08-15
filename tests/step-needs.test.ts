@@ -3,8 +3,8 @@ import { z } from "zod";
 import { defineStep } from "../src/step/define-step.js";
 import { stepNeeds } from "../src/step/step-needs.js";
 
-// Responsibility: unit tests for src/step/step-needs.ts's `stepNeeds` (p4b-
-// steps-needs task spec) — the pure function `nuka steps --json`'s `needs`/
+// Responsibility: unit tests for src/step/step-needs.ts's `stepNeeds` —
+// the pure function `nuka steps --json`'s `needs`/
 // `needs_browser` fields go through, exercised directly (no CLI, no
 // discovery) so the alphabetizing and the `page`/`context` membership check
 // are each pinned down in isolation. tests/from-chain.test.ts and this

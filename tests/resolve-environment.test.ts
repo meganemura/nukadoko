@@ -4,7 +4,7 @@ import { UnknownEnvironmentError } from "../src/environment/errors.js";
 import { resolveEnvironment } from "../src/environment/resolve-environment.js";
 
 // Responsibility: resolve-environment.ts's own layering/unknown-name logic
-// in isolation (this task's spec's acceptance criteria: baseURL override /
+// in isolation (baseURL override /
 // envFiles append order / unknown env fails setup), separate from
 // environment.test.ts's end-to-end `nuka do` wiring so a layering mistake
 // and a wiring mistake fail different tests.

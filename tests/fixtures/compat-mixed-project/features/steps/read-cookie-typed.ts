@@ -3,7 +3,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // A typed step reading, via `request`, the cookie a *compat* step set
 // via `this.openRequest()` earlier in the same pickle — proves 1 pickle = 1
-// ctx across kinds (m2b-compat-execution task spec, item 4).
+// ctx across kinds.
 export default defineStep({
   pattern: "the cookie is visible to a typed request",
   description: "Confirm the compat step's cookie is visible to a typed request",

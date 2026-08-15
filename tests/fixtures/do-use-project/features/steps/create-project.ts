@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// The chain's producer side (m6c-do-use task spec) — a plain, deterministic
+// The chain's producer side — a plain, deterministic
 // step with no network/browser at all, so this fixture's `--use` tests are
 // about the resolution mechanism itself. `name` is required, with no
 // default, on purpose: `nuka do create-project --args '{}'` is this

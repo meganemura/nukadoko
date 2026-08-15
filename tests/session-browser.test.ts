@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: the one browser-path session round trip this task's spec
-// asks for (browser-login.ts / browser-whoami.ts against a real chromium,
+// Responsibility: the one browser-path session round trip
+// (browser-login.ts / browser-whoami.ts against a real chromium,
 // via ctx.page()) — kept in its own file, same separation as
 // create-context.test.ts (node:http only) vs browser-evidence.test.ts
 // (chromium) for the pre-existing evidence tests. Unlike
-// browser-evidence.test.ts, this suite is not `it.skipIf`-gated: the task
-// spec requires it to pass without skipping (chromium is expected already
+// browser-evidence.test.ts, this suite is not `it.skipIf`-gated: it must
+// pass without skipping (chromium is expected already
 // installed in this environment).
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {
@@ -91,7 +91,7 @@ describe("nuka do --session (browser path)", () => {
     expect(whoamiStepRecord.result.cookie).toContain("sid=abc123");
   });
 
-  // fb4-evidence-time task spec's own acceptance criterion: a browser
+  // A browser
   // execution's step record carries exactly one screenshot, final.png,
   // whether the step passed or failed — the case the former
   // second-screenshot behavior (a second copy of the same buffer, saved
@@ -119,12 +119,12 @@ describe("nuka do --session (browser path)", () => {
  * inside `bounds` — the wall-clock window the caller measured around the
  * whole `runCli` call, not the step record's own `finished_at`. `finalize()` (src/context/
  * browser-evidence.ts) runs from `dispose()`, which cli/do.ts calls *after*
- * `finished_at` is already recorded — the exact gap this task's spec exists
+ * `finished_at` is already recorded — the exact gap this field exists
  * to make visible (docs/spec.md "Records": `at` is what a second,
- * per-outcome screenshot file used to stand in for without stating it), and
- * the spec's own non-scope explicitly rejects closing that gap by moving the
- * screenshot earlier ("失敗時に throw の瞬間へスクリーンショットを移す案は
- * 採らない"). So `at > finished_at` is the expected, honest reading here,
+ * per-outcome screenshot file used to stand in for without stating it) —
+ * closing that gap by moving the
+ * screenshot earlier, to the moment of the throw on failure, is
+ * deliberately not done. So `at > finished_at` is the expected, honest reading here,
  * not a bug — `started_at` still bounds it below (a screenshot cannot
  * predate the execution that produced it), and the wall clock around the
  * whole CLI call bounds it above, which is what "value ordering, not only

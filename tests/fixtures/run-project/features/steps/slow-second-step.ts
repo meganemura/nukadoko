@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Sleeps briefly on purpose (allure-step-as-test task spec, decision 2's own
-// test list: "書かれるタイミングが step 完了時であること" verified by
+// Sleeps briefly on purpose (verified by
 // observed timestamps, not by reading the code) — a scenario pairing this
 // step with a fast one first gives a live, per-step Allure emitter two
 // result files whose own mtimes land meaningfully apart; a batched-at-

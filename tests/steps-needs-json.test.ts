@@ -4,12 +4,12 @@ import type { StepSummary } from "../src/cli/vocabulary.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka steps --json`'s own `needs`/`needs_browser` fields
-// end to end (p4b-steps-needs task spec) — against
+// end to end — against
 // tests/fixtures/run-browser-project, a project already carrying both a
 // step that destructures `page` and one that destructures nothing browser-
-// related (p4a-fixture-bag task spec's own browser-launch fixtures), which
-// is exactly the "true for one, false for the other" pair this task's
-// completion condition 2 asks be fixed by a test. Read-only: `nuka steps`
+// related (browser-launch fixtures), which
+// is exactly the "true for one, false for the other" pair a test needs to
+// cover. Read-only: `nuka steps`
 // never executes a step, so the fixture project is read directly rather
 // than copied to a temp dir (the same choice tests/check-fixture-structural
 // .test.ts makes for the same reason).
@@ -18,9 +18,9 @@ async function stepsJson(rootDir: string): Promise<StepSummary[]> {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
   expect(exitCode).toBe(0);
-  // `{ steps, import_failures }`, not a bare array (fb5-loader-visibility
-  // task spec, decision 1) — `import_failures` is exercised by this task's
-  // own dedicated test file, unrelated to what this helper's callers check.
+  // `{ steps, import_failures }`, not a bare array — `import_failures` is
+  // exercised by a dedicated test file, unrelated to what this helper's
+  // callers check.
   const report = JSON.parse(stdout.text()) as { steps: StepSummary[] };
   return report.steps;
 }
@@ -39,8 +39,7 @@ describe("nuka steps --json: needs / needs_browser", () => {
     expect(noBrowserTouch?.needs).toEqual([]);
     expect(noBrowserTouch?.needs_browser).toBe(false);
     // The key itself must still be present — an empty array is a fact
-    // ("this step needs nothing"), not the same as the field being absent
-    // (this task's spec, completion condition 3).
+    // ("this step needs nothing"), not the same as the field being absent.
     expect(noBrowserTouch).toHaveProperty("needs");
     expect(noBrowserTouch).toHaveProperty("needs_browser");
   });
@@ -86,8 +85,7 @@ describe("nuka steps (text): needs_browser marker", () => {
     const noBrowserHeading = text.split("\n").find((line) => line.startsWith("no-browser-touch "));
     expect(noBrowserHeading).toBe("no-browser-touch  typed  read-only");
 
-    // The full `needs` list is never spelled out in the text rendering
-    // (this task's spec: "needs の全列挙はテキスト側に出さない").
+    // The full `needs` list is never spelled out in the text rendering.
     expect(text).not.toContain('needs":');
     expect(text).not.toMatch(/\bpage,\s*context\b/);
   });

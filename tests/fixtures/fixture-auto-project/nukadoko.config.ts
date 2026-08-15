@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// P5 task spec's own completion condition 7: `auto: true` must be refused
+// `auto: true` must be refused
 // with its own dedicated message, naming why (this is not "Playwright
 // fixture compatible" beyond the shape of a definition). `as any` on the
 // options object is deliberate — `FixtureOptions`'s own TypeScript type has

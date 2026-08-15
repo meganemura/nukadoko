@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka tend`'s `signoff-condition-mismatch` note
-// (accept-condition task spec, item 7) end to end — the one tend finding
+// Responsibility: `nuka tend`'s `signoff-condition-mismatch` note end to
+// end — the one tend finding
 // that reads a sign-off's own recorded condition against the *current*
 // config, unrelated to src/tend/signoff-rot.ts's own staleness checks
-// (this task's spec: "今この瞬間に間違っているわけではない", so a `note`,
+// (it isn't wrong at this exact moment, so a `note`,
 // never an `error`). `nuka tend` never checks git state at all (unlike
 // `nuka accept`), so a config edit here is never committed — only `nuka
 // accept` itself, further down, needs a clean tree.
@@ -38,7 +38,7 @@ function writeConfig(rootDir: string, browserType: string): Promise<void> {
   );
 }
 
-describe("nuka tend: signoff-condition-mismatch (accept-condition task spec)", () => {
+describe("nuka tend: signoff-condition-mismatch", () => {
   let rootDir: string;
   let recordPath: string;
 

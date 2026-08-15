@@ -22,15 +22,15 @@ import {
 // assertion in tests/fixtures/trace-actions-project/features/steps/wait-for-
 // late-element.ts must actually poll and wait rather than pass on its first
 // check, and this test pins the resulting step record's `actions` entry down
-// to prove `ms` reflects that real wait (a lower bound only, per this task's
-// spec: no upper bound, since machine load can only push the real duration
+// to prove `ms` reflects that real wait (a lower bound only: no upper
+// bound, since machine load can only push the real duration
 // up from 600ms, never down).
 
 const LATE_ELEMENT_DELAY_MS = 600;
 // Comfortably below the 600ms the fixture page's own script waits before
 // adding #late, leaving headroom for JS timer imprecision and the time the
 // page itself takes to load before the delayed script even starts running
-// (this task's spec: fix a lower bound only, never an upper one).
+// (fix a lower bound only, never an upper one).
 const MIN_EXPECTED_WAIT_MS = 400;
 
 function startLateElementServer(): Promise<{ server: Server; baseURL: string }> {

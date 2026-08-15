@@ -1,7 +1,7 @@
 import { attachment, label, link, logStep, parameter, step as allureStep } from "allure-js-commons";
 import { Given } from "../../nukadoko-compat-shim.js";
 
-// Proves the compat door on its main path (m2d-allure-shim task spec, item 2) — an
+// Proves the compat door on its main path — an
 // import switch to "nukadoko/compat" never touched this file's own
 // "allure-js-commons" import; every one of these calls is unmodified
 // existing-suite glue.

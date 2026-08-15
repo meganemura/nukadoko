@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: fb5-loader-visibility task spec, decision 3 — `nuka
+// Responsibility: `nuka
 // check`'s human-readable (non `--json`) rendering groups
 // `step-file-import-failed` findings that carry the exact same message
 // under one printed message, instead of repeating Node's own ESM-loader
 // error once per file it was rethrown to. `--json` is untouched: this is a
 // display-only fold over `CheckReport.errors`, never a change to the data
-// itself (this task's spec: "データ構造は変えない").
+// itself.
 //
 // tests/fixtures/check-import-failure-shared-cause-project has two files
 // (a-imports-shared.ts, b-imports-shared.ts) plus the shared module they

@@ -13,7 +13,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: promotion-comparison-test task spec — README's
+// Responsibility: README's
 // "Before / after" section claims three things about promoting a step from
 // cucumber-js glue to a typed `defineStep`, and until this file neither
 // snippet it shows ever actually ran anywhere in the repo. This makes all
@@ -137,7 +137,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
 
     expect(glueExit).toBe(typedExit);
     expect(glueRecord.status).toBe(typedRecord.status);
-    // Reported as actually measured (this task spec: a mismatch against
+    // Reported as actually measured (a mismatch against
     // README gets reported, not folded into a looser assertion) — both
     // runs are expected to pass against the fake server above.
     expect(typedRecord.status).toBe("passed");

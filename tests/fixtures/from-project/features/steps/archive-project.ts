@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 import createProject from "./create-project.js";
 
-// The chain's consumer side, via `from` (m6a-from-core task spec; docs/
+// The chain's consumer side, via `from` (docs/
 // spec.md "Chaining steps"). Two patterns, deliberately aliased (docs/
 // spec.md "Typed steps": aliases are for prose "genuinely interchangeable at
 // the args level: same keys, same run() behavior no matter which phrasing

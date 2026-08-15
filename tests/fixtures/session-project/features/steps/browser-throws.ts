@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// The failure-path counterpart to browser-login.ts (fb4-evidence-time task
-// spec's own acceptance criterion: a browser execution's step record carries
+// The failure-path counterpart to browser-login.ts (a browser execution's
+// step record carries
 // exactly one screenshot, final.png, on both a passing and a failing run —
 // the case the former second-screenshot-on-failure behavior existed for).
 // Opens the browser like any other browser-path step, then always throws,

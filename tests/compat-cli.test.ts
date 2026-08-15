@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: m2a-compat-registry task spec's CLI static-surface tests —
+// Responsibility: CLI static-surface tests —
 // `nuka steps`/`nuka describe`/`nuka do` all need to know a vocabulary entry
 // can be `kind: "compat"` (docs/spec.md "CLI summary": "list the whole
 // vocabulary, typed and compat").
@@ -45,7 +45,7 @@ describe("nuka steps: compat entries", () => {
     });
 
     expect(exitCode).toBe(0);
-    // Blocks are blank-line separated (steps-human-output task spec); a
+    // Blocks are blank-line separated; a
     // compat entry is heading-only, so each block here is exactly one line.
     const blocks = stdout.text().replace(/\n$/, "").split("\n\n");
     expect(blocks).toHaveLength(3);

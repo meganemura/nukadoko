@@ -7,7 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: run our messages.ndjson through the real, official
-// consumer (m3c-messages-emitter spec-verify task spec) rather than our own
+// consumer rather than our own
 // structural assertions about it. `@cucumber/junit-xml-formatter` drives
 // `@cucumber/query` over the envelope stream to resolve every id reference
 // (pickle -> testCase -> testCaseStarted -> testStepFinished, and the

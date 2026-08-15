@@ -7,7 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: `ctx.resultOf` end to end against tests/fixtures/
 // resultof-project — a pure-step project (no browser, no HTTP server, same
 // rationale as run.test.ts's own run-project) covering the whole chain
-// mechanism (m2pre-resultof task spec, scope item 5): a later step reading
+// mechanism: a later step reading
 // an earlier step's validated result and it landing on the step record as
 // provenance (`used`), the same step run twice in one scenario returning the
 // most recent result, the chain never crossing a scenario boundary and never
@@ -21,7 +21,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // between step files land on the same tsImport module graph, so they
 // should coincide — this is what a test must prove). The two
 // tests below now pass because `src/discover/discover-steps.ts`
-// (m2pre-module-identity task spec) calls tsx's `register({ namespace })`
+// calls tsx's `register({ namespace })`
 // exactly once per discovery run and reuses the scoped `.import()` it
 // returns for every file, instead of tsx's `tsImport()` convenience wrapper,
 // which mints a fresh namespace/module registration on every call — that
@@ -135,7 +135,7 @@ describe("ctx.resultOf", () => {
     // A fresh scenario's own chain starts empty regardless of what happened
     // in an earlier scenario — the referenced step never ran in *this*
     // scenario, and even if it had run and failed elsewhere, a failed run
-    // never becomes readable (this task's spec, decision 1).
+    // never becomes readable.
     expect(freshScenario.status).toBe("passed");
     expect(freshScenario.steps[0].status).toBe("passed");
     const freshStepRecord = await readStepRecord(rootDir, freshScenario.steps[0].record);
@@ -143,7 +143,7 @@ describe("ctx.resultOf", () => {
     expect(freshStepRecord.used).toBeUndefined();
   });
 
-  it("a failed step's step record carries the ctx.resultOf-read value's own result (fb3-used-result task spec)", async () => {
+  it("a failed step's step record carries the ctx.resultOf-read value's own result", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/resultof.feature:12"], {
       rootDir,

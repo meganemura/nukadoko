@@ -89,8 +89,8 @@ describe("createStepContext / ctx.request()", () => {
     // otherwise a plain node:http-server test file. Substituting an
     // explicit `options.method` here still exercises the same `methodOf`
     // logic in src/context/http-log.ts (options.method takes priority
-    // before any Request-vs-string check), per the task spec's allowance
-    // to substitute this case and note it.
+    // before any Request-vs-string check) — a deliberate substitution for
+    // the real page/route case, noted here rather than left implicit.
     const { ctx, dispose } = createStepContext({
       config: baseConfig({ baseURL }),
       evidenceDir,
@@ -137,7 +137,7 @@ describe("createStepContext / ctx.request()", () => {
   });
 });
 
-// Responsibility: proves config.requestContext (context-options task spec)
+// Responsibility: proves config.requestContext
 // actually reaches playwrightRequest.newContext() rather than only passing
 // schema validation — measured by spying on the real, shared `playwright`
 // module's `request.newContext`, the same singleton create-context.ts calls,

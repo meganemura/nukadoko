@@ -6,7 +6,7 @@ import { discoverSteps } from "../src/discover/discover-steps.js";
 import { DuplicateWorldDefinitionError } from "../src/discover/errors.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: m2c-typed-world task spec's own coverage — the compat
+// Responsibility: coverage for the compat
 // World's "measurement is always on, declaration is opt-in" mechanism
 // (typed-world-design.md's own section on the mechanism; proto-typed-world/findings.md's
 // verified own-data-defineProperty variant, `wrapDefinePropertySeeded`).

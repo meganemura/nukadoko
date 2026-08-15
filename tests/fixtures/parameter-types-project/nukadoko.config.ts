@@ -1,7 +1,7 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
 // Two config.parameterTypes entries, each answering one docs/spec.md example
-// verbatim (m2pre-parameter-types task spec, scope item 2):
+// verbatim:
 //
 // - `negation`: docs/spec.md's own boolean-polarity example — the
 //   `( not)?` regexp's own capturing group is either empty-participating

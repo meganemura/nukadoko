@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Then-position step that writes while declaring `mutates: false`
-// (t2-trust-declaration task spec): the declaration is what nukadoko trusts
+// Then-position step that writes while declaring `mutates: false`:
+// the declaration is what nukadoko trusts
 // now, not what execution measures, so this occurrence must pass — the
 // write still lands on the step record's `observed`, just no longer fails it.
 export default defineStep({

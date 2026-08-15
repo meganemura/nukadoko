@@ -1,8 +1,8 @@
 import { Given } from "../../nukadoko-compat-shim.js";
 
 // A RegExp pattern matching the exact same pickle text as ambiguous-typed.ts
-// ("an ambiguous thing happens") — an ambiguous match across kind (this
-// task's spec, item 6). Deliberately a RegExp, not the identical string
+// ("an ambiguous thing happens") — an ambiguous match across kind.
+// Deliberately a RegExp, not the identical string
 // pattern: two *string* patterns with identical text would also collide as
 // duplicate-pattern (a separate, whole-vocabulary static check unrelated to
 // any feature file), which would conflate this fixture's two independent

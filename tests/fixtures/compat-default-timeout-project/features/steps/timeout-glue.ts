@@ -1,6 +1,6 @@
 import { Given } from "../../nukadoko-compat-shim.js";
 
-// m22-compat-run-scope task spec, item 1: `setDefaultTimeout` (registered in
+// `setDefaultTimeout` (registered in
 // ../support/set-default-timeout.ts, resolving to 20ms after two calls —
 // last one wins) only ever applies to a step that declares no `{ timeout }`
 // of its own; a step's own declared timeout always wins over the default.

@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { wrapRequestContextWithLogging } from "../src/context/http-log.js";
 import { createObservedCollector } from "../src/context/observed.js";
 
-// Responsibility: pins urlOf/methodOf's fetch(string | Request) branch
-// (t6-http-log-test task spec) — the one branch in http-log.ts with no
+// Responsibility: pins urlOf/methodOf's fetch(string | Request) branch —
+// the one branch in http-log.ts with no
 // direct test before this file. Unit-level against
 // wrapRequestContextWithLogging directly, with a fake APIRequestContext and
-// a fake Request (`{ url: () => ..., method: () => ... }`), per the task
-// spec's allowance: a real Playwright `Request` can only come from an
+// a fake Request (`{ url: () => ..., method: () => ... }`), since a real
+// Playwright `Request` can only come from an
 // actual page/route, which create-context.test.ts already declined to pull
 // in for the same reason.
 
@@ -65,8 +65,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0 });
   });
 
-  // p3b-page-network task spec, scope item 1 and its own completion
-  // condition 2 ("ctx.request() の分に via: "request" が付くこと"): every
+  // Every
   // ctx.request() entry carries `via: "request"` explicitly, the same as
   // page-http-log.ts's own entries carry `via: "page"` — never left absent
   // for a reader to infer from its shape alone (this file's own module

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: p10-step-discovery task spec, scope 3 -- `nuka check`'s
+// Responsibility: `nuka check`'s
 // two new findings, both decidable from the walk alone (an extension check,
 // a length check), never a guess about a file's contents.
 

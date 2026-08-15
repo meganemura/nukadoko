@@ -27,8 +27,8 @@ describe("nuka steps", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
-    // Top-level `{ steps, import_failures }`, not a bare array
-    // (fb5-loader-visibility task spec, decision 1) — `import_failures` is
+    // Top-level `{ steps, import_failures }`, not a bare array —
+    // `import_failures` is
     // always present, `[]` here since this fixture has nothing broken.
     const report = JSON.parse(stdout.text());
     expect(report.import_failures).toEqual([]);
@@ -180,7 +180,7 @@ describe("nuka do", () => {
       expect(stepRecord.evidence.screenshots).toEqual([]);
       expect(stepRecord.evidence.trace).toBeUndefined();
       expect(stepRecord.evidence.http).toBeUndefined();
-      // No network call was ever made (this task's spec, decision 3):
+      // No network call was ever made:
       // `observed` is still always present on the step record, at zero.
       expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 0 });
       // `echo` declares `mutates: false` explicitly: a typed step's step

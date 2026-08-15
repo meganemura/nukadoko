@@ -9,7 +9,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: p6-browser-type task spec's own end-to-end proof —
+// Responsibility: end-to-end proof —
 // `config.browserType` reaching a real `nuka run`, and the measured
 // `ScenarioRecord.browser` it leaves behind. Reuses run-browser-project's
 // existing features/no-browser.feature (tests/run-fixture-bag-browser.test.ts
@@ -19,8 +19,7 @@ import {
 // pageless/page-naming contrast this task's own tests need: "browser キー
 // が出ない" and "browser にエンジン名とバージョンが入る" are two readings of
 // the same two records. Deliberately limited to explicitly choosing
-// "chromium" (this task's spec: "テストは chromium だけで書けるように設計
-// すること") — firefox/webkit have no binary installed in this environment
+// "chromium" — firefox/webkit have no binary installed in this environment
 // by the task's own instruction, and rejecting an unknown `browserType`
 // value needs no `nuka run` at all (see tests/load-config.test.ts).
 
@@ -72,7 +71,7 @@ describe("nuka run: browserType", () => {
     expect(pageLess!.status).toBe("passed");
     expect(pageNaming!.status).toBe("passed");
 
-    // "書かなければ今と完全に同じ挙動" (this task's spec) extends to writing
+    // "unwritten behaves exactly like today" extends to writing
     // "chromium" explicitly too: a pickle that never destructures `page`
     // launches nothing, so its own record carries no `browser` key at all —
     // never a key naming a browser that never ran.

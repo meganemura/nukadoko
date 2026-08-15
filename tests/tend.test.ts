@@ -16,7 +16,7 @@ describe("nuka tend", () => {
     const report = JSON.parse(stdout.text());
     // Checked field by field, not via a single `toEqual(report)` (m8a's
     // original assertion here): `report` now always carries a `summary`
-    // too (m8c-tend-summary task spec — asserted on its own below), and a
+    // too (asserted on its own below), and a
     // whole-object equality would make this test couple to that field's
     // exact shape for no reason this test cares about.
     expect(report.errors).toEqual([]);
@@ -35,7 +35,7 @@ describe("nuka tend", () => {
 
     // "typed 12, compat 0" is itself useful — migration is done — so the
     // migration line is present even though this fixture has no compat step
-    // at all (this task's spec).
+    // at all.
     expect(report.summary.typedSteps).toBe(2);
     expect(report.summary.compatSteps).toBe(0);
     expect(report.summary.compatStepNames).toEqual([]);
@@ -50,7 +50,7 @@ describe("nuka tend", () => {
     expect(report.summary.scannedFeatureDirs).toEqual(["features"]);
     expect(report.summary.readOnlySteps).toBe(0);
     // A summary-only report (zero errors, zero notes) still exits 0 — the
-    // summary itself never touches the exit code (this task's spec).
+    // summary itself never touches the exit code.
     expect(report.errors).toEqual([]);
     expect(report.notes).toEqual([]);
     expect(exitCode).toBe(0);
@@ -143,8 +143,8 @@ describe("nuka tend", () => {
     expect(fromUnused).toHaveLength(1);
     expect(fromUnused[0].step).toBe("orphan-from-step");
     expect(fromUnused[0].message).toContain("from.id");
-    // States the fact, not a verdict (this task's spec: "「消せ」と言わない
-    // こと") — the message may discuss removal only to say it is *not*
+    // States the fact, not a verdict (never says "delete it") — the
+    // message may discuss removal only to say it is *not*
     // prescribing it, never as an instruction.
     expect(fromUnused[0].message).toContain("not a verdict");
     expect(fromUnused[0].message).not.toMatch(/^(remove|delete)/i);
@@ -251,10 +251,9 @@ describe("nuka tend", () => {
 
     expect(exitCode).toBe(0);
     const allLines = stdout.text().trim().split("\n");
-    // The summary (m8c-tend-summary task spec, now three lines since
+    // The summary (now three lines since
     // fb3-scan-dirs's own `scanned:` line) prints first, and is visually
-    // distinct from a finding line: no leading `error\t`/`note\t` (this
-    // task's spec: "所見と視覚的に区別がつくこと").
+    // distinct from a finding line: no leading `error\t`/`note\t`.
     const summaryLines = allLines.slice(0, 3);
     const noteLines = allLines.slice(3);
     for (const line of summaryLines) {

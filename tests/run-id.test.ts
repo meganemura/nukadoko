@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { generateRunId } from "../src/run/run-id.js";
 
-// Responsibility: unit tests for the run id format (m4a-run-provenance task
-// spec, decision 1) — mirrors tests/step-record.test.ts's own
+// Responsibility: unit tests for the run id format — mirrors
+// tests/step-record.test.ts's own
 // `describe("generateStepRecordId", ...)` for the same id family.
 
 describe("generateRunId", () => {

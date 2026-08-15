@@ -11,7 +11,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: m2b-compat-execution task spec's mixed-scenario coverage
+// Responsibility: mixed-scenario coverage
 // — a typed step and a compat step sharing one pickle's ctx (a cookie the
 // compat step picks up via `this.openRequest()` is visible to a typed
 // step's own `ctx.request()`), and a typed step's `ctx.resultOf` working

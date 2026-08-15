@@ -5,7 +5,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `ctx.poll`'s step-record-side recording end to end, against
-// tests/fixtures/polls-project (ctx-poll-step-record task spec) — a no-op wait
+// tests/fixtures/polls-project — a no-op wait
 // (attempts: 1) reading differently from a genuinely retried one (attempts
 // >= 2, waited_ms > 0), a timed-out or throwing poll still landing on the
 // failed step's own step record (the whole reason this field exists), omission
@@ -16,7 +16,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // covers `ctx.poll`'s own retry-loop behavior; this file is only about what
 // lands on the step record.
 //
-// Each entry's own `at` (fb4-evidence-time task spec, item 4) is checked via
+// Each entry's own `at` is checked via
 // `expectPollAt` below: not just that it parses as a date, but that it falls
 // inside the step record's own `started_at`/`finished_at` span — the same
 // ordering check `tests/sections.test.ts` applies to `sections`, since both
@@ -32,8 +32,8 @@ async function readStepRecord(rootDir: string, recordId: string): Promise<Record
 }
 
 /** Checks every `stepRecord.polls[].at` both parses as a date and falls inside
- * this same step record's `started_at`/`finished_at` span (fb4-evidence-time
- * task spec: value ordering, not only format — see this file's own
+ * this same step record's `started_at`/`finished_at` span (value ordering,
+ * not only format — see this file's own
  * header). */
 function expectPollAtWithinStepRecord(stepRecord: Record<string, unknown>): void {
   const polls = stepRecord.polls as Array<{ at: string }> | undefined;

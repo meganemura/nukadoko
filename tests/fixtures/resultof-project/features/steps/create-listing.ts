@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// The chain's producer side (m2pre-resultof task spec, decision 1): a plain,
+// The chain's producer side: a plain,
 // deterministic step with no network/browser at all, so this fixture's
 // resultOf tests are about the chain mechanism itself, not evidence
 // collection. The `name === "boom"` throw is a deliberate escape hatch, used

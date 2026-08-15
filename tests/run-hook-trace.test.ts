@@ -10,10 +10,10 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: p3d-hook-trace task spec's own end-to-end coverage —
+// Responsibility: end-to-end coverage —
 // p3a-trace-per-step cut the Playwright trace into one chunk per step,
 // which silently stopped recording anything a Before/After/AfterStep hook
-// did through `ctx.page()`/`this.openPage()` (this task's spec's own "why").
+// did through `ctx.page()`/`this.openPage()`.
 // This file proves the fix against a real `nuka run` + real Playwright
 // browser, against tests/fixtures/run-hook-trace-project: a Before hook, an
 // AfterStep hook, and an After hook (which never touches the browser at

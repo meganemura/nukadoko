@@ -6,8 +6,8 @@ import type {
   WorldConstructorParams,
 } from "../src/compat/index.js";
 
-// Responsibility: type-only regression coverage for t5-compat-types task
-// spec — the compat surface (src/compat/index.ts) didn't export
+// Responsibility: type-only regression coverage — the compat surface
+// (src/compat/index.ts) didn't export
 // `IWorldOptions`/`ITestCaseHookParameter` even though both appear in 2/2
 // real-world repos each (m2.1-a compat-audit synthesis), so glue written
 // exactly the way cucumber-js's own docs show it (`import { type

@@ -4,7 +4,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // Then-position step that only reads: proves the same declared-mutating
 // vocabulary can legitimately pass in Then position when its own execution
 // never writes (docs/spec.md "Keyword semantics" — the same-sentence-in-
-// both-positions case this task's spec's decision 4 is about).
+// both-positions case).
 export default defineStep({
   pattern: "only a read happens",
   description: "GET only, in Then position — must pass",

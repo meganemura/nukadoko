@@ -51,7 +51,7 @@ export async function removeTempDir(dir: string): Promise<void> {
  * directory, the same way `copyFixtureToTempDir` does for `tests/fixtures/*`
  * — nested under `tempFixturesRoot` so `"nukadoko"` and `"zod"` still resolve
  * (see that function's own comment) and so running `nuka run`/`nuka do`
- * against it (examples-todo task spec: the CLI runs only against a temp
+ * against it (the CLI runs only against a temp
  * copy) never writes `.nukadoko/` state into the committed example
  * directory.
  */
@@ -65,7 +65,7 @@ export async function copyExampleToTempDir(name: string): Promise<string> {
 /**
  * A fresh, genuinely empty project directory — for `nuka init`, which
  * refuses to run at all against a directory that already has a
- * `nukadoko.config.ts` (m1-init-scaffold task spec, decision 1), so it can't
+ * `nukadoko.config.ts`, so it can't
  * be tested against a copy of any existing fixture. Nested under
  * `tempFixturesRoot` for the same reason `copyFixtureToTempDir` is: files
  * later written here (by `nuka init`/`nuka scaffold`) still resolve bare
@@ -88,7 +88,7 @@ const nukadokoShimDir = path.join(tempFixturesRoot, "node_modules", "nukadoko");
  *
  * `nuka init`/`nuka scaffold` generate real-user-facing artifacts that
  * import from `"nukadoko"` (the published package name), not from a
- * fixture-relative shim path (m1-init-scaffold task spec: the generated
+ * fixture-relative shim path (the generated
  * output itself should look like what a real user gets) — but the
  * published package doesn't exist yet in this repo's own `node_modules`.
  * This is the same stand-in `tests/fixtures/*\/nukadoko-shim.ts` provides
@@ -116,7 +116,7 @@ export async function ensureNukadokoShim(): Promise<void> {
   const specifier = relative.startsWith(".") ? relative : `./${relative}`;
   await writeFile(path.join(nukadokoShimDir, "index.ts"), `export * from "${specifier}";\n`);
 
-  // "./compat" subpath (m2a-compat-registry task spec: extending this
+  // "./compat" subpath (extending this
   // mechanism for it is explicitly permitted) — same re-export trick as the
   // main entry above, pointed at src/compat/index.ts instead, so a test
   // project can resolve `import { Given } from "nukadoko/compat"` the same
@@ -138,7 +138,7 @@ const execFileAsync = promisify(execFile);
  * `git init`s `dir` (already containing whatever files a test wants
  * committed) and commits everything in it in one commit — the means of
  * running `git init` in a temp directory that src/run/probe-git.ts's own
- * tests need (m4a-run-provenance task spec). `dir`'s own `.git` is what git
+ * tests need. `dir`'s own `.git` is what git
  * actually resolves, closest-ancestor-wins, regardless of `dir` sitting
  * inside this repo's own working tree (e.g. under `tempFixturesRoot` above)
  * — a nested repo never needs its ancestor's `.git` consulted at all. The
@@ -172,7 +172,7 @@ export function createCaptureSink(): { write(chunk: string): boolean; text(): st
   };
 }
 
-// fb5-run-output task spec: `nuka run` now always writes its own progress
+// `nuka run` now always writes its own progress
 // output to stderr (a scenario boundary line, a step line per step, where
 // output landed, and a one-line summary — src/run/progress-log.ts), so a
 // pre-existing test asserting a *clean* run's stderr is empty needs to say
@@ -185,7 +185,7 @@ const STEP_PROGRESS_LINE = /^ {2}step \d+\/\d+  /;
 const OUTPUT_LOCATION_LINE = /^(?:steps|scenarios|allure|messages)\b/;
 const RUN_SUMMARY_LINE = /^\d+ scenarios?: \d+ passed, \d+ failed {2}\(/;
 
-/** Strips `nuka run`'s own progress-log lines (fb5-run-output task spec)
+/** Strips `nuka run`'s own progress-log lines
  * out of captured stderr text, leaving any warning/error line a test still
  * wants to assert on. Used in place of a bare `stderr.text()` wherever a
  * test's own point predates this feature and was really asserting "nothing

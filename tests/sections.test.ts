@@ -5,17 +5,17 @@ import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `ctx.section` end to end against tests/fixtures/
-// sections-project (t3-sections task spec) — call order landing on the
+// sections-project — call order landing on the
 // step record, omission when a step never calls it, a failed step's step
 // record still carrying the sections it reached before failing (the requirement's
 // whole reason for existing), the reset at `beginStep` not letting one
 // step's labels bleed into a sibling's within the same `nuka run` pickle,
 // and `nuka do` recording sections the same way `nuka run` does. Each
-// entry's own `at` (fb4-evidence-time task spec, item 3) is checked here
+// entry's own `at` is checked here
 // too: not just that it parses as a date, but that it falls inside the
 // step record's own `started_at`/`finished_at` span — a label with a plausible-
-// looking but wrong timestamp would still let the misdiagnosis this task's
-// spec describes happen again.
+// looking but wrong timestamp would still let the same misdiagnosis happen
+// again.
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
@@ -28,7 +28,7 @@ async function readStepRecord(rootDir: string, recordId: string): Promise<Record
 
 /** Checks `stepRecord.sections` against the expected labels, in order, and that
  * every entry's own `at` both parses as a date and falls inside this same
- * step record's `started_at`/`finished_at` span (fb4-evidence-time task spec: an
+ * step record's `started_at`/`finished_at` span (an
  * `at` that merely looks like a timestamp is not enough — it has to be the
  * *right* one). */
 function expectSectionLabels(stepRecord: Record<string, unknown>, labels: readonly string[]): void {
@@ -101,7 +101,7 @@ describe("ctx.section", () => {
     expect(stepRecord.status).toBe("failed");
     expectSectionLabels(stepRecord, ["setup", "working"]);
     // No separate `error.section` field: the array's own last element is
-    // "the last stage reached" (this task's spec, decision 2).
+    // "the last stage reached".
     expect((stepRecord as { error: { section?: unknown } }).error.section).toBeUndefined();
   });
 

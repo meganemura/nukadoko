@@ -10,7 +10,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `--session`'s request-path round trip, the setup-phase
-// failures this task's spec adds to `do` (invalid name, malformed session
+// failures `do` refuses on (invalid name, malformed session
 // file, lock conflict), and `nuka session list`/`clear`. The browser-path
 // round trip lives in its own file (session-browser.test.ts), same
 // separation as create-context.test.ts (node:http only) vs
@@ -204,7 +204,7 @@ describe("nuka do --session (request path)", () => {
 
     expect(exitCode).toBe(0);
     expect(JSON.parse(stdout.text()).session).toBe("s3");
-    // Released at the end of the run, per this task's spec (decision 4).
+    // Released at the end of the run.
     expect(existsSync(lockPath)).toBe(false);
   });
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { After, AfterStep, Before, getRegisteredHooks } from "../src/compat/hooks.js";
 
 // Responsibility: unit coverage for src/compat/hooks.ts's registration shapes
-// (m2.1a-compat-registration task spec, decision 1) — in particular the bare
+// — in particular the bare
 // tag-expression-string form (`Before("@tag", fn)` / `After("not @tag", fn)`)
 // that cucumber-js accepts and compat previously silently misread as the
 // options form, dropping the tag condition entirely. `getRegisteredHooks()`
@@ -65,7 +65,7 @@ describe("Before/After hook registration", () => {
     expect(lastHook()).toMatchObject({ type: "after", tags: "not @slow", fn });
   });
 
-  // m21b-compat-execution task spec, item 1: `HookOptions.timeout` (14
+  // `HookOptions.timeout` (14
   // real-world call sites, 3 repos, previously silently dropped — hooks are
   // held to the same shape src/compat/registry.ts's own `CompatStepOptions`
   // already gives steps, rather than diverging from it).
@@ -111,7 +111,7 @@ describe("Before/After hook registration", () => {
   });
 });
 
-// t7-compat-status-afterstep task spec, item 2-1: AfterStep registration
+// AfterStep registration
 // takes the same three call shapes as After, tested the same way
 // Before/After's own registration tests above are.
 describe("AfterStep hook registration", () => {

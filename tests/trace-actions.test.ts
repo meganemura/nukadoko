@@ -15,8 +15,8 @@ import { createCaptureSink } from "./helpers/fixtures.js";
 // and run-browser.test.ts cover the real-browser path; a hand-built trace.zip
 // is the only practical way to exercise the version-mismatch and truncation
 // branches, both of which depend on shapes a live browser will not produce on
-// demand). Fixture data reuses the exact `before`/`after`/header shapes this
-// task's spec already measured ("前提"), not re-derived here.
+// demand). Fixture data reuses the exact `before`/`after`/header shapes
+// already measured against a real trace, not re-derived here.
 //
 // `buildSingleEntryZip` is a minimal, from-scratch zip writer — `node:zlib`
 // only, matching the reader's own dependency budget — that never computes a
@@ -105,9 +105,8 @@ function headerLine(version: number): string {
   });
 }
 
-// The exact `expect` example this task's spec measured ("前提") — reused
-// verbatim rather than re-derived, per the spec's own instruction not to
-// re-verify it.
+// The exact `expect` example already measured against a real trace —
+// reused verbatim rather than re-derived, to avoid re-verifying it.
 const EXPECT_BEFORE = {
   type: "before",
   callId: "call@10",
@@ -350,7 +349,7 @@ describe("collectTraceEvidence", () => {
     expect(result.actions).toHaveLength(1);
   });
 
-  // p3d-hook-trace task spec: several hook invocations can share one
+  // Several hook invocations can share one
   // scenario evidence dir, so a hook call site names its own chunk file
   // rather than relying on the "trace.zip" default every step call site
   // still uses.

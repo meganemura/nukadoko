@@ -17,7 +17,7 @@ import {
 // createAllureEmitter directly; this file only proves what cli/run.ts adds
 // on top: the default output location, config.allure.resultsDir overriding
 // it, the `hasPickles` gate that keeps a pickle-less run from creating
-// allure-results at all, and (allure-step-as-test task spec) the three
+// allure-results at all, and the three
 // facts only a real `nuka run` invocation can prove: a step's own test is
 // written live rather than batched (observed via real file mtimes, not by
 // reading the code), `--quiet` leaves Allure's own output untouched, and
@@ -63,8 +63,8 @@ describe("nuka run: allure-results wiring", () => {
     const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
     expect(existsSync(path.join(resultsDir, "environment.properties"))).toBe(true);
-    // passing.feature has two steps (allure-step-as-test task spec, decision
-    // 1: step = test, so step count = test count) — no longer one file for
+    // passing.feature has two steps (step = test, so step count = test
+    // count) — no longer one file for
     // the whole scenario.
     const record = JSON.parse(stdoutLines[0]!) as { steps: unknown[] };
     expect(resultFiles(resultsDir)).toHaveLength(record.steps.length);
@@ -116,7 +116,7 @@ describe("nuka run: allure-results wiring", () => {
     expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(false);
   });
 
-  it("writes a step's own test the moment that step finishes, not batched at scenario end (allure-step-as-test task spec, decision 2 — observed via real file mtimes, not by reading the code)", async () => {
+  it("writes a step's own test the moment that step finishes, not batched at scenario end (observed via real file mtimes, not by reading the code)", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/two-steps-timing.feature"], {
@@ -152,7 +152,7 @@ describe("nuka run: allure-results wiring", () => {
     expect(secondMtime - firstMtime).toBeGreaterThanOrEqual(200);
   }, 15000);
 
-  it("writes the same Allure output whether or not --quiet is given (this task's spec, decision 3: the report's own granularity does not follow the terminal's)", async () => {
+  it("writes the same Allure output whether or not --quiet is given (the report's own granularity does not follow the terminal's)", async () => {
     const quietDir = await copyFixtureToTempDir("run-project");
     try {
       const loudStdout = createCaptureSink();
@@ -188,7 +188,7 @@ describe("nuka run: allure-results wiring", () => {
     }
   });
 
-  it("never shares a historyId between two separate `nuka run` invocations against the same feature (this task's spec, decision 4 — the structural check that misconnection cannot happen)", async () => {
+  it("never shares a historyId between two separate `nuka run` invocations against the same feature (the structural check that misconnection cannot happen)", async () => {
     const firstStdout = createCaptureSink();
     const firstStderr = createCaptureSink();
     const firstExit = await runCli(["run", "features/passing.feature"], {

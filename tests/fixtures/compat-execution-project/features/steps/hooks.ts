@@ -4,13 +4,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// A trivial step shared by the hook-only feature files below (m21b-compat-
-// execution task spec, items 1-5) — none of them care what a step does,
-// only what runs around it.
+// A trivial step shared by the hook-only feature files below — none of
+// them care what a step does, only what runs around it.
 When("a no-op legacy step runs", function () {});
 
 // A step that always fails, used to drive the After hook's own
-// `result.status` to "FAILED" (this task's spec, item 3).
+// `result.status` to "FAILED".
 When("a legacy step throws for hook coverage", function () {
   throw new Error("boom for hook coverage");
 });
@@ -18,8 +17,8 @@ When("a legacy step throws for hook coverage", function () {
 // --- item 3: HookParameter reaches every hook, untagged included ---
 // Destructuring `{ gherkinDocument, pickle }` here must not crash (real
 // glue does exactly this — m2.1-a compat-audit synthesis, 10 sites, 4
-// repos) — logged via `this.log` (World's declared channel, m2d-allure-shim
-// task spec) so tests/compat-execution.test.ts can read it back off
+// repos) — logged via `this.log` (World's declared channel) so
+// tests/compat-execution.test.ts can read it back off
 // `record.hooks[].declared.logs` without needing a data bridge of its own.
 Before(function ({ gherkinDocument, pickle, testCaseStartedId, willBeRetried }) {
   this.log(`before:feature=${gherkinDocument.feature?.name}`);
@@ -28,10 +27,10 @@ Before(function ({ gherkinDocument, pickle, testCaseStartedId, willBeRetried }) 
   this.log(`before:willBeRetried=${willBeRetried}`);
 });
 
-// After-only `result` (this task's spec, item 3) — absent for Before,
+// After-only `result` — absent for Before,
 // present here as `{ status }` using cucumber's own Status string values.
-// `after:statusFailedMatches` (t7-compat-status-afterstep task spec, item 1)
-// proves `Status.FAILED` isn't just importable but actually equals the same
+// `after:statusFailedMatches` proves `Status.FAILED` isn't just importable
+// but actually equals the same
 // string `result.status` carries — real glue's own
 // `result.status === Status.FAILED` branch, not a string literal stand-in
 // for it.

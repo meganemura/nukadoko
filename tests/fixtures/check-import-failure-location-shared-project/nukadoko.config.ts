@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// fb5-import-error-line task spec: two step files, one that fails to
+// Two step files, one that fails to
 // transform on its own (broken.ts, a redeclared fixture-bag name) and one
 // that only side-effect imports it (via-import.ts) — Node's ESM loader
 // caches broken.ts's failure and rethrows the identical error to

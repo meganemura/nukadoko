@@ -1,6 +1,6 @@
 import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 
-// P5 task spec's own completion condition 6: `needs_browser` must be `true`
+// `needs_browser` must be `true`
 // for a step that only reaches `page` *through* a fixture, never directly —
 // `loggedIn` here destructures `page` itself; `via-logged-in-step.ts`
 // destructures only `loggedIn`. Also exercises `nuka tend`'s two new

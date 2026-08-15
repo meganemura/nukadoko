@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: fb5-loader-visibility task spec's own end-to-end tests —
+// Responsibility: end-to-end tests —
 // `nuka steps`/`nuka describe` are per-file tolerant of a broken glue file
 // (decision 1) and of a step whose `run()` can't be statically read for its
 // fixture needs (decision 2), unlike `run`/`do`/`init`, which stay
@@ -73,7 +73,7 @@ describe("nuka steps: a step whose run() can't be read for fixture needs", () =>
     };
     const names = report.steps.map((s) => s.name);
     // clean-step.ts's own run() parses fine; default-value-step.ts's does
-    // not (a destructured fixture with a default value) — this task's spec:
+    // not (a destructured fixture with a default value) —
     // the one broken step must not take the healthy one down with it.
     expect(names).toContain("clean-step");
     expect(names).toContain("default-value-step");

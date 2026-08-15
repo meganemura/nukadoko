@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: cli-messages-name-the-cause task spec, item 1 — `nuka
+// Responsibility: `nuka
 // steps` used to answer "no featuresDir on disk" and "featuresDir exists
 // but has zero steps" with the exact same output (`{"steps": [],
 // "import_failures": []}`, exit 0), the same silent failure `nuka check`'s

@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `from`'s multiple-candidate form end to end (m7a-from-
-// alternatives task spec; docs/spec.md "Chaining steps"' "A key may name
+// Responsibility: `from`'s multiple-candidate form end to end (docs/spec.md
+// "Chaining steps"' "A key may name
 // more than one possible producer" paragraph and the three that follow) —
 // against tests/fixtures/from-alternatives-project, where `archive-
 // project.ts`'s own `projectId` may come from either `create-project.ts` or

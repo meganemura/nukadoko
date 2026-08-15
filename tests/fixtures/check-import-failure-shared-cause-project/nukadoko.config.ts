@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// fb5-loader-visibility task spec, decision 3: two step files that both
+// Two step files that both
 // import the same broken shared module, so both fail with the identical
 // error message Node's ESM loader caches and rethrows to every importer.
 // This project exists only to prove `nuka check`'s human formatter groups

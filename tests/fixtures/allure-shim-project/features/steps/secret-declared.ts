@@ -2,7 +2,7 @@ import { label } from "allure-js-commons";
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Proves this task's spec, decision 6: the step record's existing whole-object
+// Proves the step record's existing whole-object
 // redaction already covers declared's own string fields — no special-cased
 // redaction path was written for `declared` itself.
 export default defineStep({

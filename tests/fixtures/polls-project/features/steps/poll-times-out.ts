@@ -3,8 +3,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // `fn` always returns undefined — `ctx.poll`'s own `PollTimeoutError`
 // propagates out of `run`, failing the step; proves the timed-out poll's
-// own record still lands on that failed step's step record (ctx-poll-step-record
-// task spec, test bullet 3 — the case this whole feature exists for).
+// own record still lands on that failed step's step record (the case this
+// whole feature exists for).
 // timeout/interval kept small so this test stays fast.
 export default defineStep({
   pattern: "a step polls and times out",

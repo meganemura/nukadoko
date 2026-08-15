@@ -12,13 +12,13 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: http.jsonl's page-origin half, end to end against
-// tests/fixtures/page-network-project (p3b-page-network task spec) — a real
+// tests/fixtures/page-network-project — a real
 // chromium page pulling in an image, a stylesheet, and a script (dropped,
 // tallied into the step record's own `http_omitted`) alongside its own document
 // response and an in-page `fetch` carrying a secret (both kept, `via:
 // "page"`), next to one `ctx.request()` call (`via: "request"`) hitting the
 // same `/api/data` path with a different query string — proving neither
-// path double-counts the other's own call (this task's spec, scope item 4)
+// path double-counts the other's own call
 // and that `observed` keeps counting every request regardless of what
 // http.jsonl went on to keep (scope item 2). Redaction is proven the same
 // way tests/trace-actions-step-record.test.ts already proves it for `actions`:
@@ -142,8 +142,8 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
 
     const lines = await readHttpJsonl(rootDir, stepRecord.evidence.dir);
     // Exactly 3: the document, the page-issued fetch, and the ctx.request()
-    // call. The image/stylesheet/script never land here (this task's spec,
-    // scope item 2) — no more, and (scope item 4) no duplicate of the
+    // call. The image/stylesheet/script never land here — no more, and no
+    // duplicate of the
     // ctx.request() call landing a second time via the page path.
     expect(lines).toHaveLength(3);
 
@@ -158,8 +158,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     expect(pageFetchEntry).toBeDefined();
     expect(pageFetchEntry?.via).toBe("page");
     // The secret in the page-issued fetch's own query string is redacted
-    // the same single pass every other exit already goes through (this
-    // task's spec, scope item 3).
+    // the same single pass every other exit already goes through.
     expect(pageFetchEntry?.url).toContain("{{secret.API_TOKEN}}");
     expect(pageFetchEntry?.url).not.toContain(API_TOKEN);
 
@@ -173,8 +172,8 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     expect(stepRecord.http_omitted).toEqual({ image: 1, stylesheet: 1, script: 1 });
 
     // observed counts every request the harness saw, image/stylesheet/
-    // script included — it is not narrowed by http.jsonl's own filter (this
-    // task's spec, scope item 2 and completion condition 6). Six GETs total:
+    // script included — it is not narrowed by http.jsonl's own filter. Six
+    // GETs total:
     // the document, three assets, the page-issued fetch, and the
     // ctx.request() call.
     expect(stepRecord.observed).toEqual({ http_reads: 6, http_writes: 0 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: fb5-loader-visibility task spec, decision 4 — `nuka tend`
+// Responsibility: `nuka tend`
 // discovers steps tolerant of a broken glue file (unchanged), but until now
 // said nothing about it: this pins down that exactly one note is added
 // (never one per broken file — a per-file verdict is `check`'s own finding,

@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: sessions generalized to per-environment (this task's
-// spec, decision 7/scope item 5) — `do --session --env` writing under
+// Responsibility: sessions generalized to per-environment — `do --session
+// --env` writing under
 // sessions/<env>/ instead of the old hard-coded sessions/default/, `session
 // list` enumerating every environment, and `session clear --env` touching
 // only the one it names. The request-path round trip itself (cookie survives

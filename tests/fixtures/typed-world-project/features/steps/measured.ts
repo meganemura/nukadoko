@@ -15,7 +15,7 @@ Then("the visit count is {int}", function (this: CustomWorld, expected: number) 
 });
 
 // Does nothing to the World at all — the step record's own `world` field must
-// be omitted entirely (m2c-typed-world task spec, item 3: when both halves
+// be omitted entirely (when both halves
 // are empty, the field is omitted).
 Then("a step that never touches the World runs", function (this: CustomWorld) {
   void this;
@@ -27,8 +27,8 @@ Then("a step that never touches the World runs", function (this: CustomWorld) {
 // the *next* step's read is (tests/compat-typed-world.test.ts asserts both
 // halves). Cast through `Record<string, string>`, not `this.freshField`
 // directly: an undeclared key is exactly what stays untyped under
-// `defineWorld`'s gradual-typing story (this task's spec, item 4's own
-// header) — nothing here is a workaround for a typing gap.
+// `defineWorld`'s gradual-typing story — nothing here is a workaround for a
+// typing gap.
 Given("a fresh field is created with {string}", function (this: CustomWorld, value: string) {
   (this as unknown as Record<string, string>).freshField = value;
 });
@@ -41,7 +41,7 @@ Then("the fresh field equals {string}", function (this: CustomWorld, expected: s
 });
 
 // The #private integration test itself (proto-typed-world/findings.md's
-// central claim, this task's spec's own required test): must not crash, and
+// central claim): must not crash, and
 // must return the real value, proving `this` inside `revealSecret()` is the
 // literal instance, never a wrapper.
 Then("the secret is revealed correctly", function (this: CustomWorld) {

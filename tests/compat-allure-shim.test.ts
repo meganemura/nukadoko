@@ -10,7 +10,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: m2d-allure-shim task spec's own coverage — the allure-js
+// Responsibility: coverage for the allure-js
 // runtime shim (src/compat/allure-runtime.ts) and the declared bucket it and
 // the World channel (src/compat/world.ts) both write into (src/compat/
 // declared.ts), surfaced on the step record/hook-record's own `declared` field

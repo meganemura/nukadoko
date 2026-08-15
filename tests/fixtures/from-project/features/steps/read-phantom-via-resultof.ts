@@ -2,8 +2,8 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Same "never discovered" trick as archive-project-unregistered-from.ts's
-// own `neverDiscovered`, reused here for `ctx.resultOf`'s own half of m6a-
-// from-core task spec's item 6 acceptance test: passing an unregistered
+// own `neverDiscovered`, reused here for `ctx.resultOf`'s own half of the
+// acceptance test: passing an unregistered
 // `Step` to `ctx.resultOf` must throw, not return `undefined`.
 const neverDiscovered = defineStep({
   description: "not discovered on purpose — never exported as any file's default",

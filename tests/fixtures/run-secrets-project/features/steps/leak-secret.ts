@@ -3,8 +3,8 @@ import { defineStep } from "../../nukadoko-shim.js";
 
 // Throws with the secret env value inside its own message, on purpose: the
 // message flows into both this step's failed step record (error.message) and
-// the owning scenario record's per-step error.message (this task's spec,
-// scope item 4's redaction test) — proving redaction is applied to the
+// the owning scenario record's per-step error.message — proving redaction
+// is applied to the
 // scenario record as a whole, not only to step records.
 export default defineStep({
   pattern: "the secret leaks",

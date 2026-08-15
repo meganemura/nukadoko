@@ -7,9 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { probeGitState } from "../src/run/probe-git.js";
 import { initGitRepo } from "./helpers/fixtures.js";
 
-// Responsibility: unit tests for probeGitState (m4a-run-provenance task
-// spec, test items 3-5; m4a-probe-cost task spec, test item 2's "no initial
-// commit yet" addition) — each temp dir is created directly under the OS
+// Responsibility: unit tests for probeGitState (includes the "no initial
+// commit yet" case) — each temp dir is created directly under the OS
 // temp dir (never nested under this repo's own tree, unlike
 // tests/helpers/fixtures.ts's `tempFixturesRoot`), so a "not a git
 // repository" case genuinely has no ancestor `.git` for git to walk up
@@ -56,7 +55,7 @@ describe("probeGitState", () => {
   it("returns undefined for a git-init'd repo with no commit yet, since no commit sha exists to report", async () => {
     // `git status --porcelain=v2 --branch` on a repo like this prints
     // `# branch.oid (initial)` — no sha, so probeGitState must not surface
-    // any `git` field at all (m4a-probe-cost task spec: without a commit,
+    // any `git` field at all (without a commit,
     // the claim "it was green at commit X" has nothing to stand on).
     await execFileAsync("git", ["-C", dir, "init", "-q"]);
     await writeFile(path.join(dir, "a.txt"), "a");

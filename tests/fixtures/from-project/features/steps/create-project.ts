@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// The chain's producer side (m6a-from-core task spec) — a plain,
+// The chain's producer side — a plain,
 // deterministic step with no network/browser at all, so this fixture's
 // `from` tests are about the injection mechanism itself.
 export default defineStep({

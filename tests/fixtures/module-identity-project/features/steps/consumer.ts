@@ -8,7 +8,7 @@ import producer from "./producer.js";
 // system, not the tsx registration discoverSteps() used to load this file,
 // so a plain named export here would not be reachable the way the test
 // needs it to be. This is tests/discover-steps.test.ts's module-identity
-// test (m2pre-module-identity task spec, scope item 3): it proves
+// test: it proves
 // discoverSteps()'s own direct (vocabulary) load of producer.ts and this
 // file's own relative import of producer.ts return the exact same object.
 (globalThis as Record<string, unknown>).__nukadokoModuleIdentityTestCapture = producer;

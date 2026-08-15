@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AfterAll, BeforeAll, getRegisteredRunHooks } from "../src/compat/run-hooks.js";
 
 // Responsibility: unit coverage for src/compat/run-hooks.ts's registration
-// shapes (m22-compat-run-scope task spec, item 2) — the same registration-
+// shapes — the same registration-
 // buffer conventions tests/compat-hooks.test.ts already covers for Before/
 // After, minus `tags` (a run-scope hook doesn't accept one at all — see
 // run-hooks.ts's own header). `getRegisteredRunHooks()` never drains (same
@@ -49,7 +49,7 @@ describe("BeforeAll/AfterAll registration", () => {
     expect(second).toBeGreaterThan(first);
   });
 
-  // This task's spec, item 2: BeforeAll/AfterAll do not accept tags — unlike
+  // BeforeAll/AfterAll do not accept tags — unlike
   // src/compat/hooks.ts's `HookOptions`, `tags` is not a recognized key here
   // at all, so it throws the same way any other unrecognized key would.
   it('an options object with "tags" throws, naming it as unsupported', () => {

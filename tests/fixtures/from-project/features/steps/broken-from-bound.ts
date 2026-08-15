@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Same trick as archive-project-unregistered-from.ts (m6a-from-core task
-// spec): a Step object that is never any file's own default export, so
+// Same trick as archive-project-unregistered-from.ts: a Step object that is
+// never any file's own default export, so
 // discovery can never register it. Unlike that file's step, *this* one is
-// actually bound to a Gherkin line below — m6b-from-check task spec's own
-// acceptance case: `nuka run`'s newly-closed structural `from` check
+// actually bound to a Gherkin line below — the acceptance case: `nuka
+// run`'s newly-closed structural `from` check
 // (src/step/validate-from.ts's `validateStepFrom`, wired into cli/run.ts)
 // must refuse a run whose selected feature actually binds a step like this,
 // the same way `nuka do` already refuses to run it by name.

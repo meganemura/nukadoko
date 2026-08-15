@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka accept`'s sign-off condition end to end
-// (accept-condition task spec) — (environment, browser) as a measured
+// Responsibility: `nuka accept`'s sign-off condition end to end —
+// (environment, browser) as a measured
 // tuple, never a declaration, against accept-condition-project: an
 // API-only feature (features/greeting.feature, no browser, no HTTP server)
 // paired with one that destructures `page` (features/browser.feature,
-// chromium only — this task's spec: tests must not depend on firefox/webkit
+// chromium only — tests must not depend on firefox/webkit
 // binaries, which are not installed here). Wherever a test needs config to
 // *declare* an engine nukadoko never actually launches, it writes that
 // declaration before `nuka accept` only — `accept` never executes anything
@@ -33,7 +33,7 @@ function frontmatterText(markdown: string): string {
   return match[1]!;
 }
 
-describe("nuka accept: condition (accept-condition task spec)", () => {
+describe("nuka accept: condition", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -51,7 +51,7 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
     // environment first, then staging) so the second run's own `started_at`
     // is unambiguously later than the first's — the same reasoning
     // tests/accept.test.ts's own overwrite-semantics test already uses. The
-    // point of this test (p8-scope-rename-and-accept-env task spec, part B)
+    // point of this test
     // is that `--env` picks the wanted one directly, not that recency alone
     // would happen to: accepting the default environment below still finds
     // the older run even after a newer, staging one exists.
@@ -180,7 +180,7 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
 
     // The only green full run of greeting.feature measured `staging`, never
     // the implicit `default` this `accept` call (no `--env`) resolves to —
-    // p8-scope-rename-and-accept-env task spec, part B: candidate selection
+    // Candidate selection
     // is narrowed by `environment` too, not only by `browserType`, so this
     // run is not a candidate here even though it is the only green one.
     const runExit = await runCli(["run", "features/greeting.feature", "--env", "staging"], {
@@ -225,7 +225,7 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
     const content = await readFile(path.join(rootDir, stdout.text().trim()), "utf8");
     expect(content).toContain("## Condition");
     expect(content).toContain("- environment: default");
-    // Explicit, never a blank line (task spec item 5's own "空欄にしない") —
+    // Explicit, never a blank line —
     // "condition unknown" (an old record) must stay distinguishable from
     // "condition known: no browser" (this one).
     expect(content).toContain("- browser: not launched (no step in this run destructured page/context)");
@@ -254,8 +254,8 @@ describe("nuka accept: condition (accept-condition task spec)", () => {
 
     const content = await readFile(path.join(rootDir, relativePath), "utf8");
     expect(content).toMatch(/- browser: chromium \S+/);
-    // The engine's type is enough for acceptance/matching purposes (task
-    // spec item 2) — the version is informational only, and belongs in the
+    // The engine's type is enough for acceptance/matching purposes — the
+    // version is informational only, and belongs in the
     // body, never the filename.
     expect(frontmatterText(content)).toContain("browser: chromium");
   });

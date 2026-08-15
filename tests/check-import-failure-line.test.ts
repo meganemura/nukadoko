@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: fb5-import-error-line task spec — `step-file-import-
+// Responsibility: `step-file-import-
 // failed` findings get `CheckIssue.line` filled in when (and only when) the
 // underlying message itself already names a position, extracted rather than
 // re-derived some other way (message stays verbatim either way).

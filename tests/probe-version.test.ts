@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { probeVersion } from "../src/environment/probe-version.js";
 
 // Responsibility: probe-version.ts's own success/throw/timeout behavior in
-// isolation (this task's spec's acceptance criteria). The timeout case uses
+// isolation. The timeout case uses
 // vitest's fake timers rather than a real 10s wait: `vi.useFakeTimers()`
 // replaces the global `setTimeout` probe-version.ts races against, so
 // `vi.advanceTimersByTimeAsync` fires it instantly instead of the test

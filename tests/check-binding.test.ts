@@ -94,7 +94,7 @@ describe("checkBindings", () => {
   });
 
   it("names every parameter type this project actually has, built-in and config-registered, on an unknown-parameter-type issue", () => {
-    // cli-messages-name-the-cause task spec, item 2: the raw cucumber-
+    // The raw cucumber-
     // expressions message names the unknown type but never what to write
     // instead — read straight from the same registry `nuka run` matches
     // against, not a hardcoded list, so a `config.parameterTypes` entry can

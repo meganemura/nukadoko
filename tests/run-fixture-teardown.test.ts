@@ -9,12 +9,11 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec's own completion conditions 2 and 3 — a
+// Responsibility: a
 // scenario-scope fixture's own teardown code runs whether the step (hence
 // the scenario) passes or fails, and `use()`'s own return value carries
 // that outcome back into the fixture's own body, both directions
-// (`.claude-team/playwright-native-design.md` 5 節's own conditional-
-// cleanup example: only a "passed" outcome destroys what was built).
+// (only a "passed" outcome destroys what was built).
 // Against tests/fixtures/user-fixtures-project, whose `tenant` fixture logs
 // one JSON line per lifecycle event to fixture-log.jsonl beside
 // nukadoko.config.ts (that file's own header explains why a log file, not
@@ -69,8 +68,8 @@ describe("nuka run: scenario-scope fixture teardown", () => {
     expect(records).toHaveLength(2);
     expect(records[0]!.status).toBe("passed");
     expect(records[1]!.status).toBe("failed");
-    // Teardown itself never changes a scenario's own status (this task's
-    // spec, scope item 6) — nothing in either scenario's own teardown
+    // Teardown itself never changes a scenario's own status — nothing in
+    // either scenario's own teardown
     // throws, so neither record carries `teardown_errors`.
     expect(records[0]!.teardown_errors).toBeUndefined();
     expect(records[1]!.teardown_errors).toBeUndefined();

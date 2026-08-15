@@ -8,13 +8,13 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec, scope item 5's own "page を要求しないシナ
-// リオがブラウザを起動しないことを維持すること" — extended to the fixture
+// Responsibility: maintains that a scenario not requiring `page` never
+// launches the browser — extended to the fixture
 // era: a step that only destructures a fixture reaching `page` still
 // launches exactly once; a step reaching neither `page` nor any such
 // fixture never does. Same `chromium.launch` spy tests/run-fixture-bag-
-// browser.test.ts already uses for the builtin-only case (p4a-fixture-bag
-// task spec) — this file is that same measurement, one layer further out.
+// browser.test.ts already uses for the builtin-only case — this file is
+// that same measurement, one layer further out.
 
 describe("nuka run: a step reaching page only through a fixture still launches exactly once", () => {
   let rootDir: string;

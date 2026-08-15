@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DataTable } from "../src/compat/data-table.js";
 
 // Responsibility: unit coverage for src/compat/data-table.ts (2026-08-02
-// lead scope addendum to the m2b-compat-execution task spec, item 3) —
+// lead scope addendum) —
 // raw()/rows()/hashes()/rowsHash()/transpose() against plain `string[][]`
 // input, independent of any pickle/CLI plumbing. tests/compat-run.test.ts
 // covers the one required e2e (a compat step calling `table.hashes()`

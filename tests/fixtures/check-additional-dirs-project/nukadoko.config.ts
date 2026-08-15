@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// tests/scan-dirs.test.ts's fixture (fb3-scan-dirs task spec, decision 1):
+// tests/scan-dirs.test.ts's fixture:
 // same layout as tests/fixtures/check-feature-arg-project — `features/
 // inside.feature` under featuresDir, `acceptance/outside.feature`
 // deliberately outside it — but `additionalFeatureDirs` names `acceptance`,

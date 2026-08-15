@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: p4a-fixture-bag task spec's own completion conditions 3-4
-// — an unknown fixture name, or a default value on a destructured fixture,
+// Responsibility: an unknown fixture name, or a default value on a
+// destructured fixture,
 // refuses execution entirely (setup-phase fatal, same family as a broken
 // `from`, tests/run-from-order.test.ts's own "refuses the whole run, before
 // any scenario record is written" test) rather than letting the step run
@@ -27,8 +27,8 @@ describe("nuka run: fixture bag's structural refusal", () => {
     const exitCode = await runCli(["run", "features/fixture-bag.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
-    // Setup-phase fatal, same family as a structurally broken `from` (this
-    // task's spec, scope item 3) — no scenario record line is ever printed,
+    // Setup-phase fatal, same family as a structurally broken `from` — no
+    // scenario record line is ever printed,
     // not even for the clean-step scenario in the same feature file: this
     // step's own `run` was never called, so no browser session could ever
     // have been opened for it either.

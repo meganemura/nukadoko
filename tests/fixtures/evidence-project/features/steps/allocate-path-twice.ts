@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // `evidence.path(name)` called twice with the same name must return two
-// distinct paths (P9 task spec, test bullet 4) — returned so the test can
+// distinct paths — returned so the test can
 // compare them without reaching into the fixture project's own filesystem.
 export default defineStep({
   pattern: "a step allocates a path twice with the same name",

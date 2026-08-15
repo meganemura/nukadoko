@@ -12,7 +12,7 @@ import { createDeclaredCollector, setActiveDeclaredCollector } from "../src/comp
 // fileExtension" case end to end through a real `nuka run` fixture; this
 // file isolates just the branch that changed (narrower and faster), and adds
 // the "media type not in declared.ts's own table" case that fixture doesn't
-// exercise (render-check.md section 4 / this task's spec: a media type
+// exercise (render-check.md section 4: a media type
 // absent from the table still gets no extension, same as before).
 
 describe("NukadokoAllureTestRuntime: attachment_content extension fallback", () => {

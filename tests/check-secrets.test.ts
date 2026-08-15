@@ -10,13 +10,13 @@ import {
   removeTempDir,
 } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka check`'s two secrets-redact-and-warning task spec
+// Responsibility: `nuka check`'s two secrets-redact-and-warning
 // additions.
 //
 // Part A — secrets-redact-key-too-short: a pure config-coherence warning,
 // checked against a static fixture (no git state involved). Its sibling,
-// secrets-redact-key-unknown, moved to `nuka tend` (m8d-move-to-tend task
-// spec) — tests/tend-moved-findings.test.ts reuses this same
+// secrets-redact-key-unknown, moved to `nuka tend` —
+// tests/tend-moved-findings.test.ts reuses this same
 // check-secrets-redact-project fixture to prove it now surfaces there
 // instead, and that `check` no longer reports it.
 //

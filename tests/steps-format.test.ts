@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatVocabulary, type StepSummary } from "../src/cli/vocabulary.js";
 
-// Responsibility: steps-human-output task spec's unit tests for
+// Responsibility: unit tests for
 // formatVocabulary — the pure function `nuka steps`' non-JSON output goes
 // through. Exercises it directly (no CLI/yargs/process.stdout involved) so
 // width is explicit and every case is deterministic.
@@ -137,7 +137,7 @@ describe("formatVocabulary", () => {
     expect(formatVocabulary([], 80)).toBe("");
   });
 
-  it("appends a 'browser' marker to the heading when needs_browser is true (p4b-steps-needs task spec)", () => {
+  it("appends a 'browser' marker to the heading when needs_browser is true", () => {
     const summaries: StepSummary[] = [
       {
         name: "opens-a-tab",

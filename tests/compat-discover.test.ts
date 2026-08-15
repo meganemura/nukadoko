@@ -9,7 +9,7 @@ import { createEmptyTempDir, fixture, removeTempDir, repoRoot } from "./helpers/
 
 const execFileAsync = promisify(execFile);
 
-// Responsibility: m2a-compat-registry task spec's discovery/registration
+// Responsibility: discovery/registration
 // tests — compat steps (Given/When/Then, string and RegExp patterns) land
 // in the vocabulary with `kind: "compat"`, attributed to the file that
 // registered them; two registrations sharing a pattern source collide

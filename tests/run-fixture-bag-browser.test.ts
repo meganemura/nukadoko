@@ -10,8 +10,8 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: p4a-fixture-bag task spec's own completion condition 2 —
-// "page を名指さないシナリオがブラウザを起動しないこと" — fixed by a real
+// Responsibility: proves a scenario that never names `page` never launches
+// the browser — fixed by a real
 // measurement, not an inference from absent trace evidence (the way
 // tests/run-browser.test.ts's own "no chunk" assertion works). A
 // `vi.spyOn(chromium, "launch")` (the same spy tests/browser-evidence.test.ts
@@ -19,8 +19,7 @@ import {
 // calls for a scenario whose only step never destructures `page` at all.
 // The second scenario in the same feature file — which does destructure
 // `page` — is the contrast case: `launch` is called there, proving the spy
-// would have caught a regression rather than passing vacuously (this task's
-// spec: "起動したら分かる形で").
+// would have caught a regression rather than passing vacuously.
 
 interface StoredRecord {
   readonly status: string;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec's own scope item 9 — `nuka tend`'s two new
+// Responsibility: `nuka tend`'s two new
 // findings. `fixture-unused`: `fixtureReachesUnused` (tests/fixtures/
 // fixture-touches-browser-project/nukadoko.config.ts) is declared but no
 // step requires it. `fixture-touches-app`: `loggedIn` reaches `page`,
@@ -34,7 +34,7 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
     expect(touchesApp).toBeDefined();
     expect(touchesApp?.message).toContain("page");
 
-    // Deliberately not a judgment (this task's spec, scope item 9): the
+    // Deliberately not a judgment: the
     // message never says to stop, remove, or fix it.
     expect(touchesApp?.message.toLowerCase()).not.toMatch(/\b(stop|remove|fix)\b/);
   });

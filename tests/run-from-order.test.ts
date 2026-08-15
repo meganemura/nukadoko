@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run`'s own pre-execution guard (m6b-from-check task
-// spec, item 2; docs/spec.md "Chaining steps": "`nuka run`, before it
+// Responsibility: `nuka run`'s own pre-execution guard (docs/spec.md
+// "Chaining steps": "`nuka run`, before it
 // executes that scenario, so forgetting to check is not punished with a
 // browser session") — the same judgment tests/check-from-order.test.ts
 // already covers for `nuka check` (src/check/from-order.ts's own header:
@@ -15,8 +15,8 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // unaffected. Also covers this task's other deliverable: `nuka run` now
 // shares `nuka do`'s existing structural `from` refusal
 // (src/step/validate-from.ts's `validateStepFrom`), for a step this run's
-// own selected feature actually binds — scoped that way on purpose (this
-// task's spec: "実行に入る前に一度だけ", cli/run.ts's own header) so an
+// own selected feature actually binds — scoped that way on purpose (once,
+// before execution begins — cli/run.ts's own header) so an
 // unrelated, never-bound step's own broken `from` elsewhere in the project
 // (this same fixture's `archive-project-unregistered-from`) cannot fail a
 // run that never touches it.
@@ -70,7 +70,7 @@ describe("nuka run: from's scenario-order guard", () => {
     expect(record.steps[0].record).toBeNull();
     expect(record.steps[0].error.message).toContain("only at or after this line");
     // The `create-project` line itself is textually *after* the violation,
-    // but it never runs either (this task's spec: "実行せずに失敗させる") —
+    // but it never runs either —
     // `"skipped"`, not `"passed"`, and no step record.
     expect(record.steps[1].status).toBe("skipped");
     expect(record.steps[1].record).toBeNull();
@@ -112,8 +112,8 @@ describe("nuka run: from's scenario-order guard", () => {
     const exitCode = await runCli(["run", "features/broken-from-bound.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
-    // Setup-phase fatal, same family as ConfigError/DuplicateStepError (this
-    // task's spec: "m6a が積み残した配線を1つ閉じること") — no scenario
+    // Setup-phase fatal, same family as ConfigError/DuplicateStepError
+    // (closes a piece of wiring m6a left unfinished) — no scenario
     // record line is ever printed.
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("broken-from-bound");

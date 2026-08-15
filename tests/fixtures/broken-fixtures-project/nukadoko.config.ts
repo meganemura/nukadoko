@@ -1,11 +1,11 @@
 import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 
-// P5 task spec's own completion condition 8: `nuka check` must catch a
+// `nuka check` must catch a
 // fixture dependency cycle and a scope violation before anything runs —
 // every fixture below is structurally broken on purpose and none is
 // destructured by any step in this project, since `nuka check` validates
-// `config.fixtures` regardless of what a step happens to use (this task's
-// spec, scope item 8: "config coherence"-style checking, unconditional).
+// `config.fixtures` regardless of what a step happens to use ("config
+// coherence"-style checking, unconditional).
 
 export default defineConfig({
   fixtures: defineFixtures({

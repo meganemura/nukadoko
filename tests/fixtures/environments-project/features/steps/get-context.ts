@@ -2,9 +2,8 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Read-only step used to observe the effective baseURL / env for a
-// resolved environment (this task's spec's environment-resolution tests):
-// no real HTTP call, no browser, just reading what create-context.ts already
-// assembled.
+// resolved environment: no real HTTP call, no browser, just reading what
+// create-context.ts already assembled.
 export default defineStep({
   description: "Return the effective baseURL and env values this run resolved to",
   args: z.object({}),

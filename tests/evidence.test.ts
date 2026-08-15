@@ -6,7 +6,7 @@ import type { StepSummary } from "../src/cli/vocabulary.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `evidence.attach`/`evidence.path` end to end against
-// tests/fixtures/evidence-project (P9 task spec) — content actually written
+// tests/fixtures/evidence-project — content actually written
 // and landing on the step record with `at`, same name twice both retained,
 // `path()` alone never landing on the step record until something is actually
 // written there, `path()` twice returning distinct paths, an unsafe name

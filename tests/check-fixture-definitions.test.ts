@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec's own completion conditions 7 and 8 —
-// `auto: true` is refused with its own dedicated message, and `nuka check`
+// Responsibility: `auto: true` is refused with its own dedicated
+// message, and `nuka check`
 // catches a fixture dependency cycle, a scope violation, and an unowned
 // `page` override, all before anything runs. Read-only against
 // tests/fixtures/broken-fixtures-project and tests/fixtures/
@@ -70,8 +70,7 @@ describe("nuka check / nuka run: auto: true is refused with its own dedicated me
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain('"auto"');
     // Names why: this is not a claim of deeper Playwright fixture
-    // compatibility than the shape of a definition (this task's spec, scope
-    // item 4).
+    // compatibility than the shape of a definition.
     expect(stderr.text()).toMatch(/names everything that ran|Playwright fixture/);
   });
 

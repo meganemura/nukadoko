@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka do --use <record-id>` end to end (m6c-do-use task
-// spec) against tests/fixtures/do-use-project — filling a step's own `from`
+// Responsibility: `nuka do --use <record-id>` end to end against
+// tests/fixtures/do-use-project — filling a step's own `from`
 // keys from an earlier execution's step record instead of the chain a scenario
 // would have provided (docs/spec.md "Single steps (the agent path)", the
 // `--use` paragraph). `from`'s own scenario-path injection mechanism is
@@ -58,7 +58,7 @@ describe("nuka do --use", () => {
     expect(archiveStepRecord.used).toEqual([{ record: createStepRecord.record_id, step: "create-project" }]);
 
     // Confirms the step record actually persisted to disk carries the same shape
-    // the stdout copy did (m1-secrets task spec, decision 3's own guarantee).
+    // the stdout copy did.
     const persisted = await readStepRecord(rootDir, archiveStepRecord.record_id);
     expect(persisted.used).toEqual(archiveStepRecord.used);
   });
@@ -106,7 +106,7 @@ describe("nuka do --use", () => {
     ]);
   });
 
-  it("a failed step's step record carries every --use'd upstream's own result (fb3-used-result task spec)", async () => {
+  it("a failed step's step record carries every --use'd upstream's own result", async () => {
     const createStdout = createCaptureSink();
     await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
       rootDir,
@@ -141,8 +141,8 @@ describe("nuka do --use", () => {
     expect(exitCode).toBe(1);
     const archiveStepRecord = JSON.parse(archiveStdout.text());
     expect(archiveStepRecord.status).toBe("failed");
-    // Both upstreams, each carrying its own full result (this task's spec,
-    // decisions 3-4) — not just the first one.
+    // Both upstreams, each carrying its own full result — not just the
+    // first one.
     expect(archiveStepRecord.used).toEqual([
       { record: createStepRecord.record_id, step: "create-project", result: { id: "p_acme" } },
       { record: ownerStepRecord.record_id, step: "create-owner", result: { id: "o_jane" } },
@@ -223,7 +223,7 @@ describe("nuka do --use", () => {
     expect(archiveStderr.text()).toContain("create-owner");
   });
 
-  it("--args may be omitted entirely when --use fills every key (fb4-args-optional task spec)", async () => {
+  it("--args may be omitted entirely when --use fills every key", async () => {
     const createStdout = createCaptureSink();
     await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
       rootDir,

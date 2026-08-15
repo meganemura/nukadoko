@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run`'s own progress output end to end (fb5-run-
-// output task spec) — everything src/run/progress-log.ts writes, reached
+// Responsibility: `nuka run`'s own progress output end to end —
+// everything src/run/progress-log.ts writes, reached
 // through cli/run.ts's own wiring rather than by calling that module
 // directly, since the whole point is what a real invocation's stderr looks
 // like. Reuses run-project (run.test.ts's own fixture): features/passing.
@@ -26,7 +26,7 @@ function scenarioBoundaryLines(stderrText: string): string[] {
   return nonEmptyLines(stderrText).filter((line) => /^scenario \d+\/\d+ {2}/.test(line));
 }
 
-describe("nuka run: progress output (fb5-run-output task spec)", () => {
+describe("nuka run: progress output", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -150,8 +150,8 @@ describe("nuka run: progress output (fb5-run-output task spec)", () => {
     expect(lines.some((line) => line.startsWith("scenarios "))).toBe(false);
     expect(lines.some((line) => line.startsWith("allure"))).toBe(false);
     expect(lines.some((line) => line.startsWith("messages"))).toBe(false);
-    // The summary line is unconditional even here (this task's spec,
-    // decision 3) — a run that did nothing still gets told so.
+    // The summary line is unconditional even here — a run that did nothing
+    // still gets told so.
     expect(stderr.text()).toContain("0 scenarios: 0 passed, 0 failed");
   });
 

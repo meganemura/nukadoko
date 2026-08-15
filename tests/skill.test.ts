@@ -12,8 +12,8 @@ const execFileAsync = promisify(execFile);
 // Responsibility: `nuka skill path`, and every skills/*/SKILL.md's own
 // compliance with the open Agent Skills specification
 // (https://agentskills.io/specification) that `gh skill install` and other
-// multi-host tooling read (m5e-skill-spec-compliance task spec, extended to
-// cover skills/migration by m5g-migration-skill). `install` was removed —
+// multi-host tooling read (covers skills/migration too). `install` was
+// removed —
 // see src/cli/skill.ts's header for why — so this file only exercises
 // `path`, plus the frontmatter/body shape of each skill source itself. The
 // compliance half exists to catch the actual bug this task fixes:

@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// tests/page-network.test.ts's own fixture (p3b-page-network task spec,
-// completion condition 6: "落としたものが無い step に http_omitted キーが
-// 出ないこと") — a page load with nothing but its own document response, no
+// tests/page-network.test.ts's own fixture —
+// a page load with nothing but its own document response, no
 // image/stylesheet/script and no extra fetch, so `http_omitted` must be
 // absent from this step record entirely, not present-and-empty.
 export default defineStep({

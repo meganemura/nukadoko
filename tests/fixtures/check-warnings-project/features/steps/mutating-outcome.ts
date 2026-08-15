@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Triggers the `then-mutates` *warning* (this task's spec, decision 5):
+// Triggers the `then-mutates` *warning*:
 // bound in Then position (see features/then-position.feature) while
 // declaring the default `mutates: true`. No longer an error — the
 // declaration alone can't settle whether a given occurrence's execution

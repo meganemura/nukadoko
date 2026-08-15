@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { defineFixtures } from "../src/fixture/define-fixtures.js";
 
 // Responsibility: unit tests for src/fixture/define-fixtures.ts. The type-
-// level promise this function exists for ("完全に型が付く", P5 task spec,
-// scope item 2) is checked by `npm run typecheck` compiling this very file
+// level promise this function exists for (fully typed) is checked by
+// `npm run typecheck` compiling this very file
 // under `strict` with no implicit-`any` errors — the runtime assertions
 // below only pin down that `defineFixtures` is a plain identity function
 // (docs/spec.md's own "give a literal a name, validate nothing" contract,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Status } from "../src/compat/index.js";
 
-// Responsibility: t7-compat-status-afterstep task spec, item 1 — `Status` is
+// Responsibility: `Status` is
 // a plain re-export of `@cucumber/messages`'s own `TestStepResultStatus`
 // (a real, string-valued enum), not a second enum this project defines
 // itself, so `nuka run: HookParameter.result.status` coverage in

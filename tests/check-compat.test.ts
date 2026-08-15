@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: m2a-compat-registry task spec's check-integration tests
-// (item 6) — compat participates in undefined-step/duplicate/ambiguous
+// Responsibility: check-integration tests
+// — compat participates in undefined-step/duplicate/ambiguous
 // detection across kind, and a Then-position compat step gets a soft
 // warning. A compat-origin defineParameterType still shares one registry
 // with config-origin entries (collision reuses the existing
 // `parameter-type-invalid` error) — but is no longer listed as a `check`
 // warning itself: `parameter-type-support-origin` moved to `nuka tend`
-// (m8d-move-to-tend task spec; see tests/tend-moved-findings.test.ts, which
+// (see tests/tend-moved-findings.test.ts, which
 // reuses this same check-compat-project fixture to prove it now surfaces
 // there instead).
 

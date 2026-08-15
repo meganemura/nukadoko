@@ -11,7 +11,7 @@ import {
 } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run`'s own `run_id`/`git` provenance fields end to
-// end (m4a-run-provenance task spec, test items 2-5) — companion to
+// end — companion to
 // run.test.ts (matching/skip/record mechanics, neither field), following
 // that file's own "each concern gets its own file" convention
 // (run-browser.test.ts, run-session.test.ts, run-secrets.test.ts).

@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: P5 task spec's own completion condition 4 — a fixture
+// Responsibility: a fixture
 // that never calls use() must not hang `nuka run`/`nuka do`; it must fail,
 // loudly, naming the fixture. Two shapes, both against tests/fixtures/
 // user-fixtures-project: `neverCallsUse` returns immediately without
 // calling use() at all (caught the instant its own function settles, no
 // timeout wait needed); `stuckFixture` never settles and never calls
 // use() either, caught only once its own short `options.timeout` (150ms)
-// elapses — this task's spec, item 7's own "落ちるときはどの fixture で
-// 止まったかを名指す". Both run through `nuka do` (one step, one execution)
+// elapses — when it fails, the error names which fixture it stopped at.
+// Both run through `nuka do` (one step, one execution)
 // so exit code and stderr are read directly, with no scenario/pickle
 // machinery in the way.
 

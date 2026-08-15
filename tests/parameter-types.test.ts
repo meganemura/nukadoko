@@ -13,7 +13,7 @@ import {
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: m2pre-parameter-types task spec, scope item 2's two
+// Responsibility: two
 // end-to-end items, both against tests/fixtures/parameter-types-project
 // (its nukadoko.config.ts registers docs/spec.md's `negation` and
 // `from-dir` examples verbatim) — proving the whole config -> registry ->
@@ -137,7 +137,7 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
   });
 });
 
-// fix-scenario-step-backstop task spec: a custom transformer's throw
+// A custom transformer's throw
 // propagates unchanged out of match-step.ts's matchPickleStep (that file's
 // own header comment, decision 5) — proving `nuka run` still writes the
 // scenario record instead of crashing needs its own fixture (a throwing
@@ -188,8 +188,8 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
     expect(existsSync(recordPath)).toBe(true);
 
     // No step record was ever written for this scenario — the throw happened
-    // before this step's execution phase began (fix-scenario-step-backstop
-    // task spec, decision 1), the same "never began" boundary undefined/
+    // before this step's execution phase began, the same "never began"
+    // boundary undefined/
     // ambiguous/read-only-declared-refusal already draw.
     const stepsDir = path.join(rootDir, ".nukadoko", "records", "steps");
     expect(existsSync(stepsDir)).toBe(false);

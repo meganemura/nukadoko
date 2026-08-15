@@ -9,7 +9,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // record.json — not just `nuka do`'s (already covered by tests/secrets.test.ts).
 // leak-secret.ts throws with the secret value inside its own message, which
 // flows into both the step record's own error.message and
-// record.steps[].error.message; this task's spec, decision 6: the record is
+// record.steps[].error.message; the record is
 // redacted once, as a whole object, exactly like a step record.
 
 const API_TOKEN = "sekrit-value-123";

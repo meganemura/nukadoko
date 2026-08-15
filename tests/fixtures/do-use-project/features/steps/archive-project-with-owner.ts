@@ -3,7 +3,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 import createOwner from "./create-owner.js";
 import createProject from "./create-project.js";
 
-// Two `from` keys, two distinct upstreams (m6c-do-use task spec's own "--use
+// Two `from` keys, two distinct upstreams (the "--use
 // twice, two different upstream keys both fill" test) — `projectId` and
 // `ownerId` each have to come from a different step record's `result`.
 export default defineStep({

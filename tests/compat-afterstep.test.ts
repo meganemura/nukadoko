@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: t7-compat-status-afterstep task spec's coverage for
+// Responsibility: coverage for
 // `AfterStep` execution (registration-shape coverage — the three call forms
 // — lives in tests/compat-hooks.test.ts, alongside Before/After's own) —
 // runs once per executed pickle step, never after a step this scenario
