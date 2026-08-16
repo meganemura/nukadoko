@@ -37,10 +37,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **step record と scenario record の、id を持つフィールド名がまた変わり、いまは 1 つの規則に従います: `<粒度>_record_id`、または run の `run_id` です。**
   どちらの JSON を読んでいたスクリプトも、現在の名前を読む必要があります: step record の `record_id` は `step_record_id` に、step record 上の所属 scenario record の id(旧 `scenario`)は `scenario_record_id` に、scenario record 自身の `scenario_id` は `scenario_record_id` に、scenario record の `steps[].record` は `steps[].step_record_id` になりました。
   scenario record 自身の `scenario` フィールド(id ではなく pickle の名前)と `run_id` は変わっておらず、`step-` / `scn-` / `run-` という id の接頭辞も変わっていません。
-  既存の acceptance record は作り直しが要ります: `nuka run` でその feature を再実行し、`nuka accept` し直してください。
-  `nuka tend` は、旧いフィールド名のまま残っている acceptance record を見つけると、それを名指しします(`signoff-record-old-format`)。
-  これには 0.3.0 自身で accept した record も含まれます。
-  `record_id` は、まさにその finding がすでにチェックしていたフィールドだからです。
+  既存の acceptance record は作り直しが要ることがあります: `nuka run` でその feature を再実行し、`nuka accept` し直してください。
+  自分の record が対象かどうかは、上げる前に `nuka tend` を実行すれば分かります。
+  実際に対象となる acceptance record だけを名指しし(`signoff-record-old-format`)、`featuresDir` の中にある feature については何も名指ししません。
+  その feature は無人で走っており、保証を持っているのはもう sign-off ではないからです。
   旧い、裸のままだった箇所がもう 2 つあり、いまは同じ規則に合わせました。
   step record の `used[]` の各エントリは、以前は上流の id を `record` という名前で運んでいました。
   これを読んでいたスクリプトは、いまは `used[].step_record_id` を読む必要があります。
@@ -68,9 +68,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`--use` はいまや `step-...` という id を取ります。**
   このリリースより前に発行された id は、ツールがもう読まない配置のディレクトリを指します。
   生産元の step(`nuka do` または `nuka run`)を再実行して、現在の形の id を取り直してください。
-- **既存の acceptance record は作り直しが要ります。**
-  `nuka run` でその feature を再実行し、`nuka accept` し直してください。
-  `nuka tend` は、旧い形式のまま残っている acceptance record を見つけると、それを名指しします(`signoff-record-old-format`)。
+- **既存の acceptance record は作り直しが要ることがあります。**
+  上げる前に `nuka tend` を実行して、答えさせてください。
+  実際に対象となる acceptance record だけを名指しし(`signoff-record-old-format`)、`featuresDir` の中にある feature については何も名指ししません。
+  その sign-off の報告は 0.3.0 でやめたためです。
+  名指しされたものについては、`nuka run` でその feature を再実行し、`nuka accept` し直してください。
 - **`nuka tend` は、すでに `featuresDir` の中にある feature については、もはや stale な sign-off も、ずれた条件も報告しません。**
   そのような feature についてこの所見に頼っていたプロジェクトは、その効き目が移ったと考えてください: すでに無人で実行され続けているその feature の `nuka run` こそが、いまは同じことを確認します。
   `signoff-record-unreadable` は影響を受けません。

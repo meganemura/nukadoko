@@ -49,11 +49,13 @@ says what to fix; why is in [CHANGELOG.md](../CHANGELOG.md) under
   `steps[].step_record_id`. A scenario record's own `scenario` field (the
   pickle's name, never an id) and `run_id` did not change, and neither
   did the `step-`/`scn-`/`run-` id prefixes. An existing acceptance
-  record needs re-creating: `nuka run` the feature again and `nuka
-  accept` it. `nuka tend` names any acceptance record it finds still
-  under the old field names (`signoff-record-old-format`); that now
-  includes a record accepted on 0.3.0 itself, since `record_id` is
-  exactly the field that finding already checked for. Two more spots
+  record may need re-creating: `nuka run` the feature again and `nuka
+  accept` it. Run `nuka tend` before upgrading to find out whether yours
+  does, rather than assuming: it names every acceptance record that is
+  actually affected (`signoff-record-old-format`), and names none for a
+  feature that already lives inside `featuresDir`, since that feature
+  runs unattended and its sign-off is no longer what carries the
+  guarantee. Two more spots
   followed the old, bare convention and now match the same rule: a step
   record's `used[]` entries carried the upstream id under `record`,
   formerly; a script reading it needs `used[].step_record_id` now. And
@@ -88,9 +90,12 @@ to opt in to a new capability. Each entry says what to fix; why is in
   points at a directory layout the tool no longer reads; re-run the
   producing step (`nuka do` or `nuka run`) to get one in the current
   shape.
-- **An existing acceptance record needs re-creating.** `nuka run` the
-  feature again and `nuka accept` it. `nuka tend` names any acceptance
-  record it finds still in the old shape (`signoff-record-old-format`).
+- **An existing acceptance record may need re-creating.** Run `nuka
+  tend` before upgrading and let it answer: it names every acceptance
+  record actually affected (`signoff-record-old-format`), and names none
+  for a feature inside `featuresDir`, whose sign-off it stopped
+  reporting on in 0.3.0. For the ones it names, `nuka run` the feature
+  again and `nuka accept` it.
 - **`nuka tend` stops reporting a stale sign-off or a drifted condition
   for a feature that already lives inside `featuresDir`.** If a project
   relied on that finding for such a feature, the coverage moved: running
