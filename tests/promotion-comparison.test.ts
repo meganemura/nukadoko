@@ -152,7 +152,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
       stderr: createCaptureSink(),
     });
     const glueRecord = JSON.parse(nonEmptyLines(glueStdout.text())[0]!);
-    const glueStepRecord = await readStepRecord(glueRoot, glueRecord.steps[0].record);
+    const glueStepRecord = await readStepRecord(glueRoot, glueRecord.steps[0].step_record_id);
     expect(glueStepRecord.result).toBeNull();
 
     const typedStdout = createCaptureSink();
@@ -162,7 +162,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
       stderr: createCaptureSink(),
     });
     const typedRecord = JSON.parse(nonEmptyLines(typedStdout.text())[0]!);
-    const typedStepRecord = await readStepRecord(typedRoot, typedRecord.steps[0].record);
+    const typedStepRecord = await readStepRecord(typedRoot, typedRecord.steps[0].step_record_id);
     // The server's response includes an extra `leaked` key that isn't in
     // the `returns` schema; if `result` were the raw response, it would
     // include it. It's absent because `result` is zod's *parsed* output

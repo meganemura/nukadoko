@@ -64,20 +64,20 @@ describe("nuka run: typed World measurement + declaration", () => {
     const untouched = records.find((r) => r.scenario.startsWith("a step that never touches"));
 
     expect(measured.status).toBe("passed");
-    const firstIncrement = await readStepRecord(rootDir, measured.steps[0].record);
+    const firstIncrement = await readStepRecord(rootDir, measured.steps[0].step_record_id);
     // Reads visits (0), then writes it (1) — one read, one write, in order.
     expect(firstIncrement.world).toEqual({ reads: ["visits"], writes: ["visits"] });
 
-    const secondIncrement = await readStepRecord(rootDir, measured.steps[1].record);
+    const secondIncrement = await readStepRecord(rootDir, measured.steps[1].step_record_id);
     expect(secondIncrement.world).toEqual({ reads: ["visits"], writes: ["visits"] });
 
-    const finalCheck = await readStepRecord(rootDir, measured.steps[2].record);
+    const finalCheck = await readStepRecord(rootDir, measured.steps[2].step_record_id);
     // Reads only (the assertion step never writes) — deduplicated to one
     // entry despite reading `this.visits` twice in its own `if` condition.
     expect(finalCheck.world).toEqual({ reads: ["visits"], writes: [] });
 
     expect(untouched.status).toBe("passed");
-    const untouchedStepRecord = await readStepRecord(rootDir, untouched.steps[0].record);
+    const untouchedStepRecord = await readStepRecord(rootDir, untouched.steps[0].step_record_id);
     expect(untouchedStepRecord.world).toBeUndefined();
   });
 
@@ -94,12 +94,12 @@ describe("nuka run: typed World measurement + declaration", () => {
     const scenario = records.find((r) => r.scenario.startsWith("an undeclared key introduced"));
     expect(scenario.status).toBe("passed");
 
-    const creationStepRecord = await readStepRecord(rootDir, scenario.steps[0].record);
+    const creationStepRecord = await readStepRecord(rootDir, scenario.steps[0].step_record_id);
     // The write happened, but the accessor didn't exist yet — not measured,
     // and not recorded at all.
     expect(creationStepRecord.world).toBeUndefined();
 
-    const readStepRecordBody = await readStepRecord(rootDir, scenario.steps[1].record);
+    const readStepRecordBody = await readStepRecord(rootDir, scenario.steps[1].step_record_id);
     expect(readStepRecordBody.world).toEqual({ reads: ["freshField"], writes: [] });
   });
 
@@ -132,15 +132,15 @@ describe("nuka run: typed World measurement + declaration", () => {
     const invalid = records.find((r) => r.scenario.startsWith("an invalid declared write"));
 
     expect(valid.status).toBe("passed");
-    const writeStepRecord = await readStepRecord(rootDir, valid.steps[0].record);
+    const writeStepRecord = await readStepRecord(rootDir, valid.steps[0].step_record_id);
     expect(writeStepRecord.world).toEqual({ reads: [], writes: ["listing"] });
-    const readBackStepRecord = await readStepRecord(rootDir, valid.steps[1].record);
+    const readBackStepRecord = await readStepRecord(rootDir, valid.steps[1].step_record_id);
     expect(readBackStepRecord.world).toEqual({ reads: ["listing"], writes: [] });
 
     expect(invalid.status).toBe("failed");
     expect(invalid.steps[0].status).toBe("failed");
     expect(invalid.steps[0].error.message).toContain("listing");
-    const invalidStepRecord = await readStepRecord(rootDir, invalid.steps[0].record);
+    const invalidStepRecord = await readStepRecord(rootDir, invalid.steps[0].step_record_id);
     expect(invalidStepRecord.status).toBe("failed");
     // The invalid write must never appear in world.writes: the throw runs
     // before the write is recorded (src/compat/world-instrumentation.ts).
@@ -169,7 +169,7 @@ describe("nuka run: typed World measurement + declaration", () => {
     // declared-schema failure, thrown by `WorldWriteValidationError`, is
     // "world_invalid") — this must stay "step_error", not be swept into
     // "world_invalid" just because it's also a World-related throw.
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect((stepRecord as { error: { kind: string } }).error.kind).toBe("step_error");
   });
 });
@@ -189,7 +189,7 @@ describe("nuka run: a typed-only scenario is unaffected", () => {
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("passed");
       for (const step of record.steps) {
-        const stepRecord = await readStepRecord(rootDir, step.record);
+        const stepRecord = await readStepRecord(rootDir, step.step_record_id);
         expect(stepRecord.world).toBeUndefined();
       }
     } finally {

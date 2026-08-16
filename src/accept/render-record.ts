@@ -160,7 +160,7 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
   for (const { record } of options.scenarios) {
     lines.push(`  - name: ${yamlScalar(record.scenario)}`);
     lines.push(`    line: ${record.line}`);
-    lines.push(`    scenario_id: ${record.scenario_id}`);
+    lines.push(`    scenario_record_id: ${record.scenario_record_id}`);
   }
   lines.push("---");
   return lines;
@@ -202,12 +202,12 @@ function resolveStepRecord(
   step: ScenarioRecord["steps"][number],
   stepRecords: ReadonlyMap<string, StepRecord | null>,
 ): StepRecord {
-  if (step.record === null) {
+  if (step.step_record_id === null) {
     throw new MissingStepRecordError(scenarioId, step.text, null);
   }
-  const stepRecord = stepRecords.get(step.record);
+  const stepRecord = stepRecords.get(step.step_record_id);
   if (stepRecord === null || stepRecord === undefined) {
-    throw new MissingStepRecordError(scenarioId, step.text, step.record);
+    throw new MissingStepRecordError(scenarioId, step.text, step.step_record_id);
   }
   return stepRecord;
 }
@@ -229,7 +229,7 @@ function renderScenarioSection(scenario: AcceptedScenario): string[] {
   const { record, stepRecords } = scenario;
   const lines: string[] = ["", `### ${record.scenario} (line ${record.line})`];
   for (const step of record.steps) {
-    lines.push(...renderStep(record.scenario_id, step, stepRecords));
+    lines.push(...renderStep(record.scenario_record_id, step, stepRecords));
   }
   for (const hook of record.hooks) {
     lines.push(...renderHook(hook));
@@ -260,7 +260,7 @@ function collectDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): {
   let compatStepCount = 0;
   for (const { record, stepRecords } of scenarios) {
     for (const step of record.steps) {
-      const stepRecord = resolveStepRecord(record.scenario_id, step, stepRecords);
+      const stepRecord = resolveStepRecord(record.scenario_record_id, step, stepRecords);
       if (stepRecord.mutates === null) {
         compatStepCount += 1;
         continue;

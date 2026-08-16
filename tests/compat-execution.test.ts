@@ -62,14 +62,14 @@ describe("nuka run: compat step/hook execution honesty", () => {
       // Identified by type (`CompatTimeoutError`), never by matching "timed
       // out" in the message — distinct from "step_error" (an ordinary throw
       // from the same step shape).
-      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
       expect(stepRecord.error).toMatchObject({ kind: "timeout" });
 
       // The scenario didn't hang on the timed-out step: the next step in
       // the same pickle still got its own record entry (skipped, since the
       // first step already failed).
       expect(record.steps[1].status).toBe("skipped");
-      expect(record.steps[1].record).toBeNull();
+      expect(record.steps[1].step_record_id).toBeNull();
     });
 
     it("a step finishing well within its own timeout succeeds and clears its own race timer immediately (no leaked Node timer)", async () => {
@@ -121,7 +121,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       // A compat-only shape nukadoko doesn't implement classifies as
       // "unsupported", never "step_error" (this is set directly at the
       // point it's detected, not thrown/caught).
-      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
       expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
 
@@ -138,7 +138,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain('"skipped"');
       expect(record.steps[0].error.message).toContain("docs/migration.md");
-      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
       expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
   });
@@ -166,7 +166,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain("done()");
       expect(record.steps[0].error.message).toContain("docs/migration.md");
-      const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+      const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
       expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
   });
@@ -193,7 +193,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(failedBefore.error.kind).toBe("timeout");
 
       expect(record.steps[0].status).toBe("skipped");
-      expect(record.steps[0].record).toBeNull();
+      expect(record.steps[0].step_record_id).toBeNull();
     });
 
     it("a Before hook expecting a done callback fails instead of hanging", async () => {

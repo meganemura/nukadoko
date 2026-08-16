@@ -7,7 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: `from` end to end against
 // tests/fixtures/from-project — the scenario path's injection mechanism
 // (docs/spec.md "Chaining steps"), the `used` shape it feeds into
-// (`{ record, step }`), `ctx.resultOf`'s unregistered-Step throw, and
+// (`{ step_record_id, step }`), `ctx.resultOf`'s unregistered-Step throw, and
 // `from`'s own startup-fatal check under `nuka do`. `ctx.resultOf`'s
 // "recorded as used"/"most recent wins"/"never crosses a scenario boundary"
 // behavior is already covered by tests/resultof.test.ts (updated for the new
@@ -48,8 +48,8 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const createRecordId = record.steps[0].record as string;
-    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const createRecordId = record.steps[0].step_record_id as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expect(archiveStepRecord.status).toBe("ok");
     // The injected value lands on the step record's own `args` — the step
@@ -58,8 +58,8 @@ describe("from: scenario-path injection", () => {
     // was never validated at all).
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme" });
-    // `used` cites the upstream step record in the new `{ record, step }` shape.
-    expect(archiveStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
+    // `used` cites the upstream step record in the `{ step_record_id, step }` shape.
+    expect(archiveStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-project" }]);
   });
 
   it("a captured value wins over from; no injection means no used entry", async () => {
@@ -74,7 +74,7 @@ describe("from: scenario-path injection", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
     expect(archiveStepRecord.args).toEqual({ projectId: "explicit-id" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "explicit-id" });
     // The pattern captured `projectId` itself, so `from` never fired and
@@ -104,9 +104,9 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
     expect(record.steps[0].status).toBe("failed");
-    // `record: null`, not a real record id — this step's own `run` never
-    // executed at all.
-    expect(record.steps[0].record).toBeNull();
+    // `step_record_id: null`, not a real step record id — this step's own
+    // `run` never executed at all.
+    expect(record.steps[0].step_record_id).toBeNull();
     const message = record.steps[0].error.message as string;
     expect(message).toContain("projectId");
     expect(message).toContain("create-project");
@@ -125,11 +125,11 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(3);
 
-    const secondCreateRecordId = record.steps[1].record as string;
-    const archiveStepRecord = await readStepRecord(rootDir, record.steps[2].record as string);
+    const secondCreateRecordId = record.steps[1].step_record_id as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[2].step_record_id as string);
 
     expect(archiveStepRecord.args).toEqual({ projectId: "p_second" });
-    expect(archiveStepRecord.used).toEqual([{ record: secondCreateRecordId, step: "create-project" }]);
+    expect(archiveStepRecord.used).toEqual([{ step_record_id: secondCreateRecordId, step: "create-project" }]);
   });
 
   it("from and ctx.resultOf reading the same upstream in one execution still dedupe in used", async () => {
@@ -144,14 +144,14 @@ describe("from: scenario-path injection", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const createRecordId = record.steps[0].record as string;
-    const closeStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const createRecordId = record.steps[0].step_record_id as string;
+    const closeStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expect(closeStepRecord.result).toEqual({ closed: true, projectId: "p_acme", projectName: "acme" });
     // One entry, not two: `from`'s own injection and this step's own
     // `ctx.resultOf(createProject)` call both read the exact same stepRecord,
     // and both write into the same collector.
-    expect(closeStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
+    expect(closeStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-project" }]);
   });
 
   it("a failed step's step record carries the from-injected value's own result", async () => {
@@ -167,14 +167,14 @@ describe("from: scenario-path injection", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(2);
 
-    const createRecordId = record.steps[0].record as string;
-    const explodeStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const createRecordId = record.steps[0].step_record_id as string;
+    const explodeStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expect(explodeStepRecord.status).toBe("failed");
     // The upstream's own full validated result, not just the `projectId` key
     // `from` happened to read.
     expect(explodeStepRecord.used).toEqual([
-      { record: createRecordId, step: "create-project", result: { id: "p_acme", name: "acme" } },
+      { step_record_id: createRecordId, step: "create-project", result: { id: "p_acme", name: "acme" } },
     ]);
   });
 });

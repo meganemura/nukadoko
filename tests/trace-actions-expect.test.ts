@@ -114,7 +114,7 @@ describe("actions on the step record: a real expect() wait", () => {
       ".nukadoko",
       "records",
       "steps",
-      record.steps[0].record as string,
+      record.steps[0].step_record_id as string,
       "record.json",
     );
     const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8")) as StoredStepRecord;

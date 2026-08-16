@@ -27,6 +27,29 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.3.0 から Unreleased へ
+
+破壊的変更は 1 つです。
+加えて、破壊的ではない対応が 1 つあります。
+各項目は「何を直すか」だけを述べます。
+なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+
+- **step record と scenario record の、id を持つフィールド名がまた変わり、いまは 1 つの規則に従います: `<粒度>_record_id`、または run の `run_id` です。**
+  どちらの JSON を読んでいたスクリプトも、現在の名前を読む必要があります: step record の `record_id` は `step_record_id` に、step record 上の所属 scenario record の id(旧 `scenario`)は `scenario_record_id` に、scenario record 自身の `scenario_id` は `scenario_record_id` に、scenario record の `steps[].record` は `steps[].step_record_id` になりました。
+  scenario record 自身の `scenario` フィールド(id ではなく pickle の名前)と `run_id` は変わっておらず、`step-` / `scn-` / `run-` という id の接頭辞も変わっていません。
+  既存の acceptance record は作り直しが要ります: `nuka run` でその feature を再実行し、`nuka accept` し直してください。
+  `nuka tend` は、旧いフィールド名のまま残っている acceptance record を見つけると、それを名指しします(`signoff-record-old-format`)。
+  これには 0.3.0 自身で accept した record も含まれます。
+  `record_id` は、まさにその finding がすでにチェックしていたフィールドだからです。
+  旧い、裸のままだった箇所がもう 2 つあり、いまは同じ規則に合わせました。
+  step record の `used[]` の各エントリは、以前は上流の id を `record` という名前で運んでいました。
+  これを読んでいたスクリプトは、いまは `used[].step_record_id` を読む必要があります。
+  また、Allure emitter の step パラメータで以前は `"record"` とだけ名付けられていたものは、いまは `"step record id"` です。
+  Allure の出力をパラメータ名で読んでいたスクリプトは、新しいラベルを読む必要があります。
+- **破壊的ではありません: step record はいまや `run_id: string | null` も持ちます。**
+  読まなくても何も壊れません。
+  ある step record がどの run に属するかを、隣の scenario record を先に開かずに知りたいスクリプトは、代わりにこのフィールドを読めます。
+
 ## 0.2.0 から 0.3.0 へ
 
 破壊的変更は 5 つです。

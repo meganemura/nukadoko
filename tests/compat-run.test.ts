@@ -92,7 +92,7 @@ describe("nuka run: compat step execution", () => {
       expect(step.status).toBe("passed");
     }
 
-    const firstStepRecord = await readStepRecord(rootDir, patterns.steps[0].record);
+    const firstStepRecord = await readStepRecord(rootDir, patterns.steps[0].step_record_id);
     expect(firstStepRecord.result).toBeNull();
     expect(firstStepRecord.args).toEqual(["acme"]);
     // Compat has no `mutates` declaration at all — `null`, never coerced to
@@ -101,18 +101,18 @@ describe("nuka run: compat step execution", () => {
 
     // RegExp capture arrives as a plain string, unlike a typed step's
     // coerced `{int}`.
-    const secondStepRecord = await readStepRecord(rootDir, patterns.steps[1].record);
+    const secondStepRecord = await readStepRecord(rootDir, patterns.steps[1].step_record_id);
     expect(secondStepRecord.args).toEqual(["3"]);
 
     // Proves asymmetry #2 closed: the compat-registered `legacyBoolean`
     // parameter type transformed "yes" -> true before matching/args ever
     // reached the glue function.
-    const thirdStepRecord = await readStepRecord(rootDir, patterns.steps[2].record);
+    const thirdStepRecord = await readStepRecord(rootDir, patterns.steps[2].step_record_id);
     expect(thirdStepRecord.args).toEqual([true]);
     expect(thirdStepRecord.result).toBeNull();
 
     expect(table.status).toBe("passed");
-    const tableStepRecord = await readStepRecord(rootDir, table.steps[0].record);
+    const tableStepRecord = await readStepRecord(rootDir, table.steps[0].step_record_id);
     expect(tableStepRecord.args).toEqual([
       [
         ["name", "age"],
@@ -122,7 +122,7 @@ describe("nuka run: compat step execution", () => {
     ]);
 
     expect(docstring.status).toBe("passed");
-    const docstringStepRecord = await readStepRecord(rootDir, docstring.steps[0].record);
+    const docstringStepRecord = await readStepRecord(rootDir, docstring.steps[0].step_record_id);
     expect(docstringStepRecord.args).toEqual(["hello docstring"]);
   });
 
@@ -140,7 +140,7 @@ describe("nuka run: compat step execution", () => {
 
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toBe("legacy failure on purpose");
-    const failedStepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const failedStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(failedStepRecord.status).toBe("failed");
     expect((failedStepRecord as { error: { message: string } }).error.message).toBe(
       "legacy failure on purpose",
@@ -152,7 +152,7 @@ describe("nuka run: compat step execution", () => {
     expect((failedStepRecord as { error: { kind: string } }).error.kind).toBe("step_error");
 
     expect(record.steps[1].status).toBe("skipped");
-    expect(record.steps[1].record).toBeNull();
+    expect(record.steps[1].step_record_id).toBeNull();
   });
 
   // A compat step bound in Then position passes exactly like any other
@@ -173,7 +173,7 @@ describe("nuka run: compat step execution", () => {
     expect(record.status).toBe("passed");
     expect(record.steps[0].status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.status).toBe("ok");
     // The measured tally is unchanged by this task (this file's own header)
     // — only whether it fails the step changed.

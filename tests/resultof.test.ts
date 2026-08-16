@@ -65,7 +65,7 @@ describe("ctx.resultOf", () => {
     // at all — passes regardless of the module-identity mechanics described
     // in this file's header comment.
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    const createStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const createStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(createStepRecord.result).toEqual({ id: "l_first-widget", name: "first-widget" });
     expect(createStepRecord.used).toBeUndefined();
   });
@@ -83,12 +83,12 @@ describe("ctx.resultOf", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const createRecordId = record.steps[0].record as string;
-    const closedRecordId = record.steps[1].record as string;
+    const createRecordId = record.steps[0].step_record_id as string;
+    const closedRecordId = record.steps[1].step_record_id as string;
 
     const closedStepRecord = await readStepRecord(rootDir, closedRecordId);
     expect(closedStepRecord.result).toEqual({ closed: true, name: "first-widget" });
-    expect(closedStepRecord.used).toEqual([{ record: createRecordId, step: "create-listing" }]);
+    expect(closedStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-listing" }]);
   });
 
   it("the same step run twice in one scenario: resultOf returns the most recent result", async () => {
@@ -104,11 +104,11 @@ describe("ctx.resultOf", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(3);
 
-    const secondCreateRecordId = record.steps[1].record as string;
-    const closedStepRecord = await readStepRecord(rootDir, record.steps[2].record as string);
+    const secondCreateRecordId = record.steps[1].step_record_id as string;
+    const closedStepRecord = await readStepRecord(rootDir, record.steps[2].step_record_id as string);
 
     expect(closedStepRecord.result).toEqual({ closed: true, name: "second" });
-    expect(closedStepRecord.used).toEqual([{ record: secondCreateRecordId, step: "create-listing" }]);
+    expect(closedStepRecord.used).toEqual([{ step_record_id: secondCreateRecordId, step: "create-listing" }]);
   });
 
   it("resultOf never crosses a scenario boundary, and a failed run is never chained", async () => {
@@ -126,7 +126,7 @@ describe("ctx.resultOf", () => {
     const [failedScenario, freshScenario] = records;
     expect(failedScenario.status).toBe("failed");
     expect(failedScenario.steps[0].status).toBe("failed");
-    const failedStepRecord = await readStepRecord(rootDir, failedScenario.steps[0].record);
+    const failedStepRecord = await readStepRecord(rootDir, failedScenario.steps[0].step_record_id);
     expect(failedStepRecord.status).toBe("failed");
     expect((failedStepRecord as { error: { message: string } }).error.message).toBe(
       "listing creation failed on purpose",
@@ -138,7 +138,7 @@ describe("ctx.resultOf", () => {
     // never becomes readable.
     expect(freshScenario.status).toBe("passed");
     expect(freshScenario.steps[0].status).toBe("passed");
-    const freshStepRecord = await readStepRecord(rootDir, freshScenario.steps[0].record);
+    const freshStepRecord = await readStepRecord(rootDir, freshScenario.steps[0].step_record_id);
     expect(freshStepRecord.result).toEqual({ closed: false, name: null });
     expect(freshStepRecord.used).toBeUndefined();
   });
@@ -156,12 +156,16 @@ describe("ctx.resultOf", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(2);
 
-    const createRecordId = record.steps[0].record as string;
-    const explodeStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const createRecordId = record.steps[0].step_record_id as string;
+    const explodeStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expect(explodeStepRecord.status).toBe("failed");
     expect(explodeStepRecord.used).toEqual([
-      { record: createRecordId, step: "create-listing", result: { id: "l_first-widget", name: "first-widget" } },
+      {
+        step_record_id: createRecordId,
+        step: "create-listing",
+        result: { id: "l_first-widget", name: "first-widget" },
+      },
     ]);
   });
 

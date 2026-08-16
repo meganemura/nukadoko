@@ -91,7 +91,7 @@ function buildRecord(options: { featurePath: string; stepText: string; stepRecor
     "scenarios:",
     "  - name: a synthetic scenario",
     "    line: 2",
-    "    scenario_id: scn-synthetic",
+    "    scenario_record_id: scn-synthetic",
     "---",
     "",
     "# Synthetic: green at 0000000",

@@ -41,7 +41,7 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
       .text()
       .split("\n")
       .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as { steps: { record: string }[] });
+      .map((line) => JSON.parse(line) as { steps: { step_record_id: string }[] });
     expect(records).toHaveLength(2);
 
     // Each scenario's own step record is written to .nukadoko/records/steps/<id>/
@@ -56,8 +56,8 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
       return JSON.parse(text);
     }
 
-    const first = await readStepRecord(records[0]!.steps[0]!.record);
-    const second = await readStepRecord(records[1]!.steps[0]!.record);
+    const first = await readStepRecord(records[0]!.steps[0]!.step_record_id);
+    const second = await readStepRecord(records[1]!.steps[0]!.step_record_id);
 
     // The build count seededDb's own setup incremented is 1 both times —
     // it was only ever actually built once.

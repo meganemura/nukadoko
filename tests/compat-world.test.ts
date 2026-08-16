@@ -84,7 +84,7 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
     expect(record.steps[0].status).toBe("skipped");
-    expect(record.steps[0].record).toBeNull();
+    expect(record.steps[0].step_record_id).toBeNull();
 
     const beforeHooks = record.hooks.filter((h: { type: string }) => h.type === "before");
     expect(beforeHooks.some((h: { status: string }) => h.status === "failed")).toBe(true);
@@ -117,7 +117,7 @@ describe("nuka run: World + Before/After hooks", () => {
       ".nukadoko",
       "records",
       "steps",
-      unopened.steps[0].record,
+      unopened.steps[0].step_record_id,
       "record.json",
     );
     const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8"));

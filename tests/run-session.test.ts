@@ -99,7 +99,7 @@ describe("nuka run --session", () => {
       ".nukadoko",
       "records",
       "steps",
-      records[1].steps[0].record,
+      records[1].steps[0].step_record_id,
       "record.json",
     );
     const secondStepRecord = JSON.parse(await readFile(secondStepRecordPath, "utf8"));

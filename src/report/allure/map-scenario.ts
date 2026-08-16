@@ -508,7 +508,7 @@ interface Outcome {
  * disk read (`MapStepInput.stepRecord`'s own doc
  * comment) — so, unlike the scenario = test design this replaced, there is
  * no longer an "unreadable record.json" case to fall back for: `stepRecord`
- * is `null` exactly when `step.record` is `null` (a step that never began
+ * is `null` exactly when `step.step_record_id` is `null` (a step that never began
  * at all — skipped, undefined, ambiguous, or a never-began refusal). */
 function resolveStepOutcome(step: ScenarioStepRecord, stepRecord: StepRecord | null): Outcome {
   if (step.status === "passed") {
@@ -766,7 +766,11 @@ export function mapStep(input: MapStepInput): MappedStepTest {
   let timelineChildSteps: MappedChildStep[] = [];
 
   if (stepRecord) {
-    stepRecordParameters.push({ name: "record", value: stepRecord.record_id });
+    // "step record id", not the bare "record" this parameter used to be
+    // named: every other label here already says what it is measuring
+    // (`mutates (declared)`, `http reads (observed)`) — a bare "record"
+    // told a reader there was a record without saying which one.
+    stepRecordParameters.push({ name: "step record id", value: stepRecord.step_record_id });
     stepRecordParameters.push({
       name: "mutates (declared)",
       value: stepRecord.mutates === null ? "not declared" : stepRecord.mutates ? "true" : "false",
@@ -780,7 +784,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     if (stepRecord.used && stepRecord.used.length > 0) {
       stepRecordParameters.push({
         name: "used step records",
-        value: stepRecord.used.map((entry) => entry.record).join(", "),
+        value: stepRecord.used.map((entry) => entry.step_record_id).join(", "),
       });
     }
     if (stepRecord.required_env && stepRecord.required_env.length > 0) {

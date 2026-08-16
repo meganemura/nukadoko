@@ -51,11 +51,11 @@ describe("from: injection picks whichever candidate actually ran", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const createRecordId = record.steps[0].record as string;
-    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const createRecordId = record.steps[0].step_record_id as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
     expect(archiveStepRecord.status).toBe("ok");
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
-    expect(archiveStepRecord.used).toEqual([{ record: createRecordId, step: "create-project" }]);
+    expect(archiveStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-project" }]);
   });
 
   it("fills projectId from import-project, the exact same consumer step, when only that candidate is bound earlier", async () => {
@@ -70,13 +70,13 @@ describe("from: injection picks whichever candidate actually ran", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const importRecordId = record.steps[0].record as string;
-    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const importRecordId = record.steps[0].step_record_id as string;
+    const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
     expect(archiveStepRecord.status).toBe("ok");
     // import-project's own returns key is "projectId", not "id" — proving
     // the injected value came from the *other* candidate's own key name.
     expect(archiveStepRecord.args).toEqual({ projectId: "p_beta" });
-    expect(archiveStepRecord.used).toEqual([{ record: importRecordId, step: "import-project" }]);
+    expect(archiveStepRecord.used).toEqual([{ step_record_id: importRecordId, step: "import-project" }]);
   });
 });
 
@@ -157,7 +157,7 @@ describe("nuka run: fails a scenario with two bound candidates before any step r
     // Every step in this pickle is either the failing line or skipped —
     // none of them ever ran, so none has a step record.
     for (const step of record.steps) {
-      expect(step.record).toBeNull();
+      expect(step.step_record_id).toBeNull();
     }
     const archiveStep = record.steps.find((s: { text: string }) => s.text === "the project is archived");
     expect(archiveStep.status).toBe("failed");
@@ -188,14 +188,16 @@ describe("nuka do --use: either candidate fills the key", () => {
 
     const archiveStdout = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", createStepRecord.record_id],
+      ["do", "archive-project", "--args", "{}", "--use", createStepRecord.step_record_id],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
 
     expect(exitCode).toBe(0);
     const archiveStepRecord = JSON.parse(archiveStdout.text());
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
-    expect(archiveStepRecord.used).toEqual([{ record: createStepRecord.record_id, step: "create-project" }]);
+    expect(archiveStepRecord.used).toEqual([
+      { step_record_id: createStepRecord.step_record_id, step: "create-project" },
+    ]);
   });
 
   it("--use an import-project step record fills projectId via the other candidate", async () => {
@@ -209,14 +211,16 @@ describe("nuka do --use: either candidate fills the key", () => {
 
     const archiveStdout = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", importStepRecord.record_id],
+      ["do", "archive-project", "--args", "{}", "--use", importStepRecord.step_record_id],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
 
     expect(exitCode).toBe(0);
     const archiveStepRecord = JSON.parse(archiveStdout.text());
     expect(archiveStepRecord.args).toEqual({ projectId: "p_beta" });
-    expect(archiveStepRecord.used).toEqual([{ record: importStepRecord.record_id, step: "import-project" }]);
+    expect(archiveStepRecord.used).toEqual([
+      { step_record_id: importStepRecord.step_record_id, step: "import-project" },
+    ]);
   });
 
   it("two --use values resolving the same key to different candidates fail setup", async () => {
@@ -245,9 +249,9 @@ describe("nuka do --use: either candidate fills the key", () => {
         "--args",
         "{}",
         "--use",
-        createStepRecord.record_id,
+        createStepRecord.step_record_id,
         "--use",
-        importStepRecord.record_id,
+        importStepRecord.step_record_id,
       ],
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );

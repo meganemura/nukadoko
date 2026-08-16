@@ -461,7 +461,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // matching key was already overridden by `--args` contributed
         // nothing to this run, so it is not cited.
         if (filledAnyKey) {
-          contextHandle.recordUsed(resolved.used.record, resolved.used.step, resolved.used.result);
+          contextHandle.recordUsed(resolved.used.step_record_id, resolved.used.step, resolved.used.result);
         }
       }
     }
@@ -647,7 +647,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const stepRecord: StepRecord =
       status === "ok"
         ? {
-            record_id: recordId,
+            step_record_id: recordId,
             step: name,
             kind: "do",
             args: parsedArgs,
@@ -656,7 +656,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             environment: resolvedEnv.name,
             target_version: targetVersion,
             session,
-            scenario: null,
+            scenario_record_id: null,
+            run_id: null,
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
             evidence: {
@@ -667,8 +668,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             observed,
             mutates: entry.step.mutates,
             // `omitUsedResults`: an
-            // "ok" step record keeps `used`'s original `{ record, step }` shape
-            // — see the failed branch just below for the case that keeps
+            // "ok" step record keeps `used`'s original `{ step_record_id, step }`
+            // shape — see the failed branch just below for the case that keeps
             // the upstream's own result.
             ...(used.length > 0 ? { used: omitUsedResults(used) } : {}),
             ...(sections.length > 0 ? { sections } : {}),
@@ -681,7 +682,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
-            record_id: recordId,
+            step_record_id: recordId,
             step: name,
             kind: "do",
             args: parsedArgs,
@@ -696,7 +697,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             environment: resolvedEnv.name,
             target_version: targetVersion,
             session,
-            scenario: null,
+            scenario_record_id: null,
+            run_id: null,
             started_at: startedAt.toISOString(),
             finished_at: finishedAt.toISOString(),
             mutates: entry.step.mutates,

@@ -6,10 +6,11 @@
 // placeholder to `string | null` (sessions slice), and `environment` from a
 // `"default"`-only placeholder to `string`, plus the optional
 // `target_version`. `kind` and
-// `scenario` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a step record's origin apart — the
+// `scenario_record_id` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a step record's origin apart — the
 // distinction matters for the Allure mapping and sign-off contexts, per
-// docs/spec.md — and `scenario: string | null` carries the owning scenario's
-// id for a `run`-originated step record, `null` for a `do`-originated one.
+// docs/spec.md — and `scenario_record_id: string | null` carries the owning
+// scenario record's id for a `run`-originated step record, `null` for a
+// `do`-originated one.
 //
 // This shape was called `Receipt` before this rename. Step-level and
 // scenario-level records both answer the same question, what did this
@@ -38,10 +39,10 @@
 // `target_version`'s "absence is the normal case" convention instead.
 //
 // `used`'s own entry shape widens from a bare step record id string to
-// `{ record, step }`: a `from`
+// `{ step_record_id, step }`: a `from`
 // injection (docs/spec.md "Chaining steps") is a second way this array gets
 // populated, alongside `ctx.resultOf`, both citing the richer shape — each
-// entry is `{ "record": "step-…", "step": "create-project" }`. `step`
+// entry is `{ "step_record_id": "step-…", "step": "create-project" }`. `step`
 // is redundant with the cited step record (resolving it costs one more file
 // read), which is exactly why it is written down anyway: a step record
 // legible on its own, without being resolved against another local working
@@ -367,7 +368,7 @@ export interface EvidenceMeta {
 }
 
 interface StepRecordBase {
-  record_id: string;
+  step_record_id: string;
   step: string;
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka
    * run` scenario (docs/spec.md "Records": "the same shape whether the step
@@ -386,9 +387,17 @@ interface StepRecordBase {
    * (docs/spec.md "Sessions...": no `--session` means a clean start, never
    * an implicit shared session). */
   session: string | null;
-  /** The owning scenario's id for a `run`-originated step record
+  /** The owning scenario record's id for a `run`-originated step record
    * (`kind: "run"`); always `null` for a `do`-originated one. */
-  scenario: string | null;
+  scenario_record_id: string | null;
+  /** The run's own id (`ScenarioRecord.run_id`) for a `run`-originated step
+   * record; always `null` for a `do`-originated one, the same split
+   * `scenario_record_id` above follows — a `do` execution belongs to no
+   * scenario and no run. Without this, reading one step record in isolation
+   * to find out which run it belongs to meant opening the scenario record
+   * next to it; a step record should answer that on its own, since it
+   * already answers everything else about what this one execution did. */
+  run_id: string | null;
   started_at: string;
   finished_at: string;
   evidence: EvidenceMeta;

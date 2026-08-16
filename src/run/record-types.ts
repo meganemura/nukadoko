@@ -52,8 +52,8 @@
 // groundwork for `nuka accept` (docs/spec.md
 // "Sign-off"), which is not implemented yet and does not read either field
 // itself. `run_id` identifies "every scenario record one `nuka run`
-// invocation wrote" — a fact no existing field carries, since `scenario_id`
-// is unique per pickle. `git` is the commit and cleanliness of the working
+// invocation wrote" — a fact no existing field carries, since
+// `scenario_record_id` is unique per pickle. `git` is the commit and cleanliness of the working
 // tree "when the run started" (docs/spec.md "Sign-off" verbatim) — absent
 // outside a git repository, before the first commit, or when the git call
 // itself fails (src/run/probe-git.ts), the same fail-safe convention
@@ -103,7 +103,7 @@ export interface ScenarioStepRecord {
   /** The step's own step record id, or `null` when none was written
    * (`skipped`, `undefined`, `ambiguous`, or a Then-position mutates
    * rejection — all "never began" per docs/spec.md). */
-  readonly record: string | null;
+  readonly step_record_id: string | null;
   /** Present whenever `status` is anything but `passed`/`skipped`: `skipped`
    * needs no explanation (it is a symptom of an earlier step's failure, not
    * its own), and `passed` has nothing to explain. */
@@ -166,7 +166,7 @@ export interface ScenarioEvidence {
 }
 
 export interface ScenarioRecord {
-  readonly scenario_id: string;
+  readonly scenario_record_id: string;
   /** This run's own id — every
    * scenario record one `nuka run` invocation writes shares the same value,
    * generated once per invocation, never per pickle. Required, unlike

@@ -91,7 +91,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // of that check remains (same reasoning as
 // the Then-position paragraph above): a step whose *declared* `mutates` is
 // `true` is refused before it ever runs — a "never began" outcome, alongside
-// undefined/ambiguous, with `record: null` and the rest of the scenario
+// undefined/ambiguous, with `step_record_id: null` and the rest of the scenario
 // skipped. There is no longer a measured backstop for a step that declares
 // `mutates: false` yet is observed writing anyway — `observed.http_writes`
 // is still tallied and still lands on the step record (docs/spec.md
@@ -791,7 +791,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   if (orderIssues.length > 0 || unfillableKeyIssues.length > 0) {
     // Mirrors the existing undefined-step shape (docs/spec.md "an execution
     // that never began must not be citable"): every pickle step still gets
-    // its own `steps` entry, `record: null` throughout since nothing ever
+    // its own `steps` entry, `step_record_id: null` throughout since nothing ever
     // began, and the scenario itself is `status: "failed"` like any other
     // failed scenario — cli/run.ts's own exit-code logic
     // (`record.status !== "passed"`) needs no change to reach the same
@@ -809,18 +809,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const stepRecords: ScenarioStepRecord[] = pickle.steps.map((pickleStep, index) => {
       const messages = issuesByStepIndex.get(index);
       if (messages === undefined) {
-        return { text: pickleStep.text, status: "skipped", record: null };
+        return { text: pickleStep.text, status: "skipped", step_record_id: null };
       }
       return {
         text: pickleStep.text,
         status: "failed",
-        record: null,
+        step_record_id: null,
         error: { message: messages.join("; ") },
       };
     });
     const finishedAt = new Date();
     const record: ScenarioRecord = {
-      scenario_id: scenarioId,
+      scenario_record_id: scenarioId,
       run_id: runId,
       feature: relativeFeaturePath,
       scenario: pickle.name,
@@ -1060,7 +1060,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const stepRecord: StepRecord =
       status === "ok"
         ? {
-            record_id: begun.recordId,
+            step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
             args: rawArgs,
@@ -1069,7 +1069,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             environment,
             target_version: targetVersion,
             session,
-            scenario: scenarioId,
+            scenario_record_id: scenarioId,
+            run_id: runId,
             started_at: stepStartedAt.toISOString(),
             finished_at: stepFinishedAt.toISOString(),
             evidence: {
@@ -1082,7 +1083,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             observed,
             mutates,
             // `omitUsedResults`: an
-            // "ok" step record keeps `used`'s original `{ record, step }`
+            // "ok" step record keeps `used`'s original `{ step_record_id, step }`
             // shape — the upstream's own result is only worth a second look
             // on a *failed* step record, the failed branch just below.
             ...(usedEntries.length > 0 ? { used: omitUsedResults(usedEntries) } : {}),
@@ -1100,7 +1101,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
-            record_id: begun.recordId,
+            step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
             args: rawArgs,
@@ -1116,7 +1117,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             environment,
             target_version: targetVersion,
             session,
-            scenario: scenarioId,
+            scenario_record_id: scenarioId,
+            run_id: runId,
             started_at: stepStartedAt.toISOString(),
             finished_at: stepFinishedAt.toISOString(),
             evidence: {
@@ -1160,7 +1162,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       {
         text: pickleStep.text,
         status: status === "ok" ? "passed" : "failed",
-        record: begun.recordId,
+        step_record_id: begun.recordId,
         ...(status === "failed" ? { error: { message: errorMessage } } : {}),
       },
       stepFinishedAt.getTime() - stepStartedAt.getTime(),
@@ -1438,7 +1440,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // one already failed never executes, so it never reaches any of the
       // three `runAfterStepHooks` call sites below either — this `continue`
       // is exactly where that "no after for a skipped step" boundary lives.
-      pushStepRecord({ text: pickleStep.text, status: "skipped", record: null }, 0);
+      pushStepRecord({ text: pickleStep.text, status: "skipped", step_record_id: null }, 0);
       continue;
     }
 
@@ -1461,7 +1463,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // last net underneath all of them. `began` mirrors the exact point
     // (marked below) this function already
     // treats as "a step record is always written from here on": a throw
-    // before it is "never began" (`record: null`, the same family as
+    // before it is "never began" (`step_record_id: null`, the same family as
     // undefined/ambiguous/the read-only declared-mutates refusal just
     // below), while a throw at or after it still gets a step record
     // written, exactly like any other execution-phase failure this
@@ -1506,7 +1508,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "undefined",
-            record: null,
+            step_record_id: null,
             error: { message: undefinedStepMessage(pickleStep.text) },
           },
           0,
@@ -1520,7 +1522,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "ambiguous",
-            record: null,
+            step_record_id: null,
             error: { message: ambiguousStepMessage(pickleStep.text, outcome.stepNames) },
           },
           0,
@@ -1555,7 +1557,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             {
               text: pickleStep.text,
               status: "failed",
-              record: null,
+              step_record_id: null,
               error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
             },
             0,
@@ -1823,7 +1825,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "failed",
-            record: null,
+            step_record_id: null,
             error: { message },
           },
           Date.now() - stepLoopStartedAt.getTime(),
@@ -1872,7 +1874,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const evidenceSnapshot = await contextHandle.evidenceSnapshot();
         const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
         const stepRecord: StepRecord = {
-          record_id: began.recordId,
+          step_record_id: began.recordId,
           step: began.stepName,
           kind: "run",
           args: began.rawArgs,
@@ -1885,7 +1887,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           environment,
           target_version: targetVersion,
           session,
-          scenario: scenarioId,
+          scenario_record_id: scenarioId,
+          run_id: runId,
           started_at: began.startedAt.toISOString(),
           finished_at: stepFinishedAt.toISOString(),
           evidence: {
@@ -1920,7 +1923,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           {
             text: pickleStep.text,
             status: "failed",
-            record: began.recordId,
+            step_record_id: began.recordId,
             error: { message },
           },
           stepFinishedAt.getTime() - began.startedAt.getTime(),
@@ -2067,7 +2070,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   }
 
   const record: ScenarioRecord = {
-    scenario_id: scenarioId,
+    scenario_record_id: scenarioId,
     run_id: runId,
     feature: relativeFeaturePath,
     scenario: pickle.name,

@@ -213,7 +213,7 @@ node ../../dist/cli.js run features/migration.feature
 ```
 
 Real captured output, one JSON line per scenario (reformatted here for
-readability; `scenario_id`/`record` ids and timestamps will differ on your
+readability; `scenario_record_id`/`step_record_id` ids and timestamps will differ on your
 own run):
 
 ```json
@@ -221,10 +221,10 @@ own run):
   "scenario": "legacy glue seeds todos, stashes a note, and asserts the count",
   "status": "passed",
   "steps": [
-    { "text": "a legacy note \"seed run\" is stashed", "status": "passed", "record": "step-...-2mxm" },
-    { "text": "the following legacy todos are seeded:", "status": "passed", "record": "step-...-hkkk" },
-    { "text": "the todo list has 2 todos", "status": "passed", "record": "step-...-i8jo" },
-    { "text": "the stashed note reads \"seed run\"", "status": "passed", "record": "step-...-zpj1" }
+    { "text": "a legacy note \"seed run\" is stashed", "status": "passed", "step_record_id": "step-...-2mxm" },
+    { "text": "the following legacy todos are seeded:", "status": "passed", "step_record_id": "step-...-hkkk" },
+    { "text": "the todo list has 2 todos", "status": "passed", "step_record_id": "step-...-i8jo" },
+    { "text": "the stashed note reads \"seed run\"", "status": "passed", "step_record_id": "step-...-zpj1" }
   ],
   "hooks": [{ "type": "before", "status": "ok" }]
 }
@@ -232,8 +232,8 @@ own run):
   "scenario": "a promoted producer feeds a typed consumer via resultOf",
   "status": "passed",
   "steps": [
-    { "text": "a todo titled \"Read a book\" is created", "status": "passed", "record": "step-...-4kfn" },
-    { "text": "the created todo id is read back via resultOf", "status": "passed", "record": "step-...-9x9l" }
+    { "text": "a todo titled \"Read a book\" is created", "status": "passed", "step_record_id": "step-...-4kfn" },
+    { "text": "the created todo id is read back via resultOf", "status": "passed", "step_record_id": "step-...-9x9l" }
   ],
   "hooks": [{ "type": "before", "status": "ok" }]
 }
@@ -253,7 +253,7 @@ output (`evidence`/`environment`/`session`/timestamps trimmed for space):
 
 ```json
 {
-  "record_id": "step-20260802-141751-hkkk",
+  "step_record_id": "step-20260802-141751-hkkk",
   "step": "compat: the following legacy todos are seeded:",
   "kind": "run",
   "result": null,
@@ -366,7 +366,7 @@ and `step-...-9x9l`), trimmed the same way:
 
 ```json
 {
-  "record_id": "step-20260802-141751-4kfn",
+  "step_record_id": "step-20260802-141751-4kfn",
   "step": "create-todo",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90", "title": "Read a book", "done": false },
   "status": "ok",
@@ -376,12 +376,12 @@ and `step-...-9x9l`), trimmed the same way:
 
 ```json
 {
-  "record_id": "step-20260802-141751-9x9l",
+  "step_record_id": "step-20260802-141751-9x9l",
   "step": "read-created-todo-id",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90" },
   "status": "ok",
   "observed": { "http_reads": 0, "http_writes": 0 },
-  "used": [{ "record": "step-20260802-141751-4kfn", "step": "create-todo" }]
+  "used": [{ "step_record_id": "step-20260802-141751-4kfn", "step": "create-todo" }]
 }
 ```
 

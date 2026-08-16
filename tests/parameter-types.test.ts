@@ -155,7 +155,7 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
     await removeTempDir(rootDir);
   });
 
-  it("nuka run: the scenario record is still written, the exploding step is failed with record: null, and the rest is skipped", async () => {
+  it("nuka run: the scenario record is still written, the exploding step is failed with step_record_id: null, and the rest is skipped", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/transformer-throws.feature"], {
@@ -177,11 +177,11 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
 
     const [first, second] = record.steps;
     expect(first.status).toBe("failed");
-    expect(first.record).toBeNull();
+    expect(first.step_record_id).toBeNull();
     expect(first.error.message).toBe("custom transformer exploded");
 
     expect(second.status).toBe("skipped");
-    expect(second.record).toBeNull();
+    expect(second.step_record_id).toBeNull();
     expect(second.error).toBeUndefined();
 
     const recordPath = path.join(rootDir, record.evidence.dir, "record.json");

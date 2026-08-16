@@ -244,7 +244,8 @@
       "ctx",
       "nuka check",
       "nuka tend",
-      "record_id",
+      "step_record_id",
+      "scenario_record_id",
       "record.json",
       "step-"
     ],

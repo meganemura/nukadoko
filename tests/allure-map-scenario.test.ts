@@ -60,7 +60,7 @@ function parse() {
 
 function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
   return {
-    scenario_id: "scn-1",
+    scenario_record_id: "scn-1",
     run_id: "run-1",
     feature: "features/checkout.feature",
     scenario: "a customer checks out",
@@ -79,7 +79,7 @@ function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
 
 function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
   return {
-    record_id: "step-1",
+    step_record_id: "step-1",
     step: "the cart has items",
     kind: "run",
     args: {},
@@ -87,7 +87,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     status: "ok",
     environment: "default",
     session: null,
-    scenario: "scn-1",
+    scenario_record_id: "scn-1",
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
     evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [] },
@@ -148,7 +148,7 @@ describe("mapStep: status mapping", () => {
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "failed", error: { message: "it broke", kind } });
     delete (stepRecord as { result?: unknown }).result;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -162,7 +162,7 @@ describe("mapStep: status mapping", () => {
     const step: ScenarioStepRecord = {
       text: "an unknown step",
       status: "undefined",
-      record: null,
+      step_record_id: null,
       error: { message: "no matching step definition" },
     };
 
@@ -178,7 +178,7 @@ describe("mapStep: status mapping", () => {
     const step: ScenarioStepRecord = {
       text: "an ambiguous step",
       status: "ambiguous",
-      record: null,
+      step_record_id: null,
       error: { message: "matched more than one step definition" },
     };
 
@@ -191,7 +191,7 @@ describe("mapStep: status mapping", () => {
   it("maps skipped to skipped with no message", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "a step that never ran", status: "skipped", record: null };
+    const step: ScenarioStepRecord = { text: "a step that never ran", status: "skipped", step_record_id: null };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle });
 
@@ -205,7 +205,7 @@ describe("mapStep: status mapping", () => {
     const step: ScenarioStepRecord = {
       text: "the cart has items",
       status: "failed",
-      record: null,
+      step_record_id: null,
       error: { message: "refused before it ever ran" },
     };
 
@@ -222,7 +222,7 @@ describe("mapStep: statusDetails / nukadoko.failure label, per step now (M3-C sp
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "failed", error: { message: "it broke", kind: "step_error" } });
     delete (stepRecord as { result?: unknown }).result;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -234,7 +234,7 @@ describe("mapStep: statusDetails / nukadoko.failure label, per step now (M3-C sp
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -248,7 +248,7 @@ describe("mapStep: statusDetails / nukadoko.failure label, per step now (M3-C sp
     const step: ScenarioStepRecord = {
       text: "an unknown step",
       status: "undefined",
-      record: null,
+      step_record_id: null,
       error: { message: "no matching step definition" },
     };
 
@@ -266,7 +266,7 @@ describe("mapStep: zero-width time for a step with no step record", () => {
     const step: ScenarioStepRecord = {
       text: "the cart has items",
       status: "undefined",
-      record: null,
+      step_record_id: null,
       error: { message: "no matching step definition" },
     };
     const finishedAt = new Date("2026-08-01T00:00:02.345Z");
@@ -286,7 +286,7 @@ describe("mapStep: zero-width time for a step with no step record", () => {
       started_at: "2026-08-01T00:00:00.500Z",
       finished_at: "2026-08-01T00:00:01.000Z",
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({
       record: step,
@@ -305,7 +305,7 @@ describe("mapStep: identity-breaking parameters", () => {
   it("carries nukadoko.run/nukadoko.scenario/nukadoko.step, each mode: hidden and not excluded", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
 
     const mapped = callMapStep({
       record: step,
@@ -328,7 +328,7 @@ describe("mapStep: step parameters", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null, mutates: null });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -344,13 +344,13 @@ describe("mapStep: step parameters", () => {
       mutates: false,
       observed: { http_reads: 2, http_writes: 1 },
       world: { reads: ["a", "b"], writes: ["c"] },
-      used: [{ record: "step-0", step: "create-cart" }],
+      used: [{ step_record_id: "step-0", step: "create-cart" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
-    expect(mapped.parameters).toContainEqual({ name: "record", value: "step-1" });
+    expect(mapped.parameters).toContainEqual({ name: "step record id", value: "step-1" });
     expect(mapped.parameters).toContainEqual({ name: "mutates (declared)", value: "false" });
     expect(mapped.parameters).toContainEqual({ name: "http reads (observed)", value: "2" });
     expect(mapped.parameters).toContainEqual({ name: "http writes (observed)", value: "1" });
@@ -365,7 +365,7 @@ describe("mapStep: declared attachments/links/labels/logs", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { attachments: ["screenshot.png"] } });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -385,7 +385,7 @@ describe("mapStep: declared attachments/links/labels/logs", () => {
       result: null,
       declared: { links: [{ url: "https://issues.example/1", name: "issue-1" }] },
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -396,7 +396,7 @@ describe("mapStep: declared attachments/links/labels/logs", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { labels: [{ name: "custom", value: "v" }] } });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -407,7 +407,7 @@ describe("mapStep: declared attachments/links/labels/logs", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { logs: ["hello from glue"] } });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -547,7 +547,7 @@ describe("mapStep: tag resolution", () => {
   it("resolves @allure.label.<name>:<value>, the = variant, and @allure.id, and passes other tags through raw", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle });
 
@@ -566,7 +566,7 @@ describe("mapStep: description fallback", () => {
   it("uses the Scenario's own description when present", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle });
 
@@ -576,7 +576,7 @@ describe("mapStep: description fallback", () => {
   it("falls back to the Feature's own description when the Scenario has none", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles.find((p) => p.name === "no description here")!;
-    const step: ScenarioStepRecord = { text: "a plain step", status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: "a plain step", status: "passed", step_record_id: null };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle });
 
@@ -588,7 +588,7 @@ describe("mapStep: execution-context parameters", () => {
   it("marks environment/session/target_version excluded, and includes each only when applicable", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
 
     const mapped = callMapStep({
       record: step,
@@ -608,7 +608,7 @@ describe("mapStep: execution-context parameters", () => {
   it("omits session when null and target_version when absent", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle, session: null });
 
@@ -621,7 +621,7 @@ describe("mapStep: execution-context parameters", () => {
     const outlineRows = pickles.filter((p) => p.name.startsWith("checkout as"));
     expect(outlineRows).toHaveLength(2);
     const pickle = outlineRows[0]!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", record: null };
+    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle });
 
@@ -634,9 +634,9 @@ describe("mapStep: name gets a Gherkin keyword prefix", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const steps: ScenarioStepRecord[] = [
-      { text: "the cart has items", status: "passed", record: null },
-      { text: "the customer pays", status: "passed", record: null },
-      { text: "the order is confirmed", status: "passed", record: null },
+      { text: "the cart has items", status: "passed", step_record_id: null },
+      { text: "the customer pays", status: "passed", step_record_id: null },
+      { text: "the order is confirmed", status: "passed", step_record_id: null },
     ];
 
     const names = steps.map((step, index) =>
@@ -658,14 +658,14 @@ describe("mapStep: name gets a Gherkin keyword prefix", () => {
     const pickle = pickles[0]!;
 
     const backgroundStep = callMapStep({
-      record: { text: "a clean cart", status: "passed", record: null },
+      record: { text: "a clean cart", status: "passed", step_record_id: null },
       stepRecord: null,
       gherkinDocument,
       pickle,
       index: 0,
     });
     const scenarioStep = callMapStep({
-      record: { text: "the customer pays", status: "passed", record: null },
+      record: { text: "the customer pays", status: "passed", step_record_id: null },
       stepRecord: null,
       gherkinDocument,
       pickle,
@@ -684,7 +684,7 @@ describe("mapStep: name gets a Gherkin keyword prefix", () => {
     const step: ScenarioStepRecord = {
       text: "an extra step with no pickle counterpart",
       status: "passed",
-      record: null,
+      step_record_id: null,
     };
 
     const mapped = callMapStep({ record: step, stepRecord: null, gherkinDocument, pickle, index: 3 });
@@ -702,7 +702,7 @@ describe("mapStep: declared parameters", () => {
       result: null,
       declared: { parameters: [{ name: "cart_id", value: "abc-123" }] },
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -720,14 +720,14 @@ describe("mapStep: declared parameters", () => {
       declared: { parameters: [{ name: "declared-only", value: "x" }] },
     });
     const pickle = outlineRows[0]!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle, targetVersion: "1.2.3" });
 
     const names = mapped.parameters.map((p) => p.name);
     expect(names).toEqual([
       "role",
-      "record",
+      "step record id",
       "mutates (declared)",
       "http reads (observed)",
       "http writes (observed)",
@@ -760,7 +760,7 @@ describe("mapStep: sections + polls merged into one child-step timeline", () => 
         { description: "B", at: "2026-08-01T00:00:00.200Z", attempts: 2, waited_ms: 50, outcome: "resolved" },
       ],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -776,7 +776,7 @@ describe("mapStep: sections + polls merged into one child-step timeline", () => 
       declared: { logs: ["from glue"] },
       sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -791,7 +791,7 @@ describe("mapStep: sections + polls merged into one child-step timeline", () => 
       result: null,
       sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -813,7 +813,7 @@ describe("mapStep: poll outcome -> status/startMs/stopMs, all three outcomes", (
         { description: "f", at: "2026-08-01T00:00:02.000Z", attempts: 5, waited_ms: 10, outcome: "failed" },
       ],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -840,7 +840,7 @@ describe("mapStep: poll outcome -> status/startMs/stopMs, all three outcomes", (
       result: null,
       polls: [{ at: "2026-08-01T00:00:00.000Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -859,7 +859,7 @@ describe("mapStep: poll outcome -> status/startMs/stopMs, all three outcomes", (
       // anomaly reported as-is, not clipped.
       sections: [{ label: "before the step even started", at: "2026-08-01T00:00:00.000Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -884,7 +884,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
       polls: [{ description: "B", at: "2026-08-01T00:00:00.200Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
       actions: [{ method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.300Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -909,7 +909,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
         },
       ],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -940,7 +940,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
         },
       ],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -955,7 +955,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
       result: null,
       actions: [{ method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -970,7 +970,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
       result: null,
       actions: [{ method: "click", selector: "#submit", ms: 10, outcome: "failed", at: "2026-08-01T00:00:00.100Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -988,7 +988,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
       polls: [{ description: "poll", at: sameInstant, attempts: 1, waited_ms: 0, outcome: "resolved" }],
       actions: [{ method: "click", selector: "#go", ms: 0, outcome: "passed", at: sameInstant }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1006,7 +1006,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
       at: `2026-08-01T00:00:00.${String(100 + index).padStart(3, "0")}Z`,
     }));
     const stepRecord = baseStepRecord({ status: "ok", result: null, actions, truncated: { actions: 103 } });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1026,7 +1026,7 @@ describe("mapStep: actions merged into the sections/polls timeline", () => {
       result: null,
       actions: [{ method: "click", selector: "#go", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1118,7 +1118,7 @@ describe("mapStep: page_events as step parameters", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null, page_events: { console_errors: [consoleErrorEntry(1)] } });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1136,7 +1136,7 @@ describe("mapStep: page_events as step parameters", () => {
       result: null,
       page_events: { console_errors: shown, truncated: { console_errors: 4213 } },
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1157,7 +1157,7 @@ describe("mapStep: step record evidence.attachments", () => {
         attachments: [{ name: "orders.json", file: "orders.json", at: "2026-08-01T00:00:00.100Z" }],
       },
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1181,7 +1181,7 @@ describe("mapStep: step record evidence.attachments", () => {
         attachments: [{ name: "dump.bin", file: "dump.bin", at: "2026-08-01T00:00:00.100Z" }],
       },
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1208,7 +1208,7 @@ describe("mapStep: step record evidence.attachments", () => {
         ],
       },
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1230,7 +1230,7 @@ describe("mapStep: step record evidence.attachments", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: null });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1243,7 +1243,7 @@ describe("mapStep: the whole step record as a record.json attachment", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "ok", result: { ok: true } });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1261,7 +1261,7 @@ describe("mapStep: the whole step record as a record.json attachment", () => {
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({ status: "failed", error: { message: "it broke", kind: "step_error" } });
     delete (stepRecord as { result?: unknown }).result;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", step_record_id: "step-1" };
 
     const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
 
@@ -1276,18 +1276,18 @@ describe("mapStep: the whole step record as a record.json attachment", () => {
 });
 
 describe("mapScenario: output is stable across runs of the same scenario", () => {
-  it("gives the exact same name and parameters to two calls that only differ in scenario_id/run_id", () => {
+  it("gives the exact same name and parameters to two calls that only differ in scenario_record_id/run_id", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const first = callMapScenario({
-      record: baseRecord({ scenario_id: "scn-run-1", run_id: "run-1", steps: [step] }),
+      record: baseRecord({ scenario_record_id: "scn-run-1", run_id: "run-1", steps: [step] }),
       gherkinDocument,
       pickle,
     });
     const second = callMapScenario({
-      record: baseRecord({ scenario_id: "scn-run-2", run_id: "run-2", steps: [step] }),
+      record: baseRecord({ scenario_record_id: "scn-run-2", run_id: "run-2", steps: [step] }),
       gherkinDocument,
       pickle,
     });
@@ -1296,13 +1296,13 @@ describe("mapScenario: output is stable across runs of the same scenario", () =>
     expect(second.parameters).toEqual(first.parameters);
   });
 
-  it("never folds scenario_id or run_id into its own parameters", () => {
+  it("never folds scenario_record_id or run_id into its own parameters", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const record = baseRecord({
-      scenario_id: "scn-should-not-leak",
+      scenario_record_id: "scn-should-not-leak",
       run_id: "run-should-not-leak",
-      steps: [{ text: "the cart has items", status: "passed", record: null }],
+      steps: [{ text: "the cart has items", status: "passed", step_record_id: null }],
     });
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
@@ -1339,7 +1339,7 @@ describe("mapScenario: two Scenario Outline rows sharing a name diverge via Exam
 
     const results = pickles.map((pickle) =>
       callMapScenario({
-        record: baseRecord({ steps: [{ text: pickle.steps[0]!.text, status: "passed", record: null }] }),
+        record: baseRecord({ steps: [{ text: pickle.steps[0]!.text, status: "passed", step_record_id: null }] }),
         gherkinDocument,
         pickle,
       }),
@@ -1375,7 +1375,7 @@ describe("mapScenario: two scenarios sharing a name but not a Scenario Outline",
 
     const results = pickles.map((pickle) =>
       callMapScenario({
-        record: baseRecord({ steps: [{ text: pickle.steps[0]!.text, status: "passed", record: null }] }),
+        record: baseRecord({ steps: [{ text: pickle.steps[0]!.text, status: "passed", step_record_id: null }] }),
         gherkinDocument,
         pickle,
       }),
@@ -1409,7 +1409,7 @@ describe("mapScenario: two scenarios sharing a name but not a Scenario Outline",
 
     const results = pickles.map((pickle) =>
       callMapScenario({
-        record: baseRecord({ steps: [{ text: pickle.steps[0]!.text, status: "passed", record: null }] }),
+        record: baseRecord({ steps: [{ text: pickle.steps[0]!.text, status: "passed", step_record_id: null }] }),
         gherkinDocument,
         pickle,
       }),
@@ -1423,7 +1423,7 @@ describe("mapScenario: parameter modes", () => {
   it("marks the step-signature parameter mode: hidden, and not excluded (it must still feed historyId)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({ steps: [{ text: "the cart has items", status: "passed", record: null }] });
+    const record = baseRecord({ steps: [{ text: "the cart has items", status: "passed", step_record_id: null }] });
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
 
@@ -1519,11 +1519,11 @@ describe("mapScenario: status, firstFailure classification, and child steps", ()
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const steps: ScenarioStepRecord[] = [
-      { text: "a", status: "passed", record: "s1" },
-      { text: "b", status: "failed", record: "s2" },
-      { text: "c", status: "skipped", record: null },
-      { text: "d", status: "undefined", record: null },
-      { text: "e", status: "ambiguous", record: null },
+      { text: "a", status: "passed", step_record_id: "s1" },
+      { text: "b", status: "failed", step_record_id: "s2" },
+      { text: "c", status: "skipped", step_record_id: null },
+      { text: "d", status: "undefined", step_record_id: null },
+      { text: "e", status: "ambiguous", step_record_id: null },
     ];
     const record = baseRecord({ steps });
 

@@ -5,6 +5,49 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Breaking
+
+- **Every id-bearing field on a step record and a scenario record now
+  follows one rule: `<grain>_record_id`, or `run_id` for a run.** Before
+  this, the same key name meant two different things depending on which
+  record it sat on: `scenario` was an id on a step record (the owning
+  scenario record's id) but a name on a scenario record (the pickle's own
+  name), and a step record's own id was `record_id` on the step record
+  itself but `record` inside a scenario record's `steps[]` array. A step
+  record's `record_id` is `step_record_id` now; the owning scenario
+  record's id on a step record, formerly `scenario`, is
+  `scenario_record_id`; a scenario record's own `scenario_id` is
+  `scenario_record_id`; a scenario record's `steps[].record` is
+  `steps[].step_record_id`. A scenario record's own `scenario` field (the
+  pickle's name, never an id) and `run_id` are unchanged, and so are the
+  `step-`/`scn-`/`run-` id prefixes themselves. An existing acceptance
+  record needs re-creating, the same way 0.3.0's own step record rename
+  did: `nuka run` the feature again and `nuka accept` it. `nuka tend`
+  reports `signoff-record-old-format` for a record it still finds under
+  the old field names, which now includes every record accepted before
+  this release, 0.3.0's own step records included, since `record_id` is
+  exactly the field `signoff-record-old-format` already checked for.
+  The same rule closes two more spots that had kept the old, bare
+  convention: a step record's `used[]` entries carried the upstream id
+  under `record`; that field is `used[].step_record_id` now, matching the
+  name (and the value) the step record it points at already carries on
+  itself. The Allure emitter's own step parameter list carried the same id
+  under the bare label "record"; every other label there already says what
+  it is measuring (`mutates (declared)`, `http reads (observed)`), so this
+  one is "step record id" now, not a bare "record".
+
+### Added
+
+- **A step record now also carries `run_id: string | null`**: the owning
+  `nuka run` invocation's own id for a `run`-originated step, `null` for a
+  `do`-originated one, the same split `scenario_record_id` already makes.
+  Reading one step record on its own used to mean opening the scenario
+  record beside it just to find out which run it belonged to; the step
+  record answers that itself now, the same way it already answers
+  everything else about what that one execution did.
+
 ## 0.3.0 — 2026-08-16
 
 ### Breaking

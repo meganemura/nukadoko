@@ -436,7 +436,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(
-          `warning: allure endScenario failed for scenario ${input.record.scenario_id}: ${message}\n`,
+          `warning: allure endScenario failed for scenario ${input.record.scenario_record_id}: ${message}\n`,
         );
       }
     },

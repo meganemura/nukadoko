@@ -81,7 +81,7 @@ const allureBin = path.join(repoRoot, "node_modules", "allure", "cli.js");
 interface RunStepRecord {
   readonly text: string;
   readonly status: "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
-  readonly record: string | null;
+  readonly step_record_id: string | null;
 }
 
 interface RunScenarioRecord {
@@ -427,20 +427,20 @@ async function metadataParameterValue(page: Page, label: string): Promise<string
 
 Then("the page_events counts in the report match the step's own record", async function (this: SelftestWorld) {
   const step = theExecutedStep(this.nukaStdout);
-  if (step.record === null) {
+  if (step.step_record_id === null) {
     throw new Error("expected browser-evidence.feature's run to have executed a step with a record; it had none");
   }
 
   // The expected counts come from the step's own record.json on disk, not
   // a number hardcoded here -- visits-noisy-data-url.ts's own header
   // explains why console_errors in particular is not a fixed number.
-  const recordPath = path.join(fixtureProjectDir, ".nukadoko", "records", "steps", step.record, "record.json");
+  const recordPath = path.join(fixtureProjectDir, ".nukadoko", "records", "steps", step.step_record_id, "record.json");
   const record = JSON.parse(await readFile(recordPath, "utf8")) as {
     page_events?: Record<string, readonly unknown[]>;
   };
   const pageEvents = record.page_events;
   if (pageEvents === undefined) {
-    throw new Error(`expected record ${step.record} to carry page_events; it carried none`);
+    throw new Error(`expected record ${step.step_record_id} to carry page_events; it carried none`);
   }
 
   const page = await openStepDetail(this, step.text);

@@ -57,7 +57,7 @@ describe("nuka run: secret redaction", () => {
       ".nukadoko",
       "records",
       "steps",
-      record.steps[0].record,
+      record.steps[0].step_record_id,
       "record.json",
     );
     const stepRecordText = await readFile(stepRecordPath, "utf8");

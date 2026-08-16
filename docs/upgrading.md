@@ -33,6 +33,38 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.3.0 to Unreleased
+
+One breaking change, plus one action that is not breaking. Each entry
+says what to fix; why is in [CHANGELOG.md](../CHANGELOG.md) under
+`## Unreleased`.
+
+- **A step record's and a scenario record's id-bearing field names
+  changed again, following one rule now: `<grain>_record_id`, or `run_id`
+  for a run.** A script reading either JSON needs the current names: a
+  step record's `record_id` is `step_record_id`; the owning scenario
+  record's id on a step record, formerly `scenario`, is
+  `scenario_record_id`; a scenario record's own `scenario_id` is
+  `scenario_record_id`; a scenario record's `steps[].record` is
+  `steps[].step_record_id`. A scenario record's own `scenario` field (the
+  pickle's name, never an id) and `run_id` did not change, and neither
+  did the `step-`/`scn-`/`run-` id prefixes. An existing acceptance
+  record needs re-creating: `nuka run` the feature again and `nuka
+  accept` it. `nuka tend` names any acceptance record it finds still
+  under the old field names (`signoff-record-old-format`); that now
+  includes a record accepted on 0.3.0 itself, since `record_id` is
+  exactly the field that finding already checked for. Two more spots
+  followed the old, bare convention and now match the same rule: a step
+  record's `used[]` entries carried the upstream id under `record`,
+  formerly; a script reading it needs `used[].step_record_id` now. And
+  the Allure emitter's step parameter that used to be named just
+  `"record"` is `"step record id"` now, so a script parsing Allure
+  output by parameter name needs the new label.
+- **Not breaking: a step record now also carries `run_id: string |
+  null`.** Nothing stops working without reading it. A script that wants
+  to know which run a step record belongs to, without opening the
+  scenario record beside it first, can read this field instead.
+
 ## 0.2.0 to 0.3.0
 
 Five breaking changes, plus one action that is not breaking but is needed

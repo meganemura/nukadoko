@@ -69,7 +69,7 @@ describe("ctx.poll step records", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.polls).toEqual([
       { at: expect.any(String), attempts: 1, waited_ms: expect.any(Number), outcome: "resolved" },
     ]);
@@ -86,7 +86,7 @@ describe("ctx.poll step records", () => {
 
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     const polls = stepRecord.polls as Array<{ attempts: number; waited_ms: number; outcome: string }>;
     expect(polls).toHaveLength(1);
     expect(polls[0]!.attempts).toBeGreaterThanOrEqual(2);
@@ -105,7 +105,7 @@ describe("ctx.poll step records", () => {
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.status).toBe("failed");
     const polls = stepRecord.polls as Array<{ outcome: string }>;
     expect(polls).toHaveLength(1);
@@ -123,7 +123,7 @@ describe("ctx.poll step records", () => {
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.status).toBe("failed");
     const polls = stepRecord.polls as Array<{ attempts: number; outcome: string }>;
     expect(polls).toHaveLength(1);
@@ -142,7 +142,7 @@ describe("ctx.poll step records", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.polls).toBeUndefined();
     expect(Object.keys(stepRecord)).not.toContain("polls");
   });
@@ -160,8 +160,8 @@ describe("ctx.poll step records", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
-    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
+    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expect(alphaStepRecord.polls).toEqual([
       {
@@ -195,7 +195,7 @@ describe("ctx.poll step records", () => {
 
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     const polls = stepRecord.polls as Array<{ description?: string }>;
     expect(polls).toHaveLength(2);
     // The outer poll is called first, but its own `fn` awaits the inner

@@ -116,7 +116,7 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary, features
     if (record.isOldFormat) {
       issues.push({
         code: "signoff-record-old-format",
-        message: `${relativePath} was written by an older nukadoko: its embedded step records are missing the record_id field the current format always writes, so it cannot be checked against the current format. ${FIX_HINT}.`,
+        message: `${relativePath} was written by an older nukadoko: its embedded step records are missing the step_record_id field the current format always writes, so it cannot be checked against the current format. ${FIX_HINT}.`,
         file: relativePath,
       });
       continue;

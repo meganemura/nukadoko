@@ -762,7 +762,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           if (record.status === "passed") {
             scenariosPassed += 1;
           }
-          stepRecordsWritten += record.steps.filter((step) => step.record !== null).length;
+          stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
           // A `"scenario"`-scope fixture's own teardown failure — already
           // recorded on `record.teardown_
           // errors` (src/run/run-scenario.ts); announced here too, on

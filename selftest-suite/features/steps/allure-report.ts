@@ -77,7 +77,7 @@ const allureBin = path.join(repoRoot, "node_modules", "allure", "cli.js");
 interface RunStepRecord {
   readonly text: string;
   readonly status: "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
-  readonly record: string | null;
+  readonly step_record_id: string | null;
 }
 
 interface RunScenarioRecord {
@@ -373,7 +373,7 @@ Then(
   "the failing step's record.json attachment is readable and matches its own record",
   async function (this: SelftestWorld) {
     const failingStep = allSteps(parseRunRecords(this.nukaStdout)).find((step) => step.status === "failed");
-    if (failingStep === undefined || failingStep.record === null) {
+    if (failingStep === undefined || failingStep.step_record_id === null) {
       throw new Error("expected mixed.feature's run to have exactly one failed step with a record");
     }
 
@@ -386,9 +386,9 @@ Then(
     // central artifact must survive the
     // trip to a browser, not merely appear in a file listing.
     const content = await page.getByTestId("code-attachment-content").innerText();
-    if (!content.includes(failingStep.record)) {
+    if (!content.includes(failingStep.step_record_id)) {
       throw new Error(
-        `expected the record.json attachment's own content to contain this step's record id "${failingStep.record}"; got: ${content}`,
+        `expected the record.json attachment's own content to contain this step's record id "${failingStep.step_record_id}"; got: ${content}`,
       );
     }
   },

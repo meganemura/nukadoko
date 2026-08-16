@@ -44,7 +44,7 @@ const SECOND_FEATURE_SOURCE = `Feature: Shipping
 `;
 
 function writeStepRecordFile(rootDir: string, stepRecord: StepRecord): void {
-  const dir = path.join(rootDir, ".nukadoko", "records", "steps", stepRecord.record_id);
+  const dir = path.join(rootDir, ".nukadoko", "records", "steps", stepRecord.step_record_id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}
 `);
@@ -94,7 +94,7 @@ describe("createMessagesEmitter", () => {
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
 
       const stepRecord: StepRecord = {
-        record_id: "step-1",
+        step_record_id: "step-1",
         step: "the cart has items",
         kind: "run",
         args: {},
@@ -102,7 +102,8 @@ describe("createMessagesEmitter", () => {
         status: "ok",
         environment: "staging",
         session: null,
-        scenario: "scn-1",
+        scenario_record_id: "scn-1",
+        run_id: "run-1",
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl" },
@@ -117,11 +118,11 @@ describe("createMessagesEmitter", () => {
       writeFileSync(path.join(scenarioDir, "trace.zip"), "trace bytes");
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
 
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", record: "step-1" };
+      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
       const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
       const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
       const record: ScenarioRecord = {
-        scenario_id: "scn-1",
+        scenario_record_id: "scn-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
@@ -142,7 +143,7 @@ describe("createMessagesEmitter", () => {
       emitter.emitScenario({ record, pickle });
 
       const record2: ScenarioRecord = {
-        scenario_id: "scn-2",
+        scenario_record_id: "scn-2",
         run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "checkout as <role>",
@@ -152,7 +153,7 @@ describe("createMessagesEmitter", () => {
         session: null,
         started_at: "2026-08-01T00:00:02.000Z",
         finished_at: "2026-08-01T00:00:02.500Z",
-        steps: [{ text: outlineRow.steps[0]!.text, status: "passed", record: null }],
+        steps: [{ text: outlineRow.steps[0]!.text, status: "passed", step_record_id: null }],
         hooks: [],
         evidence: { dir: ".nukadoko/records/scenarios/scn-2", screenshots: [] },
       };
@@ -343,7 +344,7 @@ describe("createMessagesEmitter", () => {
     emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
     const stepRecord: StepRecord = {
-      record_id: "step-missing-file",
+      step_record_id: "step-missing-file",
       step: "the cart has items",
       kind: "run",
       args: {},
@@ -351,7 +352,8 @@ describe("createMessagesEmitter", () => {
       status: "ok",
       environment: "staging",
       session: null,
-      scenario: "scn-missing-file",
+      scenario_record_id: "scn-missing-file",
+      run_id: "run-1",
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
       evidence: { dir: ".nukadoko/records/steps/step-missing-file", screenshots: [] },
@@ -362,7 +364,7 @@ describe("createMessagesEmitter", () => {
     writeStepRecordFile(rootDir, stepRecord);
 
     const record: ScenarioRecord = {
-      scenario_id: "scn-missing-file",
+      scenario_record_id: "scn-missing-file",
       run_id: "run-1",
       feature: "features/checkout.feature",
       scenario: "a customer checks out",
@@ -372,7 +374,7 @@ describe("createMessagesEmitter", () => {
       session: null,
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
-      steps: [{ text: "the cart has items", status: "passed", record: "step-missing-file" }],
+      steps: [{ text: "the cart has items", status: "passed", step_record_id: "step-missing-file" }],
       hooks: [],
       evidence: { dir: ".nukadoko/records/scenarios/scn-missing-file", screenshots: [] },
     };
@@ -412,7 +414,7 @@ describe("createMessagesEmitter", () => {
       expect(sink.text()).toContain("warning:");
 
       const record: ScenarioRecord = {
-        scenario_id: "scn-1",
+        scenario_record_id: "scn-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
@@ -422,7 +424,7 @@ describe("createMessagesEmitter", () => {
         session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
-        steps: [{ text: "the cart has items", status: "passed", record: null }],
+        steps: [{ text: "the cart has items", status: "passed", step_record_id: null }],
         hooks: [],
         evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
       };

@@ -123,7 +123,7 @@ describe("nuka tend: signoff-condition-mismatch", () => {
         "scenarios:",
         "  - name: an old scenario",
         "    line: 2",
-        "    scenario_id: scn-old",
+        "    scenario_record_id: scn-old",
         "---",
         "",
         "# Old: green at 0000000",

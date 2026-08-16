@@ -175,8 +175,8 @@ describe("nuka do", () => {
       expect(stepRecord.result).toEqual({ value: "hi" });
       expect(stepRecord.environment).toBe("default");
       expect(stepRecord.session).toBeNull();
-      expect(stepRecord.scenario).toBeNull();
-      expect(stepRecord.evidence.dir).toBe(path.join(".nukadoko", "records", "steps", stepRecord.record_id));
+      expect(stepRecord.scenario_record_id).toBeNull();
+      expect(stepRecord.evidence.dir).toBe(path.join(".nukadoko", "records", "steps", stepRecord.step_record_id));
       expect(stepRecord.evidence.screenshots).toEqual([]);
       expect(stepRecord.evidence.trace).toBeUndefined();
       expect(stepRecord.evidence.http).toBeUndefined();
@@ -356,7 +356,7 @@ describe("nuka do", () => {
         ".nukadoko",
         "records",
         "steps",
-        stepRecord.record_id,
+        stepRecord.step_record_id,
         "record.json",
       );
       expect(existsSync(recordPath)).toBe(true);
@@ -406,7 +406,7 @@ describe("nuka (process)", () => {
         ".nukadoko",
         "records",
         "steps",
-        stepRecord.record_id,
+        stepRecord.step_record_id,
         "record.json",
       );
       expect(existsSync(recordPath)).toBe(true);

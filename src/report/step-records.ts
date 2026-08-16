@@ -31,8 +31,8 @@ export function readStepRecordsForScenario(
   const stepsDir = path.join(rootDir, path.dirname(path.dirname(record.evidence.dir)), "steps");
   const records = new Map<string, StepRecord | null>();
   for (const step of record.steps) {
-    if (step.record !== null && !records.has(step.record)) {
-      records.set(step.record, readStepRecord(path.join(stepsDir, step.record)));
+    if (step.step_record_id !== null && !records.has(step.step_record_id)) {
+      records.set(step.step_record_id, readStepRecord(path.join(stepsDir, step.step_record_id)));
     }
   }
   return records;

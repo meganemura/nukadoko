@@ -402,7 +402,7 @@ export interface CreateStepContextOptions {
    * step name that step record itself records —
    * carried alongside `recordId` so `used` can cite it without a second
    * lookup, per docs/spec.md "Records": each `used` entry is
-   * `{ "record": ..., "step": ... }`. */
+   * `{ "step_record_id": ..., "step": ... }`. */
   resultOf?: (step: Step) => { result: unknown; recordId: string; stepName: string } | undefined;
   /** Whether `step` is one discovery actually registered — checked by
    * `ctx.resultOf` before even attempting the

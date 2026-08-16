@@ -123,22 +123,22 @@ describe("examples/migration", () => {
 
     // The undeclared World stash: measured (world.writes/reads) even though
     // no schema validates it.
-    const stashWriteStepRecord = await readStepRecord(rootDir, stashWriteStep.record);
+    const stashWriteStepRecord = await readStepRecord(rootDir, stashWriteStep.step_record_id);
     expect(stashWriteStepRecord.result).toBeNull();
     expect(stashWriteStepRecord.world).toEqual({ reads: [], writes: ["note"] });
-    const stashReadStepRecord = await readStepRecord(rootDir, stashReadStep.record);
+    const stashReadStepRecord = await readStepRecord(rootDir, stashReadStep.step_record_id);
     expect(stashReadStepRecord.world).toEqual({ reads: ["note"], writes: [] });
 
     // The seeding step: both `observed` (2 POSTs) and `world` (the one
     // declared key, seededCount) show up on the same step record -- the exact
     // claim README.md's "measured for free" section quotes.
-    const seedStepRecord = await readStepRecord(rootDir, seedStep.record);
+    const seedStepRecord = await readStepRecord(rootDir, seedStep.step_record_id);
     expect(seedStepRecord.result).toBeNull();
     expect(seedStepRecord.observed).toEqual({ http_reads: 0, http_writes: 2 });
     expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
 
     // The RegExp-pattern count assertion: read-only, no World touch.
-    const countStepRecord = await readStepRecord(rootDir, countStep.record);
+    const countStepRecord = await readStepRecord(rootDir, countStep.step_record_id);
     expect(countStepRecord.observed).toEqual({ http_reads: 1, http_writes: 0 });
     expect(countStepRecord.world).toBeUndefined();
 
@@ -150,12 +150,14 @@ describe("examples/migration", () => {
     expect(createStep.text).toContain("is created");
     expect(resultOfStep.text).toContain("resultOf");
 
-    const createStepRecord = await readStepRecord(rootDir, createStep.record);
+    const createStepRecord = await readStepRecord(rootDir, createStep.step_record_id);
     expect(createStepRecord.result).toMatchObject({ title: "Read a book", done: false });
     expect(createStepRecord.world).toBeUndefined();
 
-    const resultOfStepRecord = await readStepRecord(rootDir, resultOfStep.record);
-    expect(resultOfStepRecord.used).toEqual([{ record: createStep.record, step: createStepRecord.step }]);
+    const resultOfStepRecord = await readStepRecord(rootDir, resultOfStep.step_record_id);
+    expect(resultOfStepRecord.used).toEqual([
+      { step_record_id: createStep.step_record_id, step: createStepRecord.step },
+    ]);
     expect(resultOfStepRecord.result).toEqual({ id: (createStepRecord.result as { id: string }).id });
     expect(resultOfStepRecord.world).toBeUndefined();
   });

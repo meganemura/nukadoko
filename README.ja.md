@@ -107,7 +107,7 @@ scenario なしで 1 step だけを単独で実行すると、実際にその後
 
 ```json
 {
-  "record_id": "step-20260804-224640-50lp",
+  "step_record_id": "step-20260804-224640-50lp",
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },

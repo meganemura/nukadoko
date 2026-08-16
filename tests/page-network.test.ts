@@ -210,7 +210,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.status).toBe("ok");
     expect(stepRecord.evidence.http).toBe("http.jsonl");
 

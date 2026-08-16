@@ -268,7 +268,7 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
 
         appendEnvelope({ testCaseFinished: mapped.testCaseFinished });
       } catch (error) {
-        warn(`messages emit failed for scenario ${input.record.scenario_id}: ${errorMessage(error)}`);
+        warn(`messages emit failed for scenario ${input.record.scenario_record_id}: ${errorMessage(error)}`);
       }
     },
 

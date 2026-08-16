@@ -114,7 +114,7 @@ describe("actions on the step record: secret redaction", () => {
       ".nukadoko",
       "records",
       "steps",
-      record.steps[0].record as string,
+      record.steps[0].step_record_id as string,
       "record.json",
     );
     const stepRecordText = await readFile(recordPath, "utf8");

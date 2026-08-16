@@ -132,7 +132,7 @@ describe("measured mutates: request-side observed counts", () => {
     // fails the step changed.
     const stepRecord = JSON.parse(
       await readFile(
-        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[1].record, "record.json"),
+        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[1].step_record_id, "record.json"),
         "utf8",
       ),
     );
@@ -180,14 +180,14 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[0].status).toBe("failed");
     // Never began: no step record was written for it (docs/spec.md: "an
     // execution that never began must not be citable").
-    expect(record.steps[0].record).toBeNull();
+    expect(record.steps[0].step_record_id).toBeNull();
     expect(record.steps[0].error.message).toContain("declared-mutating-step");
     expect(record.steps[0].error.message).toContain("mutates state");
     expect(record.steps[0].error.message).toContain("readonly");
     expect(record.steps[0].error.message).toContain("read-only");
 
     expect(record.steps[1].status).toBe("skipped");
-    expect(record.steps[1].record).toBeNull();
+    expect(record.steps[1].step_record_id).toBeNull();
   });
 
   // `nuka run`'s own version of the lie backstop above: a declared
@@ -209,7 +209,7 @@ describe("measured mutates: request-side observed counts", () => {
 
     const stepRecord = JSON.parse(
       await readFile(
-        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[0].record, "record.json"),
+        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[0].step_record_id, "record.json"),
         "utf8",
       ),
     );

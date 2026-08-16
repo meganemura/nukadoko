@@ -18,7 +18,7 @@ import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../
 
 function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
   return {
-    scenario_id: "scn-1",
+    scenario_record_id: "scn-1",
     run_id: "run-1",
     feature: "features/checkout.feature",
     scenario: "a customer checks out",
@@ -111,13 +111,14 @@ function makeStepRecord(overrides: {
   recordId?: string;
 }): StepRecord {
   return {
-    record_id: overrides.recordId ?? "step-1",
+    step_record_id: overrides.recordId ?? "step-1",
     step: "some.step",
     kind: "run",
     args: {},
     environment: "default",
     session: null,
-    scenario: "scn-1",
+    scenario_record_id: "scn-1",
+    run_id: "run-1",
     started_at: "2026-08-01T00:00:00.000Z",
     finished_at: "2026-08-01T00:00:01.000Z",
     evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [] },
@@ -129,7 +130,7 @@ function makeStepRecord(overrides: {
 }
 
 function scenarioStep(text: string, recordId: string): ScenarioStepRecord {
-  return { text, status: "passed", record: recordId };
+  return { text, status: "passed", step_record_id: recordId };
 }
 
 function scenarioWithSteps(
@@ -248,7 +249,7 @@ describe("renderAcceptanceRecord: Declared vs observed", () => {
       [scenarioStep("step one", "r-1"), scenarioStep("step three", "r-3")],
       stepRecords,
       {
-        scenario_id: "scn-a",
+        scenario_record_id: "scn-a",
         scenario: "scenario A",
       },
     );
@@ -256,7 +257,7 @@ describe("renderAcceptanceRecord: Declared vs observed", () => {
       [scenarioStep("step two", "r-2"), scenarioStep("step four", "r-4")],
       stepRecords,
       {
-        scenario_id: "scn-b",
+        scenario_record_id: "scn-b",
         scenario: "scenario B",
       },
     );

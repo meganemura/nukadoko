@@ -62,10 +62,10 @@ describe("nuka run", () => {
     expect(record.steps).toHaveLength(2);
     for (const step of record.steps) {
       expect(step.status).toBe("passed");
-      expect(typeof step.record).toBe("string");
+      expect(typeof step.step_record_id).toBe("string");
       expect(step.error).toBeUndefined();
     }
-    expect(record.evidence.dir).toBe(path.join(".nukadoko", "records", "scenarios", record.scenario_id));
+    expect(record.evidence.dir).toBe(path.join(".nukadoko", "records", "scenarios", record.scenario_record_id));
     expect(record.evidence.screenshots).toEqual([]);
     expect(record.evidence.trace).toBeUndefined();
 
@@ -74,10 +74,10 @@ describe("nuka run", () => {
     expect(JSON.parse(await readFile(recordPath, "utf8"))).toEqual(record);
 
     for (const step of record.steps) {
-      const stepRecord = await readStepRecord(rootDir, step.record);
+      const stepRecord = await readStepRecord(rootDir, step.step_record_id);
       expect(stepRecord.status).toBe("ok");
       expect(stepRecord.kind).toBe("run");
-      expect(stepRecord.scenario).toBe(record.scenario_id);
+      expect(stepRecord.scenario_record_id).toBe(record.scenario_record_id);
       expect(stepRecord.environment).toBe("default");
       expect(stepRecord.session).toBeNull();
       // A pure step makes no network calls at all: `observed` is still
@@ -88,9 +88,9 @@ describe("nuka run", () => {
     // A typed step's step record carries its own declared `mutates`
     // verbatim — `thing-exists` (Given position) declares `mutates: true`,
     // `the-thing-exists` (Then position) declares `mutates: false`.
-    const firstStepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const firstStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect((firstStepRecord as { mutates: unknown }).mutates).toBe(true);
-    const secondStepRecord = await readStepRecord(rootDir, record.steps[1].record);
+    const secondStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id);
     expect((secondStepRecord as { mutates: unknown }).mutates).toBe(false);
   });
 
@@ -110,12 +110,12 @@ describe("nuka run", () => {
 
     const [first, second, third] = record.steps;
     expect(first.status).toBe("passed");
-    expect(typeof first.record).toBe("string");
+    expect(typeof first.step_record_id).toBe("string");
 
     expect(second.status).toBe("failed");
-    expect(typeof second.record).toBe("string");
+    expect(typeof second.step_record_id).toBe("string");
     expect(second.error.message).toBe("operation failed on purpose");
-    const failedStepRecord = await readStepRecord(rootDir, second.record);
+    const failedStepRecord = await readStepRecord(rootDir, second.step_record_id);
     expect(failedStepRecord.status).toBe("failed");
     expect((failedStepRecord as { error: { message: string } }).error.message).toBe(
       "operation failed on purpose",
@@ -124,7 +124,7 @@ describe("nuka run", () => {
     expect((failedStepRecord as { error: { kind: string } }).error.kind).toBe("step_error");
 
     expect(third.status).toBe("skipped");
-    expect(third.record).toBeNull();
+    expect(third.step_record_id).toBeNull();
     expect(third.error).toBeUndefined();
 
     // Only the two steps that actually began execution wrote a step record.
@@ -146,7 +146,7 @@ describe("nuka run", () => {
     expect(record.status).toBe("failed");
     expect(record.steps[0].status).toBe("passed");
     expect(record.steps[1].status).toBe("undefined");
-    expect(record.steps[1].record).toBeNull();
+    expect(record.steps[1].step_record_id).toBeNull();
     expect(record.steps[1].error.message).toContain(
       'No step definition matches "this text matches no step definition at all"',
     );
@@ -167,7 +167,7 @@ describe("nuka run", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
     expect(record.steps[0].status).toBe("ambiguous");
-    expect(record.steps[0].record).toBeNull();
+    expect(record.steps[0].step_record_id).toBeNull();
     expect(record.steps[0].error.message).toContain("ambiguous-a");
     expect(record.steps[0].error.message).toContain("ambiguous-b");
   });
@@ -193,7 +193,7 @@ describe("nuka run", () => {
     const [ok, bad] = records;
     expect(ok.scenario).toBe("a table binds successfully");
     expect(ok.status).toBe("passed");
-    const okStepRecord = await readStepRecord(rootDir, ok.steps[0].record);
+    const okStepRecord = await readStepRecord(rootDir, ok.steps[0].step_record_id);
     expect(okStepRecord.args).toEqual({
       a: "a",
       rest: [
@@ -205,11 +205,11 @@ describe("nuka run", () => {
     expect(bad.scenario).toBe("a table fails to bind");
     expect(bad.status).toBe("failed");
     expect(bad.steps[0].status).toBe("failed");
-    expect(typeof bad.steps[0].record).toBe("string");
+    expect(typeof bad.steps[0].step_record_id).toBe("string");
     expect(bad.steps[0].error.message).toContain("2 args keys are left unconsumed");
     expect(bad.steps[0].error.message).toContain("rest");
     expect(bad.steps[0].error.message).toContain("extra");
-    const badStepRecord = await readStepRecord(rootDir, bad.steps[0].record);
+    const badStepRecord = await readStepRecord(rootDir, bad.steps[0].step_record_id);
     expect(badStepRecord.status).toBe("failed");
     expect((badStepRecord as { args: unknown }).args).toEqual({ a: "a" });
     // A pickle step that can't be bound into its typed step's `args` shape
@@ -234,7 +234,7 @@ describe("nuka run", () => {
 
     expect(record.scenario).toBe("second scenario");
     expect(record.line).toBe(6);
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect((stepRecord as { result: { label: string } }).result.label).toBe("second");
 
     const scenariosDir = path.join(rootDir, ".nukadoko", "records", "scenarios");
@@ -354,7 +354,7 @@ describe("nuka run: .js and .mjs step files", () => {
       expect(record.steps).toHaveLength(2);
       for (const step of record.steps) {
         expect(step.status).toBe("passed");
-        expect(typeof step.record).toBe("string");
+        expect(typeof step.step_record_id).toBe("string");
       }
       expect(exitCode).toBe(0);
     } finally {

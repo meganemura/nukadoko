@@ -110,7 +110,7 @@ lands afterward: not a pass/fail line, a step record.
 
 ```json
 {
-  "record_id": "step-20260804-224640-50lp",
+  "step_record_id": "step-20260804-224640-50lp",
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },

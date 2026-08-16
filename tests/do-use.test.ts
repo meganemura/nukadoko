@@ -43,7 +43,7 @@ describe("nuka do --use", () => {
 
     const archiveStdout = createCaptureSink();
     const archiveExit = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", createStepRecord.record_id],
+      ["do", "archive-project", "--args", "{}", "--use", createStepRecord.step_record_id],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
 
@@ -55,11 +55,13 @@ describe("nuka do --use", () => {
     // reader must be able to tell it apart from a value never validated.
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme" });
-    expect(archiveStepRecord.used).toEqual([{ record: createStepRecord.record_id, step: "create-project" }]);
+    expect(archiveStepRecord.used).toEqual([
+      { step_record_id: createStepRecord.step_record_id, step: "create-project" },
+    ]);
 
     // Confirms the step record actually persisted to disk carries the same shape
     // the stdout copy did.
-    const persisted = await readStepRecord(rootDir, archiveStepRecord.record_id);
+    const persisted = await readStepRecord(rootDir, archiveStepRecord.step_record_id);
     expect(persisted.used).toEqual(archiveStepRecord.used);
   });
 
@@ -88,9 +90,9 @@ describe("nuka do --use", () => {
         "--args",
         "{}",
         "--use",
-        createStepRecord.record_id,
+        createStepRecord.step_record_id,
         "--use",
-        ownerStepRecord.record_id,
+        ownerStepRecord.step_record_id,
       ],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
@@ -101,8 +103,8 @@ describe("nuka do --use", () => {
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme", ownerId: "o_jane" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme", ownerId: "o_jane" });
     expect(archiveStepRecord.used).toEqual([
-      { record: createStepRecord.record_id, step: "create-project" },
-      { record: ownerStepRecord.record_id, step: "create-owner" },
+      { step_record_id: createStepRecord.step_record_id, step: "create-project" },
+      { step_record_id: ownerStepRecord.step_record_id, step: "create-owner" },
     ]);
   });
 
@@ -131,9 +133,9 @@ describe("nuka do --use", () => {
         "--args",
         "{}",
         "--use",
-        createStepRecord.record_id,
+        createStepRecord.step_record_id,
         "--use",
-        ownerStepRecord.record_id,
+        ownerStepRecord.step_record_id,
       ],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
@@ -144,8 +146,8 @@ describe("nuka do --use", () => {
     // Both upstreams, each carrying its own full result — not just the
     // first one.
     expect(archiveStepRecord.used).toEqual([
-      { record: createStepRecord.record_id, step: "create-project", result: { id: "p_acme" } },
-      { record: ownerStepRecord.record_id, step: "create-owner", result: { id: "o_jane" } },
+      { step_record_id: createStepRecord.step_record_id, step: "create-project", result: { id: "p_acme" } },
+      { step_record_id: ownerStepRecord.step_record_id, step: "create-owner", result: { id: "o_jane" } },
     ]);
   });
 
@@ -160,7 +162,7 @@ describe("nuka do --use", () => {
 
     const archiveStdout = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", '{"projectId":"explicit-id"}', "--use", createStepRecord.record_id],
+      ["do", "archive-project", "--args", '{"projectId":"explicit-id"}', "--use", createStepRecord.step_record_id],
       { rootDir, stdout: archiveStdout, stderr: createCaptureSink() },
     );
 
@@ -189,7 +191,7 @@ describe("nuka do --use", () => {
     const archiveStdout = createCaptureSink();
     const archiveStderr = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", failedStepRecord.record_id],
+      ["do", "archive-project", "--args", "{}", "--use", failedStepRecord.step_record_id],
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
@@ -197,7 +199,7 @@ describe("nuka do --use", () => {
     // Setup-phase fatal, same family as an unregistered `from` upstream: no
     // step record is ever printed to stdout.
     expect(archiveStdout.text()).toBe("");
-    expect(archiveStderr.text()).toContain(failedStepRecord.record_id);
+    expect(archiveStderr.text()).toContain(failedStepRecord.step_record_id);
     expect(archiveStderr.text()).toContain('not "ok"');
   });
 
@@ -213,13 +215,13 @@ describe("nuka do --use", () => {
     const archiveStdout = createCaptureSink();
     const archiveStderr = createCaptureSink();
     const exitCode = await runCli(
-      ["do", "archive-project", "--args", "{}", "--use", ownerStepRecord.record_id],
+      ["do", "archive-project", "--args", "{}", "--use", ownerStepRecord.step_record_id],
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
     expect(exitCode).toBe(1);
     expect(archiveStdout.text()).toBe("");
-    expect(archiveStderr.text()).toContain(ownerStepRecord.record_id);
+    expect(archiveStderr.text()).toContain(ownerStepRecord.step_record_id);
     expect(archiveStderr.text()).toContain("create-owner");
   });
 
@@ -234,7 +236,7 @@ describe("nuka do --use", () => {
 
     const archiveStdout = createCaptureSink();
     const archiveStderr = createCaptureSink();
-    const exitCode = await runCli(["do", "archive-project", "--use", createStepRecord.record_id], {
+    const exitCode = await runCli(["do", "archive-project", "--use", createStepRecord.step_record_id], {
       rootDir,
       stdout: archiveStdout,
       stderr: archiveStderr,
@@ -247,7 +249,9 @@ describe("nuka do --use", () => {
     // No --args at all means the default is `{}`, so every key on this
     // step record's own `args` came from `--use`'s `from` injection alone.
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
-    expect(archiveStepRecord.used).toEqual([{ record: createStepRecord.record_id, step: "create-project" }]);
+    expect(archiveStepRecord.used).toEqual([
+      { step_record_id: createStepRecord.step_record_id, step: "create-project" },
+    ]);
   });
 
   it("neither --args nor --use: refused before any step record is written, naming both flags", async () => {

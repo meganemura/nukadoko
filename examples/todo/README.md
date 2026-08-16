@@ -106,7 +106,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
 
 ```json
 {
-  "record_id": "step-20260802-113336-cyfi",
+  "step_record_id": "step-20260802-113336-cyfi",
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },

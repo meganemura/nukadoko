@@ -101,8 +101,8 @@ describe("nuka run (hook trace chunks)", () => {
 
     // --- test item 5 (step side): a step's own chunk carries none of the
     // hooks' operations, only its own. ---
-    const step1 = await readStepRecord(rootDir, record.steps[0].record as string);
-    const step2 = await readStepRecord(rootDir, record.steps[1].record as string);
+    const step1 = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
+    const step2 = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
     expect(actionUrls(step1.actions)).toEqual(["data:text/html,step-one"]);
     expect(actionUrls(step2.actions)).toEqual(["data:text/html,step-two"]);
 

@@ -54,7 +54,7 @@ function startTestServer(): Promise<{ server: Server; baseURL: string }> {
 interface StoredStepRecord {
   status: string;
   kind: string;
-  scenario: string;
+  scenario_record_id: string;
   evidence: { dir: string; trace?: string; screenshots: unknown[] };
   actions?: Array<{ method: string; url?: string; selector?: string; ms: number; outcome: string; at: string }>;
   result: { ok?: boolean; cookie?: string | null };
@@ -123,14 +123,14 @@ describe("nuka run (Background + browser)", () => {
     // Each step carries its own trace.zip instead:
     // a 2-step scenario produces 2 trace files, each holding only that
     // step's own operations.
-    const loginStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
-    const whoamiStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const loginStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
+    const whoamiStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     for (const stepRecord of [loginStepRecord, whoamiStepRecord]) {
       expect(stepRecord.evidence.trace).toBe("trace.zip");
       expect(stepRecord.evidence.screenshots).toEqual([]);
       expect(stepRecord.kind).toBe("run");
-      expect(stepRecord.scenario).toBe(record.scenario_id);
+      expect(stepRecord.scenario_record_id).toBe(record.scenario_record_id);
       const recordDir = path.join(rootDir, stepRecord.evidence.dir);
       expect(existsSync(path.join(recordDir, "trace.zip"))).toBe(true);
     }
@@ -159,10 +159,10 @@ describe("nuka run (Background + browser)", () => {
     // a browser already happens to be running.
     expect(noBrowserRecord.status).toBe("passed");
     expect(noBrowserRecord.steps).toHaveLength(2);
-    const secondBackgroundStepRecord = await readStepRecord(rootDir, noBrowserRecord.steps[0].record as string);
+    const secondBackgroundStepRecord = await readStepRecord(rootDir, noBrowserRecord.steps[0].step_record_id as string);
     expect(secondBackgroundStepRecord.evidence.trace).toBe("trace.zip");
 
-    const noBrowserStepRecord = await readStepRecord(rootDir, noBrowserRecord.steps[1].record as string);
+    const noBrowserStepRecord = await readStepRecord(rootDir, noBrowserRecord.steps[1].step_record_id as string);
     expect(noBrowserStepRecord.evidence.trace).toBeUndefined();
     expect(Object.keys(noBrowserStepRecord.evidence)).not.toContain("trace");
     expect(noBrowserStepRecord.actions).toBeUndefined();

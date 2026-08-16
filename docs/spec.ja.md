@@ -945,7 +945,7 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
 
 ```json
 {
-  "record_id": "step-20260801-143022-a1b2",
+  "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
   "kind": "do",
   "args": { "name": "acme" },
@@ -956,7 +956,8 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
-  "scenario": null,
+  "scenario_record_id": null,
+  "run_id": null,
   "started_at": "...",
   "finished_at": "...",
   "evidence": {
@@ -972,6 +973,9 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
   失敗時には `error: { kind, message }` がそれに置き換わります。
   compat の step は `result: null` を記録します。
+- `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
+  `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
+  `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
 - `error.kind` は閉じた集合で、人間が読むメッセージのほかに `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`step_error` の値を取ります。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
@@ -1028,7 +1032,7 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
 - `used`(空でないときだけ現れます)は、この実行が値を引き出した以前の実行の一覧です。
   `from` による注入、`resultOf` の呼び出し、あるいは `nuka do` での `--use` の step record のいずれかを通じたものです。
   どの経路もライブラリのコードを通るため、読み取りは計測されるのであって宣言されるのではありません。
-  各エントリは `{ "record": "step-…", "step": "create-project" }` の形です。
+  各エントリは `{ "step_record_id": "step-…", "step": "create-project" }` の形です。
   step 名は引用元の step record と重複していますが、それでも書き留めます。
   読むために他のファイルと突き合わせなければならない record は、単独で読める record より読み手にとって劣ったものであり、突き合わせる相手になるファイルはローカルな作業記録にすぎず、sign-off(「Sign-off」を参照)よりずっと先に寿命が尽きるからです。
   エントリは record id で重複排除され、最初に読まれた順に並びます。

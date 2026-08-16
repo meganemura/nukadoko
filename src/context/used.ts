@@ -11,12 +11,14 @@
 // `ctx.resultOf` for a different upstream still ends up with one deduplicated
 // list, not two independent ones.
 //
-// Each entry's shape is `{ record, step }`: a step record
+// Each entry's shape is `{ step_record_id, step }`: a step record
 // id that has to be resolved against other files to be read is a worse
 // acceptance record than one that is legible alone, and the file it would be
 // resolved against (another step record) is a local working record a sign-off
-// long outlives. `record` names the upstream step record's own id
-// (`step-...`), `step` the step name that step record itself carries.
+// long outlives. `step_record_id` names the upstream step record's own id
+// (`step-...`), the same field name (and the same value) the step record it
+// points at carries on itself — `step` is the step name that step record
+// itself carries.
 //
 // Deduplicated and in read order (dedupe, then order by first read) — a
 // step that reads the same earlier step's
@@ -50,17 +52,18 @@
 // breaks silently" principle exists to rule out.
 //
 // A plain structural extension (`UsedEntry & { result: unknown }`) does not
-// rule it out: TypeScript is structurally typed, so a `{ record, step,
-// result }` value is assignable wherever `{ record, step }` is expected
-// regardless of whether the wider type nominally "extends" the narrower one
-// — the same is true even without any inheritance relationship at all, since
-// assignability only ever looks at shape. Renaming the interface or
-// duplicating its fields into an unrelated one doesn't change that either.
-// The only way to make TypeScript actually refuse the wider shape is an
-// *exclusion marker*: `result?: never` on `UsedEntry` below says "this
-// field, if present at all, can never hold a value" — an optional `never`
-// still allows a plain `{ record, step }` object through untouched (no
-// `result` key at all satisfies "optional and absent"), but rejects any
+// rule it out: TypeScript is structurally typed, so a `{ step_record_id,
+// step, result }` value is assignable wherever `{ step_record_id, step }` is
+// expected regardless of whether the wider type nominally "extends" the
+// narrower one — the same is true even without any inheritance relationship
+// at all, since assignability only ever looks at shape. Renaming the
+// interface or duplicating its fields into an unrelated one doesn't change
+// that either. The only way to make TypeScript actually refuse the wider
+// shape is an *exclusion marker*: `result?: never` on `UsedEntry` below says
+// "this field, if present at all, can never hold a value" — an optional
+// `never` still allows a plain `{ step_record_id, step }` object through
+// untouched (no `result` key at all satisfies "optional and absent"), but
+// rejects any
 // value that supplies a real `result: unknown`, because `unknown` can't
 // narrow to `never`. `UsedEntryWithResult` then has to `Omit` that marker
 // before re-adding `result` as `unknown` — intersecting directly
@@ -73,7 +76,7 @@
 // (here, this field) cannot be reached with a real value."
 
 export interface UsedEntry {
-  readonly record: string;
+  readonly step_record_id: string;
   readonly step: string;
   /** Exclusion marker, not a real field (see this file's header) — always
    * absent on an actual `UsedEntry`. Its only job is to make a
@@ -114,10 +117,10 @@ export interface UsedCollector {
 /** Strips `result` from every entry
  * — the shared helper both `nuka run` (run-scenario.ts) and `nuka do`
  * (cli/do.ts) call when building an "ok" step record, so a successful
- * execution's `used` keeps the `{ record, step }` shape it always has and
- * never carries the redundant upstream value success doesn't need. */
+ * execution's `used` keeps the `{ step_record_id, step }` shape it always
+ * has and never carries the redundant upstream value success doesn't need. */
 export function omitUsedResults(entries: readonly UsedEntryWithResult[]): UsedEntry[] {
-  return entries.map(({ record, step }) => ({ record, step }));
+  return entries.map(({ step_record_id, step }) => ({ step_record_id, step }));
 }
 
 export function createUsedCollector(): UsedCollector {
@@ -136,7 +139,11 @@ export function createUsedCollector(): UsedCollector {
       }
     },
     snapshot(): UsedEntryWithResult[] {
-      return [...seen.entries()].map(([record, { step, result }]) => ({ record, step, result }));
+      return [...seen.entries()].map(([recordId, { step, result }]) => ({
+        step_record_id: recordId,
+        step,
+        result,
+      }));
     },
     reset(): void {
       seen = new Map();

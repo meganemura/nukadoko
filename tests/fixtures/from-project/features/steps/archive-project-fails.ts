@@ -5,7 +5,7 @@ import createProject from "./create-project.js";
 // Same `from` shape as archive-project.ts, but
 // always fails after reading the injected value — proves a *failed*
 // step record's `used[].result` carries the upstream's full validated result,
-// not merely the `{ record, step }` pointer `used` has always carried.
+// not merely the `{ step_record_id, step }` pointer `used` has always carried.
 export default defineStep({
   pattern: "the project archival explodes",
   description: "Reads projectId via from, then always fails",

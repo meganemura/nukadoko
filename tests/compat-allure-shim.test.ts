@@ -64,7 +64,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toEqual({
       // ".txt": the fixture's own `attachment("evidence", "...", "text/plain")`
       // declares a contentType but no fileExtension — src/compat/allure-
@@ -97,7 +97,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toEqual({
       attachments: ["attachment.txt"],
       links: [{ url: "https://example.com/world-link", name: "world link" }],
@@ -130,7 +130,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
       labels: [{ name: "hook-owner", value: "team-nukadoko" }],
     });
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toBeUndefined();
 
     const scenarioDir = path.join(rootDir, record.evidence.dir);
@@ -149,7 +149,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toEqual({
       labels: [{ name: "typed-owner", value: "team-nukadoko" }],
     });
@@ -169,7 +169,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toBeUndefined();
     expect(Object.keys(stepRecord)).not.toContain("declared");
   });
@@ -186,7 +186,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toEqual({
       labels: [{ name: "token", value: "{{secret.SHIM_SECRET}}" }],
     });
@@ -196,7 +196,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
       ".nukadoko",
       "records",
       "steps",
-      record.steps[0].record,
+      record.steps[0].step_record_id,
       "record.json",
     );
     const stepRecordText = await readFile(stepRecordPath, "utf8");

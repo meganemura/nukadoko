@@ -44,7 +44,7 @@ describe("ctx.requireEnv / required_env", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.required_env).toEqual(["API_TOKEN", "SECOND_KEY"]);
   });
 
@@ -59,7 +59,7 @@ describe("ctx.requireEnv / required_env", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.required_env).toBeUndefined();
     expect(Object.keys(stepRecord)).not.toContain("required_env");
   });
@@ -75,7 +75,7 @@ describe("ctx.requireEnv / required_env", () => {
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.status).toBe("failed");
     expect(stepRecord.required_env).toEqual(["MISSING_KEY"]);
     expect((stepRecord as { error: { message: string } }).error.message).toContain("MISSING_KEY");
@@ -94,8 +94,8 @@ describe("ctx.requireEnv / required_env", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
-    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
+    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expect(alphaStepRecord.required_env).toEqual(["ALPHA_ONLY"]);
     expect(betaStepRecord.required_env).toEqual(["BETA_ONLY"]);

@@ -45,10 +45,10 @@ describe("nuka run: from's scenario-order guard", () => {
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(1);
-    // `record: null` — the binding-order check catches the missing upstream
+    // `step_record_id: null` — the binding-order check catches the missing upstream
     // before execution begins, so this step's own `run` is never called at
     // all, and no browser session could ever have been opened.
-    expect(record.steps[0].record).toBeNull();
+    expect(record.steps[0].step_record_id).toBeNull();
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("archive-project");
     expect(record.steps[0].error.message).toContain("create-project");
@@ -65,13 +65,13 @@ describe("nuka run: from's scenario-order guard", () => {
     expect(record.status).toBe("failed");
     expect(record.steps).toHaveLength(2);
     expect(record.steps[0].status).toBe("failed");
-    expect(record.steps[0].record).toBeNull();
+    expect(record.steps[0].step_record_id).toBeNull();
     expect(record.steps[0].error.message).toContain("only at or after this line");
     // The `create-project` line itself is textually *after* the violation,
     // but it never runs either —
     // `"skipped"`, not `"passed"`, and no step record.
     expect(record.steps[1].status).toBe("skipped");
-    expect(record.steps[1].record).toBeNull();
+    expect(record.steps[1].step_record_id).toBeNull();
   });
 
   it("every other scenario in the same feature file still runs normally", async () => {
@@ -99,7 +99,7 @@ describe("nuka run: from's scenario-order guard", () => {
       expect(record, `scenario at line ${line}`).toBeDefined();
       expect(record.status, `scenario at line ${line}`).toBe("passed");
       for (const step of record.steps) {
-        expect(step.record, `scenario at line ${line}, step "${step.text}"`).not.toBeNull();
+        expect(step.step_record_id, `scenario at line ${line}, step "${step.text}"`).not.toBeNull();
       }
     }
   });

@@ -66,7 +66,7 @@ describe("ctx.section", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expectSectionLabels(stepRecord, ["one", "two", "three"]);
   });
 
@@ -81,7 +81,7 @@ describe("ctx.section", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.sections).toBeUndefined();
     expect(Object.keys(stepRecord)).not.toContain("sections");
   });
@@ -97,7 +97,7 @@ describe("ctx.section", () => {
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("failed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.status).toBe("failed");
     expectSectionLabels(stepRecord, ["setup", "working"]);
     // No separate `error.section` field: the array's own last element is
@@ -118,8 +118,8 @@ describe("ctx.section", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
-    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
+    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     expectSectionLabels(alphaStepRecord, ["alpha-only"]);
     expectSectionLabels(betaStepRecord, ["beta-only"]);

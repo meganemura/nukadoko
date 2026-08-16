@@ -1332,7 +1332,7 @@ so a reader can open either first and reach the other from it.
 
 ```json
 {
-  "record_id": "step-20260801-143022-a1b2",
+  "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
   "kind": "do",
   "args": { "name": "acme" },
@@ -1343,7 +1343,8 @@ so a reader can open either first and reach the other from it.
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
-  "scenario": null,
+  "scenario_record_id": null,
+  "run_id": null,
   "started_at": "...",
   "finished_at": "...",
   "evidence": {
@@ -1358,6 +1359,13 @@ so a reader can open either first and reach the other from it.
 - `result` is the trust anchor: it passed the returns schema and the tool
   (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
+- `scenario_record_id` and `run_id` name what this execution belongs to:
+  the owning scenario record's id and the `nuka run` invocation's own id
+  for a `run`-originated step (`kind: "run"`), both `null` for a
+  `do`-originated one, which belongs to neither. Without `run_id`, telling
+  which run one step record came from meant opening the scenario record
+  beside it first; a step record answers that on its own now, the same way
+  it already answers everything else about what this one execution did.
 - `error.kind` is a closed set, beside the message a human reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
   `timeout`, `unsupported`, `step_error`. Closed because a report has to
@@ -1447,11 +1455,11 @@ so a reader can open either first and reach the other from it.
   results this one drew a value from: through a `from` injection, a
   `resultOf` call, or a `--use` step record on `nuka do`. Every path runs
   through library code, so the reads are measured, not declared. Each entry
-  is `{ "record": "step-…", "step": "create-project" }`: the step name is
-  redundant with the cited step record and is written down anyway, because
-  a record that has to be resolved against other files to be read is worse
-  for a reader than one that is legible alone, and the file it would be
-  resolved against is a local working record that a sign-off (see
+  is `{ "step_record_id": "step-…", "step": "create-project" }`: the step
+  name is redundant with the cited step record and is written down anyway,
+  because a record that has to be resolved against other files to be read
+  is worse for a reader than one that is legible alone, and the file it
+  would be resolved against is a local working record that a sign-off (see
   Sign-off) long outlives. Entries are deduplicated by record id, in the
   order first read. The dependency is thus visible twice over: statically
   as `from` or an import, at run time as provenance in the step record

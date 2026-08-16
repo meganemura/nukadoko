@@ -142,7 +142,7 @@ describe("nuka tend: sign-off rot", () => {
     expect(invalid[0]!.message).not.toMatch(/hand-edit|edit the record/i);
   });
 
-  it("reports a record written before record_id existed as old-format, telling the reader to re-run and re-accept, and skips its other checks", async () => {
+  it("reports a record written before step_record_id existed as old-format, telling the reader to re-run and re-accept, and skips its other checks", async () => {
     // No migration code is written for this (the user re-runs and
     // re-accepts). This test stands in for that older tool version by taking
     // a record `nuka accept` really produced and removing the one field
@@ -152,8 +152,8 @@ describe("nuka tend: sign-off rot", () => {
     const original = await readFile(path.join(rootDir, recordPath), "utf8");
     const withoutRecordIds = original.replace(/```json\n([\s\S]*?)\n```/g, (block, jsonText: string) => {
       const parsed = JSON.parse(jsonText) as Record<string, unknown>;
-      if (!("record_id" in parsed)) return block; // A hook's own JSON block never had one.
-      delete parsed.record_id;
+      if (!("step_record_id" in parsed)) return block; // A hook's own JSON block never had one.
+      delete parsed.step_record_id;
       return `\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``;
     });
     expect(withoutRecordIds).not.toBe(original); // Proves the fixture's record actually had step blocks to strip.

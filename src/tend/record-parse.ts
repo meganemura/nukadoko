@@ -27,7 +27,7 @@ import path from "node:path";
 // `isOldFormat` is added the same defensive way: an acceptance record
 // embeds each step's own record verbatim (render-record.ts's own header),
 // and every step record the current tool writes always carries a
-// `record_id` string. A record written before that field existed lacks it
+// `step_record_id` string. A record written before that field existed lacks it
 // on every step it embeds, so its absence is what this module tests for —
 // never a stored copy of the field's own old name, which would just be
 // another word this module has to keep in sync with the writer by hand. An
@@ -130,7 +130,7 @@ function extractGherkinFence(body: string): string | undefined {
  * `evidence` ever stripped, `render-record.ts`'s own header), so this
  * interface only needed a name for it. `polls` is added the same way, for
  * the same module to tell a `ctx.poll`-covered read apart
- * from one that is not. `record_id` is added for `isOldFormat` below, kept
+ * from one that is not. `step_record_id` is added for `isOldFormat` below, kept
  * `unknown` the same way — the value itself is never used, only whether the
  * key is a string at all. Kept as `unknown`, `result`'s own convention: this
  * module never validates a step record's own shape beyond "is this
@@ -142,7 +142,7 @@ export interface EmbeddedStepRecordLike {
   readonly result?: unknown;
   readonly actions?: unknown;
   readonly polls?: unknown;
-  readonly record_id?: unknown;
+  readonly step_record_id?: unknown;
 }
 
 function isStepRecordLike(value: unknown): value is EmbeddedStepRecordLike {
@@ -217,7 +217,7 @@ export interface ParsedAcceptanceRecord {
    * latest sign-off" for one feature (src/tend/signoff-condition-
    * mismatch.ts) — never compared against anything else here. */
   readonly acceptedAt: Date | undefined;
-  /** True once at least one embedded step record is missing `record_id` —
+  /** True once at least one embedded step record is missing `step_record_id` —
    * the one field every step record the current tool writes always carries
    * (this file's own header). `false` for a record with no step-shaped
    * blocks at all: nothing there proves it either way, so it is never
@@ -299,7 +299,7 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
   const acceptedAtDate = acceptedAtLineMatch ? new Date(acceptedAtLineMatch[1]!) : undefined;
   const acceptedAt = acceptedAtDate !== undefined && !Number.isNaN(acceptedAtDate.getTime()) ? acceptedAtDate : undefined;
 
-  const isOldFormat = stepRecordsResult.stepRecords.some((stepRecord) => typeof stepRecord.record_id !== "string");
+  const isOldFormat = stepRecordsResult.stepRecords.some((stepRecord) => typeof stepRecord.step_record_id !== "string");
 
   return {
     kind: "ok",

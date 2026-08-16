@@ -110,7 +110,7 @@ describe("page_events on the step record", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     expect(stepRecord.status).toBe("ok");
     const pageEvents = stepRecord.page_events as {
       console_errors?: unknown[];

@@ -42,7 +42,7 @@ export interface ResolveUseSuccess {
    * for a key it already set), so this is offered up unconditionally, not
    * pre-filtered. */
   readonly filled: Readonly<Record<string, unknown>>;
-  /** The `{ record, step, result }` shape the `used` collector
+  /** The `{ step_record_id, step, result }` shape the `used` collector
    * (src/context/used.ts) already records — handed straight to
    * `StepContextHandle.recordUsed`, the sole path into that collector, once
    * the caller decides at least one of `filled`'s keys actually landed.
@@ -117,5 +117,9 @@ export function resolveUse(
     filled[key] = result[upstreamKey];
   }
 
-  return { ok: true, filled, used: { record: recordId, step: stepRecord.step, result: stepRecord.result } };
+  return {
+    ok: true,
+    filled,
+    used: { step_record_id: recordId, step: stepRecord.step, result: stepRecord.result },
+  };
 }

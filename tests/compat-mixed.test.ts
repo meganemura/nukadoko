@@ -91,20 +91,20 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     }
 
     // ctx.resultOf, unaffected by the compat step sharing the same pickle.
-    const createRecordId = record.steps[0].record as string;
-    const resultOfStepRecord = await readStepRecord(rootDir, record.steps[1].record);
+    const createRecordId = record.steps[0].step_record_id as string;
+    const resultOfStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id);
     expect(resultOfStepRecord.result).toEqual({ ok: true });
-    expect(resultOfStepRecord.used).toEqual([{ record: createRecordId, step: "create-thing" }]);
+    expect(resultOfStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-thing" }]);
 
     // The compat step's own step record: openRequest() + a GET is measured
     // (observed), same as a typed step's ctx.request() would be.
-    const compatStepRecord = await readStepRecord(rootDir, record.steps[2].record);
+    const compatStepRecord = await readStepRecord(rootDir, record.steps[2].step_record_id);
     expect(compatStepRecord.result).toBeNull();
     expect((compatStepRecord as { observed: { http_reads: number } }).observed.http_reads).toBe(1);
 
     // The typed step's own request context sees the compat step's cookie —
     // proof the two share one underlying Playwright APIRequestContext.
-    const typedStepRecord = await readStepRecord(rootDir, record.steps[3].record);
+    const typedStepRecord = await readStepRecord(rootDir, record.steps[3].step_record_id);
     expect((typedStepRecord as { result: { cookie: string } }).result.cookie).toContain("sid=abc123");
   });
 });

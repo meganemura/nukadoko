@@ -110,7 +110,7 @@ describe("nuka accept: a green run", () => {
     expect(frontmatter).toContain("environment: default");
     expect(frontmatter).toContain("name: greet a visitor");
     expect(frontmatter).toContain("line: 3");
-    expect(frontmatter).toMatch(/scenario_id: scn-/);
+    expect(frontmatter).toMatch(/scenario_record_id: scn-/);
 
     // Each step's own step record, with `evidence` stripped.
     const blocks = jsonCodeBlocks(content);
@@ -118,7 +118,7 @@ describe("nuka accept: a green run", () => {
     for (const stepRecord of blocks) {
       expect("evidence" in stepRecord).toBe(false);
       expect(stepRecord.status).toBe("ok");
-      expect(typeof stepRecord.record_id).toBe("string");
+      expect(typeof stepRecord.step_record_id).toBe("string");
     }
     expect(blocks[0]!.args).toEqual({ name: "Ada" });
 
@@ -477,12 +477,12 @@ describe("nuka accept: declared vs observed", () => {
     for (const scenarioId of scenarioIds) {
       const record = JSON.parse(await readFile(path.join(scenariosDir, scenarioId, "record.json"), "utf8")) as {
         feature: string;
-        steps: { text: string; record: string | null }[];
+        steps: { text: string; step_record_id: string | null }[];
       };
       if (record.feature !== "features/greeting.feature") continue;
       const step = record.steps.find((s) => s.text.includes("greeted"));
-      if (step?.record) {
-        stepRecordPath = path.join(stateDir, "records", "steps", step.record, "record.json");
+      if (step?.step_record_id) {
+        stepRecordPath = path.join(stateDir, "records", "steps", step.step_record_id, "record.json");
         stepText = step.text;
       }
     }

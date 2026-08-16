@@ -184,7 +184,7 @@ describe("evidence.attach / evidence.path: nuka do", () => {
     expect(attachments[0]!.name).not.toContain(API_TOKEN);
     expect(attachments[0]!.file).not.toContain(API_TOKEN);
 
-    const stepRecordText = await readStepRecordFile(rootDir, stepRecord.record_id as string);
+    const stepRecordText = await readStepRecordFile(rootDir, stepRecord.step_record_id as string);
     expect(stepRecordText).not.toContain(API_TOKEN);
   });
 });
@@ -211,7 +211,7 @@ describe("evidence.attach: nuka run", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
-    const stepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
+    const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
     const attachments = stepRecord.evidence as { attachments?: Array<{ name: string; file: string }> };
     expect(attachments.attachments).toHaveLength(1);
     expect(attachments.attachments![0]).toMatchObject({ name: "orders.json", file: "orders.json" });
@@ -230,8 +230,8 @@ describe("evidence.attach: nuka run", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].record as string);
-    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].record as string);
+    const alphaStepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
+    const betaStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
     const alphaAttachments = (alphaStepRecord.evidence as { attachments?: Array<{ file: string }> }).attachments;
     const betaAttachments = (betaStepRecord.evidence as { attachments?: Array<{ file: string }> }).attachments;

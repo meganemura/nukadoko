@@ -174,7 +174,8 @@ function mapPickleSteps(
 ): MappedTestStep[] {
   let previousStopMs = scenarioStartMs;
   return record.steps.map((step, index): MappedTestStep => {
-    const stepRecord = step.record !== null ? (stepRecords.get(step.record) ?? undefined) : undefined;
+    const stepRecord =
+      step.step_record_id !== null ? (stepRecords.get(step.step_record_id) ?? undefined) : undefined;
 
     let startMs: number;
     let stopMs: number;
@@ -280,7 +281,7 @@ export interface MapScenarioInput {
   /** Already-read step records, keyed by step record id — `null` for an id
    * whose
    * record.json couldn't be read/parsed. A step whose own
-   * `record.steps[].record` isn't a key here at all is treated the same as
+   * `record.steps[].step_record_id` isn't a key here at all is treated the same as
    * one mapped to `null`. */
   readonly stepRecords: ReadonlyMap<string, StepRecord | null>;
   readonly pickle: Pickle;
