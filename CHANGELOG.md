@@ -5,6 +5,24 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Changed
+
+- **`skills/acceptance/SKILL.md` now opens with a staged entry point
+  instead of assuming a scenario is already in hand.** A reader can start
+  from raw prose with no stated acceptance criteria yet, from general
+  acceptance-criteria sentences with no scenario yet, or from a scenario
+  ready to write; all three stages funnel into the same loop (`nuka check`
+  through `nuka accept`) that was already there. The prose-to-requirements
+  stage reads a requirement against the five EARS patterns as a checklist
+  for what has to be stated, not a template to generate wording from: a
+  slot the source doesn't support becomes a question addressed to a
+  person, never a filled-in guess. Lookup detail that used to keep the
+  body pinned at its 500-line limit moved into
+  `skills/acceptance/references/`, shipped in the same npm tarball as the
+  skill itself; the body went from 499 lines to 372.
+
 ## 0.4.0 — 2026-08-16
 
 ### Breaking

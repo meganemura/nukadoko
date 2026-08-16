@@ -103,6 +103,18 @@ for (const name of skillNames) {
       const lineCount = body.split("\n").length;
       expect(lineCount).toBeLessThan(500);
     });
+
+    it("only points at references/ files that actually exist", async () => {
+      // A skill that names a reference and doesn't ship it distributes a
+      // broken pointer (skills/ is in package.json's `files`, so a reader
+      // outside this repository hits exactly this path). Vacuous for a
+      // skill with no references/*.md mentions at all.
+      const content = await readFile(path.join(dir, "SKILL.md"), "utf8");
+      const referencePaths = [...content.matchAll(/references\/[a-z0-9-]+\.md/g)].map((m) => m[0]);
+      for (const referencePath of new Set(referencePaths)) {
+        expect(existsSync(path.join(dir, referencePath))).toBe(true);
+      }
+    });
   });
 }
 
