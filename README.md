@@ -510,11 +510,17 @@ first run rather than quietly changing what the suite does.
 Three of those suites have since been run rather than read, in
 [nukadoko-compat-lab](https://github.com/meganemura/nukadoko-compat-lab),
 which copies a pinned corpus, rewrites the one import, and runs `nuka run`
-against the result. One passed on the import alone. The two that did not
-failed for reasons on nukadoko's side rather than theirs, and both are
-fixed now, though the lab has not been re-run since. Reading glue as text
-found the blockers that are visible in glue; executing it found two that
-were not.
+against the result. One passed on the import alone. Of the other two, one
+now passes: step discovery originally read only `.ts` files, so glue
+written as plain `.js` went undiscovered; 0.1.0 widened that to
+`.ts`/`.mts`/`.js`/`.mjs`, and the suite has passed on every version the
+lab has re-tested since. The other still fails: a file outside its glue
+calls a plain `require()`, and discovery walks every file under the
+suite's feature directory, not just the ones that register steps, so that
+throws mid-import and aborts discovery. `nuka check` tolerates the failure
+and names the file; `run` is fail-fast and does not recover. The lab was
+last re-run 2026-08-16. Reading glue as text found the blockers that are
+visible in glue; executing it found two that were not.
 
 One blocker deserves naming up front, because it is a go/no-go rather than
 a pass: **a CommonJS suite cannot use the door at all.**
