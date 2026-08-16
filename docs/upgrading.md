@@ -33,11 +33,11 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## 0.3.0 to Unreleased
+## 0.3.0 to 0.4.0
 
 One breaking change, plus one action that is not breaking. Each entry
 says what to fix; why is in [CHANGELOG.md](../CHANGELOG.md) under
-`## Unreleased`.
+`## 0.4.0`.
 
 - **A step record's and a scenario record's id-bearing field names
   changed again, following one rule now: `<grain>_record_id`, or `run_id`
