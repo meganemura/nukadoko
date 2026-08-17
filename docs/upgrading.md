@@ -33,6 +33,25 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.4.1 to 0.5.0
+
+Additive, with one narrow exception. Why is in
+[CHANGELOG.md](../CHANGELOG.md) under `## 0.5.0`.
+
+- **`Step` now always carries `parts`, so a hand-written `Step` object
+  literal no longer typechecks.** `Step` is an exported type and `parts`
+  is required on it, the same way `from` already is, so every reader can
+  iterate it without checking for `undefined` first. Nothing built by
+  `defineStep` is affected, and neither is code that only annotates or
+  passes a `Step` around; the one thing that breaks is constructing the
+  object by hand, which a test double is the usual reason to do. Add
+  `parts: []` to it, or better, build it with `defineStep`.
+- **Nothing else needs doing.** A step record gained an optional `calls`
+  field, `nuka steps --json` and `nuka describe` gained `parts`, and
+  `needs`/`needs_browser` now account for a step's parts. No field was
+  renamed or removed, so an existing acceptance record stays valid and a
+  script reading either JSON keeps working.
+
 ## 0.3.0 to 0.4.0
 
 One breaking change, plus one action that is not breaking. Each entry
