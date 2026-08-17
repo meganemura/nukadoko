@@ -21,6 +21,19 @@
     },
     { "en": ["rot", "rotting", "rotten"], "ja": "腐る / 腐敗" },
     {
+      "en": ["harvest", "harvesting"],
+      "ja": "収穫する / 収穫",
+      "note": "tending → 手入れ と対の比喩。ぬか床は手入れをして、そこから収穫する。見出しは `Harvesting(収穫)` と書く(`Tending(手入れ)` と同じ形)。コマンド名 nuka harvest と、そのコマンドが計算するものを技術的な主語として指すときは英語のまま"
+    },
+    {
+      "en": ["draft"],
+      "ja": "下書き",
+      "note": "`nuka harvest` が出す未完成の feature。既に地の文で「AI が下書きした型付き step」として使われていた語を流用した。同じ doc に「起草した」もあるが、あちらは gate のより形式的な意味なので使い分ける"
+    },
+    { "en": ["provenance"], "ja": "由来", "context": "どの実行がその値を供給したか" },
+    { "en": ["round trip"], "ja": "往復", "context": "harvest が出した行を読み戻して同じ args に戻るか確かめること" },
+    { "en": ["placeholder"], "ja": "プレースホルダー" },
+    {
       "en": ["composite", "composite step"],
       "ja": "複合 / 複合 step",
       "note": "part を呼んで組み立てられている step。下の synthetic と 1 文字違いに訳し分けないこと。片方は step で、もう片方は step だったことが一度も無い"

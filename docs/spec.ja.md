@@ -1569,6 +1569,77 @@ matrix はシステムの今の姿を記述すると主張するため、シス�
 手順 1-4 が作業とレビューの場所です(新しい型付き step と feature 自体は通常の PR の題材であり、基準から scenario への翻訳こそがレビュアーがチェックするための判断です)。
 手順 5-7 は機械的であり、ツールは静かに誤って進むのではなく拒否します。
 
+そのループは受け入れ基準から始まります。
+後述の「Harvesting(収穫)」は逆向きの入り口であり、代わりに探索から始まった作業のためのもので、このループの手順 3 で合流します。
+
+## Harvesting(収穫)
+
+`nuka do` は適応的なループです(「単体 step」を参照)。
+agent はバリデーション済みの result を読み、次の呼び出しを決めます。
+それが残すものが意図的に evidence ではないのは、ad-hoc な一連の呼び出しは作業記録であり、それが物語だと誰も合意していないからです。
+そのため、何か本物を見つけた探索は、その発見を何もゲートできない形のまま終え、たどった経路は削除しても安全なディレクトリの中にしか残りません。
+
+`nuka harvest <step-record-id>...` は、それらの記録から組み立てた 1 つの feature の下書きを stdout に出力します。
+それは、このツールが分けて保っている 2 つのもの、すなわち適応して見つかった経路と、誰かが合意した 1 つの文に固定された経路との橋渡しです。
+
+```sh
+nuka harvest step-20260817-a1b2 step-20260817-c3d4 > acceptance/cart.feature
+```
+
+分業のあり方は、このツール全体を動かしているのと同じものです。
+`harvest` は、自分が計測したものだけを正確に埋めます: どの step が、どの順序で動いたか、各行のテキスト、そしてどの値が行そのものではなく以前の実行から来たか、です。
+あらゆる**主張**は空欄のまま残します、主張は step record が含むものではないからです。
+
+空欄は 2 つあり、どちらも同じ種類の空欄です。
+`Feature:` と `Scenario:` は、生成された名前ではなくプレースホルダーを受け取ります。
+すべての行は `Given`、`When`、`Then` のどれでもなく `*` を受け取ります。
+キーワードは、読む人にとってその行が何であるかを述べるものであり、記録が語るのは何が実行されたかだけなので、キーワードを選ぶことは、支えられない主張をツールが作り出すことになってしまいます。
+`*` は位置を持たない本物の Gherkin キーワードなので、下書きはパースでき、物語がまだ欠けている間も `nuka check` はそれを読めます。
+
+キーワードを `mutates` から導くことが代替案でしたが、ここでは誤った推測が推測なしより悪いという理由で退けられました: もっともらしいキーワードはレビューを通り抜けてしまいますが、`*` はそうなりません。
+下書きを仕上げるのが agent であれ人であれ、それはどのみち推測をチェックしなければならなかったはずの当事者と同じです。
+
+**どの記録が 1 つの一連をなすかは、コマンドラインで言うものであり、保存されるものではありません。**
+`do` には意図的にグループ化のラベルがなく、それを足せば ad-hoc な一連の呼び出しが、それではないものに見え始めてしまいます。
+何も足す必要はありません: `do` はそれぞれが自分の step record を出力するので、適応的なループを回している呼び出し元はすでにすべての id を持っています。
+期間(`--since`、`--last 10`)は代わりに推測することになり、試したが放棄した探りを静かに引き込んでしまいます。
+それはまさに、読み手が本物の行と見分けられない行です。
+
+コマンドラインが言うのは*どの*記録かであって、その順序では決してありません。
+下書きは各記録自身の `started_at` に従うので、2 つの id を逆順に並べた呼び出し元でも、実際に実行された順序をそのまま得られます。
+ここでは順序は計測であり、引数リストは選択です。
+
+行のどこにも現れない値は、連鎖に任されます。
+step record の `used` は、どの実行が各 `from` キーを供給したかを名指ししており(「Records」を参照)、これは再構築ではなく計測なので、`harvest` はそのキーについて何も書かず、生産者自身の行にそれを供給させます。
+そのあと、`nuka check` と `nuka run` が共有する束縛順序のチェックが、何かが動くより前に順序を証明します。
+代わりに `--args` から来たキーは、キャプチャがそれを受け取る行に書き込まれるか、あるいは唯一の未消費の required キーを受け取れる docstring や table に書き込まれます(「型付き step」を参照)。
+どちらにも当てはまらないキーはコメントでその旨を添えて省かれ、`check` はいつもと同じ理由でその行を拒否します。
+
+解決される代わりに記録される 3 つのことがあり、それぞれ下書きと stderr の両方に載ります。
+
+- **`pattern` を持たない step** は、そもそも行になれません。
+  それは、step とその args を名指しするコメントになります。
+  それがまだ文を書かれていない step だったのか、それとも別の step の内側にある part だったのかは、scenario が何のためのものかについての判断なので、下書きは事実を述べるだけにとどめ、判断は残します。
+- **実行が失敗した記録** は行になり、それが動いたときに何が、どう失敗したかを述べるコメントが添えられます。
+  これは、持つ価値のあるケースを保ちます: バグを再現した探索は、振る舞いが変わるまでは red のままの scenario として収穫され、それから green になり、受け入れ可能になります。
+  red な下書きが誤って evidence になることは決してありません、`nuka accept` は green なフル run なしには拒否するからです(「Sign-off」を参照)。
+  失敗した記録は連鎖の上流にもなれません、`--use` がすでにそれを拒否しているからです。
+  これにより再構築は健全なまま保たれます。
+- **元の記録へ読み戻らない行です。**
+  pattern は optional text(`item(s)`)や alternation(`is/are`)を持つことがあり、そのどちらかを逆向きにたどっても答えは 1 つに定まりません。
+  黙って選ぶ代わりに、`harvest` は自分が書いたそれぞれの行を、`nuka run` と同じマッチングを通して読み戻し、同じ step に同じ args で行き着くことを確かめます。
+  行き着かない行は、何が書かれ、それが何として読み戻ったかとともに名指しされます。
+
+この往復こそが、`harvest` が自分自身の出力を判定する唯一の場所であり、そこでは 2 つ目の実装ではなく `run` 自身のマッチングを再利用するので、行が何を意味するかについて両者が食い違うことは決してありません。
+
+由来は stderr に行き、ファイルには決して入りません。
+id が指すのは state directory であり、それは gitignore されていて削除しても安全なので(「The state directory」を参照)、それらを名指しするコメントを commit された feature の中に置けば、読み手がたどれない参照になってしまいます。
+作業中の情報は作業が起きている場所に属します。
+feature ファイルは耐久性のある成果物であり、真であり続けるものだけを保ちます。
+
+`nuka run` からの step record は、収穫されるのではなく拒否されます。
+その記録はすでに 1 つの feature に属しており、役に立つ答えはそこから生成される 2 つ目の feature ではなく、それが属する feature そのものなので、拒否はそれが由来する scenario record を名指しします。
+
 ## Allure emitter
 
 `nuka run` は、step が終わるたびに、その step 1 つにつき 1 つの Allure test result を、そして scenario が終わるたびに、その scenario 1 つにつきもう 1 つの Allure test result を、`export/allure-results/` ディレクトリに書き込みます(Allure 2 のファイル形式で、Allure 2 と 3 の両方で読めます)。
@@ -1935,6 +2006,16 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
+nuka harvest <step-record-id>...
+                              turn a `do` sequence into one feature draft on
+                              stdout: the lines and their order are measured,
+                              the keywords are `*` and the names are
+                              placeholders, because a claim is not in a step
+                              record. What cannot become a line, what failed
+                              when it ran, and what does not read back to the
+                              record it came from are named in the draft and
+                              on stderr. Provenance goes to stderr only. A
+                              `nuka run` record is refused
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, which
                               fixtures each step needs (needs, needs_browser,
@@ -2072,7 +2153,9 @@ nuka skill path               where the bundled skill lives, for a project
   受け入れ条件そのものではない片付けを置く場所です。
 - **M9(parts)**: `defineStep` の `parts`、`call` fixture、step record が新たに持つ `calls` エントリ、そしてそれに伴う check です(「Parts」を参照)。
   feature ファイルを書き換えずに step を分割できるようになり、scenario の行より小さい粒度での再利用がそもそも可能になります。
-- **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
+- **M10(harvesting)**: `nuka harvest`、名指しされた `do` の一連の呼び出しから組み立てられる 1 つの feature の下書きです(「Harvesting(収穫)」を参照)。
+  これは適応的なループを閉じる一手です: 探索によって見つかった経路が、1 つの文に固定された経路になり、それがここでゲートできる唯一の形だからです。
+- **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート
 
