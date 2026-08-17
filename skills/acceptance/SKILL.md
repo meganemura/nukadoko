@@ -148,14 +148,12 @@ When the work started by exploring rather than from criteria: you drove
 one, and now the path that matters is the one you just took. `nuka
 harvest` turns that path into a draft.
 
-Still exploring, and stuck because a step's `returns` only shows you what
-it already decided to show? Write one probe step with no `pattern` and a
-`returns` of `z.unknown()`, and read the whole thing off `nuka do`'s own
-stdout. When an operation has several moves, make each a part: the calling
-step's record then carries a `calls` entry per part, with the args it was
-handed and the result it returned, which is where the next move comes
-from. Parts share one browser and one page inside a single execution;
-across `do` calls nothing carries but `--session`'s login state.
+Still exploring, and stuck because a step's `returns` only shows what it
+already decided to show? Write one probe step with no `pattern` and a
+`returns` of `z.unknown()`, and read the whole thing off `nuka do`'s
+stdout. For an operation with several moves, make each one a part: the
+calling step's record then carries each part's own args and result under
+`calls`, which is where the next move comes from.
 
 The probe example, how far a composite can grow before repeating it costs
 you, and what to do for an operation that cannot be repeated:
@@ -222,7 +220,9 @@ Then join "The loop" below at step 4, `nuka check`.
    fine; they simply cannot be accepted.
 6. `nuka run <feature>` until green; when it fails, diagnose from the
    failed step's own step record before repeating the whole run (see "When
-   a run fails").
+   a run fails"). `run` always needs a target named, unlike `check`, which
+   walks the project when given none: checking everything is cheap and
+   running everything is not.
 7. `nuka accept <feature>`, then commit the record it wrote.
 
 ## Reading the vocabulary
@@ -293,9 +293,14 @@ because that source text is how nukadoko decides which fixtures to build,
 without ever calling `run`. A step needing no fixtures writes `run({},
 args)`; any other parameter name is refused.
 
-A complete step file, pattern rules, aliasing a fixture, the `do`/`run`
-gap, what a step should return beyond what a later step cites, and what
-`rationale` is for: `references/writing-steps.md`.
+A step fails when its `run` throws and passes when it does not. `expect`
+is Playwright's own, imported directly; nukadoko has no assertion API and
+re-exports none.
+
+A complete step file, how a Then step asserts and what it should return,
+pattern rules, aliasing a fixture, the `do`/`run` gap, what a step should
+return beyond what a later step cites, and what `rationale` is for:
+`references/writing-steps.md`.
 
 ## Chaining a value from an earlier step
 

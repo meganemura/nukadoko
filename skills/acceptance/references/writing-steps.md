@@ -43,6 +43,61 @@ fixtures at all writes `run({}, args)`, and one needing neither writes
 `context` and `request` are Playwright's own objects, so reach for
 Playwright's documentation for what to call on them rather than guessing.
 
+## Writing a step that checks something
+
+A step fails when its `run` throws and passes when it does not. There is
+no assertion API of nukadoko's own and none is re-exported: `expect` comes
+from Playwright, imported directly, and asserts exactly as it would in a
+Playwright test.
+
+```ts
+import { z } from "zod";
+import { expect } from "playwright/test";
+import { defineStep } from "nukadoko";
+
+export default defineStep({
+  pattern: "the customer {id:string} is in trial",
+  description: "Check that a customer's trial has not ended",
+  args: z.object({ id: z.string().describe("Customer id") }),
+  returns: z.object({
+    trialEndsAt: z
+      .string()
+      .nullable()
+      .describe("The trial end date the service reported"),
+  }),
+  mutates: false,
+  async run({ request }, args) {
+    const res = await request.get(`/customers/${args.id}`);
+    const customer = await res.json();
+    expect(customer.trialEndsAt, "trialEndsAt").not.toBeNull();
+    return { trialEndsAt: customer.trialEndsAt };
+  },
+});
+```
+
+Two habits make that record worth reading afterwards, and they cover
+opposite outcomes.
+
+**Assert with `expect` rather than a bare `throw`.** A step that failed
+has no `result` at all, only `error`, so its message is the one place the
+observed value can still survive. `expect` writes actual and expected into
+that message for you; `throw new Error("mismatch")` throws the evidence
+away at the exact moment someone needs it.
+
+**Return what you observed, never a verdict.** `{ matches: true }` tells a
+later reader nothing they did not already know from the step passing.
+`{ trialEndsAt: "2026-09-01" }` tells them what was actually true, which
+is what makes a green record worth keeping. Describe those fields: on the
+Then side, a field with no `.describe()` breaks the link between an
+acceptance criterion's wording and what was actually observed.
+
+**One step per claim, or one step with the expected value in the line?**
+Let the sentence decide, since the sentence is what a non-engineer agreed
+to. "the total is {expected:int}" carries its expected value naturally, so
+that is one step. "is in trial" and "is not in trial" read as two
+different claims, so they are two steps, and whatever they share goes into
+a part they both call.
+
 ## Writing the pattern
 
 Every parameter is `{key:type}`, and the key names the `args` field it
