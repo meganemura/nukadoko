@@ -10,6 +10,7 @@ import { readOwnVersion } from "../version.js";
 import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
 import { runDo } from "./do.js";
+import { runHarvest } from "./harvest.js";
 import { runInit } from "./init.js";
 import { runMcpTools } from "./mcp-tools.js";
 import { runRun } from "./run.js";
@@ -58,8 +59,11 @@ import type { WritableSink } from "./writable-sink.js";
 // `import()` rather than a static one — that file's own header explains
 // why) and stays a top-level command, unlike `webmcp-tools`: MCP is the
 // protocol this whole surface is named after, not an auxiliary one
-// (docs/spec.md "MCP servers"); this module only wires their argv shapes
-// and reports their exit codes.
+// (docs/spec.md "MCP servers"); `harvest`'s own draft-rendering and
+// round-trip logic lives in cli/harvest.ts (thin wiring) and
+// src/harvest/* (the actual work), the same split as `check`/`tend`/
+// `accept`; this module only wires their argv shapes and reports their
+// exit codes.
 //
 // `--version` reads nukadoko's own package.json via
 // src/version.ts's readOwnVersion() and is fed to yargs' `.version()`
@@ -110,6 +114,14 @@ interface RunArgs {
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
   quiet?: boolean;
+}
+
+interface HarvestArgs {
+  /** yargs' own `<name..>` variadic positional syntax collects every
+   * positional token into this array, in the order given on the command
+   * line — `nuka harvest`'s own handler re-sorts them by each record's
+   * `started_at` before rendering anything (docs/spec.md "Harvesting"). */
+  stepRecordIds: string[];
 }
 
 interface SessionListArgs {
@@ -412,6 +424,35 @@ export async function runCli(
     },
   };
 
+  const harvestCommand: CommandModule<Record<string, never>, HarvestArgs> = {
+    command: "harvest <step-record-ids..>",
+    describe:
+      "one feature draft to stdout from `nuka do`'s own step record ids, in the order they actually " +
+      "ran; every line's keyword is `*` and its name is a placeholder — provenance goes to stderr only",
+    builder: (y: Argv) =>
+      y.positional("step-record-ids", {
+        type: "string",
+        array: true,
+        demandOption: true,
+        describe: "one or more step record ids, as printed by `nuka do` (no time window, no --since)",
+        // yargs' own variadic-positional overloads produce a type its
+        // `.check()`/`.alias()` chain (used internally, not by this file)
+        // can't structurally match against `HarvestArgs` — `unknown` first,
+        // same remedy TS itself suggests, since the runtime shape (yargs'
+        // own camelCase expansion of "step-record-ids") is exactly
+        // `HarvestArgs` regardless.
+      }) as unknown as Argv<HarvestArgs>,
+    handler: async (args: Arguments<HarvestArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runHarvest({
+        rootDir,
+        stepRecordIds: args.stepRecordIds,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const sessionListCommand: CommandModule<Record<string, never>, SessionListArgs> = {
     command: "list",
     describe: "list sessions for the default environment",
@@ -703,6 +744,7 @@ export async function runCli(
     .command(describeCommand)
     .command(doCommand)
     .command(runCommand)
+    .command(harvestCommand)
     .command(sessionCommand)
     .command(initCommand)
     .command(scaffoldCommand)
