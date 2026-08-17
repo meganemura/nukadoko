@@ -41,8 +41,13 @@ implemented too: `from` on `defineStep`, the binding-order check `nuka
 check` and `nuka run` share, `nuka do --use`, and `used` naming the step
 beside each step record. M7 (tending) is in: `nuka tend`, for what is rotting
 rather than what is broken — kept off `nuka check` so that command stays
-worth stopping for. Still unimplemented: the AI-assisted glue converter and
-scenario harvesting.
+worth stopping for. M8 (fixtures) is in as well: `defineFixtures`, scope,
+`use()`-based teardown, and the `check`/`tend` findings that come with them.
+M9 (parts) is in: `parts` on `defineStep`, the `call` fixture, the `calls`
+entries a step record gains, and the three `check` findings that go with
+them. A step can be split without its feature file being rewritten, which
+is what makes a reuse granularity smaller than a scenario line possible.
+Still unimplemented: the AI-assisted glue converter and scenario harvesting.
 
 ## Naming rule
 

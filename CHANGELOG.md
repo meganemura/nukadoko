@@ -5,6 +5,80 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **A step can call another step, so a step can be split without its
+  feature file being rewritten.** `defineStep` takes `parts`, the list of
+  steps this one's `run` may call, and the new `call` fixture runs one:
+  `const project = await call(createProject, { name: args.name })`. There
+  is no new kind of unit here. A part is an ordinary step, usually one
+  defined without a `pattern`, which was already complete CLI-only
+  vocabulary that `nuka do` runs and `nuka steps` lists; what was missing
+  was a way to call one. What makes it worth having is what it leaves
+  alone. The calling step keeps its pattern, its `args`, and its
+  `returns`, so a scenario that was agreed with the people who decide
+  what the software is for, and that may already carry a sign-off, stays
+  as it is while the implementation underneath is split in two. Giving
+  that same part a `pattern` later binds it as a scenario line of its own
+  without taking it away from the step that calls it, which is how a
+  second scenario gets half of an existing step without the first
+  scenario paying for it. `parts` is declared rather than read out of the
+  body because a step's fixture bag is built before `run` is called: a
+  step's needs are now its own destructured names together with every
+  part's, closed transitively, so a composite whose part reaches for
+  `page` opens a browser. Reading `call` sites out of a body instead
+  would be a parser guessing at control flow, and the guess would be
+  wrong on exactly the calls that sit inside a branch. `call` refuses a
+  step `parts` does not list, and refuses one discovery never registered,
+  which is the mistake `ctx.resultOf` already throws on.
+- **A step record carries `calls`**: one entry per part this execution
+  ran, with the part's name, the args it was given, the result it
+  returned, when it started and finished, and its own error when it
+  failed. A part that called a part nests under that entry. These are not
+  step records and carry no `step_record_id`. A scenario record's
+  `steps[]` stays one entry per feature line, because a feature that does
+  not name everything that ran stops being the record this tool exists to
+  keep; what a part adds is depth under one of those lines. Everything
+  measured stays at the step boundary as well: `observed`, `sections`,
+  `used`, `required_env`, the evidence directory, and the trace are the
+  calling step's, and count the parts' work inside their own totals, so
+  nothing is counted twice and nothing that ran goes uncounted because it
+  ran inside a part.
+- **`nuka steps --json` and `nuka describe` show `parts`**, so an agent
+  reading the vocabulary can see that one step is built out of others
+  without opening a file, the same reason `from` is already there. `nuka
+  steps`' one-line-per-step text listing is unchanged: it stays readable
+  in one screen however large the vocabulary grows. A step's `needs` and
+  `needs_browser` now account for its parts too, since the bag its parts
+  will destructure from is the one the composite is given.
+- **The Allure emitter nests a `calls` entry as a nested step** under the
+  step that called it, carrying the part's args and result as parameters,
+  through the reporter machinery's own nesting rather than a shape
+  invented here.
+- **`nuka check` gains three findings about `parts`**, all of them things
+  it can be certain of without running anything.
+  `part-structural-violation` names an entry that is not a `Step`, or one
+  discovery never registered. `part-cycle` names a step that reaches
+  itself, which can never close into a fixture bag or a terminating run.
+  `part-mutates-contradiction` names a step declaring `mutates: false`
+  while declaring a part that declares `mutates: true`, since `mutates`
+  covers everywhere the step touches and a part it may call is part of
+  that reach. That last one is also what keeps `then-mutates` reading a
+  single flag on a single step instead of walking a graph. A declared
+  part the body never calls is reported by nothing, on purpose: the call
+  is inside `run` while the declaration names a `Step` object, so
+  matching them would be a guess about an identifier, and a check that
+  guesses costs more than the silence it replaces.
+- **A read-only environment now refuses a `mutates: true` part**, at the
+  call, before it runs, whatever the calling step declared about itself.
+  Only the entry step's own flag was checked before, so a composite
+  declaring `mutates: false` while calling a mutating part could reach
+  the wire under a read-only policy. The static contradiction check above
+  catches the same mistake earlier and more cheaply; this is what holds
+  when nobody ran `nuka check`.
+
 ## 0.4.1 — 2026-08-16
 
 ### Changed
