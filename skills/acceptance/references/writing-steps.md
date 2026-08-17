@@ -112,6 +112,35 @@ its body moves.
 4. Run the original scenario. Its feature file did not change, so a
    sign-off over it still describes what is on disk.
 
+`parts` takes the imported step objects themselves, never their names,
+the same way `from` names its producer:
+
+```ts
+import openAccount from "./open-account.js";
+import sendWelcomeMail from "./send-welcome-mail.js";
+
+export default defineStep({
+  // pattern, description, args and returns are exactly what they were
+  pattern: "a customer {email:string} is onboarded on the {plan:string} plan",
+  args: z.object({ email: z.string(), plan: z.string() }),
+  returns: z.object({ accountId: z.string(), mailId: z.string() }),
+  parts: [openAccount, sendWelcomeMail],
+  async run({ call }, args) {
+    const { accountId } = await call(openAccount, {
+      email: args.email,
+      plan: args.plan,
+    });
+    const { mailId } = await call(sendWelcomeMail, { email: args.email });
+    return { accountId, mailId };
+  },
+});
+```
+
+Get each part right on its own before wiring the composite back together.
+A part with no `pattern` is still vocabulary, so it runs alone like any
+other step: `nuka do open-account --args '{"email":"ada@example.com",
+"plan":"team"}'`.
+
 When the second scenario wants to name one half as a line of its own,
 give that part a `pattern`. It stays callable from the composite at the
 same time, so both granularities exist at once and neither scenario is
