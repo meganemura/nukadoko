@@ -20,6 +20,17 @@
       "note": "「ぬか床は毎日手入れをすれば熟成し、放っておけば死ぬ」という比喩と対になっている。コマンド名 nuka tend は英語のまま"
     },
     { "en": ["rot", "rotting", "rotten"], "ja": "腐る / 腐敗" },
+    {
+      "en": ["composite", "composite step"],
+      "ja": "複合 / 複合 step",
+      "note": "part を呼んで組み立てられている step。下の synthetic と 1 文字違いに訳し分けないこと。片方は step で、もう片方は step だったことが一度も無い"
+    },
+    {
+      "en": ["synthetic"],
+      "ja": "合成",
+      "context": "Allure の \"Scenario evidence\" のように、emitter が作り出して step には対応しない fixture",
+      "note": "composite(複合)と別語にしてある。まとめると、part から組み立てた step と、emitter の発明物との区別が消える"
+    },
     { "en": ["mature", "matures"], "ja": "熟成する" },
     { "en": ["deviation"], "ja": "逸脱" },
     { "en": ["chain", "chaining", "chained"], "ja": "連鎖" },
@@ -163,6 +174,10 @@
     {
       "term": "step",
       "why": "Gherkin の行、defineStep で定義される単位そのものを指すドメイン語。訳すと概念との結び付きが失われる"
+    },
+    {
+      "term": "part",
+      "why": "他の step から `parts` で宣言され `call` で呼ばれる step を指す。新しい種類の単位ではなく step が担う役割なので、訳すと「part は step である」という関係が切れる。API の語(`parts` / `call` / step record の `calls`)とも直結する。「a part」「その part」のように地の文でもそのまま使う"
     },
     {
       "term": "record",

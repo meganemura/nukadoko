@@ -202,6 +202,8 @@ export default defineStep({
   それこそがその隙間です。
 - `mutates`(デフォルトは `true`)は、その step が触れる範囲のどこかで状態を変更するかどうかを表します。
   読み取り専用の step は `mutates: false` を宣言します。
+- `parts`(デフォルトは `[]`)は、この step 自身の `run` が `call` fixture を通じて呼び出すことがある step を列挙します(「Parts」を参照)。
+  どれも呼ばない step はこれを省略でき、`from` と同じ慣習です。
 - `rationale` は任意で、デフォルト値を持ちません。
   省略すると `Step.rationale` は `undefined` になり、`pattern` と同じ慣習です。
   `description` とは別の問いに答えます。
@@ -272,6 +274,10 @@ fixture の名前:
   `resultOf` に残るのは、キー名では表せない読み取りです。
   discovery が登録しなかった `Step` を渡すと、`undefined` を返す代わりに投げます。
   その規則がどんな間違いを捕まえるためのものかは「step の連鎖」を参照してください。
+- `await call(stepModule, args)`: この step が `parts` で宣言した step のひとつを実行し、そのバリデーション済みの result を返します(「Parts」を参照)。
+  args はその part 自身の `args` スキーマに対して、result は `returns` に対してバリデーションされます。
+  呼び出しはこの step 自身の step record の `calls` 配下に記録されます。
+  `parts` に宣言していない step、あるいは discovery が登録しなかった step を渡すと、実行される代わりに投げます。
 - `section(label: string): void`: 実行がその名前の段階に到達したことを記録します。
   同期的で、返り値はなく、対になる「終了」呼び出しもありません。
   呼び出しはすべて、呼ばれた順で step record の `sections`(「Records」を参照)に追加され、一度も呼ばない step には `sections` キー自体が現れません。
@@ -383,7 +389,7 @@ nukadoko はこの覆いそのものを今のところ検出しません。
 ### Fixtures
 
 「Context API」が説明する bag は閉じています。
-`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`section`、`poll`、`evidence`、それだけです。
+`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`call`、`section`、`poll`、`evidence`、それだけです。
 プロジェクト自身の資源、テナント、シードされたデータベース、アップロードされたファイルを必要とする step には、その片付けを置く場所がこれまでありませんでした。
 片付けを step 自身に書けば、feature ファイルが受け入れ条件ではない何かを名指すことになり、片付けを省けば漏れます。
 `nukadoko.config.ts` はこの隙間を埋めます。
@@ -404,7 +410,7 @@ export default defineConfig({
 fixture は素の関数か、`[関数, options]` のタプルです。
 Playwright 自身の fixture 定義が取るのと同じ 2 つの形であり、依存が `page`/`context`/`request`/`baseURL` の内側に収まる fixture なら、そのまま `base.extend()` に渡せます。
 この共有できる部分集合は形についての事実であり、このパッケージが交わす約束ではありません。
-`env`、`section`、`poll`、`resultOf`、`evidence`、あるいはほかの nukadoko 固有の名前を分割代入する fixture は、Playwright 自身の runner には何も意味しません。
+`env`、`section`、`poll`、`resultOf`、`call`、`evidence`、あるいはほかの nukadoko 固有の名前を分割代入する fixture は、Playwright 自身の runner には何も意味しません。
 そして `auto: true`(Playwright に、何も名指していない fixture を構築させるオプション)は、理由を名指したうえで丸ごと拒否されます。
 feature ファイルが実行されたすべてを名指すという原則があり、何にも名指されていない fixture を構築することは、まさにその原則が禁じることだからです。
 「同じ定義の形を受け取る」がこのパッケージの主張のすべてであり、その形を超えて「Playwright fixture 互換」を名乗ることはありません。
@@ -437,7 +443,7 @@ nukadoko にはまだ並列実行がなく、`worker` スコープはいまの `
 `process` スコープの fixture は、そこでは `scenario` スコープの fixture とまったく同じにふるまいます。
 `process` スコープの fixture が依存してよいのは、ほかの `process` スコープの fixture と、`env`/`requireEnv`/`baseURL` だけです。
 この 3 つの builtin だけは、どの scenario の context がそれを読むかによって値が変わりません。
-`page`、`context`、`request`、`resultOf`、`section`、`poll`、`evidence`、あるいは `scenario` スコープの fixture への依存は拒否されます(`fixture-scope-violation`)。
+`page`、`context`、`request`、`resultOf`、`call`、`section`、`poll`、`evidence`、あるいは `scenario` スコープの fixture への依存は拒否されます(`fixture-scope-violation`)。
 `process` スコープの fixture は自分自身の構築を、それを供給したはずのその scenario より長く生き延びさせうるからです。
 
 `process` は 1 つの `nuka run` 実行のことではなく、1 つのアドレス空間のことを名指します。
@@ -669,8 +675,8 @@ scenario には 2 つあるのに、1 つのものを求めているからです
 これに関連する圧力は現実のもので、別の答えを持っています。
 連鎖する値は必ずどこかの step から来なければならず、その step は feature の中に現れなければならないため、scenario には id を運ぶためだけに存在し(`And the project's billing page is fetched`)、その feature が書かれた対象の読み手には何も意味しない行が残ることがあります。
 ある操作がその読み手にとって価値を持たないなら、それはそもそも step であるべきではありません。
-`features/steps/lib/` の下に普通の関数として置き、それを必要とする step から呼び出します。
-そこで手放すのはそのヘルパー自身の step record であり、それが行う HTTP は今も `observed` に数えられ、`section` も実行がどこまで進んだかを記録し続けられます。
+置き場所は 2 つ残っており、両者を分ける線は後述の「Parts」が引きます。
+契約として述べるべきものが何もなければ `features/steps/lib/` の下の普通の関数、あれば part です。
 記録の粒度と feature の読みやすさは、step の書き手が場合ごとに下す判断であり、これがその判断を下す軸です。
 
 step の連鎖は宣言と計測が出会う場所であり、`mutates` の場合(「キーワードの意味論」を参照)とは違う出会い方をします。
@@ -681,6 +687,133 @@ HTTP メソッドが書き込みの意味論の代わりを務めており、そ
 そして `from` はそれを記述するのではなく実行そのものを駆動するため、宣言と実際に起きたことは食い違いようがなく、そもそも突き合わせるべきものが最初から存在しません。
 step record の `used`(「Records」を参照)は、それゆえ宣言に対するチェックではなく、宣言には答えられない問いに答えます。
 値を供給したのがどの step かはファイルが書かれた時点ですでに決まっていましたが、それを供給したのがどの実行かは実行時にしか決まらず、`used` が答えるのはその問いです。
+
+### Parts
+
+step は scenario が読む粒度で書かれますが、それは他の誰かが再利用したい粒度とはめったに一致しません。
+この不一致は、2 つ目の scenario が現れた瞬間に 2 つの形で現れます。
+1 つは、step 自体は正しいのに具体的すぎる場合で、それを一般化するには pattern が捉える `args` キーを 1 つ増やすだけであり、それは契約のチェックがすでにカバーしている範囲です。
+もう 1 つは、step が 2 つのことをしていて次の scenario はそのうち片方だけを必要とする場合で、手を伸ばす先が何もありません。
+欲しいほうの半分には名前も契約もなく、呼び出す方法もないからです。
+
+その step を 2 つの step に分割し、最初の scenario を書き換えることは答えになりません。
+その feature はソフトウェアが何のためのものかを決める人たちと合意済みであり、すでに sign-off を運んでいるかもしれません。
+合意済みの一文を書き換える実装側のリファクタは、ツールが自分の存在理由である記録と言い争っていることになります。
+
+step は代わりに別の step を呼び出せます。
+`parts` はどの step を呼べるかを宣言し、`call` fixture がそのうちの 1 つを実行します。
+
+```ts
+import { defineStep } from "nukadoko";
+import { z } from "zod";
+import createProject from "./parts/create-project.js";
+import inviteMember from "./parts/invite-member.js";
+
+export default defineStep({
+  pattern: "a project named {string} has {string} as a member",
+  description: "Create a project and invite one member into it",
+  args: z.object({ name: z.string(), email: z.string() }),
+  returns: z.object({ projectId: z.string(), memberId: z.string() }),
+  parts: [createProject, inviteMember],
+  async run({ call }, args) {
+    const project = await call(createProject, { name: args.name });
+    const member = await call(inviteMember, {
+      projectId: project.id,
+      email: args.email,
+    });
+    return { projectId: project.id, memberId: member.id };
+  },
+});
+```
+
+ここに 2 つ目の種類の単位があるわけではありません。
+part とは同じ `defineStep` で定義された `Step` そのものであり、それを part にしているのは別の step がそれを宣言していることだけです。
+呼び出されるためだけに書かれた part は `pattern` を省略します。
+これはすでに存在していた CLI 専用の語彙であり、`nuka do create-project` は単体でそれを実行し、`nuka steps` はそれを一覧します。
+そのため、どの scenario がそれを名指す前からそれは到達可能で読み取り可能です。
+同じ part にあとから `pattern` を与えれば、それを呼ぶ step から取り上げることなく、scenario の行に束ねられます。
+2 つ目の scenario が必要とした分割は、最初の scenario の feature ファイルに手を触れずに済みます。
+これがまさに要点であり、2 つの粒度は共存し、どちらももう一方を置き換えません。
+
+なぜ `parts` は本体から読み取るのではなく宣言されるのか。
+step の fixture bag は `run()` が呼ばれるより前に、その第一引数が分割代入する名前から静的に読み取って構築されます。
+part は同じ bag から自分自身の名前を分割代入するため、`page` に手を伸ばす part を呼ぶ側は bag に `page` を必要とし、その決定はどちらの関数が動くよりも前に下されます。
+本体の中の `call` の呼び出し箇所を読んで突き止めようとすれば、それは制御フローを推測するパーサになってしまい、しかもその推測が外れるのはまさに重要な場合、つまり分岐の中の呼び出しです。
+宣言されていれば、答えはデータになります。
+step が必要とするものは、その step 自身の名前と、それが宣言するものすべての名前を合わせたものであり、推移的に閉じています。
+ユーザー定義 fixture 自身の `page` への到達がすでに閉じているのと同じやり方です(「Fixtures」を参照)。
+その代償は見える形で支払われます。
+`page` に手を伸ばす part を持つ複合 step は、その part を呼ぶ分岐を一度も通らない run でもブラウザを開きます。
+代替案はもっと高くつきます。
+step が始まる前には誰にも読めなかった決定によって、step の途中でブラウザが開いてしまう形こそ、この宣言が排除するために存在するものです。
+
+「step の連鎖」の議論はここでも変わらず成り立ちます。
+名前はデータです。
+`parts` は `nuka steps --json` と `nuka describe` にそのまま残るため、語彙を読む agent はファイルを開かなくても 1 つの step が他の 2 つから組み立てられていることを見て取れ、`nuka check` は何かが実行されるより前にそれを読みます。
+`call` は、`parts` に宣言されていない step を渡すと拒否し、discovery が登録しなかった step を渡しても拒否します。
+これは `resultOf` がすでに投げている間違いと同じです。
+2 度目の `await import()` を経由してたどり着いた step ファイルは、どの語彙とも一致しないオブジェクトを生むからです。
+何にも誠実さを保証させない宣言は、コメントにすぎません。
+
+呼び出しは、それ自身の step record としてではなく、呼び出した step 自身の step record の中に `calls` として記録されます。
+scenario record の `steps[]` は feature の行 1 つにつき 1 エントリのままです。
+feature は実行されたすべてを名指し続け、part が加えるのは feature が求めていないエントリではなく、既存の行の下にある深さです。
+各エントリは part の名前、渡された args、返された result、開始と終了の時刻を運び、失敗したときは step record の `error` と同じ分類のもとでの自分自身の error を運びます。
+part の `args` と `returns` は step のそれとまったく同じようにチェックされます。
+part もまた step だからです。
+part を呼ぶ part も同じように入れ子になります。
+
+分割されないものが 1 つあります。
+step の境界で計測されるものすべてです。
+`observed`、`sections`、`used`、`required_env`、evidence directory、trace chunk はどれも呼び出した step 自身のものであり続け、part の作業もその合計の中に数えられます。
+part は呼び出し元の `ctx` を共有します。
+これは 1 回の実行がより詳しく記述されたものであり、複数の実行が 1 つの record を共有しているのではありません。
+合計を 1 つだけ読むという形は、勘定を誠実に保つことでもあります。
+何も二重に数えられず、part の中で実行されたからといって計測から漏れるものもありません。
+
+呼び出しに際して `from` は参照されません。
+呼び出し元がすべてのキーを自分で渡します。
+`nuka do` と同じやり方であり、それは chain が scenario の性質であって呼び出しはその scenario の中にいないからです。
+scenario の行としても実行される part は、その出現については自分自身の `from` を保ちます。
+宣言が記述するのはその step のことであり、ある呼び出し元が何を供給したかは、他の呼び出し元について何も決めません。
+
+`nuka check` が確信を持てることが 2 つあり、だからそれを言います。
+`parts` の中の循環、つまり自分自身に到達する step は、fixture bag にも終了する run にも決して閉じることができず、エラーです。
+`mutates: false` を宣言しながら `mutates: true` を宣言する part を宣言する step は自己矛盾しており、これもエラーです。
+`mutates` はその step が触れる範囲のどこかで状態を変更するかどうかを述べ、それが呼ぶかもしれない part もその step が触れる範囲の一部だからです。
+このチェックがあるおかげで `then-mutates` は局所的なままでいられます。
+`Then` の行が読むのは今も 1 つの step の 1 つのフラグのままです。
+矛盾チェックがすでにそのフラグに part を織り込ませているからです。
+
+本体が一度も呼ばない、宣言だけされた part は何によっても報告されません。
+これは意図的なものです。
+呼び出しは `run` の中にあり、宣言が名指すのは `Step` オブジェクトそのものであって、本体がたまたまそれを束縛した識別子ではないため、両者が対応していないと判断することは名前についての当て推量になってしまいます。
+本体が part を 1 つの分岐でしか呼ばないこともあり得ます。
+どちらにしても、そのチェックが効いてほしい最初の場面で外れることになり、それは問いに答えないままにしておくより高くつきます。
+ここで `from` との対称性は途切れます。
+使われていない `from` のキーは feature ファイルだけから判定できます(`nuka tend` がそれを報告します)が、使われていない part はまったく判定できません。
+
+読み取り専用のポリシーは、その矛盾チェックを通じて強制されているのではありません。
+読み取り専用の environment は、呼び出し元が自分自身について何を宣言していようと、call のその場で実行前に `mutates: true` の part を拒否します。
+2 つのうち矛盾チェックのほうが安く早く、何も実行されていないうちに矛盾を捕まえます。
+誰もそのチェックを走らせなかったときに効くのは、call での拒否です。
+宣言はここでも他のどこでもと同じように信頼されるため、状態を変更すると宣言する part は、その変更が実際に起きる場所で止められます。
+
+ヘルパーか part か step か。
+「step の連鎖」にあった軸は、2 つ目の問いではなく 3 つ目の位置を得ます。
+その操作は scenario を読む人にとって何かを意味するか。
+意味するなら step であり、acceptance record はそのための step record を得ます。
+意味しないなら、失敗したあとに何が分かるべきかを問います。
+述べる価値のある契約と、読み返す価値のある入力と result があれば part、どちらもなければ `features/steps/lib/` の下の普通の関数です。
+ヘルパーは record 上の自分自身のエントリを手放しますが、それが行う HTTP は今も呼び出した step の `observed` に数えられ、`section` も実行がどこまで進んだかを記録し続けられます。
+それは妥協ではなく、今も本物の選択肢であり続けます。
+payload を整形したり fixture ファイルを選んだりする関数には、誰かが読みたくなるような契約も、凍結する価値のある result もなく、それを part にすることは維持すべきスキーマを買うだけで、それ以外は何も得られません。
+
+途中で 1 つの形が却下されました。
+step ファイルは複数の step を named export として export することもでき、そうすれば分割した半分を、それらを呼ぶ複合 step のすぐ隣に置けたはずです。
+型付き step の名前は何もインポートせずファイル名から補完されます(「実装ノート」を参照)。
+これが語彙がどれだけ大きくなっても TAB を高速なままに保つ理由であり、named export はそれが入っているファイルをインポートしなければ見えません。
+自分自身のファイルを持つ part はその性質を保ち、代償はファイルが 1 つ増えることだけです。
 
 ### キーワードの意味論
 
@@ -694,6 +827,7 @@ step ごとの boolean は出現ごとの事実を運べないため、宣言が
   この緊張関係は人の目でのレビューに値します。
   宣言だけではそれを解決できず、このチェックはあくまで警告にとどまります。
 - **読み取り専用の environment は、宣言上 mutate する step を実行前に拒否します。**
+  `call` を経由して到達した part も含みます(「Parts」を参照)。
   宣言がレビューの目を引くのではなく、実行そのものをゲートする唯一の場所です。
 - **実行時には**、step record がその実行が実際に行ったことを記録します。
   ツールが見たすべてのネットワーク呼び出しが対象であり(`request` fixture と page の両方を通じたもの)、GET/HEAD 以外の呼び出しはすべて観測された書き込みとして数えられ、`mutates`(宣言)の隣に置かれます。
@@ -1050,6 +1184,14 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
   それは「後続の step が参照するものを返す」という、参照だけに頼る罠であり、「型付き step」ですでに戒められているものです。
   これはまた、このフィールドが運べるのは上流の step 自身の `returns` スキーマがそもそも保持していたものだけだということも意味します。
   値を落とす `returns` は、ここからもその値を落とします。
+- `calls`(空でないときだけ現れます)は、この実行が `call` fixture を通じて実行した part を、呼び出した順に列挙したものです(「Parts」を参照)。
+  各エントリは `{ "step": "create-project", "args": {...}, "result": {...}, "started_at": "...", "finished_at": "..." }` の形です。
+  part が失敗したときは `result` の代わりに `error` を運び、その分類は step record 自身の `error` と同じです。
+  part がさらに part を呼んでいれば、そのエントリの下に自分自身の `calls` を運びます。
+  これらは step record ではなく、`step_record_id` を持ちません。
+  `--use` が引用するのは step record であり、この実行が後続の実行に差し出すのはその実行自身の `result` だからです。
+  各内部境界で args と result を記録することこそが、複合 step の record が失敗したあとに読まれる理由です。
+  その境界を越えた値は、そうでなければどこにも残らないからです。
 - `sections`(空でないときだけ現れます)は、この実行中に行われた `section` の呼び出しを、`{ "label": "...", "at": "..." }` の形でそれぞれ、呼ばれた順に並べたものです。
   `used` と違って重複は除きません。
   ループやリトライで 2 回入ったラベルは 2 回入ったのであり、配列はそのとおりに読めるべきです。
@@ -1924,6 +2066,8 @@ nuka skill path               where the bundled skill lives, for a project
   完全な型付けのための `defineFixtures`、scope、step や scenario 自身の成否を運ぶ `use()` ベースの teardown、fixture ごとのタイムアウト、そしてそれらに付随する `check`/`tend` の所見です。
   typed 側にあった、compat の After hook にはなかった 1 つの gap を塞ぎます。
   受け入れ条件そのものではない片付けを置く場所です。
+- **M9(parts)**: `defineStep` の `parts`、`call` fixture、step record が新たに持つ `calls` エントリ、そしてそれに伴う check です(「Parts」を参照)。
+  feature ファイルを書き換えずに step を分割できるようになり、scenario の行より小さい粒度での再利用がそもそも可能になります。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、scenario の harvesting(記録された `do` の一連の呼び出しから feature ファイルを生成する)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート

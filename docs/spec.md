@@ -270,6 +270,9 @@ export default defineStep({
   gap.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
+- `parts` (default `[]`) lists the steps this step's own `run` may call
+  through the `call` fixture (see "Parts"). A step that calls none of
+  them omits it, the same convention `from` follows.
 - `rationale` is optional with no default: omitted, `Step.rationale` is
   `undefined`, the same convention as `pattern`. It answers a different
   question than `description`: `description` is what the step does, the
@@ -372,6 +375,12 @@ The fixture names:
   Passing a `Step` that discovery never registered throws rather than
   returning `undefined`, see "Chaining steps" for the mistake that rule
   exists to catch.
+- `await call(stepModule, args)`: runs one of this step's declared `parts`
+  and returns its validated result (see "Parts"). The args are validated
+  against that part's own `args` schema, the result against its
+  `returns`, and the call is recorded under `calls` on this step's own
+  step record. A step `parts` does not declare, or one discovery never
+  registered, throws rather than running.
 - `section(label: string): void`: marks that execution has reached a
   named stage; synchronous, no return value, no matching "end" call. Every
   call is appended, in call order, to the step record's `sections` (see
@@ -548,8 +557,8 @@ be read as a claim that it does.
 ### Fixtures
 
 The bag "Context API" describes is closed: `page`, `context`, `request`,
-`env`, `requireEnv`, `baseURL`, `resultOf`, `section`, `poll`, `evidence`,
-nothing else.
+`env`, `requireEnv`, `baseURL`, `resultOf`, `call`, `section`, `poll`,
+`evidence`, nothing else.
 A step that needs a project's own resource, a tenant, a seeded database, an
 uploaded fixture file, has had nowhere to put the cleanup for it: writing it
 into the step itself makes the feature file name something that is not an
@@ -574,7 +583,7 @@ two shapes Playwright's own fixture definitions take, so a fixture whose own
 dependencies stay inside `page`/`context`/`request`/`baseURL` can be passed
 to `base.extend()` unchanged. That shared subset is a fact about the shape,
 not a promise this package makes: a fixture that destructures `env`,
-`section`, `poll`, `resultOf`, `evidence`, or another nukadoko-only name means nothing
+`section`, `poll`, `resultOf`, `call`, `evidence`, or another nukadoko-only name means nothing
 to Playwright's own runner, and `auto: true` (the option that would let
 Playwright build a fixture nothing asked for) is refused outright, with a
 message naming why: the feature file names everything that ran, and a
@@ -625,7 +634,7 @@ execution is the whole of both lifetimes, so the two scopes collapse: a
 `process`-scope fixture may only depend on other `process`-scope fixtures
 and on `env`/`requireEnv`/`baseURL`, the three builtins whose value never
 depends on which scenario's context happens to read them; depending on
-`page`, `context`, `request`, `resultOf`, `section`, `poll`, `evidence`, or a
+`page`, `context`, `request`, `resultOf`, `call`, `section`, `poll`, `evidence`, or a
 `scenario`-scope fixture is refused (`fixture-scope-violation`), since a
 `process`-scope fixture's own build can outlive the very scenario that
 would have supplied any of those.
@@ -920,13 +929,12 @@ different answer: because a chained value has to come from a step, and a
 step has to appear in the feature, a scenario can end up with a line that
 exists only to move an id (`And the project's billing page is fetched`)
 and means nothing to the reader the feature was written for. When an
-operation has no value to that reader, it should not be a step at all:
-make it an ordinary function under `features/steps/lib/` and call it from
-the step that needs it. What is given up is that helper's own step record; the
-HTTP it performs is still counted in `observed`, and `section` can
-still mark where execution went. Granularity of the record against
-legibility of the feature is a judgment the step author makes per case,
-and this is the axis to make it on.
+operation has no value to that reader, it should not be a step at all.
+Two places are left to put it, and "Parts" below draws the line between
+them: an ordinary function under `features/steps/lib/` when there is
+nothing to state a contract about, and a part when there is. Granularity
+of the record against legibility of the feature is a judgment the step
+author makes per case, and this is the axis to make it on.
 
 Chaining is where declaration and measurement meet, and it meets
 differently than `mutates` does (see "Keyword semantics"). There, the
@@ -940,6 +948,164 @@ the declaration; it answers the question the declaration cannot: not
 which step supplied the value, which was decided when the file was
 written, but which *execution* of it did, which is only ever decided at
 run time.
+
+### Parts
+
+A step is written at the granularity the scenario reads at, and that is
+rarely the granularity anything else wants to reuse. Two shapes of the
+mismatch appear as soon as a second scenario arrives. The step is right
+but too concrete, and generalizing it means one more `args` key for the
+pattern to capture, which the contract checks already cover. Or the step
+does two things, the next scenario needs one of them, and there is
+nothing to reach for: the half that is wanted has no name, no contract,
+and no way to be called.
+
+Splitting that step into two steps and rewriting the first scenario is
+not the answer. That feature was agreed with the people who decide what
+the software is for, and it may already carry a sign-off. A refactor on
+the implementation side that rewrites an agreed sentence is the tool
+arguing with the record it exists to keep.
+
+A step may call another step instead. `parts` declares which ones, and
+the `call` fixture runs one:
+
+```ts
+import { defineStep } from "nukadoko";
+import { z } from "zod";
+import createProject from "./parts/create-project.js";
+import inviteMember from "./parts/invite-member.js";
+
+export default defineStep({
+  pattern: "a project named {string} has {string} as a member",
+  description: "Create a project and invite one member into it",
+  args: z.object({ name: z.string(), email: z.string() }),
+  returns: z.object({ projectId: z.string(), memberId: z.string() }),
+  parts: [createProject, inviteMember],
+  async run({ call }, args) {
+    const project = await call(createProject, { name: args.name });
+    const member = await call(inviteMember, {
+      projectId: project.id,
+      email: args.email,
+    });
+    return { projectId: project.id, memberId: member.id };
+  },
+});
+```
+
+There is no second kind of unit here. A part is a `Step`, defined by the
+same `defineStep`, and what makes it a part is that another step declares
+it. A part written only to be called omits `pattern`, which is the
+CLI-only vocabulary that already existed: `nuka do create-project` runs
+it standalone and `nuka steps` lists it, so it is reachable and readable
+before any scenario names it. Giving that same part a `pattern` later
+binds it to a scenario line without taking it away from the step that
+calls it. The split the second scenario needed leaves the first
+scenario's feature file untouched, which is the whole point: the two
+granularities coexist, and neither replaces the other.
+
+Why `parts` is declared rather than read out of the body. A step's
+fixture bag is built before `run()` is called, from the names its first
+parameter destructures, read statically. A part destructures its own
+names from that same bag, so a caller whose part reaches for `page` needs
+`page` in the bag, and that decision is made before either function runs.
+Finding out by reading `call` sites out of a body would be a parser
+guessing at control flow, and the guess would be wrong in exactly the
+case that matters, a call inside a branch. Declared, the answer is data:
+a step's needs are its own names together with the names of everything it
+declares, closed transitively, the same way a user-defined fixture's own
+reach for `page` is already closed (see "Fixtures"). The cost of that is
+paid where it can be seen: a composite whose part reaches for `page`
+opens a browser even on a run that never takes the branch calling it. The
+alternative costs more. A browser opening partway through a step, on a
+decision no one could read before the step started, is the shape this
+declaration exists to rule out.
+
+The `from` section's argument holds here unchanged: a name is data.
+`parts` survives into `nuka steps --json` and `nuka describe`, so an
+agent reading the vocabulary sees that one step is built out of two
+others without opening a file, and `nuka check` reads it before anything
+runs. `call` refuses a step `parts` does not declare, and refuses one
+discovery never registered, which is the mistake `resultOf` already
+throws on: a step file reached through a second `await import()` produces
+an object no vocabulary can match. A declaration nothing keeps honest
+would be a comment.
+
+A call is recorded inside the calling step's own step record, under
+`calls`, and never as a step record of its own. A scenario record's
+`steps[]` stays one entry per feature line. The feature goes on naming
+everything that ran, and what a part adds is depth under one of those
+lines rather than an entry the feature never asked for. Each entry
+carries the part's name, the args it was given, the result it returned,
+when it started and finished, and, when it failed, its own error under
+the same classification a step record's `error` uses. A part's `args` and
+`returns` are checked exactly like a step's, because they are a step's. A
+part that calls a part nests the same way.
+
+What does not split is everything measured at the step boundary.
+`observed`, `sections`, `used`, `required_env`, the evidence directory,
+and the trace chunk all stay the calling step's, and count the parts'
+work inside their totals. A part shares its caller's `ctx`. This is one
+execution described in more detail, not several executions sharing a
+record. Reading one total is also what keeps the accounting honest:
+nothing is counted twice, and nothing that ran goes uncounted because it
+ran inside a part.
+
+`from` is not consulted for a call. The caller passes every key itself,
+the same way `nuka do` does, because a chain is a property of a scenario
+and a call is not in one. A part that also runs as a scenario line keeps
+its `from` for that occurrence. The declaration describes the step, and
+which of its callers supplied what decides nothing about the others.
+
+Two things `nuka check` can be certain of, so it says them. A cycle in
+`parts`, a step that reaches itself, can never close into a fixture bag
+or a terminating run, and is an error. A step that declares `mutates:
+false` while declaring a part that declares `mutates: true` contradicts
+itself, and is an error too: `mutates` says the step changes state
+anywhere it touches, and a part it may call is somewhere it touches. That
+check is what keeps `then-mutates` local. A `Then` line still reads one
+flag on one step, because the contradiction check already forced that
+flag to account for the parts.
+
+A declared part the body never calls is reported by nothing, and that is
+deliberate. The call sits inside `run`, while the declaration names a
+`Step` object rather than the identifier that body happens to bind it
+to, so deciding the two do not correspond would be a guess about a name. A body may also call a part on one branch
+only. Either way the check would be wrong the first time it mattered,
+which costs more than leaving the question unanswered. This is where the
+symmetry with `from` stops: an unused `from` key is decidable from the
+feature files alone (`nuka tend` reports it), and an unused part is not
+decidable at all.
+
+The read-only policy is not enforced through that contradiction check. A
+read-only environment refuses a `mutates: true` part at the call itself,
+before it runs, whatever its caller declared about itself. Of the two,
+the contradiction check is the cheaper and the earlier, and it catches
+the mistake while nothing is running; the refusal at the call is what
+holds when nobody ran the check. A declaration is trusted here as
+everywhere else, so a part that says it changes state is stopped where
+the change would happen.
+
+Helper, part, or step. The axis from "Chaining steps" gains a third
+position rather than a second question. Does the operation mean something
+to the person reading the scenario? If yes, it is a step, and the
+acceptance record gains a step record for it. If no, ask what should be
+knowable about it after a failure: a part when it has a contract worth
+stating and inputs and a result worth reading back, an ordinary function
+under `features/steps/lib/` when it has neither. A helper gives up its
+own entry in the record; the HTTP it performs is still counted in the
+calling step's `observed`, and `section` can still mark where execution
+went. That stays a real option rather than a consolation. A function that
+formats a payload or picks a fixture file has no contract anyone would
+read and no result worth freezing, and making it a part would buy a
+schema to maintain and nothing else.
+
+One shape was rejected on the way. A step file could export several steps
+as named exports, which would let the halves of a split sit beside the
+composite that calls them. Typed step names complete from file names
+without importing anything (see "Implementation notes"), which is what
+keeps TAB fast however large the vocabulary grows, and a named export
+cannot be seen without importing the file it is in. A part in its own
+file keeps that property, and costs one file.
 
 ### Keyword semantics
 
@@ -958,8 +1124,9 @@ what a declaration settles is layered:
   mutating step is bound in Then position. The tension deserves human
   eyes; the declaration alone cannot settle it, and this check only warns.
 - **Read-only environments refuse a declared-mutating step before it
-  runs**: the one place the declaration gates execution rather than
-  drawing review's attention.
+  runs**, a part reached through `call` included (see "Parts"): the one
+  place the declaration gates execution rather than drawing review's
+  attention.
 - **At run time**, the step record records what the execution actually did:
   every network call the tool saw (through the `request` fixture and the
   page alike), with non-GET/HEAD calls counted as observed writes, next to
@@ -1482,6 +1649,18 @@ so a reader can open either first and reach the other from it.
   warns against. That also means this field can only carry what the
   upstream step's own `returns` schema kept in the first place: a
   `returns` that dropped a value drops it from here too.
+- `calls` (present only when non-empty) lists the parts this execution ran
+  through the `call` fixture (see "Parts"), in call order. Each entry is
+  `{ "step": "create-project", "args": {...}, "result": {...},
+  "started_at": "...", "finished_at": "..." }`, and carries `error`
+  instead of `result` when the part failed, classified the same way a step
+  record's own `error` is. A part that called a part carries its own
+  `calls` under that entry. These are not step records and have no
+  `step_record_id`: `--use` cites a step record, and what this execution
+  offers a later one is its own `result`. Recording the args and the
+  result at each internal boundary is what a composite step's record is
+  read for once it fails, since the values that crossed those boundaries
+  are otherwise nowhere.
 - `sections` (present only when non-empty) lists the `section` calls
   made during this execution, each `{ "label": "...", "at": "..." }`, in
   call order. Not deduplicated, unlike `used`: a label entered twice (a
@@ -2802,6 +2981,11 @@ never actually read.
   findings that come with them. Closes the one gap the typed side had that
   compat's After hooks did not: a place to put cleanup that is not itself an
   acceptance condition.
+- **M9 (parts)**: `parts` on `defineStep`, the `call` fixture, the `calls`
+  entries a step record gains, and the checks that come with them (see
+  "Parts"). A step can be split without its feature file being rewritten,
+  which is what makes a reuse granularity smaller than a scenario line
+  possible at all.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
