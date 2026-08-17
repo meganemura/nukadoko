@@ -285,6 +285,31 @@ export interface SectionEntry {
   readonly at: string;
 }
 
+/** One `ctx.call(part, args)` invocation's own record (docs/spec.md
+ * "Parts") — recorded on the *calling* step's own step record under
+ * `calls`, never as a step record of its own: a part shares its caller's
+ * step boundary outright, so this entry is the whole account of what it
+ * did, not a pointer to a second record.json. `step` is the part's own
+ * vocabulary name, the same name `nuka steps` shows for it. `args` is
+ * exactly what the caller passed, unvalidated and uncoerced — the same
+ * "what was actually supplied" convention `StepRecordBase.args` already
+ * follows. `result` is present only when the call succeeded (the part's own
+ * `returns`-validated value); `error` is present only when it didn't,
+ * classified the same closed `ErrorKind` set a step record's own `error`
+ * uses — no new value was added for this. A part that itself calls a part
+ * nests: `calls` carries that part's own entries, present only when
+ * non-empty, the same "absence is the normal case" convention every other
+ * optional step-record field already follows. */
+export interface CallEntry {
+  readonly step: string;
+  readonly args: unknown;
+  readonly result?: unknown;
+  readonly error?: { readonly message: string; readonly kind: ErrorKind };
+  readonly started_at: string;
+  readonly finished_at: string;
+  readonly calls?: CallEntry[];
+}
+
 /** One `ctx.poll` call's own record (docs/spec.md
  * "Records"). */
 export interface PollRecord {
@@ -424,6 +449,14 @@ interface StepRecordBase {
    * way `used` is omitted for a typed step that never calls
    * `ctx.resultOf`. */
   sections?: SectionEntry[];
+  /** Every `ctx.call(part, args)` invocation made directly by this
+   * execution, in call order (docs/spec.md "Parts") — present only when
+   * non-empty, the same convention as `sections`. Depth under this one step
+   * record, never a step record of its own: a part that itself calls a part
+   * nests inside that entry's own `calls` (`CallEntry`, above) rather than
+   * flattening here. Absent for a compat step, which has no `call`
+   * counterpart on `this`, the same way `sections`/`polls` already are. */
+  calls?: CallEntry[];
   /** Every `ctx.poll` call that finished during this execution, in
    * completion order rather than call order (this file's own header).
    * Present only when non-empty; only a typed

@@ -45,7 +45,7 @@ import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
 import { fromCandidates, type Step } from "../step/define-step.js";
-import { fixtureParameterNames } from "../step/fixture-names.js";
+import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
@@ -203,7 +203,12 @@ import { writeScenarioRecord } from "./write-record.js";
 /** The declared-mutates read-only refusal message: matches cli/do.ts's own
  * setup-phase rejection wording, since
  * this is the same fact about the same policy, just reached from `nuka run`
- * this time. */
+ * this time. `stepName` names whichever `Step` is actually refused — the
+ * entry step bound to a pickle line (this file's own read-only branch,
+ * below) or a part `ctx.call` refuses on that same step's behalf
+ * (`refuseMutatingPart`, passed to `createStepContext`) — so both refusals
+ * read as the same fact about the same policy, only reached a different
+ * way. */
 function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
   return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
 }
@@ -876,6 +881,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     storageState: storageState ?? undefined,
     resultOf: readChain,
     isRegisteredStep: (step) => stepNameOf.has(step),
+    stepNameOf: (step) => stepNameOf.get(step),
+    // Closes the gap a part would otherwise open under a read-only
+    // environment: the read-only branch below this only ever checks the
+    // *entry* step's own declared `mutates`, so a step declared `mutates:
+    // false` calling a part declared `mutates: true` was never checked at
+    // all before `ctx.call` existed. Same message, same policy, only the
+    // reachability path differs from the entry-step refusal below.
+    refuseMutatingPart: (part) =>
+      policy === "read-only" && part.mutates
+        ? readOnlyDeclaredMutatesMessage(stepNameOf.get(part) ?? "a step discovery never registered", environment)
+        : undefined,
   });
 
   const stepRecords: ScenarioStepRecord[] = [];
@@ -997,6 +1013,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `beginStep` calls `observed`/`used` already are, so a step never
     // inherits an earlier step's labels in this shared-`ctx` pickle.
     const sectionLabels = contextHandle.sectionsSnapshot();
+    // Every `ctx.call(part, args)` invocation made directly by this
+    // execution, read the same "after execution, whatever the outcome" way
+    // `sectionLabels` right above is — always empty for a compat step,
+    // which has no `call` counterpart on `this`, the same way `sections` is.
+    const callEntries = contextHandle.callsSnapshot();
     // Every `ctx.poll` call that finished since the current step boundary
     // began, in completion order — same
     // "read after execution, whatever the outcome" shape as `sectionLabels`
@@ -1088,6 +1109,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // on a *failed* step record, the failed branch just below.
             ...(usedEntries.length > 0 ? { used: omitUsedResults(usedEntries) } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+            ...(callEntries.length > 0 ? { calls: callEntries } : {}),
             ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
@@ -1136,6 +1158,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // without opening a second record.json to find out.
             ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
             ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+            ...(callEntries.length > 0 ? { calls: callEntries } : {}),
             ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0
@@ -1642,11 +1665,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               // fixture use()-contract violation are all a step failure
               // ("step_error") this same way, the same outcome a step's own
               // `ctx.page()` throwing used to produce when that call lived
-              // inside `run()`. `fixtureParameterNames` is memoized and
-              // already validated by `nuka run`'s own setup phase (cli/
-              // run.ts), so it is not expected to throw here.
+              // inside `run()`. `stepFixtureNames` (src/step/step-fixture-
+              // names.ts) is `fixtureParameterNames` closed transitively
+              // over `entry.step.parts` (docs/spec.md "Parts") — a part
+              // that reaches for `page` gets the browser open here too,
+              // before `run()` starts, the same declared-before-either-
+              // function-runs timing a step's own destructuring already
+              // has. Memoized and already validated by `nuka run`'s own
+              // setup phase (cli/run.ts), so it is not expected to throw
+              // here.
               const resolved = await resolveFixtures({
-                names: fixtureParameterNames(entry.step.run),
+                names: stepFixtureNames(entry.step),
                 graph: fixtureGraph,
                 ctx: contextHandle.ctx,
                 scenarioCache: fixtureScenarioCache,
@@ -1655,6 +1684,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               });
               fixtureUsage = resolved.usage;
               const fixtures = resolved.fixtures;
+              // Opens this step's own root call frame and hands `ctx.call`
+              // the exact bag any part it calls (direct or nested) subsets
+              // from (docs/spec.md "Parts") — must run before `entry.step.
+              // run` so `ctx.call` is ready the moment the step's own body
+              // could reach for it.
+              contextHandle.beginStepRun(entry.step, fixtures);
               const runResult = await entry.step.run(fixtures, argsResult.data);
               const returnsResult = entry.step.returns.safeParse(runResult);
               if (!returnsResult.success) {
@@ -1848,6 +1883,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // whatever labels this step
         // reached before the uncaught throw still belong on its step record.
         const sectionLabels = contextHandle.sectionsSnapshot();
+        // Same backstop-only read again, for `calls` — a part this step
+        // already called (successfully or not) before the uncaught throw
+        // still belongs on its step record.
+        const callEntries = contextHandle.callsSnapshot();
         // Same backstop-only read again, for `polls` — a poll this step
         // was mid-wait on when the uncaught throw
         // hit still finished (`finally` in poll.ts's own loop guarantees
@@ -1902,6 +1941,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           mutates: began.mutates,
           ...(usedEntries.length > 0 ? { used: usedEntries } : {}),
           ...(sectionLabels.length > 0 ? { sections: sectionLabels } : {}),
+          ...(callEntries.length > 0 ? { calls: callEntries } : {}),
           ...(pollRecords.length > 0 ? { polls: pollRecords } : {}),
           ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
           ...(worldReadsWrites.reads.length > 0 || worldReadsWrites.writes.length > 0

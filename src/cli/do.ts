@@ -33,7 +33,7 @@ import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
-import { fixtureParameterNames } from "../step/fixture-names.js";
+import { stepFixtureNames } from "../step/step-fixture-names.js";
 import {
   formatFixtureDefinitionIssues,
   formatFixtureIssues,
@@ -107,6 +107,19 @@ import type { WritableSink } from "./writable-sink.js";
 // once, as a whole object, before either record.json or the stdout copy is
 // written from it — never twice, independently, which could let the two
 // drift apart.
+
+/** The declared-mutates read-only refusal message: matches run-scenario.
+ * ts's own `readOnlyDeclaredMutatesMessage` wording exactly, since this is
+ * the same fact about the same policy, just reached from `nuka do` this
+ * time. `stepName` names whichever `Step` is actually refused — the entry
+ * step named on the command line (this file's own setup-phase check,
+ * below), or a part `ctx.call` refuses on that step's behalf
+ * (`refuseMutatingPart`, passed to `createStepContext`) — so both refusals
+ * read as the same fact about the same policy, only reached a different
+ * way. */
+function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
+  return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
+}
 
 export interface RunDoOptions {
   rootDir: string;
@@ -354,9 +367,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // never happened be cited later as if it had. Read-only steps
     // (`mutates: false`) are unaffected regardless of policy.
     if (resolvedEnv.policy === "read-only" && entry.step.mutates) {
-      stderr.write(
-        `Step "${name}" mutates state but environment "${resolvedEnv.name}" has policy "read-only"\n`,
-      );
+      stderr.write(`${readOnlyDeclaredMutatesMessage(name, resolvedEnv.name)}\n`);
       return 1;
     }
 
@@ -422,6 +433,23 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // is about `step` itself, not about whether a lookup would have
       // succeeded, so it must fire here exactly as it does under `nuka run`.
       isRegisteredStep,
+      // `ctx.call` names a part's own `CallEntry`/error messages through
+      // this — the same `stepNameOf` map `isRegisteredStep` above already
+      // reads.
+      stepNameOf: (step) => stepNameOf.get(step),
+      // Closes the gap a part would otherwise open under a read-only
+      // environment: the setup-phase check above only ever looks at the
+      // named step's own declared `mutates`, so a step declared `mutates:
+      // false` calling a part declared `mutates: true` was never checked
+      // at all before `ctx.call` existed. Same message, same policy, only
+      // the reachability path differs from that setup-phase refusal.
+      refuseMutatingPart: (part) =>
+        resolvedEnv.policy === "read-only" && part.mutates
+          ? readOnlyDeclaredMutatesMessage(
+              stepNameOf.get(part) ?? "a step discovery never registered",
+              resolvedEnv.name,
+            )
+          : undefined,
       // `nuka do` is one execution, one trace chunk — this ctx never
       // calls `beginStep`, so the step's own name, known once here, is the
       // only title its chunk (if `ctx.page()` is ever called) will use.
@@ -497,11 +525,14 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // failure, a fixture setup failure, or a fixture use()-contract
         // violation are all a step failure ("step_error") this same way,
         // the same outcome a step's own `ctx.page()` throwing used to
-        // produce when that call lived inside `run()`. `fixtureParameterNames`
-        // is memoized and already validated in setup above, so it is not
-        // expected to throw here.
+        // produce when that call lived inside `run()`. `stepFixtureNames`
+        // (src/step/step-fixture-names.ts) is `fixtureParameterNames` closed
+        // transitively over `entry.step.parts` (docs/spec.md "Parts") — a
+        // part that reaches for `page` gets the browser open here too,
+        // before `run()` starts. Memoized and already validated in setup
+        // above, so it is not expected to throw here.
         const resolved = await resolveFixtures({
-          names: fixtureParameterNames(entry.step.run),
+          names: stepFixtureNames(entry.step),
           graph: fixtureGraph,
           ctx: contextHandle.ctx,
           scenarioCache: fixtureScenarioCache,
@@ -510,6 +541,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         });
         fixtureUsage = resolved.usage;
         const fixtures = resolved.fixtures;
+        // Opens this step's own root call frame and hands `ctx.call` the
+        // exact bag any part it calls (direct or nested) subsets from
+        // (docs/spec.md "Parts") — must run before `entry.step.run` so
+        // `ctx.call` is ready the moment the step's own body could reach
+        // for it.
+        contextHandle.beginStepRun(entry.step, fixtures);
         const runResult = await entry.step.run(fixtures, argsResult.data);
         const returnsResult = entry.step.returns.safeParse(runResult);
         if (!returnsResult.success) {
@@ -539,6 +576,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // concept here to special-case, so this is read the same way
     // `observed` is, right above.
     const sections = contextHandle.sectionsSnapshot();
+    // Every `ctx.call(part, args)` invocation made directly by this
+    // execution, read the same "after execution, whatever its outcome" way
+    // `sections` is right above.
+    const calls = contextHandle.callsSnapshot();
     // Every `ctx.poll` call that finished during this execution, read the
     // same "after execution, whatever its outcome" way `sections` is right
     // above — a poll that timed out or whose `fn` threw still finished, in
@@ -673,6 +714,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             // the upstream's own result.
             ...(used.length > 0 ? { used: omitUsedResults(used) } : {}),
             ...(sections.length > 0 ? { sections } : {}),
+            ...(calls.length > 0 ? { calls } : {}),
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
@@ -714,6 +756,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             // this `--use` draw on", without opening a second record.json.
             ...(used.length > 0 ? { used } : {}),
             ...(sections.length > 0 ? { sections } : {}),
+            ...(calls.length > 0 ? { calls } : {}),
             ...(polls.length > 0 ? { polls } : {}),
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),

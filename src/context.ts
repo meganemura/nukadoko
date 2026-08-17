@@ -84,6 +84,29 @@ import type { Step } from "./step/define-step.js";
 // exporting the name is what keeps that always unreachable through the bag,
 // rather than a rule a step has to remember not to break.
 //
+// `call` (docs/spec.md "Parts") runs one of the step's own declared `parts`
+// — a `Step` a step reaches for the same static way it reaches for a
+// fixture: `parts` is read before `run()` starts, never inferred from where
+// `call` happens to be invoked inside the body, so a caller whose part
+// reaches for `page` needs `page` in its own bag exactly as if it had
+// destructured that name itself (src/step/step-fixture-names.ts's
+// `stepFixtureNames` is what closes that need transitively before either
+// function runs). A part shares the calling step's own `ctx` outright — its
+// `observed`/`sections`/`used`/`required_env`/evidence/trace all land on the
+// *calling* step's own step record, never a step record of its own — so
+// `call`'s own bag for the part is a subset of the exact fixture values the
+// caller already has, not a freshly built one; this is what a part destined
+// for `env`/`resultOf`/`section`/`poll`/`evidence` reaches without this
+// module doing anything special for any one of those names. Refuses a
+// `Step` this step's own `parts` never named, and a `Step` discovery never
+// registered, before running anything — the same "never began" shape
+// `ctx.resultOf`'s own `UnregisteredStepError` already has. Every call,
+// successful or not, is recorded on the calling step's own step record
+// under `calls` (docs/spec.md "Records"), never as a step record of its
+// own — the feature file names every step record that exists, and a part
+// call is depth under one of those, not a new entry the feature never
+// asked for.
+//
 // `evidence` is the fixture-shaped counterpart to Playwright's own
 // `testInfo.attach()`/`testInfo.outputPath()`: every automatic evidence
 // field on a step record (trace, screenshots, http.jsonl, page_events, ...) is
@@ -160,6 +183,15 @@ export interface StepFixtures {
    * execution's step record under `polls` (docs/spec.md "Records"): how many
    * attempts it took, how long it waited, and how it ended. */
   readonly poll: <T>(fn: () => Promise<T | undefined>, options?: PollOptions) => Promise<T>;
+  /** Runs `part`, one of this step's own declared `parts` (docs/spec.md
+   * "Parts"), with `args` validated against `part`'s own `args` schema and
+   * the returned value validated against `part`'s own `returns` — the same
+   * two checks a step run through `nuka run`/`nuka do` already gets. Throws
+   * when `part` isn't in this step's own `parts` list, or when it isn't a
+   * `Step` discovery registered (this file's own header). Recorded on the
+   * calling step's own step record under `calls`, nested when a part calls
+   * a part of its own. */
+  readonly call: <S extends Step>(part: S, args: z.input<S["args"]>) => Promise<z.infer<S["returns"]>>;
   /** The application-specific evidence fixture (this file's
    * own header) — `attach(name, body)` writes `body` (`string | Uint8Array`)
    * to this execution's own evidence directory and records
@@ -201,6 +233,7 @@ const FIXTURE_NAME_MEMBERSHIP: Record<keyof StepFixtures, true> = {
   resultOf: true,
   section: true,
   poll: true,
+  call: true,
   evidence: true,
 };
 
@@ -256,6 +289,10 @@ export interface StepContext {
    * execution's step record under `polls` (docs/spec.md "Records"): how many
    * attempts it took, how long it waited, and how it ended. */
   poll<T>(fn: () => Promise<T | undefined>, options?: PollOptions): Promise<T>;
+  /** The same fixture as `StepFixtures.call` above, reached the older,
+   * function-based way every other member of this interface is — see that
+   * member's own doc comment for the full contract. */
+  call<S extends Step>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>>;
   /** The application-specific evidence fixture — see
    * `StepFixtures.evidence`'s own doc comment above for the full contract;
    * this is the same object, reached the older, function-based way every

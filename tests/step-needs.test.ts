@@ -89,4 +89,27 @@ describe("stepNeeds", () => {
     });
     expect(stepNeeds(step)).toEqual({ needs: ["env", "request"], needsBrowser: false });
   });
+
+  it("sets needsBrowser true when only a declared part destructures page (docs/spec.md Parts)", () => {
+    const part = defineStep({
+      description: "a part that touches the browser",
+      args: emptySchema,
+      returns: emptySchema,
+      async run({ page }) {
+        void page;
+        return {};
+      },
+    });
+    const composite = defineStep({
+      description: "never destructures page itself",
+      args: emptySchema,
+      returns: emptySchema,
+      parts: [part],
+      async run({ call }) {
+        await call(part, {});
+        return {};
+      },
+    });
+    expect(stepNeeds(composite)).toEqual({ needs: ["call", "page"], needsBrowser: true });
+  });
 });

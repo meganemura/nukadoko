@@ -34,15 +34,16 @@ export class MissingEnvError extends Error {
 }
 
 /** Thrown by `ctx.resultOf(step)` (docs/spec.md "Context API"/"Chaining
- * steps") when `step` is a `Step` object discovery never registered.
- * Unlike `from` (whose own unregistered-Step
- * mistake is caught statically, before any step runs — src/step/
- * validate-from.ts), `resultOf` names its upstream only at the call site
- * inside `run()`, so this is the one place that mistake can be caught at
- * all: docs/spec.md "Chaining steps" put it plainly — "an unregistered
- * `Step` is an error where it is found ... `resultOf` can only be caught at
- * the call, where it throws". A registered step that simply hasn't run yet
- * in this scenario is a different, non-error state (`ctx.resultOf` returns
+ * steps") or `ctx.call(part, args)` (docs/spec.md "Parts") when the `Step`
+ * given is one discovery never registered. Unlike `from` (whose own
+ * unregistered-Step mistake is caught statically, before any step runs —
+ * src/step/validate-from.ts), both of these name their target only at the
+ * call site inside `run()`, so this is the one place that mistake can be
+ * caught at all: docs/spec.md "Chaining steps" put it plainly — "an
+ * unregistered `Step` is an error where it is found ... `resultOf` can only
+ * be caught at the call, where it throws"; `call` refuses the same mistake
+ * the same way. A registered step that simply hasn't run yet in this
+ * scenario is a different, non-error state (`ctx.resultOf` returns
  * `undefined` for that, never throws) — this error exists only for a `Step`
  * object that isn't `===` anything discovery ever put in the vocabulary at
  * all, which is almost always the sign of a step file reached through a
@@ -54,17 +55,74 @@ export class MissingEnvError extends Error {
  * that possibility rather than the step itself: unlike `MissingEnvError`,
  * there is no key to single out — a `Step` carries no name of its own (only
  * discovery's vocabulary key does), so the actionable fact here is "how a
- * mismatched instance like this usually happens", not "which one". */
+ * mismatched instance like this usually happens", not "which one". One error
+ * type, kept to one so a caller only ever needs one `instanceof` check;
+ * `callSite` only changes which API name the message opens with, so the two
+ * callers read as the same mistake rather than two different ones. */
 export class UnregisteredStepError extends Error {
-  constructor() {
+  constructor(callSite: string = "ctx.resultOf()") {
     super(
-      "ctx.resultOf() was called with a Step object discovery never registered. " +
+      `${callSite} was called with a Step object discovery never registered. ` +
         "This almost always means the Step was reached through a different `await import()` " +
         "than the one discovery used, producing a distinct module instance whose export is not " +
         '`===` the one in the vocabulary (docs/spec.md "Chaining steps"). Import the step module ' +
         "the same way its own file does (a plain relative import), rather than a fresh dynamic import.",
     );
     this.name = "UnregisteredStepError";
+  }
+}
+
+/** Thrown by `ctx.call(part, args)` (docs/spec.md "Parts") when the calling
+ * step never listed `part` in its own `parts`. `parts` is declared, not read
+ * out of a step's body (src/step/define-step.ts's own header on `parts`
+ * explains why: a fixture bag is built before `run()` runs, from a static
+ * declaration, never by watching which `call` sites a body happens to
+ * reach), so a `Step` this check rejects is refused before it ever runs —
+ * the part's own `run` is never called, and nothing about this call is
+ * added to the calling step's own `calls` (docs/spec.md "Parts": "`call`
+ * refuses a step `parts` does not declare"). `callerName`/`partName` are
+ * each the vocabulary name the executor already resolved for them, or a
+ * fallback when the given `Step` object was never itself registered
+ * (a `partName` that hits that fallback is also about to be caught by
+ * `UnregisteredStepError`, but the *declaration* mismatch is checked first
+ * — a `part` a step never declared is refused for that reason alone,
+ * whether or not it is separately registered). */
+export class PartNotDeclaredError extends Error {
+  constructor(callerName: string, partName: string) {
+    super(
+      `Step "${callerName}" called "${partName}" through call(), but does not list it in its own ` +
+        '"parts" (docs/spec.md "Parts"). Add it there. The fixture bag this step runs with is ' +
+        'built from that list before "run" is called, so a part the list does not name has ' +
+        "nothing to run with.",
+    );
+    this.name = "PartNotDeclaredError";
+  }
+}
+
+/** Thrown by `ctx.call(part, args)` (docs/spec.md "Parts") when `part`'s own
+ * declared `mutates` is `true` and the current environment's `policy` is
+ * `"read-only"` — the same refusal `nuka run`/`nuka do` already apply to a
+ * step bound directly to a scenario line or named on the command line
+ * (run-scenario.ts's read-only branch, cli/do.ts's setup-phase check),
+ * closed here for the one path that skipped it: a composite declared
+ * `mutates: false` calling a part declared `mutates: true` used to reach
+ * the wire under a read-only environment on nothing but its own caller's
+ * unrelated declaration, since only the entry step's own `mutates` was ever
+ * checked before this. `part.mutates` alone decides this — the calling
+ * step's own declaration, and what the part's `run` would actually have
+ * done, are both irrelevant to it, the same way a step's own declared
+ * `mutates` already overrides everything execution measures (docs/spec.md
+ * "Keyword semantics"). `part` never runs: this is a "never began" refusal,
+ * the same shape `PartNotDeclaredError`/`UnregisteredStepError` above
+ * already have. `message` is built by the caller (create-context.ts's own
+ * `refuseMutatingPart` option), from the resolved environment's own name
+ * and policy — this class only wraps it, so the wording matches `nuka
+ * run`/`nuka do`'s own read-only refusal for a step exactly: same fact,
+ * same policy, only the reachability path differs. */
+export class ReadOnlyMutatingPartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReadOnlyMutatingPartError";
   }
 }
 

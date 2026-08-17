@@ -1,24 +1,25 @@
 import { fixtureReachesBrowser, type FixtureGraph } from "../fixture/graph.js";
-import { fixtureParameterNames } from "./fixture-names.js";
+import { stepFixtureNames } from "./step-fixture-names.js";
 import type { Step } from "./define-step.js";
 
 // Responsibility: `nuka steps --json`'s own reading of a step's fixture
 // destructuring — exposure, not judgment. The
-// extraction this reads (`fixtureParameterNames`, src/step/fixture-names.ts)
-// and the validation that decides whether a name is legitimate
+// extraction this reads (`stepFixtureNames`, src/step/step-fixture-names.ts
+// — a step's own names closed transitively over `parts`) and the
+// validation that decides whether a name is legitimate
 // (`validateStepFixtures`, src/step/validate-fixtures.ts) both already
 // exist; this file adds nothing new to either, it only turns the same
 // static reading `check` already has into a value a caller outside `check`
-// can render. A step whose `run()` can't be parsed at all still throws
-// straight out of `fixtureParameterNames`, the same way `nuka steps`
-// already fails outright on a step file that fails to import
+// can render. A step whose `run()` (or a part's) can't be parsed at all
+// still throws straight out of `stepFixtureNames`, the same way `nuka
+// steps` already fails outright on a step file that fails to import
 // (src/discover/discover-steps.ts's default `tolerateImportFailures:
 // false`) — one more way a step definition can be broken, not a new
 // failure mode this file has to soften.
 
 export interface StepNeeds {
-  /** The names `step.run` destructures from its first argument, alphabetized
-   * rather than left in
+  /** The names `step.run` destructures from its first argument, unioned with
+   * every part it declares (recursively) — alphabetized rather than left in
    * source order, so two runs of `nuka steps --json` against an unchanged
    * step never disagree over an order nothing depends on. `[]`, never
    * omitted, for a step that needs no fixtures at all: the field's presence
@@ -55,12 +56,13 @@ function opensBrowser(names: readonly string[]): boolean {
  * parameter existed (and this file's
  * own tests) already depends on, unchanged.
  *
- * @throws whatever `fixtureParameterNames` throws for a `run()` whose first
- * argument can't be read as fixture names at all (not destructured, a
- * default value, a rest property) — see that function's own doc comment.
+ * @throws whatever `stepFixtureNames` throws for a `run()` (this step's own,
+ * or any part's) whose first argument can't be read as fixture names at all
+ * (not destructured, a default value, a rest property) — see that
+ * function's own doc comment.
  */
 export function stepNeeds(step: Step, graph?: FixtureGraph): StepNeeds {
-  const needs = [...fixtureParameterNames(step.run)].sort();
+  const needs = [...stepFixtureNames(step)].sort();
   const needsBrowser =
     graph !== undefined
       ? needs.some((name) => fixtureReachesBrowser(name, graph))

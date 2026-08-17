@@ -2,15 +2,18 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
 import type { z } from "zod";
+import { formatValidationIssues } from "../binding/format-issues.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext, StepFixtures } from "../context.js";
-import type { PollRecord, ScreenshotEntry, SectionEntry } from "../record/types.js";
+import type { CallEntry, ErrorKind, PollRecord, ScreenshotEntry, SectionEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
+import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
+import { createCallsCollector } from "./calls.js";
 import { createEnvReadsCollector } from "./env-reads.js";
-import { MissingEnvError, UnregisteredStepError } from "./errors.js";
+import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
 import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createHttpOmittedCollector, type HttpOmittedCounts } from "./http-omitted.js";
@@ -159,6 +162,56 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // lifetime and reset rule as
 // `used`/`sections` — one collector per ctx, zeroed by `beginStep`.
 //
+// `ctx.call` (docs/spec.md "Parts") reads two more things this module didn't
+// need before: `stepNameOf`, the same
+// "Step object -> the vocabulary name discovery registered it under" lookup
+// `resultOf`'s own `used` entries already need a name for, threaded in here
+// because a `CallEntry` names its part the same way; and `currentFixtures`,
+// a plain mutable pointer (not a collector — nothing about it is a tally)
+// the executor sets once per step boundary via `beginStepRun`, right after
+// it resolves that step's own fixture bag (`resolveFixtures`, src/fixture/
+// resolver.ts, called from outside this module — src/run/run-scenario.ts,
+// src/cli/do.ts). `call(part, args)` never rebuilds a bag of its own: docs/
+// spec.md "Parts" is explicit that "a part destructures its own names from
+// that same bag", so `call` only ever subsets `currentFixtures` down to
+// `part.run`'s own destructured names (`subsetPartFixtures` below) —
+// `page`/`context`/`request`/`resultOf`/`section`/`poll`/`evidence` a part
+// reaches for are the exact same values, and the exact same collectors,
+// the calling step already has, which is the whole reason a part's own
+// `observed`/`sections`/`used`/`required_env` land on the *caller's* step
+// record without this module doing anything special for any one of those
+// names. This also makes a part's own custom (`config.fixtures`) needs
+// work for free: `resolveFixtures`'s own top-level call already resolves
+// the transitive closure of every part's needs (src/step/step-fixture-
+// names.ts's `stepFixtureNames`, used by run-scenario.ts/cli/do.ts in place
+// of a step's bare `fixtureParameterNames`), so any name a part destructures
+// is already a key on `currentFixtures` by the time `call` reads it. A
+// part's own `.parts` governs the *next* `call()` it makes, not the calling
+// step's — `calls` (src/context/calls.ts) is a frame stack for exactly this
+// reason: `pushFrame`/`popFrame` bracket a part's own `run()`, so a call
+// that part makes from inside its own body is checked, and recorded,
+// against that part, not the frame above it. `beginStep` resets both
+// `calls` and `currentFixtures` the same way it resets every other
+// collector — defense-in-depth, since `beginStepRun` (called later, once
+// this boundary's own fixture bag exists) always sets them again before
+// `ctx.call` could be reached this step; `nuka do` never calls `beginStep`
+// at all, but calls `beginStepRun` exactly once regardless, so both are set
+// correctly there too.
+//
+// `refuseMutatingPart` closes a gap `call` would otherwise open on its own:
+// a read-only environment already refuses a declared-mutating *step*
+// before it ever runs (run-scenario.ts's own read-only branch, cli/do.ts's
+// setup phase), but that check only ever looks at the entry step's own
+// `mutates` — a step declared `mutates: false` calling a part declared
+// `mutates: true` was never checked at all, and would reach the wire on
+// nothing but its caller's unrelated declaration. `call` checks `part`'s
+// own `mutates` against this option, the same declaration-trusted way
+// every other read-only enforcement in this package already works (docs/
+// spec.md "Keyword semantics": the declaration is what's trusted, never
+// what execution measures) — this module still never learns what
+// `"policy"`/`"environment"` mean; the caller decides and hands back
+// either the refusal message or `undefined`.
+//
 // `beginStep` now also carries a chunk title, and `endStep` is new: the Playwright trace used to be one recording
 // for this whole ctx's lifetime; it is now one chunk per *trace-recorded
 // boundary*, opened lazily on that boundary's own first `ctx.page()` call
@@ -294,6 +347,22 @@ export interface StepContextHandle {
    * boundary began, in call order, each entry carrying `at`. Never exposed on
    * `ctx` — same rule as `observedCounts()`/`usedSnapshot()`. */
   sectionsSnapshot(): SectionEntry[];
+  /** Executor-only: every `ctx.call(part, args)` invocation made *directly*
+   * by the current step boundary's own execution, in call order, with a
+   * part-of-a-part call already nested under its own entry's `calls` (docs/
+   * spec.md "Parts"). Never exposed on `ctx` — same rule as
+   * `observedCounts()`/`usedSnapshot()`/`sectionsSnapshot()`. */
+  callsSnapshot(): CallEntry[];
+  /** Executor-only: opens the current step boundary's own root call frame
+   * (`step`, whose `parts` the first `ctx.call()` this boundary makes is
+   * checked against) and sets the exact fixture bag `ctx.call` subsets from
+   * for every part it runs, direct or nested (docs/spec.md "Parts": "a part
+   * destructures its own names from that same bag"). Call once, right
+   * after resolving this boundary's own fixture bag (`resolveFixtures`, src/
+   * fixture/resolver.ts) and before calling `step.run(fixtures, args)` —
+   * `nuka run` (run-scenario.ts) and `nuka do` (cli/do.ts) both do. Never
+   * exposed on `ctx`. */
+  beginStepRun(step: Step, fixtures: StepFixtures): void;
   /** Executor-only: every `ctx.poll` call that finished since the current
    * step boundary began, in completion order.
    * Never exposed on `ctx` — same rule as `observedCounts()`/
@@ -415,6 +484,38 @@ export interface CreateStepContextOptions {
    * do`'s (cli/do.ts) both build this from the same vocabulary they already
    * discovered. */
   isRegisteredStep?: (step: Step) => boolean;
+  /** `step`'s own vocabulary name — read by `ctx.call` to name a `CallEntry`
+   * and to name both sides of a `PartNotDeclaredError`/`UnregisteredStepError`
+   * message (docs/spec.md "Parts"). `undefined` when `step` was never
+   * registered at all (`ctx.call` falls back to a generic phrase for that
+   * case, the same way run-scenario.ts's own `injectFrom` already does for
+   * an unresolved `from` candidate). Defaults to a function that always
+   * returns `undefined`, matching this option's own `isRegisteredStep`
+   * default of "everything is registered" but with nothing to name — a
+   * caller that never calls `ctx.call` doesn't have to wire this in. `nuka
+   * run`'s executor (run-scenario.ts) and `nuka do`'s (cli/do.ts) both build
+   * this from the same vocabulary map `isRegisteredStep` above already
+   * reads. */
+  stepNameOf?: (step: Step) => string | undefined;
+  /** Whether `ctx.call` must refuse `part` before it ever runs, for the
+   * current environment's own `policy` (docs/spec.md "Parts"/"Keyword
+   * semantics") — returns the refusal message when it must, `undefined`
+   * when `part` may run. This module never learns what `"policy"` or
+   * `"environment"` even mean: the caller (run-scenario.ts, cli/do.ts)
+   * already has the resolved environment's own name and policy at the
+   * point it builds this closure, the same "give the answer, not the
+   * ingredients" shape `resultOf`/`isRegisteredStep`/`stepNameOf` above
+   * already follow. Checked against `part.mutates` alone — never the
+   * calling step's own declaration, which a read-only policy already
+   * checked (and refused, if `true`) before this step's own `run` ever
+   * started; a step that got this far already declared `mutates: false`
+   * or the policy is not `"read-only"` at all, so only a part's own
+   * declaration is left to decide. Defaults to "never refuse"
+   * (`() => undefined`), matching every other read-only-related default in
+   * this package: a caller that doesn't care about this policy (most of
+   * this file's own tests, and every `nuka do`/`nuka run` invocation
+   * outside a read-only environment) doesn't have to say so. */
+  refuseMutatingPart?: (part: Step) => string | undefined;
   /** This ctx's own trace chunk title, for a caller that never calls
    * `beginStep` at all — `nuka do`'s own
    * "one execution is one chunk" shape, titled by the step's name, which is
@@ -437,6 +538,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     storageState,
     resultOf: readResultOf = () => undefined,
     isRegisteredStep = () => true,
+    stepNameOf = () => undefined,
+    refuseMutatingPart = () => undefined,
   } = options;
   // Mutable, unlike browser evidence's fixed `evidenceDir`: `beginStep`
   // (below) is the only way this ever changes, and `do` never calls it, so
@@ -471,6 +574,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const used = createUsedCollector();
   // Same lifetime rule again, for `ctx.section`'s call log.
   const sections = createSectionsCollector();
+  // Same lifetime rule again, for `ctx.call`'s own call tree — see this
+  // file's own header for why this one is a frame stack, not a flat log.
+  const calls = createCallsCollector();
+  // The current step boundary's own full fixture bag, set once by
+  // `beginStepRun` (below), right after the executor resolves it —
+  // `undefined` before the first `beginStepRun` call, and reset to
+  // `undefined` by `beginStep` the same defense-in-depth way `calls` itself
+  // is (this file's own header). `ctx.call` subsets this rather than
+  // building a bag of its own.
+  let currentFixtures: StepFixtures | undefined;
   // Same lifetime rule again, for `ctx.poll`'s own finished-call log.
   const polls = createPollsCollector();
   // Same lifetime rule again, for `ctx.requireEnv`'s name log.
@@ -526,6 +639,136 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     }
     chunkOpen = false;
     await browserHandle.endStepChunk(path.join(httpLogDir, pendingChunkFileName));
+  }
+
+  // `step`'s own vocabulary name, or the same fallback wording run-
+  // scenario.ts's own `injectFrom` already uses for an unresolved `from`
+  // candidate — `ctx.call`'s two error paths (`PartNotDeclaredError`,
+  // `UnregisteredStepError`) and every `CallEntry.step` all name their
+  // subject through this one function.
+  function partName(step: Step): string {
+    return stepNameOf(step) ?? "a step discovery never registered";
+  }
+
+  // `part.run`'s own destructured names, read straight off
+  // `currentFixtures` — never a freshly built bag (this file's own header:
+  // "a part destructures its own names from that same bag"). Both throws
+  // here are defense-in-depth: `beginStepRun` always sets `currentFixtures`
+  // before a step's own `run()` (hence before `ctx.call` is reachable at
+  // all), and src/step/step-fixture-names.ts's `stepFixtureNames` closure
+  // is what run-scenario.ts/cli/do.ts already use to guarantee every name a
+  // part destructures is a key on that bag before execution ever begins.
+  function subsetPartFixtures(part: Step): StepFixtures {
+    if (currentFixtures === undefined) {
+      throw new Error(
+        "internal: ctx.call() reached with no current fixture bag; " +
+          "beginStepRun() should have set one before this step's own run() was ever called",
+      );
+    }
+    const bag = currentFixtures as unknown as Record<string, unknown>;
+    const subset: Record<string, unknown> = {};
+    for (const name of fixtureParameterNames(part.run)) {
+      if (!(name in bag)) {
+        throw new Error(
+          `internal: ctx.call() needed fixture "${name}" for a part, but it was not in the current ` +
+            "step's own fixture bag; src/step/step-fixture-names.ts's closure should have included " +
+            "it before execution began",
+        );
+      }
+      subset[name] = bag[name];
+    }
+    return subset as unknown as StepFixtures;
+  }
+
+  // Records one failed `CallEntry` — shared by `call`'s three failure paths
+  // (bad args, the part's own `run` throwing, a bad result) so the shape
+  // stays identical across all three: only `kind`/`message`/`nested`
+  // differ.
+  function recordCallFailure(
+    step: string,
+    args: unknown,
+    kind: ErrorKind,
+    message: string,
+    startedAt: Date,
+    nested: readonly CallEntry[],
+  ): void {
+    calls.recordEntry({
+      step,
+      args,
+      error: { message, kind },
+      started_at: startedAt.toISOString(),
+      finished_at: new Date().toISOString(),
+      ...(nested.length > 0 ? { calls: [...nested] } : {}),
+    });
+  }
+
+  // `ctx.call` itself (docs/spec.md "Parts") — see this file's own header
+  // for the design (`currentFixtures`/`calls`' own frame stack). Three
+  // gates run before `part.run` ever starts, in order: declared in
+  // `caller.parts`, registered by discovery, and — only once both of those
+  // hold — allowed to run under the current environment's policy
+  // (`refuseMutatingPart`, checked against `part`'s own declared `mutates`,
+  // never the caller's). None of the three records a `CallEntry` at all —
+  // the part's own `run` never starts, so there is nothing to attest to
+  // (the same "an execution that never began must not be citable" rule a
+  // step's own undefined/ambiguous match already follows).
+  async function call<S extends Step>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>> {
+    const caller = calls.currentStep();
+    if (caller === undefined) {
+      throw new Error("internal: ctx.call() reached with no active step boundary");
+    }
+    if (!caller.parts.includes(part)) {
+      throw new PartNotDeclaredError(partName(caller), partName(part));
+    }
+    if (!isRegisteredStep(part)) {
+      throw new UnregisteredStepError("call()");
+    }
+    const refusal = refuseMutatingPart(part);
+    if (refusal !== undefined) {
+      throw new ReadOnlyMutatingPartError(refusal);
+    }
+
+    const name = partName(part);
+    const startedAt = new Date();
+    const argsResult = part.args.safeParse(args);
+    if (!argsResult.success) {
+      const message = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
+      recordCallFailure(name, args, "args_invalid", message, startedAt, []);
+      throw new Error(message);
+    }
+
+    // Opened right before the part's own `run()` starts, so a call *it*
+    // makes is checked against *its own* `parts`, not the caller's (this
+    // file's own header, and src/context/calls.ts's).
+    calls.pushFrame(part);
+    let runResult: unknown;
+    try {
+      const fixtures = subsetPartFixtures(part);
+      runResult = await part.run(fixtures, argsResult.data);
+    } catch (error) {
+      const nested = calls.popFrame();
+      const message = error instanceof Error ? error.message : String(error);
+      recordCallFailure(name, args, "step_error", message, startedAt, nested);
+      throw error;
+    }
+    const nested = calls.popFrame();
+
+    const returnsResult = part.returns.safeParse(runResult);
+    if (!returnsResult.success) {
+      const message = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+      recordCallFailure(name, args, "result_invalid", message, startedAt, nested);
+      throw new Error(message);
+    }
+
+    calls.recordEntry({
+      step: name,
+      args,
+      result: returnsResult.data,
+      started_at: startedAt.toISOString(),
+      finished_at: new Date().toISOString(),
+      ...(nested.length > 0 ? { calls: [...nested] } : {}),
+    });
+    return returnsResult.data as z.infer<S["returns"]>;
   }
 
   const ctx: StepContext = {
@@ -660,6 +903,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         });
       });
     },
+    call,
     // `attach`/`path` handed straight through from the
     // collector above — this object literal is what both `StepContext.
     // evidence` and (via `buildStepFixtures`, below) `StepFixtures.evidence`
@@ -782,6 +1026,15 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return sections.snapshot();
   }
 
+  function callsSnapshot(): CallEntry[] {
+    return calls.snapshot();
+  }
+
+  function beginStepRun(step: Step, fixtures: StepFixtures): void {
+    calls.beginRoot(step);
+    currentFixtures = fixtures;
+  }
+
   function pollsSnapshot(): PollRecord[] {
     return polls.snapshot();
   }
@@ -816,6 +1069,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     observed.reset();
     used.reset();
     sections.reset();
+    calls.reset();
+    currentFixtures = undefined;
     polls.reset();
     envReads.reset();
     pageEvents.reset();
@@ -834,6 +1089,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     usedSnapshot,
     recordUsed,
     sectionsSnapshot,
+    callsSnapshot,
+    beginStepRun,
     pollsSnapshot,
     envReadsSnapshot,
     pageEventsSnapshot,
@@ -907,6 +1164,9 @@ export async function buildStepFixtures(
         break;
       case "poll":
         fixtures.poll = ctx.poll;
+        break;
+      case "call":
+        fixtures.call = ctx.call;
         break;
       case "evidence":
         fixtures.evidence = ctx.evidence;

@@ -217,6 +217,13 @@ export interface StepDefinitionInput<
    * stays one-line-per-step); shown in `nuka describe`. No default — omit it
    * and `Step.rationale` is `undefined`, same as omitting `pattern`. */
   rationale?: string;
+  /** Other steps this step's own `run` may call through the `call` fixture
+   * (docs/spec.md "Parts") — a step that calls a part it did not list here
+   * is refused at the call site, never at the call's own body: `call` reads
+   * fixture bags before `run` executes, the same static-declaration reason
+   * `from` and a step's own fixture destructuring both already have (this
+   * file's own header). Omit it entirely for a step that calls no parts. */
+  parts?: readonly Step[];
   /** `fixtures` is a `StepFixtures` bag, named by destructuring
    * (`run({ page, section }, args) => ...`) —
    * only the names actually destructured get built at all (docs/spec.md
@@ -250,6 +257,11 @@ export interface Step<
    * unconditionally). */
   readonly from: StepFromMap;
   readonly rationale: string | undefined;
+  /** Empty (`[]`) when the step declares no `parts` at all — the same
+   * "default fills the gap" convention `from`'s own `{}` default already
+   * follows (this file's own header on `Step.from`), so every reader can
+   * iterate it unconditionally rather than checking for `undefined` first. */
+  readonly parts: readonly Step[];
   readonly run: (
     fixtures: StepFixtures,
     args: z.infer<TArgs>,
@@ -295,6 +307,7 @@ export function defineStep<
     // to begin with.
     from: (definition.from ?? {}) as StepFromMap,
     rationale: definition.rationale,
+    parts: definition.parts ?? [],
     run: definition.run,
     [STEP_BRAND]: true,
   };
