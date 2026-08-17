@@ -1,7 +1,7 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a signed-off Gherkin scenario, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, or a scenario ready to write, run, and sign off.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka accept, nuka tend).
+description: Use when turning a requirement into a signed-off Gherkin scenario, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, or a path already explored one `nuka do` call at a time and now worth fixing in a scenario.
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka check, nuka run, nuka accept, nuka tend).
 license: MIT
 ---
 
@@ -24,8 +24,9 @@ ticket closes; running those on every future commit is worth doing, so
 the feature moves into `featuresDir` instead (see "What not to do").
 
 This skill covers the whole path from whatever you start with (raw prose,
-general acceptance criteria, or a scenario ready to write) through to that
-sign-off and the placement decision right after it. "Where to start" below
+general acceptance criteria, a scenario ready to write, or a path you
+already explored one `nuka do` call at a time) through to that sign-off
+and the placement decision right after it. "Where to start" below
 picks the entry point for what you have.
 
 ## Where to start
@@ -42,8 +43,11 @@ differs is only where you enter:
    start at "From requirements to scenarios" below.
 3. **You already have, or can write directly, a concrete scenario**: skip
    ahead to "The loop" below.
+4. **You already ran the path**, exploring with `nuka do` call by call, and
+   want what you found fixed in a scenario: start at "From an exploration
+   to a scenario" below.
 
-If none of the three is true either, there is nothing yet to interrogate:
+If none of the four is true either, there is nothing yet to interrogate:
 ask the user what this is supposed to do before writing anything, since a
 scenario started without knowing what it proves just proves the wrong
 thing.
@@ -137,6 +141,58 @@ implementation is generated from the scenario, which is the whole point of
 doing it here rather than after. What the stage forbids is a draft whose
 assumptions never surface at all, not the act of drafting one.
 
+## From an exploration to a scenario
+
+When the work started by exploring rather than from criteria: you drove
+`nuka do` call by call, reading each step record and deciding the next
+one, and now the path that matters is the one you just took. `nuka
+harvest` turns that path into a draft.
+
+```sh
+nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
+```
+
+The ids are the ones each `nuka do` printed. There is no time window and
+no `--since`, because a window cannot tell the probe you abandoned from
+the call that mattered. Listing them out of order is fine: the draft
+follows what the records say about when each one ran.
+
+**One call is one scenario.** Harvest never splits a list into two, since
+where one story ends and the next begins is a judgment about meaning and
+not something a step record holds. Hand it the ids for one path. Two
+paths worth two scenarios means calling it twice, once per path, and
+pasting both into the same feature under one `Feature:`.
+
+What comes back is deliberately unfinished. Every keyword is `*` and both
+names are placeholders, because the records say what ran and nothing
+about what any of it was for. **Finishing that is your work, and it is
+the part worth doing carefully:**
+
+- Replace each `*` with `Given`, `When`, or `Then` by what that line tells
+  the person reading the scenario, not by what the code did.
+- Name the `Feature:` and the `Scenario:` for the behavior being claimed.
+- Delete any line that was a probe rather than part of the story. A draft
+  is a record of what you ran, and exploring means running things that
+  turned out not to matter.
+
+Three things the draft names rather than decides, each also on stderr:
+
+- **A comment where a step has no pattern.** It could not be a line.
+  Decide which it was: give that step a `pattern` if the scenario should
+  name it, or leave it out if it belongs inside another step as a part.
+- **A line that failed when it ran.** The scenario is red until the
+  behavior changes. That is the shape a reproduction takes here: red,
+  fixed, green, then `nuka accept`, which refuses while it is red.
+- **A line that does not read back to the record it came from.** Its
+  wording has to be fixed or it will not bind. This happens where a
+  pattern carries optional text or alternation, which cannot be reversed
+  into one answer.
+
+Nothing needs stripping before you commit the file: which records the
+draft came from went to stderr, never into it.
+
+Then join "The loop" below at step 4, `nuka check`.
+
 ## The loop
 
 1. Read the vocabulary: `nuka steps --json`, then `nuka describe <step>`
@@ -190,6 +246,15 @@ step whose contract says `mutates: true`, tell the user what it's about to
 change and get their go-ahead, once per step, not on every retry while
 fixing it, or trial-and-error stops being possible. Steps with `mutates:
 false` are observation only (the Then side); they don't need this.
+
+When there is nobody to ask mid-task, because the caller handed over a
+task rather than sitting in the conversation, the go-ahead has to come
+before the work starts instead of during it. Two ways to have it: the
+instruction already told you to run these steps, in which case say in
+your report which mutating steps that covered, or it did not, in which
+case list what you intend to run and what each one changes, and ask
+before starting. What is never right is running a mutating step and
+mentioning it afterwards because asking was inconvenient.
 
 If the same step still fails after three fix-and-retry cycles, stop and
 report where it stands instead of continuing to guess. A prompt asking for
