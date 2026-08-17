@@ -2208,6 +2208,113 @@ feature itself are ordinary PR material, and the translation from criteria
 to scenarios is the judgment a reviewer is there to check. Steps 5-7 are
 mechanical, and the tool refuses rather than let them go wrong quietly.
 
+That loop starts from criteria. "Harvesting" below is the other way in,
+for work that started by exploring instead, and it joins this loop at
+step 3.
+
+## Harvesting
+
+`nuka do` is the adaptive loop (see "Single steps"): the agent reads one
+validated result and decides the next call. What it leaves behind is
+deliberately not evidence, because an ad-hoc sequence is a working record
+and nothing agreed it was the story. So an exploration that found
+something real ends with the finding in a form nothing can gate on, and
+the path it took living only in a directory that is safe to delete.
+
+`nuka harvest <step-record-id>...` prints one feature draft to stdout,
+built from those records. It is the bridge between the two things this
+tool keeps apart: a path found by adapting, and a path fixed in a
+sentence someone agreed to.
+
+```sh
+nuka harvest step-20260817-a1b2 step-20260817-c3d4 > acceptance/cart.feature
+```
+
+The division of labor is the same one the whole tool runs on. Harvest
+fills in what it measured, exactly: which steps ran, in what order, the
+text of each line, and which values came from an earlier execution rather
+than from the line. It leaves every **claim** blank, because a claim is
+not something a step record contains.
+
+Two blanks, and they are the same kind of blank. `Feature:` and
+`Scenario:` get a placeholder rather than a generated name. Every line
+gets `*` rather than `Given`, `When`, or `Then`. A keyword says what a
+line is for the person reading it, and the records say only what ran, so
+choosing one would be the tool inventing a claim it cannot support. `*`
+is a real Gherkin keyword that carries no position, so the draft parses
+and `nuka check` can read it while the narrative is still missing.
+
+Deriving the keyword from `mutates` was the alternative, and it was
+rejected for the reason a wrong guess is worse here than no guess: a
+plausible keyword survives review, and `*` does not. Whoever finishes the
+draft, agent or person, is the same party that would have had to check a
+guess anyway.
+
+**Which records form one sequence is said on the command line, not stored.**
+`do` has no grouping label on purpose, and adding one would make an
+ad-hoc sequence start to look like the thing it is not. Nothing needs to
+be added: each `do` prints its own step record, so the caller running the
+adaptive loop already holds every id. A time window (`--since`, `--last
+10`) would guess instead, and would quietly pull in the probe that was
+tried and abandoned, which is exactly the line a reader cannot tell from
+a real one.
+
+What the command line says is *which* records, never their order. The
+draft follows each record's own `started_at`, so a caller that lists two
+ids the wrong way round still gets the sequence that ran. Order is a
+measurement here, and the argument list is a selection.
+
+A value that never appears on a line is left to chain. A step record's
+`used` names which execution supplied each `from` key (see "Records"),
+which is a measurement rather than a reconstruction, so harvest writes
+nothing for that key and lets the producer's own line supply it. The
+binding-order check `nuka check` and `nuka run` share then proves the
+order before anything runs. A key that came from `--args` instead is
+written into the line where a capture takes it, or into a docstring or
+table where the one unconsumed required key can take it (see "Typed
+steps"). A key that fits none of those is left out with a comment saying
+so, and `check` refuses the line for the same reason it always would.
+
+Three things are recorded rather than resolved, each in the draft and on
+stderr both.
+
+- **A step with no `pattern`** cannot be a line at all. It becomes a
+  comment naming the step and its args. Whether it was a step whose
+  sentence has not been written yet, or a part that belongs inside another
+  step, is a judgment about what the scenario is for, so the draft states
+  the fact and leaves the judgment.
+- **A record whose execution failed** becomes a line, with a comment
+  saying it failed when it ran and how. This keeps the case worth having:
+  an exploration that reproduced a bug harvests into a scenario that is
+  red until the behavior changes, then green, then acceptable. Nothing
+  about a red draft can turn into evidence by accident, because
+  `nuka accept` refuses without a green full run (see "Sign-off"). A
+  failed record also cannot be a chain's upstream, since `--use` already
+  refuses one, so reconstruction stays sound.
+- **A line that does not read back** to the record it came from. A
+  pattern may carry optional text (`item(s)`) or alternation (`is/are`),
+  and reversing one does not have a single answer. Rather than pick
+  quietly, harvest reads every line it wrote back through the same
+  matching `nuka run` uses and checks that it lands on the same step with
+  the same args. A line that does not is named, with what was written and
+  what it read back as.
+
+That round trip is the one place harvest judges its own output, and it
+reuses `run`'s own matching rather than a second implementation, so the
+two can never disagree about what a line means.
+
+Provenance goes to stderr and never into the file. The ids point into the
+state directory, which is gitignored and safe to delete (see "The state
+directory"), so a comment naming them inside a committed feature would
+become a reference its reader cannot follow. The working information
+belongs where the work is happening; the feature file is a durable
+artifact and keeps only what stays true.
+
+A step record from `nuka run` is refused rather than harvested. That
+record already belongs to a feature, and the useful answer is the feature
+it belongs to rather than a second one generated from it, so the refusal
+names the scenario record it came from.
+
 ## Allure emitter
 
 `nuka run` writes one Allure test result per *step*, the moment that step
@@ -2811,6 +2918,16 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
+nuka harvest <step-record-id>...
+                              turn a `do` sequence into one feature draft on
+                              stdout: the lines and their order are measured,
+                              the keywords are `*` and the names are
+                              placeholders, because a claim is not in a step
+                              record. What cannot become a line, what failed
+                              when it ran, and what does not read back to the
+                              record it came from are named in the draft and
+                              on stderr. Provenance goes to stderr only. A
+                              `nuka run` record is refused
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, which
                               fixtures each step needs (needs, needs_browser,
@@ -2991,8 +3108,11 @@ never actually read.
   "Parts"). A step can be split without its feature file being rewritten,
   which is what makes a reuse granularity smaller than a scenario line
   possible at all.
+- **M10 (harvesting)**: `nuka harvest`, one feature draft built from a
+  named `do` sequence (see "Harvesting"). This is the move that closes the
+  adaptive loop: a path found by exploring becomes a path fixed in a
+  sentence, which is the only form anything here can gate on.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
-  scenario harvesting (generate feature files from recorded `do` sequences),
   tag-expression filtering, cucumber-js adapter if a real suite needs
   in-place coexistence rather than migration.
 
