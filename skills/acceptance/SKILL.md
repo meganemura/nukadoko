@@ -220,17 +220,41 @@ The `resultOf` fixture fallback, a value with two possible producers, and
 why a chained value is never fetched by nukadoko on its own initiative:
 `references/writing-steps.md`.
 
-## Helper or step?
+## Helper, part, or step?
 
-Judge each operation on one axis: does it mean something to the person
-reading the scenario, not to the code moving data between steps? Yes, make
-it a step, and the acceptance record gains a step record for it. No, write
-an ordinary function under `features/steps/lib/` instead and call it from
-the step that needs the value: the HTTP it performs is still counted in
-the calling step's `observed`.
+Judge each operation on one axis first: does it mean something to the
+person reading the scenario, not to the code moving data between steps?
+Yes, make it a step, and the acceptance record gains a step record for it.
+No, then ask what should be knowable about it after a failure. A **part**
+when it has a contract worth stating and inputs and a result worth reading
+back: define it with `defineStep` and no `pattern`, list it in the calling
+step's `parts`, and run it with the `call` fixture. An ordinary function
+under `features/steps/lib/` when it has neither: the HTTP it performs is
+still counted in the calling step's `observed`.
 
-The full reasoning, and the kind of line this keeps out of a feature file:
-`references/writing-steps.md`.
+The full reasoning, the kind of line this keeps out of a feature file, and
+what a `calls` entry records: `references/writing-steps.md`.
+
+## A second scenario needs part of a step you already have
+
+Two refactors, and the difference is whether the agreed sentence changes.
+
+The step is right but too concrete, hardcoding a value the next scenario
+needs to vary: add the `args` key and capture it in the pattern. That
+rewrites the feature line, so it needs whoever agreed that line, and `nuka
+tend` reports any sign-off over it as no longer describing what is on
+disk. It is usually the right trade anyway, because the value was
+invisible to the feature's reader and now it is not.
+
+The step does two things and the next scenario needs one of them: split it
+into parts instead. Move each half into its own `defineStep` file with no
+`pattern`, list both in the original step's `parts`, and call them from
+its `run`. The original step's pattern, args and returns do not move, so
+the first scenario's feature file and its sign-off stay as they were. When
+the second scenario needs to name one half as a line of its own, give that
+part a `pattern`: it stays callable from the composite at the same time.
+
+The procedure, and what `nuka check` refuses: `references/writing-steps.md`.
 
 ## A resource that needs its own cleanup
 
