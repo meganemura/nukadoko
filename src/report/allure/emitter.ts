@@ -207,18 +207,34 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
-  // Every child step nests directly under `rootUuid` now (`parentStepUuid`
-  // is always `null` at both call sites below) — one level shallower than
-  // when a step was itself a child of the scenario's own test. Verified
-  // this still works: parameters and errors are still preserved, and the
-  // lost nesting level is carried by Allure's own breadcrumb instead.
-  function writeChildSteps(rootUuid: string, childSteps: readonly MappedChildStep[]): void {
+  // Every child step nests directly under `rootUuid` (`parentStepUuid`
+  // defaults to `null` at both existing call sites below) — one level
+  // shallower than when a step was itself a child of the scenario's own
+  // test. Verified this still works: parameters and errors are still
+  // preserved, and the lost nesting level is carried by Allure's own
+  // breadcrumb instead. `parentStepUuid` lets a caller nest deeper than
+  // one level — `map-scenario.ts`'s own `mapCalls` builds a
+  // `MappedChildStep` whose own `childSteps` recurses (docs/spec.md
+  // "Parts": "a part that calls a part nests the same way"), and
+  // `startStep`'s own second argument is `ReporterRuntime`'s own
+  // mechanism for exactly that, already built for it, not bent to fit.
+  function writeChildSteps(
+    rootUuid: string,
+    childSteps: readonly MappedChildStep[],
+    parentStepUuid: string | null = null,
+  ): void {
     for (const child of childSteps) {
-      const uuid = runtime.startStep(rootUuid, null, { name: child.name, start: child.startMs });
+      const uuid = runtime.startStep(rootUuid, parentStepUuid, { name: child.name, start: child.startMs });
       if (uuid !== undefined) {
         runtime.updateStep(uuid, (s) => {
           s.status = allureStatus(child.status);
+          if (child.parameters && child.parameters.length > 0) {
+            s.parameters = [...s.parameters, ...child.parameters];
+          }
         });
+        if (child.childSteps && child.childSteps.length > 0) {
+          writeChildSteps(rootUuid, child.childSteps, uuid);
+        }
         runtime.stopStep(uuid, { stop: child.stopMs });
       }
     }

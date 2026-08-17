@@ -219,6 +219,19 @@ function fromSummary(
   return result;
 }
 
+/** `nuka steps --json`'s own rendering of a step's `parts` — the
+ * declaring step's own vocabulary name for each part, resolved through
+ * `stepNames` the same way `fromSummary` resolves a `from` upstream.
+ * `undefined` (hence omitted) when the step declares no `parts` at all —
+ * `fromSummary`'s own "absent when empty" convention, reused rather than
+ * reinvented. */
+function partsSummary(step: Step, stepNames: StepNames): readonly string[] | undefined {
+  if (step.parts.length === 0) {
+    return undefined;
+  }
+  return step.parts.map((part) => upstreamStepName(part, stepNames));
+}
+
 /** `nuka describe`'s own rendering of a step's `from` — one human-readable
  * "step.key" string per key, the same "arrow" shape docs/spec.md "Chaining
  * steps" itself uses in prose ("`projectId` ← `createProject.id`"),
@@ -242,6 +255,26 @@ function fromHumanReadable(from: StepFromMap, stepNames: StepNames): Record<stri
     result[key] = candidates.length === 1 ? candidates[0]! : `either of ${candidates.join(" or ")}`;
   }
   return result;
+}
+
+/** `nuka describe`'s own rendering of a step's `parts` — one
+ * `{ name, description }` pair per part, `from`'s own "step.key" arrow
+ * shape has no equivalent here (a part is named and described, not tied
+ * to one args key), so this stays a plain list. Deliberately no reverse
+ * index (which steps call this one as a part): that answer needs the
+ * whole vocabulary scanned, and `nuka describe` looks at one step's own
+ * contract only (docs/spec.md "Parts": "An unused part is not decidable
+ * at all" — the reverse listing has the same shape of problem, scoped to
+ * a single `nuka describe` call rather than `nuka tend`). `undefined`
+ * (hence omitted) under the same condition as `partsSummary` above. */
+function partsHumanReadable(
+  step: Step,
+  stepNames: StepNames,
+): ReadonlyArray<{ readonly name: string; readonly description: string }> | undefined {
+  if (step.parts.length === 0) {
+    return undefined;
+  }
+  return step.parts.map((part) => ({ name: upstreamStepName(part, stepNames), description: part.description }));
 }
 
 /**
@@ -317,6 +350,16 @@ export interface StepSummary {
    * no `from` at all. Deliberately absent from `formatVocabulary`'s text
    * rendering below — `nuka steps` (non-JSON) stays one line per step. */
   readonly from?: Record<string, { step: string; key: string } | ReadonlyArray<{ step: string; key: string }>>;
+  /** Vocabulary names of the steps this step declares in its own `parts`
+   * (docs/spec.md "Parts"), in declaration order — resolved through the
+   * same `stepNames` lookup `from` uses, so an unregistered part reads
+   * `"(unregistered step)"` the same way an unregistered `from` upstream
+   * does. Absent for a compat entry (no declaration exists) and omitted
+   * entirely, like `from`, when a typed step declares no `parts` at all.
+   * `needs`/`needs_browser` already fold a part's own needs into this
+   * step's, so this field only names *which* steps are called, not what
+   * they need. */
+  readonly parts?: readonly string[];
 }
 
 /** The fixture names `needs_inferred` is allowed
@@ -350,6 +393,7 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
     description: entry.step.description,
     mutates: entry.step.mutates,
     from: fromSummary(entry.step.from, stepNames),
+    parts: partsSummary(entry.step, stepNames),
   };
   // `stepNeeds` throws for a `run()` it can't read fixture names from at all
   // (src/step/step-needs.ts, via src/step/fixture-names.ts) — that used to
@@ -496,6 +540,12 @@ export interface TypedStepContract {
    * not `{}`, when the step declares no `from` at all — same convention as
    * `rationale` just above. */
   readonly from?: Record<string, string>;
+  /** This step's own declared `parts` (docs/spec.md "Parts"), one entry
+   * per part naming it and repeating its own `description` — the same
+   * "no reverse index" scope `partsHumanReadable`'s own doc comment
+   * explains. Omitted, not `[]`, when the step declares no parts at all —
+   * same convention as `rationale`/`from` just above. */
+  readonly parts?: ReadonlyArray<{ readonly name: string; readonly description: string }>;
   readonly args: JsonSchema;
   readonly returns: JsonSchema;
 }
@@ -537,6 +587,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames): 
     // no "rationale" key in the output.
     rationale: entry.step.rationale,
     from: fromHumanReadable(entry.step.from, stepNames),
+    parts: partsHumanReadable(entry.step, stepNames),
     args: z.toJSONSchema(entry.step.args),
     returns: z.toJSONSchema(entry.step.returns),
   };

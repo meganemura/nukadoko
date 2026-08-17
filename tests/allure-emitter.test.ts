@@ -874,6 +874,96 @@ describe("createAllureEmitter", () => {
       }
     });
   });
+
+  describe("calls -> nested Allure steps (docs/spec.md 'Parts')", () => {
+    it("writes a part-of-a-part call as a genuinely nested step, args/result as parameters, under the calling step's own test", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles[0]!;
+
+      const stepRecord: StepRecord = {
+        step_record_id: "step-parts",
+        step: "project-with-member",
+        kind: "run",
+        args: { email: "a@example.com" },
+        result: { memberId: "m_1" },
+        status: "ok",
+        environment: "staging",
+        session: null,
+        scenario_record_id: "scn-parts",
+        run_id: "run-1",
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:01.000Z",
+        evidence: { dir: ".nukadoko/records/steps/step-parts", screenshots: [] },
+        observed: { http_reads: 0, http_writes: 1 },
+        mutates: true,
+        calls: [
+          {
+            step: "invite-member",
+            args: { projectId: "p_1", email: "a@example.com" },
+            result: { memberId: "m_1" },
+            started_at: "2026-08-01T00:00:00.200Z",
+            finished_at: "2026-08-01T00:00:00.900Z",
+            calls: [
+              {
+                step: "send-invite",
+                args: { email: "a@example.com" },
+                result: { sent: true, channel: "email" },
+                started_at: "2026-08-01T00:00:00.300Z",
+                finished_at: "2026-08-01T00:00:00.800Z",
+              },
+            ],
+          },
+        ],
+      };
+      writeStepRecordFile(rootDir, stepRecord);
+
+      emitter.beginScenario();
+      emitter.emitStep(
+        baseStepInput({
+          record: { text: "the cart has items", status: "passed", step_record_id: "step-parts" },
+          stepRecord,
+          gherkinDocument,
+          pickle,
+          scenarioId: "scn-parts",
+        }),
+      );
+
+      const results = readResultFiles(resultsDir);
+      const step1 = results.find((r) => (r as { name?: string }).name === "Given the cart has items") as {
+        steps?: {
+          name: string;
+          status: string;
+          parameters?: { name: string; value: string }[];
+          steps?: { name: string; status: string; parameters?: { name: string; value: string }[] }[];
+        }[];
+      };
+
+      expect(step1.steps).toHaveLength(1);
+      const inviteMemberStep = step1.steps![0]!;
+      expect(inviteMemberStep.name).toBe("invite-member");
+      expect(inviteMemberStep.status).toBe("passed");
+      expect(inviteMemberStep.parameters).toContainEqual({
+        name: "args",
+        value: JSON.stringify({ projectId: "p_1", email: "a@example.com" }),
+      });
+      expect(inviteMemberStep.parameters).toContainEqual({
+        name: "result",
+        value: JSON.stringify({ memberId: "m_1" }),
+      });
+
+      // The part-of-a-part call nests under invite-member's own steps, not
+      // flattened alongside it (docs/spec.md "Parts": "a part that calls a
+      // part nests the same way").
+      expect(inviteMemberStep.steps).toHaveLength(1);
+      const sendInviteStep = inviteMemberStep.steps![0]!;
+      expect(sendInviteStep.name).toBe("send-invite");
+      expect(sendInviteStep.status).toBe("passed");
+      expect(sendInviteStep.parameters).toContainEqual({
+        name: "result",
+        value: JSON.stringify({ sent: true, channel: "email" }),
+      });
+    });
+  });
 });
 
 describe("createAllureEmitter: begin() failure isolation", () => {

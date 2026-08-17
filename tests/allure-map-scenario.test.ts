@@ -1533,3 +1533,123 @@ describe("mapScenario: status, firstFailure classification, and child steps", ()
     expect(mapped.childSteps.map((c) => c.status)).toEqual(["passed", "failed", "skipped", "broken", "broken"]);
   });
 });
+
+describe("mapStep: calls -> nested child steps (docs/spec.md 'Parts')", () => {
+  it("appends one call-derived child step named after the part, args/result as parameters, after the sections/polls/actions timeline", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const stepRecord = baseStepRecord({
+      status: "ok",
+      result: { memberId: "m_1" },
+      sections: [{ label: "before the call", at: "2026-08-01T00:00:00.100Z" }],
+      calls: [
+        {
+          step: "invite-member",
+          args: { projectId: "p_1", email: "a@example.com" },
+          result: { memberId: "m_1" },
+          started_at: "2026-08-01T00:00:00.200Z",
+          finished_at: "2026-08-01T00:00:00.900Z",
+        },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+
+    const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
+
+    expect(mapped.childSteps.map((c) => c.name)).toEqual(["before the call", "invite-member"]);
+    const call = mapped.childSteps[1]!;
+    expect(call.startMs).toBe(Date.parse("2026-08-01T00:00:00.200Z"));
+    expect(call.stopMs).toBe(Date.parse("2026-08-01T00:00:00.900Z"));
+    expect(call.status).toBe("passed");
+    expect(call.parameters).toEqual([
+      { name: "args", value: JSON.stringify({ projectId: "p_1", email: "a@example.com" }) },
+      { name: "result", value: JSON.stringify({ memberId: "m_1" }) },
+    ]);
+  });
+
+  it("omits the result parameter when the call carries none (a failed call)", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const stepRecord = baseStepRecord({
+      status: "failed",
+      error: { message: "never declared this part", kind: "step_error" },
+      calls: [
+        {
+          step: "no-op-part",
+          args: {},
+          error: { message: "args validation failed", kind: "args_invalid" },
+          started_at: "2026-08-01T00:00:00.200Z",
+          finished_at: "2026-08-01T00:00:00.300Z",
+        },
+      ],
+    });
+    delete (stepRecord as { result?: unknown }).result;
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", step_record_id: "step-1" };
+
+    const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
+
+    const call = mapped.childSteps[0]!;
+    expect(call.parameters).toEqual([{ name: "args", value: JSON.stringify({}) }]);
+    // `args_invalid` classifies to "broken" the same way statusForKind
+    // already classifies a step record's own error of that kind — no
+    // second classification invented for a call's own error.
+    expect(call.status).toBe(statusForKind("args_invalid"));
+  });
+
+  it("nests a part-of-a-part call under its own caller's childSteps, not flattened alongside it", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const stepRecord = baseStepRecord({
+      status: "ok",
+      result: { memberId: "m_1" },
+      calls: [
+        {
+          step: "invite-member",
+          args: { projectId: "p_1", email: "a@example.com" },
+          result: { memberId: "m_1" },
+          started_at: "2026-08-01T00:00:00.200Z",
+          finished_at: "2026-08-01T00:00:00.900Z",
+          calls: [
+            {
+              step: "send-invite",
+              args: { email: "a@example.com" },
+              result: { sent: true, channel: "email" },
+              started_at: "2026-08-01T00:00:00.300Z",
+              finished_at: "2026-08-01T00:00:00.800Z",
+            },
+          ],
+        },
+      ],
+    });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+
+    const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
+
+    const call = mapped.childSteps[0]!;
+    expect(call.name).toBe("invite-member");
+    expect(call.childSteps).toEqual([
+      {
+        name: "send-invite",
+        startMs: Date.parse("2026-08-01T00:00:00.300Z"),
+        stopMs: Date.parse("2026-08-01T00:00:00.800Z"),
+        status: "passed",
+        parameters: [
+          { name: "args", value: JSON.stringify({ email: "a@example.com" }) },
+          { name: "result", value: JSON.stringify({ sent: true, channel: "email" }) },
+        ],
+        childSteps: [],
+      },
+    ]);
+  });
+
+  it("adds no call-derived child step at all when the step record carries no calls", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const stepRecord = baseStepRecord({ status: "ok", result: null });
+    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+
+    const mapped = callMapStep({ record: step, stepRecord, gherkinDocument, pickle });
+
+    expect(mapped.childSteps).toEqual([]);
+  });
+});

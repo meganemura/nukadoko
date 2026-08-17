@@ -10,7 +10,7 @@ import type {
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { ActionEntry } from "../../context/trace-actions.js";
-import type { ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
+import type { CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
 import { contentTypeForFileName } from "../media-type.js";
 
@@ -130,6 +130,17 @@ export interface MappedChildStep {
   readonly startMs: number;
   readonly stopMs: number;
   readonly status: MappedStatus;
+  /** Present only on a call-derived child step (`mapCalls`, below) — a
+   * part's own `args`/`result`, so they read without opening the
+   * `record.json` attachment. Every other producer of a `MappedChildStep`
+   * (declared logs, sections/polls/actions) leaves this unset. */
+  readonly parameters?: readonly MappedParameter[];
+  /** Always present on a call-derived child step (`mapCalls`, below,
+   * recursing on `CallEntry.calls`) — `[]` for a call whose own part
+   * called no part in turn, non-empty only when it did (docs/spec.md
+   * "Parts": "a part that calls a part nests the same way"). Every other
+   * producer of a `MappedChildStep` leaves this unset. */
+  readonly childSteps?: readonly MappedChildStep[];
 }
 
 /** A file-path attachment names its *source* file (emitter.ts resolves it
@@ -720,6 +731,60 @@ function pageEventCount(entries: readonly unknown[] | undefined, truncatedTotal:
   return truncatedTotal !== undefined ? `${entries.length} of ${truncatedTotal}` : String(entries.length);
 }
 
+// --- calls -> nested child steps ---
+//
+// A step's own `calls` (docs/spec.md "Parts") is kept as its own trailing
+// group rather than merged into `mapTimelineChildSteps`'s own `at`-ordered
+// sort above: a call's own span commonly overlaps the very actions/polls
+// it caused (the call is the parent operation, they happen inside it), so
+// a single flat timeline sorted by start time would interleave a part's
+// own child steps with the calling step's, which is exactly the "depth
+// under one line, not a second line" distinction docs/spec.md "Parts"
+// draws. Nesting is the only shape that keeps that distinction visible.
+
+/** One call's own args/result as step parameters — `args` is always
+ * present (a call always carries the args it was given, docs/spec.md
+ * "Parts"); `result` only when the call actually returned one (absent on
+ * a call that failed, `CallEntry.result`'s own doc comment). Values are
+ * JSON-stringified: a `Parameter`'s own `value` field is a plain string,
+ * the same reason `stepRecordParameters` below turns every non-string
+ * observed value into one with `String(...)`. */
+function callParameters(entry: CallEntry): MappedParameter[] {
+  const parameters: MappedParameter[] = [{ name: "args", value: JSON.stringify(entry.args) }];
+  if (entry.result !== undefined) {
+    parameters.push({ name: "result", value: JSON.stringify(entry.result) });
+  }
+  return parameters;
+}
+
+/** One step record's own `calls`, recursed into nested `MappedChildStep`s
+ * — one per call, named after the part's own vocabulary name
+ * (`CallEntry.step`), carrying its own args/result as parameters
+ * (`callParameters`, above) and its own nested calls under `childSteps`
+ * (`entry.calls`, docs/spec.md "Parts": "a part that calls a part nests
+ * the same way"). A call's own failure is classified the same way a
+ * step's own is (`statusForKind`, this module's own header) — a part's
+ * `error` uses the same `ErrorKind` set a step record's own `error` does
+ * (`CallEntry`'s own doc comment), so there is no second classification
+ * to invent here. `undefined`/empty `calls` maps to `[]`, the same
+ * "nothing to add" `mapTimelineChildSteps` already returns for an empty
+ * timeline. */
+function mapCalls(calls: readonly CallEntry[] | undefined): MappedChildStep[] {
+  if (!calls || calls.length === 0) {
+    return [];
+  }
+  return calls.map(
+    (entry): MappedChildStep => ({
+      name: entry.step,
+      startMs: Date.parse(entry.started_at),
+      stopMs: Date.parse(entry.finished_at),
+      status: entry.error !== undefined ? statusForKind(entry.error.kind) : "passed",
+      parameters: callParameters(entry),
+      childSteps: mapCalls(entry.calls),
+    }),
+  );
+}
+
 // --- one step -> one Allure test ---
 
 export function mapStep(input: MapStepInput): MappedStepTest {
@@ -764,6 +829,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
   const attachments: MappedAttachment[] = [];
   let declared: MappedDeclared = EMPTY_DECLARED;
   let timelineChildSteps: MappedChildStep[] = [];
+  let callChildSteps: MappedChildStep[] = [];
 
   if (stepRecord) {
     // "step record id", not the bare "record" this parameter used to be
@@ -883,6 +949,7 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     declared = mapDeclared(stepRecord.declared, stepRecord.evidence.dir, startMs);
     attachments.push(...declared.attachments);
     timelineChildSteps = mapTimelineChildSteps(stepRecord, Date.parse(stepRecord.started_at));
+    callChildSteps = mapCalls(stepRecord.calls);
   }
 
   // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
@@ -948,9 +1015,12 @@ export function mapStep(input: MapStepInput): MappedStepTest {
     ],
     attachments,
     // Declared log lines first (unchanged position and rendering), the
-    // step's own sections/polls/actions timeline after — additive, never
-    // reordering what was already there.
-    childSteps: [...declared.childSteps, ...timelineChildSteps],
+    // step's own sections/polls/actions timeline second, this step's own
+    // `calls` last — additive, never reordering what was already there
+    // (this section's own header explains why `calls` gets its own
+    // trailing, nested group instead of folding into the `at`-ordered
+    // timeline).
+    childSteps: [...declared.childSteps, ...timelineChildSteps, ...callChildSteps],
   };
 }
 
