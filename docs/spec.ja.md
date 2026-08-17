@@ -1765,8 +1765,12 @@ emitter は常に実行され、スキップされるのは `nuka run` の呼び
   Allure は nukadoko の計測の余剰が見えるようになる場所であり、こちらは compat の忠実さそのものです。
   唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko が生成した run を従来の cucumber-js の run と同じように読み続けられることです。
 - step record の内部情報はストリームに一切出ません。
-  バリデーション済みの result も、`mutates` も、`observed` の件数も、`error.kind` もです。
+  バリデーション済みの result も、`mutates` も、`observed` の件数も、`error.kind` も、`calls` もです。
   `TestStepResult` と `TestStepFinished` は closed schema(`additionalProperties: false`)であり、そのどれにもフィールドがなく、Allure 自身の `[nukadoko.failure=<kind>]` label のような marker を通じてこっそり忍び込ませることもできません。
+  `calls` には、それに加えてもう 1 つの理由があります。
+  この形式には step の中の step という概念がそもそもありません。
+  そのためスキーマが開いていたとしても、part がここで取る形はありません(「Parts」を参照)。
+  Allure がそれを入れ子にできるのは、Allure 自身のモデルがそうしているからです。
 - Attachment は step が自分自身について宣言したものに限られます: `declared` の attachment とログの行で、後者は cucumber-js 自身の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)に乗ります。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。
   その計測の余剰にはすでに置き場所があり、ここで trace を base64 で埋め込んでも、それを望む消費者がいないままストリームを太らせるだけだからです。

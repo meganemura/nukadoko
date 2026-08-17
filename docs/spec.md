@@ -2543,10 +2543,15 @@ skipped only when a `nuka run` invocation selects zero pickles.
   formatters and JUnit-based CI keep reading a nukadoko-produced run the
   way they read a classic cucumber-js one.
 - Step record internals stay out of the stream entirely: no validated result,
-  no `mutates`, no `observed` counts, no `error.kind`. `TestStepResult` and
+  no `mutates`, no `observed` counts, no `error.kind`, no `calls`.
+  `TestStepResult` and
   `TestStepFinished` are closed schemas (`additionalProperties: false`)
   with no field for any of them, and there is no smuggling them in through
   a marker the way Allure's own `[nukadoko.failure=<kind>]` label does.
+  `calls` carries a second reason on top of that one: this format has no
+  step inside a step, so a part would have no shape to take here even if
+  the schemas were open (see "Parts"). Allure nests one because Allure's
+  own model does.
 - Attachments are limited to what a step declared about itself: `declared`
   attachments and log lines, the latter riding cucumber-js's own
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).
