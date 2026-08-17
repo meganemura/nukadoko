@@ -24,3 +24,29 @@ The tag carries the id in a form something can grep for; the free text
 under `Feature:` carries what a person needs. Follow whatever tag shape the
 project already uses (`@PROJ-123`, `@issue-456`): Gherkin tags cannot
 contain `#`, so a bare issue number needs a prefix.
+
+With no tracker to carry across, drop the tag and the `Ticket:` line and
+keep the free text. That block is the place for anything a reader needs
+that no line of the scenario establishes, a premise the scenario takes as
+already true included. Do not turn such a premise into a step unless the
+scenario really does establish it: a step is a claim that something ran.
+
+## Choosing Given, When, or Then
+
+Pick the keyword for what the line does for its reader. Given is what is
+already true, When is the action under test, Then is what has to be
+observable afterwards. Matching does not depend on the keyword at all: a
+line binds by its pattern alone, so the keyword is a claim to the reader
+rather than an instruction to the tool.
+
+The one place the keyword meets a step's contract is `mutates`. A step
+declaring `mutates: true` bound in Then position is a `nuka check`
+**warning**, not an error, and warnings do not fail `check`. That is
+deliberate: a Then line that changes state is usually a Then doing the
+When's job, and occasionally it is legitimate, so the tool draws a
+person's attention instead of deciding.
+
+`And` and `But` take the position of the primary keyword above them,
+which is gherkin's own rule rather than a nukadoko choice, so an `And`
+under `Then` sits in Then position too. A `*` line has no position and is
+held to none of this.

@@ -1,5 +1,67 @@
 # Writing a step
 
+## The shape of a step file
+
+One step per file, as the file's `default` export. Discovery reads that
+export and nothing else, and the file name is the step's name: the
+`nuka do <name>` you call it by, and the name every finding and step
+record uses for it. Feature files and step files both live under the
+configured `featuresDir`, `features` unless the project says otherwise,
+with feature files ending in `.feature`.
+
+```ts
+// features/steps/set-product-out-of-stock.ts
+import { z } from "zod";
+import { defineStep } from "nukadoko";
+
+export default defineStep({
+  pattern: "the product {sku:string} is out of stock",
+  description: "Set a product's stock to zero",
+  args: z.object({ sku: z.string().describe("The product's own SKU") }),
+  returns: z.object({
+    stock: z.number().describe("The stock left after the write"),
+  }),
+  // mutates defaults to true, so a writing step can leave it out; a step
+  // that only reads has to say mutates: false.
+  async run({ request }, args) {
+    const res = await request.post(`/products/${args.sku}/stock`, {
+      data: { stock: 0 },
+    });
+    return res.json();
+  },
+});
+```
+
+`pattern` is one string. Use `patterns: [...]` for a step that answers to
+more than one line, and omit both for a step only ever reached by name.
+
+`run`'s first argument has to be written as an object destructuring
+pattern, every time, because nukadoko reads which fixtures to build from
+that pattern's source text without ever calling `run`. A step needing no
+fixtures at all writes `run({}, args)`, and one needing neither writes
+`run()`. Any other parameter, `_ctx` included, is refused. `page`,
+`context` and `request` are Playwright's own objects, so reach for
+Playwright's documentation for what to call on them rather than guessing.
+
+## Writing the pattern
+
+Every parameter is `{key:type}`, and the key names the `args` field it
+fills: `"a customer {email:string} is onboarded"` fills `args.email`. An
+unnamed `{string}` is refused outright, so there is no shorter form to
+reach for.
+
+Do not carry a list of type names around. Get one wrong and `nuka check`
+prints the parameter types **this** project has registered, custom ones
+from `nukadoko.config.ts` included, which is the only list that is true
+here rather than true of nukadoko in general.
+
+The pattern and the schema are checked against each other, both ways: a
+key the pattern captures that `args` has no field for is an error, and so
+is a required `args` field that nothing captures and no `from` fills.
+Neither side can drift away from the other quietly, so adding an `args`
+field and forgetting the capture costs you one `nuka check`, never a
+browser session.
+
 ## Running a step alone before it touches a feature
 
 If the step body needs a local variable with the same name as a fixture,
@@ -35,6 +97,23 @@ from another system's error message. This is also what a downstream
 failure's own step record can show you: a failed step's `used` entries
 carry each upstream step's full `result`, so whatever this step declined to
 return is exactly what stays missing from that step record too.
+
+## What `rationale` is for
+
+`description` says what the step does, and is what an agent reads to pick
+a step out of the vocabulary. `rationale` says why it is built this way
+and what was tried and rejected, and is what an agent reads before
+deciding it may rewrite the step. Only `nuka describe` shows it, and it
+never reaches a step record: it describes the contract, not one
+execution.
+
+Write it wherever a rewrite could destroy something a reader cannot see:
+a workaround for the system under test, an approach that was tried and
+failed, a constraint that lives outside the code. `nuka tend` reports
+every typed step without one as a note and prints the ratio it is moving
+(`rationale 2/9`), so treat it as coverage to raise over time. It never
+fails a run, and a step with genuinely nothing to say is allowed to keep
+its note.
 
 ## Chaining a value from an earlier step
 

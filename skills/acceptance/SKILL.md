@@ -206,8 +206,18 @@ step verifying "an error is shown" needs its `returns` field for that
 message described, or the link between the criterion and what was actually
 observed is lost.
 
-Aliasing a fixture, the `do`/`run` gap, and what a step should return
-beyond what a later step cites: `references/writing-steps.md`.
+Write every pattern parameter as `{key:type}`, where the key names the
+`args` field it fills. Name a type this project does not have and `nuka
+check` prints the ones it does, so there is no list here to go stale.
+
+Always write `run`'s first argument as an object destructuring pattern,
+because that source text is how nukadoko decides which fixtures to build,
+without ever calling `run`. A step needing no fixtures writes `run({},
+args)`; any other parameter name is refused.
+
+A complete step file, pattern rules, aliasing a fixture, the `do`/`run`
+gap, what a step should return beyond what a later step cites, and what
+`rationale` is for: `references/writing-steps.md`.
 
 ## Chaining a value from an earlier step
 
@@ -305,7 +315,14 @@ ticket or through the requirements and scenario stages earlier in this
 skill. Where the translation is a judgment call, that judgment is what PR
 review of the feature is for.
 
-The tag shape and a worked example: `references/writing-the-feature.md`.
+Choose Given, When, or Then for what the line tells its reader: matching
+never depends on the keyword, since a line binds by its pattern alone. A
+`mutates: true` step bound in Then position is a `check` warning rather
+than an error, because that tension needs a person.
+
+The tag shape, a worked example, where a premise belongs when there is no
+ticket, and how `And`/`But`/`*` take their position:
+`references/writing-the-feature.md`.
 
 ## Running and accepting
 
