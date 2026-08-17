@@ -47,7 +47,12 @@ M9 (parts) is in: `parts` on `defineStep`, the `call` fixture, the `calls`
 entries a step record gains, and the three `check` findings that go with
 them. A step can be split without its feature file being rewritten, which
 is what makes a reuse granularity smaller than a scenario line possible.
-Still unimplemented: the AI-assisted glue converter and scenario harvesting.
+M10 (harvesting) is in: `nuka harvest` builds one feature draft from a
+named `do` sequence, filling only what was measured and leaving every
+claim blank. That closes the adaptive loop, since a path found by
+exploring becomes a path fixed in a sentence, which is the only form
+anything here can gate on. Still unimplemented: the AI-assisted glue
+converter.
 
 ## Naming rule
 

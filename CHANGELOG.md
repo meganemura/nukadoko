@@ -5,6 +5,50 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **`nuka harvest` turns a `nuka do` sequence into one feature draft.**
+  `nuka do` was already the adaptive loop, where an agent reads one
+  validated result and decides the next call, but what it leaves behind is
+  deliberately not evidence. So an exploration that found something real
+  ended with the finding in a form nothing could gate on, and the path it
+  took living only in a directory that is safe to delete. Harvest is the
+  bridge: `nuka harvest <step-record-id>... > x.feature` writes the lines,
+  their order, and which values chained rather than appeared on a line,
+  all read out of what was measured. The ids are the ones each `nuka do`
+  printed, and their order in the draft comes from each record's own
+  `started_at`, so order stays a measurement while the argument list stays
+  a selection. There is no time window and no `--since`, because a window
+  cannot tell the probe that was tried and abandoned from the call that
+  mattered.
+- **Every claim in the draft is left blank on purpose.** Each line's
+  keyword is `*` and both names are placeholders, because a step record
+  says what ran and nothing about what any of it was for. Deriving the
+  keyword from `mutates` was the alternative and it loses on one ground: a
+  plausible keyword survives review, and `*` does not. One call is one
+  scenario, since where one story ends is not in the records either.
+- **Three things the draft names rather than decides**, each on stderr as
+  well. A step with no `pattern` becomes a comment, since it cannot be a
+  line and whether it was a step or a part is a judgment about the
+  scenario. A record whose execution failed becomes a line with the
+  failure said out loud, which is what makes a reproduction harvestable:
+  red, fixed, green, then accepted, with `nuka accept` refusing while it is
+  red. And a line that does not read back to the record it came from is
+  named with both what was written and what it read back as.
+- **The draft is verified against itself.** Reversing a pattern has no
+  single answer where one carries optional text (`item(s)`) or alternation
+  (`is/are`), so rather than pick quietly, harvest parses the draft through
+  the same gherkin entry point `run` and `check` use and puts each pickle
+  step through `run`'s own matching. Parsing the real text rather than
+  hand-building a pickle means the docstring and table escaping is checked
+  by the same pass, and there is no second matcher to disagree with the
+  first.
+- **Provenance goes to stderr and never into the file.** The ids point into
+  a gitignored directory that is safe to delete, so naming them inside a
+  committed feature would leave a reference its reader cannot follow.
+
 ## 0.5.0 — 2026-08-17
 
 ### Added
