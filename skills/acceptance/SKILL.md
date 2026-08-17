@@ -148,6 +148,19 @@ When the work started by exploring rather than from criteria: you drove
 one, and now the path that matters is the one you just took. `nuka
 harvest` turns that path into a draft.
 
+Still exploring, and stuck because a step's `returns` only shows you what
+it already decided to show? Write one probe step with no `pattern` and a
+`returns` of `z.unknown()`, and read the whole thing off `nuka do`'s own
+stdout. When an operation has several moves, make each a part: the calling
+step's record then carries a `calls` entry per part, with the args it was
+handed and the result it returned, which is where the next move comes
+from. Parts share one browser and one page inside a single execution;
+across `do` calls nothing carries but `--session`'s login state.
+
+The probe example, how far a composite can grow before repeating it costs
+you, and what to do for an operation that cannot be repeated:
+`references/exploring.md`.
+
 ```sh
 nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
 ```
