@@ -7,9 +7,11 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { loadFeaturesFromDirs, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../step/validate-fixtures.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
+import { validateStepParts } from "../step/validate-parts.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
 import { checkFeatures } from "./feature-check.js";
+import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import type { CheckIssue, CheckReport } from "./types.js";
 
 // Responsibility: the one function `nuka check` runs — load the project the
@@ -267,6 +269,44 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
         step: issue.step,
       });
     }
+  }
+
+  // `parts`' own structural validation (src/step/validate-parts.ts's
+  // `validateStepParts`) — docs/spec.md "Parts" promises `nuka check` reads
+  // the declaration before anything runs; this is that promise's static
+  // half, the same "not-a-Step or never-registered" judgment
+  // `from-structural-violation` just made above, reusing the same
+  // `isRegisteredStep` predicate (one vocabulary, one registration fact,
+  // never rebuilt per check).
+  for (const entry of vocabulary.values()) {
+    if (entry.kind !== "typed") {
+      continue; // Compat steps have no `parts` at all (no typed contract).
+    }
+    for (const issue of validateStepParts(entry.name, entry.step, isRegisteredStep)) {
+      errors.push({
+        code: "part-structural-violation",
+        message: issue.message,
+        file: path.relative(rootDir, entry.filePath),
+        step: issue.step,
+      });
+    }
+  }
+
+  // The two `parts` findings that are facts about the whole graph, not
+  // about one step's own declaration in isolation (src/check/parts-check.ts
+  // — see that module's own header for why both skip an edge to a part
+  // `part-structural-violation` above already flagged, rather than
+  // reporting the same broken edge a second time under a placeholder name).
+  for (const issue of findPartCycles(vocabulary)) {
+    errors.push({ code: issue.code, message: issue.message, step: issue.step });
+  }
+  for (const issue of findPartMutatesContradictions(vocabulary)) {
+    errors.push({
+      code: issue.code,
+      message: issue.message,
+      file: path.relative(rootDir, issue.filePath),
+      step: issue.step,
+    });
   }
 
   // The fixture-bag counterpart to the `from` structural check just above:
