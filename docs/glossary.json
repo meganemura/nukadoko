@@ -31,6 +31,13 @@
       "note": "`nuka harvest` が出す未完成の feature。既に地の文で「AI が下書きした型付き step」として使われていた語を流用した。同じ doc に「起草した」もあるが、あちらは gate のより形式的な意味なので使い分ける"
     },
     { "en": ["provenance"], "ja": "由来", "context": "どの実行がその値を供給したか" },
+    {
+      "en": ["reap", "reaps", "reaping"],
+      "ja": "回収する",
+      "note": "死んだセッションの残骸を片付けること。**収穫 と訳さないこと**。収穫 は harvest に割り当て済みで、両方をぬか床の比喩に寄せると別々の機構が同じ語になる"
+    },
+    { "en": ["verdict"], "ja": "断定", "context": "事実の報告と対にして使う。judgement の意味の 判定 とは別語" },
+    { "en": ["stale"], "ja": "古びた / 古びている" },
     { "en": ["round trip"], "ja": "往復", "context": "harvest が出した行を読み戻して同じ args に戻るか確かめること" },
     { "en": ["placeholder"], "ja": "プレースホルダー" },
     {
@@ -187,6 +194,14 @@
     {
       "term": "step",
       "why": "Gherkin の行、defineStep で定義される単位そのものを指すドメイン語。訳すと概念との結び付きが失われる"
+    },
+    {
+      "term": "live session",
+      "why": "`nuka session start` が保つ、生きたプロセスとしての session。session が keep_english なのは `--session` / `nuka session` と直に対応するからで、live session はその上に立つ新しいドメイン語なので分解して live だけ訳すと対応が切れる。初出は太字で定義する(`**Session**` の先例と同じ)。見出しは `Live sessions(たどり着いた場所からの探索)` の形(`Compat steps(移行の扉)` と同じ)"
+    },
+    {
+      "term": "lock file",
+      "why": "`cache/sessions/<env>/<name>.lock`。`env file` を訳さずに使っている先例に合わせる(`session ファイル` のようなカタカナ混じりにしない)"
     },
     {
       "term": "part",
