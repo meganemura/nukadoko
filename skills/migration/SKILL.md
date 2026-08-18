@@ -24,6 +24,21 @@ skill explains why, then walks through each starting point in turn.
 Everything below assumes the project is already initialized. If it isn't yet
 (no `nukadoko.config.ts`), run `nuka init` first.
 
+## Say what you are about to do, before doing it
+
+This one rewrites a suite that currently works, which is a frightening
+thing to watch an agent start on. Before the first change, say which
+stage you are in, what it touches, and what it deliberately leaves alone.
+Say plainly that switching the import is reversible: switch it back and
+the suite is a plain cucumber-js suite again, which is the promise the
+compat door is built to keep.
+
+Name the irreversible one when you reach it. Promoting a step to
+`defineStep` does not switch back, so it needs a word before the first
+one, not after the tenth (see "What not to do").
+
+Keep it short. Predictability is the reassuring part, not volume.
+
 ## Two stages, never at once
 
 Change one thing, then the next — never both at once. If a step breaks after

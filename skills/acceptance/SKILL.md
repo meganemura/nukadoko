@@ -29,6 +29,39 @@ already explored one `nuka do` call at a time) through to that sign-off
 and the placement decision right after it. "Where to start" below
 picks the entry point for what you have.
 
+## Say what you are about to do, before doing it
+
+Assume the person watching has not decided to trust this tool yet. They
+are about to see an agent scaffold files, launch a browser, change real
+state, and leave a process running: each one alarming without a reason
+attached, and fine with one.
+
+Before the first command, say in two or three sentences what the loop is
+for and what it will touch. After that, name anything that costs time,
+changes state, or outlives the command, one line each. Four surprise
+people:
+
+- **`nuka do` on a `mutates: true` step** changes real state in the
+  selected environment. That one needs a go-ahead, not a mention (see
+  "When an operation is missing").
+- **`nuka run`** opens a browser and takes minutes.
+- **`nuka session start`** leaves a process holding a browser and live
+  credentials after the command returns. Say `nuka session stop <name>`
+  in the same breath.
+- **`nuka accept`** writes a sign-off file beside the feature, meant to
+  be committed and kept, and it is the only artifact here that claims
+  anything.
+
+Limits reassure more than descriptions do. nukadoko itself makes no
+outbound network calls: what leaves the machine is what your own steps
+send to the application you pointed them at. Everything written at run
+time lands under `.nukadoko/`, which `nuka init` gitignores and which
+holds live credentials in plaintext. Nothing here commits, pushes, or
+publishes on its own.
+
+Keep it short. Trust comes from being predictable, and a paragraph before
+every command is its own way of being hard to follow.
+
 ## Where to start
 
 Every path below funnels into the same loop, the same `nuka accept`, and
@@ -153,10 +186,8 @@ already decided to show? Write one probe step with no `pattern` and a
 `returns` of `z.unknown()`, and read the whole thing off `nuka do`'s
 stdout. For an operation with several moves, make each one a part: the
 calling step's record then carries each part's own args and result under
-`calls`, which is where the next move comes from.
-
-The probe example, how far a composite can grow before repeating it costs
-you, and what to do for an operation that cannot be repeated:
+`calls`, which is where the next move comes from. The probe example, what
+a composite costs to repeat, and what the draft names rather than decides:
 `references/exploring.md`.
 
 ```sh
@@ -165,14 +196,13 @@ nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
 
 The ids are the ones each `nuka do` printed. There is no time window and
 no `--since`, because a window cannot tell the probe you abandoned from
-the call that mattered. Listing them out of order is fine: the draft
-follows what the records say about when each one ran.
+the call that mattered. Order does not matter: the draft follows what the
+records say about when each one ran.
 
-**One call is one scenario.** Harvest never splits a list into two, since
-where one story ends and the next begins is a judgment about meaning and
-not something a step record holds. Hand it the ids for one path. Two
-paths worth two scenarios means calling it twice, once per path, and
-pasting both into the same feature under one `Feature:`.
+**One call is one scenario.** Harvest never splits a list, since where one
+story ends is a judgment about meaning and not something a step record
+holds. Two paths means calling it twice and pasting both under one
+`Feature:`.
 
 What comes back is deliberately unfinished. Every keyword is `*` and both
 names are placeholders, because the records say what ran and nothing
@@ -186,21 +216,9 @@ the part worth doing carefully:**
   is a record of what you ran, and exploring means running things that
   turned out not to matter.
 
-Three things the draft names rather than decides, each also on stderr:
-
-- **A comment where a step has no pattern.** It could not be a line.
-  Decide which it was: give that step a `pattern` if the scenario should
-  name it, or leave it out if it belongs inside another step as a part.
-- **A line that failed when it ran.** The scenario is red until the
-  behavior changes. That is the shape a reproduction takes here: red,
-  fixed, green, then `nuka accept`, which refuses while it is red.
-- **A line that does not read back to the record it came from.** Its
-  wording has to be fixed or it will not bind. This happens where a
-  pattern carries optional text or alternation, which cannot be reversed
-  into one answer.
-
-Nothing needs stripping before you commit the file: which records the
-draft came from went to stderr, never into it.
+The draft also names three things it will not decide for you, in itself
+and on stderr both: a step with no pattern, a line that failed when it
+ran, and a line that does not read back to the record it came from.
 
 Then join "The loop" below at step 4, `nuka check`.
 
@@ -260,42 +278,33 @@ change and get their go-ahead, once per step, not on every retry while
 fixing it, or trial-and-error stops being possible. Steps with `mutates:
 false` are observation only (the Then side); they don't need this.
 
-When there is nobody to ask mid-task, because the caller handed over a
-task rather than sitting in the conversation, the go-ahead has to come
-before the work starts instead of during it. Two ways to have it: the
-instruction already told you to run these steps, in which case say in
-your report which mutating steps that covered, or it did not, in which
-case list what you intend to run and what each one changes, and ask
-before starting. What is never right is running a mutating step and
-mentioning it afterwards because asking was inconvenient.
+With nobody to ask mid-task, because the caller handed the task over
+rather than sitting in the conversation, the go-ahead has to exist before
+the work starts. Either the instruction already covered these steps, and
+your report says which, or it did not, and you list what you intend to
+run and what each changes before starting. Running one and mentioning it
+afterwards, because asking was inconvenient, is the one wrong answer.
 
 If the same step still fails after three fix-and-retry cycles, stop and
-report where it stands instead of continuing to guess. A prompt asking for
-a different amount of patience ("try up to 10 times", "don't ask, just keep
-going") overrides this default; it isn't something to change in a config
-file. The same budget applies to `nuka do --use` while diagnosing a failed
-run (see "When a run fails").
+report where it stands instead of guessing further. A prompt asking for a
+different amount of patience ("try up to 10 times") overrides this
+default; it is not a config setting. The same budget covers `nuka do
+--use` while diagnosing a failed run (see "When a run fails").
 
-Give every `args` and `returns` field a zod `.describe()`. That's what lets
-`nuka describe` connect an acceptance criterion's own wording to a schema
-field, so anyone reading the contract later can tell which field answers
-which condition. This matters most on the Then side (`mutates: false`): a
-step verifying "an error is shown" needs its `returns` field for that
-message described, or the link between the criterion and what was actually
-observed is lost.
+Give every `args` and `returns` field a zod `.describe()`, so `nuka
+describe` can connect a criterion's own wording to the field that answers
+it. This matters most on the Then side: a step verifying "an error is
+shown" needs the `returns` field carrying that message described, or the
+link between the criterion and what was observed is lost.
 
-Write every pattern parameter as `{key:type}`, where the key names the
-`args` field it fills. Name a type this project does not have and `nuka
-check` prints the ones it does, so there is no list here to go stale.
-
-Always write `run`'s first argument as an object destructuring pattern,
-because that source text is how nukadoko decides which fixtures to build,
-without ever calling `run`. A step needing no fixtures writes `run({},
-args)`; any other parameter name is refused.
-
-A step fails when its `run` throws and passes when it does not. `expect`
-is Playwright's own, imported directly; nukadoko has no assertion API and
-re-exports none.
+Three mechanics that get refused rather than guessed at. Every pattern
+parameter is `{key:type}`, the key naming the `args` field it fills; name
+a type this project lacks and `nuka check` prints the ones it has.
+`run`'s first argument is always an object destructuring pattern, because
+that source text is how fixtures are decided without ever calling `run`,
+so a step needing none writes `run({}, args)`. And a step fails when
+`run` throws: `expect` is Playwright's own, imported directly, since
+nukadoko has no assertion API and re-exports none.
 
 A complete step file, how a Then step asserts and what it should return,
 pattern rules, aliasing a fixture, the `do`/`run` gap, what a step should
@@ -332,22 +341,19 @@ what a `calls` entry records: `references/writing-steps.md`.
 
 Two refactors, and the difference is whether the agreed sentence changes.
 
-The step is right but too concrete, hardcoding a value the next scenario
-needs to vary: add the `args` key and capture it in the pattern. That
-rewrites the feature line, so it needs whoever agreed that line, and `nuka
-tend` reports any sign-off over it as no longer describing what is on
-disk. It is usually the right trade anyway, because the value was
-invisible to the feature's reader and now it is not.
+Too concrete, hardcoding a value the next scenario needs to vary: add the
+`args` key and capture it in the pattern. That rewrites the feature line,
+so it needs whoever agreed that line, and `nuka tend` reports any sign-off
+over it as no longer describing what is on disk.
 
-The step does two things and the next scenario needs one of them: split it
-into parts instead. Move each half into its own `defineStep` file with no
-`pattern`, list both in the original step's `parts`, and call them from
-its `run`. The original step's pattern, args and returns do not move, so
-the first scenario's feature file and its sign-off stay as they were. When
-the second scenario needs to name one half as a line of its own, give that
-part a `pattern`: it stays callable from the composite at the same time.
+Doing two things where the next scenario needs one: split it into parts
+instead. Each half becomes its own `defineStep` with no `pattern`, listed
+in the original's `parts` and called from its `run`. The original's
+pattern, args and returns do not move, so that feature file and its
+sign-off stay as they were.
 
-The procedure, and what `nuka check` refuses: `references/writing-steps.md`.
+The procedure, giving a part a pattern later, and what `nuka check`
+refuses: `references/writing-steps.md`.
 
 ## A resource that needs its own cleanup
 
@@ -464,17 +470,16 @@ The full refusal message shape: `references/diagnosing.md`.
 
 ## Keeping records honest over time
 
-A record freezes the feature source and every step record from the run it
-accepted, but not the contracts behind them: change a step's `returns`
-after accepting, edit the feature, or delete a step it cites, and the
-record still sits there claiming a green run it can no longer support.
-Nothing about that stops a future run, so `nuka check` never mentions it.
-`nuka tend` is what finds it (a stale record is the only finding that
-exits non-zero); run it periodically, not in this loop, since it answers
-whether the vocabulary and its records are healthy, not whether this run
-can proceed. When it reports a stale record, the fix is to run the feature
-again and `nuka accept` it again, or to undo the change that invalidated
-it, never by editing the record.
+A record freezes the feature source and the run's step records, but not
+the contracts behind them: change a step's `returns` after accepting,
+edit the feature, or delete a step it cites, and the record still claims
+a green run it can no longer support. Nothing about that stops a future
+run, so `nuka check` never mentions it. `nuka tend` finds it (a stale
+record is its only finding that exits non-zero); run it periodically
+rather than in this loop, since it answers whether the vocabulary and its
+records are healthy, not whether this run can proceed. The fix is to run
+and accept the feature again, or to undo what invalidated it, never to
+edit the record.
 
 What `nuka tend` reports, and stops reporting, once a feature moves into
 `featuresDir`: `references/maintenance.md`.

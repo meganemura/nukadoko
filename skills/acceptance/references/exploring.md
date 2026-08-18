@@ -92,6 +92,24 @@ that can only be opened once, an invoice that would be issued twice). For
 those, keep the composite down to the part you are still working out, and
 `--use` the ids you already have for what came before.
 
+## What a harvested draft names rather than decides
+
+Three of them, each also reported on stderr.
+
+- **A comment where a step has no pattern.** It could not be a line.
+  Decide which it was: give that step a `pattern` if the scenario should
+  name it, or leave it out if it belongs inside another step as a part.
+- **A line that failed when it ran.** The scenario is red until the
+  behavior changes. That is the shape a reproduction takes here: red,
+  fixed, green, then `nuka accept`, which refuses while it is red.
+- **A line that does not read back to the record it came from.** Its
+  wording has to be fixed or it will not bind. This happens where a
+  pattern carries optional text or alternation, neither of which reverses
+  into one answer.
+
+Nothing needs stripping before the file is committed: which records the
+draft came from went to stderr, never into it.
+
 ## Then fix what you found
 
 Once the path works, `nuka harvest` turns those records into a feature
