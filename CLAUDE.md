@@ -51,8 +51,11 @@ M10 (harvesting) is in: `nuka harvest` builds one feature draft from a
 named `do` sequence, filling only what was measured and leaving every
 claim blank. That closes the adaptive loop, since a path found by
 exploring becomes a path fixed in a sentence, which is the only form
-anything here can gate on. Still unimplemented: the AI-assisted glue
-converter.
+anything here can gate on. M11 (live sessions) is in: `nuka session
+start` holds one `ctx` open in a process so `nuka do` can land on a world
+that is already partway through, which is what makes exploring possible
+for work that cannot be repeated. Still unimplemented: the AI-assisted
+glue converter.
 
 ## Naming rule
 

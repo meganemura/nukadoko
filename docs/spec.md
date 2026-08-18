@@ -1487,6 +1487,92 @@ whose own setup is a no-op the second time it runs, and the fix is in the
 feature rather than in the engine: establish the state once, in the step
 whose name says it does, instead of once per step.
 
+### Live sessions (exploring from where you got to)
+
+Everything above starts from nothing. `nuka do` gives each execution its
+own browser and its own everything else, which is what makes one call
+readable on its own, and what makes exploring expensive: the twentieth
+thing you want to try has nineteen things in front of it. For reads that
+is only slow. For work that cannot be repeated, an account that opens
+once or an invoice that would be issued twice, it is not possible at all.
+
+A **live session** is one `ctx` held open by a process, so executions can
+land on it one after another instead of each building a world from
+scratch.
+
+```sh
+nuka session start alice
+nuka do open-cart --session alice
+nuka do add-item --session alice --args '{"sku":"S-1"}'
+nuka session stop alice
+```
+
+What persists is the whole context, not the browser. Persisting only the
+browser would leave a world that is half old: a user fixture rebuilt for
+this execution sitting next to a page five executions deep, with nothing
+saying which parts are which. Holding the entire fixture bag open removes
+the question, because nothing is rebuilt underneath anything.
+
+That is not a new lifetime. A scenario already builds one `ctx`, runs
+several steps against it, and tears it down; a live session is the same
+lifetime with the list of steps arriving one at a time instead of from a
+feature file. The two fixture scopes need no third value: `scenario`
+scope lasts the session, and `process` scope lasts the session's process
+(see "Fixtures").
+
+**The lock file is the rendezvous, and it already exists.** A session's
+`cache/sessions/<env>/<name>.lock` holds `{ pid, started_at }` and is
+checked against `process.kill(pid, 0)` today, with a dead pid's lock
+already defined as stale and free to take over. `nuka do --session alice`
+finds a live pid there and hands its execution to that process; finds
+none and behaves exactly as it does now. Nothing new has to be
+discovered, and the rule that a dead owner's claim is worth nothing is
+already the one in force.
+
+Stopping a session writes its storageState to the same
+`cache/sessions/<env>/<name>.json` a session has always left behind. So a
+session has two lifetimes rather than two meanings: it is a process while
+it lives, and the state it saved once it does not.
+
+**A record from a live session must not read like a record from a clean
+one.** A step that passed as the thirtieth execution against a world
+nobody else can rebuild has proved something different from the same step
+passing on its own, and a green record that cannot be told apart from the
+other kind is the one way this feature could quietly damage every record
+around it. `session` is already on a step record; what a live session adds
+is that it was live and where in the sequence this execution fell.
+
+One execution at a time per session. The lock already means "someone owns
+this right now", so a second `do` against a busy session is refused rather
+than queued: an exploration is driven by something deciding the next call
+from the last result, and two callers deciding at once is not that.
+
+Nothing here can become evidence, and no new fence is needed to keep it
+that way. A live session produces step records and no scenario record, and
+`nuka accept` refuses without a green full run (see "Sign-off"), so the
+path from an exploration to a sign-off runs through `nuka harvest` and a
+real `nuka run` or it does not exist.
+
+`nuka run` and `nuka accept` report a live session when they find one,
+naming it and how to stop it, and refuse nothing on its account. The fact
+worth surfacing is that the application may be holding state an
+exploration put there, which is exactly the kind of thing that makes a
+scenario pass for a reason nobody wrote down. Whether that session has
+anything to do with the feature being accepted is not knowable from here,
+so this is reported as a fact and never as a verdict.
+
+The socket a live session listens on holds the same live credentials the
+storageState file does, and is created with the same restricted
+permissions for the same reason (see "The state directory"). An idle
+timeout applies by default, because a forgotten session is the normal
+outcome of an interrupted exploration rather than an unusual one, and
+`nuka session list` reaps the ones whose pid is gone.
+
+The honest limit is the point of the feature rather than a flaw in it: a
+world thirty executions deep is not reproducible, by anyone, including
+the process holding it. That is why what comes out of an exploration is a
+draft to be harvested and run again from nothing, not the run itself.
+
 ## Records
 
 A step record is the tool's own measurement of one step execution: the same
@@ -3112,6 +3198,11 @@ never actually read.
   named `do` sequence (see "Harvesting"). This is the move that closes the
   adaptive loop: a path found by exploring becomes a path fixed in a
   sentence, which is the only form anything here can gate on.
+- **M11 (live sessions)**: `nuka session start`/`stop`, one `ctx` held
+  open in a process so `nuka do` can land on a world that is already
+  partway through (see "Live sessions"). Everything before this started
+  from nothing, which is merely slow for reads and impossible for work
+  that cannot be repeated.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs
   in-place coexistence rather than migration.

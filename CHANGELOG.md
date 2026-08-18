@@ -9,6 +9,54 @@ just until 0.1.
 
 ### Added
 
+- **A session can stay live, so exploring does not have to start from
+  nothing every time.** `nuka session start <name>` holds one `ctx` open
+  in a process; `nuka do --session <name>` then lands on it instead of
+  building a world from scratch, and `nuka session stop <name>` ends it.
+  What persists is the whole context rather than the browser alone:
+  persisting only the browser would leave a world that is half old, a
+  fixture rebuilt for this execution sitting beside a page five
+  executions deep, with nothing saying which parts are which. This is not
+  a new lifetime either. A scenario already builds one `ctx`, runs
+  several steps against it, and tears it down, so a live session is that
+  same lifetime with the steps arriving one at a time, and the two
+  fixture scopes need no third value.
+- **The rendezvous is the lock file that already existed.** A session's
+  `.lock` holds `{ pid, started_at }` and is already checked with
+  `process.kill(pid, 0)`, with a dead pid's lock already defined as stale
+  and free to take over. `nuka do --session` finds a live pid there and
+  hands its execution to that process, finds none and behaves exactly as
+  before. Stopping writes storageState to the same file a session has
+  always left behind, so a session has two lifetimes rather than two
+  meanings: a process while it lives, and the state it saved once it does
+  not.
+- **A step record from a live session says so**, through a new
+  `session_execution` counting this execution's position in that session.
+  Its presence is what marks the record as live, so no second field was
+  needed. A step that passed as the thirtieth execution against a world
+  nobody can rebuild has proved something different from the same step
+  passing on its own, and a green record that could not be told apart
+  from the other kind would quietly devalue every record beside it.
+- **`nuka do --session` now says which world it ran in**, on stderr: live
+  and at what position, or not live and running fresh from saved state,
+  and separately when it cleared a socket left by a session that crashed.
+  This is the one transition the feature introduces, and without a word
+  at the time it would only ever be visible afterwards in the record.
+- **`nuka run` and `nuka accept` report a live session** they find, naming
+  it, its environment, and the command that stops it. They refuse nothing
+  on its account: whether that session has anything to do with the feature
+  being accepted is not knowable from here, so this is a fact and never a
+  verdict. What it is worth saying is that the application may be holding
+  state an exploration put there, which is exactly how a scenario passes
+  for a reason nobody wrote down.
+- Only one execution runs at a time per session, the socket carries the
+  same live credentials the storageState file does and is created with the
+  same restricted permissions, and an idle timeout applies by default,
+  because a forgotten session is the normal outcome of an interrupted
+  exploration rather than an unusual one. Nothing here can reach a
+  sign-off: a live session produces no scenario record, and `nuka accept`
+  already refuses without a green full run.
+
 - **`nuka harvest` turns a `nuka do` sequence into one feature draft.**
   `nuka do` was already the adaptive loop, where an agent reads one
   validated result and decides the next call, but what it leaves behind is
