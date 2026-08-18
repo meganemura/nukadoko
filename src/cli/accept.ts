@@ -12,6 +12,7 @@ import { MissingStepRecordError, renderAcceptanceRecord, type AcceptedScenario }
 import { loadConfig } from "../config/load-config.js";
 import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment, type ResolvedEnvironment } from "../environment/resolve-environment.js";
 import { parseFeatureSource } from "../feature/load-features.js";
+import { findLiveSessions, formatLiveSessionNotice } from "../live/live-session-notice.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { listDirtyPaths, probeGitState } from "../run/probe-git.js";
 import type { ScenarioRecord } from "../run/record-types.js";
@@ -252,6 +253,16 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;
+  }
+
+  // A live session (docs/spec.md "Live sessions") is reported, never
+  // refused — see live-session-notice.ts's own header for why this stays a
+  // fact rather than a verdict. Checked across every environment, ahead of
+  // `resolveEnvironment` below, so it fires even for an accept this
+  // invocation's own `--env` never touches.
+  const liveSessionNotice = formatLiveSessionNotice(await findLiveSessions(rootDir, config.stateDir));
+  if (liveSessionNotice !== null) {
+    stderr.write(`${liveSessionNotice}\n`);
   }
 
   // Same path `nuka run` resolves `--env` through (this file's own header)

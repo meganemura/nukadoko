@@ -3,7 +3,13 @@ import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { SessionLockConflictError, SessionNotFoundError } from "./errors.js";
 import { liveLockOwner } from "./lock.js";
-import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "./paths.js";
+import {
+  sessionFilePath,
+  sessionLockPath,
+  sessionSockPath,
+  sessionsDir,
+  sessionsRootDir,
+} from "./paths.js";
 
 // Responsibility: `nuka session list`/`clear`'s actual work — enumerate and
 // delete session files under cache/sessions/<env>/ —
@@ -12,22 +18,38 @@ import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "
 // every environment's subdirectory; `clearSession`/
 // `clearAllSessions` are scoped to one environment at a time — there is no
 // all-environments clear, on purpose (accidental-deletion risk with no real
-// use case). A session's existence is defined by its .json file; a .lock
-// file with no matching .json (a session whose first-ever `do` run never got
-// as far as opening a browser/request context) is not itself a "session"
-// `list` reports, but it still guards `clear` below.
+// use case).
+//
+// A session's existence used to be defined by its .json file alone; a live
+// session (docs/spec.md "Live sessions") widens that, since a session that
+// has never been stopped has no .json yet — its storageState is only
+// written at `stop` — but is very much a session `list` should report,
+// alive, the moment `start` returns. `listSessions` below therefore reports
+// the union of every name with a .json *or* a live lock, and reaps a lock
+// (and its socket) whose own pid is dead exactly the way it always reaped
+// nothing at all for that case: a dead lock with no .json was debris before
+// this feature existed and still is, never itself a "session" worth
+// reporting — only a *live* lock earns a listing when there is no .json
+// behind it yet.
 
 export interface SessionInfo {
   environment: string;
   name: string;
-  /** ISO 8601, the session file's own mtime. */
+  /** ISO 8601 — the session file's own mtime when one exists, or the live
+   * lock's own `started_at` for a session that has never been stopped
+   * (hence has no .json yet). */
   updated_at: string;
+  /** Whether this name's own lock is currently held by a live process
+   * (docs/spec.md "Live sessions") — `false` for an ordinary, not-live
+   * session (every session before this feature existed, and any session
+   * between `stop`s), never an error condition on its own. */
+  alive: boolean;
 }
 
 const JSON_SUFFIX = ".json";
 const LOCK_SUFFIX = ".lock";
 
-async function listSessionNames(dir: string): Promise<string[]> {
+async function entryNames(dir: string, suffix: string): Promise<string[]> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -35,16 +57,17 @@ async function listSessionNames(dir: string): Promise<string[]> {
     return [];
   }
   return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(JSON_SUFFIX))
-    .map((entry) => entry.name.slice(0, -JSON_SUFFIX.length))
-    .sort();
+    .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+    .map((entry) => entry.name.slice(0, -suffix.length));
 }
 
 /**
  * Lists every session across every environment (there is no per-environment
  * filter here — `session list` always reports everything, unlike `clear`).
  * No sessions directory yet is a valid, if unhelpful, answer: an empty list,
- * not an error.
+ * not an error. Also reaps: any name whose lock's own pid is no longer
+ * alive has its lock and socket removed before this returns (its .json, if
+ * any, is left untouched — that is saved state, not debris).
  */
 export async function listSessions(rootDir: string, stateDir: string): Promise<SessionInfo[]> {
   const root = sessionsRootDir(rootDir, stateDir);
@@ -63,9 +86,36 @@ export async function listSessions(rootDir: string, stateDir: string): Promise<S
   const infos: SessionInfo[] = [];
   for (const environment of environments) {
     const dir = sessionsDir(rootDir, stateDir, environment);
-    for (const name of await listSessionNames(dir)) {
-      const stats = await stat(path.join(dir, `${name}${JSON_SUFFIX}`));
-      infos.push({ environment, name, updated_at: stats.mtime.toISOString() });
+    const jsonNames = await entryNames(dir, JSON_SUFFIX);
+    const lockNames = await entryNames(dir, LOCK_SUFFIX);
+    const names = [...new Set([...jsonNames, ...lockNames])].sort();
+
+    for (const name of names) {
+      const lockPath = sessionLockPath(rootDir, stateDir, environment, name);
+      const owner = await liveLockOwner(lockPath);
+      const hasJson = jsonNames.includes(name);
+
+      if (owner === null && lockNames.includes(name)) {
+        // A dead pid's lock is stale by definition (lock.ts's own header) —
+        // its socket (if any) is exactly as stale, since nothing is
+        // listening behind it any more.
+        await rm(lockPath, { force: true });
+        await rm(sessionSockPath(rootDir, stateDir, environment, name), { force: true });
+      }
+
+      let updatedAt: string;
+      if (hasJson) {
+        const stats = await stat(sessionFilePath(rootDir, stateDir, environment, name));
+        updatedAt = stats.mtime.toISOString();
+      } else if (owner !== null) {
+        updatedAt = owner.started_at;
+      } else {
+        // A dead, .json-less lock just reaped above: nothing left to
+        // report for this name, the same "not itself a session" rule this
+        // file's own header always applied to that case.
+        continue;
+      }
+      infos.push({ environment, name, updated_at: updatedAt, alive: owner !== null });
     }
   }
   return infos;

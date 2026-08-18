@@ -412,6 +412,15 @@ interface StepRecordBase {
    * (docs/spec.md "Sessions...": no `--session` means a clean start, never
    * an implicit shared session). */
   session: string | null;
+  /** This execution's own 1-based position in a live session's sequence
+   * (docs/spec.md "Live sessions") — present when, and only when, this
+   * execution ran against a live session's own long-lived `ctx` instead of
+   * a freshly built one. A single `nuka do` never sets this, live or not:
+   * `session` alone cannot say whether a world was built once for this
+   * execution or is thirty executions deep, and a green step record that
+   * cannot be told apart from the other kind would quietly cost every
+   * record around it the same certainty. */
+  session_execution?: number;
   /** The owning scenario record's id for a `run`-originated step record
    * (`kind: "run"`); always `null` for a `do`-originated one. */
   scenario_record_id: string | null;

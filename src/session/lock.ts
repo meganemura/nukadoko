@@ -2,15 +2,26 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SessionLockConflictError } from "./errors.js";
 
-// Responsibility: the advisory lock file at cache/sessions/default/<name>.lock —
-// `{ pid, started_at }` JSON, checked/acquired in `do`'s setup phase (before
-// any step record is written) and always released in its `finally`.
-// "Advisory" is deliberate: this is fs-only by design (no daemon,
-// no OS-level flock), so it stops nukadoko's own
-// concurrent `do`/`session clear` calls from colliding, not an arbitrary
-// process bypassing it. A lock file whose pid is no longer alive is stale by
-// definition (the process that would still care about it is gone), so it
-// may be silently taken over rather than treated as a conflict.
+// Responsibility: the advisory lock file at cache/sessions/<env>/<name>.lock
+// — `{ pid, started_at }` JSON. "Advisory" is deliberate: this is fs-only by
+// design (no OS-level flock), so it stops nukadoko's own concurrent
+// processes from colliding, not an arbitrary process bypassing it. A lock
+// file whose pid is no longer alive is stale by definition (the process
+// that would still care about it is gone), so it may be silently taken over
+// rather than treated as a conflict.
+//
+// What the lock's own pid means now depends on who is holding it. A plain
+// `nuka do --session <name>` acquires it in setup (before any step record
+// is written) and always releases it in `finally` — the pid it writes is
+// that one execution's own, alive only for as long as that single call
+// runs. A live session (docs/spec.md "Live sessions") acquires it once, in
+// its own daemon process (src/live/daemon.ts), and holds it for that
+// process's whole life — the pid it writes is the daemon's own, and the
+// lock's meaning widens from "an execution is in progress" to "this
+// session is currently owned by a live process", checked the same way
+// either time: `liveLockOwner` below neither knows nor cares which of the
+// two it is looking at, since a live process either way is exactly what a
+// stale (dead-pid) lock is not.
 
 export interface LockInfo {
   pid: number;
@@ -96,11 +107,13 @@ export async function acquireLock(lockPath: string, sessionName: string): Promis
 }
 
 /**
- * Releases a lock this process holds. Always called from `do`'s `finally`
- * regardless of how the run ended; a failure
- * here (e.g. the file was already removed by `session clear`) must not
- * itself fail the run whose step record (or setup error) is already decided,
- * so it is swallowed rather than thrown.
+ * Releases a lock this process holds. A non-live `do --session` calls this
+ * from its own `finally` regardless of how the run ended; a live session's
+ * daemon (src/live/daemon.ts) calls it once, from its own cleanup, when the
+ * session stops or its idle timeout fires. Either way a failure here (e.g.
+ * the file was already removed by `session clear`) must not itself fail
+ * whatever this process was already reporting, so it is swallowed rather
+ * than thrown.
  */
 export async function releaseLock(lockPath: string): Promise<void> {
   try {

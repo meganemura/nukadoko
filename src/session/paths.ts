@@ -39,3 +39,18 @@ export function sessionLockPath(
 ): string {
   return path.join(sessionsDir(rootDir, stateDir, environment), `${name}.lock`);
 }
+
+/** A live session's own unix socket (docs/spec.md "Live sessions"), beside
+ * its `.lock`/`.json` in the same per-environment directory — same
+ * restricted-permissions reasoning as the storageState file: a live
+ * session's socket accepts a step name and args and executes them against
+ * live credentials, so it holds the same kind of thing `.json` does while
+ * the process behind it is running. */
+export function sessionSockPath(
+  rootDir: string,
+  stateDir: string,
+  environment: string,
+  name: string,
+): string {
+  return path.join(sessionsDir(rootDir, stateDir, environment), `${name}.sock`);
+}

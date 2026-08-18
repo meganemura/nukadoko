@@ -15,7 +15,7 @@ import { runInit } from "./init.js";
 import { runMcpTools } from "./mcp-tools.js";
 import { runRun } from "./run.js";
 import { runScaffold } from "./scaffold.js";
-import { runSessionClear, runSessionList } from "./session.js";
+import { runSessionClear, runSessionList, runSessionStart, runSessionStop } from "./session.js";
 import { runSkillPath } from "./skill.js";
 import { runTend } from "./tend.js";
 import { runWebmcpTools } from "./webmcp.js";
@@ -33,15 +33,18 @@ import {
 import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`, `session list`/`clear`, `init`, `scaffold`, `check`, `tend`,
-// `accept`, `skill path`, `mcp-tools`, `experimental webmcp-tools`) to
-// yargs and turns any failure — yargs' own (bad flags, no command) or ours
-// (config/discovery errors, unknown step name) — into stderr output plus a
-// non-zero exit code, without ever calling `process.exit` itself. That is
-// `cli.ts`'s job, so this function stays callable directly from tests.
-// `do`'s own setup/execution split and step record writing lives in cli/do.ts;
-// `session`'s own list/clear logic lives in cli/session.ts; `init`/
-// `scaffold`'s own generation logic lives in cli/init.ts and
+// `do`, `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
+// `tend`, `accept`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
+// to yargs and turns any failure — yargs' own (bad flags, no command) or
+// ours (config/discovery errors, unknown step name) — into stderr output
+// plus a non-zero exit code, without ever calling `process.exit` itself.
+// That is `cli.ts`'s job, so this function stays callable directly from
+// tests. `do`'s own setup/execution split and step record writing lives in
+// cli/do.ts, including deciding whether `--session` reaches a live
+// session's own process (src/live/daemon.ts) or builds a fresh `ctx` the
+// way it always has; `session`'s own list/clear/start/stop logic lives in
+// cli/session.ts; `init`/`scaffold`'s own generation logic lives in
+// cli/init.ts and
 // cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin
 // wiring) and src/check/* (the actual checks); `tend`'s own analysis lives
 // in cli/tend.ts (thin wiring) and src/tend/* (the actual findings) — the
@@ -131,6 +134,17 @@ interface SessionListArgs {
 interface SessionClearArgs {
   name?: string;
   env: string;
+}
+
+interface SessionStartArgs {
+  name: string;
+  env?: string;
+  idleTimeout?: number;
+}
+
+interface SessionStopArgs {
+  name: string;
+  env?: string;
 }
 
 interface InitArgs {
@@ -499,6 +513,64 @@ export async function runCli(
     },
   };
 
+  const sessionStartCommand: CommandModule<Record<string, never>, SessionStartArgs> = {
+    command: "start <name>",
+    describe: "start a live session: a detached process holding one ctx open across `nuka do --session` calls",
+    builder: (y: Argv) =>
+      y
+        .positional("name", {
+          type: "string",
+          demandOption: true,
+          describe: "session name (as later passed to `nuka do --session`)",
+        })
+        .option("env", {
+          type: "string",
+          describe: 'target a named environment (omit for the "default" environment)',
+        })
+        .option("idle-timeout", {
+          type: "number",
+          default: 900,
+          describe: "seconds of no execution before the session stops itself",
+        }) as Argv<SessionStartArgs>,
+    handler: async (args: Arguments<SessionStartArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runSessionStart({
+        rootDir,
+        name: args.name,
+        env: args.env ?? null,
+        idleTimeoutSeconds: args.idleTimeout ?? 900,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const sessionStopCommand: CommandModule<Record<string, never>, SessionStopArgs> = {
+    command: "stop <name>",
+    describe: "stop a live session: persists its storageState, then ends the process",
+    builder: (y: Argv) =>
+      y
+        .positional("name", {
+          type: "string",
+          demandOption: true,
+          describe: "session name, as given to `nuka session start`",
+        })
+        .option("env", {
+          type: "string",
+          describe: 'target a named environment (omit for the "default" environment)',
+        }) as Argv<SessionStopArgs>,
+    handler: async (args: Arguments<SessionStopArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runSessionStop({
+        rootDir,
+        name: args.name,
+        env: args.env ?? null,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const initCommand: CommandModule<Record<string, never>, InitArgs> = {
     command: "init",
     describe: "set up a project; ends with a self-check",
@@ -714,13 +786,19 @@ export async function runCli(
 
   const sessionCommand: CommandModule = {
     command: "session",
-    describe: "list|clear sessions",
+    describe: "list|clear|start|stop sessions",
     builder: (y: Argv) =>
-      y.command(sessionListCommand).command(sessionClearCommand).demandCommand(1).strict(),
+      y
+        .command(sessionListCommand)
+        .command(sessionClearCommand)
+        .command(sessionStartCommand)
+        .command(sessionStopCommand)
+        .demandCommand(1)
+        .strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // one of `list`/`clear`, so this bare handler only exists to satisfy
-      // yargs' CommandModule shape.
+      // one of `list`/`clear`/`start`/`stop`, so this bare handler only
+      // exists to satisfy yargs' CommandModule shape.
     },
   };
 

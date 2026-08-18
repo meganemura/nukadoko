@@ -10,6 +10,7 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { probeVersion } from "../environment/probe-version.js";
+import { findLiveSessions, formatLiveSessionNotice } from "../live/live-session-notice.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
   resolveEnvironment,
@@ -274,6 +275,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;
+  }
+
+  // A live session (docs/spec.md "Live sessions") is reported, never
+  // refused — see live-session-notice.ts's own header for why this stays a
+  // fact rather than a verdict. Checked across every environment, ahead of
+  // `resolveEnvironment` below, so it fires even for a run this invocation's
+  // own `--env` never touches.
+  const liveSessionNotice = formatLiveSessionNotice(await findLiveSessions(rootDir, config.stateDir));
+  if (liveSessionNotice !== null) {
+    stderr.write(`${liveSessionNotice}\n`);
   }
 
   let resolvedEnv: ResolvedEnvironment;
