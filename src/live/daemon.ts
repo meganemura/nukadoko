@@ -84,6 +84,16 @@ import { encodeLine, type LiveDoRequest, type LiveRequest, type LiveResponse } f
 // deliberately not a queue: an exploration is driven by something deciding
 // the next call from the last result, so a caller racing a second one in
 // has nothing coherent to decide from yet.
+//
+// Split in two: `createSessionCore` does everything above except open a
+// real socket, and returns a request dispatcher (`SessionCore`) that
+// already knows this session's own vocabulary, ctx, busy state, and idle
+// timer. `runSessionDaemon`, below it, is the thin remainder: it opens
+// the actual unix socket and feeds each connection's one line into that
+// dispatcher. The split exists so the dispatcher itself (unknown-step and
+// compat-step refusal, busy rejection, args/returns validation, the
+// stop-then-cleanup order) can be called directly, without a socket
+// connection or a process of its own to spawn and tear down.
 
 function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
   return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
@@ -98,7 +108,65 @@ export interface RunSessionDaemonOptions {
   readonly env: string | null;
   readonly name: string;
   readonly idleTimeoutMs: number;
+  /** Ends this process; defaults to `process.exit`. Overridable only so an
+   * in-process test can run a whole daemon (`runSessionDaemon` itself, not
+   * just `createSessionCore`) and observe "the daemon decided to end
+   * itself" (an idle timeout, a completed stop) without that decision
+   * killing the test's own worker process. daemon-entry.ts never sets
+   * this, so a real session's own behavior never depends on it. */
+  readonly exit?: (code: number) => void;
 }
+
+/**
+ * Everything `createSessionCore` needs beyond `RunSessionDaemonOptions`
+ * itself: a hook for stopping whatever socket server its own caller is
+ * running, called from `performCleanup` alone, and always fire-and-forget
+ * there (that function's own comment explains why). A caller that never
+ * opened a real socket, a test calling `createSessionCore` directly, has
+ * nothing to close, hence the no-op default.
+ */
+export interface CreateSessionCoreOptions extends RunSessionDaemonOptions {
+  readonly closeServer?: () => void;
+}
+
+/**
+ * One live session's own request dispatcher, independent of the unix
+ * socket `runSessionDaemon` normally puts in front of it: everything
+ * `handleConnection` decides (unknown/compat-step refusal, busy rejection
+ * for a `do` and a `stop` alike, args/returns validation, `--use`
+ * resolution, and stop's cleanup-before-response order) lives here,
+ * reachable with a plain request or a request-shaped wire line and nothing
+ * else.
+ */
+export interface SessionCore {
+  /** cache/sessions/<env>/<name>.sock, `runSessionDaemon`'s own listen
+   * target, exposed so it never has to re-derive the same path a second
+   * way. */
+  readonly sockPath: string;
+  /** Parses one line of wire JSON, then dispatches it exactly as
+   * `dispatchRequest` would: malformed JSON is its own `"rejected"`
+   * response, never a throw, the same contract `handleConnection` already
+   * promises for every request this session is reached by. */
+  dispatchLine(line: string): Promise<LiveResponse>;
+  /** Decides and executes one already-parsed request: a `"do"` runs
+   * `executeDo` (unless this session is busy), a `"stop"` runs this
+   * session's own cleanup to completion and *then* returns `{ status:
+   * "stopped" }` (a caller sees that value only once storageState is
+   * already on disk, the same order the socket path promises its own
+   * caller). Never calls `process.exit` itself: ending the process, when a
+   * `"stop"` warrants it, is left to the caller (`handleConnection`'s own,
+   * once its acknowledgement has actually been sent). */
+  dispatchRequest(request: LiveRequest): Promise<LiveResponse>;
+  /** Arms this session's own idle timer for the first time.
+   * `runSessionDaemon` calls this only once its own socket is actually
+   * listening (a session that cannot yet be reached is not "idle" yet
+   * either), but nothing about the dispatcher itself requires a socket to
+   * exist first, so a caller driving `SessionCore` directly may call this
+   * as soon as it likes. */
+  start(): void;
+}
+
+export type CreateSessionCoreResult = { readonly ok: true; readonly core: SessionCore } | { readonly ok: false };
 
 const NOOP_TRACE_VERSION_WARNER = (): void => {
   // A trace format version this build cannot read is reported on stderr by
@@ -109,8 +177,10 @@ const NOOP_TRACE_VERSION_WARNER = (): void => {
   // create-context.ts's own header states for a corrupt trace.zip.
 };
 
-export async function runSessionDaemon(options: RunSessionDaemonOptions): Promise<void> {
+export async function createSessionCore(options: CreateSessionCoreOptions): Promise<CreateSessionCoreResult> {
   const { rootDir, env, name, idleTimeoutMs } = options;
+  const exit = options.exit ?? ((code: number) => process.exit(code));
+  const closeServer = options.closeServer ?? ((): void => {});
 
   const config = await loadConfig(rootDir);
   const resolvedEnv: ResolvedEnvironment = resolveEnvironment(
@@ -152,7 +222,7 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
     // failure.
     await releaseLock(lockPath);
     process.exitCode = 1;
-    return;
+    return { ok: false };
   }
   const knownFixtures = knownFixtureNames(config);
 
@@ -182,7 +252,7 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
     // so it must not come up silently empty instead.
     await releaseLock(lockPath);
     process.exitCode = 1;
-    return;
+    return { ok: false };
   }
 
   const sessionsDirPath = sessionsDir(rootDir, config.stateDir, resolvedEnv.name);
@@ -249,14 +319,15 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
 
   /**
    * The actual teardown: fixture caches, `dispose()`, persisting
-   * storageState (when there is one to persist), closing the socket server,
-   * removing the socket file, and releasing the lock — everything a caller
-   * needs finished *before* it can trust the session is really gone.
-   * Deliberately does not call `process.exit` itself: the `"stop"` request
-   * handler still needs the process alive long enough to write its own
-   * acknowledgement back over the socket first (see that handler's own
-   * comment for why sending the ack any earlier would race the very thing
-   * it is meant to promise).
+   * storageState (when there is one to persist), stopping whatever socket
+   * server this caller is running (`closeServer`), removing the socket
+   * file, and releasing the lock: everything a caller needs finished
+   * *before* it can trust the session is really gone. Deliberately does
+   * not call `process.exit` itself: a "stop" response is `dispatchRequest`'s
+   * own return value, and its own caller (`handleConnection`) still needs
+   * the process alive long enough to write its own acknowledgement back
+   * over the socket first (see that function's own comment for why sending
+   * the ack any earlier would race the very thing it is meant to promise).
    */
   async function performCleanup(): Promise<void> {
     busy = true;
@@ -287,16 +358,16 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
       }
     }
 
-    // Not awaited: `server.close()`'s own callback only fires once every
-    // connection it has ever accepted has ended, and the "stop" request's
-    // own connection — the caller this cleanup is running for — is
-    // deliberately still open at this point (its own acknowledgement is
+    // Not awaited: a real `server.close()`'s own callback only fires once
+    // every connection it has ever accepted has ended, and the "stop"
+    // request's own connection (the caller this cleanup is running for)
+    // is deliberately still open at this point (its own acknowledgement is
     // sent right after this function returns, in `handleConnection`'s
     // `"stop"` branch). Awaiting that callback here would wait on a
     // connection this very call is what keeps open, a real deadlock this
     // file hit under test. All `close()` needs to do synchronously is stop
     // *accepting new* connections, which it already does before returning.
-    server.close();
+    closeServer();
     await rm(sockPath, { force: true });
     await releaseLock(lockPath);
   }
@@ -305,7 +376,7 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
    * cleanup and process exit happen back to back. */
   async function performCleanupAndExit(): Promise<void> {
     await performCleanup();
-    process.exit(0);
+    exit(0);
   }
 
   async function executeDo(request: LiveDoRequest): Promise<LiveResponse> {
@@ -540,84 +611,59 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
     return { status: "record", record: redactedStepRecord };
   }
 
-  const server = net.createServer((socket) => {
-    handleConnection(socket).catch(() => {
-      socket.destroy();
-    });
-  });
-
-  async function handleConnection(socket: net.Socket): Promise<void> {
-    const line = await readOneLine(socket);
-    if (line === undefined) {
-      socket.destroy();
-      return;
-    }
-
-    let request: LiveRequest;
-    try {
-      request = JSON.parse(line) as LiveRequest;
-    } catch (error) {
-      socket.end(
-        encodeLine({
-          status: "rejected",
-          message: `malformed request JSON: ${error instanceof Error ? error.message : String(error)}`,
-        } satisfies LiveResponse),
-      );
-      return;
-    }
-
+  /**
+   * Given an already-parsed request, decides busy/rejection and dispatches
+   * to `executeDo` or to this session's own cleanup: the exact decision
+   * `handleConnection` used to make inline before ever writing a response.
+   * `busy` is claimed synchronously, before this function's own first
+   * `await`, in both the `"do"` branch below and inside `performCleanup`
+   * itself (that function's own header), the same "no window for both to
+   * observe `busy === false` at once" property this file's own top header
+   * already documents for the `busy` flag as a whole.
+   */
+  async function dispatchRequest(request: LiveRequest): Promise<LiveResponse> {
     if (request.kind === "stop") {
       if (busy) {
-        socket.end(
-          encodeLine({
-            status: "rejected",
-            message: `session "${name}" is busy executing another step; try again once it finishes`,
-          } satisfies LiveResponse),
-        );
+        const response: LiveResponse = {
+          status: "rejected",
+          message: `session "${name}" is busy executing another step; try again once it finishes`,
+        };
         // A refused request is still a request this session was reached by
         // (docs/spec.md "an idle timeout applies... because a forgotten
         // session is the normal outcome"): a caller retrying a wrong step
         // name, or racing a `stop` against an in-flight `do`, is present
         // and working, not idle. Re-arming here, and at every other place
-        // a response leaves this handler, is what keeps the countdown
-        // measuring silence rather than success.
+        // this function returns, is what keeps the countdown measuring
+        // silence rather than success.
         armIdleTimer();
-        return;
+        return response;
       }
       // Cleanup (storageState persisted, socket/lock removed) runs to
-      // completion *before* the acknowledgement is sent — a caller that
-      // sees `{ status: "stopped" }` needs that to mean the session's own
-      // ending state is already on disk, not merely "about to be". Only
-      // once the ack has actually finished writing (the callback to
-      // `socket.end`, not merely the call returning) does this process
-      // exit — ending the process any earlier risks truncating the very
-      // bytes the caller is waiting to read.
+      // completion *before* this function returns `{ status: "stopped" }`:
+      // a caller that sees that value needs it to mean the session's own
+      // ending state is already on disk, not merely "about to be". Ending
+      // this process, once that caller's own acknowledgement has actually
+      // been sent, is `handleConnection`'s own job below, deliberately not
+      // this function's (its own header explains why).
       await performCleanup();
-      await new Promise<void>((resolve) => {
-        socket.end(encodeLine({ status: "stopped" } satisfies LiveResponse), () => resolve());
-      });
-      process.exit(0);
-      return;
+      return { status: "stopped" };
     }
 
     if (busy) {
-      socket.end(
-        encodeLine({
-          status: "rejected",
-          message: `session "${name}" is busy executing another step; only one execution runs at a time`,
-        } satisfies LiveResponse),
-      );
+      const response: LiveResponse = {
+        status: "rejected",
+        message: `session "${name}" is busy executing another step; only one execution runs at a time`,
+      };
       armIdleTimer();
-      return;
+      return response;
     }
 
     busy = true;
     try {
-      const response = await executeDo(request);
-      socket.end(encodeLine(response));
+      return await executeDo(request);
     } finally {
       busy = false;
-      // Re-armed for every request this handler finishes, not only a
+      // Re-armed for every request this function finishes, not only a
       // `"record"` — a step named wrong, or one that fails `from`/fixture
       // validation, is still someone actively exploring against this
       // session; tearing it down under them because they mistyped a step
@@ -629,19 +675,94 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
     }
   }
 
-  await rm(sockPath, { force: true });
+  /** `dispatchRequest`, but starting from one still-unparsed wire line:
+   * the same "parse, then dispatch" split `handleConnection` performs
+   * before ever writing a response. Malformed JSON is its own `"rejected"`
+   * response and, deliberately like every other transport-level failure
+   * `handleConnection` used to handle before ever reaching `busy`, never
+   * touches `busy` or the idle timer at all. */
+  async function dispatchLine(line: string): Promise<LiveResponse> {
+    let request: LiveRequest;
+    try {
+      request = JSON.parse(line) as LiveRequest;
+    } catch (error) {
+      return {
+        status: "rejected",
+        message: `malformed request JSON: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    return dispatchRequest(request);
+  }
+
+  return {
+    ok: true,
+    core: { sockPath, dispatchLine, dispatchRequest, start: armIdleTimer },
+  };
+}
+
+/**
+ * One socket connection's own lifecycle: read its one line, dispatch it
+ * through `core`, and write back the one response line. For an accepted
+ * `"stop"` (`core.dispatchRequest`'s own header: cleanup has already
+ * finished by the time that response exists), this process ends only once
+ * the acknowledgement has actually finished writing (the callback to
+ * `socket.end`, not merely the call returning), since ending it any
+ * earlier risks truncating the very bytes the caller is waiting to read.
+ */
+async function handleConnection(socket: net.Socket, core: SessionCore, exit: (code: number) => void): Promise<void> {
+  const line = await readOneLine(socket);
+  if (line === undefined) {
+    socket.destroy();
+    return;
+  }
+
+  const response = await core.dispatchLine(line);
+  if (response.status === "stopped") {
+    await new Promise<void>((resolve) => {
+      socket.end(encodeLine(response), () => resolve());
+    });
+    exit(0);
+    return;
+  }
+  socket.end(encodeLine(response));
+}
+
+/**
+ * `nuka session start`'s own detached child, in full: builds this
+ * session's own dispatcher (`createSessionCore`, above) and puts a real
+ * unix socket in front of it, one connection at a time (`handleConnection`,
+ * above). `daemon-entry.ts` is this function's only real caller; a caller
+ * wanting the dispatcher alone, without a socket or a process of its own,
+ * calls `createSessionCore` directly instead.
+ */
+export async function runSessionDaemon(options: RunSessionDaemonOptions): Promise<void> {
+  const exit = options.exit ?? ((code: number) => process.exit(code));
+  let server: net.Server;
+  const result = await createSessionCore({ ...options, exit, closeServer: () => server.close() });
+  if (!result.ok) {
+    return;
+  }
+  const core = result.core;
+
+  server = net.createServer((socket) => {
+    handleConnection(socket, core, exit).catch(() => {
+      socket.destroy();
+    });
+  });
+
+  await rm(core.sockPath, { force: true });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(sockPath, resolve);
+    server.listen(core.sockPath, resolve);
   });
   // `net.createServer`'s own `listen()` creates the socket file with a
   // umask-derived mode, never 0600 on its own — this session's socket
   // carries live credentials the same way its storageState file does
   // (docs/spec.md "Live sessions"), so it needs the same explicit `chmod`
   // that file already gets (session/store.ts's own `writeSessionFile`).
-  await chmod(sockPath, 0o600);
+  await chmod(core.sockPath, 0o600);
 
-  armIdleTimer();
+  core.start();
 }
 
 /**
