@@ -1,7 +1,7 @@
 ---
 name: migration
-description: Use when moving an existing test suite onto nukadoko, whether from cucumber-js (typically driving Playwright) or from another DSL already shaped as typed steps. Covers the two-stage discipline that keeps every failure traceable to one change, the `nukadoko/compat` door, and promoting steps to typed `defineStep`s at your own pace.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do).
+description: Use when moving an existing test suite onto nukadoko, whether from cucumber-js (typically driving Playwright), from a Playwright Test suite with no cucumber and no Gherkin, or from another DSL already shaped as typed steps. Covers the two-stage discipline that keeps every failure traceable to one change, the `nukadoko/compat` door, sharing an implementation with a Playwright Test suite, and promoting steps to typed `defineStep`s at your own pace.
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do, nuka harvest).
 license: MIT
 ---
 
@@ -14,6 +14,9 @@ Where it starts differs:
 
 - **A cucumber-js suite** — feature files plus glue, usually driving
   Playwright.
+- **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
+  about it moves onto nukadoko; nukadoko grows beside it instead, sharing
+  an implementation rather than the suite's own runner.
 - **A suite already shaped as typed steps** — its own DSL, not cucumber's,
   but close enough to nukadoko's `defineStep` that the move is mostly
   translation.
@@ -31,7 +34,10 @@ thing to watch an agent start on. Before the first change, say which
 stage you are in, what it touches, and what it deliberately leaves alone.
 Say plainly that switching the import is reversible: switch it back and
 the suite is a plain cucumber-js suite again, which is the promise the
-compat door is built to keep.
+compat door is built to keep. Starting from a Playwright Test suite
+instead has a different reversal: delete the feature files and the step
+files, and the suite is untouched, because nothing it uses ever imported
+nukadoko.
 
 Name the irreversible one when you reach it. Promoting a step to
 `defineStep` does not switch back, so it needs a word before the first
@@ -217,6 +223,41 @@ it the same way it reaches `page` or `request`, by destructuring the name.
 This is additive, not required: an `After` hook that cleans up something
 no typed step has claimed yet is still exactly as valid as it was in
 Stage 1.
+
+## Coming from a Playwright Test suite
+
+If the existing suite has no cucumber and no Gherkin, tests written
+directly as `test("...", async ({ page }) => {...})`, the compat door
+above does not apply: there is no import to switch. Nothing here moves
+onto nukadoko either; nukadoko grows beside the suite instead.
+
+Derive two changes from the traceability principle above, since nothing
+is switched this time. First, pull the operation you want to reuse out
+into a plain async function that takes only Playwright's own objects, in
+a file neither runner owns, while the existing suite keeps calling it and
+stays green. Second, add a typed `defineStep` whose `run` calls that same
+function, declaring `args`/`returns` from the schemas the function's own
+file exports. Run `nuka check` and `nuka do <step>` on it the same way
+you would for any other typed step; nothing about this starting point
+changes what they check or how they run one.
+
+The Playwright suite never imports nukadoko, and a typed step's `run`
+never calls the suite's own test function: each side stays a plain caller
+of the shared function, never of the other side's runner. Two ways to
+blur that boundary are both caught rather than silent: a spec file placed
+inside `featuresDir` fails to import (`nuka check`'s
+`step-file-import-failed`, carrying Playwright's own refusal message),
+and a step file named like a spec collides on pattern with it
+(`ambiguous-step`, naming both).
+
+That is what makes this door reversible: delete the feature files and the
+step files, and the suite is untouched, because nothing it uses ever
+imported nukadoko. `experimental_recordStep` is the one exception to keep
+in mind on the way out. Calling it directly from inside a spec file, to
+turn that suite's own runs into step records `nuka harvest` can draft
+from, puts a real `import ... from "nukadoko"` in that spec file, so
+removing those call sites is part of the same reversal. It is marked
+experimental by name, on purpose, so it is never reached by accident.
 
 ## Coming from a typed-step-shaped DSL
 

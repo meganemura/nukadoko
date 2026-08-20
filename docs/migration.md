@@ -8,6 +8,11 @@ your own pace. For a full worked example of every stage below, with real
 captured command output, see
 [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration).
 
+Nothing below applies if there is no cucumber-js suite to begin with. A
+project already running Playwright Test directly, with no feature files and
+no glue to switch, starts from a different door instead: see
+[docs/migration-playwright-test.md](migration-playwright-test.md).
+
 ## Stage 0: install and point nukadoko at your suite
 
 Install nukadoko, then run `nuka init` (or hand-write `nukadoko.config.ts`)

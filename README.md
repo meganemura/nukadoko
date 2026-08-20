@@ -536,6 +536,13 @@ the audit's findings, and
 [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration)
 for a worked example running end to end.
 
+Already on Playwright Test, with no cucumber and no Gherkin? That is a
+different door, and
+[docs/migration-playwright-test.md](docs/migration-playwright-test.md)
+walks it: the suite stays where it is and keeps its own runner, while an
+operation moves into a plain function that both a spec and a typed step
+call.
+
 ## Try it against your own suite first
 
 You don't have to migrate anything to find out whether this fits. Point an

@@ -465,6 +465,11 @@ glue をテキストとして読むことは、glue の中に見える障害を�
 
 手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
+cucumber も Gherkin も無く、Playwright Test だけを使っている場合は別の扉になります。
+[docs/migration-playwright-test.ja.md](docs/migration-playwright-test.ja.md) がその道筋です。
+スイートはいまの場所に残り、自分の runner を使い続けます。
+移るのは操作の実装だけで、spec と typed step の両方がその関数を呼びます。
+
 ## Try it against your own suite first
 
 **まず自分のスイートで試す**

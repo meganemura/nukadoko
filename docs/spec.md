@@ -1334,6 +1334,12 @@ no import to swap: its tests are `test("...", async ({ page }) => {...})`
 and there is no glue layer to redirect. That is not a smaller problem, it
 is a different one, and it has a different answer.
 
+A step-by-step walkthrough of this door lives in
+[docs/migration-playwright-test.md](migration-playwright-test.md), the way
+the first door's own lives in `docs/migration.md`. They are separate
+documents because their readers do not overlap: nothing about compat, the
+World, or hooks reaches somebody who never had cucumber.
+
 **Share the implementation, not the runner.** An operation moves out of a
 spec file into a plain async function that takes Playwright's own objects
 and nothing else. The spec calls it. A typed step's `run` calls it too.

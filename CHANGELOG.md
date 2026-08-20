@@ -5,6 +5,47 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **A second door, for a suite written against Playwright Test rather
+  than cucumber-js.** The first door works by swapping an import, and a
+  Playwright suite has none to swap. This one shares the implementation
+  instead: an operation moves into a plain function over Playwright's own
+  objects, and both the spec and a typed step's `run` call it. Neither
+  runner loads the other's files, so reversing it means deleting the
+  feature files and the steps, after which the suite is untouched because
+  nothing it uses ever knew nukadoko existed. The contract goes in that
+  same shared file, since `args` and `returns` are plain zod schemas, so
+  one definition serves both homes and they cannot drift into disagreeing
+  about a shape. Both trees can live in one repository either side by
+  side or with `featuresDir` nested inside the directory the specs
+  already live in, and the two ways to get the placement wrong are both
+  caught: a spec inside `featuresDir` fails to import and `nuka check`
+  names it, and a step file named like a spec becomes a second step with
+  the same pattern, reported as `ambiguous-step`.
+- **`experimental_recordStep`, so an existing suite can migrate by
+  running rather than by rewriting.** Sharing an implementation still
+  left a Playwright run producing no step record, because the executor
+  that writes one is not in that home. Calling this from a spec runs the
+  step against that spec's own `request`, enforces its schemas, and
+  writes a step record where `nuka do`'s records land, so the journeys a
+  suite already encodes become drafts through `nuka harvest`. A step
+  record gained `kind: "external"` for it, a third answer to how an
+  execution came about, which `harvest` accepts and which cannot be
+  mistaken for something a person typed. The injected request context is
+  logged and redacted like any other and never disposed, and a step whose
+  fixtures reach for a browser is refused before any record exists.
+  Marked experimental by name, with the conditions for dropping the
+  prefix written in the module: an injected `page`, and this shape
+  surviving a real migrated suite rather than only these tests.
+- **A selftest scenario drives one shared implementation three ways**, a
+  real `playwright test`, a real `nuka run` and a real `nuka do`, and
+  checks that a step record carries the value the shared helper returned.
+  That last assertion is the one that would catch the sharing having
+  quietly become two implementations that happen to agree.
+
 ## 0.6.0 — 2026-08-18
 
 ### Added

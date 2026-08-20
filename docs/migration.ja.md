@@ -6,6 +6,10 @@
 書き換えは不要です: 目標は、スイートを変更せずに nukadoko の harness 上で実行し、その後は自分のペースで一部ずつ昇格させることです。
 以下の各段階の実際に取得したコマンド出力を伴う完全な実例については、[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
+そもそも cucumber-js のスイートがなければ、以下はどれも当てはまりません。
+Playwright Test に対して直接書かれたプロジェクトで、feature ファイルも切り替える glue もない場合は、別の扉から始まります。
+[docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照してください。
+
 ## Stage 0: nukadoko をインストールしてスイートに向ける
 
 nukadoko をインストールし、プロジェクトルートから `nuka init` を実行します(あるいは `nukadoko.config.ts` を手書きします):
