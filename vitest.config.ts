@@ -60,7 +60,25 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       // `include` alone still lets a loaded file outside it be reported,
       // so the two example/harness trees are named here as well.
-      exclude: ["examples/**", "selftest-suite/**", "tests/**"],
+      //
+      // The three named files after them are process entry points, where
+      // importing the module *is* running it: `cli.ts` is the installed
+      // bin, `daemon-entry.ts` starts a live session's daemon, and
+      // `define-config.ts` is an identity helper that exists to give a
+      // config literal a type and deliberately validates nothing. A test
+      // that reached any of them would start a process or assert that an
+      // identity function returns its argument, so their absence from the
+      // report is a fact about their shape rather than a gap in the suite.
+      // Nothing else is excluded on grounds of being hard to reach: an
+      // experimental command is still ordinary code and stays counted.
+      exclude: [
+        "examples/**",
+        "selftest-suite/**",
+        "tests/**",
+        "src/cli.ts",
+        "src/live/daemon-entry.ts",
+        "src/config/define-config.ts",
+      ],
       reporter: ["text-summary", "json-summary"],
     },
   },
