@@ -76,21 +76,48 @@ Inside one execution, the parts share everything: one browser, one page,
 one request context. A part sees the page where the part before it left
 off, which is what makes a browser flow expressible as parts at all.
 
-Across `nuka do` calls, nothing continues except what `--session` carries,
-and that is login state alone. Every call gets its own browser, on a fresh
-page. Values move forward with `--use <step-record-id>`, which fills the
-`from` keys of the next step from a record you already have.
+Across `nuka do` calls, nothing continues by default. Every call builds
+its own browser on a fresh page, and `--session` alone carries only login
+state. Values still move forward with `--use <step-record-id>`, which
+fills the `from` keys of the next step from a record you already have.
 
-So the shape of an exploration is: make the unit of one `do` call as small
-as you can while still being able to see what you need, and grow it by
-adding parts rather than by chaining more `do` calls through the browser.
+So one shape of an exploration is: keep the unit of a single `do` call
+small enough to see what you need, and grow it by adding parts rather
+than by chaining `do` calls through a browser. The cost of growing a
+composite that way is that each `do` runs it from the start, which is
+free for reads and fine for anything repeatable.
 
-The cost of growing a composite is that each `do` runs it from the start.
-That is free for reads and fine for anything you can repeat, and it is the
-thing to watch out for where an operation cannot be repeated (an account
-that can only be opened once, an invoice that would be issued twice). For
-those, keep the composite down to the part you are still working out, and
-`--use` the ids you already have for what came before.
+For work that cannot be repeated, an account that opens once or an
+invoice that would be issued twice, running from the start is not an
+option, and that is what a live session is for:
+
+```sh
+nuka session start alice
+nuka do open-cart --session alice
+nuka do add-item --session alice --args '{"sku":"S-1"}'
+nuka session stop alice
+```
+
+`nuka session start` holds one context open in a process, so `--session`
+now lands each call on the world the last one left rather than rebuilding
+it. Stopping saves that session's login state to the file `--session` has
+always used, so a session is a process while it lives and saved state
+once it does not.
+
+Two things keep that readable. `nuka do --session` says on stderr which
+world it ran in, live or fresh, because a session that timed out or
+crashed underneath you is otherwise invisible until afterwards. And the
+step record carries `session_execution`, this call's position in that
+session, so a step that passed as the thirtieth execution against a world
+nobody can rebuild is never mistaken for one that passed on its own.
+
+Say what a live session is before starting one, and how to stop it. It
+outlives the command, holding a browser and live credentials until
+`nuka session stop` or its idle timeout. One execution runs at a time.
+
+A world many executions deep is not reproducible, by anyone, which is the
+reason to harvest what you found and run it again from nothing rather
+than trusting the session itself.
 
 ## What a harvested draft names rather than decides
 

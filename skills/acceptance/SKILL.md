@@ -33,21 +33,19 @@ picks the entry point for what you have.
 
 Assume the person watching has not decided to trust this tool yet. They
 are about to see an agent scaffold files, launch a browser, change real
-state, and leave a process running: each one alarming without a reason
-attached, and fine with one.
+state, and leave a process running: each alarming without a reason, fine
+with one.
 
 Before the first command, say in two or three sentences what the loop is
 for and what it will touch. After that, name anything that costs time,
-changes state, or outlives the command, one line each. Four surprise
-people:
+changes state, or outlives the command, one line each. Four surprise people:
 
 - **`nuka do` on a `mutates: true` step** changes real state in the
   selected environment. That one needs a go-ahead, not a mention (see
   "When an operation is missing").
 - **`nuka run`** opens a browser and takes minutes.
 - **`nuka session start`** leaves a process holding a browser and live
-  credentials after the command returns. Say `nuka session stop <name>`
-  in the same breath.
+  credentials after it returns. Say `nuka session stop <name>` with it.
 - **`nuka accept`** writes a sign-off file beside the feature, meant to
   be committed and kept, and it is the only artifact here that claims
   anything.
@@ -55,11 +53,11 @@ people:
 Limits reassure more than descriptions do. nukadoko itself makes no
 outbound network calls: what leaves the machine is what your own steps
 send to the application you pointed them at. Everything written at run
-time lands under `.nukadoko/`, which `nuka init` gitignores and which
-holds live credentials in plaintext. Nothing here commits, pushes, or
-publishes on its own.
+time lands under `.nukadoko/`, gitignored by `nuka init` and holding live
+credentials in plaintext. Nothing here commits, pushes, or publishes on
+its own.
 
-Keep it short. Trust comes from being predictable, and a paragraph before
+Keep it short: trust comes from being predictable, and a paragraph before
 every command is its own way of being hard to follow.
 
 ## Where to start
@@ -186,8 +184,10 @@ already decided to show? Write one probe step with no `pattern` and a
 `returns` of `z.unknown()`, and read the whole thing off `nuka do`'s
 stdout. For an operation with several moves, make each one a part: the
 calling step's record then carries each part's own args and result under
-`calls`, which is where the next move comes from. The probe example, what
-a composite costs to repeat, and what the draft names rather than decides:
+`calls`, which is where the next move comes from. When the operation
+cannot be repeated at all, `nuka session start` holds one world open so
+the next call lands on it instead of rebuilding it. The probe example,
+live sessions, and what the draft names rather than decides:
 `references/exploring.md`.
 
 ```sh
