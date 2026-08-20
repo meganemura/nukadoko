@@ -119,6 +119,16 @@ A world many executions deep is not reproducible, by anyone, which is the
 reason to harvest what you found and run it again from nothing rather
 than trusting the session itself.
 
+A session left running, or left behind after the terminal that started it
+is gone, is easy to lose track of. `nuka session list` finds every one
+across every environment, live or only saved, each with its own name and
+whether it is still alive; `--json` also names which environment each one
+belongs to, which the plain listing leaves out. `nuka session clear
+[name]` deletes one by name, or, with no name, every session in `--env`'s
+environment (`default` when omitted); a live one refuses to clear until
+it is stopped first, since clearing only ever touches files, never a
+running process.
+
 ## What a harvested draft names rather than decides
 
 Three of them, each also reported on stderr.

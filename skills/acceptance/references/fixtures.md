@@ -64,3 +64,21 @@ back absent, return proof the read was valid alongside it, not the absence
 alone: a bare `false` can't tell whoever reads the step record later
 whether the target really isn't there or the page just wasn't ready to
 say.
+
+## Reading a required environment variable
+
+Reach for `requireEnv(name)` over reading `env[name]` directly whenever a
+step needs a value it cannot run without: `requireEnv` throws the moment
+the key is missing or empty, rather than letting an `undefined` fail later
+doing something the missing key had nothing to do with. Read `env` itself
+only when a step wants several keys at once, or treats absence as a case
+to branch on rather than a config mistake worth refusing over.
+
+The two also differ in what a step record shows afterward. Every name
+`requireEnv` is called with, found or not, lands on that step's own
+`required_env`, in the order it was read; a value taken straight off `env`
+leaves no trace there. Neither ever records the value itself, only the
+name it was read by: both draw from the project's configured `envFiles`
+(the top-level list, then whatever the running environment's own
+`envFiles` appends after it), which is exactly where a secret is most
+likely to live.

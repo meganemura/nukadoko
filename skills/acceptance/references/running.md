@@ -1,5 +1,22 @@
 # Running and accepting
 
+## Environments
+
+`--env <name>` on `nuka do`, `nuka run`, and `nuka session start`/`stop`/
+`clear` targets one of the environments named in `nukadoko.config.ts`'s
+own `environments` key; omitting it targets `default`, which needs no
+entry there. Each entry can override `baseURL`, append its own `envFiles`
+after the top-level list, and set `policy: "read-only"`.
+
+Trial and error, `nuka do` while building a step and `nuka run` while
+getting a feature green, belongs on a verification environment; never
+point `--env` at a production-pointing name. `policy: "read-only"` is a
+second backstop for exactly that mistake, not a substitute for picking the
+right environment in the first place: it refuses a `mutates: true` step
+outright before that step ever runs, and the same refusal reaches a
+`mutates: true` part a step calls, whatever that calling step declared
+about itself.
+
 ## Before running
 
 `nuka check <feature>` catches every static inconsistency it can, before
@@ -51,3 +68,24 @@ the placement question from "What not to do" in `SKILL.md`; stdout stays
 exactly the record's own path.
 
 Commit the record `accept` wrote.
+
+## What a run writes
+
+Every `nuka run` also writes two report streams, both with zero
+configuration and no flag to turn either on: Allure results under
+`.nukadoko/export/allure-results/`, and a cucumber-messages NDJSON stream
+under `.nukadoko/export/messages.ndjson`. `allure.resultsDir` and
+`messages.output` in `nukadoko.config.ts` only relocate where each writes;
+neither ever needs enabling. `nuka run`'s own stderr names every path it
+actually wrote at the end of the run, so where output landed is never a
+guess.
+
+Open the two for different reasons. Allure is nukadoko's own dashboard:
+every step's trace, HTTP log, and validated result, plus a per-step
+timeline of what it waited for and what it clicked, all in one place with
+zero project wiring. Render it with Allure's own CLI, `npx allure watch
+<dir> --output <report-dir>` while iterating (updates step by step as a
+run writes) or `npx allure generate`/`npx allure open` for one already
+finished; nukadoko never renders HTML itself. `messages.ndjson` is for the
+opposite reason: feeding a suite's existing cucumber-js-era formatter or
+JUnit-based CI while it migrates, not for reading by hand.

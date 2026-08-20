@@ -469,7 +469,7 @@ export async function runCli(
 
   const sessionListCommand: CommandModule<Record<string, never>, SessionListArgs> = {
     command: "list",
-    describe: "list sessions for the default environment",
+    describe: "list every session, across all environments; --json names each one's environment",
     builder: (y: Argv) =>
       y.option("json", {
         type: "boolean",

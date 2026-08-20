@@ -31,6 +31,17 @@ that no line of the scenario establishes, a premise the scenario takes as
 already true included. Do not turn such a premise into a step unless the
 scenario really does establish it: a step is a claim that something ran.
 
+## Scenario Outline and Background
+
+Gherkin compiles a feature into pickles before nukadoko ever runs it: a
+Scenario Outline's `Examples` table produces one independent pickle per
+row, never one pickle covering the whole table, and a Background's own
+steps are folded into every pickle in that feature, run ahead of that
+scenario's steps. Writing an Outline row per case, rather than one
+scenario asserting several values in a row, is what keeps each case its
+own step records and its own pass or fail, never two cases sharing one
+verdict because they happened to share a scenario.
+
 ## Choosing Given, When, or Then
 
 Pick the keyword for what the line does for its reader. Given is what is

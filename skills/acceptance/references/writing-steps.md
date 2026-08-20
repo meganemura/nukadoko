@@ -110,6 +110,17 @@ prints the parameter types **this** project has registered, custom ones
 from `nukadoko.config.ts` included, which is the only list that is true
 here rather than true of nukadoko in general.
 
+Add to that list instead of working around it when a pattern keeps
+needing the same shape spelled out by hand. `parameterTypes` in
+`nukadoko.config.ts` takes a `{ name, regexp, transformer? }` entry per
+type: a `negation` type matching an optional `" not"` and turning it into
+a `z.boolean()` lets a pattern write `will{negated:negation} return`
+straight into an `args` key of that type. `transformer` only coerces the
+matched text; the `args` schema is still what actually validates it. The
+one thing a project cannot do is redefine a built-in name (`int`,
+`string`, and the rest): that would quietly change what every pattern
+already using it means.
+
 The pattern and the schema are checked against each other, both ways: a
 key the pattern captures that `args` has no field for is an error, and so
 is a required `args` field that nothing captures and no `from` fills.

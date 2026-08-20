@@ -186,9 +186,9 @@ stdout. For an operation with several moves, make each one a part: the
 calling step's record then carries each part's own args and result under
 `calls`, which is where the next move comes from. When the operation
 cannot be repeated at all, `nuka session start` holds one world open so
-the next call lands on it instead of rebuilding it. The probe example,
-live sessions, and what the draft names rather than decides:
-`references/exploring.md`.
+the next call lands on it instead of rebuilding it (`nuka session
+list`/`clear` clean up what's left). The probe example, live sessions,
+and what the draft names rather than decides: `references/exploring.md`.
 
 ```sh
 nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
@@ -372,9 +372,9 @@ isn't finished when the write is accepted, it's finished once that effect
 is visible to whatever runs next: wait for it there, with the `poll`
 fixture, not in a later step that merely reads the effect.
 
-The fixture example, build order and scope options, and the full `poll`
-discussion (including what a wait function should and shouldn't wait for):
-`references/fixtures.md`.
+The fixture example, build order and scope options, the full `poll`
+discussion (what a wait function should and shouldn't wait for), and
+`requireEnv` versus reading `env` directly: `references/fixtures.md`.
 
 ## Adding your own evidence
 
@@ -410,8 +410,8 @@ never depends on the keyword, since a line binds by its pattern alone. A
 than an error, because that tension needs a person.
 
 The tag shape, a worked example, where a premise belongs when there is no
-ticket, and how `And`/`But`/`*` take their position:
-`references/writing-the-feature.md`.
+ticket, how `And`/`But`/`*` take their position, and how Outline rows and
+Background steps expand into pickles: `references/writing-the-feature.md`.
 
 ## Running and accepting
 
@@ -419,11 +419,9 @@ ticket, and how `And`/`But`/`*` take their position:
 executes, including a broken `from` binding order; run it before the first
 `nuka run` (see "The loop" above). All of the trial and error, `nuka do`
 while building a step, `nuka run` while getting the feature green, happens
-against a verification environment: never pass a production-pointing name
-to `--env`. An environment configured with `policy: "read-only"` is a
-second backstop, not a substitute for picking the right one; the engine
-refuses any mutating step there outright regardless of what `--env` was
-given.
+against a verification environment named with `--env`, never a
+production-pointing one; a `policy: "read-only"` one backstops that,
+refusing any mutating step outright before it runs.
 
 `nuka accept <feature>` freezes the newest all-green run of that feature,
 restricted to runs matching the current environment and `browserType`,
@@ -431,8 +429,10 @@ both matched against what each candidate run actually measured, never a
 declaration. On success, stderr also asks the placement question (see
 "What not to do"); stdout stays exactly the record's own path.
 
-Condition matching, stderr/stdout shapes during `nuka run`, and the
-`<feature>:<line>` narrowing option: `references/running.md`.
+Condition matching, stderr/stdout shapes during `nuka run`, the
+`<feature>:<line>` narrowing option, environments (`--env`, and a
+read-only one's reach into parts), and what a run writes for a report:
+`references/running.md`.
 
 ## When a run fails
 
