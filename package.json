@@ -29,7 +29,8 @@
     "test": "vitest run",
     "preselftest": "npm run build",
     "selftest": "node selftest-suite/run-selftest.mjs",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "coverage": "vitest run --coverage"
   },
   "keywords": [
     "cucumber",
@@ -80,6 +81,7 @@
     "@modelcontextprotocol/server": "2.0.0",
     "@types/node": "26.1.1",
     "@types/yargs": "17.0.35",
+    "@vitest/coverage-v8": "4.1.10",
     "allure": "3.14.3",
     "typescript": "7.0.2",
     "vitest": "4.1.10"

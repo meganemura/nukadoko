@@ -38,5 +38,20 @@ export default defineConfig({
     // suite reports "Test timed out" where it could have reported the
     // actual failure.
     testTimeout: 60_000,
+    coverage: {
+      provider: "v8",
+      // Only `src/`. That is what the npm tarball ships and what a user's
+      // own code reaches; `examples/` is documentation that is not even
+      // packaged (see package.json's `files`), `selftest-suite/` is itself
+      // a harness rather than a thing under test, and counting either one
+      // moves the number without saying anything about the library. A
+      // coverage figure that includes an example server is a figure nobody
+      // can act on.
+      include: ["src/**/*.ts"],
+      // `include` alone still lets a loaded file outside it be reported,
+      // so the two example/harness trees are named here as well.
+      exclude: ["examples/**", "selftest-suite/**", "tests/**"],
+      reporter: ["text-summary", "json-summary"],
+    },
   },
 });
