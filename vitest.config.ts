@@ -38,6 +38,16 @@ export default defineConfig({
     // suite reports "Test timed out" where it could have reported the
     // actual failure.
     testTimeout: 60_000,
+    // Hooks get the same budget as tests, for the same reason. Vitest's
+    // own default is 10s, and several fixtures spawn `git init` from a
+    // `beforeEach`; under a loaded machine that spawn exceeds 10s and the
+    // file fails with a hook timeout that has nothing to do with what it
+    // was testing. Three separate runs hit exactly that on the same three
+    // sign-off files while other work was running alongside, and all three
+    // passed standalone straight afterwards. Leaving the test budget at
+    // 60s while the hook budget stays at 10s means contention keeps
+    // arriving as a failure in whichever file happens to be unlucky.
+    hookTimeout: 60_000,
     coverage: {
       provider: "v8",
       // Only `src/`. That is what the npm tarball ships and what a user's
