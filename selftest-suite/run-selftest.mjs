@@ -81,7 +81,12 @@ import { promisify } from "node:util";
 // same value at every key. Nothing else about either track's output is
 // compared.
 //
-const SUITE_FEATURES = ["features/nuka-run.feature", "features/acceptance-lifecycle.feature", "features/same-scenario-across-runs.feature"];
+const SUITE_FEATURES = [
+  "features/nuka-run.feature",
+  "features/acceptance-lifecycle.feature",
+  "features/same-scenario-across-runs.feature",
+  "features/playwright-suite.feature",
+];
 
 const execFileAsync = promisify(execFile);
 
