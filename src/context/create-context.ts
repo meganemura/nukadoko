@@ -284,6 +284,17 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // still calls `buildStepFixtures` once per step, and the second step's own
 // call reaches the second branch exactly as a step's own direct
 // `ctx.page()` call used to.
+//
+// `CreateStepContextOptions.request` is added now: an external driver
+// (src/external/record-step.ts) runs a typed step from inside a Playwright
+// Test spec, which already has its own `request` fixture open and its own
+// teardown that will close it — `ctx.page()`'s lazy-launch branches above
+// stay the only path for a browser (out of scope for that driver so far),
+// but `ctx.request()` needed a second path that takes an already-open
+// context instead of opening one of its own. `requestContextOwnedHere`
+// (below) is the flag that keeps the two paths from colliding at teardown:
+// `dispose()` closes a request context this module opened itself, never one
+// handed in from outside.
 
 export interface EvidenceResult {
   trace?: string;
@@ -455,6 +466,18 @@ export interface CreateStepContextOptions {
    * when there is nothing secret to log. Never exposed on `ctx` — only
    * `wrapRequestContextWithLogging` (http-log.ts) sees it. */
   secrets?: SecretSet;
+  /** An already-open Playwright `APIRequestContext` to hand back from
+   * `ctx.request()` instead of lazily launching a fresh one — the "take
+   * what's already running" path an external driver (src/external/
+   * record-step.ts) needs: a Playwright Test spec's own `request` fixture
+   * is already open and owned by that spec's own teardown, so this module
+   * must read and log through it without ever closing it itself. `undefined`
+   * (the default) keeps every existing caller's lazy-launch behavior
+   * unchanged — `nuka do`/`nuka run` never set this. Still wrapped through
+   * `wrapRequestContextWithLogging` the same as a lazily-launched one, so
+   * http.jsonl and `observed` work identically either way; only `dispose`
+   * (below) treats the two differently. */
+  request?: APIRequestContext;
   /** A `--session`'s previously saved storageState, when one was loaded and
    * parsed successfully; `undefined` for a session's first-ever use or when
    * `--session` wasn't given. Restored into whichever of `ctx.page()` /
@@ -608,6 +631,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
+  // True only once this module's own `playwrightRequest.newContext()` call
+  // below actually opens one — never for `options.request`, which some
+  // other caller already owns and must close itself (`CreateStepContextOptions.request`'s
+  // own doc comment, above). `dispose()` reads this to decide whether
+  // `requestContext.dispose()` is this module's call to make at all.
+  let requestContextOwnedHere = false;
 
   // Closes whatever trace chunk is open for the *current* boundary, writing
   // it to `httpLogDir` (this file's own header) — a no-op when nothing is
@@ -838,32 +867,46 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     async request(): Promise<APIRequestContext> {
       if (!requestContext) {
-        // No `baseURL` requirement here, matching `ctx.page()` above, which
-        // already passes `config.baseURL` through as `undefined` without
-        // complaint — a suite
-        // that only ever talks to absolute URLs across several hosts has no
-        // single baseURL to state, and forcing one into config would make
-        // config assert something untrue. If a step written against a
-        // relative path actually needs a baseURL and none was configured,
-        // Playwright's own `newContext`/fetch call fails on that URL; this
-        // module does not duplicate Playwright's URL-resolution rules to
-        // pre-empt that with its own error.
-        //
-        // `config.requestContext` is spread in
-        // first, `baseURL`/`storageState` after: schema.ts already rejects
-        // a `requestContext` that sets either key, so this ordering never
-        // actually resolves a real collision, only guards the invariant.
-        const raw = await playwrightRequest.newContext({
-          ...(config.requestContext ?? {}),
-          ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-          ...(storageState ? { storageState } : {}),
-        });
-        requestContext = wrapRequestContextWithLogging(
-          raw,
-          () => path.join(httpLogDir, "http.jsonl"),
-          secrets,
-          observed,
-        );
+        if (options.request) {
+          // Take what's already running, per this option's own doc comment
+          // above — no `newContext` call, so `requestContextOwnedHere` stays
+          // `false` and `dispose()` below leaves closing it to whoever
+          // opened it.
+          requestContext = wrapRequestContextWithLogging(
+            options.request,
+            () => path.join(httpLogDir, "http.jsonl"),
+            secrets,
+            observed,
+          );
+        } else {
+          // No `baseURL` requirement here, matching `ctx.page()` above, which
+          // already passes `config.baseURL` through as `undefined` without
+          // complaint — a suite
+          // that only ever talks to absolute URLs across several hosts has no
+          // single baseURL to state, and forcing one into config would make
+          // config assert something untrue. If a step written against a
+          // relative path actually needs a baseURL and none was configured,
+          // Playwright's own `newContext`/fetch call fails on that URL; this
+          // module does not duplicate Playwright's URL-resolution rules to
+          // pre-empt that with its own error.
+          //
+          // `config.requestContext` is spread in
+          // first, `baseURL`/`storageState` after: schema.ts already rejects
+          // a `requestContext` that sets either key, so this ordering never
+          // actually resolves a real collision, only guards the invariant.
+          const raw = await playwrightRequest.newContext({
+            ...(config.requestContext ?? {}),
+            ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+            ...(storageState ? { storageState } : {}),
+          });
+          requestContextOwnedHere = true;
+          requestContext = wrapRequestContextWithLogging(
+            raw,
+            () => path.join(httpLogDir, "http.jsonl"),
+            secrets,
+            observed,
+          );
+        }
       }
       return requestContext;
     },
@@ -962,13 +1005,21 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // step record (see DisposeResult's doc comment: `undefined` here means
         // "leave the existing session file untouched", never "clear it").
       }
-      try {
-        await requestContext.dispose();
-      } catch {
-        // As with browser teardown above, losing the request context's own
-        // dispose() is not a reason to lose the step record; http.jsonl is
-        // written incrementally as calls happen, so it is unaffected by a
-        // dispose() failure here.
+      // Only a request context this module itself opened (`playwrightRequest.
+      // newContext`, above) is this module's own to close — `options.request`
+      // stays open for whoever handed it in, per `CreateStepContextOptions.
+      // request`'s own doc comment. Closing it here would pull it out from
+      // under a Playwright Test spec's own `request` fixture mid-test, well
+      // before that spec's own teardown ever runs.
+      if (requestContextOwnedHere) {
+        try {
+          await requestContext.dispose();
+        } catch {
+          // As with browser teardown above, losing the request context's own
+          // dispose() is not a reason to lose the step record; http.jsonl is
+          // written incrementally as calls happen, so it is unaffected by a
+          // dispose() failure here.
+        }
       }
     }
 

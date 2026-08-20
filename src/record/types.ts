@@ -12,6 +12,16 @@
 // scenario record's id for a `run`-originated step record, `null` for a
 // `do`-originated one.
 //
+// `kind` widens again to add `"external"`: a step run from inside a
+// Playwright Test spec (src/external/record-step.ts) rather than from
+// `nuka do`/`nuka run` is a third, distinct origin — the executor that
+// measured it is neither of the other two. `nuka harvest` treats
+// `"external"` the same as `"do"` (both are a working record, never
+// evidence a sign-off can cite), while `scenario_record_id`/`run_id` stay
+// `null` for it the same way they already are for a `"do"`-originated
+// record: an externally-driven step belongs to no `nuka run` scenario
+// either.
+//
 // This shape was called `Receipt` before this rename. Step-level and
 // scenario-level records both answer the same question, what did this
 // execution actually do, but had used two unrelated words for it: `Receipt`
@@ -397,8 +407,11 @@ interface StepRecordBase {
   step: string;
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka
    * run` scenario (docs/spec.md "Records": "the same shape whether the step
-   * ran inside a scenario or via `do`"). */
-  kind: "do" | "run";
+   * ran inside a scenario or via `do`"), `"external"` for one run from
+   * inside a Playwright Test spec through `experimental_recordStep`
+   * (src/external/record-step.ts) — a working record the same way `"do"`
+   * is, never evidence a sign-off can cite. */
+  kind: "do" | "run" | "external";
   /** Exactly what `--args` deserialized to (`do`) or what the pickle step's
    * captures/table/docstring bound (`run`) — unvalidated and uncoerced by
    * the step's own `args` schema either way. */
@@ -422,12 +435,13 @@ interface StepRecordBase {
    * record around it the same certainty. */
   session_execution?: number;
   /** The owning scenario record's id for a `run`-originated step record
-   * (`kind: "run"`); always `null` for a `do`-originated one. */
+   * (`kind: "run"`); always `null` for a `do`- or `external`-originated
+   * one. */
   scenario_record_id: string | null;
   /** The run's own id (`ScenarioRecord.run_id`) for a `run`-originated step
-   * record; always `null` for a `do`-originated one, the same split
-   * `scenario_record_id` above follows — a `do` execution belongs to no
-   * scenario and no run. Without this, reading one step record in isolation
+   * record; always `null` for a `do`- or `external`-originated one, the
+   * same split `scenario_record_id` above follows — neither belongs to a
+   * scenario or a run. Without this, reading one step record in isolation
    * to find out which run it belongs to meant opening the scenario record
    * next to it; a step record should answer that on its own, since it
    * already answers everything else about what this one execution did. */

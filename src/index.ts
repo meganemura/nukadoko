@@ -36,3 +36,13 @@ export { defineStep } from "./step/define-step.js";
 // mark, and the condition that would let it be dropped.
 export { experimental_callWebmcpTool } from "./webmcp/call-tool.js";
 export type { WebmcpToolDescriptor } from "./webmcp/list-tools.js";
+// EXPERIMENTAL: see record-step.ts's own header for why the name carries
+// the mark, and the condition that would let it be dropped.
+export {
+  experimental_recordStep,
+  UnsupportedExternalFixtureError,
+} from "./external/record-step.js";
+export type {
+  ExperimentalRecordStepOptions,
+  ExperimentalStepExecution,
+} from "./external/record-step.js";
