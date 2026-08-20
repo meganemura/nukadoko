@@ -1326,6 +1326,147 @@ import { Given, When, Then } from "nukadoko/compat";
   project already on nukadoko to a newer release is a different question,
   answered in [docs/upgrading.md](upgrading.md).
 
+## The second door: a Playwright Test suite
+
+The door above is for a suite built on cucumber-js, and it works by
+swapping an import. A suite written directly against Playwright Test has
+no import to swap: its tests are `test("...", async ({ page }) => {...})`
+and there is no glue layer to redirect. That is not a smaller problem, it
+is a different one, and it has a different answer.
+
+**Share the implementation, not the runner.** An operation moves out of a
+spec file into a plain async function that takes Playwright's own objects
+and nothing else. The spec calls it. A typed step's `run` calls it too.
+Neither runner ever loads the other's files.
+
+```
+e2e/cart.spec.ts  ──▶  features/steps/lib/cart.ts  ◀──  features/steps/add-item.ts
+   (Playwright)              (plain functions)               (nukadoko)
+```
+
+The arrows point one way on purpose. The Playwright suite never imports
+nukadoko, so what it depends on after the move is exactly what it
+depended on before: Playwright, and a function in its own repository.
+This door's way back is therefore stronger than the first one's. Reversing
+the compat door means switching an import back; reversing this one means
+deleting the feature files and the steps, after which the suite is
+untouched because nothing it uses ever knew nukadoko existed.
+
+What makes the sharing work is a shape rather than a promise: `page`,
+`context`, `request` and `baseURL` are Playwright's own objects on both
+sides (see "Context API"), so a function written against them is already
+callable from both. Nothing is adapted, wrapped, or re-exported.
+
+What is deliberately not shared is anything above that line. A spec must
+not call `step.run(bag, args)` directly, which looks tempting and holds
+only while the step destructures Playwright-only names: it breaks the
+moment that step reaches for `call`, `section`, `resultOf` or
+`requireEnv`, which is to say the moment the step becomes worth having.
+And a fixture map cannot be shared either, for the typing reason
+"Fixtures" already gives.
+
+The contract can live in the shared unit rather than above it, and
+should. A step's `args` and `returns` are plain zod schemas, so the
+function's own file can export them and the step can declare them:
+
+```ts
+// features/steps/lib/cart.ts
+export const openCartReturns = z.object({ id: z.string() });
+export async function openCart(request: APIRequestContext) { ... }
+
+// features/steps/open-cart.ts
+export default defineStep({ returns: openCartReturns, run: ({ request }) => openCart(request) });
+```
+
+One definition, imported by both homes, so the spec and the step cannot
+drift into disagreeing about the shape. The shared file still depends on
+nothing but Playwright and zod, so the arrow above is unchanged.
+
+The **record** is the other half, and sharing the implementation alone
+does not produce one. A Playwright run leaves Playwright's own artifacts
+and no step record, because a step record is written by an executor and
+that home has none. An existing suite could therefore share every line of
+its implementation and still leave nothing to harvest.
+
+`experimental_recordStep` is the experiment that closes that, and it is
+marked experimental by name for the reasons its own module gives.
+
+```ts
+const { result, stepRecordId } = await experimental_recordStep(
+  openCartStep, { sku }, { name: "open-cart", rootDir, request },
+);
+```
+
+The step runs against the spec's own `request`, its schemas are enforced,
+and a step record lands where `nuka do`'s records land. So the suite a
+team already runs becomes the source of records, and the journeys it
+already encodes become drafts through `nuka harvest`: migrating by
+running rather than by rewriting, which is a smaller ask than any
+rewrite.
+
+Three properties keep that from blurring what a record means. The record
+says `kind: "external"`, a third answer to how an execution came about
+alongside `do` and `run`, so it cannot be read as something a person
+typed; `harvest` accepts it and goes on refusing a `run` record, which
+already has a feature. The injected request context is wrapped for the
+same logging and redaction any other one gets, and is never disposed,
+since closing what another owner opened is a fault that only appears on
+the second call. And a step whose fixtures reach for a browser is refused
+before any record exists, so this path cannot half-work by quietly
+launching one.
+
+What still does not cross is the **sign-off**. `nuka accept` needs a green
+full `nuka run` and its scenario record, and an external record is not
+that. This tool's guarantee is about executions it drove itself, and one
+it did not drive is one it can only take somebody's word for. So an
+external record is a working record in exactly the sense a `do` record
+is: the material a scenario gets harvested from, never the evidence.
+
+Both of nukadoko's own paths open at once, which is the point of entering
+here rather than rewriting. `nuka run` fixes a path in a feature file, and
+`nuka do` runs any of those steps alone, so the same operations an
+existing suite already trusts become the vocabulary an agent explores
+with (see "Single steps" and "Live sessions").
+
+Both trees can sit in one repository, and either arrangement works.
+Side by side is the obvious one. The other is worth naming because it is
+the smaller ask of a team whose Playwright suite is the asset: put
+`featuresDir` *inside* the directory their specs already live in.
+
+```
+e2e/
+  cart.spec.ts          <- Playwright finds this
+  lib/cart.ts           <- shared, owned by neither runner
+  nukadoko/             <- featuresDir
+    cart.feature
+    steps/add-item.ts   <- Playwright does not find this
+```
+
+That holds because each runner only loads what it recognises. Playwright
+collects files matching its own `testMatch`, which a step file named for
+the step it defines never does. Discovery imports every `.ts`/`.mts`/
+`.js`/`.mjs` under `featuresDir`, which a spec kept outside it never is.
+The two rules are about naming and placement, and they do not collide.
+
+Two ways to get it wrong, both of which are caught rather than silent.
+
+A spec **inside** `featuresDir` gets imported by discovery, and
+Playwright's `test()` refuses to be called outside its own runner, so the
+file fails to import. `nuka check` names it with Playwright's own message,
+and `run`/`do` refuse to execute at all, exactly as they do for any other
+broken glue.
+
+A step file **named like a spec** collides differently. A step's name is
+its file's basename, so `open-cart.spec.ts` defines a second step called
+`open-cart.spec` carrying the same pattern as the first, and `nuka check`
+reports `ambiguous-step` naming both. The pattern matching more than one
+step is the error, and the fix is the file name.
+
+The shared file belongs outside `featuresDir` in either arrangement.
+Discovery would import it harmlessly, since a module defining no step is
+simply not vocabulary, but the placement says who owns it, and the
+existing suite does.
+
 ## Running
 
 ### Scenarios (the scripted path)
