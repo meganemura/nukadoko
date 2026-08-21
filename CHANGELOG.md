@@ -40,6 +40,19 @@ just until 0.1.
   Marked experimental by name, with the conditions for dropping the
   prefix written in the module: an injected `page`, and this shape
   surviving a real migrated suite rather than only these tests.
+- **`experimental_recordStep` takes a `page` and a `use` list.** A real
+  Playwright suite is written around the browser, so taking only
+  `request` would have missed most of what this exists for; the context
+  comes from `page.context()` rather than being accepted separately.
+  Evidence listeners attach to a context the caller owns, so they are
+  removed again when the execution ends. `use` means what `nuka do --use`
+  means and is resolved by the same code: without it, a spec that passes
+  the previous result in a variable records no chain, and the harvested
+  draft carries a value that was true exactly once, which passes against
+  a server that still remembers it and fails against a fresh one. An
+  external record is narrower than a `nuka run` one by design: no trace,
+  no screenshot, no `http.jsonl` for page traffic, since Playwright
+  already produced all three.
 - **A selftest scenario drives one shared implementation three ways**, a
   real `playwright test`, a real `nuka run` and a real `nuka do`, and
   checks that a step record carries the value the shared helper returned.

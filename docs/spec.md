@@ -1423,6 +1423,21 @@ already encodes become drafts through `nuka harvest`: migrating by
 running rather than by rewriting, which is a smaller ask than any
 rewrite.
 
+It takes a `page` as well as a `request`, deriving the context from
+`page.context()`, which is what lets it reach a suite written around the
+browser rather than only one written around HTTP. Evidence collection
+attaches listeners to that context, and the context belongs to the
+caller, so they come off again when the execution ends: leaving them on
+would let one recorded step keep counting traffic from the rest of the
+spec.
+
+What an external record carries is therefore narrower than a `nuka run`
+one, and narrower in a way that reads. There is no trace chunk, no
+screenshot, and no `http.jsonl` line for page traffic, because Playwright
+already produced its own artifacts for all three and a second copy would
+say nothing new. What stays is what nukadoko alone measures: the args,
+the validated result, `observed`, and the page events.
+
 Three properties keep that from blurring what a record means. The record
 says `kind: "external"`, a third answer to how an execution came about
 alongside `do` and `run`, so it cannot be read as something a person
