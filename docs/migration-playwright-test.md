@@ -8,8 +8,30 @@ starts from cucumber-js; if that is not your suite, start here instead.
 
 Getting nukadoko itself installed and configured is the same regardless of
 which door you use, and none of it is cucumber-specific: install the
-package and run `nuka init` from the project root (see docs/migration.md
-"Stage 0" for the full walkthrough of that step).
+package, then run `nuka init` from the project root (`nuka init --help`
+lists its flags, including `--base-url` and `--features-dir`). It writes
+`nukadoko.config.ts`:
+
+```ts
+import { defineConfig } from "nukadoko";
+
+export default defineConfig({
+  featuresDir: "features",
+  baseURL: "http://localhost:...", // wherever the app under test listens
+});
+```
+
+A Playwright Test suite already has its own `baseURL`, in
+`playwright.config.ts`'s `use.baseURL`. That is a separate field, and
+nukadoko never reads it, so the same value ends up written into both
+files. Nothing here removes that duplication; it is just how the two
+configs sit today.
+
+Neither `nuka run` nor `nuka do` reads `playwright.config.ts` at all, so
+its `webServer` field never runs, unlike under `playwright test`, which
+starts the app under test through that field before a single spec runs. A
+step that calls `request` or `page` before the app is listening fails
+with `ECONNREFUSED`. Start the app by hand first.
 
 ## Share the implementation, not the runner
 
@@ -20,8 +42,8 @@ calls it, and a typed step's `run` calls it too. Neither runner ever loads
 the other's files.
 
 ```
-e2e/cart.spec.ts  ──▶  features/steps/lib/cart.ts  ◀──  features/steps/add-item.ts
-   (Playwright)              (plain functions)               (nukadoko)
+e2e/cart.spec.ts  ──▶  e2e/lib/cart.ts  ◀──  features/steps/add-item.ts
+   (Playwright)          (plain functions)          (nukadoko)
 ```
 
 The arrows point one way on purpose. The Playwright suite never imports
@@ -54,17 +76,63 @@ should. A step's `args` and `returns` are plain zod schemas, so the
 function's own file can export them and the step can declare them:
 
 ```ts
-// features/steps/lib/cart.ts
+// e2e/lib/cart.ts
 export const openCartReturns = z.object({ id: z.string() });
 export async function openCart(request: APIRequestContext) { ... }
 
 // features/steps/open-cart.ts
-export default defineStep({ returns: openCartReturns, run: ({ request }) => openCart(request) });
+export default defineStep({
+  patterns: ["a cart is opened"],
+  description: "Open a new cart",
+  args: z.object({}),
+  returns: openCartReturns,
+  run: ({ request }) => openCart(request),
+});
 ```
 
 One definition, imported by both homes, so the spec and the step cannot
 drift into disagreeing about the shape. The shared file still depends on
 nothing but Playwright and zod, so the arrow above stays unchanged.
+
+## Naming where a value comes from: `from`
+
+`from` declares where an args key's value comes from when the pattern
+did not capture it (docs/spec.md "Chaining steps"): an upstream step, and
+which of that step's own `returns` keys to read.
+
+```ts
+// e2e/lib/cart.ts (continuing the file above)
+export const addItemArgs = z.object({ cartId: z.string(), sku: z.string() });
+export const addItemReturns = z.object({ itemId: z.string(), cartId: z.string(), sku: z.string() });
+export async function addItem(request: APIRequestContext, cartId: string, sku: string) { ... }
+
+// features/steps/add-item.ts
+import openCartStep from "./open-cart.js";
+
+export default defineStep({
+  patterns: ["item {sku:string} is added to the cart"],
+  description: "Add one item to the cart opened earlier in this scenario",
+  args: addItemArgs,
+  returns: addItemReturns,
+  from: { cartId: [openCartStep, "id"] },
+  run: ({ request }, args) => addItem(request, args.cartId, args.sku),
+});
+```
+
+`from` names the upstream step by importing it, the same way any other
+value gets into a module: `openCartStep` above is `open-cart.ts`'s own
+default export. `from`'s own value is always `[<step>, "<key>"]`: the
+step that produces the value, paired with which of that step's own
+`returns` keys to read. A capture still needs a name of its own,
+`{sku:string}`, never cucumber's bare `{string}`; `nuka check` refuses
+the unnamed form as `unnamed-capture`. `from` is what fills a key no
+capture reached.
+
+This is also what `use` needs. `nuka do --use <record-id>` and
+`experimental_recordStep`'s own `use` option (below) both fill a step's
+`from` keys from an earlier step record's result. A step with no `from`
+entry naming the upstream step has nothing for `use` to fill, and is
+refused rather than silently ignored.
 
 ## Turning a Playwright run into records: `experimental_recordStep`
 
@@ -80,14 +148,16 @@ by accident, and it drops that mark only once it also supports an
 injected `page`, not only `request` (today it always refuses a step whose
 fixtures reach for a browser resource), and the API shape has run
 unchanged against a real Playwright Test suite, not only against
-nukadoko's own tests:
+nukadoko's own tests. `rootDir` is the same project root
+`nukadoko.config.ts` and `.nukadoko/` live under for `nuka do`/`nuka run`;
+inside a Playwright Test spec that is usually `process.cwd()`.
 
 ```ts
 const opened = await experimental_recordStep(
-  openCartStep, { sku }, { name: "open-cart", rootDir, request },
+  openCartStep, {}, { name: "open-cart", rootDir, request },
 );
 const added = await experimental_recordStep(
-  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
+  addItemStep, { sku }, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
 );
 ```
 

@@ -8,7 +8,30 @@ Playwright Test に対して直接書かれたスイートには、差し替え�
 そちらがあなたのスイートでなければ、ここから始めてください。
 
 nukadoko 自身のインストールと設定は、どちらの扉を使っても同じであり、その手順のどこにも cucumber 固有のものはありません。
-パッケージをインストールし、プロジェクトルートから `nuka init` を実行してください(その手順の完全な流れは docs/migration.ja.md の「Stage 0」を参照してください)。
+パッケージをインストールし、プロジェクトルートから `nuka init` を実行してください。
+フラグの一覧は `nuka init --help` が表示します(`--base-url` と `--features-dir` を含みます)。
+`nuka init` は `nukadoko.config.ts` を書きます:
+
+```ts
+import { defineConfig } from "nukadoko";
+
+export default defineConfig({
+  featuresDir: "features",
+  baseURL: "http://localhost:...", // wherever the app under test listens
+});
+```
+
+Playwright Test のスイートはすでに自分自身の `baseURL` を持っています。
+`playwright.config.ts` の `use.baseURL` です。
+これは別のフィールドであり、nukadoko はそれを一切読みません。
+そのため同じ値を両方のファイルに書くことになります。
+ここではその重複を解消しません。
+2 つの設定が今そういう関係にある、というだけです。
+
+`nuka run` も `nuka do` も `playwright.config.ts` を一切読まないため、その `webServer` フィールドは決して動きません。
+`playwright test` はそのフィールドを通じて、spec を 1 つ実行する前にテスト対象のアプリを起動しますが、この 2 つのコマンドはそうしません。
+アプリがまだ待ち受けていない状態で `request` や `page` を呼ぶ step は `ECONNREFUSED` で失敗します。
+先に自分の手でアプリを起動してください。
 
 ## 共有するのは runner ではなく実装
 
@@ -19,8 +42,8 @@ spec はそれを呼びます。
 どちらの runner も、もう一方のファイルを読み込むことは決してありません。
 
 ```
-e2e/cart.spec.ts  ──▶  features/steps/lib/cart.ts  ◀──  features/steps/add-item.ts
-   (Playwright)              (plain functions)               (nukadoko)
+e2e/cart.spec.ts  ──▶  e2e/lib/cart.ts  ◀──  features/steps/add-item.ts
+   (Playwright)          (plain functions)          (nukadoko)
 ```
 
 矢印は意図的に一方向です。
@@ -46,16 +69,60 @@ fixture map も同じく共有できません。
 step の `args` と `returns` はただの zod スキーマなので、その関数自身のファイルがそれらを export し、step 側はそれを宣言できます:
 
 ```ts
-// features/steps/lib/cart.ts
+// e2e/lib/cart.ts
 export const openCartReturns = z.object({ id: z.string() });
 export async function openCart(request: APIRequestContext) { ... }
 
 // features/steps/open-cart.ts
-export default defineStep({ returns: openCartReturns, run: ({ request }) => openCart(request) });
+export default defineStep({
+  patterns: ["a cart is opened"],
+  description: "Open a new cart",
+  args: z.object({}),
+  returns: openCartReturns,
+  run: ({ request }) => openCart(request),
+});
 ```
 
 定義は 1 つだけで、両方の住まいからそれを import するので、spec と step が形について食い違う方向へずれることはありません。
 共有ファイルが依存するのはあくまで Playwright と zod だけなので、上の矢印は変わりません。
+
+## 値の出どころを名指す: `from`
+
+`from` は、pattern がキャプチャしなかった args キーの値がどこから来るかを宣言します(docs/spec.ja.md の「step の連鎖」を参照)。
+上流の step と、その step の `returns` のどのキーを読むかです。
+
+```ts
+// e2e/lib/cart.ts (continuing the file above)
+export const addItemArgs = z.object({ cartId: z.string(), sku: z.string() });
+export const addItemReturns = z.object({ itemId: z.string(), cartId: z.string(), sku: z.string() });
+export async function addItem(request: APIRequestContext, cartId: string, sku: string) { ... }
+
+// features/steps/add-item.ts
+import openCartStep from "./open-cart.js";
+
+export default defineStep({
+  patterns: ["item {sku:string} is added to the cart"],
+  description: "Add one item to the cart opened earlier in this scenario",
+  args: addItemArgs,
+  returns: addItemReturns,
+  from: { cartId: [openCartStep, "id"] },
+  run: ({ request }, args) => addItem(request, args.cartId, args.sku),
+});
+```
+
+`from` は、上流の step を import することでそれを名指します。
+値が他のどのモジュールに入るときとも同じやり方です。
+上の `openCartStep` は `open-cart.ts` 自身の default export です。
+`from` の値は常に `[<step>, "<キー>"]` です。
+値を生み出す step と、その step 自身の `returns` のどのキーを読むかの組です。
+キャプチャにも自分自身の名前が要ります。
+`{sku:string}` であり、cucumber の裸の `{string}` ではありません。
+`nuka check` は名前のない形を `unnamed-capture` として拒否します。
+`from` はどのキャプチャも届かなかったキーを埋めるものです。
+
+これは `use` が必要とするものでもあります。
+`nuka do --use <record-id>` と、`experimental_recordStep` 自身の `use` オプション(後述)は、どちらも先行する step record の結果から step の `from` キーを埋めます。
+上流の step を名指す `from` エントリを持たない step には `use` が埋めるものが何もなく、黙って無視されるのではなく拒否されます。
 
 ## Playwright の実行を record に変える: `experimental_recordStep`
 
@@ -68,13 +135,15 @@ step record を書くのは executor であり、その home にはそれがな�
 experimental という名前が付いているのは意図的で、誰もそこに偶然たどり着かないようにするためです。
 この印が外れる条件は 2 つです。
 `request` だけでなく注入された `page` にも対応すること(今のところ、fixture が browser に手を伸ばす step は常に拒否します)、そして、この API の形が nukadoko 自身のテストだけでなく、本物の Playwright Test スイートに対して変更なしに動いた実績ができることです。
+`rootDir` は、`nuka do`/`nuka run` にとっての `nukadoko.config.ts` と `.nukadoko/` が住むのと同じプロジェクトルートです。
+Playwright Test の spec の中では、たいてい `process.cwd()` がそれに当たります。
 
 ```ts
 const opened = await experimental_recordStep(
-  openCartStep, { sku }, { name: "open-cart", rootDir, request },
+  openCartStep, {}, { name: "open-cart", rootDir, request },
 );
 const added = await experimental_recordStep(
-  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
+  addItemStep, { sku }, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
 );
 ```
 
