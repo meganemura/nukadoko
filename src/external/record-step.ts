@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import type { APIRequestContext } from "playwright";
+import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { resolveUse, type ResolveUseSuccess } from "../cli/resolve-use.js";
@@ -27,24 +27,24 @@ import { stepFixtureNames } from "../step/step-fixture-names.js";
 // can turn into a feature draft, closing the gap that door's own doc
 // comment names: "What does not cross is the record... there is no
 // executor in that home." This module is that home's executor, on the one
-// slice it drives (a typed step's own `args`/`returns` schemas, `request`),
-// not a general Playwright fixture wrapper.
+// slice it drives (a typed step's own `args`/`returns` schemas, `request`,
+// an injected `page`), not a general Playwright fixture wrapper.
 //
-// `stepFixtureNames(step)` (its transitive closure over `parts`) is
-// checked against `SUPPORTED_FIXTURE_NAMES`, below, before any record
-// exists: a step that names `page`/`context` would otherwise reach
-// `ctx.page()`, lazily launch a browser this module has no Playwright page
-// to hand it, and write a trace.zip that duplicates evidence the calling
-// spec's own Playwright run already owns (docs/spec.md "The second door"'s
-// own arrow diagram: this module must not become a second, competing
-// evidence source). Refusing before `recordId`/`evidenceDir` exist matches
-// `nuka do`'s own setup-phase refusals (src/cli/do.ts): a step whose
-// fixtures cannot be built here never began, so no record is cited for it.
-// A custom `config.fixtures` name fails the same check for a related but
-// different reason: nothing here resolves `config.fixtures` at all yet
-// (only the closed, no-browser subset of `StepFixtures` is built), so a
-// name outside that subset is refused the same way regardless of why it
-// isn't supported.
+// `stepFixtureNames(step)` (its transitive closure over `parts`) is checked
+// against `SUPPORTED_FIXTURE_NAMES`, below, before any record exists —
+// plus `page`/`context`, checked separately from that set because they are
+// supported exactly when `options.page` was given for *this* call (this
+// file's own `ExperimentalRecordStepOptions.page` doc comment: no second,
+// competing browser ever launches here, so a step naming either without a
+// `page` supplied has nothing this module can build for it).
+// Refusing before `recordId`/`evidenceDir` exist matches `nuka do`'s own
+// setup-phase refusals (src/cli/do.ts): a step whose fixtures cannot be
+// built here never began, so no record is cited for it. A custom
+// `config.fixtures` name fails the same check for a related but different
+// reason: nothing here resolves `config.fixtures` at all yet (only the
+// closed subset of `StepFixtures` this module can build is), so a name
+// outside that subset is refused the same way regardless of why it isn't
+// supported.
 //
 // Config (`nukadoko.config.ts`), env, and secrets load the same way `nuka
 // do` loads them (src/cli/do.ts), so http.jsonl's redaction and
@@ -117,23 +117,26 @@ import { stepFixtureNames } from "../step/step-fixture-names.js";
 // `experimental_callWebmcpTool`'s own convention — src/webmcp/call-tool.ts)
 // rather than by a runtime flag, for the reason that module's own header
 // gives: the whole point is that a caller cannot reach this surface
-// without typing the word. Remove the prefix only once both of these hold:
-//   - an injected `page` (not only `request`) is supported, so a step
-//     whose fixtures include a browser resource is no longer refused
-//     outright by this module
-//   - the API shape above (three exported names, one call site) has run
+// without typing the word. Remove the prefix only once this holds:
+//   - the API shape above (four exported names, one call site) has run
 //     unchanged against a real Playwright Test suite migrated this way,
 //     not only against this package's own tests
-// A third condition held once and no longer needs restating as a
+// The other original condition is now met, not merely restated: an
+// injected `page` (`options.page`, not only `request`) is supported, so a
+// step whose fixtures include `page`/`context` is no longer refused
+// outright by this module. A third condition held once and no longer needs
+// restating as a
 // precondition, only as a fact: before `use` existed, a spec that chained
 // calls by passing a previous `result` into the next `args` was not
 // actually practical to harvest (the paragraph above, on `use`, is the
 // record of that).
 
-/** Every `StepFixtures` name this module can build without a browser page
- * (`BUILTIN_FIXTURE_NAMES`, src/context.ts, minus `page`/`context`) — see
- * this file's own header for why a name outside this set is refused before
- * any record exists. */
+/** Every `StepFixtures` name this module can always build, regardless of
+ * whether a call passes `options.page`
+ * (`BUILTIN_FIXTURE_NAMES`, src/context.ts, minus `page`/`context`) — `page`/
+ * `context` are supported too, but only on a call that actually supplies
+ * `options.page` (this file's own header), so they are checked separately,
+ * in `experimental_recordStep` itself, rather than folded into this set. */
 const SUPPORTED_FIXTURE_NAMES = new Set(
   BUILTIN_FIXTURE_NAMES.filter((name) => name !== "page" && name !== "context"),
 );
@@ -148,20 +151,29 @@ const SUPPORTED_FIXTURE_NAMES = new Set(
 const externalStepNames = new WeakMap<Step, string>();
 
 /** Thrown when `step`'s own fixture needs (its `run`'s destructured names,
- * closed transitively over `parts`) include a name this module cannot
- * build — `"page"`/`"context"` (no injected browser page yet, this file's
- * own header) or a `config.fixtures` entry (not resolved here). Thrown
- * before `recordId`/`evidenceDir` exist, so no step record is written for
- * it: the execution never began. */
+ * closed transitively over `parts`) include a name this module cannot build
+ * for this call — `"page"`/`"context"` on a call that passed no
+ * `options.page` (this file's own header), or a `config.fixtures` entry (not
+ * resolved here, regardless of `options.page`). Thrown before `recordId`/
+ * `evidenceDir` exist, so no step record is written for it: the execution
+ * never began. */
 export class UnsupportedExternalFixtureError extends Error {
   readonly fixtureName: string;
 
   constructor(fixtureName: string) {
+    // Reached for `"page"`/`"context"` only when `options.page` was *not*
+    // given — the caller (`experimental_recordStep`, below) already lets
+    // both through without throwing whenever it was, so seeing either name
+    // here means specifically "no page was supplied", not "page is
+    // unsupported in general".
+    const isPageFixture = fixtureName === "page" || fixtureName === "context";
     super(
-      `experimental_recordStep cannot build fixture "${fixtureName}": only ` +
-        `${[...SUPPORTED_FIXTURE_NAMES].sort().join(", ")} are available without an injected browser page. ` +
-        `"page"/"context" need a Playwright page, not supported yet; any other name is a config.fixtures ` +
-        `entry, which this experimental function does not resolve.`,
+      isPageFixture
+        ? `experimental_recordStep cannot build fixture "${fixtureName}": this call passed no options.page ` +
+          `(an already-open Playwright page); "page"/"context" are only available on a call that supplies one.`
+        : `experimental_recordStep cannot build fixture "${fixtureName}": only ` +
+          `${[...SUPPORTED_FIXTURE_NAMES].sort().join(", ")} (plus "page"/"context" when options.page is given) ` +
+          `are available; any other name is a config.fixtures entry, which this experimental function does not resolve.`,
     );
     this.name = "UnsupportedExternalFixtureError";
     this.fixtureName = fixtureName;
@@ -190,6 +202,18 @@ export interface ExperimentalRecordStepOptions {
    * header); never disposed here — closing it stays whichever caller
    * opened it's own job (docs/spec.md "The second door"). */
   request: APIRequestContext;
+  /** An already-open Playwright `Page` — a Playwright Test's own `page`
+   * fixture, typically. Optional: omit it for a step that never names
+   * `page`/`context`, the same way this module has always worked. When
+   * given, `step.run`'s own `page` (and `context`, derived from
+   * `page.context()`) is this exact page, `observed`/`page_events` tally
+   * its traffic, and neither the page nor its context is ever closed here
+   * — same ownership rule as `request`, above (this file's own header). No
+   * trace chunk opens and no screenshot is taken for it: the calling
+   * Playwright Test spec already owns both for this exact page, so a
+   * second copy here would only duplicate evidence that spec's own run
+   * already has. */
+  page?: Page;
   /** `nuka do --use <record-id>`'s own meaning (docs/spec.md "Single steps
    * (the agent path)"), repeatable the same way: each id fills whichever of
    * `step`'s own `from` keys that step record's step is named by, and lands
@@ -220,14 +244,15 @@ export interface ExperimentalStepExecution<TReturns extends z.ZodTypeAny> {
 /**
  * Runs `step` with `args`, the same way `nuka do` runs a typed step, and
  * writes a `kind: "external"` step record (this file's own header) to
- * `options.rootDir`'s state directory. Reuses `options.request` rather than
- * launching one of its own — see `CreateStepContextOptions.request`
- * (src/context/create-context.ts) for why closing it is never this
- * module's job.
+ * `options.rootDir`'s state directory. Reuses `options.request` (and
+ * `options.page`, when given) rather than launching either of its own —
+ * see `CreateStepContextOptions.request`/`.page` (src/context/
+ * create-context.ts) for why closing either is never this module's job.
  *
  * @throws {UnsupportedExternalFixtureError} `step`'s own fixture needs (or
- * any of its `parts`') name `page`/`context`, or a `config.fixtures` entry
- * — before any step record is written.
+ * any of its `parts`') name `page`/`context` on a call that passed no
+ * `options.page`, or name a `config.fixtures` entry — before any step
+ * record is written.
  * @throws {Error} an `options.use` id is unknown, names a non-`"ok"` step
  * record, names a step that is not registered here (this file's own
  * header) or is not among `step.from`'s upstreams, is missing the result
@@ -253,7 +278,7 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
   args: Partial<z.input<TArgs>>,
   options: ExperimentalRecordStepOptions,
 ): Promise<ExperimentalStepExecution<TReturns>> {
-  const { name, rootDir, request, use = [] } = options;
+  const { name, rootDir, request, page, use = [] } = options;
 
   // Registered before anything else, unconditionally — this call's own
   // `step`/`name` pair is what lets a *later* call's `use` resolve a `from`
@@ -264,7 +289,13 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
 
   const fixtureNames = stepFixtureNames(step);
   for (const fixtureName of fixtureNames) {
-    if (!SUPPORTED_FIXTURE_NAMES.has(fixtureName)) {
+    // `page`/`context` are supported exactly when this call supplied
+    // `options.page` (this file's own header) — checked here, alongside
+    // `SUPPORTED_FIXTURE_NAMES`, rather than folded into that set, since
+    // whether they are available depends on this one call, not on the
+    // module as a whole.
+    const isPageFixture = fixtureName === "page" || fixtureName === "context";
+    if (!SUPPORTED_FIXTURE_NAMES.has(fixtureName) && !(isPageFixture && page)) {
       throw new UnsupportedExternalFixtureError(fixtureName);
     }
   }
@@ -343,6 +374,7 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
     env: envVars,
     secrets,
     request,
+    page,
     // Names this step's own `CallEntry`/error messages the same way
     // cli/do.ts's own `stepNameOf` does — the only step this module ever
     // knows the discovered name of is `step` itself (`options.name`,

@@ -10,7 +10,12 @@ import type { SecretSet } from "../secrets/types.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
 import type { StorageState } from "../session/storage-state.js";
-import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
+import {
+  attachExternalPageEvidence,
+  launchBrowserWithTracing,
+  type BrowserEvidenceHandle,
+  type ExternalPageEvidenceHandle,
+} from "./browser-evidence.js";
 import { createCallsCollector } from "./calls.js";
 import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
@@ -295,6 +300,24 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // (below) is the flag that keeps the two paths from colliding at teardown:
 // `dispose()` closes a request context this module opened itself, never one
 // handed in from outside.
+//
+// `CreateStepContextOptions.page` closes that "out of scope so far" gap:
+// the same external driver's own Playwright Test spec typically also has a
+// `page` fixture already open, with its own teardown that will close it.
+// `context` is deliberately not a second option next to it — a `page`
+// always belongs to exactly one context (`page.context()`), so accepting
+// both would only create room for the two to disagree; `ctx.page()`'s own
+// branch for this option derives the context from `page` alone
+// (browser-evidence.ts's `attachExternalPageEvidence`). That branch never
+// opens a trace chunk and never takes a screenshot — the calling spec
+// already owns both for this exact `page` — but it does attach the same
+// `observed`/`pageEvents` listeners `launchBrowserWithTracing` attaches for
+// a browser this module launches itself, and removes exactly those on
+// `dispose()`, the discipline `options.request` already keeps for closing:
+// never touch what this module did not open, but the ownership boundary is
+// listener attachment here, not context closing, since a listener left
+// running past this handle's own lifetime would leak into whatever else the
+// caller goes on to do with `page.context()`.
 
 export interface EvidenceResult {
   trace?: string;
@@ -478,6 +501,21 @@ export interface CreateStepContextOptions {
    * http.jsonl and `observed` work identically either way; only `dispose`
    * (below) treats the two differently. */
   request?: APIRequestContext;
+  /** An already-open Playwright `Page` to hand back from `ctx.page()`
+   * instead of lazily launching a browser of this module's own — the same
+   * "take what's already running" path `request` above is, applied to a
+   * page (this file's own header). `context` is deliberately not a
+   * separate option: `ctx.page()` derives it from `page.context()`, since a
+   * `page` always belongs to exactly one context and accepting both would
+   * only create room for them to disagree. `undefined` (the default) keeps
+   * every existing caller's lazy-launch behavior unchanged — `nuka do`/
+   * `nuka run` never set this. No trace chunk ever opens and no screenshot
+   * is ever taken for this `page` (this file's own header); `observed` and
+   * `pageEvents` still tally its traffic, through listeners this module
+   * attaches on first `ctx.page()` call and removes on `dispose()` (never
+   * the page or its context itself, which stay open for whoever handed
+   * `page` in). */
+  page?: Page;
   /** A `--session`'s previously saved storageState, when one was loaded and
    * parsed successfully; `undefined` for a session's first-ever use or when
    * `--session` wasn't given. Restored into whichever of `ctx.page()` /
@@ -630,6 +668,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const evidence = createEvidenceCollector(() => httpLogDir);
 
   let browserHandle: BrowserEvidenceHandle | undefined;
+  // Set only when `options.page` is adopted (below) — kept apart from
+  // `browserHandle` rather than reusing its type, since an adopted page
+  // never opens a trace chunk and `closeCurrentChunk`'s own `if
+  // (!browserHandle) return;` guard already needs `browserHandle` to stay
+  // `undefined` for that page for exactly that reason (this file's own
+  // header).
+  let externalPageHandle: ExternalPageEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
   // True only once this module's own `playwrightRequest.newContext()` call
   // below actually opens one — never for `options.request`, which some
@@ -822,6 +867,19 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     baseURL: config.baseURL,
     async page(): Promise<Page> {
+      if (options.page) {
+        // Adopt, never launch — same "take what's already running" branch
+        // `ctx.request()` below already has for `options.request`, applied
+        // to a page (this file's own header). No `pendingChunkTitle`/
+        // `chunkOpen` bookkeeping runs on this branch at all: an adopted
+        // page never opens a trace chunk, so `browserHandle` (the trace
+        // machinery's own state) stays `undefined` for this ctx's whole
+        // lifetime even though a page was used.
+        if (!externalPageHandle) {
+          externalPageHandle = attachExternalPageEvidence(options.page, { observed, pageEvents });
+        }
+        return externalPageHandle.page;
+      }
       if (!browserHandle) {
         browserHandle = await launchBrowserWithTracing({
           // `config.browserType` — which of
@@ -959,6 +1017,15 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     const evidence: EvidenceResult = { screenshots: [] };
     let browserStorageState: StorageState | undefined;
     let requestStorageState: StorageState | undefined;
+
+    if (externalPageHandle) {
+      // Only removes the listeners this module attached (this file's own
+      // header) — the page and its context stay open, exactly as `options.
+      // request` stays open below: closing either would pull it out from
+      // under whoever handed it in (typically a Playwright Test spec's own
+      // fixture teardown, which has not run yet at this point).
+      externalPageHandle.dispose();
+    }
 
     if (browserHandle) {
       // Must run before finalize() below: finalize() closes the context,

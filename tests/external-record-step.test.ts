@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
-import { request as playwrightRequest, type APIRequestContext } from "playwright";
+import { chromium, request as playwrightRequest, type APIRequestContext } from "playwright";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runHarvest } from "../src/cli/harvest.js";
@@ -21,9 +21,12 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // harvest` can consume, its args/returns pass through the step's own
 // schema, the injected request context survives the call (never disposed
 // by this module), and a secret is redacted out of http.jsonl. A
-// `page`/`context`-needing step is refused before any record exists,
-// pinning the "no trace, no screenshot" rule this experimental surface
-// promises (its own header, src/external/record-step.ts).
+// `page`/`context`-needing step is refused before any record exists when no
+// `options.page` was given — the `describe("experimental_recordStep: page"`
+// block below covers the case an `options.page` was, pinning the "no trace,
+// no screenshot for a page this module did not launch" rule this
+// experimental surface promises (its own header, src/external/
+// record-step.ts).
 //
 // `openCartStep` here is a plain-JS twin of the fixture project's own
 // features/steps/open-cart.ts (pattern/args/returns kept identical by
@@ -68,6 +71,37 @@ function startCartServer(): Promise<{ server: Server; url: string }> {
     });
   });
 }
+
+function startPageServer(): Promise<{ server: Server; url: string }> {
+  return new Promise((resolve) => {
+    const server = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body>ok</body></html>");
+    });
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address() as AddressInfo;
+      resolve({ server, url: `http://127.0.0.1:${address.port}` });
+    });
+  });
+}
+
+// Whether to run the `options.page`-adoption tests at all — computed once at
+// module load (top-level await), the same reasoning and pattern
+// tests/browser-evidence.test.ts's own `isChromiumAvailable` already
+// follows: chromium is expected to already be installed (`npx playwright
+// install chromium`), this is only a safety net for an environment where
+// that is genuinely impossible.
+async function isChromiumAvailable(): Promise<boolean> {
+  try {
+    const browser = await chromium.launch({ headless: true });
+    await browser.close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const chromiumAvailable = await isChromiumAvailable();
 
 describe("experimental_recordStep", () => {
   let server: Server;
@@ -194,6 +228,209 @@ describe("experimental_recordStep", () => {
     // before `recordId`/`evidenceDir` are ever created.
     expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
   });
+});
+
+// Responsibility: the acceptance points m12 (an injected `page`, not only
+// `request`) added to `experimental_recordStep` — a real chromium page,
+// adopted rather than launched by this module (src/context/
+// browser-evidence.ts's `attachExternalPageEvidence`, wired in through
+// src/context/create-context.ts's own `page` option): the step's own
+// `run({ page })` receives that exact page, page-issued traffic is counted
+// in `observed`, no trace/screenshot lands on the record (the calling
+// Playwright Test spec already owns both for this page), and the four
+// listeners this module attaches to `page.context()` do not survive past
+// the call that attached them — proven by driving the *same* page/context
+// through two calls and checking nothing is left listening afterward.
+describe("experimental_recordStep: page", () => {
+  let server: Server;
+  let url: string;
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  beforeEach(async () => {
+    ({ server, url } = await startPageServer());
+    rootDir = await copyFixtureToTempDir("external-driver-project");
+    requestContext = await playwrightRequest.newContext({ baseURL: url });
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await removeTempDir(rootDir);
+  });
+
+  function stepRecordDir(recordId: string): string {
+    return path.join(rootDir, ".nukadoko", "records", "steps", recordId);
+  }
+
+  it.skipIf(!chromiumAvailable)(
+    "passes the exact injected page to the step's own run(), with no trace/screenshot on the record",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      try {
+        let capturedPage: unknown;
+        const identityStep = defineStep({
+          description: "captures the page it was given, to prove it is the same object",
+          args: z.object({}),
+          returns: z.object({}),
+          async run({ page: injectedPage }) {
+            capturedPage = injectedPage;
+            return {};
+          },
+        });
+
+        const { stepRecordId } = await experimental_recordStep(identityStep, {}, {
+          name: "capture-page",
+          rootDir,
+          request: requestContext,
+          page,
+        });
+
+        // Reference equality, not merely "a Page" — proves `page.run()`
+        // received this exact object, not a fresh one this module launched
+        // for itself.
+        expect(capturedPage).toBe(page);
+
+        const record = readStepRecord(stepRecordDir(stepRecordId)) as StepRecord;
+        // No trace/screenshot: this module never opens either for a page it
+        // did not launch itself (src/context/browser-evidence.ts's own
+        // header) — the calling Playwright Test spec already owns both for
+        // this exact page.
+        expect(record.evidence.trace).toBeUndefined();
+        expect(record.evidence.screenshots).toEqual([]);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "counts page-issued traffic in observed, the same tally ctx.page() already keeps for a launched browser",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      try {
+        const gotoStep = defineStep({
+          description: "navigates the injected page",
+          args: z.object({}),
+          returns: z.object({}),
+          async run({ page }) {
+            await page.goto(url);
+            return {};
+          },
+        });
+
+        const { stepRecordId } = await experimental_recordStep(gotoStep, {}, {
+          name: "goto-page",
+          rootDir,
+          request: requestContext,
+          page,
+        });
+
+        const record = readStepRecord(stepRecordDir(stepRecordId)) as StepRecord;
+        expect(record.observed).toEqual({ http_reads: 1, http_writes: 0 });
+      } finally {
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "removes its own listeners after each call: recording twice through the same page leaves none behind on the caller's own context",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      // `BrowserContext#listenerCount` is a real, working method (it is a
+      // Node `EventEmitter` under the hood) that Playwright's own .d.ts does
+      // not type — this is the direct, spec-recommended way to prove a
+      // listener this module attached did not outlive the call that
+      // attached it: a leak would make this number keep growing across
+      // calls instead of returning to 0 once each call's own dispose() ran.
+      const listenerCount = (event: string): number =>
+        (context as unknown as { listenerCount(event: string): number }).listenerCount(event);
+      try {
+        const gotoStep = defineStep({
+          description: "navigates the injected page",
+          args: z.object({}),
+          returns: z.object({}),
+          async run({ page }) {
+            await page.goto(url);
+            return {};
+          },
+        });
+
+        await experimental_recordStep(gotoStep, {}, {
+          name: "goto-page-1",
+          rootDir,
+          request: requestContext,
+          page,
+        });
+        await experimental_recordStep(gotoStep, {}, {
+          name: "goto-page-2",
+          rootDir,
+          request: requestContext,
+          page,
+        });
+
+        // Every one of the four events browser-evidence.ts's
+        // `attachExternalPageEvidence` subscribes must be back to 0 — a
+        // leftover from either call would show up here, on the same
+        // context both calls (and this test) share.
+        expect(listenerCount("request")).toBe(0);
+        expect(listenerCount("console")).toBe(0);
+        expect(listenerCount("weberror")).toBe(0);
+        expect(listenerCount("requestfailed")).toBe(0);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "no longer refuses a step needing page once options.page is given (still refused without one, per the describe block above)",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      try {
+        const needsPageStep = defineStep({
+          description: "needs a browser page, now supported when options.page is given",
+          args: z.object({}),
+          returns: z.object({}),
+          async run({ page }) {
+            await page.title();
+            return {};
+          },
+        });
+
+        await expect(
+          experimental_recordStep(needsPageStep, {}, {
+            name: "needs-page",
+            rootDir,
+            request: requestContext,
+            page,
+          }),
+        ).resolves.toMatchObject({ result: {} });
+      } finally {
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
+  if (!chromiumAvailable) {
+    // Warns rather than silently skipping: only skip when chromium is
+    // genuinely unavailable in this environment (this file's own
+    // `isChromiumAvailable`).
+    console.warn("external-record-step.test.ts: chromium unavailable, options.page adoption tests skipped");
+  }
 });
 
 describe("experimental_recordStep: use", () => {

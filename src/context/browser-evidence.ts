@@ -7,8 +7,11 @@ import {
   type Browser,
   type BrowserContext,
   type BrowserContextOptions,
+  type ConsoleMessage,
   type LaunchOptions,
   type Page,
+  type Request as PlaywrightRequest,
+  type WebError,
 } from "playwright";
 import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -108,6 +111,23 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // `webkit`) fails right here, at `launch` — Playwright's own error, neither
 // caught nor reworded, since it already names the missing engine as part of
 // the executable path it looked for.
+//
+// `attachExternalPageEvidence` (below) is a second, narrower entry point,
+// for a `page` this module did not launch — an external driver (src/
+// external/record-step.ts) runs a typed step from inside a Playwright Test
+// spec, which already has its own `page` fixture open and its own teardown
+// that will close it, the same shape `options.request` already has here.
+// Only two of this module's four context subscriptions apply to that page:
+// `observed`'s `request` tally and `pageEvents`' `console`/`weberror`/
+// `requestfailed` tallies are nukadoko's own measurement and carry the
+// record's value; a trace chunk and a screenshot would duplicate evidence
+// the calling Playwright Test spec already owns for that same page, so
+// neither is ever produced here. The four listeners are attached to
+// `page.context()` on first use and removed by the returned handle's own
+// `dispose()` — unlike `launchBrowserWithTracing`'s own context, this one
+// outlives this handle and keeps running whatever the caller does with it
+// next, so anything still subscribed after this handle is done would leak
+// into that.
 const BROWSER_ENGINES = { chromium, firefox, webkit } as const;
 
 export type BrowserEngineName = keyof typeof BROWSER_ENGINES;
@@ -357,4 +377,88 @@ export async function launchBrowserWithTracing(
     flushPageHttpLog,
     finalize,
   };
+}
+
+export interface ExternalPageEvidenceHandle {
+  readonly page: Page;
+  /** Removes the four listeners `attachExternalPageEvidence` attached to
+   * `page.context()`. Synchronous — `BrowserContext#off` never awaits
+   * anything, unlike `finalize()`'s own teardown above. Never closes the
+   * page or its context: this file's own header explains why that stays
+   * whichever caller opened it's own job. Idempotent to call more than once
+   * (a second call removes nothing, since the first already did), though
+   * every caller today calls it exactly once. */
+  dispose(): void;
+}
+
+/**
+ * Adopts an already-open `page` — typically a Playwright Test spec's own
+ * `page` fixture — instead of launching a browser of nukadoko's own (this
+ * file's own header). Attaches the same four listeners
+ * `launchBrowserWithTracing` attaches at context creation (`request` into
+ * `observed`, `console`/`weberror`/`requestfailed` into `pageEvents`), to
+ * `page.context()` rather than to a context this module opened itself, and
+ * removes exactly those four when the returned handle's own `dispose()` is
+ * called — the context itself is never closed here, since it belongs to
+ * whoever handed `page` in.
+ *
+ * Each handler is bound to a named `const` rather than passed inline,
+ * because `BrowserContext#on`/`#off` pair a removal with its attach by
+ * function reference: `off` needs the exact same reference `on` was given,
+ * not merely a listener for the same event.
+ */
+export function attachExternalPageEvidence(
+  page: Page,
+  options: { observed: ObservedCollector; pageEvents: PageEventsCollector },
+): ExternalPageEvidenceHandle {
+  const context = page.context();
+
+  const onRequest = (request: PlaywrightRequest): void => {
+    options.observed.record(request.method());
+  };
+  const onConsole = (msg: ConsoleMessage): void => {
+    if (msg.type() !== "error") {
+      return;
+    }
+    const location = msg.location();
+    options.pageEvents.recordConsoleError({
+      text: msg.text(),
+      location: {
+        url: location.url,
+        lineNumber: location.lineNumber,
+        columnNumber: location.columnNumber,
+      },
+    });
+  };
+  const onWebError = (webError: WebError): void => {
+    options.pageEvents.recordPageError(webError.error().message);
+  };
+  const onRequestFailed = (request: PlaywrightRequest): void => {
+    const failure = request.failure();
+    options.pageEvents.recordFailedRequest({
+      method: request.method(),
+      url: request.url(),
+      ...(failure ? { failure: failure.errorText } : {}),
+    });
+  };
+
+  context.on("request", onRequest);
+  context.on("console", onConsole);
+  context.on("weberror", onWebError);
+  context.on("requestfailed", onRequestFailed);
+
+  let disposed = false;
+
+  function dispose(): void {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    context.off("request", onRequest);
+    context.off("console", onConsole);
+    context.off("weberror", onWebError);
+    context.off("requestfailed", onRequestFailed);
+  }
+
+  return { page, dispose };
 }
