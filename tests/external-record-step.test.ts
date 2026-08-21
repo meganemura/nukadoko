@@ -158,6 +158,31 @@ describe("experimental_recordStep", () => {
     ).rejects.toThrow(/args validation failed/);
   });
 
+  it("rejects a missing required args key at compile time when options has no use", async () => {
+    // A local step whose `args` has a required key, unlike `openCartStep`
+    // above (`z.object({})`, which cannot demonstrate a missing key). This
+    // call passes no `options.use`, so the strict overload of
+    // `experimental_recordStep` applies and `args` must satisfy
+    // `requiresCartIdStep.args` exactly; the line below omits the required
+    // `cartId` key, which the type checker must reject. If the strict
+    // overload ever stopped applying (a regression back to the single,
+    // loosened `Partial` signature), this `@ts-expect-error` would itself
+    // fail `npm run typecheck` for reporting an unused suppression.
+    const requiresCartIdStep = defineStep({
+      description: "requires a cartId, to exercise the strict-overload compile check",
+      args: z.object({ cartId: z.string() }),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+
+    await expect(
+      // @ts-expect-error missing required key `cartId`, to prove the strict overload (no `use`) still catches this at compile time. Kept on one line: which parameter TypeScript blames for an overload mismatch is not stable, but the whole call sits on this one line either way.
+      experimental_recordStep(requiresCartIdStep, {}, { name: "requires-cart-id", rootDir, request: requestContext }),
+    ).rejects.toThrow(/args validation failed/);
+  });
+
   it("never disposes the injected request context: a second call through the same context still succeeds", async () => {
     const first = await experimental_recordStep(
       openCartStep,

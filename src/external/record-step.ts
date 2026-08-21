@@ -265,14 +265,31 @@ export interface ExperimentalStepExecution<TReturns extends z.ZodTypeAny> {
  * Also rethrows whatever `step.run` itself threw, unchanged, after writing
  * the same kind of failed record.
  *
- * `args` is `Partial<z.input<TArgs>>`, not the exact shape (loosened when
- * `use` was added): a `Step<TArgs, TReturns>` never carries its own `TFrom`
- * (`defineStep`'s return type erases it), so nothing here can tell, at
- * compile time, which of `TArgs`'s keys `options.use` might fill instead —
- * the same reason a caller who omits a key `use` does *not* end up filling
- * still gets a real, thrown `args validation failed` error, just at run
- * time instead of at the type checker.
+ * `args` must satisfy `step.args` exactly on this overload, the same shape
+ * a direct call to the plain function requires: `options` sets no `use`
+ * here, so no args key is ever filled from anywhere else, and a missing
+ * required key is a compile error instead of waiting for the run-time
+ * `args validation failed` throw.
  */
+export function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
+  step: Step<TArgs, TReturns>,
+  args: z.input<TArgs>,
+  options: ExperimentalRecordStepOptions & { use?: undefined },
+): Promise<ExperimentalStepExecution<TReturns>>;
+/**
+ * `args` is `Partial<z.input<TArgs>>` on this overload, not the exact shape
+ * the overload above requires: a `Step<TArgs, TReturns>` never carries its
+ * own `TFrom` (`defineStep`'s return type erases it), so nothing here can
+ * tell, at compile time, which of `TArgs`'s keys `options.use` might fill
+ * instead. A caller whose `use` does not end up filling some key still gets
+ * a real, thrown `args validation failed` error, just at run time instead
+ * of at the type checker. See the overload above for `@throws`.
+ */
+export function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
+  step: Step<TArgs, TReturns>,
+  args: Partial<z.input<TArgs>>,
+  options: ExperimentalRecordStepOptions & { use: readonly string[] },
+): Promise<ExperimentalStepExecution<TReturns>>;
 export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
   step: Step<TArgs, TReturns>,
   args: Partial<z.input<TArgs>>,
