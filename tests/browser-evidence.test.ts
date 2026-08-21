@@ -7,7 +7,11 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
+import { attachExternalPageEvidence, launchBrowserWithTracing } from "../src/context/browser-evidence.js";
 import { createStepContext } from "../src/context/create-context.js";
+import { createHttpOmittedCollector } from "../src/context/http-omitted.js";
+import { createObservedCollector } from "../src/context/observed.js";
+import { createPageEventsCollector } from "../src/context/page-events.js";
 
 // Whether to run at all: computed once at module load (top-level await), so
 // `it.skipIf` below sees the real answer instead of the pre-`beforeAll`
@@ -478,6 +482,170 @@ describe("createStepContext / ctx.page(): baseURL wired into the browser context
       expect(page.url()).toBe(`${baseURL}/hello`);
 
       await dispose();
+    },
+  );
+});
+
+// Responsibility: the launched browser's own "console" filter — `msg.type()
+// !== "error"` returns without recording, so a routine console.log must
+// never reach `page_events`. Both messages are fired in the same step so
+// the log's absence is evidence (proven by the error entry actually
+// landing), not merely an untested default.
+describe("createStepContext / ctx.page(): console filtering", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-console-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    "does not record a plain console.log as a page event, only the console.error alongside it",
+    async () => {
+      const { ctx, dispose, pageEventsSnapshot } = createStepContext({
+        config: baseConfig(),
+        evidenceDir,
+        env: {},
+        stepTitle: "browser step",
+      });
+
+      const page = await ctx.page();
+      const errorSeen = page.context().waitForEvent("console", {
+        predicate: (msg) => msg.type() === "error",
+        timeout: 10_000,
+      });
+      await page.setContent(
+        `<script>console.log("routine noise")</script><script>console.error("the real one")</script>`,
+      );
+      await errorSeen;
+
+      const snapshot = pageEventsSnapshot();
+      expect(snapshot?.console_errors).toHaveLength(1);
+      expect(snapshot?.console_errors?.[0]?.text).toBe("the real one");
+
+      await dispose();
+    },
+  );
+});
+
+// Responsibility: `LaunchBrowserOptions.browserType`'s own documented
+// default — `undefined` behaves exactly like `"chromium"` (this file's own
+// header). The one production caller (create-context.ts) always passes
+// `config.browserType`, which zod defaults to `"chromium"` before this
+// function ever sees it, so this fallback is unreached through that one
+// caller; `launchBrowserWithTracing` is exported and its own doc comment
+// makes a promise about `undefined` specifically, so it is tested directly
+// against that promise here.
+describe("launchBrowserWithTracing: browserType defaults to chromium when omitted", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-default-engine-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    "launches chromium when browserType itself is undefined",
+    async () => {
+      const handle = await launchBrowserWithTracing({
+        evidenceDir,
+        observed: createObservedCollector(),
+        pageEvents: createPageEventsCollector(),
+        logPath: () => path.join(evidenceDir, "http.jsonl"),
+        secrets: [],
+        httpOmitted: createHttpOmittedCollector(),
+      });
+
+      expect(handle.browserInfo.type).toBe("chromium");
+
+      await handle.finalize();
+    },
+  );
+});
+
+// Responsibility: `attachExternalPageEvidence`'s own contract, tested
+// directly rather than only through src/external/record-step.ts — a
+// `BrowserContext#listenerCount` reading of 0 after `dispose()` cannot tell
+// "this handle's own listener was removed" apart from "this handle never
+// attached one in the first place"; a second real event landing on the same
+// collector instance can.
+describe("attachExternalPageEvidence", () => {
+  it.skipIf(!chromiumAvailable)(
+    "filters a plain console.log the same way the launched path does, and stops recording console errors after dispose()",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      try {
+        const observed = createObservedCollector();
+        const pageEvents = createPageEventsCollector();
+        const handle = attachExternalPageEvidence(page, { observed, pageEvents });
+
+        const firstConsoleSeen = context.waitForEvent("console", {
+          predicate: (msg) => msg.type() === "error",
+          timeout: 10_000,
+        });
+        // `onConsole` here is a separate closure from the launched path's
+        // own console handler (createStepContext / ctx.page(): console
+        // filtering, above) — the two duplicate the same filter, so this
+        // adopted-page path needs its own proof that a routine log never
+        // reaches page_events.
+        await page.setContent(`<script>console.log("noise")</script><script>console.error("first")</script>`);
+        await firstConsoleSeen;
+        expect(pageEvents.snapshot()?.console_errors).toHaveLength(1);
+        expect(pageEvents.snapshot()?.console_errors?.[0]?.text).toBe("first");
+
+        handle.dispose();
+
+        const secondConsoleSeen = context.waitForEvent("console", {
+          predicate: (msg) => msg.type() === "error",
+          timeout: 10_000,
+        });
+        await page.setContent(`<script>console.error("second")</script>`);
+        // Waiting for the *context's own* event (not this handle's
+        // collector) is what makes this deterministic: it proves the second
+        // error really fired, so the collector's own count staying at 1 is
+        // evidence dispose() actually removed the listener, not merely that
+        // nothing happened yet.
+        await secondConsoleSeen;
+        expect(pageEvents.snapshot()?.console_errors).toHaveLength(1);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "dispose() a second time does not throw and removes nothing further",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      try {
+        const observed = createObservedCollector();
+        const pageEvents = createPageEventsCollector();
+        const handle = attachExternalPageEvidence(page, { observed, pageEvents });
+
+        handle.dispose();
+        expect(() => handle.dispose()).not.toThrow();
+
+        const listenerCount = (event: string): number =>
+          (context as unknown as { listenerCount(event: string): number }).listenerCount(event);
+        expect(listenerCount("request")).toBe(0);
+        expect(listenerCount("console")).toBe(0);
+        expect(listenerCount("weberror")).toBe(0);
+        expect(listenerCount("requestfailed")).toBe(0);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
     },
   );
 });

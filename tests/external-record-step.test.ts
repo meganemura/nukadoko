@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { chromium, request as playwrightRequest, type APIRequestContext } from "playwright";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { runHarvest } from "../src/cli/harvest.js";
 import { experimental_recordStep, UnsupportedExternalFixtureError } from "../src/external/record-step.js";
@@ -450,6 +450,118 @@ describe("experimental_recordStep: page", () => {
     },
   );
 
+  it.skipIf(!chromiumAvailable)(
+    "counts a console error, an uncaught page error, and a failed request into page_events, the same way ctx.page() already does",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      try {
+        const pageEventsStep = defineStep({
+          description: "trips a console error, an uncaught error, and a failed request on the injected page",
+          args: z.object({}),
+          returns: z.object({ ok: z.boolean() }),
+          async run({ page }) {
+            const pageContext = page.context();
+            // Awaited before the assertion below, the same technique
+            // tests/fixtures/page-events-project's own trigger-page-events.ts
+            // fixture uses: PageEventsCollector's own listener is registered
+            // at context creation, well before this handler runs, so by the
+            // time each of these promises resolves, the collector's own has
+            // already run in the same tick.
+            const consoleErrorSeen = pageContext.waitForEvent("console", {
+              predicate: (msg) => msg.type() === "error",
+              timeout: 10_000,
+            });
+            const webErrorSeen = pageContext.waitForEvent("weberror", { timeout: 10_000 });
+            const requestFailedSeen = pageContext.waitForEvent("requestfailed", { timeout: 10_000 });
+
+            await page.setContent(
+              `<script>console.error("console error");</script>` +
+                `<script>throw new Error("uncaught error");</script>`,
+            );
+            await page.evaluate(async () => {
+              try {
+                await fetch("http://127.0.0.1:1/unreachable");
+              } catch {
+                // Expected: nothing listens on this port. The context's own
+                // requestfailed event, awaited below, is what this exists to
+                // trigger.
+              }
+            });
+
+            await Promise.all([consoleErrorSeen, webErrorSeen, requestFailedSeen]);
+            return { ok: true };
+          },
+        });
+
+        const { stepRecordId } = await experimental_recordStep(pageEventsStep, {}, {
+          name: "page-events-step",
+          rootDir,
+          request: requestContext,
+          page,
+        });
+
+        const record = readStepRecord(stepRecordDir(stepRecordId)) as StepRecord;
+        // At least the explicit console.error() call above — Chromium also
+        // auto-logs an uncaught exception as a console error of its own, so
+        // this is >= 1, not exactly 1 (same fact tests/page-events-step-
+        // record.test.ts's own assertion is built around).
+        expect(record.page_events?.console_errors?.length ?? 0).toBeGreaterThanOrEqual(1);
+        expect(record.page_events?.console_errors?.some((entry) => entry.text === "console error")).toBe(true);
+        expect(record.page_events?.page_errors).toHaveLength(1);
+        expect(record.page_events?.page_errors?.[0]?.message).toBe("uncaught error");
+        expect(record.page_events?.failed_requests).toHaveLength(1);
+      } finally {
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "swallows a dispose() failure on the adopted page's own listener removal, and still writes the record it already had",
+    async () => {
+      const browser = await chromium.launch();
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      const offSpy = vi.spyOn(context, "off").mockImplementation(() => {
+        throw new Error("boom from off()");
+      });
+      try {
+        const simpleStep = defineStep({
+          description: "a trivial step, to exercise dispose() failing on an adopted page",
+          args: z.object({}),
+          returns: z.object({}),
+          async run({ page }) {
+            await page.title();
+            return {};
+          },
+        });
+
+        const { stepRecordId } = await experimental_recordStep(simpleStep, {}, {
+          name: "dispose-throws",
+          rootDir,
+          request: requestContext,
+          page,
+        });
+
+        const record = readStepRecord(stepRecordDir(stepRecordId)) as StepRecord;
+        // The step itself still succeeded (dispose() runs after the result
+        // is already settled) — only the evidence this backstop provides
+        // defaults, per create-context.ts's own "no evidence file is known
+        // to exist in that case" fallback.
+        expect(record.status).toBe("ok");
+        expect(record.evidence.screenshots).toEqual([]);
+        expect(record.evidence.trace).toBeUndefined();
+      } finally {
+        offSpy.mockRestore();
+        await context.close();
+        await browser.close();
+      }
+    },
+  );
+
   if (!chromiumAvailable) {
     // Warns rather than silently skipping: only skip when chromium is
     // genuinely unavailable in this environment (this file's own
@@ -488,6 +600,43 @@ describe("experimental_recordStep: use", () => {
         return { cartId };
       },
     });
+  }
+
+  // A second candidate producer for `cartId`, distinct from `openCartStep` —
+  // exists only so a key can have two candidates, needed to exercise the
+  // "two `use` ids disagree about which candidate producer fills the same
+  // key" refusal below (`from`'s multi-candidate form, docs/spec.md
+  // "Chaining steps").
+  const importCartArgs = z.object({});
+  const importCartReturns = z.object({ cartId: z.string() });
+  const importCartStep = defineStep({
+    pattern: "a cart is imported",
+    description: "Import an existing cart, as a second candidate producer of cartId",
+    args: importCartArgs,
+    returns: importCartReturns,
+    mutates: true,
+    async run({ request }) {
+      const res = await request.post("/carts");
+      const body = await res.json();
+      return { cartId: body.id };
+    },
+  });
+
+  function makeAddItemMultiCandidateStep() {
+    return defineStep({
+      description: "Add an item, accepting cartId from either candidate producer",
+      args: z.object({ cartId: z.string() }),
+      returns: z.object({ cartId: z.string() }),
+      mutates: true,
+      from: { cartId: [[openCartStep, "id"], [importCartStep, "cartId"]] },
+      run({}, { cartId }) {
+        return { cartId };
+      },
+    });
+  }
+
+  function bareStepsDir(): string {
+    return path.join(rootDir, ".nukadoko", "records", "steps");
   }
 
   beforeEach(async () => {
@@ -572,6 +721,77 @@ describe("experimental_recordStep: use", () => {
       : [];
     expect(after).toEqual(before);
   });
+
+  it("two use ids that fill the same key from two different candidate producers are refused, before any step record is written for this call", async () => {
+    const opened = await experimental_recordStep(
+      openCartStep,
+      {},
+      { name: "open-cart", rootDir, request: requestContext },
+    );
+    const imported = await experimental_recordStep(
+      importCartStep,
+      {},
+      { name: "import-cart", rootDir, request: requestContext },
+    );
+    const before = readdirSync(bareStepsDir());
+
+    await expect(
+      experimental_recordStep(makeAddItemMultiCandidateStep(), {}, {
+        name: "add-item-multi",
+        rootDir,
+        request: requestContext,
+        use: [opened.stepRecordId, imported.stepRecordId],
+      }),
+    ).rejects.toThrow(/cannot tell which one should win/);
+
+    // Neither `use` id ambiguity, nor the call that raised it, wrote a
+    // step record for this call — same "checked before anything is
+    // written" rule the unknown-id refusal above already follows.
+    expect(readdirSync(bareStepsDir())).toEqual(before);
+  });
+
+  it("a returns-validation failure still writes a failed record carrying the use-filled args and the used entry", async () => {
+    const opened = await experimental_recordStep(
+      openCartStep,
+      {},
+      { name: "open-cart", rootDir, request: requestContext },
+    );
+    const badReturnsStep = defineStep({
+      description: "Fills cartId from use, then returns a shape its own schema rejects",
+      args: addItemArgs,
+      returns: z.object({ cartId: z.string(), itemCount: z.number() }),
+      mutates: true,
+      from: { cartId: [openCartStep, "id"] },
+      run({}, { cartId }) {
+        return { cartId } as any;
+      },
+    });
+
+    const before = new Set(readdirSync(bareStepsDir()));
+    await expect(
+      experimental_recordStep(badReturnsStep, {}, {
+        name: "add-item-bad-returns",
+        rootDir,
+        request: requestContext,
+        use: [opened.stepRecordId],
+      }),
+    ).rejects.toThrow(/returns validation failed/);
+
+    const newIds = readdirSync(bareStepsDir()).filter((id) => !before.has(id));
+    expect(newIds).toHaveLength(1);
+    const record = readStepRecord(stepRecordDir(newIds[0]!)) as StepRecord;
+    expect(record.status).toBe("failed");
+    expect(record.status === "failed" && record.error.kind).toBe("result_invalid");
+    expect(record.args).toEqual({ cartId: opened.result.id });
+    // Unlike an "ok" record's own `used` (stripped of `result` by
+    // `omitUsedResults`, tested above), a failed record's `used` keeps the
+    // full upstream result — `src/context/used.ts`'s own documented reason:
+    // a failed step record can be read alone, with no second record.json
+    // to open just to see what it read.
+    expect(record.used).toEqual([
+      { step_record_id: opened.stepRecordId, step: "open-cart", result: opened.result },
+    ]);
+  });
 });
 
 describe("experimental_recordStep: a malformed from entry", () => {
@@ -615,5 +835,273 @@ describe("experimental_recordStep: a malformed from entry", () => {
         { name: "malformed-from", rootDir, request: requestContext },
       ),
     ).rejects.toThrow(/from\.cartId is not usable/);
+  });
+});
+
+// Responsibility: the step_error path — `step.run` itself throwing, as
+// distinct from an args/returns schema failure. Both the caught value's own
+// message (an `Error`) and its `String(...)` fallback (a non-`Error` throw)
+// are exercised, since the failed record's own `error.message` is built
+// differently for each.
+describe("experimental_recordStep: the step's own run() throws", () => {
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("external-driver-project");
+    requestContext = await playwrightRequest.newContext();
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await removeTempDir(rootDir);
+  });
+
+  function stepRecordDir(recordId: string): string {
+    return path.join(rootDir, ".nukadoko", "records", "steps", recordId);
+  }
+
+  it("rethrows the step's own Error unchanged and writes a failed record with kind step_error", async () => {
+    const boom = new Error("boom from the step");
+    const throwingStep = defineStep({
+      description: "Always throws an Error instance",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        throw boom;
+      },
+    });
+
+    let thrown: unknown;
+    try {
+      await experimental_recordStep(throwingStep, {}, { name: "throwing-step", rootDir, request: requestContext });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(boom);
+
+    const [recordId] = readdirSync(path.join(rootDir, ".nukadoko", "records", "steps"));
+    const record = readStepRecord(stepRecordDir(recordId!)) as StepRecord;
+    expect(record.status === "failed" && record.error).toEqual({ kind: "step_error", message: "boom from the step" });
+  });
+
+  it("stringifies a non-Error thrown value into the failed record's own error message", async () => {
+    const throwingStep = defineStep({
+      description: "Throws a plain string, not an Error instance",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        throw "not an Error object";
+      },
+    });
+
+    let thrown: unknown;
+    try {
+      await experimental_recordStep(throwingStep, {}, {
+        name: "throwing-step-string",
+        rootDir,
+        request: requestContext,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe("not an Error object");
+
+    const [recordId] = readdirSync(path.join(rootDir, ".nukadoko", "records", "steps"));
+    const record = readStepRecord(stepRecordDir(recordId!)) as StepRecord;
+    expect(record.status === "failed" && record.error).toEqual({
+      kind: "step_error",
+      message: "not an Error object",
+    });
+  });
+});
+
+// Responsibility: `experimental_recordStep`'s own `stepNameOf` callback
+// (passed to `createStepContext`, read by `ctx.call`'s own `partName`) —
+// names the top-level step by `options.name` when `ctx.call` reports about
+// it, and falls back to `create-context.ts`'s own generic wording for any
+// other step, since this module only ever knows the discovered name of the
+// one step it was called for.
+describe("experimental_recordStep: ctx.call diagnostics name the caller by its own registered name", () => {
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("external-driver-project");
+    requestContext = await playwrightRequest.newContext();
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await removeTempDir(rootDir);
+  });
+
+  it("names the caller by its registered name, and the undeclared part by the generic 'never registered' wording, in one PartNotDeclaredError", async () => {
+    const undeclaredPart = defineStep({
+      description: "Never listed in the caller's own parts",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const callerStep = defineStep({
+      description: "Calls a part it never declared in parts",
+      args: z.object({}),
+      returns: z.object({}),
+      async run({ call }) {
+        return call(undeclaredPart, {});
+      },
+    });
+
+    await expect(
+      experimental_recordStep(callerStep, {}, { name: "caller-step", rootDir, request: requestContext }),
+    ).rejects.toThrow(/Step "caller-step" called "a step discovery never registered" through call\(\)/);
+  });
+});
+
+// Responsibility: a failed execution still carries what it measured before
+// failing — `experimental_recordStep`'s own snapshots (sections, calls,
+// required_env) are taken unconditionally after `step.run` settles, not only
+// on the success path, the same "measurement must never depend on the
+// outcome" rule the ok-status record already follows.
+describe("experimental_recordStep: a failed run still records what it measured before failing", () => {
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("external-driver-project");
+    requestContext = await playwrightRequest.newContext();
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await removeTempDir(rootDir);
+  });
+
+  function stepRecordDir(recordId: string): string {
+    return path.join(rootDir, ".nukadoko", "records", "steps", recordId);
+  }
+
+  it("carries sections, calls, and required_env onto a failed record when the failure only happens at the very end", async () => {
+    const declaredPart = defineStep({
+      description: "A declared part the composite step calls successfully before failing",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const compositeStep = defineStep({
+      description: "Opens a section, calls a declared part, polls once, reads an env var, then fails its own returns schema",
+      args: z.object({}),
+      returns: z.object({ ok: z.boolean() }),
+      parts: [declaredPart],
+      async run({ section, call, poll, requireEnv }) {
+        section("setup");
+        await call(declaredPart, {});
+        await poll(async () => "done");
+        requireEnv("API_TOKEN");
+        return {} as any;
+      },
+    });
+
+    let thrown: unknown;
+    try {
+      await experimental_recordStep(compositeStep, {}, { name: "composite-step", rootDir, request: requestContext });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toMatch(/returns validation failed/);
+
+    const [recordId] = readdirSync(path.join(rootDir, ".nukadoko", "records", "steps"));
+    const record = readStepRecord(stepRecordDir(recordId!)) as StepRecord;
+    expect(record.status).toBe("failed");
+    expect(record.sections?.[0]?.label).toBe("setup");
+    expect(record.calls).toHaveLength(1);
+    expect(record.polls).toHaveLength(1);
+    expect(record.required_env).toEqual(["API_TOKEN"]);
+  });
+
+  it("carries sections, calls, polls, and required_env onto an ok record too — the same measurement, on the other status branch", async () => {
+    const declaredPart = defineStep({
+      description: "A declared part the composite step calls successfully",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const compositeStep = defineStep({
+      description: "Opens a section, calls a declared part, polls once, reads an env var, then succeeds",
+      args: z.object({}),
+      returns: z.object({ ok: z.boolean() }),
+      parts: [declaredPart],
+      async run({ section, call, poll, requireEnv }) {
+        section("setup");
+        await call(declaredPart, {});
+        await poll(async () => "done");
+        requireEnv("API_TOKEN");
+        return { ok: true };
+      },
+    });
+
+    const { stepRecordId } = await experimental_recordStep(compositeStep, {}, {
+      name: "composite-step-ok",
+      rootDir,
+      request: requestContext,
+    });
+
+    const record = readStepRecord(stepRecordDir(stepRecordId)) as StepRecord;
+    expect(record.status).toBe("ok");
+    expect(record.sections?.[0]?.label).toBe("setup");
+    expect(record.calls).toHaveLength(1);
+    expect(record.polls).toHaveLength(1);
+    expect(record.required_env).toEqual(["API_TOKEN"]);
+  });
+});
+
+// Responsibility: `config.envFiles ?? []` — a project whose config sets no
+// `envFiles` at all still has to load and classify env files (the
+// `loadEnvFiles`/`classifyEnvFiles` calls just below it). `envFiles` has no
+// zod default (`z.array(z.string()).optional()`, src/config/schema.ts), so
+// `undefined` is a real value this module has to fall back from, not merely
+// a defensive guard against a value the schema already rules out.
+describe("experimental_recordStep: a project with no envFiles at all", () => {
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("external-driver-no-envfiles-project");
+    requestContext = await playwrightRequest.newContext();
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await removeTempDir(rootDir);
+  });
+
+  it("still runs and writes an ok record when config.envFiles is omitted", async () => {
+    const trivialStep = defineStep({
+      description: "A step with nothing to do, to exercise a config with no envFiles at all",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+
+    const { result, stepRecordId } = await experimental_recordStep(trivialStep, {}, {
+      name: "trivial-step",
+      rootDir,
+      request: requestContext,
+    });
+    expect(result).toEqual({});
+
+    const record = readStepRecord(
+      path.join(rootDir, ".nukadoko", "records", "steps", stepRecordId),
+    ) as StepRecord;
+    expect(record.status).toBe("ok");
   });
 });
