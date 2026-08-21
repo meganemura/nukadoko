@@ -63,6 +63,32 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     expect(result.notices.some((notice) => notice.includes("ghost-step"))).toBe(true);
   });
 
+  it("points at the `name` option on an external record whose step is not in the vocabulary", () => {
+    const vocabulary: Vocabulary = new Map();
+    const record = makeRecord("r-1", "ghost-step", {}, { kind: "external" });
+
+    const result = draftFor({
+      orderedIds: ["r-1"],
+      recordsById: new Map([["r-1", record]]),
+      vocabulary,
+    });
+
+    expect(result.featureText).toContain("experimental_recordStep");
+  });
+
+  it("does not add the `name` option hint for a `do`-originated record", () => {
+    const vocabulary: Vocabulary = new Map();
+    const record = makeRecord("r-1", "ghost-step", {}, { kind: "do" });
+
+    const result = draftFor({
+      orderedIds: ["r-1"],
+      recordsById: new Map([["r-1", record]]),
+      vocabulary,
+    });
+
+    expect(result.featureText).not.toContain("experimental_recordStep");
+  });
+
   it("names a step record whose step is now a compat step, with no pattern to render", () => {
     const compatEntry: VocabularyEntry = {
       kind: "compat",

@@ -110,11 +110,19 @@ function buildEntry(
   const stepName = record.step;
   const entry = vocabulary.get(stepName);
   if (entry === undefined) {
+    // Only an "external" record's step name comes from a hand-typed string
+    // (experimental_recordStep's own `name` option); a "do"/"run" record's
+    // step name always came from discovery itself, so a mismatch there has
+    // some other cause and this hint would misdirect.
+    const externalHint =
+      record.kind === "external"
+        ? ` (experimental_recordStep's "name" option must match the name discovery assigns to this step's file)`
+        : "";
     return {
       kind: "no-line",
       recordId,
       stepName,
-      reason: `step "${stepName}" is not in the vocabulary this project discovers now; args: ${formatValue(record.args)}`,
+      reason: `step "${stepName}" is not in the vocabulary this project discovers now${externalHint}; args: ${formatValue(record.args)}`,
     };
   }
   if (entry.kind !== "typed") {
