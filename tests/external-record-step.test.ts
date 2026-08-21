@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -193,5 +193,121 @@ describe("experimental_recordStep", () => {
     // Nothing this call could have written a record for: the refusal fires
     // before `recordId`/`evidenceDir` are ever created.
     expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
+  });
+});
+
+describe("experimental_recordStep: use", () => {
+  // The mechanical points `use` itself is responsible for — `nuka do
+  // --use`'s own meaning, reached through the same src/cli/resolve-use.ts
+  // function (src/external/record-step.ts's own header). The heavier claim
+  // this option exists for (a harvested draft built from a `use`-chained
+  // execution stays green across a swapped backend) is
+  // tests/external-use-run.test.ts's own job, not this file's — that one
+  // needs a `from`-declaring on-disk step twin this fixture's single step
+  // doesn't have.
+
+  let server: Server;
+  let url: string;
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  const addItemArgs = z.object({ cartId: z.string() });
+  const addItemReturns = z.object({ cartId: z.string() });
+
+  function makeAddItemStep() {
+    return defineStep({
+      pattern: "an item is added",
+      description: "Add an item to the open cart (no real HTTP call: this file's own point is `use`'s bookkeeping, not the transport)",
+      args: addItemArgs,
+      returns: addItemReturns,
+      mutates: true,
+      from: { cartId: [openCartStep, "id"] },
+      run({}, { cartId }) {
+        return { cartId };
+      },
+    });
+  }
+
+  beforeEach(async () => {
+    ({ server, url } = await startCartServer());
+    rootDir = await copyFixtureToTempDir("external-driver-project");
+    requestContext = await playwrightRequest.newContext({ baseURL: url });
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await removeTempDir(rootDir);
+  });
+
+  function stepRecordDir(recordId: string): string {
+    return path.join(rootDir, ".nukadoko", "records", "steps", recordId);
+  }
+
+  it("fills a `from` key from a previous call's own step record, and records it in `used`", async () => {
+    const opened = await experimental_recordStep(
+      openCartStep,
+      {},
+      { name: "open-cart", rootDir, request: requestContext },
+    );
+    const added = await experimental_recordStep(makeAddItemStep(), {}, {
+      name: "add-item",
+      rootDir,
+      request: requestContext,
+      use: [opened.stepRecordId],
+    });
+
+    expect(added.result).toEqual({ cartId: opened.result.id });
+
+    const record = readStepRecord(stepRecordDir(added.stepRecordId)) as StepRecord;
+    expect(record.args).toEqual({ cartId: opened.result.id });
+    // Same shape a scenario's own `from` injection leaves (tests/from-
+    // chain.test.ts): `{ step_record_id, step }`, no `result` — `nuka
+    // harvest`'s own name match (src/harvest/categorize-args.ts) only ever
+    // needs the step name, not the value again.
+    expect(record.used).toEqual([{ step_record_id: opened.stepRecordId, step: "open-cart" }]);
+  });
+
+  it("an explicit args key wins over use for that same key — same priority nuka do --use gives --args", async () => {
+    const opened = await experimental_recordStep(
+      openCartStep,
+      {},
+      { name: "open-cart", rootDir, request: requestContext },
+    );
+    const added = await experimental_recordStep(
+      makeAddItemStep(),
+      { cartId: "explicit-cart-id" },
+      { name: "add-item", rootDir, request: requestContext, use: [opened.stepRecordId] },
+    );
+
+    expect(added.result).toEqual({ cartId: "explicit-cart-id" });
+
+    const record = readStepRecord(stepRecordDir(added.stepRecordId)) as StepRecord;
+    expect(record.args).toEqual({ cartId: "explicit-cart-id" });
+    // `use` never actually filled anything here (its own candidate key was
+    // already set by `args`), so nothing is cited — same "no injection
+    // means no used entry" rule tests/from-chain.test.ts already covers for
+    // a scenario's own `from`.
+    expect(record.used).toBeUndefined();
+  });
+
+  it("an unknown use id is refused before any step record is written for this call", async () => {
+    const before = existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))
+      ? readdirSync(path.join(rootDir, ".nukadoko", "records", "steps"))
+      : [];
+
+    await expect(
+      experimental_recordStep(makeAddItemStep(), { cartId: "x" }, {
+        name: "add-item",
+        rootDir,
+        request: requestContext,
+        use: ["no-such-record"],
+      }),
+    ).rejects.toThrow(/no such step record/);
+
+    const after = existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))
+      ? readdirSync(path.join(rootDir, ".nukadoko", "records", "steps"))
+      : [];
+    expect(after).toEqual(before);
   });
 });

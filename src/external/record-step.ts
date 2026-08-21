@@ -3,6 +3,7 @@ import path from "node:path";
 import type { APIRequestContext } from "playwright";
 import type { z } from "zod";
 import { formatValidationIssues } from "../binding/format-issues.js";
+import { resolveUse, type ResolveUseSuccess } from "../cli/resolve-use.js";
 import { loadConfig } from "../config/load-config.js";
 import { BUILTIN_FIXTURE_NAMES } from "../context.js";
 import { buildStepFixtures, createStepContext, type DisposeResult } from "../context/create-context.js";
@@ -10,13 +11,14 @@ import { loadEnvFiles } from "../context/env.js";
 import { mergeTruncated } from "../context/evidence.js";
 import { omitUsedResults } from "../context/used.js";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
+import { readStepRecordById } from "../record/read-step-record.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact } from "../secrets/redact.js";
-import type { Step } from "../step/define-step.js";
+import { fromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 
 // Responsibility: run one typed step from inside a Playwright Test spec and
@@ -75,6 +77,42 @@ import { stepFixtureNames } from "../step/step-fixture-names.js";
 // fail its own test the normal way: the failure propagates exactly as if
 // the wrapped plain function itself had thrown.
 //
+// `options.use` (added after this module first shipped without it) is
+// `nuka do --use`'s own meaning, reached through the same mechanism
+// (src/cli/resolve-use.ts's `resolveUse`): a spec that reads a previous
+// call's own `result` and passes it into the next call's `args` — the
+// natural way to write chained calls by hand — never left anything in
+// `used` for that chain, so `nuka harvest` (which only ever sees the step
+// records, never the spec source) had no way to tell the value apart from
+// one typed in by a human, and baked that one call's own id-of-the-moment
+// into the draft as a literal. A draft built that way stayed green only by
+// accident, against whichever backend happened to still hold that literal
+// in memory; swapping the backend broke it, silently, for a reason no line
+// in the feature file named. `use` closes that gap by recording the same
+// provenance `--use` already does, so a chained call now leaves `nuka
+// harvest` the evidence it needs to render the key as a chain instead of a
+// value.
+//
+// `resolveUse`'s own `stepNameOf: ReadonlyMap<Step, string>` needs a name
+// for every upstream `Step` object a `from` entry might reference, and this
+// module cannot get that from this project's own discovery — this file's
+// own header, above, already explains why: a `Step` object discovery
+// produces (via `scoped.import`) never equals the one a caller's own
+// `import` produced, so a discovered vocabulary's map would never match a
+// `from` entry's own `Step` reference. `externalStepNames` (a
+// process-lifetime `WeakMap<Step, string>`, below) is the name source
+// instead: every call registers its own `step`/`name` pair there,
+// regardless of whether it uses `use` itself, so a later call's `from`
+// entries resolve against whatever this same process already recorded.
+// That is also this feature's one real limit, worth stating plainly rather
+// than leaving a caller to discover it by a refusal: `use` here only
+// resolves against an upstream step this same process already ran through
+// `experimental_recordStep` — an id minted by `nuka do`, or by a
+// *different* process's own `experimental_recordStep` calls, reads back
+// fine from disk but was never registered here, so `resolveUse` refuses it
+// the same way it refuses an id naming an unrelated step (loud, not
+// silent, matching this project's own "nothing breaks silently" rule).
+//
 // EXPERIMENTAL, marked by name (`experimental_` first, matching
 // `experimental_callWebmcpTool`'s own convention — src/webmcp/call-tool.ts)
 // rather than by a runtime flag, for the reason that module's own header
@@ -86,6 +124,11 @@ import { stepFixtureNames } from "../step/step-fixture-names.js";
 //   - the API shape above (three exported names, one call site) has run
 //     unchanged against a real Playwright Test suite migrated this way,
 //     not only against this package's own tests
+// A third condition held once and no longer needs restating as a
+// precondition, only as a fact: before `use` existed, a spec that chained
+// calls by passing a previous `result` into the next `args` was not
+// actually practical to harvest (the paragraph above, on `use`, is the
+// record of that).
 
 /** Every `StepFixtures` name this module can build without a browser page
  * (`BUILTIN_FIXTURE_NAMES`, src/context.ts, minus `page`/`context`) — see
@@ -94,6 +137,15 @@ import { stepFixtureNames } from "../step/step-fixture-names.js";
 const SUPPORTED_FIXTURE_NAMES = new Set(
   BUILTIN_FIXTURE_NAMES.filter((name) => name !== "page" && name !== "context"),
 );
+
+/** `Step` -> the `name` its own `experimental_recordStep` call was given,
+ * accumulated across every call this process makes — this file's own header
+ * (the `options.use` paragraph) explains why this, not this project's own
+ * discovery, is `use`'s name source. Module-scoped on purpose: a `WeakMap`
+ * lets a `Step` object be the key without keeping it alive forever, and one
+ * shared instance is what lets a later call's `from` entries resolve
+ * against an earlier call's own `step` in the same process. */
+const externalStepNames = new WeakMap<Step, string>();
 
 /** Thrown when `step`'s own fixture needs (its `run`'s destructured names,
  * closed transitively over `parts`) include a name this module cannot
@@ -138,6 +190,19 @@ export interface ExperimentalRecordStepOptions {
    * header); never disposed here — closing it stays whichever caller
    * opened it's own job (docs/spec.md "The second door"). */
   request: APIRequestContext;
+  /** `nuka do --use <record-id>`'s own meaning (docs/spec.md "Single steps
+   * (the agent path)"), repeatable the same way: each id fills whichever of
+   * `step`'s own `from` keys that step record's step is named by, and lands
+   * in this execution's own `used` for `nuka harvest` to read back as a
+   * chain (this file's own header, the `options.use` paragraph). A key
+   * `args` (the second parameter, above) already set wins over a `use`
+   * value for that same key — the same priority `nuka do` gives `--args`.
+   * Omit it, or pass `[]`, for a call that fills every `from`-eligible key
+   * through `args` directly; unrelated to whether `step` declares `from` at
+   * all. Every id here must name a step this same process already recorded
+   * through `experimental_recordStep` — see this file's own header for why
+   * an id from anywhere else is refused. */
+  use?: readonly string[];
 }
 
 export interface ExperimentalStepExecution<TReturns extends z.ZodTypeAny> {
@@ -163,18 +228,39 @@ export interface ExperimentalStepExecution<TReturns extends z.ZodTypeAny> {
  * @throws {UnsupportedExternalFixtureError} `step`'s own fixture needs (or
  * any of its `parts`') name `page`/`context`, or a `config.fixtures` entry
  * — before any step record is written.
+ * @throws {Error} an `options.use` id is unknown, names a non-`"ok"` step
+ * record, names a step that is not registered here (this file's own
+ * header) or is not among `step.from`'s upstreams, is missing the result
+ * key `from` names, or two `use` ids disagree about which producer fills
+ * the same key — before any step record is written, the same family as
+ * {@link UnsupportedExternalFixtureError}.
  * @throws {Error} `args` failed `step.args`, or `step`'s own return value
  * failed `step.returns` — after a `status: "failed"` step record is
  * written.
  * Also rethrows whatever `step.run` itself threw, unchanged, after writing
  * the same kind of failed record.
+ *
+ * `args` is `Partial<z.input<TArgs>>`, not the exact shape (loosened when
+ * `use` was added): a `Step<TArgs, TReturns>` never carries its own `TFrom`
+ * (`defineStep`'s return type erases it), so nothing here can tell, at
+ * compile time, which of `TArgs`'s keys `options.use` might fill instead —
+ * the same reason a caller who omits a key `use` does *not* end up filling
+ * still gets a real, thrown `args validation failed` error, just at run
+ * time instead of at the type checker.
  */
 export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
   step: Step<TArgs, TReturns>,
-  args: z.input<TArgs>,
+  args: Partial<z.input<TArgs>>,
   options: ExperimentalRecordStepOptions,
 ): Promise<ExperimentalStepExecution<TReturns>> {
-  const { name, rootDir, request } = options;
+  const { name, rootDir, request, use = [] } = options;
+
+  // Registered before anything else, unconditionally — this call's own
+  // `step`/`name` pair is what lets a *later* call's `use` resolve a `from`
+  // entry naming `step` as an upstream, regardless of whether this call
+  // itself used `use`, and regardless of whether it goes on to succeed
+  // (this file's own header, the `externalStepNames` doc comment).
+  externalStepNames.set(step, name);
 
   const fixtureNames = stepFixtureNames(step);
   for (const fixtureName of fixtureNames) {
@@ -184,6 +270,58 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
   }
 
   const config = await loadConfig(rootDir);
+
+  // `use` resolved fully here, in setup, before `recordId`/`evidenceDir`
+  // exist — mirrors `nuka do`'s own setup-phase `--use` handling
+  // (src/cli/do.ts) exactly: every id is checked, and the two-different-
+  // producers-for-one-key conflict is caught, before anything is written.
+  // `useStepNameOf` only ever holds entries for `step.from`'s own candidate
+  // `Step` objects (plus `step` itself) — this file's own header explains
+  // why `externalStepNames` is where those names come from. Named apart
+  // from `createStepContext`'s own `stepNameOf` option, below, which
+  // answers a different question (`ctx.call`'s naming) from a narrower map
+  // (`step` only).
+  const useStepNameOf = new Map<Step, string>([[step, name]]);
+  for (const fromEntry of Object.values(step.from)) {
+    for (const [upstream] of fromCandidates(fromEntry)) {
+      const upstreamName = externalStepNames.get(upstream);
+      if (upstreamName !== undefined) {
+        useStepNameOf.set(upstream, upstreamName);
+      }
+    }
+  }
+
+  const resolvedUses: ResolveUseSuccess[] = [];
+  for (const useRecordId of use) {
+    const resolved = resolveUse(useRecordId, step, useStepNameOf, (id) =>
+      readStepRecordById(rootDir, config.stateDir, id),
+    );
+    if (!resolved.ok) {
+      throw new Error(resolved.message);
+    }
+    resolvedUses.push(resolved);
+  }
+
+  // Two different `use` ids filling the same key from two different
+  // candidate producers — the same ambiguity `nuka do --use` refuses
+  // (src/cli/do.ts), replicated here rather than left for `step.args`'
+  // own schema to catch (a schema has no way to tell "two candidates
+  // disagree" from "one candidate supplied a value we don't like").
+  const useProducerByKey = new Map<string, string>();
+  for (const resolved of resolvedUses) {
+    for (const key of Object.keys(resolved.filled)) {
+      const existingProducer = useProducerByKey.get(key);
+      if (existingProducer !== undefined && existingProducer !== resolved.used.step) {
+        throw new Error(
+          `use: key "${key}" is filled by both step "${existingProducer}" and step ` +
+            `"${resolved.used.step}". These are different candidate producers for the same ` +
+            `\`from\` key, and experimental_recordStep cannot tell which one should win`,
+        );
+      }
+      useProducerByKey.set(key, resolved.used.step);
+    }
+  }
+
   const recordId = generateStepRecordId();
   const relativeDir = path.join(config.stateDir, "records", "steps", recordId);
   const evidenceDir = path.join(rootDir, relativeDir);
@@ -216,6 +354,35 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
   });
 
   const startedAt = new Date();
+
+  // `use`'s actual effect — applied here, not in setup, so `recordUsed`
+  // rides `contextHandle`'s own collector (it didn't exist yet in setup);
+  // mirrors `nuka do`'s own application loop (src/cli/do.ts) exactly,
+  // including its priority (`args`, the parameter above, still wins for a
+  // key it already set) and its "only a `use` id that actually filled a key
+  // lands in `used`" rule. Builds a fresh object rather than mutating
+  // `args` in place — unlike `nuka do`'s own `parsedArgs` (freshly parsed
+  // from `--args` JSON, owned outright by that one call), `args` here is
+  // the caller's own live object, and mutating it would leak this
+  // function's own bookkeeping back into the calling spec.
+  let effectiveArgs: unknown = args;
+  if (typeof args === "object" && args !== null && !Array.isArray(args)) {
+    const argsObject: Record<string, unknown> = { ...(args as Record<string, unknown>) };
+    for (const resolved of resolvedUses) {
+      let filledAnyKey = false;
+      for (const [key, value] of Object.entries(resolved.filled)) {
+        if (!(key in argsObject)) {
+          argsObject[key] = value;
+          filledAnyKey = true;
+        }
+      }
+      if (filledAnyKey) {
+        contextHandle.recordUsed(resolved.used.step_record_id, resolved.used.step, resolved.used.result);
+      }
+    }
+    effectiveArgs = argsObject;
+  }
+
   let status: "ok" | "failed";
   let result: unknown;
   let errorMessage = "";
@@ -225,7 +392,7 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
   // thrown value, unchanged, for a step_error (this file's own header).
   let thrown: unknown;
 
-  const argsResult = step.args.safeParse(args);
+  const argsResult = step.args.safeParse(effectiveArgs);
   if (!argsResult.success) {
     status = "failed";
     errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
@@ -286,7 +453,13 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
           step_record_id: recordId,
           step: name,
           kind: "external",
-          args,
+          // `effectiveArgs`, not the caller's own `args` parameter: the
+          // same "the record's own `args` is what actually ran, `use`-
+          // filled keys included" rule `nuka do` follows for `parsedArgs`
+          // (src/cli/do.ts) — a chained key both lands here *and* is named
+          // in `used`, below, which is exactly the pairing `nuka harvest`
+          // reads to tell a chain apart from a literal.
+          args: effectiveArgs,
           result,
           status: "ok",
           environment: DEFAULT_ENVIRONMENT_NAME,
@@ -315,7 +488,8 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
           step_record_id: recordId,
           step: name,
           kind: "external",
-          args,
+          // Same reasoning as the `status === "ok"` branch above.
+          args: effectiveArgs,
           error: { message: errorMessage, kind: errorKind ?? "step_error" },
           status: "failed",
           environment: DEFAULT_ENVIRONMENT_NAME,
