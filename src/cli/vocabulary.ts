@@ -12,7 +12,7 @@ import {
 } from "../discover/discover-steps.js";
 import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
-import { fromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
+import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
 import { stepNeeds } from "../step/step-needs.js";
@@ -188,35 +188,73 @@ interface FromCandidateSummary {
   readonly key: string;
 }
 
+/** One `from` key this file's own rendering could not read at all — an
+ * `as`-cast declaration whose runtime value is neither a `[Step, string]`
+ * tuple nor a list of them (`tryFromCandidates` returning `null`). Carries
+ * the key by itself, alongside the step's own `name` a reader already has
+ * from the enclosing `StepSummary`/`TypedStepContract` (a typed step's own
+ * `name` *is* its file's basename, discovery's own naming rule — so "which
+ * file" and "which step" are already the same one field, not two this
+ * needs to repeat). */
+export interface FromKeyError {
+  readonly key: string;
+  readonly message: string;
+}
+
+/** `fromSummary`/`fromHumanReadable` share this shape: the entries they
+ * could render, and, separately, the keys they could not — so one step
+ * with one broken `from` key still shows every other key it declares
+ * (and every other step in the vocabulary), rather than the whole call
+ * throwing and taking the rest of `nuka steps`/`nuka describe`'s output
+ * down with it. */
+interface FromRendering<TRendered> {
+  readonly rendered: TRendered | undefined;
+  readonly errors: readonly FromKeyError[] | undefined;
+}
+
 /** `nuka steps --json`'s own rendering of a step's `from` — one entry per
  * key, `undefined` (hence omitted, `rationale`'s own convention) when the
- * step declares no `from` at all. A key with exactly one candidate keeps
- * the original `{ step, key }` object shape untouched (existing output for
- * existing steps does not change); a key with more than one is an array of
- * that same shape, `[{ step, key }, ...]` — deliberately not
- * always-an-array, so a consumer written against the single-candidate
- * shape keeps working, and a reader can tell "one candidate" from
- * "several" by checking `Array.isArray` (or simply `.length`) without a
- * separate field either way. */
+ * step declares no `from` at all, or when every key it declares turned out
+ * to be unreadable (`errors` on the same `FromRendering` is where that
+ * shows instead). A key with exactly one candidate keeps the original
+ * `{ step, key }` object shape untouched (existing output for existing
+ * steps does not change); a key with more than one is an array of that
+ * same shape, `[{ step, key }, ...]` — deliberately not always-an-array,
+ * so a consumer written against the single-candidate shape keeps working,
+ * and a reader can tell "one candidate" from "several" by checking
+ * `Array.isArray` (or simply `.length`) without a separate field either
+ * way. A key whose own entry is unreadable is left out of `rendered`
+ * entirely (nothing to show) and named in `errors` instead — not
+ * `{ step, key }` with placeholder values, which a reader could mistake
+ * for real data. */
 function fromSummary(
   from: StepFromMap,
   stepNames: StepNames,
-): Record<string, FromCandidateSummary | readonly FromCandidateSummary[]> | undefined {
+): FromRendering<Record<string, FromCandidateSummary | readonly FromCandidateSummary[]>> {
   const entries = Object.entries(from);
   if (entries.length === 0) {
-    return undefined;
+    return { rendered: undefined, errors: undefined };
   }
   const result: Record<string, FromCandidateSummary | readonly FromCandidateSummary[]> = {};
+  const errors: FromKeyError[] = [];
   for (const [key, entry] of entries) {
-    const candidates = fromCandidates(entry).map(
+    const candidates = tryFromCandidates(entry);
+    if (candidates === null) {
+      errors.push({ key, message: malformedFromEntryMessage(key, entry) });
+      continue;
+    }
+    const rendered = candidates.map(
       ([upstream, upstreamKey]): FromCandidateSummary => ({
         step: upstreamStepName(upstream, stepNames),
         key: upstreamKey,
       }),
     );
-    result[key] = candidates.length === 1 ? candidates[0]! : candidates;
+    result[key] = rendered.length === 1 ? rendered[0]! : rendered;
   }
-  return result;
+  return {
+    rendered: Object.keys(result).length > 0 ? result : undefined,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }
 
 /** `nuka steps --json`'s own rendering of a step's `parts` — the
@@ -242,19 +280,28 @@ function partsSummary(step: Step, stepNames: StepNames): readonly string[] | und
  * more than one candidate reads as "either of A or B" — spelled out so a
  * person skimming `nuka describe` sees the "exactly one of these, never
  * both" relationship the JSON form only implies through array length. */
-function fromHumanReadable(from: StepFromMap, stepNames: StepNames): Record<string, string> | undefined {
+function fromHumanReadable(from: StepFromMap, stepNames: StepNames): FromRendering<Record<string, string>> {
   const entries = Object.entries(from);
   if (entries.length === 0) {
-    return undefined;
+    return { rendered: undefined, errors: undefined };
   }
   const result: Record<string, string> = {};
+  const errors: FromKeyError[] = [];
   for (const [key, entry] of entries) {
-    const candidates = fromCandidates(entry).map(
+    const candidates = tryFromCandidates(entry);
+    if (candidates === null) {
+      errors.push({ key, message: malformedFromEntryMessage(key, entry) });
+      continue;
+    }
+    const rendered = candidates.map(
       ([upstream, upstreamKey]) => `${upstreamStepName(upstream, stepNames)}.${upstreamKey}`,
     );
-    result[key] = candidates.length === 1 ? candidates[0]! : `either of ${candidates.join(" or ")}`;
+    result[key] = rendered.length === 1 ? rendered[0]! : `either of ${rendered.join(" or ")}`;
   }
-  return result;
+  return {
+    rendered: Object.keys(result).length > 0 ? result : undefined,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }
 
 /** `nuka describe`'s own rendering of a step's `parts` — one
@@ -350,6 +397,18 @@ export interface StepSummary {
    * no `from` at all. Deliberately absent from `formatVocabulary`'s text
    * rendering below — `nuka steps` (non-JSON) stays one line per step. */
   readonly from?: Record<string, { step: string; key: string } | ReadonlyArray<{ step: string; key: string }>>;
+  /** Every `from` key this step declares whose own entry could not be read
+   * at all (docs/spec.md "Chaining steps" never sanctions the `as`-cast
+   * escape hatch that produces one, but nothing stops a step author from
+   * writing it anyway) — a bare string or a `Step` passed directly instead
+   * of wrapped in a `[step, "key"]` tuple, most often. Present only when at
+   * least one such key exists; that key is simply missing from `from`
+   * above rather than appearing there with placeholder values. A step with
+   * `from_errors` is otherwise still fully listed, alongside every other
+   * step in the vocabulary — the fact this field exists at all is what
+   * keeps one broken key from taking `nuka steps`/`nuka describe` down for
+   * every step, typed or compat, that has nothing wrong with it. */
+  readonly from_errors?: readonly FromKeyError[];
   /** Vocabulary names of the steps this step declares in its own `parts`
    * (docs/spec.md "Parts"), in declaration order — resolved through the
    * same `stepNames` lookup `from` uses, so an unregistered part reads
@@ -386,13 +445,15 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
       patterns: [entry.compat.patternSource],
     };
   }
+  const fromResult = fromSummary(entry.step.from, stepNames);
   const base = {
     name: entry.name,
     kind: "typed" as const,
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
-    from: fromSummary(entry.step.from, stepNames),
+    from: fromResult.rendered,
+    from_errors: fromResult.errors,
     parts: partsSummary(entry.step, stepNames),
   };
   // `stepNeeds` throws for a `run()` it can't read fixture names from at all
@@ -474,7 +535,12 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   // `needs` in the successful case).
   const needsErrorLabel =
     s.needs_error === undefined ? "" : s.needs_inferred !== undefined ? "  needs (inferred)" : "  needs unreadable";
-  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}${needsErrorLabel}`];
+  // A step whose `from` has at least one unreadable key gets the same kind
+  // of marker `needsErrorLabel` already does — the fact is worth a person's
+  // attention even in the one-line-per-step text listing, though the full
+  // list of broken keys, like `needs` itself, stays a `--json`-only detail.
+  const fromErrorLabel = s.from_errors !== undefined ? "  from unreadable" : "";
+  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}${needsErrorLabel}${fromErrorLabel}`];
   const patterns = s.patterns.length > 0 ? s.patterns : ["(no pattern)"];
   for (const pattern of patterns) {
     lines.push(...wrapIndented(pattern, width));
@@ -484,6 +550,11 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   }
   if (s.needs_error !== undefined) {
     lines.push(...wrapIndented(`needs: ${s.needs_error}`, width));
+  }
+  if (s.from_errors !== undefined) {
+    for (const fromError of s.from_errors) {
+      lines.push(...wrapIndented(`from: ${fromError.message}`, width));
+    }
   }
   return lines.join("\n");
 }
@@ -540,6 +611,11 @@ export interface TypedStepContract {
    * not `{}`, when the step declares no `from` at all — same convention as
    * `rationale` just above. */
   readonly from?: Record<string, string>;
+  /** Every `from` key this step declares whose own entry could not be read
+   * at all — same condition and same shape as `StepSummary.from_errors`
+   * (see that field's own doc comment), rendered here instead of there
+   * since `nuka describe` reads one step at a time. */
+  readonly from_errors?: readonly FromKeyError[];
   /** This step's own declared `parts` (docs/spec.md "Parts"), one entry
    * per part naming it and repeating its own `description` — the same
    * "no reverse index" scope `partsHumanReadable`'s own doc comment
@@ -576,6 +652,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames): 
         'compat steps have no type contract; promote this pattern to defineStep to add one (docs/spec.md "What compat steps lack")',
     };
   }
+  const fromResult = fromHumanReadable(entry.step.from, stepNames);
   return {
     kind: "typed",
     name: entry.name,
@@ -586,7 +663,8 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames): 
     // an `undefined`-valued key on its own, so a step with none simply has
     // no "rationale" key in the output.
     rationale: entry.step.rationale,
-    from: fromHumanReadable(entry.step.from, stepNames),
+    from: fromResult.rendered,
+    from_errors: fromResult.errors,
     parts: partsHumanReadable(entry.step, stepNames),
     args: z.toJSONSchema(entry.step.args),
     returns: z.toJSONSchema(entry.step.returns),

@@ -1,7 +1,7 @@
 import type { Pickle, PickleStep } from "@cucumber/messages";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
-import { fromCandidates, isStep, type Step } from "../step/define-step.js";
+import { isStep, tryFromCandidates, type Step } from "../step/define-step.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { matchPickleStepText } from "./feature-check.js";
 
@@ -240,15 +240,24 @@ export function checkFromOrder(
       // two-or-more-bound check, which fires regardless of required/optional.
       const required = isRequiredField(fieldSchema);
 
-      // Every *named* candidate — `fromCandidates` normalizes the single- and
-      // multi-candidate shapes uniformly, and a candidate whose upstream
+      // Every *named* candidate — `tryFromCandidates` normalizes the single-
+      // and multi-candidate shapes uniformly, and a candidate whose upstream
       // isn't even a valid, registered `Step` is left out of the count
       // entirely (that structural fact is validate-from.ts's own finding,
       // not re-derived here — same as before this per-candidate check
       // existed, just
-      // now per candidate instead of per key).
+      // now per candidate instead of per key). A structurally malformed
+      // entry (`tryFromCandidates` returning `null`) is skipped the same
+      // way, for the same reason: `validateStepFrom` already reports it as
+      // `from-structural-violation`, the same "skip an edge a structural
+      // finding already flagged" move src/check/parts-check.ts makes for
+      // `part-structural-violation`.
       const named: CandidateStatus[] = [];
-      for (const [upstream] of fromCandidates(entryValue)) {
+      const candidates = tryFromCandidates(entryValue);
+      if (candidates === null) {
+        continue;
+      }
+      for (const [upstream] of candidates) {
         const name = isStep(upstream) ? stepNameOf.get(upstream) : undefined;
         if (name === undefined) {
           continue;

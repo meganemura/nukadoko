@@ -172,20 +172,127 @@ export type FromCandidate = readonly [step: Step, key: string];
  * describe`) all read this shape. */
 export type StepFromMap = Readonly<Record<string, FromCandidate | readonly FromCandidate[]>>;
 
+/** True when `value` has the *shape* of one producer tuple — a two-element
+ * array whose second element is a string. Deliberately not also checking
+ * `isStep(value[0])`: whether the first element is actually a registered
+ * `Step` is validate-from.ts's own, more specific "not a Step" finding
+ * (`isStep`'s own check further down that module) — this function only
+ * decides whether `value` is shaped like a tuple at all, the one place
+ * `tryFromCandidates` below needs for both its single- and multi-candidate
+ * branches, so "shaped like a tuple" is judged the same way regardless of
+ * which shape a `from` entry's author happened to write. The second
+ * element being a string is what actually does the discriminating work:
+ * a genuine multi-candidate list's own first two entries are each
+ * themselves an array (`[[stepA, "k1"], [stepB, "k2"]]`), never a string at
+ * that position, so this never mistakes a two-candidate list for a single
+ * tuple even without checking `Array.isArray(value[0])` directly. */
+function isCandidateTuple(value: unknown): value is FromCandidate {
+  return Array.isArray(value) && value.length === 2 && typeof value[1] === "string";
+}
+
+/**
+ * Normalizes one `Step.from` entry to its full candidate list, the same as
+ * `fromCandidates` below, but returns `null` instead of throwing when
+ * `entry` is neither a well-formed single tuple nor a well-formed list of
+ * them. `FromMap`'s own compile-time checks (this file's own header) never
+ * let a mismatched entry compile, but a step author routing around them
+ * with `as any` (the escape hatch every static type system leaves open)
+ * can put anything there at runtime: a bare string, a `Step` passed
+ * directly instead of wrapped in a tuple, a plain object. Judging that
+ * needs the *whole* entry inspected, not just its first element the way the
+ * single-vs-multi discriminator alone does — checking only
+ * `Array.isArray(entry[0])` treats a string's first character and a plain
+ * object's missing index 0 both as "not an array", so both used to land in
+ * the single-candidate branch and then fail to destructure. Every reader of
+ * `Step.from` calls this function once per key instead of re-deriving that
+ * check itself, so "malformed" is decided in the same one place "single vs
+ * multi" already was.
+ *
+ * `null`, not `[]`: an empty array would make a required key look merely
+ * unfillable, the same outward shape a key that legitimately has zero
+ * candidates would have, losing the reason. `null`'s own type instead
+ * forces every caller to decide at compile time what a malformed entry
+ * means for it: src/step/validate-from.ts turns it into a reported
+ * `FromIssue` instead of a crash; src/cli/resolve-use.ts,
+ * src/cli/vocabulary.ts, src/harvest/categorize-args.ts, and
+ * src/run/run-scenario.ts each turn it into a message naming the broken key
+ * (`malformedFromEntryMessage` below); src/check/from-order.ts skips it,
+ * since a structural fact about the declaration is
+ * src/step/validate-from.ts's finding to report, not this module's own to
+ * repeat. `fromCandidates` below is the one caller left that still throws
+ * on `null`, kept for a caller with no `from` key of its own in scope to
+ * name (src/external/record-step.ts, walking `Object.values(step.from)`
+ * rather than `Object.entries`).
+ */
+export function tryFromCandidates(
+  entry: FromCandidate | readonly FromCandidate[],
+): readonly FromCandidate[] | null {
+  const raw: unknown = entry;
+  if (isCandidateTuple(raw)) {
+    return [raw];
+  }
+  if (Array.isArray(raw) && raw.every(isCandidateTuple)) {
+    return raw;
+  }
+  return null;
+}
+
+/** One clause describing what a malformed `from` entry actually holds, for
+ * a message a person reads. `typeof`/`Array.isArray`/`isStep` only, never
+ * `JSON.stringify` — a well-formed entry's first element is a `Step`, which
+ * carries zod schemas that do not serialize to anything readable, and a
+ * malformed entry is exactly the case this function cannot trust enough to
+ * stringify at all. */
+function describeMalformedFromEntry(entry: unknown): string {
+  if (isStep(entry)) {
+    return 'a Step, not a [step, "key"] tuple';
+  }
+  if (typeof entry === "string") {
+    return 'a string, not a [step, "key"] tuple';
+  }
+  if (Array.isArray(entry)) {
+    return 'an array, but not a valid [step, "key"] tuple or a list of them';
+  }
+  return `a ${typeof entry}, not a [step, "key"] tuple`;
+}
+
+/** The message every caller with a `from` key in scope uses to report a
+ * malformed entry (`tryFromCandidates` returning `null`) — one shared
+ * wording, so `nuka check`, `nuka steps --json`/`nuka describe`, `nuka do
+ * --use`, and `nuka harvest` all name the same broken key the same way. */
+export function malformedFromEntryMessage(key: string, entry: unknown): string {
+  return `from.${key} is not usable: ${describeMalformedFromEntry(entry)}`;
+}
+
+/** Thrown by `fromCandidates` below for a malformed entry — a proper,
+ * readable error in place of the bare `TypeError` a malformed entry used to
+ * throw once a caller tried to destructure it, for the one caller with no
+ * `from` key of its own in scope to name (`tryFromCandidates`'s own doc
+ * comment above). */
+export class MalformedFromEntryError extends Error {
+  constructor(entry: unknown) {
+    super(`from entry is not usable: ${describeMalformedFromEntry(entry)}`);
+    this.name = "MalformedFromEntryError";
+  }
+}
+
 /**
  * Normalizes one `Step.from` entry to its full candidate list — a single
  * `[Step, string]` tuple becomes a one-element array; an already-multi
- * `readonly [Step, string][]` passes through unchanged. The discriminator is
- * the entry's own first element: a `Step` (always a plain object, never an
- * array — `isStep`'s own brand check below) means "this is one candidate
- * tuple itself"; an array means "this is already the candidate list"
- * (docs/spec.md "Chaining steps": "A key may name more than one possible
- * producer"). Every reader of `Step.from` calls this once per key
- * instead of re-deriving the discriminator itself, so "single vs multi"
- * stays decided in exactly one place.
+ * `readonly [Step, string][]` passes through unchanged (docs/spec.md
+ * "Chaining steps": "A key may name more than one possible producer").
+ * Throws `MalformedFromEntryError` when `entry` is neither
+ * (`tryFromCandidates` above does the actual check); every caller with a
+ * `from` key of its own in scope should call that function directly
+ * instead, so it can name the broken key rather than relying on this
+ * function's key-less message.
  */
 export function fromCandidates(entry: FromCandidate | readonly FromCandidate[]): readonly FromCandidate[] {
-  return Array.isArray(entry[0]) ? (entry as readonly FromCandidate[]) : [entry as FromCandidate];
+  const candidates = tryFromCandidates(entry);
+  if (candidates === null) {
+    throw new MalformedFromEntryError(entry);
+  }
+  return candidates;
 }
 
 export interface StepDefinitionInput<

@@ -1,6 +1,6 @@
 import type { UsedEntryWithResult } from "../context/used.js";
 import type { StepRecord } from "../record/types.js";
-import { fromCandidates, type Step } from "../step/define-step.js";
+import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 
 // Responsibility: `nuka do --use <record-id>`'s own lookup (docs/spec.md
 // "Single steps (the agent path)", the `--use` paragraph) — turns one
@@ -62,9 +62,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Resolves one `--use <recordId>` against `step`'s own `from` declaration.
- * Checked in this order: unknown id, a non-`"ok"` step record, a step
- * record whose step names none of `step.from`'s upstreams, then — per
- * matching entry — a `result` missing the key that entry names.
+ * Checked in this order: unknown id, a non-`"ok"` step record, the first
+ * structurally malformed `from` entry this step declares (walked in key
+ * order, so this can surface before the "no matching upstream" verdict
+ * below even runs), a step record whose step names none of `step.from`'s
+ * upstreams, then — per matching entry — a `result` missing the key that
+ * entry names.
  */
 export function resolveUse(
   recordId: string,
@@ -87,12 +90,16 @@ export function resolveUse(
   // Entries (plural on purpose — docs/spec.md's own wording): a single
   // upstream step can be named by more than one of this step's `from` keys,
   // and one matching step record fills all of them. Each key's own
-  // candidates are checked individually via `fromCandidates`, so a key whose
-  // `from` lists several producers still matches as long as one of them is
-  // this step record's own step.
+  // candidates are checked individually via `tryFromCandidates`, so a key
+  // whose `from` lists several producers still matches as long as one of
+  // them is this step record's own step.
   const matches: Array<readonly [key: string, upstreamKey: string]> = [];
   for (const [key, entry] of Object.entries(step.from)) {
-    for (const [upstream, upstreamKey] of fromCandidates(entry)) {
+    const candidates = tryFromCandidates(entry);
+    if (candidates === null) {
+      return { ok: false, message: `--use ${recordId}: ${malformedFromEntryMessage(key, entry)}` };
+    }
+    for (const [upstream, upstreamKey] of candidates) {
       if (stepNameOf.get(upstream) === stepRecord.step) {
         matches.push([key, upstreamKey]);
       }

@@ -44,7 +44,7 @@ import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
-import { fromCandidates, type Step } from "../step/define-step.js";
+import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
@@ -528,7 +528,10 @@ function injectFrom(
       // pattern capture still wins").
       continue;
     }
-    const candidates = fromCandidates(entry);
+    const candidates = tryFromCandidates(entry);
+    if (candidates === null) {
+      throw new Error(malformedFromEntryMessage(key, entry));
+    }
     const present = candidates.flatMap(([upstream, upstreamKey]) => {
       const chainEntry = chain.get(upstream);
       return chainEntry === undefined ? [] : [{ upstream, upstreamKey, chainEntry }];

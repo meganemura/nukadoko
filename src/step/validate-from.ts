@@ -1,5 +1,5 @@
 import { asObjectShape } from "../binding/schema-shape.js";
-import { fromCandidates, isStep, type Step } from "./define-step.js";
+import { isStep, malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
 // Responsibility: the runtime half of `from`'s three checks (docs/spec.md
 // "Chaining steps") — whether the upstream a
@@ -98,7 +98,12 @@ export function validateStepFrom(
       });
     }
 
-    for (const [upstream, upstreamKey] of fromCandidates(entry)) {
+    const candidates = tryFromCandidates(entry);
+    if (candidates === null) {
+      issues.push({ step: stepName, key, message: malformedFromEntryMessage(key, entry) });
+      continue;
+    }
+    for (const [upstream, upstreamKey] of candidates) {
       if (!isStep(upstream)) {
         issues.push({
           step: stepName,

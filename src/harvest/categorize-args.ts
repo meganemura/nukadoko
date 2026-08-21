@@ -1,6 +1,6 @@
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { StepRecord } from "../record/types.js";
-import { fromCandidates, type Step } from "../step/define-step.js";
+import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import type { Attachment } from "./render-line.js";
 
 // Responsibility: docs/spec.md "Harvesting"'s three-way split for one
@@ -118,7 +118,11 @@ function confirmedChainSource(
   if (!isPlainRecord(producerRecord.result)) {
     return false;
   }
-  for (const [candidateStep, upstreamKey] of fromCandidates(fromEntry)) {
+  const candidates = tryFromCandidates(fromEntry);
+  if (candidates === null) {
+    throw new Error(malformedFromEntryMessage(key, fromEntry));
+  }
+  for (const [candidateStep, upstreamKey] of candidates) {
     if (stepNameOf.get(candidateStep) !== producerStepName) {
       continue;
     }
@@ -159,9 +163,11 @@ export function categorizeArgs(
       continue;
     }
 
-    const candidateStepNames = new Set(
-      fromCandidates(fromEntry).map(([candidateStep]) => stepNameOf.get(candidateStep)),
-    );
+    const candidates = tryFromCandidates(fromEntry);
+    if (candidates === null) {
+      throw new Error(malformedFromEntryMessage(key, fromEntry));
+    }
+    const candidateStepNames = new Set(candidates.map(([candidateStep]) => stepNameOf.get(candidateStep)));
     let confirmed = false;
     let outside: ChainOutsideList | undefined;
     for (const usedEntry of used) {
