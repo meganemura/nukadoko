@@ -2259,14 +2259,21 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
-                              comes from; --json's top level is { steps,
+                              comes from (from, or from_errors naming the
+                              key and why for the one it can't read);
+                              --json's top level is { steps,
                               import_failures }, the second always present,
-                              exiting 1 if either has anything in it, output
-                              printed either way
+                              exiting 1 if import_failures is non-empty or
+                              any step's needs_error or from_errors is
+                              present, output printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
                               rationale when the step declared one, plus
                               import_failures beside it (same shape as nuka
-                              steps' own); exits 1 when that array is non-empty
+                              steps' own); exits 1 when that array is
+                              non-empty, or when the described step is typed
+                              and carries its own from_errors; a broken
+                              sibling step elsewhere in the vocabulary does
+                              not fail it
 nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
