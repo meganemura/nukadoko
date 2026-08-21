@@ -452,7 +452,7 @@ export async function runCli(
     command: "harvest <step-record-ids..>",
     describe:
       "one feature draft to stdout from `nuka do`'s own step record ids, in the order they actually " +
-      "ran; every line's keyword is `*` and its name is a placeholder — provenance goes to stderr only",
+      "ran; every line's keyword is `*` and its name is a placeholder (provenance goes to stderr only)",
     builder: (y: Argv) =>
       y.positional("step-record-ids", {
         type: "string",
