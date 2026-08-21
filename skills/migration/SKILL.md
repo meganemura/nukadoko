@@ -9,15 +9,15 @@ license: MIT
 
 ## What this is for
 
-An existing suite moving onto nukadoko, one piece at a time — not a rewrite.
+An existing suite moving onto nukadoko, one piece at a time, not a rewrite.
 Where it starts differs:
 
-- **A cucumber-js suite** — feature files plus glue, usually driving
+- **A cucumber-js suite**: feature files plus glue, usually driving
   Playwright.
 - **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
   about it moves onto nukadoko; nukadoko grows beside it instead, sharing
   an implementation rather than the suite's own runner.
-- **A suite already shaped as typed steps** — its own DSL, not cucumber's,
+- **A suite already shaped as typed steps**: its own DSL, not cucumber's,
   but close enough to nukadoko's `defineStep` that the move is mostly
   translation.
 
@@ -47,10 +47,10 @@ Keep it short. Predictability is the reassuring part, not volume.
 
 ## Two stages, never at once
 
-Change one thing, then the next — never both at once. If a step breaks after
+Change one thing, then the next. Never both at once. If a step breaks after
 two changes land together, there is no way to tell which one broke it: the
 causes are tangled in a single failure. Splitting the work into stages keeps
-every failure traceable to exactly one change. That is the whole point — the
+every failure traceable to exactly one change. That is the whole point: the
 stages themselves are secondary to it.
 
 If the stages below don't fit where you're starting from, derive your own
@@ -65,7 +65,7 @@ differently, described further down.
 
 This is the case the two stages above are named after.
 
-### Stage 1 — make it run
+### Stage 1: make it run
 
 Change the one import each glue file uses:
 
@@ -87,7 +87,7 @@ check` says so as `step-file-import-failed`.
 
 Then run `nuka check <feature>` and `nuka run <feature>` and read what they
 say. Fix whatever they point at, and run them again. Repeat until the
-existing suite is green — that is Stage 1's completion condition, nothing
+existing suite is green: that is Stage 1's completion condition, nothing
 more. That condition is `nuka check` and `nuka run` going green, not `tsc`
 typechecking cleanly; the two can disagree in either direction.
 
@@ -101,11 +101,11 @@ an unreadable glue file, on purpose, since they are about to execute.
 
 Do not go looking for a list of what compat doesn't support before you
 start. Whatever will not work fails loudly, either at the import or on the
-first `nuka run` — the failure names what broke, and that is what to act
+first `nuka run`: the failure names what broke, and that is what to act
 on. A list written here would go stale the moment compat's coverage grows;
 the CLI's own output never does.
 
-### Stage 2 — give it contracts
+### Stage 2: give it contracts
 
 Once the suite runs, some steps are worth typing. This is what changes when
 one is:
@@ -113,18 +113,18 @@ one is:
 | | compat step | typed step |
 |---|---|---|
 | Input | pattern capture only, unchecked | validated against an `args` schema, each field carrying a `.describe()` |
-| Output | discarded — the step record's `result` is `null` | validated against a `returns` schema and stored in the step record |
+| Output | discarded: the step record's `result` is `null` | validated against a `returns` schema and stored in the step record |
 | Dependencies | side effects on the World, invisible in the function signature | declared with `from`, named in an import, checked by `nuka check` before anything runs, and recorded as `used` in the step record |
-| Keyword | decorative — a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the step record's `observed` counts |
+| Keyword | decorative: a step bound to `Then` can still mutate | `mutates` is a declaration nukadoko trusts: declare `mutates: true` and a read-only environment refuses to run it, and `nuka check` warns if it's bound to `Then`; what actually ran is still recorded in the step record's `observed` counts |
 | Running alone | not possible (the World is empty outside a scenario) | `nuka do <step>` runs it directly, step record printed to stdout; a `from` key comes from `--args` like any other, or from `--use <step-record-id>` for one drawn from an earlier execution; a `resultOf` fixture call inside `run` still finds nothing, since there is no scenario for it to walk |
 
 That last row is a separate fact from the "Dependencies" row above it, not a
 consequence of it: a compat step can't run alone because what it needs lives
-on a World nothing populated yet, and the World isn't part of its signature —
+on a World nothing populated yet, and the World isn't part of its signature:
 there's nothing to inspect to know what to set up first. A typed step's
 dependencies are named as `from` entries, visible in an import, so a
 `nuka do` call can supply them by hand: `--args` for an ordinary key, or
-`--use <step-record-id>` for one drawn from an earlier execution's result — the
+`--use <step-record-id>` for one drawn from an earlier execution's result. The
 upstream step's own name never has to appear on the command line, because
 the cited step record already carries it. A step whose every key arrives that
 way needs no `--args` at all: `--use` on its own is a complete invocation. What still finds nothing outside a
@@ -132,7 +132,7 @@ scenario is a dependency read through the `resultOf` fixture from inside `run`: 
 call has no chain to walk when there was no scenario to build one,
 `--use` or not.
 
-Promote the steps you run most often first, one at a time — not the whole
+Promote the steps you run most often first, one at a time, not the whole
 suite in one pass. How to rewrite any given piece of glue is a judgment
 call for the moment you're making it; nukadoko doesn't prescribe one
 recipe, and this skill won't either.
@@ -187,7 +187,7 @@ What changed:
 
 - `this.projectId` is gone; the id comes back through `returns` instead. A
   later step declares `from: { projectId: [createProjectStep, "id"] }` to
-  read it by key — `nuka check` verifies the binding order before anything
+  read it by key: `nuka check` verifies the binding order before anything
   runs, and the read shows up in that later step's own step record (the
   `resultOf` fixture stays available for the rarer read a key name can't
   express).
@@ -195,7 +195,7 @@ What changed:
   (`{name:string}` → `args.name`), so the pattern alone shows which text
   becomes which field.
 - `mutates: true` is now a declaration, not just a fact about what the code
-  happens to do — `nuka check` warns if this step is ever bound to `Then`,
+  happens to do: `nuka check` warns if this step is ever bound to `Then`,
   and a read-only environment refuses to run it at all. The step record still
   records what the run actually sent, for review, but that count doesn't
   get the step rejected.
@@ -205,7 +205,7 @@ What changed:
   A step naming neither `page` nor `context` never launches a browser.
 
 This is the only worked example here. It's not a catalog of every gap
-between compat and typed — if another pattern comes up often enough to
+between compat and typed. If another pattern comes up often enough to
 deserve one, that's a separate addition, not something to improvise from
 this single case.
 
@@ -259,10 +259,20 @@ from, puts a real `import ... from "nukadoko"` in that spec file, so
 removing those call sites is part of the same reversal. It is marked
 experimental by name, on purpose, so it is never reached by accident.
 
+`use` on `experimental_recordStep` hides a trap. Pass the previous call's
+`stepRecordId` through `use`, not the value it returned. The receiving step
+must already declare its own `from` entry naming the upstream step; `use`
+only fills it in. Skip `use` and hold that value in a variable instead, and
+no chain gets recorded at all. `nuka harvest` then bakes that single run's
+value, a cart id, for example, straight into the draft, with no record of
+where it came from. `nuka check` stays clean, and `nuka run` goes green,
+but that pass proves only that the server remembers one value, not that
+the steps chain.
+
 ## Coming from a typed-step-shaped DSL
 
 If there are no feature files and no cucumber glue, the compat door in
-Stage 1 above is not relevant — skip straight past it.
+Stage 1 above is not relevant. Skip straight past it.
 
 What makes that possible is that `pattern` is optional on `defineStep`: a
 step can be defined with no pattern at all and still be a complete piece of
@@ -274,20 +284,20 @@ doing.
 
 If the source DSL already carries something like a `description`, `args`,
 `returns`, `mutates`, and a `run` function, the translation to `defineStep`
-is direct — each has a `defineStep` counterpart to receive it.
+is direct: each has a `defineStep` counterpart to receive it.
 
 ## What not to do
 
 - **Don't do Stage 1 and Stage 2 at once.** Mixing an import switch with
   added typing in the same change is exactly the thing that makes a
-  failure unattributable — see "Two stages, never at once" above.
+  failure unattributable (see "Two stages, never at once" above).
 - **Don't let the suite stop running while it's partway migrated.** Compat
   and typed steps coexist in the same feature file; a suite with some
   steps promoted and others still compat must keep passing throughout.
   Never make "fully typed" a precondition for "runs."
 - **Don't delete compat glue before its typed replacement is written and
   passing.** Write the new step, get it running with `nuka do`, only then
-  remove the old one — never the other order.
+  remove the old one, never the other order.
 - **Don't guess at a fix `nuka check` or `nuka run` didn't ask for.** Their
   output is the evidence for what's wrong; changing something they didn't
   flag is a change made on a hunch, not on what actually broke.
