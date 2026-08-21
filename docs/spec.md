@@ -1398,10 +1398,23 @@ its implementation and still leave nothing to harvest.
 marked experimental by name for the reasons its own module gives.
 
 ```ts
-const { result, stepRecordId } = await experimental_recordStep(
+const opened = await experimental_recordStep(
   openCartStep, { sku }, { name: "open-cart", rootDir, request },
 );
+const added = await experimental_recordStep(
+  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
+);
 ```
+
+**Pass the record id, never the value.** A spec naturally holds what the
+last call returned in a variable and hands it to the next one, and doing
+that here records no chain at all, because none happened: `use` is what
+says one did, meaning exactly what `nuka do --use` means. Without it the
+key reads as one the caller supplied, and `nuka harvest` writes that run's
+own id into the draft, which then passes against a server that still
+remembers it and fails against a fresh one. Threading the id instead
+leaves the line alone and lets `from` fill it, the way it would have on
+any `nuka run`.
 
 The step runs against the spec's own `request`, its schemas are enforced,
 and a step record lands where `nuka do`'s records land. So the suite a

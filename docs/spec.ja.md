@@ -840,11 +840,11 @@ step ごとの boolean は出現ごとの事実を運べないため、宣言が
 - なぜ計測がこれを決めるのをやめたのか。
   書き込みの検出は HTTP メソッドに基づいており(GET/HEAD 以外はすべて書き込みとして数えます)、これは書き込みの意味論そのものではなく、そのためのプロキシです。
   GraphQL、RPC-over-POST、そして多くのベンダーの query API は、意味的に純粋な読み取りを POST の上に実装します。
-  ある呼び出しが実際にサーバーの状態を変えたかどうかは外部システム自身の意味論であり、nukadoko はその 1 つ下の層、HTTP のレイヤーにいます。
+  ある呼び出しが実際にサーバの状態を変えたかどうかは外部システム自身の意味論であり、nukadoko はその 1 つ下の層、HTTP のレイヤーにいます。
   読み取りと書き込みを区別する手掛かりは、毎回プロトコル固有です。
   GraphQL の body の `query` と `mutation` の違い、RPC の body のメソッド名、ベンダー独自の path の規約などです。
   だからこのプロキシに代わる、汎用の機械的な判定は原理的にありません。
-  この回数が保証するのは step が何を送ったかであって、サーバーの状態が変わったかどうかではありません。
+  この回数が保証するのは step が何を送ったかであって、サーバの状態が変わったかどうかではありません。
   この 2 つは別の事実であり、前者を後者の証拠として扱うことは言い過ぎでした。
 - 記録が縮んだわけではありません。
   `observed`、http.jsonl、そして Allure の declared/observed テーブルは、計測されたとおりにそのまま残ります。
@@ -1009,10 +1009,21 @@ Playwright の run が残すのは Playwright 自身の成果物だけで、step
 `experimental_recordStep` はその隙間を閉じる実験であり、experimental という名前が付いているのは、そのモジュール自身が挙げる理由によります。
 
 ```ts
-const { result, stepRecordId } = await experimental_recordStep(
+const opened = await experimental_recordStep(
   openCartStep, { sku }, { name: "open-cart", rootDir, request },
 );
+const added = await experimental_recordStep(
+  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
+);
 ```
+
+**渡すのは record の id であり、値ではありません。**
+spec は、直前の呼び出しが返した値を変数に保持し、次の呼び出しへ渡すのが自然な書き方です。
+けれどもここでそう書くと、連鎖は何も記録されません、実際には連鎖していないからです。
+連鎖したと言う手段が `use` であり、意味は `nuka do --use` とまったく同じです。
+`use` がなければそのキーは呼び出し側が渡したものとして読まれ、`nuka harvest` はその実行自身の id を下書きに書き込みます。
+すると、その id をまだ覚えているサーバに対しては通り、新しいサーバに対しては失敗します。
+代わりに id を連ねて渡せば行はそのままにでき、`from` がそこを埋めます、どの `nuka run` でもそうなるのと同じです。
 
 step は spec 自身の `request` に対して実行され、そのスキーマは強制され、step record は `nuka do` の record と同じ場所に置かれます。
 だから、チームがすでに実行しているスイートが record の供給源になり、そこにすでにコード化されている道のりは `nuka harvest` を通じて下書きになります: 書き直すのではなく実行することによる移行であり、これはどんな書き直しよりも小さな要求です。

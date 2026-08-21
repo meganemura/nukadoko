@@ -83,10 +83,23 @@ unchanged against a real Playwright Test suite, not only against
 nukadoko's own tests:
 
 ```ts
-const { result, stepRecordId } = await experimental_recordStep(
+const opened = await experimental_recordStep(
   openCartStep, { sku }, { name: "open-cart", rootDir, request },
 );
+const added = await experimental_recordStep(
+  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
+);
 ```
+
+**Pass the record id to the next call, never the value it returned.** A
+spec holds the last result in a variable and hands it on, which is the
+natural way to write one and records no chain at all, because none
+happened. `use` is what says one did, and it means exactly what `nuka do
+--use` means. Skip it and the key reads as something the caller supplied,
+so the harvested draft carries that run's own id, passes against a server
+that still remembers it, and fails against a fresh one. That failure
+arrives long after the run that caused it, which is why it is worth
+getting right the first time.
 
 The step runs against the spec's own `request`, its schemas are enforced,
 and a step record lands where `nuka do`'s records land. So the suite a

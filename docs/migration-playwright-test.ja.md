@@ -70,10 +70,21 @@ experimental という名前が付いているのは意図的で、誰もそこ�
 `request` だけでなく注入された `page` にも対応すること(今のところ、fixture が browser に手を伸ばす step は常に拒否します)、そして、この API の形が nukadoko 自身のテストだけでなく、本物の Playwright Test スイートに対して変更なしに動いた実績ができることです。
 
 ```ts
-const { result, stepRecordId } = await experimental_recordStep(
+const opened = await experimental_recordStep(
   openCartStep, { sku }, { name: "open-cart", rootDir, request },
 );
+const added = await experimental_recordStep(
+  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
+);
 ```
+
+**次の呼び出しへ渡すのは record の id であり、返ってきた値ではありません。**
+spec は直前の結果を変数に保持して次へ渡すのが自然な書き方です。
+けれどもそう書くと連鎖は何も記録されません、実際には連鎖していないからです。
+連鎖したと言う手段が `use` であり、意味は `nuka do --use` とまったく同じです。
+`use` を省くと、そのキーは呼び出し側が渡したものとして読まれます。
+すると `nuka harvest` が書く下書きにはその実行自身の id がそのまま載り、それをまだ覚えているサーバでは通り、新しいサーバでは失敗します。
+その失敗は原因となった実行からずっと後になって現れるので、最初から正しくしておく価値があります。
 
 step は spec 自身の `request` に対して実行され、そのスキーマは強制され、step record は `nuka do` の record と同じ場所に置かれます。
 だから、チームがすでに実行しているスイートが record の供給源になり、そこにすでにコード化されている道のりは `nuka harvest` を通じて下書きになります: 書き直すのではなく実行することによる移行です。
