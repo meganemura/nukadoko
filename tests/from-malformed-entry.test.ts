@@ -56,11 +56,11 @@ async function checkReport(
 const PROJECT = fixture("from-malformed-entry-project");
 
 describe("nuka steps --json: a malformed from entry", () => {
-  it("does not crash the whole vocabulary — every step, broken or not, still shows up", async () => {
+  it("does not crash the whole vocabulary — every step, broken or not, still shows up — but exits 1 for the from_errors", async () => {
     const { steps, exitCode } = await stepsJson(PROJECT);
     const names = steps.map((s) => s.name).sort();
     expect(names).toEqual(["archive-cart", "bad-object", "bad-string", "open-cart"]);
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
   });
 
   it("names the key and describes the value for a bare-string entry, in from_errors", async () => {
@@ -88,11 +88,11 @@ describe("nuka steps --json: a malformed from entry", () => {
 });
 
 describe("nuka steps (text): a malformed from entry", () => {
-  it("marks the broken step with 'from unreadable' and prints the key-named reason, without crashing", async () => {
+  it("marks the broken step with 'from unreadable', prints the key-named reason, and exits 1 without crashing", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["steps"], { rootDir: PROJECT, stdout, stderr: createCaptureSink() });
     const text = stdout.text();
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
 
     const heading = text.split("\n").find((line) => line.startsWith("bad-string "));
     expect(heading).toBe("bad-string  typed  read-only  from unreadable");
@@ -105,9 +105,9 @@ describe("nuka steps (text): a malformed from entry", () => {
 });
 
 describe("nuka describe: a malformed from entry", () => {
-  it("bare string: reports from_errors instead of a fabricated candidate, and does not silently lie", async () => {
+  it("bare string: reports from_errors instead of a fabricated candidate, exits 1, and does not silently lie", async () => {
     const { contract, exitCode } = await describeJson(PROJECT, "bad-string");
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
     expect(contract.from).toBeUndefined();
     expect(contract.from_errors).toEqual([{ key: "id", message: expect.stringContaining("from.id is not usable") }]);
     // The bug this guards against: normalizing a string as a one-element
@@ -117,11 +117,17 @@ describe("nuka describe: a malformed from entry", () => {
     expect(JSON.stringify(contract)).not.toContain("unregistered step");
   });
 
-  it("Step object: reports from_errors instead of crashing", async () => {
+  it("Step object: reports from_errors instead of crashing, and exits 1", async () => {
     const { contract, exitCode } = await describeJson(PROJECT, "bad-object");
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
     expect(contract.from).toBeUndefined();
     expect(contract.from_errors).toEqual([{ key: "id", message: expect.stringContaining("from.id is not usable") }]);
+  });
+
+  it("a step with a genuinely correct from chain still exits 0 — the exit code is per step, not per project", async () => {
+    const { contract, exitCode } = await describeJson(PROJECT, "archive-cart");
+    expect(exitCode).toBe(0);
+    expect(contract.from_errors).toBeUndefined();
   });
 });
 

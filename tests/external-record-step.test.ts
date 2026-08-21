@@ -573,3 +573,47 @@ describe("experimental_recordStep: use", () => {
     expect(after).toEqual(before);
   });
 });
+
+describe("experimental_recordStep: a malformed from entry", () => {
+  // Same broken shape tests/from-malformed-entry.test.ts's own fixture
+  // carries (a `Step` object cast into a `[step, key]` tuple's own type
+  // instead of wrapped in one) — reached here through `step.from` directly
+  // rather than through the on-disk fixture project, since this module's
+  // own walk of `step.from` (src/external/record-step.ts) runs
+  // unconditionally, before `options.use` is even read, so no `use` id is
+  // needed to trigger it.
+
+  let rootDir: string;
+  let requestContext: APIRequestContext;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("external-driver-project");
+    requestContext = await playwrightRequest.newContext();
+  });
+
+  afterEach(async () => {
+    await requestContext.dispose();
+    await removeTempDir(rootDir);
+  });
+
+  it("names the broken from key in the thrown message, the same way nuka steps/describe do", async () => {
+    const malformedFromStep = defineStep({
+      description: "from names an upstream with the Step object itself, not a tuple",
+      args: z.object({ cartId: z.string() }),
+      returns: z.object({ ok: z.boolean() }),
+      mutates: false,
+      from: { cartId: openCartStep as unknown as [typeof openCartStep, "id"] },
+      async run() {
+        return { ok: true };
+      },
+    });
+
+    await expect(
+      experimental_recordStep(
+        malformedFromStep,
+        { cartId: "unused" },
+        { name: "malformed-from", rootDir, request: requestContext },
+      ),
+    ).rejects.toThrow(/from\.cartId is not usable/);
+  });
+});

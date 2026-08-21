@@ -271,11 +271,17 @@ export async function runCli(
         }
         stderr.write(formatImportFailuresStderr(importFailureSummaries));
         // Exit 1 whenever the output is incomplete in a way this command
-        // still went ahead and printed anyway: an import failure, or a
-        // step whose own `needs` this run couldn't read (`summarize`'s own
-        // `needs_error`).
+        // still went ahead and printed anyway — the check below has to name
+        // every such case, not just today's, so a new one has to be added
+        // here the moment it exists. So far: an import failure, a step
+        // whose own `needs` this run couldn't read (`summarize`'s own
+        // `needs_error`), and a step with an unreadable `from` entry
+        // (`from_errors`).
         // Output is not withheld either way — only "this succeeded" is.
-        if (importFailures.length > 0 || summaries.some((s) => s.needs_error !== undefined)) {
+        if (
+          importFailures.length > 0 ||
+          summaries.some((s) => s.needs_error !== undefined || s.from_errors !== undefined)
+        ) {
           exitCode = 1;
         }
       } catch (error) {
@@ -318,7 +324,11 @@ export async function runCli(
           `${JSON.stringify({ ...contract, import_failures: importFailureSummaries }, null, 2)}\n`,
         );
         stderr.write(formatImportFailuresStderr(importFailureSummaries));
-        if (importFailures.length > 0) {
+        // Same rule as `steps` above, scoped to this one contract: an
+        // import failure elsewhere in the project, or this step's own
+        // unreadable `from` entry (`from_errors`), same reasoning either
+        // way — the output went ahead and printed, but it is not complete.
+        if (importFailures.length > 0 || (contract.kind === "typed" && contract.from_errors !== undefined)) {
           exitCode = 1;
         }
       } catch (error) {

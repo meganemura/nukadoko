@@ -191,10 +191,13 @@ function isCandidateTuple(value: unknown): value is FromCandidate {
 }
 
 /**
- * Normalizes one `Step.from` entry to its full candidate list, the same as
- * `fromCandidates` below, but returns `null` instead of throwing when
- * `entry` is neither a well-formed single tuple nor a well-formed list of
- * them. `FromMap`'s own compile-time checks (this file's own header) never
+ * Normalizes one `Step.from` entry to its full candidate list — a single
+ * `[Step, string]` tuple becomes a one-element array; an already-multi
+ * `readonly [Step, string][]` passes through unchanged (docs/spec.md
+ * "Chaining steps": "A key may name more than one possible producer").
+ * Returns `null` instead of throwing when `entry` is neither a well-formed
+ * single tuple nor a well-formed list of them. `FromMap`'s own compile-time
+ * checks (this file's own header) never
  * let a mismatched entry compile, but a step author routing around them
  * with `as any` (the escape hatch every static type system leaves open)
  * can put anything there at runtime: a bare string, a `Step` passed
@@ -214,15 +217,12 @@ function isCandidateTuple(value: unknown): value is FromCandidate {
  * forces every caller to decide at compile time what a malformed entry
  * means for it: src/step/validate-from.ts turns it into a reported
  * `FromIssue` instead of a crash; src/cli/resolve-use.ts,
- * src/cli/vocabulary.ts, src/harvest/categorize-args.ts, and
- * src/run/run-scenario.ts each turn it into a message naming the broken key
- * (`malformedFromEntryMessage` below); src/check/from-order.ts skips it,
- * since a structural fact about the declaration is
- * src/step/validate-from.ts's finding to report, not this module's own to
- * repeat. `fromCandidates` below is the one caller left that still throws
- * on `null`, kept for a caller with no `from` key of its own in scope to
- * name (src/external/record-step.ts, walking `Object.values(step.from)`
- * rather than `Object.entries`).
+ * src/cli/vocabulary.ts, src/harvest/categorize-args.ts,
+ * src/run/run-scenario.ts, and src/external/record-step.ts each turn it
+ * into a message naming the broken key (`malformedFromEntryMessage`
+ * below); src/check/from-order.ts skips it, since a structural fact about
+ * the declaration is src/step/validate-from.ts's finding to report, not
+ * this module's own to repeat.
  */
 export function tryFromCandidates(
   entry: FromCandidate | readonly FromCandidate[],
@@ -259,40 +259,10 @@ function describeMalformedFromEntry(entry: unknown): string {
 /** The message every caller with a `from` key in scope uses to report a
  * malformed entry (`tryFromCandidates` returning `null`) — one shared
  * wording, so `nuka check`, `nuka steps --json`/`nuka describe`, `nuka do
- * --use`, and `nuka harvest` all name the same broken key the same way. */
+ * --use`, `nuka harvest`, and `experimental_recordStep` all name the same
+ * broken key the same way. */
 export function malformedFromEntryMessage(key: string, entry: unknown): string {
   return `from.${key} is not usable: ${describeMalformedFromEntry(entry)}`;
-}
-
-/** Thrown by `fromCandidates` below for a malformed entry — a proper,
- * readable error in place of the bare `TypeError` a malformed entry used to
- * throw once a caller tried to destructure it, for the one caller with no
- * `from` key of its own in scope to name (`tryFromCandidates`'s own doc
- * comment above). */
-export class MalformedFromEntryError extends Error {
-  constructor(entry: unknown) {
-    super(`from entry is not usable: ${describeMalformedFromEntry(entry)}`);
-    this.name = "MalformedFromEntryError";
-  }
-}
-
-/**
- * Normalizes one `Step.from` entry to its full candidate list — a single
- * `[Step, string]` tuple becomes a one-element array; an already-multi
- * `readonly [Step, string][]` passes through unchanged (docs/spec.md
- * "Chaining steps": "A key may name more than one possible producer").
- * Throws `MalformedFromEntryError` when `entry` is neither
- * (`tryFromCandidates` above does the actual check); every caller with a
- * `from` key of its own in scope should call that function directly
- * instead, so it can name the broken key rather than relying on this
- * function's key-less message.
- */
-export function fromCandidates(entry: FromCandidate | readonly FromCandidate[]): readonly FromCandidate[] {
-  const candidates = tryFromCandidates(entry);
-  if (candidates === null) {
-    throw new MalformedFromEntryError(entry);
-  }
-  return candidates;
 }
 
 export interface StepDefinitionInput<

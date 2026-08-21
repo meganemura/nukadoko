@@ -18,7 +18,7 @@ import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact } from "../secrets/redact.js";
-import { fromCandidates, type Step } from "../step/define-step.js";
+import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 
 // Responsibility: run one typed step from inside a Playwright Test spec and
@@ -330,8 +330,12 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
   // answers a different question (`ctx.call`'s naming) from a narrower map
   // (`step` only).
   const useStepNameOf = new Map<Step, string>([[step, name]]);
-  for (const fromEntry of Object.values(step.from)) {
-    for (const [upstream] of fromCandidates(fromEntry)) {
+  for (const [key, fromEntry] of Object.entries(step.from)) {
+    const candidates = tryFromCandidates(fromEntry);
+    if (candidates === null) {
+      throw new Error(malformedFromEntryMessage(key, fromEntry));
+    }
+    for (const [upstream] of candidates) {
       const upstreamName = externalStepNames.get(upstream);
       if (upstreamName !== undefined) {
         useStepNameOf.set(upstream, upstreamName);
