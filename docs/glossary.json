@@ -213,6 +213,11 @@
       "en": ["parser", "parsers"],
       "ja": "パーサ",
       "note": "長音を付けない。docs/spec.ja.md が @cucumber/gherkin を指してすでにこう書いており、ブラウザ・フォーマッタと同じ扱い。README.ja.md にだけ パーサー が 1 件あって割れていたのを 2026-08-08 に揃えた。長音の扱いは語ごとに違う(ユーザー は付ける)ので、規則ではなくこの語の決定として読むこと"
+    },
+    {
+      "en": ["experimental", "EXPERIMENTAL"],
+      "ja": "実験的",
+      "note": "形容詞として使うときの訳語。CLI の説明文にある大文字の EXPERIMENTAL もこれに含める。`experimental_` 接頭辞や `nuka experimental` サブコマンドのように識別子そのものを指すときは、identifiers の規則により英語のままバッククォート付きで書く"
     }
   ],
   "keep_english": [

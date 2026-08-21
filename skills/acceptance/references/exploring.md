@@ -42,6 +42,17 @@ The moment you know the shape, the step that a scenario will name declares
 it properly. A probe that drifts into being relied on is a contract that
 stopped saying anything.
 
+Some apps declare their own tools too, through the WebMCP standard
+(`navigator.modelContext.registerTool`). `nuka experimental webmcp-tools
+<url>` reads whatever a page has already declared and prints it, another
+raw thing to look at, this one named by the app rather than probed for. It
+stays `experimental`: the standard's own documentation is not settled
+about running it from a caller like this one instead of a human driving
+the browser by hand. What it reports never becomes step vocabulary, the
+same rule an MCP server over stdio follows, so a scenario can never name a
+WebMCP tool. A step that does call one imports
+`experimental_callWebmcpTool` directly, not through the fixture bag.
+
 ## Seeing what happened in between
 
 Once an operation has more than one move, make each move a part and let

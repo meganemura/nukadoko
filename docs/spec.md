@@ -782,6 +782,80 @@ that never reads that field would record a failed call as a passing one.
 `callMcpTool` throws in that one case and returns every other field of the
 result untouched.
 
+### WebMCP tools (experimental)
+
+A third face reads declared tools without folding them into `nuka steps`,
+the same separation "MCP servers" just drew for a stdio server, but over a
+different protocol and through a different door. WebMCP is a browser
+standard: a page declares its own tools through
+`navigator.modelContext.registerTool`, in its own JavaScript, never over a
+connection this project opens itself. `nuka experimental webmcp-tools <url>`
+launches the configured browser fresh (no session restored, no evidence
+collected), navigates to `url`, reads whatever that page has already
+declared, and prints it as a report, never a vocabulary: `nuka steps` never
+reads this surface and this surface never reads step discovery, because
+letting a page's own declared tools become part of `nuka steps` would let
+the page decide part of this project's own step vocabulary, the same
+mistake this whole package exists to keep out of a generated
+implementation. `experimental_callWebmcpTool`, exported from `"nukadoko"`
+itself, is the half a hand-written typed step imports to call one of those
+already-declared tools by name.
+
+`experimental_callWebmcpTool` is a plain import, not a member of the
+fixture bag "Fixtures" describes, for the boundary rule that section
+already states: a fixture carries only what the executor must inject, and
+the only thing this function needs from the executor is `page`, which
+already reaches a step as a fixture on its own. `poll` crossed that same
+boundary once, from an import onto the fixture bag, for a reason that does
+not carry over here: a wait that finishes without being recorded cannot be
+told apart, from a step record, from one that returned on its first try,
+and that gap was worth closing by making it a fixture. Calling a WebMCP
+tool has no such gap: the step around it declares its own `args`/`returns`
+schemas, already validated at the run boundary regardless of how the value
+inside them was produced (see "Context API"), so the step record already
+carries whatever the call returned without this function needing to write
+anything of its own.
+
+Both halves carry the mark by name, never by a runtime flag: `experimental_`
+on the function, prefixed rather than suffixed so it is still visible at
+the point a step author's own autocomplete would offer it, and
+`experimental` on the CLI, one command above `webmcp-tools` rather than
+beside it. Either way the whole point is that a caller cannot reach the
+surface without typing the word. That is also where this pair splits from
+"MCP servers": `nuka mcp-tools` reports a similar kind of thing and stays a
+top-level command, because MCP is the protocol this whole surface is named
+after, not an auxiliary one; `nuka experimental webmcp-tools` is nested one
+command deeper than every other command this package ships, on purpose, so
+`experimental` is unavoidable at every call site that reaches it.
+
+The mark is there because the standard's own documentation has not settled
+whether this project's own use of it is even supported. Chrome's WebMCP
+documentation (https://developer.chrome.com/docs/ai/webmcp), fetched
+2026-08-13, states: "While it may be possible to run WebMCP tools in
+headless environments, this API is primarily designed for local browser
+workflows with a human in the loop," and separately that the whole standard
+"is under active discussion and subject to change in the future." Its
+Japanese localization, fetched the same day, goes further than the English
+page does: translated, it says that because a tool call runs in
+JavaScript, a browser tab or webview must stay open to provide it a
+visible interface, so an agent or auxiliary tool calling a tool in a
+headless state is unsupported. Calling a page's own tool from Node, through
+Playwright, the way `experimental_callWebmcpTool` does, is exactly the kind
+of caller either wording describes. That the two localizations disagreed on
+this point, on the same day, is itself part of why the mark stays: a
+standard whose own documentation is not settled about itself is not one to
+build an unmarked dependency on. It measurably works against Chromium 149
+today, this surface's own tests measure that much, but "measured" and
+"guaranteed to keep working" are not the same claim.
+
+The `experimental_` prefix, and the `experimental` subcommand, come off
+only once both hold: the official documentation affirmatively supports
+invocation by an auxiliary or headless caller, and it no longer describes
+the standard itself as subject to change. A sentence simply going missing
+does not satisfy either point on its own: the same disagreement between the
+English and Japanese pages, on the same day, already shows that a missing
+sentence does not settle which claim is current.
+
 ### Chaining steps
 
 Giving a CLI-only step (one defined without a `pattern`) a `pattern` so it
@@ -3251,6 +3325,20 @@ nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
+nuka mcp-tools [--json] -- <command> [args...]
+                              list the tools an MCP server declares over stdio,
+                              connecting just long enough to ask. A separate
+                              face from `nuka steps`; nothing this command
+                              reports is ever part of that vocabulary
+nuka experimental webmcp-tools <url> [--json]
+                              EXPERIMENTAL, may change or disappear without
+                              notice: list the WebMCP tools a page has already
+                              declared via navigator.modelContext.registerTool.
+                              The same separation from `nuka steps` that
+                              `mcp-tools` draws, over a different protocol;
+                              nested one command under `experimental` on
+                              purpose, so the word is unavoidable at the call
+                              site
 ```
 
 Text output (no `--json`) is formatted for a human reading a terminal; `--json` is the machine-readable contract.

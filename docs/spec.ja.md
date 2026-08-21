@@ -551,6 +551,58 @@ pin するモード(`{ mode: { pin: '<version>' } }`)はこのフォールバッ
 MCP 自身は、ツールの帯域内での失敗を、例外ではなく正常な戻り値(`isError: true`)として返すので、それを読まない step は失敗した呼び出しを成功として記録してしまいます。
 `callMcpTool` はその 1 つの場合にだけ投げ、それ以外の戻り値のフィールドはすべてそのまま返します。
 
+### WebMCP tools(実験的)
+
+宣言済みのツールを `nuka steps` に取り込まずに読む面が、もう 1 つあります。
+「MCP servers」が stdio 経由のサーバについてすでに引いた切り分けと同じですが、プロトコルも扉も別です。
+WebMCP はブラウザの標準です。
+ページが自身の JavaScript の中で `navigator.modelContext.registerTool` を通じて自分のツールを宣言するのであって、このプロジェクト自身が開く接続の上でではありません。
+`nuka experimental webmcp-tools <url>` は、設定されたブラウザを何も引き継がずに(session の復元も evidence の収集もせず)起動し、`url` へ遷移し、そのページがすでに宣言しているものを読み、レポートとして出力します。
+語彙としてではありません。
+`nuka steps` はこの面を一度も読まず、この面も step discovery を一度も読みません。
+ページ自身が宣言したツールを `nuka steps` の一部にしてしまうと、このプロジェクト自身の step 語彙の一部をページに決めさせることになるからです。
+それは、生成された実装からその間違いを締め出すためにこのパッケージ全体が存在する、まさにその間違いです。
+`experimental_callWebmcpTool` は `"nukadoko"` 自身から export されている、もう半分の面です。
+手で書いた typed step がこれを import し、すでに宣言されているツールを名前で 1 つ呼び出します。
+
+`experimental_callWebmcpTool` は素の import であり、「Fixtures」が説明する fixture の bag のメンバーではありません。
+理由はあの節がすでに述べている境界の規則です。
+fixture が運ぶのは executor が注入しなければならないものだけであり、この関数が executor から必要とするのは `page` だけで、それはすでに fixture として step に届いています。
+`poll` は一度、import から fixture の bag へとこの同じ境界を越えましたが、その理由はここには当てはまりません。
+記録されずに終わる待ちは、step record の上では最初の試行で返ったものと区別が付かず、その隙間は fixture にすることで埋める価値がありました。
+WebMCP のツールを呼ぶことには、そうした隙間がありません。
+それを囲む step は自分自身の `args`/`returns` の schema を宣言しており、その中の値がどう作られたかにかかわらず run の境界ですでにバリデーションされています(「Context API」参照)。
+だから、この関数が自分で何も書き足さなくても、その呼び出しが返したものは step record にすでに運ばれています。
+
+両方の面は、実行時のフラグではなく名前でこの印を運びます。
+関数側は `experimental_` で、接尾辞ではなく接頭辞にしてあるのは、step を書く人自身の補完がこれを候補に出す時点でまだ見えるようにするためです。
+CLI 側は `experimental` で、`webmcp-tools` の横ではなく 1 段上のコマンドに置いてあります。
+どちらの形でも、狙いは同じです。
+呼び出す側はこの語を打たずにこの面へたどり着けません。
+この対はここで「MCP servers」とも分かれます。
+`nuka mcp-tools` は似た種類のことを報告しますが、トップレベルのコマンドのままです。
+MCP はこの面全体がその名を取った本体のプロトコルであり、補助的なものではないからです。
+一方 `nuka experimental webmcp-tools` は、このパッケージが出荷する他のどのコマンドよりも 1 段深くネストされています。
+わざとそうしてあり、そこに届くどの呼び出しでも `experimental` を避けられません。
+
+この印がある理由は、この標準自身のドキュメントが、このプロジェクト自身のこの使い方をそもそもサポートしているのかどうかさえ定まっていないからです。
+2026-08-13 に取得した Chrome の WebMCP ドキュメント(https://developer.chrome.com/docs/ai/webmcp)は、こう述べています。
+「While it may be possible to run WebMCP tools in headless environments, this API is primarily designed for local browser workflows with a human in the loop」。
+また別の箇所では、標準全体について「is under active discussion and subject to change in the future」とも述べています。
+同じ日に取得したその日本語版は、英語版よりも踏み込んだ書き方をしています。
+ツールの呼び出しは JavaScript の中で処理されるので、目に見えるインターフェースを提供するためにブラウザのタブや webview を開いたままにする必要があり、そのため headless な状態でツールを呼ぶ agent や補助ツールはサポート対象外だとしています。
+Playwright を通じて Node からページ自身のツールを呼ぶという、`experimental_callWebmcpTool` がやっていることは、どちらの記述にもそのまま当てはまる呼び出し側の姿です。
+この 2 つの言語版が同じ日にこの点で食い違っていたこと自体が、この印を残す理由の一部です。
+自分自身についてさえドキュメントが定まっていない標準は、印なしの依存先にしてよいものではありません。
+今日のところ、これは Chromium 149 に対して動くことが計測されています。
+この面自身のテストがそこまでは計測していますが、「計測されている」ことと「動き続けると保証されている」ことは同じ主張ではありません。
+
+`experimental_` という接頭辞と `experimental` というサブコマンドは、次の 2 つがどちらも成り立ったときにだけ外れます。
+1 つは、公式ドキュメントが補助的な呼び出し側や headless な呼び出し側からの呼び出しを積極的にサポートすると述べていることです。
+もう 1 つは、標準自身をもう「変わりうる」とは書いていないことです。
+ある文が単に消えるだけでは、どちらの条件も満たしません。
+同じ日の英語版と日本語版のあの食い違いこそが、文が 1 つ消えたところでどちらの主張が現在のものかは定まらないことを、すでに示しています。
+
 ### step の連鎖
 
 CLI 専用の step(`pattern` を持たずに定義された step)に `pattern` を与えて scenario に束ねると、その step が単体では直面しなかった問いが立ち上がります。
@@ -2264,6 +2316,20 @@ nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
+nuka mcp-tools [--json] -- <command> [args...]
+                              list the tools an MCP server declares over stdio,
+                              connecting just long enough to ask. A separate
+                              face from `nuka steps`; nothing this command
+                              reports is ever part of that vocabulary
+nuka experimental webmcp-tools <url> [--json]
+                              EXPERIMENTAL, may change or disappear without
+                              notice: list the WebMCP tools a page has already
+                              declared via navigator.modelContext.registerTool.
+                              The same separation from `nuka steps` that
+                              `mcp-tools` draws, over a different protocol;
+                              nested one command under `experimental` on
+                              purpose, so the word is unavoidable at the call
+                              site
 ```
 
 テキスト出力(`--json` なし)は、端末で読む人間向けに整形されます。
