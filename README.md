@@ -514,7 +514,7 @@ mechanical pass first, and every blocker fails loudly at the import or the
 first run rather than quietly changing what the suite does.
 
 Three of those suites have since been run rather than read, in
-[nukadoko-compat-lab](https://github.com/meganemura/nukadoko-compat-lab),
+[nukadoko-lab](https://github.com/meganemura/nukadoko-lab),
 which copies a pinned corpus, rewrites the one import, and runs `nuka run`
 against the result. One passed on the import alone. Of the other two, one
 now passes: step discovery originally read only `.ts` files, so glue

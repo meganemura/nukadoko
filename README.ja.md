@@ -444,7 +444,7 @@ import を元に戻せば、ただの cucumber-js スイートに戻ります。
 監査が見つけた障害をふさいだことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
 残る 6 本は、先に短い機械的な準備が必要で、どの障害も、スイートの振る舞いを静かに変えるのではなく、import の時点か最初の実行でうるさく失敗します。
 
-それらのスイートのうち 3 本は、その後 [nukadoko-compat-lab](https://github.com/meganemura/nukadoko-compat-lab) で、読むのではなく実際に走らせました。
+それらのスイートのうち 3 本は、その後 [nukadoko-lab](https://github.com/meganemura/nukadoko-lab) で、読むのではなく実際に走らせました。
 これは固定された corpus を複製し、import を 1 つ書き換え、その結果に対して `nuka run` を実行するものです。
 1 本は import だけで通りました。
 残る 2 本のうち、1 本はいまは通ります。
