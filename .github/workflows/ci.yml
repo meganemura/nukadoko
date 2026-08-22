@@ -1,0 +1,47 @@
+# This repository's own gate. It is not the recipe a project using nukadoko
+# should copy: that one is docs/ci.md, and it runs `nuka check` and `nuka run`
+# against an application. This one runs nukadoko's own tests.
+#
+# Actions are pinned to commit ids rather than tags, with the version beside
+# them so the line stays readable. This repository also requires that pinning
+# at the settings level, so a tag here would be refused before it ran.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here writes anything back. An injected workflow is limited by what
+# its token may do, so the token is given only what this one needs.
+permissions:
+  contents: read
+
+# A superseded run has nothing left to tell anyone.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # `--ignore-scripts` is also set by this repository's .npmrc. It is
+      # written here too because the line is where a reader looks.
+      - run: npm ci --ignore-scripts
+
+      # Browsers are never installed by `npm ci`. They live in a cache
+      # outside node_modules that only this command fills, and a fresh
+      # runner has none. Chromium is the only one the suite launches.
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run selftest
