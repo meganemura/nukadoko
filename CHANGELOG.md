@@ -58,10 +58,11 @@ just until 0.1.
   execution came about, which `harvest` accepts and which cannot be
   mistaken for something a person typed. The injected request context is
   logged and redacted like any other and never disposed, and a step whose
-  fixtures reach for a browser is refused before any record exists.
-  Marked experimental by name, with the conditions for dropping the
-  prefix written in the module: an injected `page`, and this shape
-  surviving a real migrated suite rather than only these tests.
+  fixtures reach for a browser is refused before any record exists unless
+  the call passes a `page` as well (see the next entry). Marked
+  experimental by name, with the one condition left for dropping the
+  prefix written in the module: this shape surviving a real migrated
+  suite rather than only these tests.
 - **`experimental_recordStep` takes a `page` and a `use` list.** A real
   Playwright suite is written around the browser, so taking only
   `request` would have missed most of what this exists for; the context
@@ -80,9 +81,99 @@ just until 0.1.
   checks that a step record carries the value the shared helper returned.
   That last assertion is the one that would catch the sharing having
   quietly become two implementations that happen to agree.
+- **`nuka clean`, since nothing before it ever deleted what a run
+  writes.** Five runs leave five runs' worth of step and scenario records
+  (`records/steps/<id>/`, `records/scenarios/<id>/`), and one run that
+  opens a browser leaves megabytes of trace beside them. It deletes
+  `records/`, `cache/sessions/<env>/`, and `export/` under the state
+  directory, selectively (`--records`/`--cache`/`--export`, or all three
+  when none is given) or as a `--dry-run` preview that reports exactly
+  the plan the real run acts on. It refuses the whole command, not only
+  the cache, while any session in any environment is live, since that
+  process is still writing records and can still emit exports, the same
+  rule `nuka session clear` already applied to a live lock, generalized
+  here to every category. Allure's own `allure-history.jsonl` is never a
+  target: it is the one artifact here that cannot be produced again by
+  running the suite.
+- **`nuka tend` gains `feature-never-signed`, for a feature no
+  acceptance record has ever named.** The three existing sign-off
+  findings all started from a record that already exists and asked
+  whether it had gone stale; none asked whether a feature was signed at
+  all, which is the quiet way sign-off actually fails, since nothing
+  looks for a pull request missing a file. It is a note, not an error: a
+  feature still being drafted has no sign-off yet, and accepting comes
+  after checking and running, so flagging that as broken would leave
+  every feature in progress red. Being inside `featuresDir` does not
+  silence it, unlike the staleness findings, which go quiet there because
+  a frozen claim stops mattering once the suite runs a feature unattended;
+  whether it was ever signed is a different question.
+- **A CI recipe, `docs/ci.md`, with a workflow file to copy whole.** The
+  README's own CI section is a two-line excerpt, and was leaving out what
+  a project migrating from `npx playwright test` has to add by hand:
+  `nuka run` does not read `playwright.config.ts`, so its `webServer`
+  never starts the app and the first run meets `ECONNREFUSED`; the
+  browser needs `--with-deps` on a Linux runner; and `nuka tend` needs
+  its own schedule, since nothing runs it otherwise.
 
 ### Fixed
 
+- **A malformed `from` entry no longer takes the whole vocabulary down
+  with it.** Deciding between a single tuple and a list of them checked
+  only whether the entry's first element was an array, which a string or
+  a bare `Step` both answer wrong, so either one reached the nine call
+  sites that expect a two-element tuple and crashed: `nuka steps` and
+  `nuka check` failed entirely, with no file, step, or key named, and the
+  string case rendered a fixed, meaningless string instead of crashing at
+  all. The shape decision now judges the whole entry, and the one step
+  whose entry is malformed is reported as unreadable (`from_errors`, on
+  `nuka steps --json` and `nuka describe`) rather than emptying the
+  listing for every step beside it.
+- **`nuka steps` and `nuka describe` exit non-zero on a step with an
+  unreadable `from` entry**, matching the exit-code rule they already
+  applied to an import failure or an unreadable `needs`. `describe`
+  judges only the one contract it printed, so a healthy step next to a
+  broken sibling still exits `0`.
+- **`nuka init` now adds `.env` and `.env.*` to the project's
+  `.gitignore` (re-including `.env.example`).** A tracked env file is
+  the one door a secret can reach a run record through in plaintext: an
+  untracked one is already classified as a secret source and redacted,
+  but a tracked one is ordinary config to everything downstream, and
+  `check`'s own secret-name heuristic (a key whose name looks like a
+  secret) says nothing about a key named, say, `AUTH_STRING`. `init`
+  already writes to `.gitignore` and already reads env files, so it
+  closes the gap instead of only reporting it.
+- **`nuka check` now names the step line a finding is about, not the
+  `Scenario:` line it sits under.** All seven line-bearing findings, in
+  both the text output and `--json`, used to report the pickle's own
+  scenario location, since the check path dropped the parsed document a
+  pickle step's own line resolves through. A Scenario Outline resolves to
+  the template's own line, not the row's. A scenario record written by
+  `nuka run` is unaffected; it already carried the scenario's own line.
+- **`nuka check <feature>:line` now says the line syntax is unsupported,
+  instead of reporting the file as not found.** `check` reads a whole
+  file and a line means nothing to it, so the refusal was already
+  correct, but the message sent the reader looking for a missing file
+  that was right where it was named. It now says why a line is
+  meaningless here and what to run instead; a genuinely missing file
+  still reports a missing file.
+- **`nukadoko.config.ts`'s unknown-key error now names the correctly
+  cased key when casing is the only thing wrong**, for example
+  suggesting `baseURL` for a written `baseUrl`. Only an exact
+  case-insensitive match is named; nothing looser is offered, since a
+  check that guesses is worse than no check.
+- **`nuka describe` now includes a step's `needs`/`needs_browser`,
+  matching `nuka steps --json`.** The command already calls its own
+  output the full contract; reading the fixtures a step needs used to
+  mean calling `steps --json` as well. `describe` also exits non-zero
+  when it cannot read them, the same rule it already applied to an
+  import failure.
+- **`nuka session start` refuses up front when its unix socket path
+  would exceed the platform's length limit**, naming the path, its
+  actual size, and the limit, instead of the daemon exiting with no
+  output at all. When the daemon fails to start for some other reason,
+  it now writes what it caught to a file beside the socket and the
+  failure message points at it, so a cause nobody predicted stays
+  reachable.
 - **Two `nuka run` invocations against the same project no longer
   collide in `messages.output`.** The file was truncated at the start of
   every run and both processes wrote into it, so a second run starting
