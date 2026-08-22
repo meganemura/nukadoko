@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   AttachmentContentEncoding,
@@ -44,12 +44,68 @@ import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
 // this emitter's lifetime — appending onto a stream that was never
 // successfully truncated would mix this run's envelopes with a previous
 // run's leftover ones, a worse outcome than simply staying silent.
+//
+// One real file per invocation, one copy at the configured path: every
+// write in this file (the truncate in `begin()`, every `appendFileSync` in
+// `appendEnvelope`) targets `runOutput` — `options.output` with its own
+// run id spliced into the name (`messagesRunOutputPath`, below), never
+// `options.output` itself. Two `nuka run` invocations against the same
+// project used to share one file, truncated at each one's own `begin()`;
+// whichever began second wiped out the first's own `testRunStarted`
+// without removing anything the first had already appended, so both runs'
+// own `testRunFinished` still landed in one file — a combination no single
+// run can ever produce. Giving each invocation its own file removes the
+// shared mutable state entirely. `options.output` is only ever touched
+// once, in `end()`, and only after this run's own `testRunFinished` has
+// already been appended to `runOutput` — a full, atomic copy (temp file in
+// the same directory, then rename, `copyOutputAtomic` below) of that now-
+// complete file, so a reader of `options.output` never observes a
+// half-written run and always sees either the previous run's complete
+// stream or this one's, never a mix of the two. `runOutput` itself is left
+// on disk afterward — cleanup is `nuka clean`'s job (src/cli/clean.ts),
+// the same way it already owns cleanup for every other accumulated
+// artifact this tool writes.
 
 export interface MessagesEmitterOptions {
-  /** Absolute path. NDJSON output file. */
+  /** Absolute path. The stable NDJSON location a project's own tooling
+   * points at — this emitter's real writes land in a sibling file instead
+   * (see this file's own header); `output` itself is only ever replaced,
+   * atomically, once this run's own stream is complete. */
   readonly output: string;
   readonly rootDir: string;
   readonly stderr: WritableSink;
+  /** This invocation's own run id (src/run/run-id.ts) — spliced into
+   * `output`'s own name to build the file this emitter actually writes to
+   * (`messagesRunOutputPath`, below). */
+  readonly runId: string;
+}
+
+/** The file this emitter actually writes to for one invocation: `output`
+ * with its own basename (extension stripped) followed by `.<runId>.ndjson`,
+ * beside `output` itself. Always a literal `.ndjson` extension, regardless
+ * of `output`'s own — the name only needs to be unique and self-describing,
+ * not to mirror a user-chosen extension. Exported so `nuka clean`
+ * (src/cli/clean.ts) can build the same name without re-deriving this
+ * rule. */
+export function messagesRunOutputPath(output: string, runId: string): string {
+  const base = path.basename(output, path.extname(output));
+  return path.join(path.dirname(output), `${base}.${runId}.ndjson`);
+}
+
+/** True for any file this emitter's own naming produces beside `output`
+ * for *some* run id, never for `output` itself. `output` can be relocated
+ * to a user-owned directory (`messages.output` in `nukadoko.config.ts`),
+ * so this only matches on the one part of a run id's own format
+ * (src/run/run-id.ts) that is safe to depend on here, its `run-` prefix —
+ * matching any `<base>.<anything>.ndjson` instead would let `nuka clean`
+ * delete an unrelated file a project happens to keep beside its own
+ * configured path (e.g. a hand-kept `messages.backup.ndjson`). */
+export function isMessagesRunOutputFileName(output: string, candidateFileName: string): boolean {
+  if (candidateFileName === path.basename(output)) {
+    return false;
+  }
+  const base = path.basename(output, path.extname(output));
+  return candidateFileName.startsWith(`${base}.run-`) && candidateFileName.endsWith(".ndjson");
 }
 
 /** One feature file's own contribution to `begin()` (a directory-target
@@ -80,13 +136,15 @@ export interface MessagesEmitter {
    * `input.features`'s own order, that feature's `source` /
    * `gherkinDocument` / one `pickle` per selected pickle, then one
    * `testRunStarted` once every feature has been written.
-   * Truncates `output`. */
+   * Truncates this invocation's own run file, never `output` itself (see
+   * this file's own header). */
   begin(input: MessagesBeginInput): void;
   /** One scenario. Never throws. */
   emitScenario(input: MessagesEmitScenarioInput): void;
   /** Once, at the end of a run. `success` is the run's own exit code, not
-   * this emitter's own health. Never
-   * throws. */
+   * this emitter's own health. Publishes this run's own complete file onto
+   * `output`, atomically, as its last action (this file's own header).
+   * Never throws. */
   end(success: boolean): void;
 }
 
@@ -102,6 +160,20 @@ function errorMessage(error: unknown): string {
  * directory's sibling, not its dependent — reach sideways into it. */
 function toPosixPath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
+}
+
+/** Writes `sourcePath`'s current bytes to `finalPath`, atomically: a temp
+ * file in `finalPath`'s own directory (never a different filesystem/mount,
+ * which is what makes the rename itself atomic), written in full, then
+ * renamed onto `finalPath` — mirrors src/report/allure/writer.ts's own
+ * `copyAtomic`, a small, deliberate duplicate for the same "stay this
+ * directory's sibling, not its dependent" reason `toPosixPath` above
+ * already gives. */
+function copyOutputAtomic(finalPath: string, sourcePath: string): void {
+  const tempName = `.${path.basename(finalPath)}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const tempPath = path.join(path.dirname(finalPath), tempName);
+  copyFileSync(sourcePath, tempPath);
+  renameSync(tempPath, finalPath);
 }
 
 function buildMeta(): Meta {
@@ -130,6 +202,10 @@ function buildMeta(): Meta {
 
 export function createMessagesEmitter(options: MessagesEmitterOptions): MessagesEmitter {
   const newId = IdGenerator.uuid();
+  // This invocation's own real file — every write below targets this, never
+  // `options.output` (this file's own header, "One real file per
+  // invocation, one copy at the configured path").
+  const runOutput = messagesRunOutputPath(options.output, options.runId);
   let enabled = false;
   // `afterStep` — keyed by
   // `step_index`, mirroring `before`/`after` but one id per index rather
@@ -142,7 +218,7 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
   }
 
   function appendEnvelope(envelope: Envelope): void {
-    appendFileSync(options.output, `${JSON.stringify(envelope)}\n`);
+    appendFileSync(runOutput, `${JSON.stringify(envelope)}\n`);
   }
 
   // A declared file attachment's bytes are read and base64-encoded here
@@ -180,8 +256,12 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
   return {
     begin(input: MessagesBeginInput): void {
       try {
-        mkdirSync(path.dirname(options.output), { recursive: true });
-        writeFileSync(options.output, "");
+        // Truncates `runOutput`, this invocation's own file — never
+        // `options.output`, which stays whatever the last completed run
+        // left it as until `end()` below replaces it in one atomic step
+        // (this file's own header).
+        mkdirSync(path.dirname(runOutput), { recursive: true });
+        writeFileSync(runOutput, "");
         enabled = true;
 
         appendEnvelope({ meta: buildMeta() });
@@ -280,6 +360,13 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
         appendEnvelope({
           testRunFinished: { success, timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(Date.now()) },
         });
+        // `runOutput` is now this run's own complete stream — replace
+        // `options.output` with it in one atomic step (this file's own
+        // header). Left inside the same try/catch as the append above:
+        // either both succeed, or this run's failure to publish is
+        // reported the same way its failure to finish would be, never
+        // silently.
+        copyOutputAtomic(options.output, runOutput);
       } catch (error) {
         warn(`messages end failed: ${errorMessage(error)}`);
       }

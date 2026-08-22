@@ -180,12 +180,40 @@ describe("nuka run: progress output", () => {
     expect(exitCode).toBe(0);
     const text = stderr.text();
     expect(text).toContain(path.join("reports", "allure"));
-    expect(text).toContain(path.join("reports", "messages.ndjson"));
+    // The messages row names this run's own run-id-suffixed file inside
+    // the moved directory, not the bare configured name (this file's own
+    // "run-id-suffixed" test above covers why) — checked by directory plus
+    // id, not by the exact "messages.ndjson" name, which a suffixed file
+    // never contains contiguously.
+    const runId = (JSON.parse(nonEmptyLines(stdout.text())[0]!) as { run_id: string }).run_id;
+    expect(text).toContain(path.join("reports", `messages.${runId}.ndjson`));
     // The default locations are named nowhere — the config moved the
     // output, this line reports where it actually landed, not where it
     // would have landed by default.
     expect(text).not.toContain(".nukadoko/export/allure-results");
     expect(text).not.toContain(".nukadoko/export/messages.ndjson");
+  });
+
+  it("the messages output-location line names this run's own run-id-suffixed file, not the stable configured path", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/passing.feature"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    const runId = (JSON.parse(nonEmptyLines(stdout.text())[0]!) as { run_id: string }).run_id;
+    const messagesLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("messages"));
+    expect(messagesLine).toBeDefined();
+    // A concurrent run can overwrite the stable configured path before a
+    // reader gets to it (this file's own header) — checking for a fixed
+    // "messages.ndjson" substring alone would pass even for the stable
+    // path, since a run-id-suffixed name never contains it contiguously
+    // (the id sits between the basename and the extension), so this
+    // asserts the id actually named is *this* run's own.
+    expect(messagesLine).toContain(`messages.${runId}.ndjson`);
   });
 
   it("stdout carries only the NDJSON scenario records; every non-empty line parses, one per scenario", async () => {

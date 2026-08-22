@@ -4,6 +4,7 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { messagesRunOutputPath } from "../src/report/messages/emitter.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 /** A pid guaranteed to already be dead: spawnSync blocks until the child
@@ -63,6 +64,16 @@ async function seedExport(rootDir: string): Promise<void> {
   await writeFile(path.join(stateDir(rootDir), "export", "messages.ndjson"), "line1\n");
 }
 
+/** One leftover run-id-suffixed sibling of `export/messages.ndjson`
+ * (src/report/messages/emitter.ts's own header: every `nuka run`
+ * invocation leaves one of these behind, distinct from the stable path
+ * itself) — seeded by hand here, the same as every other file this test
+ * file seeds, rather than by actually running `nuka run`. */
+async function seedExportRunFile(rootDir: string, runId: string): Promise<void> {
+  const output = path.join(stateDir(rootDir), "export", "messages.ndjson");
+  await writeFile(messagesRunOutputPath(output, runId), "line1\n");
+}
+
 describe("nuka clean", () => {
   let rootDir: string;
 
@@ -85,6 +96,7 @@ describe("nuka clean", () => {
     await seedRecords(rootDir);
     await seedCache(rootDir);
     await seedExport(rootDir);
+    await seedExportRunFile(rootDir, "run-seed-0001");
 
     const stdout = createCaptureSink();
     const exitCode = await runCli(["clean", "--dry-run"], { rootDir, stdout, stderr: createCaptureSink() });
@@ -96,11 +108,13 @@ describe("nuka clean", () => {
     expect(text).toContain(path.join(".nukadoko", "cache", "sessions", "default", "alpha.json"));
     expect(text).toContain(path.join(".nukadoko", "export", "allure-results"));
     expect(text).toContain(path.join(".nukadoko", "export", "messages.ndjson"));
+    expect(text).toContain(path.join(".nukadoko", "export", "messages.run-seed-0001.ndjson"));
 
     // Nothing actually removed.
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "messages.run-seed-0001.ndjson"))).toBe(true);
   });
 
   it("--json reports the same plan as a structured object", async () => {
@@ -142,6 +156,7 @@ describe("nuka clean", () => {
 
   it("deletes export/allure-results contents but recreates the directory empty, and never touches allure-history.jsonl", async () => {
     await seedExport(rootDir);
+    await seedExportRunFile(rootDir, "run-seed-0001");
 
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
@@ -150,9 +165,28 @@ describe("nuka clean", () => {
     expect(existsSync(resultsDir)).toBe(true);
     expect(await readdir(resultsDir)).toEqual([]);
     expect(existsSync(path.join(stateDir(rootDir), "export", "messages.ndjson"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "messages.run-seed-0001.ndjson"))).toBe(false);
 
     const historyPath = path.join(stateDir(rootDir), "export", "allure-history.jsonl");
     expect(existsSync(historyPath)).toBe(true);
+  });
+
+  it("deletes every run-id-suffixed messages file, however many accumulated, and leaves an unrelated file with a similar name alone", async () => {
+    await seedExport(rootDir);
+    await seedExportRunFile(rootDir, "run-seed-0001");
+    await seedExportRunFile(rootDir, "run-seed-0002");
+    // A file that merely sits beside messages.ndjson but doesn't match this
+    // emitter's own naming rule (src/report/messages/emitter.ts's own
+    // `isMessagesRunOutputFileName`) — a clean this broad must still leave
+    // it alone.
+    await writeFile(path.join(stateDir(rootDir), "export", "other.ndjson"), "unrelated\n");
+
+    const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+    expect(exitCode).toBe(0);
+
+    expect(existsSync(path.join(stateDir(rootDir), "export", "messages.run-seed-0001.ndjson"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "messages.run-seed-0002.ndjson"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "other.ndjson"))).toBe(true);
   });
 
   it("--records cleans only records, leaving cache and export untouched", async () => {

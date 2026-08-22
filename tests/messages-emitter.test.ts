@@ -4,7 +4,7 @@ import path from "node:path";
 import type { Envelope } from "@cucumber/messages";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
-import { createMessagesEmitter, type MessagesEmitter } from "../src/report/messages/emitter.js";
+import { createMessagesEmitter, messagesRunOutputPath, type MessagesEmitter } from "../src/report/messages/emitter.js";
 import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 import { readOwnVersion } from "../src/version.js";
@@ -61,14 +61,16 @@ function readEnvelopes(output: string): Envelope[] {
 describe("createMessagesEmitter", () => {
   let rootDir: string;
   let output: string;
+  let runOutput: string;
   let sink: { write(chunk: string): boolean; text(): string };
   let emitter: MessagesEmitter;
 
   beforeEach(() => {
     rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-messages-emitter-"));
     output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
+    runOutput = messagesRunOutputPath(output, "run-1");
     sink = createCaptureSink();
-    emitter = createMessagesEmitter({ output, rootDir, stderr: sink });
+    emitter = createMessagesEmitter({ output, rootDir, stderr: sink, runId: "run-1" });
   });
 
   afterEach(() => {
@@ -274,15 +276,37 @@ describe("createMessagesEmitter", () => {
     });
   });
 
-  it("truncates output on begin(), so a previous run's lines never survive", () => {
+  it("truncates this run's own file on begin(), so a leftover under the same run id never survives", () => {
+    mkdirSync(path.dirname(runOutput), { recursive: true });
+    writeFileSync(runOutput, "leftover line from a previous run\n");
+
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
+
+    const content = readFileSync(runOutput, "utf8");
+    expect(content).not.toContain("leftover line from a previous run");
+  });
+
+  it("leaves the configured output path untouched until end(), then replaces it atomically with this run's own complete stream", () => {
     mkdirSync(path.dirname(output), { recursive: true });
     writeFileSync(output, "leftover line from a previous run\n");
 
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
+    // begin() alone must not touch `output` at all — a concurrent run's own
+    // begin() truncating a file this run also writes to is exactly the
+    // corruption src/report/messages/emitter.ts's own header describes.
+    expect(readFileSync(output, "utf8")).toBe("leftover line from a previous run\n");
+
+    emitter.end(true);
+
     const content = readFileSync(output, "utf8");
     expect(content).not.toContain("leftover line from a previous run");
+    expect(content).toContain("testRunFinished");
+    // `output` is a copy, byte for byte, of this run's own file — not a
+    // reconstruction, not a summary.
+    expect(content).toBe(readFileSync(runOutput, "utf8"));
   });
 
   it("begin() with more than one feature writes meta, then one (source, gherkinDocument, pickle x N) group per feature in the given order, then one testRunStarted", () => {
@@ -300,7 +324,7 @@ describe("createMessagesEmitter", () => {
       ],
     });
 
-    const envelopes = readEnvelopes(output);
+    const envelopes = readEnvelopes(runOutput);
     const kinds = envelopes.map((e) => Object.keys(e)[0]);
 
     // meta, then checkout's own (source, gherkinDocument, pickle x 3), then
@@ -384,7 +408,7 @@ describe("createMessagesEmitter", () => {
     expect(sink.text()).toContain("warning:");
     expect(sink.text()).toContain("never-written.txt");
 
-    const envelopes = readEnvelopes(output);
+    const envelopes = readEnvelopes(runOutput);
     expect(envelopes.some((e) => e.testCase)).toBe(true);
     expect(envelopes.some((e) => e.attachment)).toBe(false);
   });
@@ -400,12 +424,12 @@ describe("createMessagesEmitter", () => {
   });
 
   describe("begin() failure isolation", () => {
-    it("degrades to a silent no-op for emitScenario/end when begin() itself fails (unwritable output path)", () => {
+    it("degrades to a silent no-op for emitScenario/end when begin() itself fails (unwritable run output path)", () => {
       // A deterministic way to make begin()'s own truncate fail: pre-create
-      // a *directory* at the exact path `output` would be written to —
-      // `writeFileSync` onto an existing directory always fails (EISDIR),
-      // regardless of platform/CI permissions setup.
-      mkdirSync(output, { recursive: true });
+      // a *directory* at the exact path this run's own file would be
+      // written to — `writeFileSync` onto an existing directory always
+      // fails (EISDIR), regardless of platform/CI permissions setup.
+      mkdirSync(runOutput, { recursive: true });
 
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;

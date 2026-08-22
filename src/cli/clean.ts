@@ -3,6 +3,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
+import { isMessagesRunOutputFileName } from "../report/messages/emitter.js";
 import { liveLockOwner } from "../session/lock.js";
 import { sessionsDir, sessionsRootDir } from "../session/paths.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -26,9 +27,14 @@ import type { WritableSink } from "./writable-sink.js";
 // only this one new caller uses is a second source of truth, not a
 // reduction in duplication — it earns its existence once cli/do.ts and
 // cli/run.ts actually move onto it, which this change does not do.
-// `export`'s two targets are resolved exactly the way cli/run.ts resolves
+// `export`'s targets are resolved exactly the way cli/run.ts resolves
 // them, config override included (`config.allure?.resultsDir`,
-// `config.messages?.output`).
+// `config.messages?.output`). `config.messages?.output` names only the
+// stable, most-recently-completed-run copy the messages emitter leaves
+// behind (src/report/messages/emitter.ts's own header) — every run also
+// leaves its own run-id-suffixed file beside it, which a project
+// accumulates one of per `nuka run` invocation, so `buildExportPlan` below
+// enumerates and removes those too, not only the stable path itself.
 //
 // A live session is refused before anything is deleted, for every
 // category, not only cache: src/live/daemon.ts is a long-running process
@@ -193,10 +199,14 @@ async function buildCachePlan(rootDir: string, stateDir: string): Promise<string
 interface ExportPlan {
   resultsDirRelative: string;
   messagesOutputRelative: string;
+  /** Every run-id-suffixed sibling file found beside `messagesOutputRelative`
+   * (root-relative), sorted for a deterministic plan. */
+  messagesRunOutputsRelative: string[];
   paths: string[];
 }
 
-/** `export/allure-results/` and `export/messages.ndjson`, or wherever
+/** `export/allure-results/`, `export/messages.ndjson`, and every run-id-
+ * suffixed file the messages emitter left beside it, or wherever
  * `config.allure.resultsDir`/`config.messages.output` point instead —
  * resolved exactly the way cli/run.ts resolves them before handing them to
  * the two emitters, config override included, so a clean targets the same
@@ -220,7 +230,30 @@ async function buildExportPlan(
   if (existsSync(path.join(rootDir, messagesOutputRelative))) {
     paths.push(messagesOutputRelative);
   }
-  return { resultsDirRelative, messagesOutputRelative, paths };
+
+  // Every run-id-suffixed file beside `messagesOutputRelative`
+  // (src/report/messages/emitter.ts's own header: the configured path is
+  // only ever a post-hoc copy of the most recently *completed* run, and
+  // each run's own real stream lives in one of these instead). A missing
+  // directory (no `nuka run` has written there yet) is zero entries, not
+  // an error, same convention as buildRecordsPlan/buildCachePlan above.
+  const messagesDirRelative = path.dirname(messagesOutputRelative);
+  const messagesRunOutputsRelative: string[] = [];
+  try {
+    const entries = await readdir(path.join(rootDir, messagesDirRelative), { withFileTypes: true });
+    const names = entries
+      .filter((entry) => entry.isFile() && isMessagesRunOutputFileName(messagesOutputRelative, entry.name))
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+    for (const name of names) {
+      messagesRunOutputsRelative.push(path.join(messagesDirRelative, name));
+    }
+  } catch {
+    // Directory doesn't exist yet: nothing to enumerate.
+  }
+  paths.push(...messagesRunOutputsRelative);
+
+  return { resultsDirRelative, messagesOutputRelative, messagesRunOutputsRelative, paths };
 }
 
 function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: WritableSink): void {
@@ -307,6 +340,9 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
     await rm(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true, force: true });
     await mkdir(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true });
     await rm(path.join(rootDir, exportPlan.messagesOutputRelative), { force: true });
+    for (const relativePath of exportPlan.messagesRunOutputsRelative) {
+      await rm(path.join(rootDir, relativePath), { force: true });
+    }
   }
 
   return 0;

@@ -375,7 +375,13 @@ export const configSchema = z
     /** `output` is root-relative; omitted, it defaults to
      * `<stateDir>/export/messages.ndjson` — that default is applied where
      * `stateDir` is resolved (src/cli/run.ts), not here, same split as
-     * `allure.resultsDir` above. No `enabled` key: the emitter is always
+     * `allure.resultsDir` above. `output` itself only ever holds the most
+     * recently *completed* run's own stream, written there atomically once
+     * that run finishes; each invocation's real, in-progress write target
+     * is a run-id-suffixed sibling file beside it instead
+     * (src/report/messages/emitter.ts), so two concurrent `nuka run`
+     * invocations against this same path never interleave their writes.
+     * No `enabled` key: the emitter is always
      * on, same reason as `allure`
      * above — zero configuration already gets a full stream. No CLI flag
      * either. */

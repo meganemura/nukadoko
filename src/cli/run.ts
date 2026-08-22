@@ -17,7 +17,11 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
-import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
+import {
+  createMessagesEmitter,
+  messagesRunOutputPath,
+  type MessagesEmitter,
+} from "../report/messages/emitter.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { probeGitState } from "../run/probe-git.js";
 import {
@@ -190,17 +194,24 @@ import type { WritableSink } from "./writable-sink.js";
 // this run's own exit code — this emitter's only channel for a run-scope
 // hook's failure, since neither hook has a record of its own to carry it.
 //
-// Output-file semantics: one `nuka run` invocation is one stream,
-// written to one file; `begin()` truncates it (appending would produce a
-// second `testRunStarted` in what must read back as a single well-formed
-// message stream). One invocation can select more than one feature file now
-// (a directory target folds every `.feature`
-// file it walked into this same one stream, `begin()` called once with all
-// of them — see that call site below), but it is still exactly one
-// invocation, one stream: running `nuka run` a second time, whether against
-// one file or a directory, overwrites the first run's stream rather than
-// appending to it — a deliberate consequence of "one file, truncated on
-// begin", not a bug.
+// Output-file semantics: one `nuka run` invocation is one stream. Its real
+// file is unique to this invocation, named from `runId` above
+// (src/report/messages/emitter.ts's own `messagesRunOutputPath`); `begin()`
+// truncates that file, never the configured `messagesOutputRel` path
+// itself (appending would produce a second `testRunStarted` in what must
+// read back as a single well-formed message stream, the same reason a
+// second concurrent invocation must never share this invocation's own
+// file — see that module's own header for the corruption this used to
+// allow). One invocation can select more than one feature file now (a
+// directory target folds every `.feature` file it walked into this same
+// one stream, `begin()` called once with all of them — see that call site
+// below), but it is still exactly one invocation, one file. The configured
+// path only ever changes once, in `end()`, replaced atomically with a full
+// copy of this invocation's now-complete stream — so running `nuka run` a
+// second time, sequentially, still leaves the configured path holding
+// exactly the newest run's stream, the same externally-visible behavior
+// "truncated on begin" gave before, but without two concurrent invocations
+// able to interleave writes into one shared file.
 //
 // `from`'s structural
 // validation (src/step/validate-from.ts's `validateStepFrom`)
@@ -584,6 +595,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // itself) is available for the output-location line near this
       // function's own `return` too,
       // whether or not the emitter that writes there actually succeeds.
+      // `messagesOutputRel` itself feeds two different things below: the
+      // emitter's own `output` (the stable, config-facing path it copies
+      // its finished stream onto), and, run-id-suffixed via
+      // `messagesRunOutputPath`, the row that output-location line names —
+      // a concurrent second invocation can replace the stable path's
+      // contents before a reader gets to it, but never this run's own
+      // suffixed file (src/report/messages/emitter.ts's own header).
       const allureResultsDirRel =
         config.allure?.resultsDir ?? path.join(config.stateDir, "export", "allure-results");
       const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "export", "messages.ndjson");
@@ -619,7 +637,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       if (hasPickles) {
         try {
           const output = path.join(rootDir, messagesOutputRel);
-          messagesEmitter = createMessagesEmitter({ output, rootDir, stderr });
+          messagesEmitter = createMessagesEmitter({ output, rootDir, stderr, runId });
           // One `features` entry per file `selected` carries —
           // `selected.features` is already in this
           // run's own deterministic order, so this emitter has no reordering
@@ -857,7 +875,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // (run.ts:530,557 above — the same condition that gates their own
       // construction): each writes its own environment/categories or
       // stream-header data as soon as it is constructed, before any one
-      // scenario's own record exists to write.
+      // scenario's own record exists to write. `messages` names this run's
+      // own run-id-suffixed file, not `messagesOutputRel` itself — that
+      // stable path is a copy destination a concurrent second invocation
+      // can replace before a reader gets to it (see `messagesOutputRel`'s
+      // own comment above), so only the suffixed file is guaranteed to
+      // still hold this run's own stream when read.
       writeOutputLocations(stderr, [
         ...(scenariosWritten > 0
           ? [
@@ -878,7 +901,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(hasPickles
           ? [
               { label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const },
-              { label: "messages", relativePath: messagesOutputRel, kind: "file" as const },
+              {
+                label: "messages",
+                relativePath: messagesRunOutputPath(messagesOutputRel, runId),
+                kind: "file" as const,
+              },
             ]
           : []),
       ]);
