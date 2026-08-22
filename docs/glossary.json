@@ -228,6 +228,11 @@
       "en": ["listener", "listeners"],
       "ja": "リスナー",
       "note": "docs/spec.md \"Compat steps\" で、experimental_recordStep が page.context() に取り付けて evidence を集める event listener を指す文脈で入った"
+    },
+    {
+      "en": ["gate"],
+      "ja": "ゲート",
+      "note": "cucumber/gherkin のドメイン語だが、他の keep_english の語と違い .ja.md では一貫してカタカナのゲートに訳されている(2026-08-22 に確認、keep_english から移動)"
     }
   ],
   "keep_english": [
@@ -284,7 +289,6 @@
     { "term": "hook", "why": "cucumber/gherkin のドメイン語" },
     { "term": "pickle", "why": "cucumber/gherkin のドメイン語" },
     { "term": "glue", "why": "cucumber/gherkin のドメイン語" },
-    { "term": "gate", "why": "cucumber/gherkin のドメイン語" },
     { "term": "observed", "why": "step record のフィールド名と直接対応する" },
     { "term": "provenance", "why": "step record のフィールドが答える性質の名前として英語のまま" },
     {

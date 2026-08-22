@@ -81,6 +81,23 @@ just until 0.1.
   That last assertion is the one that would catch the sharing having
   quietly become two implementations that happen to agree.
 
+### Fixed
+
+- **Two `nuka run` invocations against the same project no longer
+  collide in `messages.output`.** The file was truncated at the start of
+  every run and both processes wrote into it, so a second run starting
+  before the first finished cut the first run's stream in half and
+  appended its own: a file no single run could have produced, with
+  neither run failing or warning about it. Each run now writes its own
+  file, named for its run id beside the configured path
+  (`messages.<run_id>.ndjson` under the default path), and the
+  configured path becomes a copy of the most recently finished run's
+  stream, placed there by rename so a reader never catches it half
+  written. `nuka clean [--export]` removes both the configured path and
+  every run's own file beside it. See
+  [docs/upgrading.md](docs/upgrading.md) for what changes for a script
+  that watches this file.
+
 ## 0.6.0 — 2026-08-18
 
 ### Added

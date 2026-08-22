@@ -78,9 +78,9 @@ differs is only where you enter:
    want what you found fixed in a scenario: start at "From an exploration
    to a scenario" below.
 
-If none of the four is true, there is nothing yet to interrogate: ask what
-this is supposed to do before writing anything, since a scenario started
-without knowing what it proves just proves the wrong thing.
+If none of the four is true, there is nothing yet to interrogate: ask the
+user what this is supposed to do before writing anything, since a scenario
+started without knowing what it proves just proves the wrong thing.
 
 Everything below assumes the project is already initialized. If it isn't
 yet (no `nukadoko.config.ts`), run `nuka init` first.
@@ -197,7 +197,8 @@ nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
 
 The ids are the ones `nuka do` printed. There is no time window and no
 `--since`: it cannot tell an abandoned probe from the call that mattered.
-Order does not matter either; the draft follows what the records say.
+Order does not matter either; the draft follows what the records say about
+when each one ran.
 
 **One call is one scenario.** Harvest never splits a list, since where one
 story ends is a judgment about meaning and not something a step record
@@ -215,10 +216,6 @@ the part worth doing carefully:**
 - Delete any line that was a probe rather than part of the story. A draft
   is a record of what you ran, and exploring means running things that
   turned out not to matter.
-
-The draft also names three things it will not decide for you, in itself
-and on stderr both: a step with no pattern, a line that failed when it
-ran, and a line that does not read back to the record it came from.
 
 Then join "The loop" below at step 4, `nuka check`.
 
