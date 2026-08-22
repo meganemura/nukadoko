@@ -140,6 +140,21 @@ environment (`default` when omitted); a live one refuses to clear until
 it is stopped first, since clearing only ever touches files, never a
 running process.
 
+`nuka clean [--records] [--cache] [--export] [--dry-run]` is the wider
+version of the same idea, once you are done exploring rather than mid-way
+through it: it removes accumulated step/scenario records, session cache
+files, and the Allure/messages export output, all disposable by design
+(see "Artifacts" in `docs/spec.md`). No category flag cleans all three;
+`--dry-run` prints the same plan the real run would act on without
+removing anything. It refuses the whole command, every category, while
+any session anywhere is still live, the same rule `session clear` already
+applies to one, widened here because a live session's own process is
+still writing records and export output, not sitting idle. Stop every
+session first (`nuka session stop <name>`), then clean.
+`export/allure-history.jsonl` survives regardless: it sits beside
+`allure-results/`, not inside it, and is the one export artifact no
+re-run can reproduce.
+
 ## What a harvested draft names rather than decides
 
 Three of them, each also reported on stderr.

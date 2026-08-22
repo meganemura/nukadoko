@@ -33,6 +33,47 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## Unreleased
+
+One breaking change, plus a behavior change that is not breaking but is
+worth knowing about, since it changes what a script watching `nuka run`'s
+output actually sees. The breaking one: why is in
+[CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+
+- **An args key a step's schema does not declare is refused now, not
+  silently dropped.** `nuka describe` already published each object
+  schema's own `additionalProperties: false`; the runtime now enforces
+  the same shape everywhere a step can be called: `nuka do`, `nuka do
+  --session <live>`, `nuka run`, `experimental_recordStep`, and the `call`
+  fixture a part is invoked through. A key `from` or `--use` fills is
+  never flagged, since either can only ever name a key the step already
+  declared. **A successful step record's own `args` also changed shape**:
+  it is now the schema-validated value, not the raw one, so a key filled
+  by the schema's own `.default(...)` shows up in it even where the
+  caller never typed it. A script comparing a step record's `args`
+  against what it sent needs to allow for that: an added default is not a
+  sign anything went wrong. A failed record is unaffected, and neither is
+  a part's own `CallEntry.args`, which stays raw on both outcomes either
+  way.
+- **Not breaking, but worth knowing: `nuka run` no longer writes straight
+  into `messages.output` while a run is in progress.** Each invocation now
+  writes its own file (the configured path's own name with the run id
+  spliced in, `messages.<run_id>.ndjson` under the default path) beside
+  the configured path, and only replaces the configured path, atomically,
+  once the run finishes; the change closes a real bug where two `nuka run`
+  invocations against the same path used to interleave into one broken
+  file. A script
+  that tailed `messages.ndjson` to watch a run live no longer sees
+  anything until the run ends; watch Allure instead (`npx allure watch`)
+  for that. A script that treated the file being truncated as "a run just
+  started" needs a different signal, since the configured path is not
+  touched until the run's own end now. `messages.output` still ends up
+  holding the newest completed run's own stream either way, so nothing
+  that only reads it once the run is done needs to change. One thing to
+  add to housekeeping: each run's own file accumulates beside the
+  configured path now, removed only by `nuka clean [--export]`, a new
+  command this release also adds (see the command's own `--help`).
+
 ## 0.4.1 to 0.5.0
 
 Additive, with one narrow exception. Why is in

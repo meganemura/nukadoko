@@ -7,6 +7,28 @@ just until 0.1.
 
 ## Unreleased
 
+### Breaking
+
+- **An args key a step's schema does not declare is refused now, not
+  silently dropped.** `nuka describe` already publishes an object `args`
+  schema as JSON Schema with `additionalProperties: false`; the runtime
+  used to strip an extra key instead of rejecting it, since a zod object's
+  own default parse mode for an unrecognized key is "strip", so the
+  published contract forbade something the engine still allowed, and that
+  key then reached the step record it produced. Every path that turns a
+  step's `args` into a validated value now parses against that same
+  closed shape: `nuka do`, `nuka do --session <live>`, `nuka run`,
+  `experimental_recordStep`, and the `call` fixture a part is invoked
+  through. A key `from` or `--use` fills is never flagged, since either
+  can only ever name a key the step itself declared. A successful step
+  record's own `args` is the validated value now too, so a key filled by
+  the schema's own `.default(...)` appears in it even when the caller
+  never typed it; a failed record keeps exactly what was given. A part's
+  own `CallEntry.args` stays raw on both outcomes deliberately: what
+  changed here is what gets accepted, not what gets written down. See
+  [docs/upgrading.md](docs/upgrading.md) for what a project already
+  relying on the old behavior needs to check.
+
 ### Added
 
 - **A second door, for a suite written against Playwright Test rather

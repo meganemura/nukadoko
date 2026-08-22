@@ -76,9 +76,9 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに分かれま
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>` | ツール | しない | run ごと | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
+| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>` | ツール | しない | `nuka clean` が消すまで | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
 | Sign-off | `<feature のベース名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
-| Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson` | ツール | しない | 使い捨て | 他のツール |
+| Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも。こちらも `nuka clean` が消すまで残る) | ツール | しない | 使い捨て | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
 この表が名指しているのはファイルです。
@@ -96,6 +96,16 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに分かれま
   Measurement は決してコミットされません。
   `nuka init` が、それが置かれる state directory を gitignore するからです。
   1 回の run の作業記録は、次の run について何も語らないからです。
+- **Measurement の「run ごと」という寿命は、`nuka clean` ができるまでは願望にすぎませんでした。**
+  その record を書いた run が終わっても、step record も scenario record も何も消されませんでした。
+  `nuka do --use` と `nuka harvest` は意図的に昨日の record を読むので、自動で消すという選択肢はそもそも無かったのです。
+  それを実際に行う明示の操作が `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` です。
+  カテゴリのフラグを 1 つも与えなければ 3 つとも消し、1 つ与えればそれだけに絞ります。
+  `--dry-run` は、実際の run が作用するのと同じ計画を、何も消さずに出力します。
+  どこかで session が 1 つでも live であれば、カテゴリを問わずコマンド全体を拒否します。
+  その session 自身のプロセスがいままさに records と export の出力を書いているからで、これは `nuka session clear` が live な lock に対してすでに拒否している理由を、全 environment に広げたものです。
+  1 つだけ例外の export ファイルがあります。
+  `export/allure-history.jsonl` は `allure-results/` の隣にあり、その中にはなく、ここにある成果物の中で唯一、再実行では作り直せないものです。
 - **step record と scenario record は同じ 1 行にいます。**
   違うのは粒度だけです。
   scenario 自身の record と、その step それぞれの record は、同じ問いに 2 つの解像度で答えているのであって、違う 2 つの問いに答えているのではありません。
@@ -171,6 +181,15 @@ export default defineStep({
   その行は args のバリデーションに失敗する以外にありえないからです。
   この逆方向は、キーが何かツールに見えない方法で埋まっているかもしれないという理屈のもと、しばらく未チェックのままでした。
   `from` が残る方法を可視化することでその隙間を埋めたため、残っているのは単に説明されていないだけでなく、正真正銘埋まりようのないものです。
+- pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、黙って捨てられるのではなく拒否されます。
+  `nuka describe` はすでに各オブジェクトの `args` スキーマ自身の `additionalProperties: false` を公開しており、step の `args` を検証済みの値に変える経路はすべていま、その同じ閉じた形に対してパースするようになりました(`nuka do`、`nuka do --session <live>`、`nuka run`、`experimental_recordStep`、そして part が呼ばれる `call` fixture。「Parts」を参照)。
+  `from`/`--use` が埋めるキーは決して指摘されません。
+  どちらも、その step 自身が宣言したキーしか名指せないからです。
+  成功した record の `args` は検証済みの値そのものなので、スキーマ自身の `.default(...)` が埋めたキーは、その行で誰も書いていなくても現れます。
+  失敗した record は与えられたものをそのまま保持します。
+  読み手が生の値をもっとも必要とするのがそこだからです。
+  part 自身の `CallEntry.args`(「Records」を参照)は、どちらの結果でも生のままです。
+  ここで変わったのは何を受け入れるかであり、何を書き残すかではありません。
 - step に付いた data table や docstring は、名前付きキャプチャが消費せずに残した唯一の必須 args キーに結び付きます(table は `string[][]` として、docstring は `string` として)。
   他のものと同様にスキーマでバリデーションされます。
   Gherkin の table が初めて型を持つことになります。
@@ -1363,6 +1382,12 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
   失敗時には `error: { kind, message }` がそれに置き換わります。
   compat の step は `result: null` を記録します。
+- `args` も同じ分かれ方をします(この背後にある拒否については「型付き step」を参照)。
+  `ok` な record では `run` が実際に受け取った、スキーマで検証済みの値です。
+  呼び出し側が書かなかったキーにスキーマ自身の `.default(...)` が入った場合も含みます。
+  `failed` な record では与えられたものをそのまま保持します。
+  スキーマがすでに拒否した値を、検証済みの形に組み立て直すことはできないからです。
+  compat の step の `args` は、検証対象のスキーマが無いため、どちらの結果でも検証されません。
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
@@ -1443,6 +1468,8 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
 - `calls`(空でないときだけ現れます)は、この実行が `call` fixture を通じて実行した part を、呼び出した順に列挙したものです(「Parts」を参照)。
   各エントリは `{ "step": "create-project", "args": {...}, "result": {...}, "started_at": "...", "finished_at": "..." }` の形です。
   part が失敗したときは `result` の代わりに `error` を運び、その分類は step record 自身の `error` と同じです。
+  step record 自身のトップレベルの `args`(上記)とは違い、ここでの `args` はどちらの結果でも常に `call()` に渡された生の値です。
+  part について変わったのは `call()` が何を受け入れるかであり、何を書き残すかではありません。
   part がさらに part を呼んでいれば、そのエントリの下に自分自身の `calls` を運びます。
   これらは step record ではなく、`step_record_id` を持ちません。
   `--use` が引用するのは step record であり、この実行が後続の実行に差し出すのはその実行自身の `result` だからです。
@@ -1707,7 +1734,18 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   `init` もこれを空のまま作ります。
   Allure 自身の CLI は、存在しないディレクトリでは起動を拒む一方、空のディレクトリなら受け付けるからです。
   これにより、最初の `nuka run` より前から `allure watch` を起動しておけます。
-- `export/messages.ndjson`(messages emitter の出力。run ごとに 1 つのストリームで、`nuka run` のたびに先頭が truncate される。Messages emitter を参照)
+- `export/messages.ndjson`(messages emitter の出力)。
+  このパスが持つのは常に、直近に *完了した* run 自身のストリームだけで、その run が終わった瞬間に原子的に置き換えられます。
+  各呼び出し自身の、実行中の本当の書き込み先はその隣にある run-id 付きの兄弟ファイルです(`messages.<run_id>.ndjson`、その呼び出し自身の開始時に truncate される)。
+  `nuka run` の呼び出し 1 回につき 1 つで、終わったあともディスクに残ります(Messages emitter を参照)。
+  溜まったものを消すのは `nuka clean [--export]` です。
+
+`nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、この 3 つのディレクトリすべてにまたがって消すコマンドです。
+カテゴリのフラグを 1 つも与えなければ、既定はその全部です。
+どこかで `nuka session` が 1 つでも live であれば、カテゴリを問わずコマンド全体を拒否します。
+その session 自身のプロセスが、いままさに `records/` と `export/` に書き込んでいるからです(理由の全体は「成果物」を参照)。
+カテゴリを問わず決して触れないファイルが 1 つあります。
+`export/allure-history.jsonl` は `export/allure-results/` の隣にあり、その中にはなく、`.nukadoko/` の下にある成果物の中で唯一、再実行では作り直せないものです。
 
 耐久性のある成果物はその代わりにリポジトリの中に置かれます: feature ファイル、型付き step、sign-off の記録です。
 
@@ -2088,11 +2126,22 @@ Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日�
 `enabled` フラグも CLI フラグもありません(Allure と同じです)。
 emitter は常に実行され、スキップされるのは `nuka run` の呼び出しが 0 件の pickle を選んだときだけです。
 
-- 1 回の run は 1 つのストリームであり 1 つのファイルです。
-  `begin` は追記ではなく truncate します。
-  追記だと 1 つのファイルに `testRunStarted` の envelope が 2 つ残ってしまい、読み戻せる単一の well-formed なストリームでなくなるからです。
-  `nuka run` は呼び出しごとに 1 つの feature を実行するため、続けて 2 つ目の feature を実行すると最初のストリームは上書きされます。
-  これは「1 ファイル、truncate」という設計の意図した帰結であり、見落としではありません。
+- 1 回の run は 1 つのストリームであり 1 つのファイルですが、2 つの呼び出しがどちらのファイルかを取り合うことはもうありません。
+  各呼び出し自身の本当のファイルは、設定されたパス自身の名前に run id を差し込んだもので(既定のパスなら `messages.<run_id>.ndjson`、`messages.output: "out/stream.ndjson"` なら代わりに `out/stream.<run_id>.ndjson`)、設定されたパスの隣に置かれます。
+  `begin` が truncate するのはこのファイルであり、設定されたパス自身ではありません。
+  追記だと、読み戻せる単一の well-formed なストリームであるべきところに `testRunStarted` の envelope が 2 つ残ってしまうからです。
+  これは、2 つの同時並行な呼び出しが 1 つの共有ファイルを互いに truncate してはいけない理由と同じです(以前はそうしていました。あとから始まったほうが、最初のストリームの開始を消す一方で、どちらも自分自身の終了は追記し続けたため、1 回の run では決して生まれない組み合わせがそこに現れていました)。
+  `end` はそのあと、この呼び出し自身のいま完全になったファイルの完全な原子的コピーで、設定されたパスを置き換えます。
+  これがその最後の動作です。
+  だから設定されたパスの読み手は、書きかけの run を決して目にしません。
+  常にどちらか、直前の run の完全なストリームか、この run のものかであり、2 つが混ざることはありません。
+- 設定されたパスは、run が進行している間は更新されません。
+  以前は run の進行に合わせて伸びていましたが、いまは `end` が完成したコピーを置く、そのちょうど 1 回だけ変わります。
+  run の途中でクラッシュしても、設定されたパスに残るのは直前の run 自身の完全なファイルであり、truncate されたファイルではありません。
+  run をライブで見るのは Allure の仕事(`npx allure watch`)であり、このストリームの仕事ではありません。
+- 各呼び出し自身のファイルは、設定されたパスの隣に積み上がっていきます。
+  「成果物」が他のあらゆる measurement artifact について与えているのと同じ理由で、それを自動で消すものは何もありません。
+  溜まったものを、設定されたパス自身のコピーとあわせて消すのは `nuka clean [--export]` です。
 - この emitter の役割は Allure emitter の逆です。
   Allure は nukadoko の計測の余剰が見えるようになる場所であり、こちらは compat の忠実さそのものです。
   唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko が生成した run を従来の cucumber-js の run と同じように読み続けられることです。
@@ -2221,6 +2270,16 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   スキャン対象をそこから広げてしまうと、少なくとも一度は accept されたことのある feature にしか気付けず、まだ書きかけの feature を静かに見逃してしまいます。
   それこそ、誤った `pattern-unbound` がいちばん人を誤解させる feature です。
   `additionalFeatureDirs` にそのディレクトリを名指しすることが、実際にこれを直す方法です。
+- **どの acceptance record にも一度も名指しされたことのない feature**(`feature-never-signed`)。
+  上の所見と鏡写しです。
+  あちらは record から出発して正しい feature の集合を見ているかを問い、こちらはスキャン対象の feature 集合自身から出発して、その各メンバーに何か record が存在するかを問います。
+  だからこの 2 つが同じ feature に対して同じ理由で同時に出ることはありません。
+  これは note であり、error ではありません。
+  `nuka accept` は受け入れループの中で後から来る、明示の step なので(「Sign-off」を参照)、まだ書きかけの feature にまだ sign-off が無いのは普通の状態であり、それを壊れているものとして扱えば、書きかけのあらゆる feature がそれが終わる日まで赤いままになってしまいます。
+  時間の閾値もありません。
+  「一度でも sign-off されたか」には答えが 1 つありますが、「心配になるほど長いか」には発明した答えが必要になるからです。
+  `featuresDir` の中にあってもこれは黙りません、上の sign-off の staleness の所見とは違います。
+  あちらは、走っているスイート自身が、かつて凍結された record が持っていた保証を運ぶようになった時点で黙りますが、record が一度でも作られたかどうかは別の問いであり、その feature がどこで走るかとは関係がありません。
 - **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。** 凍結された sign-off の記録に埋め込まれた step record だけを読みます、live な run の step record は読みません(`.nukadoko` は、ここでの他のすべての walk と同じやり方で、この walk からも除外されたままです)。
   その step record 自身の `actions` にある `goto`・`reload`・`goBack`・`goForward` のそれぞれについて、その step が次に行った呼び出しまでの経過を見ます。
   同じ step record 自身の `ctx.poll` の窓の中に着地する読みは除外されます: 「Context API」の doctrine がすでに求めているとおり `poll()` を使って書かれた step は、構造上すでにリトライしているのであって、この所見が見分けようとしている対象そのものではありません。
@@ -2319,6 +2378,15 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               featuresDir plus additionalFeatureDirs; a
                               feature argument checks that one file instead,
                               for a feature living outside both
+nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
+                              delete accumulated records/cache/export under
+                              the state directory; no category flag cleans
+                              all three, one flag narrows to it; --dry-run
+                              prints the same plan the real run would act on
+                              without removing anything; refuses outright,
+                              every category, while any session anywhere is
+                              live; export/allure-history.jsonl is never
+                              removed
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
@@ -2339,7 +2407,8 @@ nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
                               envFile defines, a configured
                               additionalFeatureDirs entry absent from disk,
                               an accepted feature outside every scanned
-                              directory, a fixture no typed step requires,
+                              directory, a feature no acceptance record has
+                              ever named, a fixture no typed step requires,
                               a fixture reaching page/context
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]

@@ -99,9 +99,9 @@ whether it belongs in the repository, and how long it is meant to live:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>` | the tool | no | one run | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
+| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>` | the tool | no | until `nuka clean` removes it | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
 | Sign-off | `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
-| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` | the tool | no | disposable | other tools |
+| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter, until `nuka clean` removes it) | the tool | no | disposable | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
 The table names files; the distinctions behind the columns are what answer
@@ -118,6 +118,21 @@ The table names files; the distinctions behind the columns are what answer
   promise ran green. Measurement is never committed: `nuka init` gitignores
   the state directory it lives under, because a working record of one run
   has nothing to say about the next one.
+- **Measurement's "one run" lifetime was aspirational until `nuka clean`
+  existed.** Nothing removed a step or scenario record once the run that
+  wrote it ended: `nuka do --use` and `nuka harvest` read yesterday's
+  records on purpose, so deleting them automatically was never on the
+  table. `nuka clean [--records] [--cache] [--export] [--dry-run]
+  [--json]` is the explicit act that does it now; giving no category flag
+  cleans all three, giving one narrows to it, and `--dry-run` prints the
+  same plan the real run would act on without removing anything. It
+  refuses the whole command, every category, while any session anywhere
+  is live, since that session's own process is still writing records and
+  export output, the same reason `nuka session clear` already refuses on
+  a live lock, generalized to every environment at once. One export file
+  is exempt regardless: `export/allure-history.jsonl` sits beside
+  `allure-results/`, not inside it, and is the one artifact here no re-run
+  can reproduce.
 - **Step records and scenario records share one row.** They differ only in
   grain: a scenario's own record and each of its steps' own records answer
   the same question at two resolutions, not two different ones. `nuka do`
@@ -218,6 +233,21 @@ export default defineStep({
   reasoning that a key might be filled some way the tool could not see;
   `from` closed that gap by making the remaining way visible, so what is
   left is genuinely unfillable rather than merely unexplained.
+- An args key the pattern, a table/docstring, or `from` did not fill and
+  the schema does not declare is refused, not silently dropped: `nuka
+  describe` already publishes each object `args` schema's own
+  `additionalProperties: false`, and every path that turns a step's `args`
+  into a validated value now parses against that same closed shape (`nuka
+  do`, `nuka do --session <live>`, `nuka run`, `experimental_recordStep`,
+  and the `call` fixture a part is invoked through, see "Parts"). A key
+  `from`/`--use` fills is never flagged, since either can only ever name a
+  key the step itself declared. A successful record's own `args` is the
+  validated value, so a key a schema's own `.default(...)` filled in shows
+  up even when nothing on the line typed it; a failed record keeps exactly
+  what was given, which is where a reader needs the raw thing most. A
+  part's own `CallEntry.args` (see "Records") stays raw on both outcomes
+  regardless: what changed here is what gets accepted, not what gets
+  written down.
 - A data table or docstring attached to the step binds to the one required
   args key the named captures left unconsumed (tables as `string[][]`,
   docstrings as `string`), validated by the schema like everything else.
@@ -1870,6 +1900,13 @@ so a reader can open either first and reach the other from it.
 - `result` is the trust anchor: it passed the returns schema and the tool
   (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
+- `args` follows a matching split (see "Typed steps" for the refusal this
+  backs). On an `ok` record it is the schema-validated value `run`
+  actually received, a schema's own `.default(...)` included even where
+  the caller never typed the key; on a `failed` one it is exactly what was
+  given, since a value the schema already rejected cannot be reconstructed
+  into the validated shape. A compat step's `args` is never validated
+  either way, having no schema to validate against.
 - `scenario_record_id` and `run_id` name what this execution belongs to:
   the owning scenario record's id and the `nuka run` invocation's own id
   for a `run`-originated step (`kind: "run"`), both `null` for a
@@ -1998,7 +2035,10 @@ so a reader can open either first and reach the other from it.
   `{ "step": "create-project", "args": {...}, "result": {...},
   "started_at": "...", "finished_at": "..." }`, and carries `error`
   instead of `result` when the part failed, classified the same way a step
-  record's own `error` is. A part that called a part carries its own
+  record's own `error` is. Unlike a step record's own top-level `args`
+  (above), `args` here is always the raw value `call()` was given, on both
+  outcomes: what changed for a part is what `call()` accepts, never what
+  gets written down. A part that called a part carries its own
   `calls` under that entry. These are not step records and have no
   `step_record_id`: `--use` cites a step record, and what this execution
   offers a later one is its own `result`. Recording the args and the
@@ -2368,8 +2408,23 @@ directories, by purpose (see "Artifacts"):
   creates it empty, since Allure's own CLI refuses to start against a
   missing directory but accepts an empty one, letting `allure watch` already
   be running before the first `nuka run`
-- `export/messages.ndjson`: the messages emitter's output, one stream per
-  run; truncated at the start of every `nuka run` (see "Messages emitter")
+- `export/messages.ndjson`: the messages emitter's output. This path only
+  ever holds the most recently *completed* run's own stream, replaced
+  atomically once that run finishes; each invocation's real, in-progress
+  write target is a run-id-suffixed sibling beside it instead
+  (`messages.<run_id>.ndjson`, truncated at that invocation's own start),
+  one per `nuka run` invocation, left on disk afterward (see "Messages
+  emitter"). `nuka clean [--export]` is what removes the accumulated ones
+
+`nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` is what
+deletes across all three directories: no category flag narrows it to one,
+so the default is every one of them. It refuses the whole command, every
+category, while any `nuka session` anywhere is live, since that session's
+own process is still writing into `records/` and `export/` (see
+"Artifacts" for the full reasoning). One file it never touches regardless
+of category: `export/allure-history.jsonl` sits beside
+`export/allure-results/`, not inside it, and is the one artifact under
+`.nukadoko/` no re-run can reproduce.
 
 The durable artifacts live in the repository instead: feature files, typed
 steps, and sign-off records.
@@ -2989,12 +3044,32 @@ moves it to any other root-relative path. There is no `enabled` flag and
 no CLI flag, the same as Allure: the emitter always runs, and it is
 skipped only when a `nuka run` invocation selects zero pickles.
 
-- One run is one stream is one file: `begin` truncates the output rather
-  than appending, because appending would leave two `testRunStarted`
-  envelopes in one file: no longer a single well-formed stream to read
-  back. `nuka run` runs one feature per invocation, so running a second
-  feature afterward overwrites the first stream: the intended consequence
-  of "one file, truncated," not an oversight.
+- One run is one stream is one file, but two invocations no longer fight
+  over which one it is. Each invocation's own real file is the
+  configured path's own name with the run id spliced in
+  (`messages.<run_id>.ndjson` under the default path; `messages.output:
+  "out/stream.ndjson"` gets `out/stream.<run_id>.ndjson` instead), beside
+  the configured path; `begin`
+  truncates that file, never the configured path, because appending would
+  leave two `testRunStarted` envelopes in what must read back as a single
+  well-formed stream, the same reason two concurrent invocations must
+  never truncate one shared file between them (they used to: whichever
+  began second erased the first's own start of stream while both still
+  appended their own finish to it, a combination no single run can ever
+  produce on its own). `end` then replaces the configured path with a
+  full, atomic copy of this invocation's now-complete file, as its very
+  last action, so a reader of the configured path never observes a
+  half-written run: always either the previous run's complete stream or
+  this one's, never a mix of the two.
+- The configured path is not updated while a run is in progress. It used
+  to grow as the run went; now it changes exactly once, when `end` places
+  the finished copy. A crash mid-run leaves the previous run's own
+  complete file at the configured path, never a truncated one; watching a
+  run live is Allure's job (`npx allure watch`), not this stream's.
+- Each invocation's own file accumulates beside the configured path.
+  Nothing removes it automatically, on the same reasoning "Artifacts"
+  gives for every other measurement artifact; `nuka clean [--export]`
+  removes the accumulated ones along with the configured path's own copy.
 - This emitter's role is the Allure emitter's inverse. Allure is where
   nukadoko's measurement surplus becomes visible; this one is compat
   fidelity, full stop: its only job is that a migrated suite's existing
@@ -3204,6 +3279,22 @@ What it looks at, and why each one is rot rather than style:
   missing the one still being drafted: exactly the feature a false
   `pattern-unbound` would most mislead someone about. Naming the
   directory in `additionalFeatureDirs` is what actually fixes it.
+- **A feature no acceptance record has ever named**
+  (`feature-never-signed`), the mirror of the finding above: that one
+  starts from a record and asks whether it is looking at the right
+  feature set, this one starts from the scanned feature set itself and
+  asks whether any record exists for each member at all, so the two can
+  never fire on the same feature for the same reason. A note, not an
+  error: `nuka accept` is a later, explicit step in the acceptance loop
+  (see "Sign-off"), so a feature still being drafted having no sign-off
+  yet is the ordinary state, and treating that as broken would leave
+  every feature in progress red until the day it is finished. No age
+  threshold either, since "has this ever been signed" has one answer and
+  "long enough to worry about" would need an invented one. Being inside
+  `featuresDir` does not silence it, unlike the sign-off staleness
+  findings above: those go quiet once the running suite carries the
+  guarantee a frozen record used to, but whether a record was ever made
+  is a different question, unaffected by where the feature runs.
 - **A step whose own trace shows another call landing close behind a
   navigation call.** Read from a frozen sign-off record's step record
   alone, never a live run's (`.nukadoko` stays out of this walk the same
@@ -3321,6 +3412,15 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               featuresDir plus additionalFeatureDirs; a
                               feature argument checks that one file instead,
                               for a feature living outside both
+nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
+                              delete accumulated records/cache/export under
+                              the state directory; no category flag cleans
+                              all three, one flag narrows to it; --dry-run
+                              prints the same plan the real run would act on
+                              without removing anything; refuses outright,
+                              every category, while any session anywhere is
+                              live; export/allure-history.jsonl is never
+                              removed
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
 nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
@@ -3341,7 +3441,8 @@ nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
                               envFile defines, a configured
                               additionalFeatureDirs entry absent from disk,
                               an accepted feature outside every scanned
-                              directory, a fixture no typed step requires,
+                              directory, a feature no acceptance record has
+                              ever named, a fixture no typed step requires,
                               a fixture reaching page/context
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]

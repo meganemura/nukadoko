@@ -17,3 +17,19 @@ even parse (`signoff-record-unreadable`): its own claimed feature path may
 not have parsed either, so there is no placement to judge it by, and a
 file that looks like a record but cannot be read stays worth reporting
 regardless of where the feature lives.
+
+The findings above all start from a record that already exists and ask
+whether its claim still holds. One more starts from the opposite end:
+`feature-never-signed` names a feature under `featuresDir` or
+`additionalFeatureDirs` that no acceptance record's own `feature:`
+frontmatter has ever named. `nuka accept` has no way to force a red run
+through; it refuses and names the next command to run, which means the
+usual way sign-off actually fails is that nobody runs it at all, and that
+shows up in a PR as a file that is not there. Nothing else here looks for
+a file that is not there. It is a note, not an error, the same reason a
+feature still being drafted is a normal thing to see: `nuka accept` is a
+later, explicit step, so a feature with no sign-off yet may simply not
+have reached it. Being inside `featuresDir` does not silence this one,
+unlike the two staleness findings above: whether a record was ever made
+is a different question from whether a frozen one is still accurate, and
+the running suite answers only the second.

@@ -91,6 +91,14 @@ existing suite is green: that is Stage 1's completion condition, nothing
 more. That condition is `nuka check` and `nuka run` going green, not `tsc`
 typechecking cleanly; the two can disagree in either direction.
 
+A migration repeats that loop far more than a finished suite ever runs
+`nuka run` again, so `.nukadoko/` accumulates step/scenario records,
+session cache files, and export output quickly. `nuka clean [--records]
+[--cache] [--export] [--dry-run]` removes what piled up; giving no
+category flag cleans all three, `--dry-run` previews the same plan it
+would act on without removing anything, and it refuses the whole command,
+every category, while any `nuka session` anywhere is still live.
+
 `nuka steps` and `nuka describe` stay usable throughout Stage 1, even while
 some glue files still fail to import: both read step files one at a time,
 so a file still failing to import is named (`import_failures` on `--json`,

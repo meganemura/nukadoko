@@ -78,10 +78,9 @@ differs is only where you enter:
    want what you found fixed in a scenario: start at "From an exploration
    to a scenario" below.
 
-If none of the four is true either, there is nothing yet to interrogate:
-ask the user what this is supposed to do before writing anything, since a
-scenario started without knowing what it proves just proves the wrong
-thing.
+If none of the four is true, there is nothing yet to interrogate: ask what
+this is supposed to do before writing anything, since a scenario started
+without knowing what it proves just proves the wrong thing.
 
 Everything below assumes the project is already initialized. If it isn't
 yet (no `nukadoko.config.ts`), run `nuka init` first.
@@ -187,17 +186,18 @@ calling step's record then carries each part's own args and result under
 `calls`, which is where the next move comes from. When the operation
 cannot be repeated at all, `nuka session start` holds one world open so
 the next call lands on it instead of rebuilding it (`nuka session
-list`/`clear` clean up what's left). The probe example, live sessions,
-and what the draft names rather than decides: `references/exploring.md`.
+list`/`clear` clean up what's left; `nuka clean` refuses outright, every
+category, while any session anywhere is live). The probe example, live
+sessions, `nuka clean`, and what the draft names rather than decides:
+`references/exploring.md`.
 
 ```sh
 nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
 ```
 
-The ids are the ones each `nuka do` printed. There is no time window and
-no `--since`, because a window cannot tell the probe you abandoned from
-the call that mattered. Order does not matter: the draft follows what the
-records say about when each one ran.
+The ids are the ones `nuka do` printed. There is no time window and no
+`--since`: it cannot tell an abandoned probe from the call that mattered.
+Order does not matter either; the draft follows what the records say.
 
 **One call is one scenario.** Harvest never splits a list, since where one
 story ends is a judgment about meaning and not something a step record

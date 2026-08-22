@@ -89,3 +89,13 @@ run writes) or `npx allure generate`/`npx allure open` for one already
 finished; nukadoko never renders HTML itself. `messages.ndjson` is for the
 opposite reason: feeding a suite's existing cucumber-js-era formatter or
 JUnit-based CI while it migrates, not for reading by hand.
+
+`messages.ndjson` at the configured path is not that run's own stream
+while the run is happening; it is a copy of the most recently *completed*
+run, replaced atomically once a run's own `end()` runs. Each invocation
+writes its own stream first, to a run-id-suffixed file beside the
+configured path (`messages.<run_id>.ndjson`), so tailing the configured
+path to watch a run live shows nothing until that run finishes; use
+`npx allure watch` for a live view instead. Each of those per-run files
+stays on disk afterward, one per `nuka run` invocation, until `nuka clean
+[--export]` removes them along with the configured path's own copy.
