@@ -700,7 +700,7 @@ export async function runCli(
         .option("export", {
           type: "boolean",
           default: false,
-          describe: "clean only allure-results/messages.ndjson (default: every category, when none of --records/--cache/--export is given)",
+          describe: "clean only allure-results, messages.ndjson, and each run's own messages.<run_id>.ndjson (default: every category, when none of --records/--cache/--export is given)",
         })
         .option("json", {
           type: "boolean",
