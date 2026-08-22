@@ -3,7 +3,7 @@
 これはレシピであって要件ではありません。
 `nuka check` と `nuka run` は普通の CLI コマンドで、すべてが保たれていれば `0` で終了し、何かが壊れた瞬間に非ゼロで終了します([README.md](../README.ja.md#running-this-in-ci) と [docs/spec.ja.md](spec.ja.md#cli-summary) の「CLI summary」を参照)。
 だからどの CI システムからでも呼び出せます。
-このページが埋めるのは 2 行の抜粋には書けないもの、すなわち丸ごと 1 つの workflow ファイルと、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある、そして `nuka run` が自分では決してやらない 4 つのことです。
+このページが埋めるのは 2 行の抜粋には書けないもの、すなわち丸ごと 1 つの workflow ファイルと、そのうち 3 行が存在する理由と、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある、そして `nuka run` が自分では決してやらない 4 つのことです。
 
 ## そのままコピーできる workflow
 
@@ -27,12 +27,14 @@ jobs:
   check:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # PR gate: static, seconds, no browser. Put this on every PR; it can
       # fail before anything runs.
       - run: npx nuka check
@@ -41,12 +43,14 @@ jobs:
     if: github.event_name != 'schedule'
     needs: check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # `nuka run` opens a browser; install it here, not on the `check`
       # job above, which never launches one. `chromium` is
       # `browserType`'s own default (docs/spec.md "Sessions, environments,
@@ -74,12 +78,14 @@ jobs:
   tend:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # `nuka tend` reports what is rotting rather than what is broken
       # (docs/spec.md "Tending"); it never gates a PR, which is why it
       # sits on its own schedule rather than beside `check`/`run` above.
@@ -87,6 +93,37 @@ jobs:
       # code it froze; every other finding is a note.
       - run: npx nuka tend
 ```
+
+## 上の workflow が action を固定し、インストールスクリプトを止め、権限を絞る理由
+
+2026 年 8 月、広く使われている npm パッケージ群が複数、侵害されました。
+攻撃の経路は `package.json` の `preinstall` フックから始まりました。
+これは `npm install` を実行した瞬間に npm が自動で実行するもので、誰もそのパッケージ自身のコードを 1 行も読まないうちに動きます。
+このフックは 200 を超えるファイルパスを走査して、AWS の認証情報、GitHub の個人アクセストークン、npm のトークン、SSH 鍵を探し、見つけたものをプロジェクトの外のサーバへ送りました。
+盗んだ GitHub トークンを使って、同じ攻撃はさらに `.github/workflows/` へ workflow を注入しました。
+その workflow は `toJSON(secrets)` でリポジトリのシークレットをすべて読み、その結果をビルドの artifact へ書き込むものでした。
+
+上の workflow の 3 行が、その経路の 3 つの部分にそれぞれ答えます。
+
+- **`uses:` はタグではなくコミットを名指しします。** `@v4` のようなタグは動きます。
+  侵害されたメンテナのアカウントは、読み手が workflow ファイルで目にする文字列を変えないまま、そのタグを別のコードへ付け替えられます。
+  コミット SHA は同じようには動かないので、上の workflow は SHA を名指しています。
+  上の 2 つの SHA は、この文章を書いている時点でそれぞれの action の最新リリースでもあります(`checkout` は v7.0.1、`setup-node` は v7.0.0)。
+  これはこのファイルが以前に使っていた `v4` の系列から 3 メジャー先で、固定をやり直すこの機会がそこへ移る潮時でした。
+  SHA へ固定することは、動くタグが運んでいた自動の更新と引き換えです。
+  ここに書かれたものは自分からピンを進めません。
+  誰かが手で進めるか、そのために作られた道具に進めさせる必要があります。
+  Dependabot は SHA のピンを更新できます。
+  それはいくつかある選択肢の 1 つであって、このレシピが求めるものではありません。
+- **`npm ci --ignore-scripts` は上の攻撃が使ったフックを止めます。** このリポジトリ自身の `.npmrc` はすでに `ignore-scripts=true` を設定しているので、CI の行に無くてもこの効果はすでにここで効いています。
+  それでもこのフラグを行そのものに書くのは、このレシピを別のプロジェクトへコピーする読み手が持っていくのが YAML であって、このリポジトリの `.npmrc` ではないからです。
+  行そのものにフラグが無ければ、そのプロジェクトはすべての依存のインストールスクリプトを既定で実行します。
+  それは上の攻撃が頼った、まさにその既定です。
+- **`permissions: contents: read` は job の中のトークンにできることを絞ります。** step が GitHub 自身のトークンで何をできるかは `permissions:` ブロックが決めるものであって、その場その場で決まるものではありません。
+  job レベルの `permissions: contents: read` はそのトークンをリポジトリの内容を読むことだけに絞るので、すでに侵害された step であっても、それを使ってコミットを push したり新しい workflow ファイルを書いたりはできません。
+  このリポジトリ自身の既定の workflow permission はすでに `read` で、リポジトリのシークレットも 0 件です。
+  ですが、このレシピをコピーする読み手が持っていくのは YAML であって、このリポジトリのアカウントレベルの設定ではありません。
+  既定が違うリポジトリでは、同じ行をファイル自身に書き込む必要があります。
 
 ## `npx playwright test` に対してこれが加える 4 つのこと
 
@@ -122,4 +159,6 @@ jobs:
 この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否や、`nuka accept` を実行した瞬間に `feature-never-signed` の finding が消えることも含めて)です。
 `npx playwright install --with-deps chromium` は自身の `--dry-run` で確かめただけで、最後まで実行してはいません。
 `--with-deps` は Linux ランナーの外では何もしないため(このリポジトリには Linux ランナーがありません)、ダウンロード自体はここでは試していません。
+上の `uses:` 行にある 2 つのコミット SHA は、GitHub 自身の API に照らして確かめました。
+`repos/actions/checkout/git/ref/tags/v7.0.1` と `setup-node` の同等のエンドポイントをそれぞれ 1 回ずつ呼び、それぞれがコメントの主張どおりのコミットを名指ししていて、他の何も指していないことを確かめました。
 この workflow は、実際のランナー上で green になるのを見届けたファイルとしてではなく、手を加えるための出発点として読んでください。

@@ -233,6 +233,15 @@
       "en": ["gate"],
       "ja": "ゲート",
       "note": "cucumber/gherkin のドメイン語だが、他の keep_english の語と違い .ja.md では一貫してカタカナのゲートに訳されている(2026-08-22 に確認、keep_english から移動)"
+    },
+    {
+      "en": ["permission", "permissions", "workflow permissions"],
+      "ja": null,
+      "note": "英語では同じ語だが、既存の日本語訳が意味ごとに分かれている。docs/ci.ja.md で GitHub Actions の permissions: フィールドや GITHUB_TOKEN のスコープを指す用途が加わり、docs/spec.ja.md がすでに使っているファイルシステムの権限ビット(chmod)の訳語 パーミッション と混同すると別の機構が同じ日本語になる",
+      "by_context": [
+        { "when": "GitHub Actions の permissions: フィールドや GITHUB_TOKEN のスコープ", "ja": ["権限"] },
+        { "when": "ファイルシステムの権限ビット(chmod)。docs/spec.ja.md の既存訳語", "ja": ["パーミッション"] }
+      ]
     }
   ],
   "keep_english": [
@@ -324,6 +333,10 @@
     {
       "term": "workflow",
       "why": "GitHub Actions の .github/workflows/ という実在のディレクトリ名・ファイル種別を指すときは英語のまま(docs/ci.md)。エージェントの一連の作業を指す一般語としての「ワークフロー」(README.ja.md で既に使用)とは別の使われ方"
+    },
+    {
+      "term": "action",
+      "why": "docs/ci.md の `uses: actions/checkout@...` が指す、GitHub Actions のマーケットプレイスの単位そのものを指す語。step record の evidence にある `actions` フィールド(ブラウザ操作の記録、docs/spec.md \"Records\")とは別語で、後者は常にコードスパン付きでしか現れないため衝突しない"
     }
   ],
   "identifiers": {
