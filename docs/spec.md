@@ -164,8 +164,7 @@ above; `node_modules` and every dot-directory stay excluded regardless of
 how wide `featuresDir` is set.
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "a project {name:string} exists",  // named capture, see below
@@ -912,8 +911,7 @@ stops being visible to a reviewer reading the feature file.
 `from` keeps both by saying, once and as data, where a key comes from:
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 import createProject from "./create-project.js";
 
 export default defineStep({
@@ -1083,8 +1081,7 @@ A step may call another step instead. `parts` declares which ones, and
 the `call` fixture runs one:
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 import createProject from "./parts/create-project.js";
 import inviteMember from "./parts/invite-member.js";
 

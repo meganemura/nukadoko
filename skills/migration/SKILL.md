@@ -171,8 +171,7 @@ Given("a project {string} exists", async function (name) {
 After, a typed step (`features/steps/create-project.ts`):
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "a project {name:string} exists",

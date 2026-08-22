@@ -16,8 +16,7 @@ never become a line in a feature, and a `returns` of `z.unknown()`, so
 nothing is filtered out:
 
 ```ts
-import { z } from "zod";
-import { defineStep } from "nukadoko";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   description: "Send one request and return the whole response, for looking at",

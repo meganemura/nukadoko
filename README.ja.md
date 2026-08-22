@@ -248,8 +248,7 @@ After(`defineStep`、named capture、zod、step record 付き):
 
 ```ts
 // features/steps/create-project.ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "a project {name:string} exists",
@@ -266,6 +265,8 @@ export default defineStep({
 
 - named capture(`{name:string}`)は、値を名前で `args.name` に結び付けます。位置キャプチャでは、同じ型の値 2 つを pattern 内で入れ替えると、どちらの値がどこに入るかが黙って入れ替わります。`nuka check` は、それが起きる前に、裸の `{string}` もエラーとして検出します。
 - `args` と `returns` は、実行境界でバリデーションされる zod のスキーマです。step record の `result` は、step が返しただけのものではなく、ツールがバリデーション済みのものです。
+  上の `z` は nukadoko 自身から来るので、zod を別途インストールする必要はありません。
+  自分のプロジェクトですでに zod を使っていて、そちらのスキーマを渡す場合は、そのスキーマが zod 4 である必要があります。
 - 上の `request`(そして browser の step 向けの `page`)は、`run` の第一引数である fixture bag から直接分割代入されたものです。
   step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません。
   どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。

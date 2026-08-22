@@ -264,8 +264,7 @@ After (`defineStep`, named capture, zod, step-record-backed):
 
 ```ts
 // features/steps/create-project.ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "a project {name:string} exists",
@@ -286,7 +285,9 @@ export default defineStep({
   `{string}` as an error before that can happen.
 - `args` and `returns` are zod schemas validated at the run boundary.
   `result` in the step record is something the tool validated, not just
-  whatever the step handed back.
+  whatever the step handed back. `z` above comes from nukadoko itself, so
+  there is no zod to install separately; if your own project already uses
+  zod and passes one of its own schemas in, that schema needs to be zod 4.
 - `request` above (and `page` for browser steps) is destructured straight
   out of `run`'s first argument, the fixture bag; only the names a step
   actually destructures ever get built, so a step that never names `page`

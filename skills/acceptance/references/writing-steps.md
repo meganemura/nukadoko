@@ -11,8 +11,7 @@ with feature files ending in `.feature`.
 
 ```ts
 // features/steps/set-product-out-of-stock.ts
-import { z } from "zod";
-import { defineStep } from "nukadoko";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "the product {sku:string} is out of stock",
@@ -31,6 +30,10 @@ export default defineStep({
   },
 });
 ```
+
+`z` above comes from nukadoko itself, so there is nothing to install
+separately for it. If your own project already uses zod and you want to
+pass one of its own schemas into a step, that schema needs to be zod 4.
 
 `pattern` is one string. Use `patterns: [...]` for a step that answers to
 more than one line, and omit both for a step only ever reached by name.
@@ -51,9 +54,8 @@ from Playwright, imported directly, and asserts exactly as it would in a
 Playwright test.
 
 ```ts
-import { z } from "zod";
 import { expect } from "playwright/test";
-import { defineStep } from "nukadoko";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "the customer {id:string} is in trial",

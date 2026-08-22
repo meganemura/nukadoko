@@ -44,3 +44,15 @@ export type {
   RecordStepOptions,
   StepExecution,
 } from "./external/record-step.js";
+// `z` itself, not merely its type: `vocabulary.ts` calls
+// `z.toJSONSchema(entry.step.args)` and `strict-args.ts` reads a schema's
+// own `.type` property to decide whether to strictify it, both against
+// this package's own zod install. A step file that imported a separate
+// `zod` install would hand those two call sites an object neither one
+// recognizes, so the same copy has to reach both sides. Re-exporting it
+// also means a step file needs no dependency of its own to write
+// `z.object(...)`: a package manager that does not hoist a dependency's
+// own dependencies to a project's top level (unlike npm's default layout)
+// would otherwise fail to resolve a bare `import { z } from "zod"` in a
+// step file at all.
+export { z } from "zod";

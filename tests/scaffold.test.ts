@@ -56,6 +56,11 @@ describe("nuka scaffold", () => {
     expect(existsSync(filePath)).toBe(true);
     const content = await readFile(filePath, "utf8");
     expect(content).toContain('from "nukadoko"');
+    // `z` comes from nukadoko's own re-export, not a direct `zod`
+    // dependency: a step file that imported `zod` itself would fail to
+    // resolve it under a package manager that does not hoist a
+    // dependency's own dependencies to the project's top level.
+    expect(content).not.toContain('from "zod"');
     expect(content).toContain("TODO: describe send-invite");
     expect(content).not.toMatch(/pattern/);
     expect(content).toContain(".describe(");

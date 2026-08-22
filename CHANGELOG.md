@@ -5,6 +5,19 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **`nukadoko` re-exports zod's `z`, so `import { defineStep, z } from
+  "nukadoko"` is the only import a step file needs.** A step file that
+  imported `zod` directly still worked under npm, which hoists a
+  dependency's own dependencies to a project's top-level `node_modules`,
+  but not under a package manager that keeps them nested where the
+  dependency declared them; `zod` was never a step file's own dependency
+  to import in the first place. `nuka scaffold`'s generated template
+  follows the same shape.
+
 ## 0.7.0 — 2026-08-22
 
 ### Breaking

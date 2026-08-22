@@ -57,8 +57,7 @@ const VALID_STEP_NAME = /^[a-z0-9-]+$/;
 
 function stepTemplate(name: string): string {
   return [
-    'import { defineStep } from "nukadoko";',
-    'import { z } from "zod";',
+    'import { defineStep, z } from "nukadoko";',
     "",
     "export default defineStep({",
     `  description: "TODO: describe ${name}",`,

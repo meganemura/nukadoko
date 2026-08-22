@@ -127,8 +127,7 @@ nukadoko は ESM-only であるため(同じ CommonJS の go/no-go について�
 `node_modules` とすべてのドットディレクトリは、`featuresDir` をどれだけ広く設定していても除外され続けます。
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "a project {name:string} exists",  // named capture, see below
@@ -644,8 +643,7 @@ setup 全体を 1 つの複合 step にまとめれば既存の step には触�
 `from` は、キーがどこから来るかを一度だけ、データとして述べることで両方を成り立たせます。
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 import createProject from "./create-project.js";
 
 export default defineStep({
@@ -783,8 +781,7 @@ step は代わりに別の step を呼び出せます。
 `parts` はどの step を呼べるかを宣言し、`call` fixture がそのうちの 1 つを実行します。
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 import createProject from "./parts/create-project.js";
 import inviteMember from "./parts/invite-member.js";
 
