@@ -4,6 +4,7 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missing.js";
+import { findNeverSignedFeatures } from "./feature-never-signed.js";
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
@@ -46,6 +47,19 @@ import type { TendIssue, TendReport } from "./types.js";
 // feature outside every scanned directory, which is what made
 // `pattern-unbound` misreport a bound step as unbound before
 // `additionalFeatureDirs` existed to name where it lives.
+//
+// `findNeverSignedFeatures` is a further later addition, called with the
+// same `features` `resolveStepOccurrences` above already consumed rather
+// than a second walk of the same directories: every scanned feature that no
+// acceptance record's own `feature:` frontmatter has ever named. It is the
+// mirror question `findSignedFeatureUnscanned` does not ask — that finding
+// starts from a record and asks whether it is looking at the right feature
+// set, this one starts from the feature set and asks whether any record
+// exists for each member at all — so the two can never fire on the same
+// feature for the same reason. A note, not an error: `nuka accept` is an
+// explicit, later act in the acceptance loop (see "The acceptance loop"),
+// so a feature nobody has run it against yet is the ordinary state of one
+// still being drafted, not a broken one.
 //
 // `patterns` is built once, here, via src/check/binding-check.ts's own
 // `checkBindings` — the same parsed-pattern array src/check/feature-check.ts
@@ -148,6 +162,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnknownSecretsKeys(rootDir, config),
     ...findMissingAdditionalFeatureDirs(missingAdditionalDirs),
     ...findSignedFeatureUnscanned(rootDir, scannedFeatureDirs),
+    ...findNeverSignedFeatures(rootDir, features),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
     ...findSignoffConditionMismatch(rootDir, config.browserType, config.featuresDir),

@@ -3,7 +3,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 describe("nuka tend", () => {
-  it("reports zero errors and zero notes for a healthy project", async () => {
+  it("reports zero errors, and only the never-signed note, for a project whose vocabulary and bindings are otherwise clean", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--json"], {
@@ -20,7 +20,15 @@ describe("nuka tend", () => {
     // whole-object equality would make this test couple to that field's
     // exact shape for no reason this test cares about.
     expect(report.errors).toEqual([]);
-    expect(report.notes).toEqual([]);
+    // This fixture's own feature has never been accepted, so it is the
+    // minimal case for that finding: every other check on it is clean,
+    // which is what makes exactly one note come through here rather than
+    // zero (tests/fixtures/tend-clean-signed-project is this same fixture
+    // plus a sign-off record, for the tests below that need truly nothing
+    // to report).
+    expect(report.notes).toEqual([
+      { code: "feature-never-signed", file: "features/checkout.feature", message: expect.any(String) },
+    ]);
     expect(exitCode).toBe(0);
   });
 
@@ -49,10 +57,13 @@ describe("nuka tend", () => {
     // `mutates: true` (define-step.ts's own `?? true`).
     expect(report.summary.scannedFeatureDirs).toEqual(["features"]);
     expect(report.summary.readOnlySteps).toBe(0);
-    // A summary-only report (zero errors, zero notes) still exits 0 — the
-    // summary itself never touches the exit code.
+    // A summary-only report (zero errors, one never-signed note for this
+    // fixture's own unaccepted feature) still exits 0 — the summary itself
+    // never touches the exit code.
     expect(report.errors).toEqual([]);
-    expect(report.notes).toEqual([]);
+    expect(report.notes).toEqual([
+      { code: "feature-never-signed", file: "features/checkout.feature", message: expect.any(String) },
+    ]);
     expect(exitCode).toBe(0);
   });
 
@@ -95,7 +106,11 @@ describe("nuka tend", () => {
   it("prints a human-readable ok line when there is nothing to tend", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend"], {
-      rootDir: fixture("tend-clean-project"),
+      // tend-clean-signed-project, not tend-clean-project: its feature also
+      // carries a sign-off record, so the never-signed note this task added
+      // stays quiet too — "nothing to tend" needs every finding silent, not
+      // just the ones this test predates.
+      rootDir: fixture("tend-clean-signed-project"),
       stdout,
       stderr: createCaptureSink(),
     });
@@ -104,7 +119,7 @@ describe("nuka tend", () => {
     expect(stdout.text()).toContain("ok: nothing to tend");
   });
 
-  it("detects all five findings, and exits 0 because errors stay empty (notes never fail the run)", async () => {
+  it("detects all six findings, and exits 0 because errors stay empty (notes never fail the run)", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--json"], {
@@ -126,6 +141,8 @@ describe("nuka tend", () => {
         "schema-field-undescribed",
         "step-rationale-missing",
         "parameter-type-unused",
+        // This fixture's own feature has never been accepted either.
+        "feature-never-signed",
       ].sort(),
     );
   });
@@ -260,7 +277,7 @@ describe("nuka tend", () => {
       expect(line).not.toMatch(/^(error|note)\t/);
     }
 
-    expect(noteLines).toHaveLength(5);
+    expect(noteLines).toHaveLength(6);
     for (const line of noteLines) {
       expect(line).toMatch(/^note\t/);
     }
@@ -275,7 +292,9 @@ describe("nuka tend", () => {
   it("prints the summary before findings, and before the 'nothing to tend' line on a healthy project", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend"], {
-      rootDir: fixture("tend-clean-project"),
+      // tend-clean-signed-project, not tend-clean-project: same reasoning
+      // as the "prints a human-readable ok line" test above.
+      rootDir: fixture("tend-clean-signed-project"),
       stdout,
       stderr: createCaptureSink(),
     });
