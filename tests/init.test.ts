@@ -267,7 +267,7 @@ describe("nuka init", () => {
     expect(existsSync(path.join(rootDir, ".gitignore"))).toBe(false);
   });
 
-  it("appends .nukadoko/ to an existing .gitignore", async () => {
+  it("appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n");
 
     const stdout = createCaptureSink();
@@ -280,11 +280,14 @@ describe("nuka init", () => {
     expect(stdout.text()).toContain(".gitignore");
 
     const gitignore = await readFile(path.join(rootDir, ".gitignore"), "utf8");
-    expect(gitignore).toBe("node_modules/\n.nukadoko/\n");
+    expect(gitignore).toBe("node_modules/\n.nukadoko/\n.env\n.env.*\n!.env.example\n");
   });
 
-  it("does not duplicate an already-present .nukadoko/ line, and doesn't report .gitignore as written", async () => {
-    await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n.nukadoko/\n");
+  it("does not duplicate any already-present entry, and doesn't report .gitignore as written when every entry is already there", async () => {
+    await writeFile(
+      path.join(rootDir, ".gitignore"),
+      "node_modules/\n.nukadoko/\n.env\n.env.*\n!.env.example\n",
+    );
 
     const stdout = createCaptureSink();
     const exitCode = await runCli(["init"], {
@@ -296,7 +299,45 @@ describe("nuka init", () => {
     expect(stdout.text()).not.toContain(".gitignore");
 
     const gitignore = await readFile(path.join(rootDir, ".gitignore"), "utf8");
-    expect(gitignore.split("\n").filter((line) => line === ".nukadoko/")).toHaveLength(1);
+    for (const entry of [".nukadoko/", ".env", ".env.*", "!.env.example"]) {
+      expect(gitignore.split("\n").filter((line) => line === entry)).toHaveLength(1);
+    }
+  });
+
+  it("appends .env, .env.*, and !.env.example (in that order) to a fresh .gitignore", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["init"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).toContain(".gitignore");
+
+    const lines = (await readFile(path.join(rootDir, ".gitignore"), "utf8")).split("\n");
+    expect(lines).toContain(".env");
+    expect(lines).toContain(".env.*");
+    expect(lines).toContain("!.env.example");
+    // Order matters: a negated pattern only re-includes a path excluded by
+    // an *earlier* pattern, so !.env.example must come after .env.* or the
+    // exclusion never takes effect.
+    expect(lines.indexOf("!.env.example")).toBeGreaterThan(lines.indexOf(".env.*"));
+  });
+
+  it("does not duplicate an already-present .env line, and still adds the other two", async () => {
+    await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n.env\n");
+
+    const exitCode = await runCli(["init"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+
+    const lines = (await readFile(path.join(rootDir, ".gitignore"), "utf8")).split("\n");
+    expect(lines.filter((line) => line === ".env")).toHaveLength(1);
+    expect(lines).toContain(".env.*");
+    expect(lines).toContain("!.env.example");
   });
 });
 

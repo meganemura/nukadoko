@@ -104,26 +104,32 @@ function configTemplate(baseUrl: string | null, featuresDir: string | null): str
 }
 
 /**
- * Appends `<stateDir>/` to `<rootDir>/.gitignore`, creating the file if it
- * doesn't exist. Returns whether the file was actually written — `false`
- * when the entry was already present, so the caller knows not to report a
- * path that didn't change.
+ * Appends every one of `entries` not already present, as its own exact
+ * line, to `<rootDir>/.gitignore` (creating the file if it doesn't exist).
+ * An entry already present anywhere in the file is left where it is, never
+ * duplicated. New entries are appended in `entries`' own order, which is
+ * why callers that need one entry to follow another (`!.env.example` must
+ * come after `.env.*`, the pattern it re-includes from, or the exclusion
+ * never takes effect) pass them in that order here rather than in two
+ * separate calls. Returns whether the file was actually written — `false`
+ * when every entry was already present, so the caller knows not to report
+ * a path that didn't change.
  */
-async function ensureGitignoreEntry(rootDir: string, stateDir: string): Promise<boolean> {
+async function ensureGitignoreEntries(rootDir: string, entries: readonly string[]): Promise<boolean> {
   const gitignorePath = path.join(rootDir, ".gitignore");
-  const entry = `${stateDir}/`;
 
   let existing = "";
   if (existsSync(gitignorePath)) {
     existing = await readFile(gitignorePath, "utf8");
-    const alreadyPresent = existing.split(/\r?\n/).some((line) => line.trim() === entry);
-    if (alreadyPresent) {
-      return false;
-    }
+  }
+  const existingLines = new Set(existing.split(/\r?\n/).map((line) => line.trim()));
+  const missing = entries.filter((entry) => !existingLines.has(entry));
+  if (missing.length === 0) {
+    return false;
   }
 
   const prefix = existing.length > 0 && !existing.endsWith("\n") ? `${existing}\n` : existing;
-  await writeFile(gitignorePath, `${prefix}${entry}\n`);
+  await writeFile(gitignorePath, `${prefix}${missing.join("\n")}\n`);
   return true;
 }
 
@@ -286,7 +292,21 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   await mkdir(path.join(rootDir, stepsDirRelative), { recursive: true });
   stdout.write(`${stepsDirRelative}\n`);
 
-  const gitignoreWritten = await ensureGitignoreEntry(rootDir, defaults.stateDir);
+  // .env/.env.* are ignored because a tracked env file is treated as plain
+  // configuration, not a secret source (src/secrets/classify-env-files.ts):
+  // its values are read into ctx.env like any other config and are never
+  // redacted from a run's own records. Committing .env by mistake is the
+  // one path that turns "read into ctx" into "written in plaintext
+  // somewhere this tool keeps". `!.env.example` re-includes the one
+  // filename teams commit on purpose (a template with no real values). It
+  // has to come after .env.* below: a negated pattern only re-includes a
+  // path an earlier pattern already excluded.
+  const gitignoreWritten = await ensureGitignoreEntries(rootDir, [
+    `${defaults.stateDir}/`,
+    ".env",
+    ".env.*",
+    "!.env.example",
+  ]);
   if (gitignoreWritten) {
     stdout.write(".gitignore\n");
   }
