@@ -487,8 +487,15 @@ can show where they actually belong.
 with a cost, and it is stated as one (see "Out of scope").
 
 `expect` is not a fixture. A step imports it directly, `import { expect }
-from "playwright/test"`, and asserts with it exactly as a Playwright test
-would. This follows from the same rule every other fixture answers to: a
+from "playwright/test"`. Whether a matcher asserts exactly as it would in
+a Playwright test does not follow from what it is called on:
+`toMatchAriaSnapshot` (a locator), `toHaveScreenshot` (`page`), and
+`toMatchSnapshot` (a plain value) each throw `"<name>() must be called
+during the test"` outside the runner (measured against Playwright 1.61.1),
+the same three shapes `toBeVisible`, `toBe`, and `expect.poll` take
+without incident. What decides it is whether the matcher reads or writes a
+snapshot file keyed to the runner's current test, and a step has none.
+This follows from the same rule every other fixture answers to: a
 fixture carries only what the executor must inject, and `expect` needs
 nothing the executor owns (assertion evidence already reaches the step
 record through the trace, `actions`, see "Records"), so making it a fixture would

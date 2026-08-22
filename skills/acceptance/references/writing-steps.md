@@ -50,8 +50,9 @@ Playwright's documentation for what to call on them rather than guessing.
 
 A step fails when its `run` throws and passes when it does not. There is
 no assertion API of nukadoko's own and none is re-exported: `expect` comes
-from Playwright, imported directly, and asserts exactly as it would in a
-Playwright test.
+from Playwright, imported directly. Most of what `expect` offers works
+the same as it would in a Playwright test; a few matchers need something a
+step does not have (see "What `expect` needs from the runner" below).
 
 ```ts
 import { expect } from "playwright/test";
@@ -99,6 +100,70 @@ to. "the total is {expected:int}" carries its expected value naturally, so
 that is one step. "is in trial" and "is not in trial" read as two
 different claims, so they are two steps, and whatever they share goes into
 a part they both call.
+
+## What `expect` needs from the runner
+
+A step runs outside `playwright test`, so any matcher that depends on the
+runner's own per-test state fails, and the rest do not. What follows was
+measured against Playwright 1.61.1, calling `expect` from a plain script
+with no runner around it.
+
+The call shape does not tell you which matchers depend on the runner:
+`toMatchAriaSnapshot` is called on a locator, `toHaveScreenshot` is called
+on `page`, and `toMatchSnapshot` is called on a plain value, the same
+three shapes several working matchers also take. What actually
+discriminates is whether the matcher reads or writes a snapshot file keyed
+to the runner's current test.
+
+Works the same as inside a Playwright test: `toBeVisible`, `toHaveText`,
+and the other locator assertions that do not compare against a stored
+snapshot; `toBe` and the other plain-value assertions; `expect.poll` (it
+keeps polling on its own schedule, not the runner's). `expect.soft` also
+asserts correctly, but loses the one thing that makes it "soft": with no
+runner to collect into, a failing `expect.soft` throws right away, same as
+a plain `expect` would, rather than letting the step continue and
+reporting every failure at the end.
+
+Does not work: `toMatchAriaSnapshot`, `toHaveScreenshot`, and
+`toMatchSnapshot` each throw `"<name>() must be called during the
+test"` the moment they run, because a step has no current test to key a
+snapshot file to.
+
+Reach for a different check instead of one of these three. In place of
+`toMatchAriaSnapshot`'s comparison of a whole accessibility tree, capture
+the one property the scenario actually cares about, ordered rendered
+titles, say, and assert it directly against an expected order carried in
+a docstring rather than against a serialized snapshot:
+
+```ts
+import { expect } from "playwright/test";
+import { defineStep, z } from "nukadoko";
+
+export default defineStep({
+  pattern: "the results are titled, in this order",
+  description: "Check the rendered result titles against an expected order",
+  args: z.object({
+    expectedTitles: z
+      .string()
+      .describe("Expected titles, one per line, in render order"),
+  }),
+  returns: z.object({
+    titles: z
+      .array(z.string())
+      .describe("The titles actually rendered, in order"),
+  }),
+  mutates: false,
+  async run({ page }, args) {
+    const titles = await page.locator(".result h2").allTextContents();
+    expect(titles.join("\n")).toBe(args.expectedTitles.trim());
+    return { titles };
+  },
+});
+```
+
+The pattern captures nothing, so the docstring binds to `expectedTitles`,
+the one required `args` key it leaves unfilled (see "Typed steps" in
+`docs/spec.md` for how a table or docstring binds to an `args` key).
 
 ## Writing the pattern
 

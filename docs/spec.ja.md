@@ -342,7 +342,11 @@ green な scenario は、その待ちが正しく置かれている証拠には�
 これは代償を伴う選択であり、その代償ごと「Out of scope」に明記してあります。
 
 `expect` は fixture ではありません。
-step は `import { expect } from "playwright/test"` で直接インポートし、Playwright のテストとまったく同じやり方でアサーションします。
+step は `import { expect } from "playwright/test"` で直接インポートします。
+ある matcher が Playwright のテストとまったく同じやり方でアサーションするかどうかは、それが何に対して呼ばれているかからは決まりません。
+`toMatchAriaSnapshot`(locator)、`toHaveScreenshot`(`page`)、`toMatchSnapshot`(値そのもの)は、runner の外ではいずれも `"<name>() must be called during the test"` を投げます(Playwright 1.61.1 で計測)。
+これは `toBeVisible`、`toBe`、`expect.poll` が問題なく取っているのと同じ 3 つの形です。
+決め手は、その matcher が runner の現在のテストに紐づくスナップショットファイルを読み書きするかどうかであり、step にはその「現在のテスト」が無いということです。
 これは他のあらゆる fixture が従っているのと同じ規則から来ています。
 fixture が運ぶのは executor が注入しなければならないものだけであり、`expect` は executor が所有するものを何一つ必要としません(アサーションの証跡はすでに trace(`actions`、「Records」を参照)を通じて step record に届いています)。
 fixture にしてしまうと、Playwright 自身がすでに公開している export の裏に何もない、ただのメンバーが増えるだけです。
