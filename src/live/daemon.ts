@@ -37,6 +37,7 @@ import { sessionFilePath, sessionLockPath, sessionSockPath, sessionsDir } from "
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
+import { strictArgsSchema } from "../step/strict-args.js";
 import {
   formatFixtureIssues,
   knownFixtureNames,
@@ -474,13 +475,21 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     let errorMessage = "";
     let errorKind: ErrorKind | undefined;
     let fixtureUsage: FixtureUsageEntry[] = [];
+    // Defaults to the merged-but-unvalidated value (`--use` already applied
+    // above); overwritten with the schema-validated value below on success,
+    // matching do.ts's own `recordedArgs` so a step record's own `args`
+    // never shows a key validation actually rejected or a default
+    // validation actually filled in silently, regardless of which of the
+    // two `nuka do` ever reaches this step through.
+    let recordedArgs: unknown = parsedArgs;
 
-    const argsResult = entry.step.args.safeParse(parsedArgs);
+    const argsResult = strictArgsSchema(entry.step.args).safeParse(parsedArgs);
     if (!argsResult.success) {
       status = "failed";
       errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
       errorKind = "args_invalid";
     } else {
+      recordedArgs = argsResult.data;
       try {
         const resolved = await resolveFixtures({
           names: stepFixtureNames(entry.step),
@@ -551,7 +560,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
             step_record_id: recordId,
             step: request.step,
             kind: "do",
-            args: parsedArgs,
+            args: recordedArgs,
             result,
             status: "ok",
             environment: resolvedEnv.name,
@@ -580,7 +589,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
             step_record_id: recordId,
             step: request.step,
             kind: "do",
-            args: parsedArgs,
+            args: recordedArgs,
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment: resolvedEnv.name,

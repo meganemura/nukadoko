@@ -46,6 +46,7 @@ import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
+import { strictArgsSchema } from "../step/strict-args.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
@@ -976,7 +977,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // own reason (args/binding/returns/its own throw).
     initialErrorKind: ErrorKind | undefined,
     result: unknown,
-    rawArgs: unknown,
+    // For a typed step whose args validated, this is the schema-validated
+    // value (`argsResult.data`), not the raw binding/`from` output — a step
+    // record's own `args` must show what `run` actually received, matching
+    // the JSON Schema `nuka describe` publishes for it (`strictArgsSchema`,
+    // src/step/strict-args.ts). Raw whenever there is no validated value to
+    // show instead: a binding/args-validation failure, or a compat step,
+    // which has no `args` schema to validate against at all.
+    recordedArgs: unknown,
     chainKey: Step | undefined,
     // This step's own declared `mutates` (typed) or `null` (compat, which
     // has no declaration at all).
@@ -1087,7 +1095,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
-            args: rawArgs,
+            args: recordedArgs,
             result,
             status: "ok",
             environment,
@@ -1129,7 +1137,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
-            args: rawArgs,
+            args: recordedArgs,
             // `errorKind` is guaranteed set by this point: the caller always
             // passes one alongside `initialStatus === "failed"`, and this
             // function no longer demotes an "ok" status to "failed" itself.
@@ -1629,6 +1637,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let errorKind: ErrorKind | undefined;
         const rawArgs: unknown = bindResult.ok ? bindResult.value : bindResult.partialValue;
         began.rawArgs = rawArgs;
+        // Defaults to the same raw/merged value as `began.rawArgs`;
+        // overwritten with the schema-validated value below when args
+        // validation succeeds, so this step's own step record shows what
+        // `run` actually received (this function's own `finishExecutedStep`
+        // parameter doc comment).
+        let recordedArgs: unknown = rawArgs;
 
         if (!bindResult.ok) {
           status = "failed";
@@ -1649,7 +1663,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             stepNameOf,
             contextHandle.recordUsed,
           );
-          const argsResult = entry.step.args.safeParse(bindResult.value);
+          const argsResult = strictArgsSchema(entry.step.args).safeParse(bindResult.value);
           if (!argsResult.success) {
             status = "failed";
             errorMessage =
@@ -1657,6 +1671,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               fromInjectionHint(argsResult.error.issues, stillMissingFrom);
             errorKind = "args_invalid";
           } else {
+            recordedArgs = argsResult.data;
             try {
               // Bag construction sits inside this same try (this also
               // resolves `config.fixtures`
@@ -1726,7 +1741,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           errorMessage,
           errorKind,
           result,
-          rawArgs,
+          recordedArgs,
           entry.step,
           entry.step.mutates,
           fixtureUsage,

@@ -20,6 +20,7 @@ import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact } from "../secrets/redact.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
+import { strictArgsSchema } from "../step/strict-args.js";
 
 // Responsibility: run one typed step from inside a Playwright Test spec and
 // write the same step record shape `nuka do` writes (docs/spec.md "The
@@ -444,14 +445,21 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
   // written — a fresh `Error` for a schema failure, or `step.run`'s own
   // thrown value, unchanged, for a step_error (this file's own header).
   let thrown: unknown;
+  // Defaults to the merged-but-unvalidated value (`use` already applied
+  // above, in `effectiveArgs`); overwritten with the schema-validated value
+  // below on success, so this step record's own `args` never shows a key
+  // validation actually rejected or a default validation actually filled in
+  // silently — the same reasoning cli/do.ts's own `recordedArgs` follows.
+  let recordedArgs: unknown = effectiveArgs;
 
-  const argsResult = step.args.safeParse(effectiveArgs);
+  const argsResult = strictArgsSchema(step.args).safeParse(effectiveArgs);
   if (!argsResult.success) {
     status = "failed";
     errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
     errorKind = "args_invalid";
     thrown = new Error(errorMessage);
   } else {
+    recordedArgs = argsResult.data;
     try {
       const fixtures = await buildStepFixtures(contextHandle.ctx, fixtureNames);
       contextHandle.beginStepRun(step, fixtures);
@@ -506,13 +514,14 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
           step_record_id: recordId,
           step: name,
           kind: "external",
-          // `effectiveArgs`, not the caller's own `args` parameter: the
-          // same "the record's own `args` is what actually ran, `use`-
-          // filled keys included" rule `nuka do` follows for `parsedArgs`
-          // (src/cli/do.ts) — a chained key both lands here *and* is named
-          // in `used`, below, which is exactly the pairing `nuka harvest`
-          // reads to tell a chain apart from a literal.
-          args: effectiveArgs,
+          // `recordedArgs`, not the caller's own `args` parameter: the same
+          // "the record's own `args` is what actually ran, `use`-filled
+          // keys included, schema-validated" rule `nuka do` follows for its
+          // own `recordedArgs` (src/cli/do.ts) — a chained key both lands
+          // here *and* is named in `used`, below, which is exactly the
+          // pairing `nuka harvest` reads to tell a chain apart from a
+          // literal.
+          args: recordedArgs,
           result,
           status: "ok",
           environment: DEFAULT_ENVIRONMENT_NAME,
@@ -542,7 +551,7 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
           step: name,
           kind: "external",
           // Same reasoning as the `status === "ok"` branch above.
-          args: effectiveArgs,
+          args: recordedArgs,
           error: { message: errorMessage, kind: errorKind ?? "step_error" },
           status: "failed",
           environment: DEFAULT_ENVIRONMENT_NAME,

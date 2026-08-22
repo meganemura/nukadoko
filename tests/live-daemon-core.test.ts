@@ -172,6 +172,56 @@ describe("createSessionCore: request dispatch", () => {
     expect(record.status === "ok" && record.result).toEqual({ value: "hi" });
   });
 
+  // Pairs with the test right below it (tests/args-strict.test.ts's own
+  // header: a reject-only test would also pass an implementation that
+  // refuses everything) — this session's own `executeDo` used to call
+  // `entry.step.args.safeParse` directly, which strips an unrecognized key
+  // rather than refusing it, so `nuka do --session <live>` was the one form
+  // of `nuka do` that still silently accepted one after strictArgsSchema
+  // closed this gap for `nuka do`/`nuka run`/`experimental_recordStep`.
+  it("rejects an extra key echo's args schema does not declare, naming it in the failed step record", async () => {
+    const { core } = await newCore();
+    const record = expectRecord(
+      await core.dispatchRequest({
+        kind: "do",
+        step: "echo",
+        args: { value: "hi", EXTRA_KEY: "should be rejected" },
+      }),
+    );
+    expect(record.status).toBe("failed");
+    expect(record.status === "failed" && record.error.kind).toBe("args_invalid");
+    expect(record.status === "failed" && record.error.message).toContain("EXTRA_KEY");
+  });
+
+  it("still accepts the same call with only the declared key, and records the schema-validated args", async () => {
+    const { core } = await newCore();
+    const record = expectRecord(await core.dispatchRequest({ kind: "do", step: "echo", args: { value: "hi" } }));
+    expect(record.status).toBe("ok");
+    // The same `args` shape `nuka do`/`nuka run`/`experimental_recordStep`
+    // record on a passing step (tests/args-strict.test.ts): the schema-
+    // validated value, not whatever `--use` merging left `parsedArgs`
+    // holding.
+    expect(record.args).toEqual({ value: "hi" });
+  });
+
+  // echo's own args schema has no `.default(...)`, so a raw value and a
+  // validated one always read identical there — the test right above this
+  // one already proves extra-key rejection, but not which of the two
+  // values a passing step record actually carries. `greet-default`'s own
+  // args schema (tests/fixtures/live-daemon-project/features/steps/
+  // greet-default.ts) fills a default the caller never supplies, which is
+  // the one case where the two values provably differ.
+  it("records the schema-validated args, including a filled default, on a passing step record", async () => {
+    const { core } = await newCore();
+    const record = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "greet-default", args: { name: "ada" } }),
+    );
+    expect(record.status).toBe("ok");
+    // `tag` was never given: this is the schema's own default, present
+    // only if the record holds the validated value.
+    expect(record.args).toEqual({ name: "ada", tag: "guest" });
+  });
+
   it("a read-only environment rejects a step declared mutating", async () => {
     const { core } = await newCore({ env: "readonly" });
     const response = await core.dispatchRequest({ kind: "do", step: "mutating", args: {} });
@@ -197,6 +247,29 @@ describe("createSessionCore: request dispatch", () => {
     expect(used.status).toBe("ok");
     expect(used.status === "ok" && used.result).toEqual({ id: createdId });
     expect(used.used?.[0]?.step).toBe("create-thing");
+  });
+
+  it("does not treat a --use-filled key as extra, but still rejects a genuinely extra key given alongside it", async () => {
+    const { core } = await newCore();
+    const created = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "create-thing", args: { name: "widget" } }),
+    );
+    expect(created.status).toBe("ok");
+
+    // use-thing's own args schema is `{ id: string }` (tests/fixtures/
+    // live-daemon-project/features/steps/use-thing.ts); `--use` fills `id`,
+    // and `BOGUS` is the one key this schema never declares.
+    const record = expectRecord(
+      await core.dispatchRequest({
+        kind: "do",
+        step: "use-thing",
+        args: { BOGUS: "not a real key" },
+        use: [created.step_record_id],
+      }),
+    );
+    expect(record.status).toBe("failed");
+    expect(record.status === "failed" && record.error.kind).toBe("args_invalid");
+    expect(record.status === "failed" && record.error.message).toContain("BOGUS");
   });
 
   it("a second do against a busy session is refused, not queued", async () => {

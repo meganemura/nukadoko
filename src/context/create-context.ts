@@ -9,6 +9,7 @@ import type { CallEntry, ErrorKind, PollRecord, ScreenshotEntry, SectionEntry } 
 import type { SecretSet } from "../secrets/types.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
+import { strictArgsSchema } from "../step/strict-args.js";
 import type { StorageState } from "../session/storage-state.js";
 import {
   attachExternalPageEvidence,
@@ -804,7 +805,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
     const name = partName(part);
     const startedAt = new Date();
-    const argsResult = part.args.safeParse(args);
+    const argsResult = strictArgsSchema(part.args).safeParse(args);
     if (!argsResult.success) {
       const message = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
       recordCallFailure(name, args, "args_invalid", message, startedAt, []);

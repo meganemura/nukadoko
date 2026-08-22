@@ -36,6 +36,7 @@ import { sessionFilePath, sessionLockPath, sessionSockPath } from "../session/pa
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
+import { strictArgsSchema } from "../step/strict-args.js";
 import {
   formatFixtureDefinitionIssues,
   formatFixtureIssues,
@@ -626,13 +627,19 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `[]` (hence omitted on the step record)
     // when args validation failed before fixture resolution ever ran.
     let fixtureUsage: FixtureUsageEntry[] = [];
+    // Defaults to the merged-but-unvalidated value (`--use` already applied
+    // above); overwritten with the schema-validated value below on success,
+    // so a step record's own `args` never shows a key validation actually
+    // rejected or a default validation actually filled in silently.
+    let recordedArgs: unknown = parsedArgs;
 
-    const argsResult = entry.step.args.safeParse(parsedArgs);
+    const argsResult = strictArgsSchema(entry.step.args).safeParse(parsedArgs);
     if (!argsResult.success) {
       status = "failed";
       errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
       errorKind = "args_invalid";
     } else {
+      recordedArgs = argsResult.data;
       try {
         // Bag construction happens inside this try, same as the `run()`
         // call itself below (this also resolves `config.fixtures`
@@ -807,7 +814,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             step_record_id: recordId,
             step: name,
             kind: "do",
-            args: parsedArgs,
+            args: recordedArgs,
             result,
             status: "ok",
             environment: resolvedEnv.name,
@@ -843,7 +850,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             step_record_id: recordId,
             step: name,
             kind: "do",
-            args: parsedArgs,
+            args: recordedArgs,
             // `errorKind` is always set by this point: `status` only ever
             // becomes `"failed"` alongside it, at each branch above. The
             // `?? "step_error"` fallback is a

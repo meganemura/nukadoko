@@ -16,9 +16,11 @@ import { defineStep } from "../src/step/define-step.js";
 // an executor omits them (`nuka do`'s own contract, docs/spec.md "Context
 // API": undefined under `nuka do`), ctx.call's internal-invariant guards
 // (called before beginStepRun; a fixture bag missing a name the part's own
-// run destructures), and the two outcomes `ctx.call` must still report
-// correctly: the part's own run() throwing, and the part's own result
-// failing its returns schema.
+// run destructures), the two outcomes `ctx.call` must still report
+// correctly (the part's own run() throwing, and the part's own result
+// failing its returns schema), and `ctx.call`'s own strict-args enforcement
+// (an unrecognized key refused, naming it, while `CallEntry.args` still
+// records whatever raw value `call()` was actually given).
 
 function baseConfig(): NukadokoConfig {
   return {
@@ -220,6 +222,98 @@ describe("ctx.call: reporting a part's own run() outcome", () => {
     const calls = callsSnapshot();
     expect(calls).toHaveLength(1);
     expect(calls[0]?.error?.kind).toBe("result_invalid");
+  });
+});
+
+describe("ctx.call: strict args validation", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-evidence-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  // A part is registered vocabulary too, publishing the same
+  // `additionalProperties: false` contract `nuka describe` gives a whole
+  // step (src/step/strict-args.ts's own header) — `ctx.call` used to call
+  // `part.args.safeParse` directly, which strips an unrecognized key
+  // instead of refusing it, so a part was the one place that contract went
+  // unenforced.
+  it("rejects an extra key the part's own args schema does not declare, naming it, and records the failure raw under calls[0]", async () => {
+    const part = defineStep({
+      description: "requires exactly one declared key",
+      args: z.object({ email: z.string() }),
+      returns: z.object({ email: z.string() }),
+      async run({}, args) {
+        return { email: args.email };
+      },
+    });
+    const composite = defineStep({
+      description: "calls the part with an extra key its args schema does not declare",
+      args: emptySchema,
+      returns: emptySchema,
+      parts: [part],
+      async run({ call }) {
+        // @ts-expect-error deliberately an extra key `part.args` does not declare
+        await call(part, { email: "a@example.com", EXTRA: "should be rejected" });
+        return {};
+      },
+    });
+
+    const { ctx, beginStepRun, callsSnapshot } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: {},
+    });
+    const fixtures = await buildStepFixtures(ctx, ["call"]);
+    beginStepRun(composite, fixtures);
+
+    await expect(composite.run(fixtures, {})).rejects.toThrow(/args validation failed.*EXTRA/s);
+    const calls = callsSnapshot();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.error?.kind).toBe("args_invalid");
+    // `CallEntry.args` stays the raw value given to `call()`, on a
+    // rejection the same as on a success (this file's own "reporting a
+    // part's own run() outcome" describe block, above, covers the success
+    // side) — strictArgsSchema changes what gets accepted, not what a
+    // failed `CallEntry` records.
+    expect(calls[0]?.args).toEqual({ email: "a@example.com", EXTRA: "should be rejected" });
+  });
+
+  it("still accepts the same call with only the declared key", async () => {
+    const part = defineStep({
+      description: "requires exactly one declared key",
+      args: z.object({ email: z.string() }),
+      returns: z.object({ email: z.string() }),
+      async run({}, args) {
+        return { email: args.email };
+      },
+    });
+    const composite = defineStep({
+      description: "calls the part with only the declared key",
+      args: emptySchema,
+      returns: z.object({ email: z.string() }),
+      parts: [part],
+      async run({ call }) {
+        return call(part, { email: "a@example.com" });
+      },
+    });
+
+    const { ctx, beginStepRun, callsSnapshot } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: {},
+    });
+    const fixtures = await buildStepFixtures(ctx, ["call"]);
+    beginStepRun(composite, fixtures);
+
+    await expect(composite.run(fixtures, {})).resolves.toEqual({ email: "a@example.com" });
+    const calls = callsSnapshot();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toEqual({ email: "a@example.com" });
   });
 });
 
