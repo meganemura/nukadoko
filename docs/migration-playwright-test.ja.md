@@ -10,7 +10,8 @@ Playwright Test に対して直接書かれたスイートには、差し替え�
 nukadoko 自身のインストールと設定は、どちらの扉を使っても同じであり、その手順のどこにも cucumber 固有のものはありません。
 パッケージをインストールし、プロジェクトルートから `nuka init` を実行してください。
 フラグの一覧は `nuka init --help` が表示します(`--base-url` と `--features-dir` を含みます)。
-`nuka init` は `nukadoko.config.ts` を書きます:
+`nuka init` は `nukadoko.config.ts` を書きます。
+CommonJS のプロジェクト(`package.json` に `"type": "module"` が無い場合。既存のスイートはこうなっていることもあります)では `nukadoko.config.mts` を書きます:
 
 ```ts
 import { defineConfig } from "nukadoko";
@@ -20,6 +21,10 @@ export default defineConfig({
   baseURL: "http://localhost:...", // wherever the app under test listens
 });
 ```
+
+その CommonJS の場合、step ファイルも同じ `.mts` 拡張子にする必要があります。
+そのプロジェクトではふつうの `.ts` ファイルが CommonJS として読まれ、nukadoko は ESM 専用だからです。
+`nuka init` はそれを stderr で伝えます。
 
 Playwright Test のスイートはすでに自分自身の `baseURL` を持っています。
 `playwright.config.ts` の `use.baseURL` です。

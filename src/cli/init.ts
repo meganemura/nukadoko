@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { CONFIG_FILE_NAME, loadConfig } from "../config/load-config.js";
+import { CONFIG_FILE_NAME, CONFIG_FILE_NAMES, loadConfig } from "../config/load-config.js";
+import { isCommonJsProject } from "../config/module-kind.js";
 import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
@@ -13,11 +14,21 @@ import type { WritableSink } from "./writable-sink.js";
 // (same split as cli/do.ts and cli/session.ts). One command, one all-or-
 // nothing outcome:
 //
-//   - If `nukadoko.config.ts` already exists, refuse the whole command
-//     (stderr + exit 1, nothing written) before touching the filesystem at
-//     all. A partial init would leave a state no later run can tell apart
-//     from "fully initialized" or "never initialized" — refusing up front is
-//     the only way to keep that question answerable.
+//   - If either nukadoko.config.ts or nukadoko.config.mts already exists,
+//     refuse the whole command (stderr + exit 1, nothing written) before
+//     touching the filesystem at all. A partial init would leave a state no
+//     later run can tell apart from "fully initialized" or "never
+//     initialized" — refusing up front is the only way to keep that
+//     question answerable.
+//   - Which name gets written depends on the project's own module kind
+//     (isCommonJsProject, src/config/module-kind.ts): a project with no
+//     "type": "module" in package.json gets nukadoko.config.mts instead of
+//     nukadoko.config.ts, since tsx reads a plain .ts config the same
+//     CommonJS way Node would and that config would fail to load before a
+//     single line of it ran. A one-line stderr notice says so, and says
+//     step files need the same .mts extension there — never silently,
+//     since a project that hits this without the notice would only see the
+//     step files it later writes fail to import, with no link back to why.
 //   - Otherwise, generate the config, the (empty) steps directory, the
 //     `.gitignore` entry, and `allurerc.mjs`, printing each path actually
 //     written to stdout as it happens (diagnostics go to stderr — an agent
@@ -264,13 +275,20 @@ async function ensureAllurercFile(
 export async function runInit(options: RunInitOptions): Promise<number> {
   const { rootDir, baseUrl, featuresDir, stdout, stderr } = options;
 
-  const configPath = path.join(rootDir, CONFIG_FILE_NAME);
-  if (existsSync(configPath)) {
+  const existingConfigPaths = CONFIG_FILE_NAMES.map((fileName) => path.join(rootDir, fileName)).filter(
+    (candidate) => existsSync(candidate),
+  );
+  if (existingConfigPaths.length > 0) {
+    const already = existingConfigPaths.length === 1 ? "already exists" : "already exist";
     stderr.write(
-      `Refusing to init: ${CONFIG_FILE_NAME} already exists at ${configPath}; nothing was written\n`,
+      `Refusing to init: ${existingConfigPaths.join(" and ")} ${already}; nothing was written\n`,
     );
     return 1;
   }
+
+  const isCjs = isCommonJsProject(rootDir);
+  const configFileName = isCjs ? "nukadoko.config.mts" : CONFIG_FILE_NAME;
+  const configPath = path.join(rootDir, configFileName);
 
   let featuresDirOverride: string | null = null;
   if (featuresDir !== null) {
@@ -287,7 +305,12 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   const stepsDirRelative = path.join(featuresDirOverride ?? defaults.featuresDir, "steps");
 
   await writeFile(configPath, configTemplate(baseUrl, featuresDirOverride));
-  stdout.write(`${CONFIG_FILE_NAME}\n`);
+  stdout.write(`${configFileName}\n`);
+  if (isCjs) {
+    stderr.write(
+      `No "type": "module" in package.json, so nuka init wrote ${configFileName}; write step files as .mts too, since nukadoko is ESM-only and this project reads .ts as CommonJS\n`,
+    );
+  }
 
   await mkdir(path.join(rootDir, stepsDirRelative), { recursive: true });
   stdout.write(`${stepsDirRelative}\n`);

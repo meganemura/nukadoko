@@ -4,6 +4,9 @@
 
 既存の cucumber-js スイートを Playwright に対して実行しているチーム向けで、feature ファイルと step の定義は `features/` 配下にあります(cucumber-js 自身のレイアウト規約であり、nukadoko のデフォルトでもあります)。
 書き換えは不要です: 目標は、スイートを変更せずに nukadoko の harness 上で実行し、その後は自分のペースで一部ずつ昇格させることです。
+既存のスイートは CommonJS のこともあります(自分の `package.json` に `"type": "module"` が無い場合)。
+この扉はそこでも動きます。
+nukadoko の設定と step ファイルの両方で、`.ts` の代わりに `.mts` を使います(下の Stage 0)。
 以下の各段階の実際に取得したコマンド出力を伴う完全な実例については、[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 
 そもそも cucumber-js のスイートがなければ、以下はどれも当てはまりません。
@@ -23,7 +26,11 @@ export default defineConfig({
 });
 ```
 
-`nuka init` は `nukadoko.config.ts` が既に存在する場合は実行を拒否し、`<featuresDir>/steps/` を作成し、`.nukadoko/` を `.gitignore` に追加し、(まだ空の)語彙を発見する self-check で終わります。
+CommonJS のスイートでは、`nuka init` は代わりに `nukadoko.config.mts` を書きます(中身は同じで、stderr にその旨を伝えます)。
+そこでは step ファイルも同じ `.mts` 拡張子にする必要があります。
+そのプロジェクトではふつうの `.ts` ファイルが CommonJS として読まれ、nukadoko は ESM 専用だからです。
+
+`nuka init` は `nukadoko.config.ts` か `nukadoko.config.mts` のどちらかが既に存在する場合は実行を拒否し、`<featuresDir>/steps/` を作成し、`.nukadoko/` を `.gitignore` に追加し、(まだ空の)語彙を発見する self-check で終わります。
 `featuresDir` はデフォルトで `features`(cucumber-js 自身の規約)なので、ほとんどのスイートは上書き不要であり、discovery はディレクトリ全体をたどるため、その配下の別の場所にある step ファイル(`features/step_definitions/`、`features/support/`)も並べ替えは不要です。
 
 ## Stage 1: import を差し替える

@@ -4,8 +4,11 @@ For teams with an existing cucumber-js suite running against Playwright,
 feature files and step definitions living under `features/` (cucumber-js's
 own layout convention, and nukadoko's default too). No rewrite: the goal is
 to run the suite, unchanged, on nukadoko's harness, then promote pieces at
-your own pace. For a full worked example of every stage below, with real
-captured command output, see
+your own pace. An existing suite can be CommonJS (no `"type": "module"` in
+its own `package.json`); this door works there too, using `.mts` in place
+of `.ts` for both nukadoko's config and its step files (Stage 0 below). For
+a full worked example of every stage below, with real captured command
+output, see
 [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration).
 
 Nothing below applies if there is no cucumber-js suite to begin with. A
@@ -27,13 +30,19 @@ export default defineConfig({
 });
 ```
 
-`nuka init` refuses to run if `nukadoko.config.ts` already exists, creates
-`<featuresDir>/steps/`, adds `.nukadoko/` to `.gitignore`, and ends with a
-self-check that discovers the (still empty) vocabulary. `featuresDir`
-defaults to `features` (cucumber-js's own convention), so most suites need
-no override; discovery walks the whole directory, so step files living
-elsewhere under it (`features/step_definitions/`, `features/support/`) need
-no reshuffling either.
+In a CommonJS suite, `nuka init` writes `nukadoko.config.mts` instead
+(same content, and it says so on stderr); step files need the same `.mts`
+extension there, since a plain `.ts` file is read as CommonJS in that
+project and nukadoko is ESM-only.
+
+`nuka init` refuses to run if `nukadoko.config.ts` or `nukadoko.config.mts`
+already exists, creates `<featuresDir>/steps/`, adds `.nukadoko/` to
+`.gitignore`, and ends with a self-check that discovers the (still empty)
+vocabulary. `featuresDir` defaults to `features` (cucumber-js's own
+convention), so most suites need no override; discovery walks the whole
+directory, so step files living elsewhere under it
+(`features/step_definitions/`, `features/support/`) need no reshuffling
+either.
 
 ## Stage 1: switch the import
 

@@ -10,7 +10,8 @@ Getting nukadoko itself installed and configured is the same regardless of
 which door you use, and none of it is cucumber-specific: install the
 package, then run `nuka init` from the project root (`nuka init --help`
 lists its flags, including `--base-url` and `--features-dir`). It writes
-`nukadoko.config.ts`:
+`nukadoko.config.ts`, or `nukadoko.config.mts` in a CommonJS project (no
+`"type": "module"` in `package.json`, which an existing suite can be):
 
 ```ts
 import { defineConfig } from "nukadoko";
@@ -20,6 +21,10 @@ export default defineConfig({
   baseURL: "http://localhost:...", // wherever the app under test listens
 });
 ```
+
+In that CommonJS case, step files need the same `.mts` extension too,
+since a plain `.ts` file is read as CommonJS in that project and nukadoko
+is ESM-only; `nuka init` says so on stderr.
 
 A Playwright Test suite already has its own `baseURL`, in
 `playwright.config.ts`'s `use.baseURL`. That is a separate field, and

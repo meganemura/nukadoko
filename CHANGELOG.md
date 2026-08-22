@@ -9,6 +9,18 @@ just until 0.1.
 
 ### Added
 
+- **A CommonJS project (no `"type": "module"` in `package.json`) can now
+  use nukadoko.** `nuka init` now writes `nukadoko.config.mts` there
+  instead of `nukadoko.config.ts`, and says on stderr that step files need
+  the same `.mts` extension; `nukadoko.config.mts` joins
+  `nukadoko.config.ts` as a name `nuka check`/`nuka do`/`nuka run`/`nuka
+  steps` all resolve, and the two existing at once is refused rather than
+  silently picking one. Before this, the only way in was switching the
+  whole project to `"type": "module"`, which this door exists specifically
+  to avoid asking for. `nuka check`'s `step-file-import-failed` also now
+  names the cause when a CommonJS project's own `.ts` step file fails to
+  import: previously Node's own `Cannot find module` message stood alone,
+  reading like the file was missing rather than misread as CommonJS.
 - **`nuka check --codes` lists every finding code `nuka check` can
   produce, each with a one-line description.** `nuka check --json` only
   ever reported the current project's own findings, never a catalog of

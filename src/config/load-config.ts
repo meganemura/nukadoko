@@ -6,17 +6,38 @@ import { ZodArray, ZodDefault, ZodObject, ZodOptional, ZodRecord, type z } from 
 import { ConfigError } from "./errors.js";
 import { configSchema, type NukadokoConfig } from "./schema.js";
 
-// Exported (not just module-private) so `nuka init` can check for this
-// exact file's existence before generating anything, and `nuka scaffold`'s
-// tests can reason about it, without either duplicating the literal.
-export const CONFIG_FILE_NAME = "nukadoko.config.ts";
+// The two names loadConfig ever reads, in preference order. Exported so
+// `nuka init` can check both for existence before generating anything (a
+// stray nukadoko.config.mts must refuse init exactly like a stray
+// nukadoko.config.ts already did), and so tests can reason about the set
+// without duplicating it.
+export const CONFIG_FILE_NAMES = ["nukadoko.config.ts", "nukadoko.config.mts"] as const;
 
-// Responsibility: find nukadoko.config.ts under a project root, load it at
-// run time (it is TypeScript, not something Node can import unassisted —
-// hence tsx's tsImport, per the spec), and turn its default export into a
-// fully-defaulted, validated NukadokoConfig. Applying defaults through the
-// same schema used for validation (rather than a second hard-coded literal)
-// keeps "file absent" and "file present but empty" behave identically.
+// The name to use when no config file exists yet, and the name `nuka
+// scaffold`'s tests reason about — kept as its own export (rather than
+// `CONFIG_FILE_NAMES[0]`) since most callers only ever care about "the
+// default", not "the full accepted set".
+export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
+
+// Responsibility: find a project's config file (nukadoko.config.ts or
+// nukadoko.config.mts — CONFIG_FILE_NAMES above) under a project root, load
+// it at run time (it is TypeScript, not something Node can import
+// unassisted — hence tsx's tsImport, per the spec), and turn its default
+// export into a fully-defaulted, validated NukadokoConfig. Applying
+// defaults through the same schema used for validation (rather than a
+// second hard-coded literal) keeps "file absent" and "file present but
+// empty" behave identically.
+//
+// .mts exists for one reason: a project whose package.json has no
+// "type": "module" (CommonJS) cannot load nukadoko.config.ts at all — tsx
+// reads a plain .ts file's module kind from that same package.json field,
+// the same rule Node itself applies, so a CommonJS project's .ts config
+// is read as CommonJS and fails before a single line of it runs. .mts is
+// unambiguous ESM regardless of package.json, which is the one thing that
+// lets such a project load a config at all (docs/migration.md "Stage 0:
+// install and point nukadoko at your suite"). `nuka init` decides which
+// name to write (src/config/module-kind.ts's isCommonJsProject); this
+// module only reads whichever one is actually on disk.
 
 /** Strips `ZodOptional`/`ZodDefault` down to the schema they wrap — every
  * container `configSchema` nests a `.strict()` object inside (`environments.
@@ -92,11 +113,55 @@ function formatIssues(issues: readonly z.core.$ZodIssue[]): string {
     .join("; ");
 }
 
+export interface ResolvedConfigFile {
+  readonly path: string;
+  readonly fileName: string;
+}
+
+/**
+ * Finds which of CONFIG_FILE_NAMES exists under `rootDir`. Both existing at
+ * once is refused outright, as a `ConfigError` naming both absolute paths:
+ * loading one over the other silently would mean which config actually
+ * governs a run depends on an ordering nothing in the project states, and a
+ * project that meant to keep only one now has a second, stale copy nobody
+ * is reading. `null` means neither exists — not an error on its own;
+ * callers fall back to schema defaults the same way an absent
+ * nukadoko.config.ts always has.
+ */
+export function findConfigFile(rootDir: string): ResolvedConfigFile | null {
+  const found = CONFIG_FILE_NAMES.map((fileName) => ({
+    fileName,
+    path: path.join(rootDir, fileName),
+  })).filter((candidate) => existsSync(candidate.path));
+
+  if (found.length > 1) {
+    const paths = found.map((candidate) => candidate.path).join(" and ");
+    throw new ConfigError(
+      `Both ${paths} exist; nukadoko cannot tell which one to read. Delete one and keep the other.`,
+      found[0]!.path,
+    );
+  }
+  return found[0] ?? null;
+}
+
+/**
+ * The config file name a project actually resolves to: whichever of
+ * CONFIG_FILE_NAMES exists, or CONFIG_FILE_NAME (the default) when neither
+ * does. For a caller that needs to name "the config file" in a message
+ * (e.g. src/check/analyze.ts attributing a config.fixtures issue to the
+ * file it lives in) without also wanting `findConfigFile`'s `null`/both-
+ * exist handling spelled out again.
+ */
+export function resolveConfigFileName(rootDir: string): string {
+  return findConfigFile(rootDir)?.fileName ?? CONFIG_FILE_NAME;
+}
+
 export async function loadConfig(rootDir: string): Promise<NukadokoConfig> {
-  const configPath = path.join(rootDir, CONFIG_FILE_NAME);
+  const resolved = findConfigFile(rootDir);
+  const configPath = resolved?.path ?? path.join(rootDir, CONFIG_FILE_NAME);
 
   let raw: unknown = {};
-  if (existsSync(configPath)) {
+  if (resolved !== null) {
     const mod: { default?: unknown } = await tsImport(
       pathToFileURL(configPath).href,
       import.meta.url,

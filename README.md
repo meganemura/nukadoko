@@ -16,13 +16,19 @@ Node 20+ (`package.json`'s `engines.node` is `">=20"`).
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts and .nukadoko/ ignores
+npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .nukadoko/ ignores
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
 nukadoko is a devDependency: it ships its own TypeScript source alongside
 `dist/`, so stack traces land on real code and an agent reading
 `node_modules` can see why a thing works, not just its type.
+
+Already have a `package.json` with no `"type": "module"` (CommonJS, what a
+plain `npm init -y` writes)? `nuka init` still works: it writes
+`nukadoko.config.mts` instead of `nukadoko.config.ts`, and prints a
+one-line reminder that step files need `.mts` too, since a plain `.ts`
+file is read as CommonJS in that project and nukadoko is ESM-only.
 
 <details>
 <summary>No `package.json` yet (Rails, Django, and other non-Node repos)?</summary>
@@ -35,13 +41,14 @@ more reliable to write the minimum by hand:
 { "private": true, "type": "module" }
 ```
 
-`"type": "module"` is required, not optional: nukadoko is ESM-only, and
-without it every `nuka` command fails with `No "exports" main defined in
-.../node_modules/nukadoko/package.json`. That message never mentions
-`type`, and nukadoko cannot improve on it, since the CLI hasn't loaded yet
-when Node gives up. You don't need to gitignore `.nukadoko/` yourself:
-`nuka init` writes that. Traces and screenshots inside it are not
-redacted, so the state directory itself is sensitive.
+`"type": "module"` keeps every generated file `.ts`, the simpler of the
+two paths above. Leaving it out is not a dead end (see the CommonJS
+paragraph above), but hand-writing `nukadoko.config.ts` yourself in a
+project without it still fails with `No "exports" main defined in
+.../node_modules/nukadoko/package.json`; `nuka init` is what knows to
+write `nukadoko.config.mts` there instead. You don't need to gitignore
+`.nukadoko/` yourself: `nuka init` writes that. Traces and screenshots
+inside it are not redacted, so the state directory itself is sensitive.
 
 </details>
 

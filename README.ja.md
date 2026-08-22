@@ -19,12 +19,17 @@ Node 20+(`package.json` の `engines.node` は `">=20"`)。
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts and .nukadoko/ ignores
+npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .nukadoko/ ignores
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
 nukadoko は devDependency です。
 `dist/` と並べて TypeScript のソースそのものも同梱しているため、stack trace は実際のコードを指し、`node_modules` を読む agent は型だけでなく「なぜそう動くか」まで見えます。
+
+すでに `package.json` はあるが `"type": "module"` が無い(CommonJS。ふつうの `npm init -y` が書く形)場合はどうでしょうか。
+`nuka init` はそれでも動きます。
+`nukadoko.config.ts` の代わりに `nukadoko.config.mts` を書き、step ファイルも `.mts` にする必要があることを 1 行で伝えます。
+そのプロジェクトではふつうの `.ts` ファイルが CommonJS として読まれ、nukadoko は ESM 専用だからです。
 
 <details>
 <summary>まだ `package.json` がありませんか(Rails、Django など Node 以外のリポジトリ)?</summary>
@@ -37,10 +42,11 @@ nukadoko は devDependency です。
 { "private": true, "type": "module" }
 ```
 
-`"type": "module"` は省略できません。
-nukadoko は ESM 専用であり、これがないとあらゆる `nuka` コマンドが `No "exports" main defined in .../node_modules/nukadoko/package.json` で失敗します。
-このメッセージは `type` については何も言わず、nukadoko 側で改善することもできません。
-Node が諦める時点では、CLI がまだ読み込まれていないからです。
+`"type": "module"` を付けると、生成されるファイルはすべて `.ts` のままになります。
+上の 2 つの経路のうち簡単な方です。
+省略しても行き止まりにはなりません(上の CommonJS の段落を参照)。
+ただし `"type": "module"` の無いプロジェクトで `nukadoko.config.ts` を自分の手で書くと、`No "exports" main defined in .../node_modules/nukadoko/package.json` で失敗します。
+代わりに `nukadoko.config.mts` を書くべきだと知っているのは `nuka init` の側です。
 `.nukadoko/` を自分で gitignore する必要はありません。
 `nuka init` がそれを書き込みます。
 Trace とスクリーンショットは redact されません。

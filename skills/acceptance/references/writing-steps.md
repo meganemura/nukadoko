@@ -9,6 +9,13 @@ record uses for it. Feature files and step files both live under the
 configured `featuresDir`, `features` unless the project says otherwise,
 with feature files ending in `.feature`.
 
+Step files end in `.ts`, except in a CommonJS project (no
+`"type": "module"` in `package.json`), where they end in `.mts` instead:
+a plain `.ts` file is read as CommonJS there, and nukadoko is ESM-only.
+`nuka init` already wrote a matching `nukadoko.config.mts` in that case
+(see the SKILL.md this file supports), so the same rule applies to every
+step file underneath it.
+
 ```ts
 // features/steps/set-product-out-of-stock.ts
 import { defineStep, z } from "nukadoko";

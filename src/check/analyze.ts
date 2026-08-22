@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
-import { CONFIG_FILE_NAME, loadConfig } from "../config/load-config.js";
+import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
+import { isCommonJsProject } from "../config/module-kind.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import {
   attachStepLines,
@@ -207,19 +208,36 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
 
-  // Node's own error message, unmodified: it already names the missing
-  // export, subpath, or package, so re-parsing it here would mean depending
-  // on Node's own wording while losing information rather than adding any.
-  // See this file's own header for why a broken glue file is a report entry
-  // here rather than the fundamental failure it still is for `run`/`do`/
-  // `steps`/`init`.
+  // Node's own error message is the base of every entry below, unmodified:
+  // it already names the missing export, subpath, or package, so re-parsing
+  // it here would mean depending on Node's own wording while losing
+  // information rather than adding any. See this file's own header for why
+  // a broken glue file is a report entry here rather than the fundamental
+  // failure it still is for `run`/`do`/`steps`/`init`.
+  //
+  // One case gets a sentence appended: a CommonJS project (no
+  // "type": "module" in package.json) whose failed file is itself .ts.
+  // Node's own message there is a bare "Cannot find module" naming the very
+  // file that does exist on disk — true only in the sense that tsx's loader
+  // gave up before it could read it, and misleading on its own, since it
+  // reads like a missing file rather than a module-kind mismatch. The two
+  // conditions both have to hold before anything is added: a project that
+  // isn't CommonJS, or a failure on a file that isn't .ts, gets Node's
+  // message exactly as it came (CLAUDE.md: "a check that guesses is worse
+  // than no check").
+  const cjsProject = isCommonJsProject(rootDir);
   for (const failure of importFailures) {
+    const isCjsTsMismatch = cjsProject && path.extname(failure.filePath) === ".ts";
+    const message = isCjsTsMismatch
+      ? `${failure.message} This project has no "type": "module" in package.json, so nukadoko reads .ts here as CommonJS; nukadoko is ESM-only, so rename this file to .mts.`
+      : failure.message;
     errors.push({
       code: "step-file-import-failed",
-      message: failure.message,
+      message,
       file: failure.filePath,
-      // Extracted from the message above, never re-derived some other way —
-      // the message itself stays verbatim either way.
+      // Extracted from Node's own message above, never re-derived some
+      // other way — the location, when present, is always in the part
+      // passed through verbatim.
       line: extractImportFailureLine(failure.message, rootDir, failure.filePath),
     });
   }
@@ -389,15 +407,18 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // overridden by a fixture that owns neither `page` nor `context`
   // (src/fixture/graph.ts does the actual graph-shape work; this file only
   // turns its findings into a `CheckIssue`, the same shape every other
-  // category here already produces). `file` names `nukadoko.config.ts`
-  // itself — that is where every `config.fixtures` entry actually lives,
-  // the same "file" field src/check/config-check.ts's own config-level
-  // findings already use — and the fixture's own name is already part of
-  // each issue's `message` (src/step/validate-fixtures.ts), so `step` is
-  // left unset rather than repurposed for a subject it was never meant to
-  // carry.
+  // category here already produces). `file` names the config file itself —
+  // that is where every `config.fixtures` entry actually lives, the same
+  // "file" field src/check/config-check.ts's own config-level findings
+  // already use — resolved via resolveConfigFileName rather than
+  // hard-coded, since a CommonJS project reads its config from
+  // nukadoko.config.mts, not nukadoko.config.ts. The fixture's own name is
+  // already part of each issue's `message`
+  // (src/step/validate-fixtures.ts), so `step` is left unset rather than
+  // repurposed for a subject it was never meant to carry.
+  const configFileName = resolveConfigFileName(rootDir);
   for (const issue of validateFixtureDefinitions(config)) {
-    errors.push({ code: issue.code, message: issue.message, file: CONFIG_FILE_NAME });
+    errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
   const { features, parseErrors } =

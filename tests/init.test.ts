@@ -341,6 +341,116 @@ describe("nuka init", () => {
   });
 });
 
+// Responsibility: the CJS door — a project whose own package.json has no
+// "type": "module" cannot load nukadoko.config.ts at all (tsx reads a
+// plain .ts file's module kind from that same field, the same rule Node
+// itself applies), so `nuka init` writes nukadoko.config.mts there
+// instead and says why on stderr. isCommonJsProject (src/config/
+// module-kind.ts) is the one place that decision is made; this only
+// exercises it through `nuka init` itself.
+describe("nuka init: CommonJS projects", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+    await ensureNukadokoShim();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it('writes nukadoko.config.mts, not nukadoko.config.ts, when package.json has no "type": "module", and says why on stderr', async () => {
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify({ name: "cjs-project", private: true }),
+    );
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).toContain("nukadoko.config.mts");
+    expect(stdout.text()).not.toContain("nukadoko.config.ts\n");
+    expect(existsSync(path.join(rootDir, "nukadoko.config.mts"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
+
+    // One line, naming both the fact (.mts was written) and the reason
+    // (.ts is read as CommonJS here, nukadoko is ESM-only) — never
+    // silently, per this file's own header.
+    expect(stderr.text()).toContain(".mts");
+    expect(stderr.text()).toMatch(/type.*module/);
+    expect(stderr.text().trim().split("\n")).toHaveLength(1);
+
+    // The self-check (loadConfig + discoverSteps) still passed above
+    // (exitCode 0) — this is the further proof that a step file placed
+    // under the generated layout is actually discoverable too, the same
+    // "creates <featuresDir>/steps... and the self-check discovers under
+    // it" property the plain (non-CJS) describe block above checks for
+    // nukadoko.config.ts.
+    await writeFile(
+      path.join(rootDir, "features", "steps", "ping.mts"),
+      [
+        'import { defineStep } from "nukadoko";',
+        'import { z } from "zod";',
+        "export default defineStep({",
+        '  description: "ping",',
+        "  args: z.object({}),",
+        "  returns: z.object({}),",
+        "  run() {",
+        "    return {};",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const stepsStdout = createCaptureSink();
+    const stepsExitCode = await runCli(["steps"], {
+      rootDir,
+      stdout: stepsStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(stepsExitCode).toBe(0);
+    expect(stepsStdout.text()).toContain("ping");
+  });
+
+  it('still writes nukadoko.config.ts, with no CJS notice, when package.json has "type": "module"', async () => {
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify({ name: "esm-project", private: true, type: "module" }),
+    );
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).toContain("nukadoko.config.ts");
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.mts"))).toBe(false);
+    expect(stderr.text()).toBe("");
+  });
+
+  it("refuses the whole command when nukadoko.config.mts already exists, the same as nukadoko.config.ts", async () => {
+    const existingConfig =
+      'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n';
+    await writeFile(path.join(rootDir, "nukadoko.config.mts"), existingConfig);
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).not.toBe("");
+
+    expect(await readFile(path.join(rootDir, "nukadoko.config.mts"), "utf8")).toBe(existingConfig);
+    expect(existsSync(path.join(rootDir, "features"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".gitignore"))).toBe(false);
+  });
+});
+
 describe("nuka init: allurerc.mjs", () => {
   let rootDir: string;
 

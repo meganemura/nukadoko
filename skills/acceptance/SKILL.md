@@ -82,8 +82,8 @@ If none of the four is true, there is nothing yet to interrogate: ask the
 user what this is supposed to do before writing anything, since a scenario
 started without knowing what it proves just proves the wrong thing.
 
-Everything below assumes the project is already initialized. If it isn't
-yet (no `nukadoko.config.ts`), run `nuka init` first.
+Everything below assumes the project is already initialized (run `nuka init`
+if not; a CommonJS project gets `nukadoko.config.mts`, not `.ts`).
 
 ## From prose to requirements
 

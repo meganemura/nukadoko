@@ -25,7 +25,10 @@ Either way, the move happens in stages, never all at once; the rest of this
 skill explains why, then walks through each starting point in turn.
 
 Everything below assumes the project is already initialized. If it isn't yet
-(no `nukadoko.config.ts`), run `nuka init` first.
+(no `nukadoko.config.ts` or `nukadoko.config.mts`), run `nuka init` first.
+An existing suite can be CommonJS (no `"type": "module"` in
+`package.json`); `nuka init` writes `nukadoko.config.mts` there instead,
+and step files need the same `.mts` extension.
 
 ## Say what you are about to do, before doing it
 
