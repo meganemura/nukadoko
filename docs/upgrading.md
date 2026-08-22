@@ -33,6 +33,20 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.7.0 to the next release
+
+Nothing here needs doing before upgrading. One behavior change is worth
+knowing about if anything you run reads `nuka tend --json`.
+
+- **`nuka tend`'s `post-navigation-read` notes are grouped now.** One note
+  used to be emitted per step record, so a Background step in a suite with
+  two dozen scenarios produced two dozen notes that differed only by file
+  name. Matches that share a step, its navigation call, and the call that
+  followed it are one note now, carrying how many step records it happened
+  in and the range the gaps fell in. A script that counted notes to count
+  occurrences counts distinct shapes instead; the occurrence count is in
+  the note's own text.
+
 ## 0.6.0 to 0.7.0
 
 One breaking change, plus a behavior change that is not breaking but is
