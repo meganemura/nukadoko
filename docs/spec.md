@@ -1855,7 +1855,15 @@ so this is reported as a fact and never as a verdict.
 
 The socket a live session listens on holds the same live credentials the
 storageState file does, and is created with the same restricted
-permissions for the same reason (see "The state directory"). An idle
+permissions for the same reason (see "The state directory"). It is not
+kept beside that file, though. Every platform caps how long a unix socket
+path may be, a project's own path can be arbitrarily deep (a worktree, a
+package inside a monorepo, a nested checkout), and a cap that a project's
+location can push past is one no amount of shortening a session's name
+gets back under. The socket lives in a private directory of its own under
+the operating system's temp directory instead, so its length does not
+depend on where the project sits, and the session's lock file names the
+path once it exists. An idle
 timeout applies by default, because a forgotten session is the normal
 outcome of an interrupted exploration rather than an unusual one, and
 `nuka session list` reaps the ones whose pid is gone.

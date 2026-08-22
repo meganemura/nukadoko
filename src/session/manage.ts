@@ -1,15 +1,10 @@
 import { existsSync } from "node:fs";
 import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { removeLiveSockDir } from "../live/live-sock.js";
 import { SessionLockConflictError, SessionNotFoundError } from "./errors.js";
-import { liveLockOwner } from "./lock.js";
-import {
-  sessionFilePath,
-  sessionLockPath,
-  sessionSockPath,
-  sessionsDir,
-  sessionsRootDir,
-} from "./paths.js";
+import { liveLockOwner, readLockInfo } from "./lock.js";
+import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "./paths.js";
 
 // Responsibility: `nuka session list`/`clear`'s actual work — enumerate and
 // delete session files under cache/sessions/<env>/ —
@@ -98,9 +93,15 @@ export async function listSessions(rootDir: string, stateDir: string): Promise<S
       if (owner === null && lockNames.includes(name)) {
         // A dead pid's lock is stale by definition (lock.ts's own header) —
         // its socket (if any) is exactly as stale, since nothing is
-        // listening behind it any more.
+        // listening behind it any more. The socket's own path only ever
+        // lived in this lock file's own `sock` field (it moved out of
+        // `stateDir` entirely, so nothing else can derive it) — read here,
+        // before the lock itself is removed, or it is lost for good.
+        const staleInfo = await readLockInfo(lockPath);
         await rm(lockPath, { force: true });
-        await rm(sessionSockPath(rootDir, stateDir, environment, name), { force: true });
+        if (staleInfo?.sock !== undefined) {
+          await removeLiveSockDir(staleInfo.sock);
+        }
       }
 
       let updatedAt: string;

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdir, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
@@ -33,8 +34,9 @@ import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { resolveUse, type ResolveUseSuccess } from "../cli/resolve-use.js";
 import { acquireLock, releaseLock } from "../session/lock.js";
-import { sessionFilePath, sessionLockPath, sessionSockPath, sessionsDir } from "../session/paths.js";
+import { sessionFilePath, sessionLockPath, sessionsDir } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
+import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME } from "./live-sock.js";
 import type { Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -140,9 +142,14 @@ export interface CreateSessionCoreOptions extends RunSessionDaemonOptions {
  * else.
  */
 export interface SessionCore {
-  /** cache/sessions/<env>/<name>.sock, `runSessionDaemon`'s own listen
-   * target, exposed so it never has to re-derive the same path a second
-   * way. */
+  /** This session's own unix socket, inside a private directory `mkdtemp`
+   * made under the OS's own temp directory (live-sock.ts) — never under
+   * `stateDir`, and never derivable from `rootDir`/`name` the way it used
+   * to be, so this is the only place `runSessionDaemon`'s own listen target
+   * comes from. Also what `acquireLock` (above) already wrote into this
+   * session's own lock, under `sock` — every other reader in this package
+   * that needs to reach a live session reads it from there instead of
+   * here. */
   readonly sockPath: string;
   /** Parses one line of wire JSON, then dispatches it exactly as
    * `dispatchRequest` would: malformed JSON is its own `"rejected"`
@@ -191,8 +198,34 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
   );
 
   const lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, name);
-  const sockPath = sessionSockPath(rootDir, config.stateDir, resolvedEnv.name, name);
   const sessionFile = sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, name);
+
+  // The socket lives under the OS's own temp directory, never under
+  // `stateDir` (live-sock.ts's own header explains why: a project's own
+  // path can be deep enough on its own to push a `stateDir`-derived path
+  // over this platform's sun_path limit, and `os.tmpdir()` does not grow
+  // with it). mkdtemp's own six-character suffix is what keeps this
+  // directory unguessable — the socket accepts a step name and args and
+  // runs them against live credentials, so it needs that property the same
+  // way a stolen storageState file would.
+  const sockDir = await mkdtemp(path.join(os.tmpdir(), LIVE_SOCK_DIR_PREFIX));
+  // mkdtemp itself creates this directory at mode 0700 (POSIX mkdtemp(3));
+  // chmod here makes that explicit rather than resting on a guarantee this
+  // file's own reader has no way to see, the same posture the socket
+  // file's own chmod already takes a few lines below, in
+  // `runSessionDaemon`.
+  await chmod(sockDir, 0o700);
+  const sockPath = path.join(sockDir, LIVE_SOCK_FILE_NAME);
+
+  /** Undoes the mkdtemp above and releases the lock together — every path
+   * below that exits before this session is actually serving requests
+   * acquired both, so both have to be given back together, the same
+   * pairing `performCleanup` (further down) keeps for this session's whole
+   * later life. */
+  async function releaseLockAndSockDir(): Promise<void> {
+    await releaseLock(lockPath);
+    await rm(sockDir, { recursive: true, force: true });
+  }
 
   // The lock is acquired by this process itself, not by `session start`'s
   // own short-lived parent (docs/spec.md "Live sessions": "the lock file is
@@ -201,8 +234,17 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
   // session start` already made a best-effort check before spawning this
   // process at all; this is the authoritative one, and the only one that
   // can actually win or lose the race against another session of the same
-  // name starting at the same time.
-  await acquireLock(lockPath, name);
+  // name starting at the same time. `sockPath` is written into the lock in
+  // this same call (session/lock.ts's own `sock` field) — a conflict here
+  // means this process never actually claimed the name, so the directory
+  // just made above is removed rather than left behind for nothing to ever
+  // find again.
+  try {
+    await acquireLock(lockPath, name, sockPath);
+  } catch (error) {
+    await rm(sockDir, { recursive: true, force: true });
+    throw error;
+  }
 
   const { vocabulary } = await discoverSteps(rootDir, config.featuresDir);
   const stepNameOf = new Map<Step, string>(
@@ -218,10 +260,10 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // Every request this session could ever serve would fail the exact same
     // way (this is a config-wide judgment, not a per-step one) — refusing
     // to come up at all is more honest than opening a socket that can only
-    // ever reject. `nuka session start`'s own bounded poll for the socket
-    // (spawn-daemon.ts) is what turns this early exit into a reported
-    // failure.
-    await releaseLock(lockPath);
+    // ever reject. `nuka session start`'s own bounded poll for this
+    // session's lock to name a reachable socket (spawn-daemon.ts) is what
+    // turns this early exit into a reported failure.
+    await releaseLockAndSockDir();
     process.exitCode = 1;
     return { ok: false };
   }
@@ -251,7 +293,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // A malformed session file is a setup failure `nuka do` also refuses on
     // (do.ts's own setup phase) — this session has nothing safe to restore,
     // so it must not come up silently empty instead.
-    await releaseLock(lockPath);
+    await releaseLockAndSockDir();
     process.exitCode = 1;
     return { ok: false };
   }
@@ -321,9 +363,10 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
   /**
    * The actual teardown: fixture caches, `dispose()`, persisting
    * storageState (when there is one to persist), stopping whatever socket
-   * server this caller is running (`closeServer`), removing the socket
-   * file, and releasing the lock: everything a caller needs finished
-   * *before* it can trust the session is really gone. Deliberately does
+   * server this caller is running (`closeServer`), removing the socket's
+   * own mkdtemp'd directory, and releasing the lock: everything a caller
+   * needs finished *before* it can trust the session is really gone.
+   * Deliberately does
    * not call `process.exit` itself: a "stop" response is `dispatchRequest`'s
    * own return value, and its own caller (`handleConnection`) still needs
    * the process alive long enough to write its own acknowledgement back
@@ -369,7 +412,13 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // file hit under test. All `close()` needs to do synchronously is stop
     // *accepting new* connections, which it already does before returning.
     closeServer();
-    await rm(sockPath, { force: true });
+    // Recursive here, unlike every other reader of a lock's `sock` field in
+    // this package (live-sock.ts's own `removeLiveSockDir`): this process is
+    // the one that created `sockDir` with `mkdtemp` a few lines up in this
+    // same function, so there is nothing to protect against here that a
+    // reader reconstructing the path from a lock file on disk would need
+    // to.
+    await rm(sockDir, { recursive: true, force: true });
     await releaseLock(lockPath);
   }
 
@@ -759,7 +808,9 @@ export async function runSessionDaemon(options: RunSessionDaemonOptions): Promis
     });
   });
 
-  await rm(core.sockPath, { force: true });
+  // No stale-file removal before `listen()` here any more: `core.sockPath`
+  // sits inside a directory `mkdtemp` just made fresh, a few lines up in
+  // `createSessionCore`, so nothing could already be there to remove.
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(core.sockPath, resolve);

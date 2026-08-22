@@ -44,6 +44,18 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka session start` no longer refuses in a deep project.** Its own
+  unix socket used to live under this project's own `stateDir`
+  (`cache/sessions/<env>/<name>.sock`), so a worktree, a monorepo package,
+  or any nested checkout deep enough pushed that path over this platform's
+  own limit on a socket path, and a live session could not start at all —
+  with no workaround that actually helped, since the fixed part of that
+  path alone already used up most of the budget. The socket now lives in
+  its own directory under the OS's own temp directory instead, picked at
+  random and unrelated to this project's own path, so its length no longer
+  depends on where a project sits; the daemon's own lock file names the
+  real path once it exists, and every other command that needs to reach a
+  live session reads it from there.
 - **`nuka harvest` no longer writes raw ANSI escape codes into a draft's
   comments.** A failed step record's own error message can carry a
   terminal's own color codes (Playwright's dim/reset styling around a

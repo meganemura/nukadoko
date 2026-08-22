@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -25,17 +26,29 @@ function sessionsDir(rootDir: string, environment = "default"): string {
   return path.join(rootDir, ".nukadoko", "cache", "sessions", environment);
 }
 
+/** Writes a lock file directly, bypassing `acquireLock` — `sock`, when
+ * given, is a live session daemon's own socket path (session/lock.ts's own
+ * field); omitted, a lock reads exactly like the one-execution-long lock a
+ * plain `nuka do --session` also holds. */
 async function writeLockFile(
   rootDir: string,
   environment: string,
   name: string,
   pid: number,
-): Promise<{ lockPath: string; sockPath: string }> {
+  options: { sock?: string } = {},
+): Promise<{ lockPath: string }> {
   const dir = sessionsDir(rootDir, environment);
   await mkdir(dir, { recursive: true });
   const lockPath = path.join(dir, `${name}.lock`);
-  await writeFile(lockPath, `${JSON.stringify({ pid, started_at: new Date().toISOString() })}\n`);
-  return { lockPath, sockPath: path.join(dir, `${name}.sock`) };
+  await writeFile(
+    lockPath,
+    `${JSON.stringify({
+      pid,
+      started_at: new Date().toISOString(),
+      ...(options.sock !== undefined ? { sock: options.sock } : {}),
+    })}\n`,
+  );
+  return { lockPath };
 }
 
 /** A pid guaranteed to already be dead: spawnSync blocks until the child has
@@ -48,32 +61,6 @@ function deadPid(): number {
     throw new Error("spawnSync did not report a pid");
   }
   return child.pid;
-}
-
-/**
- * A minimal project at a *short* path under `/tmp`'s own realpath, not the
- * usual nested `tests/.tmp-fixtures/...` copy: a live session's own socket
- * path is `cache/sessions/<env>/<name>.sock`, and appending that to this
- * repository's own (long) absolute path overruns the OS's ~104-byte
- * `sun_path` limit on a unix socket, so `listen()` fails outright rather
- * than merely running slowly (same reasoning as live-session.test.ts's own
- * `createLiveSessionProject`, which this mirrors at a much smaller scale:
- * `runSessionStop` never loads step files, so there is nothing here for
- * `defineConfig`/a shim/a `featuresDir` to serve).
- */
-async function createShortPathProject(): Promise<string> {
-  const base = await realpath("/tmp");
-  const dir = await mkdtemp(path.join(base, "nk-"));
-  // Without a `"type": "module"` package.json, tsx's own CJS interop
-  // double-wraps a plain `export default {}` into `{ default: {} }`,
-  // which the config schema then rejects as an unknown "default" key
-  // (discovered empirically while writing this fixture). Every other
-  // fixture in this repo avoids the question entirely by inheriting
-  // this repository's own package.json from an ancestor directory, which
-  // a short `/tmp` path deliberately does not have.
-  await writeFile(path.join(dir, "package.json"), `${JSON.stringify({ type: "module" })}\n`);
-  await writeFile(path.join(dir, "nukadoko.config.ts"), "export default {};\n");
-  return dir;
 }
 
 describe("nuka session list: setup failure", () => {
@@ -266,12 +253,14 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
     expect(stdout.text()).toBe("");
   });
 
-  it("cleans up a stale (dead-pid) lock and its socket, and still succeeds quietly", async () => {
-    const { lockPath, sockPath } = await writeLockFile(rootDir, "default", "alice", deadPid());
+  it("cleans up a stale (dead-pid) lock and its socket's own tmp directory, and still succeeds quietly", async () => {
+    const sockDir = await mkdtemp(path.join(await realpath("/tmp"), "nk-stale-sock-"));
+    const sockPath = path.join(sockDir, "live.sock");
     // A leftover socket *file* (never actually listened on) is exactly what
     // a crashed daemon would leave behind. `liveLockOwner` never dials it,
     // it only reads the lock, so a plain file stands in fine here.
     await writeFile(sockPath, "");
+    const { lockPath } = await writeLockFile(rootDir, "default", "alice", deadPid(), { sock: sockPath });
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -285,11 +274,18 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
     expect(stderr.text()).toBe("");
     await expect(rm(lockPath)).rejects.toThrow();
     await expect(rm(sockPath)).rejects.toThrow();
+    // The mkdtemp'd directory itself is gone too, not just the socket file
+    // inside it (live/live-sock.ts's own `removeLiveSockDir`) — nothing
+    // under the OS's own temp dir should survive reaping a dead session.
+    expect(existsSync(sockDir)).toBe(false);
   });
 
-  it("reports a transport failure when the lock claims a live pid but no socket answers", async () => {
+  it("refuses when the lock claims a live pid but names no live session socket", async () => {
     await writeLockFile(rootDir, "default", "alice", process.pid);
-    // Deliberately no socket at all: `sendLiveRequest` must fail to connect.
+    // Deliberately no `sock` field: indistinguishable, by design, from a
+    // plain `nuka do --session` execution still in flight
+    // (session/lock.ts's own header) — `stop` has nothing to dial and must
+    // not touch a lock it does not own.
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -302,48 +298,44 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("Failed to stop session");
     expect(stderr.text()).toContain(`pid ${process.pid}`);
+    expect(stderr.text()).toContain("no live session socket is recorded");
   });
 
   it("reports a rejection when the live session refuses the stop request", async () => {
-    // A real listening unix socket, unlike every other case in this file:
-    // needs the short-path project (this file's own
-    // `createShortPathProject` header) or `listen()` itself fails.
-    const shortRootDir = await createShortPathProject();
-    try {
-      const { sockPath } = await writeLockFile(shortRootDir, "default", "alice", process.pid);
+    const sockDir = await mkdtemp(path.join(await realpath("/tmp"), "nk-stop-reject-"));
+    const sockPath = path.join(sockDir, "live.sock");
+    await writeLockFile(rootDir, "default", "alice", process.pid, { sock: sockPath });
 
-      // A minimal stand-in for daemon.ts's own connection handler: read one
-      // line, always answer "rejected", enough to exercise
-      // runSessionStop's own `response.status === "rejected"` branch without
-      // a real daemon behind it.
-      const server: Server = createServer((socket) => {
-        let buffer = "";
-        socket.on("data", (chunk: Buffer) => {
-          buffer += chunk.toString("utf8");
-          if (buffer.includes("\n")) {
-            socket.end(encodeLine({ status: "rejected", message: "still mid-execution" }));
-          }
-        });
+    // A minimal stand-in for daemon.ts's own connection handler: read one
+    // line, always answer "rejected", enough to exercise
+    // runSessionStop's own `response.status === "rejected"` branch without
+    // a real daemon behind it.
+    const server: Server = createServer((socket) => {
+      let buffer = "";
+      socket.on("data", (chunk: Buffer) => {
+        buffer += chunk.toString("utf8");
+        if (buffer.includes("\n")) {
+          socket.end(encodeLine({ status: "rejected", message: "still mid-execution" }));
+        }
       });
-      await new Promise<void>((resolve) => server.listen(sockPath, resolve));
+    });
+    await new Promise<void>((resolve) => server.listen(sockPath, resolve));
 
-      try {
-        const stdout = createCaptureSink();
-        const stderr = createCaptureSink();
-        const exitCode = await runCli(["session", "stop", "alice"], {
-          rootDir: shortRootDir,
-          stdout,
-          stderr,
-        });
+    try {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["session", "stop", "alice"], {
+        rootDir,
+        stdout,
+        stderr,
+      });
 
-        expect(exitCode).toBe(1);
-        expect(stderr.text()).toContain("did not stop");
-        expect(stderr.text()).toContain("still mid-execution");
-      } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-      }
+      expect(exitCode).toBe(1);
+      expect(stderr.text()).toContain("did not stop");
+      expect(stderr.text()).toContain("still mid-execution");
     } finally {
-      await removeTempDir(shortRootDir);
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await rm(sockDir, { recursive: true, force: true });
     }
   });
 });

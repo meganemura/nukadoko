@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { isProcessAlive } from "../src/session/lock.js";
+import { isProcessAlive, readLockInfo } from "../src/session/lock.js";
+import { sessionLockPath } from "../src/session/paths.js";
 import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka session start`/`do --session`/`stop`'s own round
@@ -16,14 +17,17 @@ import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";
 // must never survive the test that spawned it, whether that test finished
 // cleanly or an assertion threw partway through.
 //
-// This fixture project lives at a *short* path outside this repo's own
-// tree entirely (`createLiveSessionProject`, below), not the usual
-// `tests/.tmp-fixtures/...` copy every other fixture-backed test uses: a
-// live session's own socket path is `cache/sessions/<env>/<name>.sock`
-// (docs/spec.md "Live sessions"), and this repository's own absolute path
-// is already long enough that appending that onto the ordinary nested copy
-// location overruns the OS's ~104-byte `sun_path` limit on a unix socket,
-// which fails `listen()` outright rather than merely running slowly.
+// This fixture project lives outside this repo's own tree entirely
+// (`createLiveSessionProject`, below), not the usual
+// `tests/.tmp-fixtures/...` copy every other fixture-backed test uses —
+// this repository's own committed layout has no `node_modules/zod` for a
+// project outside it to reach without a symlink, and no bare-specifier
+// resolution for `nukadoko-shim.ts` to lean on either. A live session's own
+// socket path used to depend on this project's own path too (it was
+// `cache/sessions/<env>/<name>.sock`, docs/spec.md "Live sessions"), which
+// is what this whole task fixed: the socket now lives under the OS's own
+// temp directory (src/live/live-sock.ts), independent of where this
+// project sits.
 //
 // The counter step (`count`) is what actually proves world persistence: a
 // live session's own vocabulary is loaded once, by its own daemon process,
@@ -43,9 +47,10 @@ function sessionsDir(rootDir: string): string {
 }
 
 /**
- * A fresh copy of tests/fixtures/live-session-project, placed at a short
- * path under `/tmp`'s own realpath (this file's own header explains why)
- * with its own `package.json` (`{"type":"module"}` — nothing under `/tmp`
+ * A fresh copy of tests/fixtures/live-session-project, placed under `/tmp`'s
+ * own realpath (this file's own header explains why it lives outside this
+ * repository's own tree at all) with its own `package.json`
+ * (`{"type":"module"}` — nothing under `/tmp`
  * inherits this repo's own from an ancestor the way a normal
  * `tests/.tmp-fixtures/...` copy does), a `node_modules/zod` symlink back
  * to this repo's real dependency (same reason), and `nukadoko-shim.ts`
@@ -218,12 +223,27 @@ describe("nuka session start/stop (live sessions)", () => {
     expect(fast.stderr).toContain("busy");
   });
 
-  it("socket is 0600 while live, and stop persists storageState to the same .json path", async () => {
+  it("socket is 0600 in a 0700 directory while live, and stop persists storageState to the same .json path", async () => {
     const pid = await start("erin");
 
-    const sockPath = path.join(sessionsDir(rootDir), "erin.sock");
+    // The socket's own path is no longer derivable from `rootDir`/`name` —
+    // it lives inside a directory `mkdtemp` picked at random under the OS's
+    // own temp dir (live-sock.ts) — so it is read back from this daemon's
+    // own lock (session/lock.ts's own `sock` field), the same way every
+    // other reader in this package now reaches it.
+    const lockPath = sessionLockPath(rootDir, "s", "default", "erin");
+    const lockInfo = await readLockInfo(lockPath);
+    if (lockInfo?.sock === undefined) {
+      throw new Error("expected the daemon's own lock to name a live session socket");
+    }
+    const sockPath = lockInfo.sock;
     const sockStats = await stat(sockPath);
     expect(sockStats.mode & 0o777).toBe(0o600);
+    // The directory that holds it keeps the same restricted permissions the
+    // socket used to get from sitting inside cache/sessions/<env>/ — set
+    // explicitly right after `mkdtemp` itself now (daemon.ts's own header).
+    const sockDirStats = await stat(path.dirname(sockPath));
+    expect(sockDirStats.mode & 0o777).toBe(0o700);
 
     const jsonPath = path.join(sessionsDir(rootDir), "erin.json");
     expect(existsSync(jsonPath)).toBe(false);
@@ -244,10 +264,21 @@ describe("nuka session start/stop (live sessions)", () => {
 
     await waitUntilDead(pid);
     expect(existsSync(sockPath)).toBe(false);
+    // The whole mkdtemp'd directory goes with it, not only the socket file
+    // inside it (daemon.ts's own `performCleanup`).
+    expect(existsSync(path.dirname(sockPath))).toBe(false);
   });
 
   it("list reaps a dead session's lock/socket debris and reports liveness", async () => {
     const pid = await start("finn");
+
+    const lockPath = sessionLockPath(rootDir, "s", "default", "finn");
+    const lockInfo = await readLockInfo(lockPath);
+    if (lockInfo?.sock === undefined) {
+      throw new Error("expected the daemon's own lock to name a live session socket");
+    }
+    const sockPath = lockInfo.sock;
+    const sockDir = path.dirname(sockPath);
 
     const liveList = JSON.parse(
       (await (async () => {
@@ -270,6 +301,7 @@ describe("nuka session start/stop (live sessions)", () => {
 
     const dir = sessionsDir(rootDir);
     expect(existsSync(path.join(dir, "finn.lock"))).toBe(true);
+    expect(existsSync(sockPath)).toBe(true);
 
     const stdout = createCaptureSink();
     const exitCode = await runCli(["session", "list", "--json"], {
@@ -286,7 +318,13 @@ describe("nuka session start/stop (live sessions)", () => {
     // session `list` reports).
     expect(list.find((entry) => entry.name === "finn")).toBeUndefined();
     expect(existsSync(path.join(dir, "finn.lock"))).toBe(false);
-    expect(existsSync(path.join(dir, "finn.sock"))).toBe(false);
+    expect(existsSync(sockPath)).toBe(false);
+    // `listSessions`'s own reap removes the socket's whole mkdtemp'd
+    // directory, not only the socket file inside it (session/manage.ts's
+    // own reap branch, live/live-sock.ts's own `removeLiveSockDir`) —
+    // nothing under the OS's own temp dir should survive reaping a dead
+    // session.
+    expect(existsSync(sockDir)).toBe(false);
   });
 
   it("says which world each --session execution ran in, on stderr", async () => {

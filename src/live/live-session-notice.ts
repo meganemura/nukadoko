@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
 import { liveLockOwner } from "../session/lock.js";
-import { sessionLockPath, sessionSockPath, sessionsDir, sessionsRootDir } from "../session/paths.js";
+import { sessionLockPath, sessionsDir, sessionsRootDir } from "../session/paths.js";
 
 // Responsibility: tell `nuka run`/`nuka accept` about a live session that is
 // still open when they start (docs/spec.md "Live sessions"), without acting
@@ -15,12 +15,12 @@ import { sessionLockPath, sessionSockPath, sessionsDir, sessionsRootDir } from "
 // finding already follows.
 //
 // Detection reuses exactly what a live session already is, nothing new:
-// `liveLockOwner` (a lock whose own pid is still alive) plus its socket
-// actually existing. The socket is the second check because a live lock
-// alone is not proof of a live *session* specifically — a plain, non-live
-// `nuka do --session <name>` holds the very same kind of lock for the
-// length of one call (session/lock.ts's own header), and only a session's
-// daemon ever opens a socket beside it.
+// `liveLockOwner` (a lock whose own pid is still alive) plus the socket its
+// own `sock` field names actually existing. The socket is the second check
+// because a live lock alone is not proof of a live *session* specifically —
+// a plain, non-live `nuka do --session <name>` holds the very same kind of
+// lock for the length of one call (session/lock.ts's own header), and only
+// a session's daemon ever writes a `sock` field into its own lock at all.
 //
 // Every environment is walked, not just the one this invocation targets:
 // the app a session was opened against is shared across environments, so a
@@ -76,7 +76,7 @@ export async function findLiveSessions(rootDir: string, stateDir: string): Promi
       const lockPath = sessionLockPath(rootDir, stateDir, environment, name);
       const owner = await liveLockOwner(lockPath);
       if (owner === null) continue;
-      if (!existsSync(sessionSockPath(rootDir, stateDir, environment, name))) continue;
+      if (owner.sock === undefined || !existsSync(owner.sock)) continue;
       found.push({ environment, name });
     }
   }

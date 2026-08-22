@@ -11,9 +11,9 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // names is alive (`process.kill(pid, 0)`), so a lock file naming this test
 // process's own pid is indistinguishable, to that check, from one a real
 // daemon wrote (the same technique session-cli-refusals.test.ts already
-// uses to stay daemon-free). The `.sock` path is a plain file, never a
-// listening socket, so connecting to it fails the way a crashed daemon's
-// leftover socket file would.
+// uses to stay daemon-free). The lock's own `sock` field is a plain file,
+// never a listening socket, so connecting to it fails the way a crashed
+// daemon's leftover socket file would.
 
 function sessionsDir(rootDir: string): string {
   return path.join(rootDir, ".nukadoko", "cache", "sessions", "default");
@@ -27,14 +27,14 @@ describe("nuka do --session: a live lock whose socket does not answer", () => {
       await mkdir(dir, { recursive: true });
       const lockPath = path.join(dir, "gale.lock");
       const sockPath = path.join(dir, "gale.sock");
-      await writeFile(
-        lockPath,
-        `${JSON.stringify({ pid: process.pid, started_at: new Date().toISOString() })}\n`,
-      );
       // A plain file, not a listening unix socket: `existsSync(sockPath)`
       // reads true (do.ts's own "a live owner with a socket" branch), but
       // `sendLiveRequest` must still fail to connect.
       await writeFile(sockPath, "");
+      await writeFile(
+        lockPath,
+        `${JSON.stringify({ pid: process.pid, started_at: new Date().toISOString(), sock: sockPath })}\n`,
+      );
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();

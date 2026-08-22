@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
@@ -23,6 +23,7 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { sendLiveRequest } from "../live/client.js";
+import { removeLiveSockDir } from "../live/live-sock.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
@@ -30,9 +31,9 @@ import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact } from "../secrets/redact.js";
-import { acquireLock, liveLockOwner, releaseLock } from "../session/lock.js";
+import { acquireLock, liveLockOwner, readLockInfo, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
-import { sessionFilePath, sessionLockPath, sessionSockPath } from "../session/paths.js";
+import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
@@ -272,35 +273,38 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
     lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
-    const sockPath = sessionSockPath(rootDir, config.stateDir, resolvedEnv.name, session);
 
     // A live session's own daemon (docs/spec.md "Live sessions") holds this
     // lock for as long as it runs, not just for one execution's own
     // duration the way a plain `--session` lock below already does — a
-    // live owner *with* a socket is that daemon, and this execution is
-    // handed to it instead of building a fresh `ctx`. A live owner with no
-    // socket is the pre-existing case this file always had (another `do
-    // --session` mid-flight, whose own lock never has a socket beside it):
-    // falling through to `acquireLock` below reproduces that exact
+    // live owner *with* a `sock` (session/lock.ts's own field, written only
+    // by that daemon) is that daemon, and this execution is handed to it
+    // instead of building a fresh `ctx`. A live owner with no `sock` is the
+    // pre-existing case this file always had (another `do --session`
+    // mid-flight, whose own one-execution-long lock never names a socket at
+    // all): falling through to `acquireLock` below reproduces that exact
     // conflict, unchanged.
     const owner = await liveLockOwner(lockPath);
-    if (owner !== null && existsSync(sockPath)) {
-      return await delegateToLiveSession(sockPath, owner.pid, session, name, parsedArgs, use, stdout, stderr);
+    if (owner !== null && owner.sock !== undefined && existsSync(owner.sock)) {
+      return await delegateToLiveSession(owner.sock, owner.pid, session, name, parsedArgs, use, stdout, stderr);
     }
-    if (owner === null && existsSync(sockPath)) {
-      // No live owner but a socket file remains: whatever daemon listened
-      // there is gone (idle timeout, crash) without cleaning up after
-      // itself. That is evidence worth saying out loud, not just fixing
-      // quietly — a socket nobody is listening on any more is the trace of
-      // an exploration that stopped existing without anyone telling this
-      // caller (docs/spec.md "Live sessions": "clean them up before
-      // proceeding down the existing path"). A stale lock is already
-      // handled by `acquireLock` itself (session/lock.ts), so only the
-      // socket needs clearing here.
-      stderr.write(
-        `Session "${session}"'s socket is left over from a session that is no longer live (idle timeout or crash); removing it\n`,
-      );
-      await rm(sockPath, { force: true }).catch(() => {});
+    if (owner === null) {
+      // No live owner: a stale lock, if one is still on disk, might still
+      // name a socket from a daemon that is gone (idle timeout, crash)
+      // without cleaning up after itself. That is evidence worth saying out
+      // loud, not just fixing quietly — a socket nobody is listening on any
+      // more is the trace of an exploration that stopped existing without
+      // anyone telling this caller (docs/spec.md "Live sessions": "clean
+      // them up before proceeding down the existing path"). The stale lock
+      // *file* itself is already handled by `acquireLock` below (session/
+      // lock.ts), so only its socket's own directory needs clearing here.
+      const staleInfo = await readLockInfo(lockPath);
+      if (staleInfo?.sock !== undefined && existsSync(staleInfo.sock)) {
+        stderr.write(
+          `Session "${session}"'s socket is left over from a session that is no longer live (idle timeout or crash); removing it\n`,
+        );
+        await removeLiveSockDir(staleInfo.sock);
+      }
     }
 
     try {

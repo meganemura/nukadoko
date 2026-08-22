@@ -1,17 +1,18 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { sessionLockPath, sessionSockPath } from "../src/session/paths.js";
+import { sessionLockPath } from "../src/session/paths.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run`/`nuka accept` reporting a live session found at
 // start (docs/spec.md "Live sessions"), never refusing on its account. A
 // live session's own daemon is never actually spawned here — that is
 // tests/live-session.test.ts's own, much heavier, job — a lock file
-// carrying this test process's own (genuinely alive) pid, plus a socket
-// file beside it, is exactly what `findLiveSessions`
-// (src/live/live-session-notice.ts) checks for, so faking those two files
+// carrying this test process's own (genuinely alive) pid, plus a `sock`
+// field naming a real file on disk, is exactly what `findLiveSessions`
+// (src/live/live-session-notice.ts) checks for, so faking those two things
 // is enough to exercise the detection without a real daemon.
 
 const STATE_DIR = ".nukadoko";
@@ -24,13 +25,23 @@ async function writeLiveSession(
 ): Promise<void> {
   const lockPath = sessionLockPath(rootDir, STATE_DIR, environment, name);
   await mkdir(path.dirname(lockPath), { recursive: true });
+  let sock: string | undefined;
+  if (options.withSocket) {
+    // A real file, standing in for the socket a real daemon's mkdtemp'd
+    // directory would hold (live/live-sock.ts) — `findLiveSessions` only
+    // ever checks `existsSync`, never dials it.
+    const sockDir = await mkdtemp(path.join(os.tmpdir(), "nk-live-notice-"));
+    sock = path.join(sockDir, "live.sock");
+    await writeFile(sock, "");
+  }
   await writeFile(
     lockPath,
-    `${JSON.stringify({ pid: options.pid ?? process.pid, started_at: new Date().toISOString() })}\n`,
+    `${JSON.stringify({
+      pid: options.pid ?? process.pid,
+      started_at: new Date().toISOString(),
+      ...(sock !== undefined ? { sock } : {}),
+    })}\n`,
   );
-  if (options.withSocket) {
-    await writeFile(sessionSockPath(rootDir, STATE_DIR, environment, name), "");
-  }
 }
 
 describe("live session notice (nuka run / nuka accept)", () => {

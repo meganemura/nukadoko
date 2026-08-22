@@ -2,10 +2,14 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { liveLockOwner } from "../session/lock.js";
 
 // Responsibility: `nuka session start`'s own detached child — picking the
 // right interpreter for daemon-entry.ts and turning "spawn it and return"
-// into a bounded, honest wait for either its socket to appear or its own
+// into a bounded, honest wait for either its socket to become reachable
+// (read from this session's own lock, not a path this module derives
+// itself — the daemon's socket lives under the OS's own temp directory now,
+// picked by its own `mkdtemp` call, live-sock.ts's own header) or its own
 // early death, per `SpawnDaemonOptions`'s and `waitForDaemonStartup`'s own
 // doc comments below.
 //
@@ -84,13 +88,18 @@ export interface DaemonStartupFailed {
 }
 
 /**
- * Waits, bounded by `timeoutMs`, for one of three outcomes: the daemon's own
- * socket appears on disk (success — `daemon.ts` only creates it after
- * acquiring the lock and starting to listen), the child process exits or
- * errors first (a fast, precise failure — e.g. it lost the lock's own race,
- * or a config/discovery error it hit before ever opening a socket), or
- * neither happens before `timeoutMs` (a slower, less precise failure — the
- * child is presumably still alive but never got there).
+ * Waits, bounded by `timeoutMs`, for one of three outcomes: this session's
+ * own lock names a socket that actually exists on disk (success — the lock
+ * only ever names one once `daemon.ts` has acquired the lock, and the
+ * socket file itself only exists once `listen()` has actually succeeded
+ * against it, so this is the same "acquired the lock and started to
+ * listen" guarantee the pre-mkdtemp version of this check made against a
+ * predictable path, just read from the lock now that the path is not one),
+ * the child process exits or errors first (a fast, precise failure — e.g.
+ * it lost the lock's own race, or a config/discovery error it hit before
+ * ever opening a socket), or neither happens before `timeoutMs` (a slower,
+ * less precise failure — the child is presumably still alive but never got
+ * there).
  *
  * `stdio: "ignore"` (spawnDaemon, above) means the daemon can never write
  * *why* it failed anywhere this caller can read; this polling loop is the
@@ -100,11 +109,16 @@ export interface DaemonStartupFailed {
  */
 export function waitForDaemonStartup(
   child: ChildProcess,
-  sockPath: string,
+  lockPath: string,
   timeoutMs: number,
 ): Promise<DaemonStartupOk | DaemonStartupFailed> {
   return new Promise((resolve) => {
     let settled = false;
+    // Guards against two `liveLockOwner` reads overlapping if one read
+    // (a file read plus a `kill(pid, 0)`) ever takes longer than one
+    // `setInterval` tick — unlikely at 50ms, but a stray unresolved promise
+    // outliving `finish` below is worse than one skipped tick.
+    let polling = false;
 
     function finish(result: DaemonStartupOk | DaemonStartupFailed): void {
       if (settled) {
@@ -132,9 +146,19 @@ export function waitForDaemonStartup(
     child.once("error", onError);
 
     const poll = setInterval(() => {
-      if (existsSync(sockPath)) {
-        finish({ ok: true });
+      if (settled || polling) {
+        return;
       }
+      polling = true;
+      void liveLockOwner(lockPath)
+        .then((owner) => {
+          if (owner?.sock !== undefined && existsSync(owner.sock)) {
+            finish({ ok: true });
+          }
+        })
+        .finally(() => {
+          polling = false;
+        });
     }, 50);
     const timer = setTimeout(() => {
       finish({ ok: false, message: `the session did not become ready within ${timeoutMs}ms` });
@@ -143,8 +167,9 @@ export function waitForDaemonStartup(
 }
 
 // The unix domain socket `sun_path` buffer a live session's own socket path
-// (src/session/paths.ts's own `sessionSockPath`) has to fit inside, in
-// bytes. Measured directly on macOS, in this repository's own dev
+// (live-sock.ts's own `LIVE_SOCK_DIR_PREFIX`/`LIVE_SOCK_FILE_NAME`, joined
+// to `os.tmpdir()`) has to fit inside, in bytes. Measured directly on
+// macOS, in this repository's own dev
 // environment, rather than assumed: `net.createServer().listen()` against a
 // generated path succeeds up to 104 bytes and fails with `EINVAL` at 105 —
 // the same "declaration and measurement answer different questions" split
@@ -167,15 +192,18 @@ export interface SockPathLengthCheck {
 }
 
 /**
- * Checks `sockPath` against this platform's own `sun_path` limit *before*
- * anything spawns a process to bind it — a monorepo or a deeply nested
- * checkout can put a project's own `stateDir` well past it, and
+ * Checks `sockPath` against this platform's own `sun_path` limit. `cli/
+ * session.ts`'s own preflight calls this *before* anything spawns a
+ * process to bind it, against the exact byte length the real path will
+ * have once `mkdtemp` fills in its own six-character suffix (live-sock.ts):
  * `spawnDaemon`'s own child has no terminal to report `EINVAL` to
- * (spawn-daemon.ts's own header): refusing here, loudly, from the one
+ * (spawn-daemon.ts's own header), so refusing here, loudly, from the one
  * process that still has a caller to report to, is strictly better than
  * waiting for that same failure to surface as an unexplained non-zero exit
  * (this file's own `waitForDaemonStartup`) with the real reason nowhere a
- * user can read it.
+ * user can read it. Generic on its own `sockPath` argument rather than
+ * hard-coded to that one shape, so this stays testable against an arbitrary
+ * path independent of whatever `cli/session.ts` predicts.
  */
 export function checkSockPathLength(sockPath: string): SockPathLengthCheck {
   const limit = process.platform === "linux" ? MAX_SOCK_PATH_BYTES_LINUX : MAX_SOCK_PATH_BYTES_BSD_DERIVED;

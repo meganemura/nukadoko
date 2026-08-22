@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { validateEnvironmentName } from "../environment/name.js";
 import {
@@ -8,11 +10,12 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { sendLiveRequest } from "../live/client.js";
+import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME, removeLiveSockDir } from "../live/live-sock.js";
 import { checkSockPathLength, spawnDaemon, waitForDaemonStartup } from "../live/spawn-daemon.js";
 import { clearAllSessions, clearSession, listSessions } from "../session/manage.js";
-import { liveLockOwner } from "../session/lock.js";
+import { liveLockOwner, readLockInfo } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
-import { sessionCrashLogPath, sessionLockPath, sessionSockPath } from "../session/paths.js";
+import { sessionCrashLogPath, sessionLockPath } from "../session/paths.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -156,7 +159,6 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
   }
 
   const lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, name);
-  const sockPath = sessionSockPath(rootDir, config.stateDir, resolvedEnv.name, name);
   const crashLogPath = sessionCrashLogPath(rootDir, config.stateDir, resolvedEnv.name, name);
 
   // A fast, best-effort refusal before ever spawning anything — the
@@ -173,39 +175,43 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
     return 1;
   }
 
-  // Refused here, loudly, before anything spawns: a monorepo or a deeply
-  // nested checkout can put `sockPath` past this platform's own unix
-  // domain socket path limit, and the daemon's own child has no terminal
-  // to report that failure to once it is running (spawn-daemon.ts's own
-  // header) — `checkSockPathLength`'s own doc comment states the measured
-  // limit and why. Without this check, the same failure would still
-  // happen, just later, inside the daemon's own `listen()` call, as an
-  // `EINVAL` this command could only report as "the session process
-  // exited before it was ready", naming no cause at all.
-  const lengthCheck = checkSockPathLength(sockPath);
+  // Refused here, loudly, before anything spawns. The socket no longer
+  // lives under this project at all (live-sock.ts's own header), so a deep
+  // project path cannot push it over this platform's own unix domain
+  // socket path limit any more — only a long `os.tmpdir()` still can, on
+  // some platform this measurement has not seen. Predicted rather than
+  // read back from the daemon, since that child has no terminal to report
+  // `EINVAL` to once it is running (spawn-daemon.ts's own header): mkdtemp
+  // appends exactly six characters after `LIVE_SOCK_DIR_PREFIX`
+  // (live-sock.ts's own doc comment), so any six-character stand-in
+  // predicts the real path's own byte length exactly, without knowing
+  // which six characters mkdtemp will actually choose.
+  const predictedSockPath = path.join(os.tmpdir(), `${LIVE_SOCK_DIR_PREFIX}XXXXXX`, LIVE_SOCK_FILE_NAME);
+  const lengthCheck = checkSockPathLength(predictedSockPath);
   if (!lengthCheck.ok) {
     stderr.write(
-      `Session "${name}" cannot start: its own unix socket path is ${lengthCheck.byteLength} bytes, over ` +
+      `Session "${name}" cannot start: its own live-session socket path is ${lengthCheck.byteLength} bytes, over ` +
         `this platform's ${lengthCheck.limit}-byte limit on a socket path.\n` +
-        `Path: ${sockPath}\n` +
-        "Run from a shallower directory, or shorten the project's stateDir, environment name, or session name.\n",
+        `Path (mkdtemp fills XXXXXX in with 6 random characters): ${predictedSockPath}\n` +
+        "This is the OS's own temp directory, not this project's; a shorter TMPDIR is the only way around it.\n",
     );
     return 1;
   }
 
-  // A stale socket from a daemon that crashed without cleaning up after
-  // itself would otherwise make the new daemon's own `listen()` fail
-  // (EADDRINUSE) — the daemon itself also removes any file at this path
-  // before listening, but clearing it here too means a startup failure is
-  // reported as *this* daemon's own, not blamed on debris from a previous
-  // one. The crash log gets the same treatment, and for the same reason:
-  // a log left over from a previous failed start must not be misread as
-  // this attempt's own reason.
-  await rm(sockPath, { force: true }).catch(() => {});
+  // A stale lock naming a socket from a daemon that crashed without
+  // cleaning up after itself would otherwise leak that daemon's own
+  // mkdtemp'd directory forever: nothing else ever visits a session name
+  // once its lock is gone. Reaped here, before a fresh daemon starts under
+  // the same name, the same "clear debris before it can be blamed on the
+  // wrong attempt" reasoning already applies to the crash log just below.
+  const staleInfo = await readLockInfo(lockPath);
+  if (staleInfo?.sock !== undefined) {
+    await removeLiveSockDir(staleInfo.sock);
+  }
   await rm(crashLogPath, { force: true }).catch(() => {});
 
   const child = spawnDaemon({ rootDir, env, name, idleTimeoutSeconds, crashLogPath });
-  const outcome = await waitForDaemonStartup(child, sockPath, STARTUP_TIMEOUT_MS);
+  const outcome = await waitForDaemonStartup(child, lockPath, STARTUP_TIMEOUT_MS);
   if (!outcome.ok) {
     // The daemon's own child writes this file only when it dies from a
     // thrown, unnamed setup failure (daemon-entry.ts's own header) — named
@@ -268,19 +274,37 @@ export async function runSessionStop(options: RunSessionStopOptions): Promise<nu
   }
 
   const lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, name);
-  const sockPath = sessionSockPath(rootDir, config.stateDir, resolvedEnv.name, name);
 
   const owner = await liveLockOwner(lockPath);
   if (owner === null) {
-    // Nothing alive to ask — clean up whatever debris (a dead lock, a
-    // stale socket) is left and succeed quietly, the same convention
-    // `runSessionClear` above already follows.
-    await rm(sockPath, { force: true }).catch(() => {});
+    // Nothing alive to ask — clean up whatever debris (a dead lock, and its
+    // socket's own mkdtemp'd directory if the lock still names one) is left
+    // and succeed quietly, the same convention `runSessionClear` above
+    // already follows.
+    const staleInfo = await readLockInfo(lockPath);
+    if (staleInfo?.sock !== undefined) {
+      await removeLiveSockDir(staleInfo.sock);
+    }
     await rm(lockPath, { force: true }).catch(() => {});
     return 0;
   }
 
-  const outcome = await sendLiveRequest(sockPath, { kind: "stop" });
+  if (owner.sock === undefined) {
+    // An alive lock naming no socket is not a live session's own daemon:
+    // `acquireLock` (session/lock.ts) always writes `sock` together with
+    // `pid`/`started_at`, in the one call a live session ever makes, so a
+    // lock without it is a plain `nuka do --session` execution still in
+    // flight, holding this same kind of lock for the length of one call
+    // (session/lock.ts's own header). There is nothing to dial, and that
+    // execution owns the lock legitimately, so nothing here is touched.
+    stderr.write(
+      `Failed to stop session "${name}" (pid ${owner.pid}): no live session socket is recorded for this lock; ` +
+        "it may be a plain `nuka do --session` execution still in progress rather than a live session\n",
+    );
+    return 1;
+  }
+
+  const outcome = await sendLiveRequest(owner.sock, { kind: "stop" });
   if (!outcome.ok) {
     stderr.write(`Failed to stop session "${name}" (pid ${owner.pid}): ${outcome.message}\n`);
     return 1;

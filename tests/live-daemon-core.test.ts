@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sendLiveRequest } from "../src/live/client.js";
 import { createSessionCore, runSessionDaemon, type SessionCore } from "../src/live/daemon.js";
 import type { LiveResponse } from "../src/live/protocol.js";
-import { sessionFilePath, sessionSockPath } from "../src/session/paths.js";
+import { readLockInfo } from "../src/session/lock.js";
+import { sessionFilePath, sessionLockPath } from "../src/session/paths.js";
 import { fixture, repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: everything tests/live-session.test.ts cannot reach,
@@ -18,9 +19,7 @@ import { fixture, repoRoot } from "./helpers/fixtures.js";
 // `readOneLine`/`handleConnection`/the socket bind itself are exercised
 // too. No test in this file spawns a process; the fixture-copy dance below
 // exists only so bare specifiers ("zod", the fixture's own re-export shims)
-// resolve and so a live session's own socket path stays under the OS's
-// short sun_path limit, the same reasons tests/live-session.test.ts's own
-// `createLiveSessionProject` already gives.
+// resolve.
 
 const DEFAULT_IDLE_TIMEOUT_MS = 60_000;
 
@@ -465,9 +464,25 @@ describe("runSessionDaemon: a real unix socket, in-process (no subprocess)", () 
       exit: (code: number) => exitCalls.push(code),
     });
 
-    const sockPath = sessionSockPath(rootDir, "s", "default", name);
+    // The socket's own path is no longer derivable from `rootDir`/`name` —
+    // it lives inside a directory `mkdtemp` picked at random under the OS's
+    // own temp dir (live-sock.ts) — so it is read back from the lock this
+    // daemon already wrote it into (session/lock.ts's own `sock` field),
+    // the same way every other reader in this package now reaches it.
+    const lockInfo = await readLockInfo(sessionLockPath(rootDir, "s", "default", name));
+    if (lockInfo?.sock === undefined) {
+      throw new Error("expected the daemon's own lock to name a live session socket");
+    }
+    const sockPath = lockInfo.sock;
     const sockStats = await stat(sockPath);
     expect(sockStats.mode & 0o777).toBe(0o600);
+    // The directory that holds it keeps the same restricted permissions the
+    // socket used to get from sitting inside cache/sessions/<env>/ (0700,
+    // set with `mode` on mkdir there) — now set explicitly right after
+    // `mkdtemp` itself (daemon.ts's own header), since this directory no
+    // longer sits inside anything else nukadoko already restricts.
+    const sockDirStats = await stat(path.dirname(sockPath));
+    expect(sockDirStats.mode & 0o777).toBe(0o700);
 
     const doResult = await sendLiveRequest(sockPath, { kind: "do", step: "echo", args: { value: "ok" } });
     if (!doResult.ok || doResult.response.status !== "record") {
@@ -498,5 +513,9 @@ describe("runSessionDaemon: a real unix socket, in-process (no subprocess)", () 
     await waitFor(() => exitCalls.length > 0, 5000);
     expect(exitCalls).toEqual([0]);
     expect(existsSync(sockPath)).toBe(false);
+    // `performCleanup` removes the whole mkdtemp'd directory, not only the
+    // socket file inside it (daemon.ts's own header) — nothing under the
+    // OS's own temp dir should survive a clean stop.
+    expect(existsSync(path.dirname(sockPath))).toBe(false);
   });
 });
