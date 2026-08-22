@@ -3523,6 +3523,20 @@ never actually read.
   re-run a frozen scenario to find out. The honesty is that a record only
   ever speaks about one execution; the limit is that a whole class of defect
   is invisible to any single one.
+- **This package ships ESM and only ESM, on purpose.** `package.json`'s
+  `exports` carries an `import` condition and no `require` one, there is no
+  CommonJS build beside the ESM one, and neither is planned. A project whose
+  own `package.json` has no `"type": "module"` still uses nukadoko, through
+  files that are unambiguously ESM whatever that field says: its config as
+  `nukadoko.config.mts`, its step files as `.mts`, which is what `nuka init`
+  and `nuka scaffold` write once they see such a project. So nukadoko is
+  imported from ESM either way, and what a CommonJS project gets is a way in
+  rather than a second build to keep working. The cost is real and falls on
+  an existing suite: glue already written as `.ts` there has to be renamed
+  before it can be discovered, which is more than the one import specifier
+  the compat door otherwise asks for, and `nuka check` names each file that
+  needs it.
+
 - **Promoting a step to `defineStep` is one-way.** The migration door's
   promise covers compat assets: switching the import back leaves a plain
   cucumber-js suite. `defineStep` has no import to switch back to. A
