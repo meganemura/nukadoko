@@ -55,8 +55,23 @@ export interface DraftResult {
 const STEP_INDENT = "    ";
 const ATTACHMENT_INDENT = "      ";
 
+// Every CSI sequence (`ESC [ <params> <final byte>`) — colors and text
+// styling included — is a display instruction for a terminal, not part of
+// the message a reader or `.feature` file needs. Playwright's own "Call
+// log:" text carries exactly this shape (dim/reset around each waited-for
+// locator), and every message this file assembles is destined for a
+// `.feature` comment or stderr, neither of which renders ANSI. A second
+// pass drops any stray ESC byte that survives (a truncated or malformed
+// sequence): the guarantee this makes is "no ESC reaches the output", not
+// "every well-formed CSI sequence was recognized".
+const ANSI_CSI_PATTERN = /\u001b\[[0-9;]*[a-zA-Z]/g;
+
+function stripAnsi(message: string): string {
+  return message.replace(ANSI_CSI_PATTERN, "").replace(/\u001b/g, "");
+}
+
 function flatten(message: string): string {
-  return message.replace(/\s*\n\s*/g, " ");
+  return stripAnsi(message).replace(/\s*\n\s*/g, " ");
 }
 
 function formatValue(value: unknown): string {

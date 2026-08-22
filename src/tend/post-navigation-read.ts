@@ -46,6 +46,18 @@ import type { TendIssue } from "./types.js";
 // live run's own step record - that module's own `EXCLUDED_DIR_NAMES` keeps
 // `.nukadoko` out of every walk built on it, this one included, and nothing
 // here changes that list.
+//
+// A Background step runs once per scenario, so a suite with two dozen
+// scenarios produces two dozen step records for that one step, all
+// measuring the same thing: one navigation call, the same call right
+// after it - whether those step records sit in one accepted file or many,
+// since one accepted record already holds one step record per scenario in
+// its own `scenarios:` list. Reporting each of those as its own note would
+// repeat one fact two dozen times rather than say it once - `groupMatches`
+// (below) merges every match sharing the same step, the same navigation
+// method, and the same following method into a single note, naming how
+// many step records it happened in and the gap's own range, before
+// reporting one example record rather than all of them.
 
 /** The four navigation calls this note looks for, read verbatim off each
  * action's own `method` (trace's own `before.method`, src/context/
@@ -141,8 +153,31 @@ function isWithinAnyPollWindow(readStartedAt: number, polls: readonly unknown[])
  * broken one (record-parse.ts's own convention for `condition`). A step
  * record with no `polls` field simply has nothing to exclude with, and
  * falls back to this note's original behavior unchanged. */
-export function findPostNavigationReads(rootDir: string): TendIssue[] {
-  const issues: TendIssue[] = [];
+/** One navigation-then-call pair this finding matched, before grouping. A
+ * project with a Background step produces one of these per step record
+ * that step ran in - a suite with dozens of scenarios can produce dozens
+ * of matches that are all the same fact measured again, which is exactly
+ * what `groupMatches` (below) exists to collapse. */
+interface Match {
+  readonly relativePath: string;
+  /** Identifies the one step record this match came from, uniquely across
+   * the whole project: `relativePath` alone is not enough, since one
+   * accepted record's own body holds one `#### <step>` block per scenario
+   * section, and a Background step contributes one such block per scenario
+   * in that same file. Built as `${relativePath}#${stepRecordIndex}`,
+   * `stepRecordIndex` being this step record's own position among every
+   * fenced JSON block `extractStepRecordLikeBlocks`
+   * (src/tend/record-parse.ts) read out of that one file, in the order it
+   * read them. */
+  readonly stepRecordKey: string;
+  readonly step: string;
+  readonly navigationMethod: string;
+  readonly nextMethod: string;
+  readonly gapMs: number;
+}
+
+function collectMatches(rootDir: string): Match[] {
+  const matches: Match[] = [];
 
   for (const absolutePath of discoverMarkdownFiles(rootDir)) {
     const relativePath = path.relative(rootDir, absolutePath);
@@ -157,11 +192,12 @@ export function findPostNavigationReads(rootDir: string): TendIssue[] {
     const parsed = parseAcceptanceRecord(content, relativePath);
     if (parsed.kind !== "ok") continue; // Not a record, or malformed: another finding's own concern.
 
-    for (const stepRecord of parsed.record.stepRecords) {
+    parsed.record.stepRecords.forEach((stepRecord, stepRecordIndex) => {
       const actions = stepRecord.actions;
-      if (!Array.isArray(actions)) continue; // No actions at all - out of scope, not an error (this file's own header).
+      if (!Array.isArray(actions)) return; // No actions at all - out of scope, not an error (this file's own header).
 
       const polls = Array.isArray(stepRecord.polls) ? stepRecord.polls : [];
+      const stepRecordKey = `${relativePath}#${stepRecordIndex}`;
 
       for (let index = 0; index < actions.length - 1; index++) {
         const action: unknown = actions[index];
@@ -185,18 +221,75 @@ export function findPostNavigationReads(rootDir: string): TendIssue[] {
         // (this file's own header).
         if (isWithinAnyPollWindow(nextStartedAt, polls)) continue;
 
-        issues.push({
-          code: "post-navigation-read",
-          message:
-            `${relativePath}: step "${stepRecord.step}" called "${next.method}" ${gapMs}ms after its own ` +
-            `"${action.method}" finished. Not a judgment: whether that gap was enough depends on how long ` +
-            `this application takes to render after "${action.method}", and this tool has no way to know that.`,
-          file: relativePath,
+        matches.push({
+          relativePath,
+          stepRecordKey,
           step: stepRecord.step,
+          navigationMethod: action.method,
+          nextMethod: next.method,
+          gapMs,
         });
       }
+    });
+  }
+
+  return matches;
+}
+
+/** `${step} ${navigationMethod} ${nextMethod}` - a step, its own
+ * navigation call, and the call that followed it, name one recurring shape
+ * (this file's own header: "what the gap was", never a per-record verdict),
+ * so every match sharing that triple is one fact told once, not once per
+ * step record it happened in. */
+function groupKey(match: Match): string {
+  return `${match.step} ${match.navigationMethod} ${match.nextMethod}`;
+}
+
+function formatGapRange(gapsMs: readonly number[]): string {
+  const min = Math.min(...gapsMs);
+  const max = Math.max(...gapsMs);
+  return min === max ? `${min}ms` : `${min}ms-${max}ms`;
+}
+
+function groupMatches(matches: readonly Match[]): TendIssue[] {
+  const order: string[] = [];
+  const byKey = new Map<string, Match[]>();
+  for (const match of matches) {
+    const key = groupKey(match);
+    const existing = byKey.get(key);
+    if (existing === undefined) {
+      order.push(key);
+      byKey.set(key, [match]);
+    } else {
+      existing.push(match);
     }
   }
 
-  return issues;
+  return order.map((key) => {
+    const group = byKey.get(key)!;
+    const first = group[0]!;
+    // Every step record this pair happened in, not the raw match count - a
+    // step whose own actions repeat the same pair twice in one step record
+    // still counts as one record, and two step records that happen to share
+    // one accepted file (two scenarios in the same run both hitting the
+    // same Background step) still count as two.
+    const recordCount = new Set(group.map((match) => match.stepRecordKey)).size;
+    const gapRange = formatGapRange(group.map((match) => match.gapMs));
+    const exampleRecord = group[0]!.relativePath;
+
+    return {
+      code: "post-navigation-read",
+      message:
+        `step "${first.step}" called "${first.nextMethod}" ${gapRange} after its own "${first.navigationMethod}" ` +
+        `finished, across ${recordCount} step record${recordCount === 1 ? "" : "s"} (for example ` +
+        `${exampleRecord}). Not a judgment: whether that gap was enough depends on how long this application ` +
+        `takes to render after "${first.navigationMethod}", and this tool has no way to know that.`,
+      file: exampleRecord,
+      step: first.step,
+    };
+  });
+}
+
+export function findPostNavigationReads(rootDir: string): TendIssue[] {
+  return groupMatches(collectMatches(rootDir));
 }

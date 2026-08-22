@@ -28,6 +28,23 @@ just until 0.1.
   to import in the first place. `nuka scaffold`'s generated template
   follows the same shape.
 
+### Fixed
+
+- **`nuka harvest` no longer writes raw ANSI escape codes into a draft's
+  comments.** A failed step record's own error message can carry a
+  terminal's own color codes (Playwright's dim/reset styling around a
+  "Call log:" line, for one); those reached the assembled `.feature` file
+  unchanged, since nothing stripped them before they were written to a
+  comment. They are stripped now, wherever an external message lands in
+  the draft; the words around them are unchanged.
+- **`nuka tend`'s `post-navigation-read` note no longer repeats the same
+  fact once per accepted record.** A Background step runs in every
+  scenario, so a suite with two dozen scenarios used to produce two dozen
+  identical notes for that one step. Every note that shares the same
+  step, the same navigation call, and the same call right after it is now
+  one note, naming how many step records it happened in and the gap's own
+  range, with one example record's path rather than every one of them.
+
 ## 0.7.0 — 2026-08-22
 
 ### Breaking

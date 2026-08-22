@@ -117,6 +117,70 @@ function buildRecord(options: { featurePath: string; stepText: string; stepRecor
   ].join("\n");
 }
 
+/** One accepted record covering two scenarios that share a Background
+ * step, the way one `nuka accept` call over a multi-scenario feature
+ * actually produces one: two step records under the same file, one
+ * `#### <stepText>` block per scenario. Distinct from `buildRecord`
+ * above, which only ever writes one scenario, one step record. */
+function buildRecordWithTwoStepRecords(options: {
+  featurePath: string;
+  stepText: string;
+  stepRecords: readonly [Record<string, unknown>, Record<string, unknown>];
+}): string {
+  const { featurePath, stepText, stepRecords } = options;
+  return [
+    "---",
+    "run_id: run-synthetic",
+    `commit: ${COMMIT}`,
+    `feature: ${featurePath}`,
+    "ran_at: 2026-01-01T00:00:00.000Z",
+    "accepted_at: 2026-01-01T00:00:00.000Z",
+    "environment: default",
+    "browser: none",
+    "scenarios:",
+    "  - name: first scenario",
+    "    line: 2",
+    "    scenario_record_id: scn-synthetic-1",
+    "  - name: second scenario",
+    "    line: 8",
+    "    scenario_record_id: scn-synthetic-2",
+    "---",
+    "",
+    "# Synthetic: green at 0000000",
+    "",
+    "## The scenario as it ran",
+    "",
+    "```gherkin",
+    "Feature: Synthetic",
+    "  Background:",
+    `    Given ${stepText}`,
+    "  Scenario: first scenario",
+    "    Given a placeholder step",
+    "  Scenario: second scenario",
+    "    Given a placeholder step",
+    "```",
+    "",
+    "## What the tool measured",
+    "",
+    "### first scenario (line 2)",
+    "",
+    `#### ${stepText}`,
+    "",
+    "```json",
+    JSON.stringify(stepRecords[0], null, 2),
+    "```",
+    "",
+    "### second scenario (line 8)",
+    "",
+    `#### ${stepText}`,
+    "",
+    "```json",
+    JSON.stringify(stepRecords[1], null, 2),
+    "```",
+    "",
+  ].join("\n");
+}
+
 describe("nuka tend: post-navigation-read", () => {
   describe("a real chromium step record", () => {
     let server: Server;
@@ -423,6 +487,89 @@ describe("nuka tend: post-navigation-read", () => {
           "a step whose read starts 1ms after the poll window",
         ].sort(),
       );
+    });
+
+    it("merges the same (step, navigation method, next method) across many step records into one note", async () => {
+      // Mirrors a Background step that runs in every scenario: the same
+      // step name, the same navigation-then-call shape, once per accepted
+      // record. Three records, three different gaps (two of them equal),
+      // so the merged note's own range can be checked against both ends.
+      const gapsMs = [100, 150, 100];
+      const fileNames = gapsMs.map((_, index) => `background-${index}.2026-01-01-0000000.md`);
+      for (const [index, gapMs] of gapsMs.entries()) {
+        const navigationEndsAt = new Date(0).toISOString();
+        const nextStartsAt = new Date(gapMs).toISOString();
+        await writeFile(
+          path.join(rootDir, fileNames[index]!),
+          buildRecord({
+            featurePath: "features/does-not-exist.feature",
+            stepText: "open the todo app",
+            stepRecord: {
+              step: "open-todo-app",
+              status: "ok",
+              actions: [
+                { method: "goto", at: navigationEndsAt, ms: 0 },
+                { method: "waitForSelector", at: nextStartsAt, ms: 5 },
+              ],
+            },
+          }),
+        );
+      }
+
+      const { report } = await runTendJson(rootDir);
+      const notes = report.notes.filter((n) => n.code === "post-navigation-read");
+      expect(notes).toHaveLength(1);
+      expect(notes[0]!.step).toBe("open-todo-app");
+      expect(fileNames).toContain(notes[0]!.file);
+      // How many step records this happened in.
+      expect(notes[0]!.message).toContain("3");
+      // The gap range: the smallest and the largest of the three gaps.
+      expect(notes[0]!.message).toContain("100");
+      expect(notes[0]!.message).toContain("150");
+      // "Not a judgment" appears exactly once, not once per merged record.
+      expect(notes[0]!.message.match(/Not a judgment/g)).toHaveLength(1);
+    });
+
+    it("counts two step records in one accepted file as two, not as one file", async () => {
+      // One `nuka accept` call over a multi-scenario feature writes one
+      // file holding one step record per scenario - a Background step
+      // still ran twice, even though only one file exists to hold both
+      // measurements.
+      await writeFile(
+        path.join(rootDir, "two-scenarios.2026-01-01-0000000.md"),
+        buildRecordWithTwoStepRecords({
+          featurePath: "features/does-not-exist.feature",
+          stepText: "open the todo app",
+          stepRecords: [
+            {
+              step: "open-todo-app",
+              status: "ok",
+              actions: [
+                { method: "goto", at: new Date(0).toISOString(), ms: 0 },
+                { method: "waitForSelector", at: new Date(120).toISOString(), ms: 5 },
+              ],
+            },
+            {
+              step: "open-todo-app",
+              status: "ok",
+              actions: [
+                { method: "goto", at: new Date(0).toISOString(), ms: 0 },
+                { method: "waitForSelector", at: new Date(180).toISOString(), ms: 5 },
+              ],
+            },
+          ],
+        }),
+      );
+
+      const { report } = await runTendJson(rootDir);
+      const notes = report.notes.filter((n) => n.code === "post-navigation-read");
+      expect(notes).toHaveLength(1);
+      expect(notes[0]!.step).toBe("open-todo-app");
+      // Two step records, in one file: the count names the step records,
+      // never the file.
+      expect(notes[0]!.message).toContain("2 step records");
+      expect(notes[0]!.message).toContain("120");
+      expect(notes[0]!.message).toContain("180");
     });
   });
 });

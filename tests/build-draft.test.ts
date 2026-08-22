@@ -4,7 +4,7 @@ import { buildDraft, type DraftInput } from "../src/harvest/build-draft.js";
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
 import { defineStep } from "../src/step/define-step.js";
 import { buildStepBindings } from "../src/run/match-step.js";
-import type { StepRecordOk } from "../src/record/types.js";
+import type { StepRecordFailed, StepRecordOk } from "../src/record/types.js";
 
 // Responsibility: unit tests for src/harvest/build-draft.ts's branches that
 // harvest.test.ts's own fixture-driven cases (tests/fixtures/harvest-project)
@@ -41,6 +41,26 @@ function makeRecord(id: string, step: string, args: unknown, overrides: Partial<
 
 function typedEntry(name: string, step: ReturnType<typeof defineStep>): VocabularyEntry {
   return { kind: "typed", name, filePath: `features/steps/${name}.ts`, step };
+}
+
+function makeFailedRecord(id: string, step: string, errorMessage: string): StepRecordFailed {
+  return {
+    step_record_id: id,
+    step,
+    kind: "do",
+    args: {},
+    environment: "default",
+    session: null,
+    scenario_record_id: null,
+    run_id: null,
+    started_at: "2026-08-01T00:00:00.000Z",
+    finished_at: "2026-08-01T00:00:01.000Z",
+    evidence: { dir: `.nukadoko/records/steps/${id}`, screenshots: [] },
+    observed: { http_reads: 0, http_writes: 0 },
+    mutates: true,
+    status: "failed",
+    error: { message: errorMessage, kind: "step_error" },
+  };
 }
 
 function draftFor(input: Omit<DraftInput, "bindings"> & { bindings?: DraftInput["bindings"] }) {
@@ -251,5 +271,39 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
 
     expect(result.featureText).toContain("* a 5 thing");
     expect(result.featureText).toMatch(/does not read back to the same args/);
+  });
+});
+
+describe("buildDraft: a message with ANSI escapes embedded", () => {
+  const ESC = "\u001b";
+
+  it("drops the escapes from a failed record's error message before it reaches the draft or the notices", () => {
+    // Shaped like Playwright's own dim/reset "Call log:" output: ESC "["
+    // "2m" dims, ESC "[" "22m" resets. The words around them are what a
+    // reader needs; the escapes are display formatting a terminal would
+    // consume, never text a `.feature` file should carry.
+    const errorMessage = `locator not found\nCall log:\n${ESC}[2m  - waiting for getByRole('button')${ESC}[22m`;
+    const step = defineStep({
+      pattern: "a risky thing happens",
+      description: "d",
+      args: z.object({}),
+      returns: z.object({}),
+      run: () => ({}),
+    });
+    const vocabulary: Vocabulary = new Map([["risky-thing", typedEntry("risky-thing", step)]]);
+    const bindings = buildStepBindings(vocabulary);
+    const record = makeFailedRecord("r-1", "risky-thing", errorMessage);
+
+    const result = draftFor({
+      orderedIds: ["r-1"],
+      recordsById: new Map([["r-1", record]]),
+      vocabulary,
+      bindings,
+    });
+
+    expect(result.featureText).toContain("failed when it ran");
+    expect(result.featureText).toContain("waiting for getByRole('button')");
+    expect(result.featureText.includes(ESC)).toBe(false);
+    expect(result.notices.some((notice) => notice.includes(ESC))).toBe(false);
   });
 });
