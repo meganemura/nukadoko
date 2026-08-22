@@ -175,8 +175,35 @@ draft came from went to stderr, never into it.
 ## Then fix what you found
 
 Once the path works, `nuka harvest` turns those records into a feature
-draft (see "From an exploration to a scenario" in the skill body). The
-probe step stays behind: it has no pattern, so it was never going to
+draft:
+
+```sh
+nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
+```
+
+The ids are the ones `nuka do` printed. There is no time window and no
+`--since`: it cannot tell an abandoned probe from the call that mattered.
+Order does not matter either; the draft follows what the records say about
+when each one ran.
+
+**One call is one scenario.** Harvest never splits a list, since where one
+story ends is a judgment about meaning and not something a step record
+holds. Two paths means calling it twice and pasting both under one
+`Feature:`.
+
+What comes back is deliberately unfinished. Every keyword is `*` and both
+names are placeholders, because the records say what ran and nothing
+about what any of it was for. Finishing that is the part worth doing
+carefully:
+
+- Replace each `*` with `Given`, `When`, or `Then` by what that line tells
+  the person reading the scenario, not by what the code did.
+- Name the `Feature:` and the `Scenario:` for the behavior being claimed.
+- Delete any line that was a probe rather than part of the story. A draft
+  is a record of what you ran, and exploring means running things that
+  turned out not to matter.
+
+The probe step stays behind: it has no pattern, so it was never going to
 appear in a scenario, and nothing you learned through it is lost, because
 what you learned is now written into the contracts of the steps that
 replaced it.

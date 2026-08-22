@@ -31,6 +31,41 @@ that no line of the scenario establishes, a premise the scenario takes as
 already true included. Do not turn such a premise into a step unless the
 scenario really does establish it: a step is a claim that something ran.
 
+## From requirements to scenarios
+
+This is where information gets added that no requirement sentence stated:
+concrete values, boundaries, negative paths. Turning "a discount code
+applies to eligible orders" into a scenario means picking an actual code,
+an actual order total, and an actual eligibility rule to test against, and
+none of those came from the requirement itself. This is real information,
+not implied by the requirement, so it has to be visible, not silently
+assumed.
+
+- **Surface every assumption.** State beside the scenario what was chosen
+  and why (a comment, a linked table, or the PR description), rather than
+  leaving a literal value to speak for itself. A reviewer who can't see
+  what was assumed can't tell whether it was the right assumption.
+- **Keep the trace.** Which requirement sentence produced which scenario
+  should be readable later, not just at the moment of writing. The
+  ticket-verbatim convention under `Feature:` (see above) already carries
+  this for a scenario sourced from a ticket; keep the same discipline for
+  one whose trace target is a requirement sentence rather than a ticket.
+- **Know when a single scenario stops being the right tool.** A rule with
+  several combining conditions doesn't resolve sentence by sentence; reach
+  for a decision table or a state model instead of writing one scenario
+  per case and hoping the combinations stay covered. What decides whether
+  to reach for one is the number of conditions the rule combines, not how
+  large the project is: a two-person tool with one four-condition rule
+  needs the table as much as a large one does.
+
+A model drafting this translation is not the problem this stage guards
+against; drafting is fine, and it can happen before any of it is fixed.
+What gets fixed is the moment a person reads the draft, sees the
+assumptions it made, and accepts them: that happens before any
+implementation is generated from the scenario, which is the whole point of
+doing it here rather than after. What the stage forbids is a draft whose
+assumptions never surface at all, not the act of drafting one.
+
 ## Scenario Outline and Background
 
 Gherkin compiles a feature into pickles before nukadoko ever runs it: a

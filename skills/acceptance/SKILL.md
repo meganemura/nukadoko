@@ -139,37 +139,18 @@ source didn't support, not in refusing to draft at all.
 ## From requirements to scenarios
 
 This is where information gets added that no requirement sentence stated:
-concrete values, boundaries, negative paths. Turning "a discount code
-applies to eligible orders" into a scenario means picking an actual code,
-an actual order total, and an actual eligibility rule to test against, and
-none of those came from the requirement itself. This is real information,
-not implied by the requirement, so it has to be visible, not silently
-assumed.
+concrete values, boundaries, negative paths. Surface every assumption
+beside the scenario rather than leaving a literal value to speak for
+itself, keep the trace from the requirement sentence that produced a
+scenario readable later, and reach for a decision table instead of one
+scenario per case once a rule combines several conditions. A model
+drafting this translation is fine; what the stage forbids is a draft
+whose assumptions never surface at all, not the act of drafting one.
 
-- **Surface every assumption.** State beside the scenario what was chosen
-  and why (a comment, a linked table, or the PR description), rather than
-  leaving a literal value to speak for itself. A reviewer who can't see
-  what was assumed can't tell whether it was the right assumption.
-- **Keep the trace.** Which requirement sentence produced which scenario
-  should be readable later, not just at the moment of writing. The
-  ticket-verbatim convention under `Feature:` (see "Writing the feature"
-  below) already carries this for a scenario sourced from a ticket; keep
-  the same discipline for one sourced from the requirements stage above.
-- **Know when a single scenario stops being the right tool.** A rule with
-  several combining conditions doesn't resolve sentence by sentence; reach
-  for a decision table or a state model instead of writing one scenario
-  per case and hoping the combinations stay covered. What decides whether
-  to reach for one is the number of conditions the rule combines, not how
-  large the project is: a two-person tool with one four-condition rule
-  needs the table as much as a large one does.
-
-A model drafting this translation is not the problem this stage guards
-against; drafting is fine, and it can happen before any of it is fixed.
-What gets fixed is the moment a person reads the draft, sees the
-assumptions it made, and accepts them: that happens before any
-implementation is generated from the scenario, which is the whole point of
-doing it here rather than after. What the stage forbids is a draft whose
-assumptions never surface at all, not the act of drafting one.
+Picking concrete values a requirement never stated, a worked example,
+why a reviewer needs the assumption visible, and how many combining
+conditions push a rule toward a decision table instead of a scenario:
+`references/writing-the-feature.md`.
 
 ## From an exploration to a scenario
 
@@ -178,44 +159,21 @@ When the work started by exploring rather than from criteria: you drove
 one, and now the path that matters is the one you just took. `nuka
 harvest` turns that path into a draft.
 
-Still exploring, and stuck because a step's `returns` only shows what it
-already decided to show? Write one probe step with no `pattern` and a
-`returns` of `z.unknown()`, and read the whole thing off `nuka do`'s
-stdout. For an operation with several moves, make each one a part: the
-calling step's record then carries each part's own args and result under
-`calls`, which is where the next move comes from. When the operation
-cannot be repeated at all, `nuka session start` holds one world open so
-the next call lands on it instead of rebuilding it (`nuka session
-list`/`clear` clean up what's left; `nuka clean` refuses outright, every
-category, while any session anywhere is live). The probe example, live
-sessions, `nuka clean`, and what the draft names rather than decides:
-`references/exploring.md`.
+Still exploring and stuck? A step's `returns` hiding too much, an
+operation with several moves, or one that cannot be repeated at all each
+have their own move, the probe step, a part, and `nuka session start`
+respectively: `references/exploring.md`.
 
 ```sh
 nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
 ```
 
-The ids are the ones `nuka do` printed. There is no time window and no
-`--since`: it cannot tell an abandoned probe from the call that mattered.
-Order does not matter either; the draft follows what the records say about
-when each one ran.
-
-**One call is one scenario.** Harvest never splits a list, since where one
-story ends is a judgment about meaning and not something a step record
-holds. Two paths means calling it twice and pasting both under one
-`Feature:`.
-
-What comes back is deliberately unfinished. Every keyword is `*` and both
-names are placeholders, because the records say what ran and nothing
-about what any of it was for. **Finishing that is your work, and it is
-the part worth doing carefully:**
-
-- Replace each `*` with `Given`, `When`, or `Then` by what that line tells
-  the person reading the scenario, not by what the code did.
-- Name the `Feature:` and the `Scenario:` for the behavior being claimed.
-- Delete any line that was a probe rather than part of the story. A draft
-  is a record of what you ran, and exploring means running things that
-  turned out not to matter.
+The ids are the ones `nuka do` printed. What comes back is deliberately
+unfinished, every keyword `*` and both names placeholders: replace each
+`*`, name the `Feature:` and `Scenario:`, and delete any line that was a
+probe rather than part of the story. Why `harvest` takes explicit ids
+rather than a time window, why one call is one scenario, and each
+finishing step in full: `references/exploring.md`.
 
 Then join "The loop" below at step 4, `nuka check`.
 
@@ -289,24 +247,10 @@ different amount of patience ("try up to 10 times") overrides this
 default; it is not a config setting. The same budget covers `nuka do
 --use` while diagnosing a failed run (see "When a run fails").
 
-Give every `args` and `returns` field a zod `.describe()`, so `nuka
-describe` can connect a criterion's own wording to the field that answers
-it. This matters most on the Then side: a step verifying "an error is
-shown" needs the `returns` field carrying that message described, or the
-link between the criterion and what was observed is lost.
-
-Three mechanics that get refused rather than guessed at. Every pattern
-parameter is `{key:type}`, the key naming the `args` field it fills; name
-a type this project lacks and `nuka check` prints the ones it has.
-`run`'s first argument is always an object destructuring pattern, because
-that source text is how fixtures are decided without ever calling `run`,
-so a step needing none writes `run({}, args)`. And a step fails when
-`run` throws: `expect` is Playwright's own, imported directly, since
-nukadoko has no assertion API and re-exports none.
-
 A complete step file, how a Then step asserts and what it should return,
 pattern rules, aliasing a fixture, the `do`/`run` gap, what a step should
-return beyond what a later step cites, and what `rationale` is for:
+return beyond what a later step cites, what `rationale` is for, and why
+every `args` and `returns` field wants a zod `.describe()`:
 `references/writing-steps.md`.
 
 ## Chaining a value from an earlier step
@@ -324,13 +268,9 @@ why a chained value is never fetched by nukadoko on its own initiative:
 
 Judge each operation on one axis first: does it mean something to the
 person reading the scenario, not to the code moving data between steps?
-Yes, make it a step, and the acceptance record gains a step record for it.
-No, then ask what should be knowable about it after a failure. A **part**
-when it has a contract worth stating and inputs and a result worth reading
-back: define it with `defineStep` and no `pattern`, list it in the calling
-step's `parts`, and run it with the `call` fixture. An ordinary function
-under `features/steps/lib/` when it has neither: the HTTP it performs is
-still counted in the calling step's `observed`.
+Yes, make it a step. No, ask what should be knowable about it after a
+failure: a **part** if it has a contract worth stating, an ordinary
+function under `features/steps/lib/` if it has neither.
 
 The full reasoning, the kind of line this keeps out of a feature file, and
 what a `calls` entry records: `references/writing-steps.md`.
@@ -338,20 +278,13 @@ what a `calls` entry records: `references/writing-steps.md`.
 ## A second scenario needs part of a step you already have
 
 Two refactors, and the difference is whether the agreed sentence changes.
+Hardcoding a value the next scenario needs to vary: add the `args` key and
+capture it in the pattern, which rewrites the feature line and needs
+whoever agreed it. Doing two things where the next scenario needs one:
+split it into parts instead, and that feature line does not move.
 
-Too concrete, hardcoding a value the next scenario needs to vary: add the
-`args` key and capture it in the pattern. That rewrites the feature line,
-so it needs whoever agreed that line, and `nuka tend` reports any sign-off
-over it as no longer describing what is on disk.
-
-Doing two things where the next scenario needs one: split it into parts
-instead. Each half becomes its own `defineStep` with no `pattern`, listed
-in the original's `parts` and called from its `run`. The original's
-pattern, args and returns do not move, so that feature file and its
-sign-off stay as they were.
-
-The procedure, giving a part a pattern later, and what `nuka check`
-refuses: `references/writing-steps.md`.
+The procedure for each, giving a part a pattern later, and what `nuka
+check` refuses: `references/writing-steps.md`.
 
 ## A resource that needs its own cleanup
 
@@ -360,15 +293,11 @@ seeded database row, an uploaded file), don't write its teardown inside the
 step: that puts something in the feature file that is not itself an
 acceptance condition. Declare it as a fixture instead, under
 `nukadoko.config.ts`'s own `fixtures`, using `defineFixtures` (from the
-`nukadoko` package). A step reaches it the same way it reaches `page` or
-`request`, by destructuring the name; setup runs the first time a step
-names it, and teardown runs after that step's scenario finishes, whether
-the scenario passed or failed.
+`nukadoko` package).
 
 A step that writes to a system whose effect lands elsewhere asynchronously
-isn't finished when the write is accepted, it's finished once that effect
-is visible to whatever runs next: wait for it there, with the `poll`
-fixture, not in a later step that merely reads the effect.
+needs a wait for that effect, with the `poll` fixture, not a later step
+that merely reads it.
 
 The fixture example, build order and scope options, the full `poll`
 discussion (what a wait function should and shouldn't wait for), and
@@ -379,11 +308,11 @@ discussion (what a wait function should and shouldn't wait for), and
 The automatic evidence (screenshot, trace, `http.jsonl`, `page_events`)
 never covers something application-specific: an API response body, a DB
 row, a generated file's contents. Reach for the `evidence` fixture for
-that, `evidence.attach(name, body)`, rather than logging it away or
-writing it to disk with no place on the step record to point back at.
+that instead of logging it away with no place on the step record to
+point back at.
 
-Attachment shapes, `evidence.path()`, and the secrets rule:
-`references/evidence.md`.
+`evidence.attach(name, body)`, attachment shapes, `evidence.path()`, and
+the secrets rule: `references/evidence.md`.
 
 ## Writing the feature
 
@@ -402,33 +331,24 @@ ticket or through the requirements and scenario stages earlier in this
 skill. Where the translation is a judgment call, that judgment is what PR
 review of the feature is for.
 
-Choose Given, When, or Then for what the line tells its reader: matching
-never depends on the keyword, since a line binds by its pattern alone. A
-`mutates: true` step bound in Then position is a `check` warning rather
-than an error, because that tension needs a person.
-
-The tag shape, a worked example, where a premise belongs when there is no
-ticket, how `And`/`But`/`*` take their position, and how Outline rows and
-Background steps expand into pickles: `references/writing-the-feature.md`.
+Choosing Given, When, or Then, the tag shape, a worked example, where a
+premise belongs when there is no ticket, how `And`/`But`/`*` take their
+position, and how Outline rows and Background steps expand into pickles:
+`references/writing-the-feature.md`.
 
 ## Running and accepting
 
 `nuka check <feature>` catches every static inconsistency before anything
-executes, including a broken `from` binding order; run it before the first
-`nuka run` (see "The loop" above). `nuka check --codes` lists every finding
-code `check` can produce, each with a one-line description, so what it can
-catch is answered by the tool itself rather than a list that could go
-stale here. All of the trial and error, `nuka do`
-while building a step, `nuka run` while getting the feature green, happens
-against a verification environment named with `--env`, never a
-production-pointing one; a `policy: "read-only"` one backstops that,
-refusing any mutating step outright before it runs.
+executes (see "The loop" above); `nuka check --codes` lists every finding
+code it can produce. All the trial and error, `nuka do` while building a
+step, `nuka run` while getting the feature green, happens against a
+verification environment named with `--env`, never a production-pointing
+one.
 
-`nuka accept <feature>` freezes the newest all-green run of that feature,
-restricted to runs matching the current environment and `browserType`,
-both matched against what each candidate run actually measured, never a
-declaration. On success, stderr also asks the placement question (see
-"What not to do"); stdout stays exactly the record's own path.
+`nuka accept <feature>` freezes the newest all-green run of that feature
+under the current environment and `browserType`, matched against what was
+actually measured, never a declaration; stderr also asks the placement
+question (see "What not to do").
 
 Condition matching, stderr/stdout shapes during `nuka run`, the
 `<feature>:<line>` narrowing option, environments (`--env`, and a
@@ -461,11 +381,9 @@ and when to reach for the trace viewer: `references/diagnosing.md`.
 ## When accept refuses
 
 `accept` always says which refusal condition fired, in stderr, along with
-the next command to run. Read that message and act on it; stderr is the
-source of truth here. One shape worth knowing ahead of time: "no run to
-freeze" can mean a green full run of the feature exists, just not under
-the current condition; that refusal names the condition it looked for and
-lists every condition that does have a run.
+the next command to run: act on that message rather than guessing. "No
+run to freeze" can mean a green run exists, just not under the condition
+just checked.
 
 The full refusal message shape: `references/diagnosing.md`.
 

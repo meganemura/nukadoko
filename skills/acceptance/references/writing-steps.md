@@ -113,6 +113,11 @@ is what makes a green record worth keeping. Describe those fields: on the
 Then side, a field with no `.describe()` breaks the link between an
 acceptance criterion's wording and what was actually observed.
 
+The same discipline applies to `args`, not only `returns`: give every
+field a `.describe()` so `nuka describe` can connect a criterion's own
+wording to the field that answers it, wherever in the step that wording
+actually lands.
+
 **One step per claim, or one step with the expected value in the line?**
 Let the sentence decide, since the sentence is what a non-engineer agreed
 to. "the total is {expected:int}" carries its expected value naturally, so
