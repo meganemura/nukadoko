@@ -97,7 +97,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
 
   it("errors when both candidates are bound before a required-key consumer", async () => {
     const { report } = await checkReport(fixture("from-alternatives-project"));
-    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 11);
+    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 14);
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain("archive-project");
     expect(issues[0]!.message).toContain("create-project");
@@ -106,7 +106,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
 
   it("errors the same way when both candidates are bound before an optional-key consumer", async () => {
     const { report } = await checkReport(fixture("from-alternatives-project"));
-    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 22);
+    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 25);
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain("create-project");
     expect(issues[0]!.message).toContain("import-project");
@@ -114,7 +114,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
 
   it("errors when neither candidate is bound before a required-key consumer", async () => {
     const { report } = await checkReport(fixture("from-alternatives-project"));
-    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 16);
+    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 17);
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain("create-project");
     expect(issues[0]!.message).toContain("import-project");
@@ -122,14 +122,14 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
 
   it("says nothing when neither candidate is bound before an optional-key consumer", async () => {
     const { report } = await checkReport(fixture("from-alternatives-project"));
-    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 19);
+    const issues = report.errors.filter((issue) => issue.code === "from-order-violation" && issue.line === 20);
     expect(issues).toHaveLength(0);
   });
 
   it("says nothing when exactly one candidate is bound earlier (either one)", async () => {
     const { report } = await checkReport(fixture("from-alternatives-project"));
     const issues = report.errors.filter(
-      (issue) => issue.code === "from-order-violation" && (issue.line === 3 || issue.line === 7),
+      (issue) => issue.code === "from-order-violation" && (issue.line === 5 || issue.line === 9),
     );
     expect(issues).toHaveLength(0);
   });

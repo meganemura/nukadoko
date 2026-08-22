@@ -33,7 +33,7 @@ describe("nuka check: from's scenario-order check", () => {
   it("errors when the upstream is never bound anywhere in the scenario", async () => {
     const { report } = await checkReport(fixture("from-project"));
     const issues = (report.errors as FromOrderIssue[]).filter(
-      (issue) => issue.code === "from-order-violation" && issue.line === 11,
+      (issue) => issue.code === "from-order-violation" && issue.line === 12,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain("archive-project");
@@ -45,7 +45,7 @@ describe("nuka check: from's scenario-order check", () => {
   it("errors when the upstream is bound, but only after this line — a different message, same code", async () => {
     const { report } = await checkReport(fixture("from-project"));
     const issues = (report.errors as FromOrderIssue[]).filter(
-      (issue) => issue.code === "from-order-violation" && issue.line === 23,
+      (issue) => issue.code === "from-order-violation" && issue.line === 24,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain("only at or after this line, never before it");
@@ -56,7 +56,7 @@ describe("nuka check: from's scenario-order check", () => {
   it("says nothing when the upstream is bound earlier in the same scenario", async () => {
     const { report } = await checkReport(fixture("from-project"));
     const issues = (report.errors as FromOrderIssue[]).filter(
-      (issue) => issue.code === "from-order-violation" && issue.line === 3,
+      (issue) => issue.code === "from-order-violation" && issue.line === 5,
     );
     expect(issues).toHaveLength(0);
   });
@@ -64,7 +64,7 @@ describe("nuka check: from's scenario-order check", () => {
   it("says nothing when a pattern capture fills the key, even with no upstream at all", async () => {
     const { report } = await checkReport(fixture("from-project"));
     const issues = (report.errors as FromOrderIssue[]).filter(
-      (issue) => issue.code === "from-order-violation" && issue.line === 27,
+      (issue) => issue.code === "from-order-violation" && issue.line === 28,
     );
     expect(issues).toHaveLength(0);
   });
@@ -72,7 +72,7 @@ describe("nuka check: from's scenario-order check", () => {
   it("says nothing when the from key is optional, even with no upstream at all", async () => {
     const { report } = await checkReport(fixture("from-project"));
     const issues = (report.errors as FromOrderIssue[]).filter(
-      (issue) => issue.code === "from-order-violation" && issue.line === 30,
+      (issue) => issue.code === "from-order-violation" && issue.line === 31,
     );
     expect(issues).toHaveLength(0);
   });
@@ -89,6 +89,6 @@ describe("nuka check: from's scenario-order check", () => {
     const { report } = await checkReport(fixture("from-project"));
     const issues = (report.errors as FromOrderIssue[]).filter((issue) => issue.code === "from-order-violation");
     expect(issues).toHaveLength(2);
-    expect(issues.map((issue) => issue.line).sort()).toEqual([11, 23]);
+    expect(issues.map((issue) => issue.line).sort()).toEqual([12, 24]);
   });
 });

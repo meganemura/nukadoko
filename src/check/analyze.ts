@@ -4,7 +4,12 @@ import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { CONFIG_FILE_NAME, loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
-import { loadFeaturesFromDirs, parseFeatureSource, type LoadFeaturesResult } from "../feature/load-features.js";
+import {
+  attachStepLines,
+  loadFeaturesFromDirs,
+  parseFeatureSource,
+  type LoadFeaturesResult,
+} from "../feature/load-features.js";
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../step/validate-fixtures.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { validateStepParts } from "../step/validate-parts.js";
@@ -90,8 +95,13 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
   }
 
   try {
-    const { pickles } = parseFeatureSource(source, relativePath);
-    return { features: [{ relativePath, pickles }], parseErrors: [] };
+    // `attachStepLines` mirrors src/feature/load-features.ts's own
+    // `loadFeaturesFromDirs` — the same "resolve each pickle step's own
+    // line from the GherkinDocument before it's dropped" step, done here
+    // too since this function is the featureArg path's own equivalent of
+    // that walk, not a call through it.
+    const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
+    return { features: [{ relativePath, pickles: attachStepLines(pickles, gherkinDocument) }], parseErrors: [] };
   } catch (error) {
     return {
       features: [],

@@ -165,9 +165,13 @@ export function checkFeatures(
     const reportedUndefinedText = new Set<string>();
 
     for (const pickle of feature.pickles) {
-      const line = pickle.location?.line;
-
       for (const step of pickle.steps) {
+        // This step's own line (src/feature/load-features.ts's
+        // `attachStepLines`) — never the enclosing Scenario's line: every
+        // finding below is about this one step, and a multi-step scenario
+        // would otherwise point a reader at the `Scenario:` line no matter
+        // which of its steps actually has the problem.
+        const line = step.line;
         const { stepNames, matched } = matchPickleStepText(step.text, patterns);
 
         if (stepNames.length === 0) {
@@ -260,13 +264,17 @@ export function checkFeatures(
       // One call per pickle, after this
       // pickle's own per-step findings above — a scenario-order violation is
       // a property of the whole pickle (which upstream is bound where),
-      // never of one line in isolation the way the checks above are.
+      // never decidable from one step in isolation the way the checks above
+      // are. The violation itself still belongs to one particular
+      // step, though (`issue.stepIndex`, the consuming line) — resolved back
+      // to that step's own line here, the same way the per-step loop above
+      // does, rather than the pickle's Scenario line.
       for (const issue of checkFromOrder(pickle, vocabulary, patterns)) {
         errors.push({
           code: "from-order-violation",
           message: issue.message,
           file: feature.relativePath,
-          line,
+          line: pickle.steps[issue.stepIndex]?.line,
           step: issue.stepName,
         });
       }
@@ -275,13 +283,13 @@ export function checkFeatures(
       // alongside this module's own per-step findings" shape as
       // `checkFromOrder` just above — a property of one line's own resolved
       // step + matched capture set, never something feature-check.ts needs
-      // to re-derive itself.
+      // to re-derive itself. Same per-step line resolution too.
       for (const issue of checkUnfillableKeys(pickle, vocabulary, patterns)) {
         errors.push({
           code: "unfillable-required-key",
           message: issue.message,
           file: feature.relativePath,
-          line,
+          line: pickle.steps[issue.stepIndex]?.line,
           step: issue.stepName,
         });
       }

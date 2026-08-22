@@ -1,7 +1,14 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile } from "@cucumber/gherkin";
-import { IdGenerator, type GherkinDocument, type Pickle } from "@cucumber/messages";
+import {
+  IdGenerator,
+  type GherkinDocument,
+  type Pickle,
+  type PickleStep,
+  type Scenario,
+  type Step,
+} from "@cucumber/messages";
 
 // Responsibility: walk `featuresDir` plus each `additionalFeatureDirs` entry
 // for `**/*.feature` files and turn each into pickles via @cucumber/gherkin
@@ -40,10 +47,18 @@ import { IdGenerator, type GherkinDocument, type Pickle } from "@cucumber/messag
 // alongside the pickles, rather than reconstructing or half-populating one
 // later, is what keeps a hook's `gherkinDocument` from becoming its own new
 // "silently read something undefined/partial" gap.
+//
+// `buildAstNodeLineMap`/`attachStepLines` exist because a pickle step never
+// carries its own line — `@cucumber/messages`'s `PickleStep` has only
+// `astNodeIds`, ids pointing back into the `GherkinDocument` a pickle was
+// compiled from. `FeatureFile.pickles` resolves that lookup once, here,
+// before the `GherkinDocument` itself is dropped, so a check finding about
+// one step in a multi-step scenario can point at that step's own line
+// instead of falling back to the whole scenario's line.
 
 export interface FeatureFile {
   readonly relativePath: string;
-  readonly pickles: readonly Pickle[];
+  readonly pickles: readonly FeaturePickle[];
 }
 
 export interface FeatureParseError {
@@ -109,6 +124,94 @@ export function parseFeatureSource(source: string, relativePath: string): Parsed
   return { gherkinDocument, pickles };
 }
 
+/**
+ * Every AST node in `gherkinDocument` that has both an `id` and a
+ * `location`, keyed by that id. `PickleStep` itself never carries a
+ * location (`@cucumber/messages`'s own shape has only `astNodeIds`, pointers
+ * back into this document) — this map is what turns an id back into the
+ * line it sits on. Only a Step's own id and an Examples row's own id are
+ * ever named by a pickle step's `astNodeIds` (`@cucumber/gherkin`'s own
+ * `compile()`), so those are the two kinds of node collected; a Feature,
+ * Scenario, or Background node's own id is never looked up through a pickle
+ * step and is left out.
+ */
+export function buildAstNodeLineMap(gherkinDocument: GherkinDocument): ReadonlyMap<string, number> {
+  const lineById = new Map<string, number>();
+  const feature = gherkinDocument.feature;
+  if (feature === undefined) {
+    return lineById;
+  }
+
+  const addSteps = (steps: readonly Step[]): void => {
+    for (const step of steps) {
+      lineById.set(step.id, step.location.line);
+    }
+  };
+
+  const addScenario = (scenario: Scenario): void => {
+    addSteps(scenario.steps);
+    for (const examples of scenario.examples) {
+      for (const row of examples.tableBody) {
+        lineById.set(row.id, row.location.line);
+      }
+    }
+  };
+
+  for (const child of feature.children) {
+    if (child.background) {
+      addSteps(child.background.steps);
+    } else if (child.scenario) {
+      addScenario(child.scenario);
+    } else if (child.rule) {
+      for (const ruleChild of child.rule.children) {
+        if (ruleChild.background) {
+          addSteps(ruleChild.background.steps);
+        } else if (ruleChild.scenario) {
+          addScenario(ruleChild.scenario);
+        }
+      }
+    }
+  }
+
+  return lineById;
+}
+
+/** A pickle step plus the line it sits on in the original `.feature` source
+ * — `undefined` only if `astNodeIds` names an id `buildAstNodeLineMap`
+ * didn't collect, which never happens for a document `compile()` produced
+ * these pickles from (defensive, not an observed case). */
+export interface FeaturePickleStep extends PickleStep {
+  readonly line: number | undefined;
+}
+
+export interface FeaturePickle extends Pickle {
+  readonly steps: readonly FeaturePickleStep[];
+}
+
+/**
+ * Resolves every pickle step's own line via `buildAstNodeLineMap` and
+ * `astNodeIds[0]` — always the step's own AST node id, whether the step
+ * came from a Background, a Scenario, or a Scenario Outline template
+ * (`@cucumber/gherkin`'s own `compile()` puts it first every time and, for
+ * an outline, only appends the Examples row's id after it). Reading the
+ * step's own id rather than the row's id means an outline finding points at
+ * the templated step line to edit, not the data row that happened to
+ * interpolate into the failing text.
+ */
+export function attachStepLines(
+  pickles: readonly Pickle[],
+  gherkinDocument: GherkinDocument,
+): readonly FeaturePickle[] {
+  const lineById = buildAstNodeLineMap(gherkinDocument);
+  return pickles.map((pickle) => ({
+    ...pickle,
+    steps: pickle.steps.map((step) => {
+      const stepNodeId = step.astNodeIds[0];
+      return { ...step, line: stepNodeId === undefined ? undefined : lineById.get(stepNodeId) };
+    }),
+  }));
+}
+
 export interface LoadFeaturesFromDirsResult extends LoadFeaturesResult {
   /** Which `additionalFeatureDirs` entries (never `featuresDir` — see this
    * file's own header) do not exist on disk, in the order they were given. */
@@ -141,12 +244,14 @@ export function loadFeaturesFromDirs(
       const source = readFileSync(filePath, "utf8");
       try {
         // This caller (src/check/*.ts, src/tend/*.ts) has no hook to run
-        // against, so its own `FeatureFile` keeps `pickles` only; the
-        // `gherkinDocument` `parseFeatureSource` also returns is exclusively
-        // for `nuka run`'s own path (src/run/select-pickles.ts) onward to
-        // src/run/run-scenario.ts.
-        const { pickles } = parseFeatureSource(source, relativePath);
-        features.push({ relativePath, pickles });
+        // against, so it never keeps the `gherkinDocument`
+        // `parseFeatureSource` also returns the way `nuka run`'s own path
+        // (src/run/select-pickles.ts onward to src/run/run-scenario.ts)
+        // does — it is only read here, through `attachStepLines`, to give
+        // each pickle step its own line before the document itself is
+        // dropped.
+        const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
+        features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
       } catch (error) {
         parseErrors.push({
           relativePath,

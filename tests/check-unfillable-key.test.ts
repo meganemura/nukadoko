@@ -39,7 +39,7 @@ describe("nuka check: unfillable required args keys", () => {
   it("errors when a required key has no capture, table/docstring, or from at all", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 18,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 19,
     );
     expect(issues).toHaveLength(1);
     expect(issues[0]!.message).toContain('"serial"');
@@ -55,7 +55,7 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing when a pattern capture fills the required key", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 3,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 4,
     );
     expect(issues).toHaveLength(0);
   });
@@ -63,7 +63,7 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing when a table attachment fills the required key", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 6,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 7,
     );
     expect(issues).toHaveLength(0);
   });
@@ -71,11 +71,11 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing when the required key has a declared from, and does not double-report with from-order", async () => {
     const { report } = await checkReport(rootDir);
     const unfillable = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 11,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 13,
     );
     expect(unfillable).toHaveLength(0);
     const fromOrder = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "from-order-violation" && issue.file === thisFile && issue.line === 11,
+      (issue) => issue.code === "from-order-violation" && issue.file === thisFile && issue.line === 13,
     );
     expect(fromOrder).toHaveLength(0);
   });
@@ -83,7 +83,7 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing when the key is optional", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 15,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 16,
     );
     expect(issues).toHaveLength(0);
   });
@@ -91,7 +91,7 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing for a compat step's line", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 21,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 22,
     );
     expect(issues).toHaveLength(0);
   });
@@ -99,13 +99,13 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing for an undefined-step line", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 24,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 25,
     );
     expect(issues).toHaveLength(0);
     // Confirms the fixture actually reaches undefined-step, not some other
     // shape, so the assertion above isn't vacuous.
     const undefinedStep = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "undefined-step" && issue.file === thisFile && issue.line === 24,
+      (issue) => issue.code === "undefined-step" && issue.file === thisFile && issue.line === 25,
     );
     expect(undefinedStep).toHaveLength(1);
   });
@@ -113,13 +113,13 @@ describe("nuka check: unfillable required args keys", () => {
   it("says nothing for an ambiguous-step line", async () => {
     const { report } = await checkReport(rootDir);
     const issues = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 27,
+      (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile && issue.line === 28,
     );
     expect(issues).toHaveLength(0);
     // Confirms the fixture actually reaches ambiguous-step, not some other
     // shape, so the assertion above isn't vacuous.
     const ambiguousStep = (report.errors as UnfillableKeyIssue[]).filter(
-      (issue) => issue.code === "ambiguous-step" && issue.file === thisFile && issue.line === 27,
+      (issue) => issue.code === "ambiguous-step" && issue.file === thisFile && issue.line === 28,
     );
     expect(ambiguousStep).toHaveLength(1);
   });
@@ -130,6 +130,6 @@ describe("nuka check: unfillable required args keys", () => {
       (issue) => issue.code === "unfillable-required-key" && issue.file === thisFile,
     );
     expect(issues).toHaveLength(1);
-    expect(issues[0]!.line).toBe(18);
+    expect(issues[0]!.line).toBe(19);
   });
 });
