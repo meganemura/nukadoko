@@ -17,10 +17,12 @@ just until 0.1.
   steps` all resolve, and the two existing at once is refused rather than
   silently picking one. Before this, the only way in was switching the
   whole project to `"type": "module"`, which this door exists specifically
-  to avoid asking for. `nuka check`'s `step-file-import-failed` also now
-  names the cause when a CommonJS project's own `.ts` step file fails to
-  import: previously Node's own `Cannot find module` message stood alone,
-  reading like the file was missing rather than misread as CommonJS.
+  to avoid asking for. `nuka scaffold` writes `.mts` in such a project
+  too, so nothing generates a file the same project then cannot read.
+  Where a `.ts` step file does fail to import there, every command that
+  reports it (`check`, `steps`, `describe`, `run`, `do`) names the cause:
+  Node's own `Cannot find module` message stands for a file that is
+  plainly present, so alone it reads as missing rather than as misread.
 - **`nuka check --codes` lists every finding code `nuka check` can
   produce, each with a one-line description.** `nuka check --json` only
   ever reported the current project's own findings, never a catalog of

@@ -3,7 +3,7 @@ import path from "node:path";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { isCommonJsProject } from "../config/module-kind.js";
+import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import {
   attachStepLines,
@@ -215,22 +215,13 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // a broken glue file is a report entry here rather than the fundamental
   // failure it still is for `run`/`do`/`steps`/`init`.
   //
-  // One case gets a sentence appended: a CommonJS project (no
-  // "type": "module" in package.json) whose failed file is itself .ts.
-  // Node's own message there is a bare "Cannot find module" naming the very
-  // file that does exist on disk — true only in the sense that tsx's loader
-  // gave up before it could read it, and misleading on its own, since it
-  // reads like a missing file rather than a module-kind mismatch. The two
-  // conditions both have to hold before anything is added: a project that
-  // isn't CommonJS, or a failure on a file that isn't .ts, gets Node's
-  // message exactly as it came (CLAUDE.md: "a check that guesses is worse
-  // than no check").
+  // `cjsTsMismatchExplanation` appends the one sentence that names a
+  // CommonJS/.ts mismatch when that's the real cause (its own doc comment,
+  // src/config/module-kind.ts); everywhere else it appends nothing, so
+  // Node's message passes through exactly as it came.
   const cjsProject = isCommonJsProject(rootDir);
   for (const failure of importFailures) {
-    const isCjsTsMismatch = cjsProject && path.extname(failure.filePath) === ".ts";
-    const message = isCjsTsMismatch
-      ? `${failure.message} This project has no "type": "module" in package.json, so nukadoko reads .ts here as CommonJS; nukadoko is ESM-only, so rename this file to .mts.`
-      : failure.message;
+    const message = `${failure.message}${cjsTsMismatchExplanation(cjsProject, failure.filePath)}`;
     errors.push({
       code: "step-file-import-failed",
       message,

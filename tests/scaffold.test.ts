@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -174,5 +174,125 @@ describe("nuka scaffold", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("typo");
+  });
+});
+
+// Responsibility: a CommonJS project (no "type": "module" in package.json)
+// gets `nuka init` writing nukadoko.config.mts and telling the user to
+// write step files as .mts too (tests/init.test.ts's own "nuka init:
+// CommonJS projects"). `nuka scaffold` has to honor that same fact for the
+// file it writes itself: a scaffolded .ts step in such a project fails to
+// import (`step-file-import-failed`) before its own `run()` ever runs, so
+// the tool would be contradicting the guidance it just gave.
+describe("nuka scaffold: CommonJS projects", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+    await ensureNukadokoShim();
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify({ name: "cjs-project", private: true }),
+    );
+    const initExit = await runCli(["init"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    if (initExit !== 0) {
+      throw new Error("test setup: `nuka init` failed");
+    }
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("writes <name>.mts, not <name>.ts, and `nuka check` passes with no rename needed", async () => {
+    const scaffoldStdout = createCaptureSink();
+    const scaffoldExit = await runCli(["scaffold", "send-invite"], {
+      rootDir,
+      stdout: scaffoldStdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(scaffoldExit).toBe(0);
+    expect(scaffoldStdout.text().trim()).toBe(path.join("features", "steps", "send-invite.mts"));
+    expect(existsSync(path.join(rootDir, "features", "steps", "send-invite.mts"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "features", "steps", "send-invite.ts"))).toBe(false);
+
+    const checkStdout = createCaptureSink();
+    const checkStderr = createCaptureSink();
+    const checkExit = await runCli(["check"], {
+      rootDir,
+      stdout: checkStdout,
+      stderr: checkStderr,
+    });
+    expect(checkExit).toBe(0);
+    expect(checkStdout.text() + checkStderr.text()).not.toContain("step-file-import-failed");
+  });
+
+  it("refuses to overwrite an existing <name>.mts", async () => {
+    await runCli(["scaffold", "send-invite"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    const filePath = path.join(rootDir, "features", "steps", "send-invite.mts");
+    const original = await readFile(filePath, "utf8");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["scaffold", "send-invite"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("send-invite.mts");
+    expect(await readFile(filePath, "utf8")).toBe(original);
+  });
+});
+
+// Regression: an explicit `"type": "module"` project (not merely a project
+// with no package.json at all, which reads the same "not CommonJS" branch
+// by a different route) still gets `.ts`, unchanged by the CommonJS branch
+// above.
+describe("nuka scaffold: an explicit ESM project (regression)", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+    await ensureNukadokoShim();
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify({ name: "esm-project", private: true, type: "module" }),
+    );
+    const initExit = await runCli(["init"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    if (initExit !== 0) {
+      throw new Error("test setup: `nuka init` failed");
+    }
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("still writes <name>.ts, not <name>.mts", async () => {
+    const scaffoldStdout = createCaptureSink();
+    const scaffoldExit = await runCli(["scaffold", "send-invite"], {
+      rootDir,
+      stdout: scaffoldStdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(scaffoldExit).toBe(0);
+    expect(scaffoldStdout.text().trim()).toBe(path.join("features", "steps", "send-invite.ts"));
+    expect(existsSync(path.join(rootDir, "features", "steps", "send-invite.ts"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "features", "steps", "send-invite.mts"))).toBe(false);
   });
 });

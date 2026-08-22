@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import { register } from "tsx/esm/api";
 import type { z } from "zod";
 import type { DeclaredCollector } from "../compat/declared.js";
@@ -384,7 +385,18 @@ export async function discoverSteps(
         mod = await scoped.import(pathToFileURL(filePath).href, import.meta.url);
       } catch (error) {
         if (!tolerateImportFailures) {
-          throw error;
+          // The tolerant path (nuka check, nuka tend) reports this failure
+          // through `importFailures`, where the same explanation is added on
+          // the way out. This path throws instead, so the explanation has to
+          // travel with the error: `nuka run` and `nuka do` are the commands
+          // most likely to be typed first, and Node's own message for this
+          // case names a path the file plainly occupies, which reads as a
+          // missing file rather than a module kind the project decides.
+          const explanation = cjsTsMismatchExplanation(isCommonJsProject(rootDir), filePath);
+          if (explanation === "" || !(error instanceof Error)) {
+            throw error;
+          }
+          throw new Error(`${error.message}${explanation}`, { cause: error });
         }
         // A file that dies partway through its own evaluation (CommonJS
         // `require()` inside an ESM file throws mid-evaluation, not at ESM's

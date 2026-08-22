@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
+import { isCommonJsProject } from "../config/module-kind.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -107,7 +108,14 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     return 1;
   }
 
-  const relativeFilePath = path.join(config.featuresDir, "steps", `${name}.ts`);
+  // The same `isCommonJsProject` call `nuka init` already defers to
+  // (src/config/module-kind.ts's own header): a project with no
+  // "type": "module" in package.json reads a plain .ts file as CommonJS,
+  // and nukadoko is ESM-only, so a step file scaffolded there has to be
+  // .mts or `nuka check` immediately flags the very file this command just
+  // wrote.
+  const stepExtension = isCommonJsProject(rootDir) ? ".mts" : ".ts";
+  const relativeFilePath = path.join(config.featuresDir, "steps", `${name}${stepExtension}`);
   const filePath = path.join(rootDir, relativeFilePath);
 
   if (existsSync(filePath)) {

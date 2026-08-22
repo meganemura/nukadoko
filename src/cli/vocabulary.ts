@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { ConfigError } from "../config/errors.js";
 import { loadConfig } from "../config/load-config.js";
+import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { BUILTIN_FIXTURE_NAMES } from "../context.js";
 import {
@@ -125,14 +126,25 @@ export function toImportFailureSummaries(
  * Returns `""` (nothing to write) when
  * `failures` is empty, so a caller can call this unconditionally. Same
  * newline-collapsing as src/cli/check.ts's own `formatIssueLine` — an
- * import error's message can itself carry embedded newlines. */
-export function formatImportFailuresStderr(failures: readonly ImportFailureSummary[]): string {
+ * import error's message can itself carry embedded newlines.
+ *
+ * Takes `rootDir` so it can append the same CJS/.ts mismatch sentence
+ * `nuka check`'s `step-file-import-failed` already does
+ * (`cjsTsMismatchExplanation`, src/config/module-kind.ts). A project's
+ * first command is not always `check`, and Node's own "Cannot find module"
+ * is the same misleading message here as it is there. */
+export function formatImportFailuresStderr(
+  rootDir: string,
+  failures: readonly ImportFailureSummary[],
+): string {
   if (failures.length === 0) {
     return "";
   }
-  const lines = failures.map(
-    (failure) => `  ${failure.file}: ${failure.message.replace(/\s*\n\s*/g, " ")}`,
-  );
+  const cjsProject = isCommonJsProject(rootDir);
+  const lines = failures.map((failure) => {
+    const explanation = cjsTsMismatchExplanation(cjsProject, failure.file);
+    return `  ${failure.file}: ${failure.message.replace(/\s*\n\s*/g, " ")}${explanation}`;
+  });
   return `${failures.length} step file${failures.length === 1 ? "" : "s"} could not be imported:\n${lines.join("\n")}\n`;
 }
 

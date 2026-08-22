@@ -282,7 +282,7 @@ export async function runCli(
           // run.
           stdout.write(formatVocabulary(summaries, process.stdout.columns ?? 80));
         }
-        stderr.write(formatImportFailuresStderr(importFailureSummaries));
+        stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         // Exit 1 whenever the output is incomplete in a way this command
         // still went ahead and printed anyway — the check below has to name
         // every such case, not just today's, so a new one has to be added
@@ -329,7 +329,7 @@ export async function runCli(
         if (!entry) {
           exitCode = 1;
           stderr.write(`Unknown step: ${args.name}\n`);
-          stderr.write(formatImportFailuresStderr(importFailureSummaries));
+          stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
           return;
         }
         // Same `buildFixtureGraph(config)` call `steps` above already makes
@@ -342,7 +342,7 @@ export async function runCli(
         stdout.write(
           `${JSON.stringify({ ...contract, import_failures: importFailureSummaries }, null, 2)}\n`,
         );
-        stderr.write(formatImportFailuresStderr(importFailureSummaries));
+        stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         // Same rule as `steps` above, scoped to this one contract: an
         // import failure elsewhere in the project, this step's own
         // unreadable `from` entry (`from_errors`), or this step's own
