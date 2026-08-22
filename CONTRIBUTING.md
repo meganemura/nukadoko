@@ -61,6 +61,11 @@ npm run build
 npm publish
 ```
 
+Run `npm run pack-check` before either command: it installs the real
+tarball into a throwaway project outside this repository and drives the
+CLI there, which is the only way to catch a `bin` that depends on a
+package this repository only lists as a devDependency.
+
 `package.json` declares `prepublishOnly`, and with `ignore-scripts` on it
 does not fire. Publishing without building first ships whatever `dist/`
 happened to be there, which may be older than `src/` or missing entirely.
