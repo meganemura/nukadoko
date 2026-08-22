@@ -367,6 +367,33 @@ describe("nuka tend: post-navigation-read", () => {
       expect(notes.map((n) => n.step)).toEqual(["a step at the cutoff"]);
     });
 
+    it("names ctx.poll in the note, the one shape that makes the note stop being true", async () => {
+      // Without this, a reader who wants to act reaches for a direct
+      // browser wait instead. That wait is itself a call right after the
+      // navigation, so the note comes back naming it, and reads as though
+      // no way of writing the step can ever silence it.
+      await writeFile(
+        path.join(rootDir, "bare-read.2026-01-01-0000000.md"),
+        buildRecord({
+          featurePath: "features/does-not-exist.feature",
+          stepText: "a step that reads right after navigating",
+          stepRecord: {
+            step: "a step that reads right after navigating",
+            status: "ok",
+            actions: [
+              { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
+              { method: "click", at: "2026-01-01T00:00:00.060Z", ms: 5 },
+            ],
+          },
+        }),
+      );
+
+      const { report } = await runTendJson(rootDir);
+      const notes = report.notes.filter((n) => n.code === "post-navigation-read");
+      expect(notes).toHaveLength(1);
+      expect(notes[0]!.message).toContain("ctx.poll");
+    });
+
     it("excludes a read inside a ctx.poll window, but still reports one outside it on the same step record", async () => {
       await writeFile(
         path.join(rootDir, "poll-covered.2026-01-01-0000000.md"),

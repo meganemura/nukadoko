@@ -7,6 +7,16 @@ to fix it. Every other finding it reports, `signoff-condition-mismatch` and
 `post-navigation-read` among them, is a note a project is allowed to carry
 rather than something blocking.
 
+`post-navigation-read` is the one worth knowing the shape of, because
+there is a way to make it stop being true and only one. It lists a call a
+step made shortly after its own navigation, and it never says the gap was
+too short, since how long an application takes to render after a
+navigation is not something this tool can know. A read that a `ctx.poll`
+call was already retrying is not listed at all. Reaching for a direct
+browser wait instead does not help: that wait is itself a call right after
+the navigation, so the note comes back naming it, which reads as though
+nothing silences it.
+
 Once a feature has moved into `featuresDir` (see "What not to do" in
 `SKILL.md`), `nuka tend` stops reporting a stale sign-off or a drifted
 condition for it: the running suite carries the guarantee now, not a

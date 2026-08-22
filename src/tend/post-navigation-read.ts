@@ -29,6 +29,13 @@ import type { TendIssue } from "./types.js";
 // itself already carries: a call's own method name, when it ended, and when
 // the next call started.
 //
+// The note's own text names that exclusion, which is the only shape that
+// makes this note stop being true: a reader who wants to act on it has
+// nowhere else to learn that, and one who reaches for a direct browser
+// wait instead writes a call this note then reports in its turn, reading
+// as though nothing silences it. Naming the shape is still not a verdict
+// on the gap, which this note never gives.
+//
 // A read that lands inside a `ctx.poll` call's own window is excluded:
 // `docs/spec.md:350-375` already asks a step to
 // use `poll()` rather than a direct browser wait precisely so a delayed
@@ -283,7 +290,8 @@ function groupMatches(matches: readonly Match[]): TendIssue[] {
         `step "${first.step}" called "${first.nextMethod}" ${gapRange} after its own "${first.navigationMethod}" ` +
         `finished, across ${recordCount} step record${recordCount === 1 ? "" : "s"} (for example ` +
         `${exampleRecord}). Not a judgment: whether that gap was enough depends on how long this application ` +
-        `takes to render after "${first.navigationMethod}", and this tool has no way to know that.`,
+        `takes to render after "${first.navigationMethod}", and this tool has no way to know that. ` +
+        `A read that a ctx.poll call was already retrying is not listed here.`,
       file: exampleRecord,
       step: first.step,
     };
