@@ -308,7 +308,7 @@ export async function runCli(
         // about may be exactly the one whose own file failed to import, so
         // "Unknown step" alone would misdiagnose a migration problem as a
         // typo.
-        const { vocabulary, importFailures } = await loadVocabulary(rootDir, {
+        const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
         });
         const importFailureSummaries = toImportFailureSummaries(importFailures);
@@ -319,16 +319,26 @@ export async function runCli(
           stderr.write(formatImportFailuresStderr(importFailureSummaries));
           return;
         }
-        const contract = describeContract(entry, buildStepNames(vocabulary));
+        // Same `buildFixtureGraph(config)` call `steps` above already makes
+        // — `describeContract`'s own `needs`/`needs_browser` need it for the
+        // same reason `summarize`'s do (that field's own doc comment):
+        // without it, `describe`'s "full contract" would fall back to a
+        // builtins-only guess instead of this project's real fixture graph.
+        const graph = buildFixtureGraph(config);
+        const contract = describeContract(entry, buildStepNames(vocabulary), graph);
         stdout.write(
           `${JSON.stringify({ ...contract, import_failures: importFailureSummaries }, null, 2)}\n`,
         );
         stderr.write(formatImportFailuresStderr(importFailureSummaries));
         // Same rule as `steps` above, scoped to this one contract: an
-        // import failure elsewhere in the project, or this step's own
-        // unreadable `from` entry (`from_errors`), same reasoning either
-        // way — the output went ahead and printed, but it is not complete.
-        if (importFailures.length > 0 || (contract.kind === "typed" && contract.from_errors !== undefined)) {
+        // import failure elsewhere in the project, this step's own
+        // unreadable `from` entry (`from_errors`), or this step's own
+        // unreadable `needs` (`needs_error`) — same reasoning in every
+        // case, the output went ahead and printed, but it is not complete.
+        if (
+          importFailures.length > 0 ||
+          (contract.kind === "typed" && (contract.from_errors !== undefined || contract.needs_error !== undefined))
+        ) {
           exitCode = 1;
         }
       } catch (error) {

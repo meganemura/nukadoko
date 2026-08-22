@@ -432,6 +432,57 @@ function knownFixtureNamesFor(graph: FixtureGraph | undefined): ReadonlySet<stri
   return graph !== undefined ? new Set(graph.nodes.keys()) : new Set(BUILTIN_FIXTURE_NAMES);
 }
 
+/** One typed step's own `needs`/`needs_browser`/`needs_error`/
+ * `needs_inferred` fields, computed once and shared verbatim by `summarize`
+ * (`nuka steps --json`) and `describeContract` (`nuka describe`) — an agent
+ * calling `describe` for one step's "full contract" (this command's own
+ * yargs description) needs the same fixture-need verdict `steps --json`
+ * already computes for that step, not a second copy of this logic that
+ * could silently drift from it. `graph` is optional so every call site
+ * that has no config-derived fixture graph handy keeps working unchanged
+ * (`needs_browser` falls back to `stepNeeds`'s own direct membership
+ * check) — `nuka steps --json`/`nuka describe`'s own handlers (run-cli.ts)
+ * are the two callers that build and pass one.
+ *
+ * `stepNeeds` throws for a `run()` it can't read fixture names from at all
+ * (src/step/step-needs.ts, via src/step/fixture-names.ts) — that used to
+ * propagate straight out of `summarize` and take every other step's own
+ * entry down with it: one unparseable `run()` should not empty the whole
+ * vocabulary a reader is trying to see. Caught here instead, so a caller
+ * iterating the whole vocabulary can keep going past it.
+ */
+function needsFields(
+  step: Step,
+  graph: FixtureGraph | undefined,
+): {
+  readonly needs: readonly string[] | null;
+  readonly needs_browser?: boolean;
+  readonly needs_error?: string;
+  readonly needs_inferred?: readonly string[];
+} {
+  try {
+    const { needs, needsBrowser } = stepNeeds(step, graph);
+    return { needs, needs_browser: needsBrowser };
+  } catch (error) {
+    // A guess at what `error` couldn't state as a contract — attempted
+    // only for the one throw shape `inferNeeds` can key a scan on
+    // (`FixtureNotDestructuredError`'s own bare first-argument identifier,
+    // e.g. `run(ctx, args)`'s `"ctx"`); a default-value or rest-property
+    // throw leaves no such identifier to scan by, so this stays
+    // `undefined` for those and `needs_inferred` is simply omitted: no
+    // guess reads as no guess, never as an empty one.
+    const inferred =
+      error instanceof FixtureNotDestructuredError
+        ? inferNeeds(step.run, error.firstArgumentText, knownFixtureNamesFor(graph))
+        : undefined;
+    return {
+      needs: null,
+      needs_error: error instanceof Error ? error.message : String(error),
+      ...(inferred !== undefined ? { needs_inferred: inferred } : {}),
+    };
+  }
+}
+
 /** `graph` is optional so every call site
  * that has no config-derived fixture graph handy keeps working unchanged
  * (`needs_browser` falls back to `stepNeeds`'s own direct membership
@@ -446,7 +497,7 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
     };
   }
   const fromResult = fromSummary(entry.step.from, stepNames);
-  const base = {
+  return {
     name: entry.name,
     kind: "typed" as const,
     patterns: entry.step.patterns,
@@ -455,35 +506,8 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
     from: fromResult.rendered,
     from_errors: fromResult.errors,
     parts: partsSummary(entry.step, stepNames),
+    ...needsFields(entry.step, graph),
   };
-  // `stepNeeds` throws for a `run()` it can't read fixture names from at all
-  // (src/step/step-needs.ts, via src/step/fixture-names.ts) — that used to
-  // propagate straight out of this function and take every other step's own
-  // entry down with it: one unparseable `run()` should not empty the whole
-  // vocabulary a reader is trying to see. Caught here, per entry, so the
-  // rest of `nuka steps` still lists everything else it could read.
-  try {
-    const { needs, needsBrowser } = stepNeeds(entry.step, graph);
-    return { ...base, needs, needs_browser: needsBrowser };
-  } catch (error) {
-    // A guess at what `error` couldn't state as a contract — attempted
-    // only for the one throw shape `inferNeeds` can key a scan on
-    // (`FixtureNotDestructuredError`'s own bare first-argument identifier,
-    // e.g. `run(ctx, args)`'s `"ctx"`); a default-value or rest-property
-    // throw leaves no such identifier to scan by, so this stays
-    // `undefined` for those and `needs_inferred` is simply omitted: no
-    // guess reads as no guess, never as an empty one.
-    const inferred =
-      error instanceof FixtureNotDestructuredError
-        ? inferNeeds(entry.step.run, error.firstArgumentText, knownFixtureNamesFor(graph))
-        : undefined;
-    return {
-      ...base,
-      needs: null,
-      needs_error: error instanceof Error ? error.message : String(error),
-      ...(inferred !== undefined ? { needs_inferred: inferred } : {}),
-    };
-  }
 }
 
 /**
@@ -622,6 +646,22 @@ export interface TypedStepContract {
    * explains. Omitted, not `[]`, when the step declares no parts at all —
    * same convention as `rationale`/`from` just above. */
   readonly parts?: ReadonlyArray<{ readonly name: string; readonly description: string }>;
+  /** The fixture names this step's own `run()` destructures — same field,
+   * same computation (`needsFields`, shared with `summarize` below), and
+   * same presence rule as `StepSummary.needs`: this command's own yargs
+   * description calls its output "full contract", so a reader must not
+   * have to also call `nuka steps --json` to learn what this step needs
+   * before running it. */
+  readonly needs: readonly string[] | null;
+  /** Same field, same computation, and same presence rule as
+   * `StepSummary.needs_browser`. */
+  readonly needs_browser?: boolean;
+  /** Same field, same computation, and same presence rule as
+   * `StepSummary.needs_error`. */
+  readonly needs_error?: string;
+  /** Same field, same computation, and same presence rule as
+   * `StepSummary.needs_inferred`. */
+  readonly needs_inferred?: readonly string[];
   readonly args: JsonSchema;
   readonly returns: JsonSchema;
 }
@@ -642,7 +682,12 @@ export interface CompatStepContract {
 
 export type StepContract = TypedStepContract | CompatStepContract;
 
-export function describeContract(entry: VocabularyEntry, stepNames: StepNames): StepContract {
+/** `graph` is optional for the same reason `summarize`'s own parameter is
+ * (that function's own doc comment) — `nuka describe`'s own handler
+ * (run-cli.ts) is the caller that builds and passes one, the same
+ * `buildFixtureGraph(config)` call `nuka steps --json`'s handler already
+ * makes. */
+export function describeContract(entry: VocabularyEntry, stepNames: StepNames, graph?: FixtureGraph): StepContract {
   if (entry.kind === "compat") {
     return {
       kind: "compat",
@@ -666,6 +711,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames): 
     from: fromResult.rendered,
     from_errors: fromResult.errors,
     parts: partsHumanReadable(entry.step, stepNames),
+    ...needsFields(entry.step, graph),
     args: z.toJSONSchema(entry.step.args),
     returns: z.toJSONSchema(entry.step.returns),
   };
