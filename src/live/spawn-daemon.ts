@@ -22,8 +22,8 @@ import { fileURLToPath } from "node:url";
 //
 // This entry point is never part of nukadoko's own CLI surface — argv here
 // is a private, positional contract this file and daemon-entry.ts alone
-// share (`<rootDir> <env|""> <name> <idleTimeoutSeconds>`), not something a
-// user ever types.
+// share (`<rootDir> <env|""> <name> <idleTimeoutSeconds> <crashLogPath>`),
+// not something a user ever types.
 
 export interface SpawnDaemonOptions {
   readonly rootDir: string;
@@ -34,6 +34,13 @@ export interface SpawnDaemonOptions {
   readonly env: string | null;
   readonly name: string;
   readonly idleTimeoutSeconds: number;
+  /** Where daemon-entry.ts writes the reason if it dies before ever
+   * opening a socket (its own header, and `checkSockPathLength`'s own doc
+   * comment below, explain why this process otherwise has nowhere to
+   * report that at all). Computed by the caller (`sessionCrashLogPath`,
+   * src/session/paths.ts) rather than re-derived here, the same split this
+   * module already keeps for the socket/lock paths. */
+  readonly crashLogPath: string;
 }
 
 function packageRoot(here: string): string {
@@ -47,11 +54,11 @@ function packageRoot(here: string): string {
  * below) without keeping it alive as a child.
  */
 export function spawnDaemon(options: SpawnDaemonOptions): ChildProcess {
-  const { rootDir, env, name, idleTimeoutSeconds } = options;
+  const { rootDir, env, name, idleTimeoutSeconds, crashLogPath } = options;
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
   const daemonEntry = path.join(path.dirname(here), `daemon-entry${ext}`);
-  const args = [rootDir, env ?? "", name, String(idleTimeoutSeconds)];
+  const args = [rootDir, env ?? "", name, String(idleTimeoutSeconds), crashLogPath];
 
   const child =
     ext === ".ts"
@@ -133,4 +140,45 @@ export function waitForDaemonStartup(
       finish({ ok: false, message: `the session did not become ready within ${timeoutMs}ms` });
     }, timeoutMs);
   });
+}
+
+// The unix domain socket `sun_path` buffer a live session's own socket path
+// (src/session/paths.ts's own `sessionSockPath`) has to fit inside, in
+// bytes. Measured directly on macOS, in this repository's own dev
+// environment, rather than assumed: `net.createServer().listen()` against a
+// generated path succeeds up to 104 bytes and fails with `EINVAL` at 105 —
+// the same "declaration and measurement answer different questions" split
+// this repository's own CLAUDE.md states for project config applies here to
+// a platform constant. Linux's own limit is wider (`sizeof(sun_path)` in
+// the kernel's own `include/uapi/linux/un.h`) and is not measured here —
+// this package has no Linux machine to measure on — so it is cited from
+// that header instead and named as a citation, not presented as equally
+// certain. Every other Node platform this constant might run on (the BSDs)
+// shares macOS's own BSD sockets lineage closely enough to use the same
+// value; nothing here claims that for Windows, whose own `AF_UNIX` support
+// is a separate, much newer addition this package has not measured either.
+const MAX_SOCK_PATH_BYTES_LINUX = 108;
+const MAX_SOCK_PATH_BYTES_BSD_DERIVED = 104;
+
+export interface SockPathLengthCheck {
+  readonly ok: boolean;
+  readonly byteLength: number;
+  readonly limit: number;
+}
+
+/**
+ * Checks `sockPath` against this platform's own `sun_path` limit *before*
+ * anything spawns a process to bind it — a monorepo or a deeply nested
+ * checkout can put a project's own `stateDir` well past it, and
+ * `spawnDaemon`'s own child has no terminal to report `EINVAL` to
+ * (spawn-daemon.ts's own header): refusing here, loudly, from the one
+ * process that still has a caller to report to, is strictly better than
+ * waiting for that same failure to surface as an unexplained non-zero exit
+ * (this file's own `waitForDaemonStartup`) with the real reason nowhere a
+ * user can read it.
+ */
+export function checkSockPathLength(sockPath: string): SockPathLengthCheck {
+  const limit = process.platform === "linux" ? MAX_SOCK_PATH_BYTES_LINUX : MAX_SOCK_PATH_BYTES_BSD_DERIVED;
+  const byteLength = Buffer.byteLength(sockPath);
+  return { ok: byteLength <= limit, byteLength, limit };
 }

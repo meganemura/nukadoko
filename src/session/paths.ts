@@ -54,3 +54,20 @@ export function sessionSockPath(
 ): string {
   return path.join(sessionsDir(rootDir, stateDir, environment), `${name}.sock`);
 }
+
+/** Where the daemon's own detached child (src/live/daemon-entry.ts) writes
+ * the reason it failed, for a failure this whole package has nowhere else
+ * to report: that process's own stdio is `"ignore"` (src/live/spawn-
+ * daemon.ts's own header), so a setup failure inside it (e.g. `listen()`
+ * rejecting with `EINVAL` for a socket path over the platform's own limit
+ * that this package could not rule out ahead of time) would otherwise never
+ * reach anyone. `nuka session start` names this path in its own failure
+ * message once a start fails (src/cli/session.ts). */
+export function sessionCrashLogPath(
+  rootDir: string,
+  stateDir: string,
+  environment: string,
+  name: string,
+): string {
+  return path.join(sessionsDir(rootDir, stateDir, environment), `${name}.crash.log`);
+}

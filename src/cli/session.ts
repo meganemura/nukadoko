@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { loadConfig } from "../config/load-config.js";
 import { validateEnvironmentName } from "../environment/name.js";
@@ -7,11 +8,11 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { sendLiveRequest } from "../live/client.js";
-import { spawnDaemon, waitForDaemonStartup } from "../live/spawn-daemon.js";
+import { checkSockPathLength, spawnDaemon, waitForDaemonStartup } from "../live/spawn-daemon.js";
 import { clearAllSessions, clearSession, listSessions } from "../session/manage.js";
 import { liveLockOwner } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
-import { sessionLockPath, sessionSockPath } from "../session/paths.js";
+import { sessionCrashLogPath, sessionLockPath, sessionSockPath } from "../session/paths.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -156,6 +157,7 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
 
   const lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, name);
   const sockPath = sessionSockPath(rootDir, config.stateDir, resolvedEnv.name, name);
+  const crashLogPath = sessionCrashLogPath(rootDir, config.stateDir, resolvedEnv.name, name);
 
   // A fast, best-effort refusal before ever spawning anything — the
   // daemon's own `acquireLock` (src/live/daemon.ts) is the authoritative
@@ -170,18 +172,48 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
     );
     return 1;
   }
+
+  // Refused here, loudly, before anything spawns: a monorepo or a deeply
+  // nested checkout can put `sockPath` past this platform's own unix
+  // domain socket path limit, and the daemon's own child has no terminal
+  // to report that failure to once it is running (spawn-daemon.ts's own
+  // header) — `checkSockPathLength`'s own doc comment states the measured
+  // limit and why. Without this check, the same failure would still
+  // happen, just later, inside the daemon's own `listen()` call, as an
+  // `EINVAL` this command could only report as "the session process
+  // exited before it was ready", naming no cause at all.
+  const lengthCheck = checkSockPathLength(sockPath);
+  if (!lengthCheck.ok) {
+    stderr.write(
+      `Session "${name}" cannot start: its own unix socket path is ${lengthCheck.byteLength} bytes, over ` +
+        `this platform's ${lengthCheck.limit}-byte limit on a socket path.\n` +
+        `Path: ${sockPath}\n` +
+        "Run from a shallower directory, or shorten the project's stateDir, environment name, or session name.\n",
+    );
+    return 1;
+  }
+
   // A stale socket from a daemon that crashed without cleaning up after
   // itself would otherwise make the new daemon's own `listen()` fail
   // (EADDRINUSE) — the daemon itself also removes any file at this path
   // before listening, but clearing it here too means a startup failure is
   // reported as *this* daemon's own, not blamed on debris from a previous
-  // one.
+  // one. The crash log gets the same treatment, and for the same reason:
+  // a log left over from a previous failed start must not be misread as
+  // this attempt's own reason.
   await rm(sockPath, { force: true }).catch(() => {});
+  await rm(crashLogPath, { force: true }).catch(() => {});
 
-  const child = spawnDaemon({ rootDir, env, name, idleTimeoutSeconds });
+  const child = spawnDaemon({ rootDir, env, name, idleTimeoutSeconds, crashLogPath });
   const outcome = await waitForDaemonStartup(child, sockPath, STARTUP_TIMEOUT_MS);
   if (!outcome.ok) {
-    stderr.write(`Failed to start session "${name}": ${outcome.message}\n`);
+    // The daemon's own child writes this file only when it dies from a
+    // thrown, unnamed setup failure (daemon-entry.ts's own header) — named
+    // here, when it exists, so a failure that outcome.message alone cannot
+    // explain (e.g. "exited before it was ready", the same shape an
+    // unmeasured EINVAL would produce) still has somewhere to point a user.
+    const crashLogNote = existsSync(crashLogPath) ? `Its own crash log may explain why: ${crashLogPath}\n` : "";
+    stderr.write(`Failed to start session "${name}": ${outcome.message}\n${crashLogNote}`);
     return 1;
   }
 
