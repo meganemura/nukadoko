@@ -223,6 +223,11 @@
       "en": ["trust boundary"],
       "ja": "信頼境界",
       "note": "docs/spec.md \"WebMCP tools (experimental)\" で、args を受け取るページ側の JavaScript がこのプロジェクトの信頼できる相手ではないことを述べる段落で入った"
+    },
+    {
+      "en": ["listener", "listeners"],
+      "ja": "リスナー",
+      "note": "docs/spec.md \"Compat steps\" で、experimental_recordStep が page.context() に取り付けて evidence を集める event listener を指す文脈で入った"
     }
   ],
   "keep_english": [
