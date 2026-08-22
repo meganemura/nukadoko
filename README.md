@@ -569,20 +569,20 @@ for this project's end-to-end / acceptance tests.
    CI runs them.
 3. Report back under exactly these five headings, in this order:
 
-1. Current state — what test suite exists today: scope, coverage, what
+1. Current state (what test suite exists today): scope, coverage, what
    executes it.
-2. Fit — how typed steps + step records would change the way an agent runs
-   this suite's checks: which flows become vocabulary, and what the
+2. Fit (how typed steps + step records would change the way an agent runs
+   this suite's checks): which flows become vocabulary, and what the
    explore-execute-decide loop looks like concretely here.
-3. First three migration moves — the first commands to run and the first
+3. First three migration moves: the first commands to run and the first
    slice of steps to bind (e.g. `nuka init`, binding an initial slice of
    steps, promoting the hottest existing step to a typed one).
-4. Risks and costs — an estimate of vocabulary size (how many distinct
+4. Risks and costs: an estimate of vocabulary size (how many distinct
    typed steps this suite would need), how much of the existing `Then`
    usage is hygienic (assertion only, nothing chained that mutates) versus
    not, whether the suite is CommonJS, and where secrets currently live
    relative to where nukadoko expects them.
-5. Verdict — adopt / trial / not-yet, with the reasoning.
+5. Verdict: adopt / trial / not-yet, with the reasoning.
 
 Do not guess at nukadoko internals beyond what its README and docs/spec.md
 state. If something is unclear, not yet implemented, or you don't have

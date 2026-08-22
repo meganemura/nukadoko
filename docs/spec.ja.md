@@ -2248,7 +2248,7 @@ npm パッケージは `nukadoko` で、それがインストールするただ 
 ```
 nuka run <feature[:line]|dir>
                               execute scenarios; step records + allure-results.
-                              :line runs one scenario, for iteration only — a
+                              :line runs one scenario, for iteration only. A
                               partial run can never be accepted. A directory
                               is walked recursively for .feature files, in
                               deterministic byte order, folded into this one
