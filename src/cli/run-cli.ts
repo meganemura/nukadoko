@@ -9,6 +9,7 @@ import { buildFixtureGraph } from "../fixture/graph.js";
 import { readOwnVersion } from "../version.js";
 import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
+import { runClean } from "./clean.js";
 import { runDo } from "./do.js";
 import { runHarvest } from "./harvest.js";
 import { runInit } from "./init.js";
@@ -34,7 +35,7 @@ import type { WritableSink } from "./writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
 // `do`, `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `tend`, `accept`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
+// `clean`, `tend`, `accept`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -46,7 +47,10 @@ import type { WritableSink } from "./writable-sink.js";
 // cli/session.ts; `init`/`scaffold`'s own generation logic lives in
 // cli/init.ts and
 // cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin
-// wiring) and src/check/* (the actual checks); `tend`'s own analysis lives
+// wiring) and src/check/* (the actual checks); `clean`'s own plan-then-
+// delete logic lives entirely in cli/clean.ts (see that file's own header
+// for why it stays self-contained rather than sharing path helpers with
+// cli/do.ts/cli/run.ts); `tend`'s own analysis lives
 // in cli/tend.ts (thin wiring) and src/tend/* (the actual findings) — the
 // same split, one command answering "can this run", the other "is this
 // still healthy" (docs/spec.md "Tending"); `accept`'s own run-selection and
@@ -162,6 +166,14 @@ interface CheckArgs {
 }
 
 interface TendArgs {
+  json?: boolean;
+}
+
+interface CleanArgs {
+  dryRun?: boolean;
+  records?: boolean;
+  cache?: boolean;
+  export?: boolean;
   json?: boolean;
 }
 
@@ -664,6 +676,52 @@ export async function runCli(
     },
   };
 
+  const cleanCommand: CommandModule<Record<string, never>, CleanArgs> = {
+    command: "clean",
+    describe:
+      "delete accumulated records/cache/export under the state directory; refuses while any session is live",
+    builder: (y: Argv) =>
+      y
+        .option("dry-run", {
+          type: "boolean",
+          default: false,
+          describe: "list what would be removed without removing it",
+        })
+        .option("records", {
+          type: "boolean",
+          default: false,
+          describe: "clean only step/scenario records (default: every category, when none of --records/--cache/--export is given)",
+        })
+        .option("cache", {
+          type: "boolean",
+          default: false,
+          describe: "clean only session cache files (default: every category, when none of --records/--cache/--export is given)",
+        })
+        .option("export", {
+          type: "boolean",
+          default: false,
+          describe: "clean only allure-results/messages.ndjson (default: every category, when none of --records/--cache/--export is given)",
+        })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "machine-readable output",
+        }) as Argv<CleanArgs>,
+    handler: async (args: Arguments<CleanArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runClean({
+        rootDir,
+        dryRun: args.dryRun ?? false,
+        records: args.records ?? false,
+        cache: args.cache ?? false,
+        exportArtifacts: args.export ?? false,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const tendCommand: CommandModule<Record<string, never>, TendArgs> = {
     command: "tend",
     describe: "what is rotting rather than what is broken: unused declarations, undescribed fields, missing rationale",
@@ -847,6 +905,7 @@ export async function runCli(
     .command(initCommand)
     .command(scaffoldCommand)
     .command(checkCommand)
+    .command(cleanCommand)
     .command(tendCommand)
     .command(acceptCommand)
     .command(skillCommand)
