@@ -1,4 +1,5 @@
 import { analyzeProject } from "../check/analyze.js";
+import { listCheckCodes } from "../check/codes.js";
 import type { CheckIssue } from "../check/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
@@ -17,10 +18,21 @@ import type { WritableSink } from "./writable-sink.js";
 // behavior). `CheckFeatureNotFoundError` needs no
 // special handling here — it is an `Error` like every other setup failure
 // this catch already turns into stderr + exit 1 via `formatVocabularyError`.
+//
+// `codes` answers a different question than everything else in this file:
+// not "what is wrong with this project" (`analyzeProject`'s own report) but
+// "what could `nuka check` ever report" — the catalog src/check/codes.ts
+// keeps in sync with the checker at compile time. It short-circuits before
+// `analyzeProject` runs at all, on purpose: the catalog holds even for a
+// project whose config or discovery is currently broken, which is exactly
+// the state a reader reaching for this flag is often in. `featureArg` is
+// silently ignored when `codes` is set, the same way `--help` ignores every
+// other flag.
 
 export interface RunCheckOptions {
   rootDir: string;
   json: boolean;
+  codes?: boolean;
   featureArg?: string;
   stdout: WritableSink;
   stderr: WritableSink;
@@ -121,8 +133,29 @@ function formatImportFailureGroup(message: string, files: readonly string[], lin
   return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t(${files.length} files)\t${singleLineMessage}\n${fileLines}`;
 }
 
+// One line per code, tab-separated (same column style `formatIssueLine`
+// already uses for a report line), code then severity then description —
+// severity is printed as `-` for a code this registry does not fix to one
+// side, rather than left out, so every line has the same column count to
+// parse against.
+function formatCodeLine(entry: ReturnType<typeof listCheckCodes>[number]): string {
+  return `${entry.code}\t${entry.severity ?? "-"}\t${entry.description}`;
+}
+
 export async function runCheck(options: RunCheckOptions): Promise<number> {
-  const { rootDir, json, featureArg, stdout, stderr } = options;
+  const { rootDir, json, codes, featureArg, stdout, stderr } = options;
+
+  if (codes) {
+    const entries = listCheckCodes();
+    if (json) {
+      stdout.write(`${JSON.stringify(entries, null, 2)}\n`);
+    } else {
+      for (const entry of entries) {
+        stdout.write(`${formatCodeLine(entry)}\n`);
+      }
+    }
+    return 0;
+  }
 
   let report;
   try {

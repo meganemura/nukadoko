@@ -102,9 +102,10 @@ catches it before either step executes:
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
 ```
 
-These two are a sample, not the list. `nuka check --json` is what answers
-"what can this catch": every finding code it knows about, not a count
-written here that would drift the next time one is added.
+These two are a sample, not the list. `nuka check --codes` is what answers
+"what can this catch": every finding code it knows about, each with a
+one-line description, not a count written here that would drift the next
+time one is added.
 
 Running one step alone, with no scenario required, shows what actually
 lands afterward: not a pass/fail line, a step record.

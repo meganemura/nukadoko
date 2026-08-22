@@ -89,7 +89,10 @@ Then run `nuka check <feature>` and `nuka run <feature>` and read what they
 say. Fix whatever they point at, and run them again. Repeat until the
 existing suite is green: that is Stage 1's completion condition, nothing
 more. That condition is `nuka check` and `nuka run` going green, not `tsc`
-typechecking cleanly; the two can disagree in either direction.
+typechecking cleanly; the two can disagree in either direction. `nuka check
+--codes` lists every finding code `check` can produce, with a one-line
+description of what triggers it, so a code that shows up mid-migration and
+isn't self-explanatory can be looked up without leaving the CLI.
 
 A migration repeats that loop far more than a finished suite ever runs
 `nuka run` again, so `.nukadoko/` accumulates step/scenario records,

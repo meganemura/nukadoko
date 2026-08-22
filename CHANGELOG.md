@@ -9,6 +9,16 @@ just until 0.1.
 
 ### Added
 
+- **`nuka check --codes` lists every finding code `nuka check` can
+  produce, each with a one-line description.** `nuka check --json` only
+  ever reported the current project's own findings, never a catalog of
+  what the checker knows how to find at all, so a claim the README made
+  about `--json` answering "what can this catch" had no command behind
+  it. `--codes --json` returns the same catalog as a sorted array; plain
+  `--codes` prints one tab-separated line per code. The registry backing
+  it (`src/check/codes.ts`) is also what `CheckIssue.code`'s type is now
+  derived from, so a code that isn't registered there fails to compile
+  rather than silently drifting out of the list.
 - **`nukadoko` re-exports zod's `z`, so `import { defineStep, z } from
   "nukadoko"` is the only import a step file needs.** A step file that
   imported `zod` directly still worked under npm, which hoists a

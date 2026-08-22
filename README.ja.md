@@ -102,8 +102,8 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 ```
 
 この 2 つは一覧ではなく、あくまで一例です。
-「何を捕まえられるか」に答えるのは `nuka check --json` です。
-知っているあらゆる finding code を返すので、ここに数を書いて新しいものが増えるたびにずれていく、ということが起きません。
+「何を捕まえられるか」に答えるのは `nuka check --codes` です。
+知っているあらゆる finding code を 1 行の説明つきで返すので、ここに数を書いて新しいものが増えるたびにずれていく、ということが起きません。
 
 scenario なしで 1 step だけを単独で実行すると、実際にその後に残るものが分かります: pass/fail の 1 行ではなく、step record です。
 

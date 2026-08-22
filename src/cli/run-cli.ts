@@ -162,6 +162,7 @@ interface ScaffoldArgs {
 
 interface CheckArgs {
   json?: boolean;
+  codes?: boolean;
   feature?: string;
 }
 
@@ -663,12 +664,19 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe: "machine-readable output",
+        })
+        .option("codes", {
+          type: "boolean",
+          default: false,
+          describe:
+            "list every finding code nuka check can produce, with a one-line description, instead of checking a project",
         }) as Argv<CheckArgs>,
     handler: async (args: Arguments<CheckArgs>) => {
       if (argsFailed) return;
       exitCode = await runCheck({
         rootDir,
         json: args.json ?? false,
+        codes: args.codes ?? false,
         featureArg: args.feature,
         stdout,
         stderr,

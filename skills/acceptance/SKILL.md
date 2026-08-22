@@ -414,7 +414,10 @@ Background steps expand into pickles: `references/writing-the-feature.md`.
 
 `nuka check <feature>` catches every static inconsistency before anything
 executes, including a broken `from` binding order; run it before the first
-`nuka run` (see "The loop" above). All of the trial and error, `nuka do`
+`nuka run` (see "The loop" above). `nuka check --codes` lists every finding
+code `check` can produce, each with a one-line description, so what it can
+catch is answered by the tool itself rather than a list that could go
+stale here. All of the trial and error, `nuka do`
 while building a step, `nuka run` while getting the feature green, happens
 against a verification environment named with `--env`, never a
 production-pointing one; a `policy: "read-only"` one backstops that,
