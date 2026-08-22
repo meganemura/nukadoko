@@ -24,7 +24,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "npm run build && tsc -p tsconfig.json",
     "test": "npm run build && vitest run",
     "selftest": "npm run build && node selftest-suite/run-selftest.mjs",
     "prepublishOnly": "npm run build",

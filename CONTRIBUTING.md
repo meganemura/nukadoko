@@ -37,7 +37,7 @@ build and the tests were measured without it.
 |---|---|
 | `npm test` | Builds, then runs the unit and CLI tests |
 | `npm run selftest` | Builds, then runs the suite against itself, with a browser |
-| `npm run typecheck` | Type-checks sources and tests together, no build needed |
+| `npm run typecheck` | Builds, then type-checks sources and tests together |
 | `npm run coverage` | Builds, then runs the tests with coverage |
 | `npm run build` | Compiles `src/` to `dist/` |
 
@@ -45,6 +45,12 @@ Every command above that needs a build runs it in its own body rather than
 through npm's `pretest` hook, because `ignore-scripts` turns those hooks off
 too. A build step that silently does not run is worse than no build step,
 and this repository has been caught by that twice.
+
+The type check needs one as well, which is easy to miss because it emits
+nothing itself. The files under `selftest-suite/` import `nukadoko` by its
+package name, the way a real project would, and the package resolves that
+through `exports` into `dist/`. Without a build there is nothing there to
+resolve to.
 
 ## Releasing
 
