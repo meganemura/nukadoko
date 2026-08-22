@@ -227,7 +227,7 @@
     {
       "en": ["listener", "listeners"],
       "ja": "リスナー",
-      "note": "docs/spec.md \"Compat steps\" で、experimental_recordStep が page.context() に取り付けて evidence を集める event listener を指す文脈で入った"
+      "note": "docs/spec.md \"Compat steps\" で、recordStep が page.context() に取り付けて evidence を集める event listener を指す文脈で入った"
     },
     {
       "en": ["gate"],

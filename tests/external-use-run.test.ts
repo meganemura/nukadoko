@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runHarvest } from "../src/cli/harvest.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { experimental_recordStep } from "../src/external/record-step.js";
+import { recordStep } from "../src/external/record-step.js";
 import type { StepRecord } from "../src/record/types.js";
 import { defineStep } from "../src/step/define-step.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: the claim src/external/record-step.ts's own header makes
-// for `use` — a chained `experimental_recordStep` call leaves `nuka
+// for `use` — a chained `recordStep` call leaves `nuka
 // harvest` real evidence of the chain, so the draft it writes never bakes
 // in one call's own id-of-the-moment, so the finished feature stays green
 // after the backend that minted that id is gone. tests/external-record-
@@ -116,7 +116,7 @@ function firstScenarioRecord(stdout: string): { status: string } {
   return JSON.parse(line ?? "{}") as { status: string };
 }
 
-describe("experimental_recordStep use: a chained draft survives a swapped backend", () => {
+describe("recordStep use: a chained draft survives a swapped backend", () => {
   let server: Server;
   let url: string;
   let rootDir: string;
@@ -142,12 +142,12 @@ describe("experimental_recordStep use: a chained draft survives a swapped backen
     // this test exists to catch (this file's own header).
     await requestContext.post("/carts?token=warmup");
 
-    const opened = await experimental_recordStep(
+    const opened = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
     );
-    const added = await experimental_recordStep(addItemStep, {}, {
+    const added = await recordStep(addItemStep, {}, {
       name: "add-item",
       rootDir,
       request: requestContext,

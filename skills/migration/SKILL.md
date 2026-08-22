@@ -260,14 +260,13 @@ and a step file named like a spec collides on pattern with it
 
 That is what makes this door reversible: delete the feature files and the
 step files, and the suite is untouched, because nothing it uses ever
-imported nukadoko. `experimental_recordStep` is the one exception to keep
+imported nukadoko. `recordStep` is the one exception to keep
 in mind on the way out. Calling it directly from inside a spec file, to
 turn that suite's own runs into step records `nuka harvest` can draft
 from, puts a real `import ... from "nukadoko"` in that spec file, so
-removing those call sites is part of the same reversal. It is marked
-experimental by name, on purpose, so it is never reached by accident.
+removing those call sites is part of the same reversal.
 
-`use` on `experimental_recordStep` hides a trap. Pass the previous call's
+`use` on `recordStep` hides a trap. Pass the previous call's
 `stepRecordId` through `use`, not the value it returned. The receiving step
 must already declare its own `from` entry naming the upstream step; `use`
 only fills it in. Skip `use` and hold that value in a variable instead, and

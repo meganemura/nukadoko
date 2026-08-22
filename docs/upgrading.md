@@ -44,7 +44,7 @@ output actually sees. The breaking one: why is in
   silently dropped.** `nuka describe` already published each object
   schema's own `additionalProperties: false`; the runtime now enforces
   the same shape everywhere a step can be called: `nuka do`, `nuka do
-  --session <live>`, `nuka run`, `experimental_recordStep`, and the `call`
+  --session <live>`, `nuka run`, `recordStep`, and the `call`
   fixture a part is invoked through. A key `from` or `--use` fills is
   never flagged, since either can only ever name a key the step already
   declared. **A successful step record's own `args` also changed shape**:

@@ -7,14 +7,14 @@ import { chromium, request as playwrightRequest, type APIRequestContext } from "
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { runHarvest } from "../src/cli/harvest.js";
-import { experimental_recordStep, UnsupportedExternalFixtureError } from "../src/external/record-step.js";
+import { recordStep, UnsupportedExternalFixtureError } from "../src/external/record-step.js";
 import { readStepRecord } from "../src/record/read-step-record.js";
 import type { StepRecord } from "../src/record/types.js";
 import { defineStep } from "../src/step/define-step.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: the acceptance points the task that added
-// `experimental_recordStep` named as required — a step run from inside a
+// `recordStep` named as required — a step run from inside a
 // Playwright Test spec (here, against a real `APIRequestContext` built the
 // same way that spec's own `request` fixture is, since the function itself
 // cannot tell the two apart) writes a `kind: "external"` step record `nuka
@@ -22,7 +22,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // schema, the injected request context survives the call (never disposed
 // by this module), and a secret is redacted out of http.jsonl. A
 // `page`/`context`-needing step is refused before any record exists when no
-// `options.page` was given — the `describe("experimental_recordStep: page"`
+// `options.page` was given — the `describe("recordStep: page"`
 // block below covers the case an `options.page` was, pinning the "no trace,
 // no screenshot for a page this module did not launch" rule this
 // experimental surface promises (its own header, src/external/
@@ -103,7 +103,7 @@ async function isChromiumAvailable(): Promise<boolean> {
 
 const chromiumAvailable = await isChromiumAvailable();
 
-describe("experimental_recordStep", () => {
+describe("recordStep", () => {
   let server: Server;
   let url: string;
   let rootDir: string;
@@ -126,7 +126,7 @@ describe("experimental_recordStep", () => {
   }
 
   it("runs the step, validates args/returns against its own schema, and writes a kind: external step record", async () => {
-    const { result, stepRecordId } = await experimental_recordStep(
+    const { result, stepRecordId } = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
@@ -149,7 +149,7 @@ describe("experimental_recordStep", () => {
 
   it("refuses bad args before running the step, still against the step's own schema", async () => {
     await expect(
-      experimental_recordStep(
+      recordStep(
         openCartStep,
         // @ts-expect-error deliberately the wrong type, to exercise the runtime refusal
         "not-an-object",
@@ -162,7 +162,7 @@ describe("experimental_recordStep", () => {
     // A local step whose `args` has a required key, unlike `openCartStep`
     // above (`z.object({})`, which cannot demonstrate a missing key). This
     // call passes no `options.use`, so the strict overload of
-    // `experimental_recordStep` applies and `args` must satisfy
+    // `recordStep` applies and `args` must satisfy
     // `requiresCartIdStep.args` exactly; the line below omits the required
     // `cartId` key, which the type checker must reject. If the strict
     // overload ever stopped applying (a regression back to the single,
@@ -179,17 +179,17 @@ describe("experimental_recordStep", () => {
 
     await expect(
       // @ts-expect-error missing required key `cartId`, to prove the strict overload (no `use`) still catches this at compile time. Kept on one line: which parameter TypeScript blames for an overload mismatch is not stable, but the whole call sits on this one line either way.
-      experimental_recordStep(requiresCartIdStep, {}, { name: "requires-cart-id", rootDir, request: requestContext }),
+      recordStep(requiresCartIdStep, {}, { name: "requires-cart-id", rootDir, request: requestContext }),
     ).rejects.toThrow(/args validation failed/);
   });
 
   it("never disposes the injected request context: a second call through the same context still succeeds", async () => {
-    const first = await experimental_recordStep(
+    const first = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
     );
-    const second = await experimental_recordStep(
+    const second = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
@@ -222,7 +222,7 @@ describe("experimental_recordStep", () => {
   });
 
   it("redacts the API token from http.jsonl but the returned result stays the real value", async () => {
-    const { result, stepRecordId } = await experimental_recordStep(
+    const { result, stepRecordId } = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
@@ -246,7 +246,7 @@ describe("experimental_recordStep", () => {
     });
 
     await expect(
-      experimental_recordStep(needsPageStep, {}, { name: "needs-page", rootDir, request: requestContext }),
+      recordStep(needsPageStep, {}, { name: "needs-page", rootDir, request: requestContext }),
     ).rejects.toBeInstanceOf(UnsupportedExternalFixtureError);
 
     // Nothing this call could have written a record for: the refusal fires
@@ -256,7 +256,7 @@ describe("experimental_recordStep", () => {
 });
 
 // Responsibility: the acceptance points m12 (an injected `page`, not only
-// `request`) added to `experimental_recordStep` — a real chromium page,
+// `request`) added to `recordStep` — a real chromium page,
 // adopted rather than launched by this module (src/context/
 // browser-evidence.ts's `attachExternalPageEvidence`, wired in through
 // src/context/create-context.ts's own `page` option): the step's own
@@ -266,7 +266,7 @@ describe("experimental_recordStep", () => {
 // listeners this module attaches to `page.context()` do not survive past
 // the call that attached them — proven by driving the *same* page/context
 // through two calls and checking nothing is left listening afterward.
-describe("experimental_recordStep: page", () => {
+describe("recordStep: page", () => {
   let server: Server;
   let url: string;
   let rootDir: string;
@@ -306,7 +306,7 @@ describe("experimental_recordStep: page", () => {
           },
         });
 
-        const { stepRecordId } = await experimental_recordStep(identityStep, {}, {
+        const { stepRecordId } = await recordStep(identityStep, {}, {
           name: "capture-page",
           rootDir,
           request: requestContext,
@@ -349,7 +349,7 @@ describe("experimental_recordStep: page", () => {
           },
         });
 
-        const { stepRecordId } = await experimental_recordStep(gotoStep, {}, {
+        const { stepRecordId } = await recordStep(gotoStep, {}, {
           name: "goto-page",
           rootDir,
           request: requestContext,
@@ -390,13 +390,13 @@ describe("experimental_recordStep: page", () => {
           },
         });
 
-        await experimental_recordStep(gotoStep, {}, {
+        await recordStep(gotoStep, {}, {
           name: "goto-page-1",
           rootDir,
           request: requestContext,
           page,
         });
-        await experimental_recordStep(gotoStep, {}, {
+        await recordStep(gotoStep, {}, {
           name: "goto-page-2",
           rootDir,
           request: requestContext,
@@ -436,7 +436,7 @@ describe("experimental_recordStep: page", () => {
         });
 
         await expect(
-          experimental_recordStep(needsPageStep, {}, {
+          recordStep(needsPageStep, {}, {
             name: "needs-page",
             rootDir,
             request: requestContext,
@@ -495,7 +495,7 @@ describe("experimental_recordStep: page", () => {
           },
         });
 
-        const { stepRecordId } = await experimental_recordStep(pageEventsStep, {}, {
+        const { stepRecordId } = await recordStep(pageEventsStep, {}, {
           name: "page-events-step",
           rootDir,
           request: requestContext,
@@ -539,7 +539,7 @@ describe("experimental_recordStep: page", () => {
           },
         });
 
-        const { stepRecordId } = await experimental_recordStep(simpleStep, {}, {
+        const { stepRecordId } = await recordStep(simpleStep, {}, {
           name: "dispose-throws",
           rootDir,
           request: requestContext,
@@ -570,7 +570,7 @@ describe("experimental_recordStep: page", () => {
   }
 });
 
-describe("experimental_recordStep: use", () => {
+describe("recordStep: use", () => {
   // The mechanical points `use` itself is responsible for — `nuka do
   // --use`'s own meaning, reached through the same src/cli/resolve-use.ts
   // function (src/external/record-step.ts's own header). The heavier claim
@@ -656,12 +656,12 @@ describe("experimental_recordStep: use", () => {
   }
 
   it("fills a `from` key from a previous call's own step record, and records it in `used`", async () => {
-    const opened = await experimental_recordStep(
+    const opened = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
     );
-    const added = await experimental_recordStep(makeAddItemStep(), {}, {
+    const added = await recordStep(makeAddItemStep(), {}, {
       name: "add-item",
       rootDir,
       request: requestContext,
@@ -680,12 +680,12 @@ describe("experimental_recordStep: use", () => {
   });
 
   it("an explicit args key wins over use for that same key — same priority nuka do --use gives --args", async () => {
-    const opened = await experimental_recordStep(
+    const opened = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
     );
-    const added = await experimental_recordStep(
+    const added = await recordStep(
       makeAddItemStep(),
       { cartId: "explicit-cart-id" },
       { name: "add-item", rootDir, request: requestContext, use: [opened.stepRecordId] },
@@ -708,7 +708,7 @@ describe("experimental_recordStep: use", () => {
       : [];
 
     await expect(
-      experimental_recordStep(makeAddItemStep(), { cartId: "x" }, {
+      recordStep(makeAddItemStep(), { cartId: "x" }, {
         name: "add-item",
         rootDir,
         request: requestContext,
@@ -723,12 +723,12 @@ describe("experimental_recordStep: use", () => {
   });
 
   it("two use ids that fill the same key from two different candidate producers are refused, before any step record is written for this call", async () => {
-    const opened = await experimental_recordStep(
+    const opened = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
     );
-    const imported = await experimental_recordStep(
+    const imported = await recordStep(
       importCartStep,
       {},
       { name: "import-cart", rootDir, request: requestContext },
@@ -736,7 +736,7 @@ describe("experimental_recordStep: use", () => {
     const before = readdirSync(bareStepsDir());
 
     await expect(
-      experimental_recordStep(makeAddItemMultiCandidateStep(), {}, {
+      recordStep(makeAddItemMultiCandidateStep(), {}, {
         name: "add-item-multi",
         rootDir,
         request: requestContext,
@@ -751,7 +751,7 @@ describe("experimental_recordStep: use", () => {
   });
 
   it("a returns-validation failure still writes a failed record carrying the use-filled args and the used entry", async () => {
-    const opened = await experimental_recordStep(
+    const opened = await recordStep(
       openCartStep,
       {},
       { name: "open-cart", rootDir, request: requestContext },
@@ -769,7 +769,7 @@ describe("experimental_recordStep: use", () => {
 
     const before = new Set(readdirSync(bareStepsDir()));
     await expect(
-      experimental_recordStep(badReturnsStep, {}, {
+      recordStep(badReturnsStep, {}, {
         name: "add-item-bad-returns",
         rootDir,
         request: requestContext,
@@ -794,7 +794,7 @@ describe("experimental_recordStep: use", () => {
   });
 });
 
-describe("experimental_recordStep: a malformed from entry", () => {
+describe("recordStep: a malformed from entry", () => {
   // Same broken shape tests/from-malformed-entry.test.ts's own fixture
   // carries (a `Step` object cast into a `[step, key]` tuple's own type
   // instead of wrapped in one) — reached here through `step.from` directly
@@ -829,7 +829,7 @@ describe("experimental_recordStep: a malformed from entry", () => {
     });
 
     await expect(
-      experimental_recordStep(
+      recordStep(
         malformedFromStep,
         { cartId: "unused" },
         { name: "malformed-from", rootDir, request: requestContext },
@@ -843,7 +843,7 @@ describe("experimental_recordStep: a malformed from entry", () => {
 // message (an `Error`) and its `String(...)` fallback (a non-`Error` throw)
 // are exercised, since the failed record's own `error.message` is built
 // differently for each.
-describe("experimental_recordStep: the step's own run() throws", () => {
+describe("recordStep: the step's own run() throws", () => {
   let rootDir: string;
   let requestContext: APIRequestContext;
 
@@ -874,7 +874,7 @@ describe("experimental_recordStep: the step's own run() throws", () => {
 
     let thrown: unknown;
     try {
-      await experimental_recordStep(throwingStep, {}, { name: "throwing-step", rootDir, request: requestContext });
+      await recordStep(throwingStep, {}, { name: "throwing-step", rootDir, request: requestContext });
     } catch (error) {
       thrown = error;
     }
@@ -897,7 +897,7 @@ describe("experimental_recordStep: the step's own run() throws", () => {
 
     let thrown: unknown;
     try {
-      await experimental_recordStep(throwingStep, {}, {
+      await recordStep(throwingStep, {}, {
         name: "throwing-step-string",
         rootDir,
         request: requestContext,
@@ -916,13 +916,13 @@ describe("experimental_recordStep: the step's own run() throws", () => {
   });
 });
 
-// Responsibility: `experimental_recordStep`'s own `stepNameOf` callback
+// Responsibility: `recordStep`'s own `stepNameOf` callback
 // (passed to `createStepContext`, read by `ctx.call`'s own `partName`) —
 // names the top-level step by `options.name` when `ctx.call` reports about
 // it, and falls back to `create-context.ts`'s own generic wording for any
 // other step, since this module only ever knows the discovered name of the
 // one step it was called for.
-describe("experimental_recordStep: ctx.call diagnostics name the caller by its own registered name", () => {
+describe("recordStep: ctx.call diagnostics name the caller by its own registered name", () => {
   let rootDir: string;
   let requestContext: APIRequestContext;
 
@@ -955,17 +955,17 @@ describe("experimental_recordStep: ctx.call diagnostics name the caller by its o
     });
 
     await expect(
-      experimental_recordStep(callerStep, {}, { name: "caller-step", rootDir, request: requestContext }),
+      recordStep(callerStep, {}, { name: "caller-step", rootDir, request: requestContext }),
     ).rejects.toThrow(/Step "caller-step" called "a step discovery never registered" through call\(\)/);
   });
 });
 
 // Responsibility: a failed execution still carries what it measured before
-// failing — `experimental_recordStep`'s own snapshots (sections, calls,
+// failing — `recordStep`'s own snapshots (sections, calls,
 // required_env) are taken unconditionally after `step.run` settles, not only
 // on the success path, the same "measurement must never depend on the
 // outcome" rule the ok-status record already follows.
-describe("experimental_recordStep: a failed run still records what it measured before failing", () => {
+describe("recordStep: a failed run still records what it measured before failing", () => {
   let rootDir: string;
   let requestContext: APIRequestContext;
 
@@ -1008,7 +1008,7 @@ describe("experimental_recordStep: a failed run still records what it measured b
 
     let thrown: unknown;
     try {
-      await experimental_recordStep(compositeStep, {}, { name: "composite-step", rootDir, request: requestContext });
+      await recordStep(compositeStep, {}, { name: "composite-step", rootDir, request: requestContext });
     } catch (error) {
       thrown = error;
     }
@@ -1047,7 +1047,7 @@ describe("experimental_recordStep: a failed run still records what it measured b
       },
     });
 
-    const { stepRecordId } = await experimental_recordStep(compositeStep, {}, {
+    const { stepRecordId } = await recordStep(compositeStep, {}, {
       name: "composite-step-ok",
       rootDir,
       request: requestContext,
@@ -1068,7 +1068,7 @@ describe("experimental_recordStep: a failed run still records what it measured b
 // zod default (`z.array(z.string()).optional()`, src/config/schema.ts), so
 // `undefined` is a real value this module has to fall back from, not merely
 // a defensive guard against a value the schema already rules out.
-describe("experimental_recordStep: a project with no envFiles at all", () => {
+describe("recordStep: a project with no envFiles at all", () => {
   let rootDir: string;
   let requestContext: APIRequestContext;
 
@@ -1092,7 +1092,7 @@ describe("experimental_recordStep: a project with no envFiles at all", () => {
       },
     });
 
-    const { result, stepRecordId } = await experimental_recordStep(trivialStep, {}, {
+    const { result, stepRecordId } = await recordStep(trivialStep, {}, {
       name: "trivial-step",
       rootDir,
       request: requestContext,

@@ -259,7 +259,7 @@ function describeMalformedFromEntry(entry: unknown): string {
 /** The message every caller with a `from` key in scope uses to report a
  * malformed entry (`tryFromCandidates` returning `null`) — one shared
  * wording, so `nuka check`, `nuka steps --json`/`nuka describe`, `nuka do
- * --use`, `nuka harvest`, and `experimental_recordStep` all name the same
+ * --use`, `nuka harvest`, and `recordStep` all name the same
  * broken key the same way. */
 export function malformedFromEntryMessage(key: string, entry: unknown): string {
   return `from.${key} is not usable: ${describeMalformedFromEntry(entry)}`;

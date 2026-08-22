@@ -129,12 +129,12 @@ the unnamed form as `unnamed-capture`. `from` is what fills a key no
 capture reached.
 
 This is also what `use` needs. `nuka do --use <record-id>` and
-`experimental_recordStep`'s own `use` option (below) both fill a step's
+`recordStep`'s own `use` option (below) both fill a step's
 `from` keys from an earlier step record's result. A step with no `from`
 entry naming the upstream step has nothing for `use` to fill, and is
 refused rather than silently ignored.
 
-## Turning a Playwright run into records: `experimental_recordStep`
+## Turning a Playwright run into records: `recordStep`
 
 Sharing the implementation alone does not produce a record. A Playwright
 run leaves Playwright's own artifacts and no step record, because a step
@@ -142,11 +142,9 @@ record is written by an executor, and that home has none. An existing
 suite could share every line of its implementation and still leave
 nothing to harvest.
 
-`experimental_recordStep`, exported from `nukadoko` itself, closes that
-gap. It is marked experimental by name, on purpose, so nobody reaches it
-by accident, and only one condition still holds that name back: this
-API's shape has to run unchanged against a real Playwright Test suite,
-not only against nukadoko's own tests. It already supports an injected
+`recordStep`, exported from `nukadoko` itself, closes that gap. Its
+shape has run so far against nukadoko's own tests, not yet against a
+real Playwright Test suite. It already supports an injected
 `page`, not only `request`, so a step whose fixtures reach for a browser
 resource is refused only when the call passes none. `rootDir` is the
 same project root `nukadoko.config.ts` and `.nukadoko/` live under for
@@ -154,10 +152,10 @@ same project root `nukadoko.config.ts` and `.nukadoko/` live under for
 `process.cwd()`.
 
 ```ts
-const opened = await experimental_recordStep(
+const opened = await recordStep(
   openCartStep, {}, { name: "open-cart", rootDir, request },
 );
-const added = await experimental_recordStep(
+const added = await recordStep(
   addItemStep, { sku }, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
 );
 ```
@@ -249,9 +247,9 @@ Delete the feature files and the step files, and the Playwright suite is
 untouched, the same promise "Share the implementation, not the runner"
 states above: nothing it uses ever imported nukadoko.
 
-`experimental_recordStep` is the one exception to notice on the way out.
+`recordStep` is the one exception to notice on the way out.
 A spec file that calls it directly has
-`import { experimental_recordStep } from "nukadoko"` written into it, so
+`import { recordStep } from "nukadoko"` written into it, so
 if you added those calls to turn that suite's own runs into records,
 removing them is part of the same reversal: delete the call sites along
 with the feature files and the step files, and nothing is left that ever

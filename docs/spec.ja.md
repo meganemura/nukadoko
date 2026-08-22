@@ -182,7 +182,7 @@ export default defineStep({
   この逆方向は、キーが何かツールに見えない方法で埋まっているかもしれないという理屈のもと、しばらく未チェックのままでした。
   `from` が残る方法を可視化することでその隙間を埋めたため、残っているのは単に説明されていないだけでなく、正真正銘埋まりようのないものです。
 - pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、黙って捨てられるのではなく拒否されます。
-  `nuka describe` はすでに各オブジェクトの `args` スキーマ自身の `additionalProperties: false` を公開しており、step の `args` を検証済みの値に変える経路はすべていま、その同じ閉じた形に対してパースするようになりました(`nuka do`、`nuka do --session <live>`、`nuka run`、`experimental_recordStep`、そして part が呼ばれる `call` fixture。「Parts」を参照)。
+  `nuka describe` はすでに各オブジェクトの `args` スキーマ自身の `additionalProperties: false` を公開しており、step の `args` を検証済みの値に変える経路はすべていま、その同じ閉じた形に対してパースするようになりました(`nuka do`、`nuka do --session <live>`、`nuka run`、`recordStep`、そして part が呼ばれる `call` fixture。「Parts」を参照)。
   `from`/`--use` が埋めるキーは決して指摘されません。
   どちらも、その step 自身が宣言したキーしか名指せないからです。
   成功した record の `args` は検証済みの値そのものなので、スキーマ自身の `.default(...)` が埋めたキーは、その行で誰も書いていなくても現れます。
@@ -1085,13 +1085,14 @@ export default defineStep({ returns: openCartReturns, run: ({ request }) => open
 Playwright の run が残すのは Playwright 自身の成果物だけで、step record は残りません、step record を書くのは executor であり、その home にはそれがないからです。
 そのため既存のスイートは、実装のすべての行を共有していてもなお、harvest できるものを何も残さないことがあります。
 
-`experimental_recordStep` はその隙間を閉じる実験であり、experimental という名前が付いているのは、そのモジュール自身が挙げる理由によります。
+`recordStep` はその隙間を閉じます。
+この形はいまのところ nukadoko 自身のテストに対してのみ動いており、この形で移行した本物のスイートに対してはまだ動いていません。
 
 ```ts
-const opened = await experimental_recordStep(
+const opened = await recordStep(
   openCartStep, { sku }, { name: "open-cart", rootDir, request },
 );
-const added = await experimental_recordStep(
+const added = await recordStep(
   addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
 );
 ```

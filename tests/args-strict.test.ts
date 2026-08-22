@@ -2,7 +2,7 @@ import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext } from "playwright";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { experimental_recordStep } from "../src/external/record-step.js";
+import { recordStep } from "../src/external/record-step.js";
 import { readStepRecord } from "../src/record/read-step-record.js";
 import { defineStep } from "../src/step/define-step.js";
 import { z } from "zod";
@@ -17,7 +17,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // of being refused. This file covers the fix (src/step/strict-args.ts)
 // across the three execution paths that turn a step's `args` into a
 // validated value: `nuka do` (src/cli/do.ts), `nuka run`
-// (src/run/run-scenario.ts), and `experimental_recordStep`
+// (src/run/run-scenario.ts), and `recordStep`
 // (src/external/record-step.ts). Each path gets the same pair of tests —
 // an extra key refused, naming it, and the same call with only the
 // declared keys still accepted — so passing proves the fix discriminates
@@ -206,7 +206,7 @@ describe("nuka run: strict args validation", () => {
   });
 });
 
-describe("experimental_recordStep: strict args validation", () => {
+describe("recordStep: strict args validation", () => {
   let rootDir: string;
   let requestContext: APIRequestContext;
 
@@ -214,7 +214,7 @@ describe("experimental_recordStep: strict args validation", () => {
     rootDir = await copyFixtureToTempDir("external-driver-project");
     // Never actually dialed: every step in this describe block declines
     // every fixture (`run({}, args)`), so `request` only has to exist to
-    // satisfy `ExperimentalRecordStepOptions`'s own required field.
+    // satisfy `RecordStepOptions`'s own required field.
     requestContext = await playwrightRequest.newContext({ baseURL: "http://127.0.0.1:1" });
   });
 
@@ -233,7 +233,7 @@ describe("experimental_recordStep: strict args validation", () => {
   });
 
   it("accepts exactly the declared args key", async () => {
-    const { result } = await experimental_recordStep(cartIdStep, { cartId: "c1" }, {
+    const { result } = await recordStep(cartIdStep, { cartId: "c1" }, {
       name: "cart-id-step",
       rootDir,
       request: requestContext,
@@ -243,7 +243,7 @@ describe("experimental_recordStep: strict args validation", () => {
 
   it("rejects the same call with one extra key added, naming it", async () => {
     await expect(
-      experimental_recordStep(
+      recordStep(
         cartIdStep,
         // @ts-expect-error deliberately an extra key `cartIdStep.args` does not declare
         { cartId: "c1", EXTRA: "nope" },
@@ -271,12 +271,12 @@ describe("experimental_recordStep: strict args validation", () => {
       },
     });
 
-    const produced = await experimental_recordStep(producerStep, {}, {
+    const produced = await recordStep(producerStep, {}, {
       name: "producer-step",
       rootDir,
       request: requestContext,
     });
-    const consumed = await experimental_recordStep(consumerStep, {}, {
+    const consumed = await recordStep(consumerStep, {}, {
       name: "consumer-step",
       rootDir,
       request: requestContext,
@@ -296,7 +296,7 @@ describe("experimental_recordStep: strict args validation", () => {
       },
     });
 
-    const { stepRecordId } = await experimental_recordStep(couponStep, { cartId: "c1" }, {
+    const { stepRecordId } = await recordStep(couponStep, { cartId: "c1" }, {
       name: "coupon-step",
       rootDir,
       request: requestContext,

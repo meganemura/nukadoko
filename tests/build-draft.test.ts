@@ -73,7 +73,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
       vocabulary,
     });
 
-    expect(result.featureText).toContain("experimental_recordStep");
+    expect(result.featureText).toContain("recordStep");
   });
 
   it("does not add the `name` option hint for a `do`-originated record", () => {
@@ -86,7 +86,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
       vocabulary,
     });
 
-    expect(result.featureText).not.toContain("experimental_recordStep");
+    expect(result.featureText).not.toContain("recordStep");
   });
 
   it("names a step record whose step is now a compat step, with no pattern to render", () => {

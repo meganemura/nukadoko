@@ -35,7 +35,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 - **step のスキーマが宣言していない args キーは、いまや黙って捨てられるのではなく拒否されます。**
   `nuka describe` はすでに各オブジェクトスキーマ自身の `additionalProperties: false` を公開していました。
-  実行時はいま、step を呼べるあらゆる経路で同じ形を強制するようになりました: `nuka do`、`nuka do --session <live>`、`nuka run`、`experimental_recordStep`、そして part が呼ばれる `call` fixture です。
+  実行時はいま、step を呼べるあらゆる経路で同じ形を強制するようになりました: `nuka do`、`nuka do --session <live>`、`nuka run`、`recordStep`、そして part が呼ばれる `call` fixture です。
   `from` や `--use` が埋めるキーは決して指摘されません。
   どちらも、その step がすでに宣言したキーしか名指せないからです。
   **成功した step record 自身の `args` も形が変わりました。**

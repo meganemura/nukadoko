@@ -121,30 +121,28 @@ export default defineStep({
 `from` はどのキャプチャも届かなかったキーを埋めるものです。
 
 これは `use` が必要とするものでもあります。
-`nuka do --use <record-id>` と、`experimental_recordStep` 自身の `use` オプション(後述)は、どちらも先行する step record の結果から step の `from` キーを埋めます。
+`nuka do --use <record-id>` と、`recordStep` 自身の `use` オプション(後述)は、どちらも先行する step record の結果から step の `from` キーを埋めます。
 上流の step を名指す `from` エントリを持たない step には `use` が埋めるものが何もなく、黙って無視されるのではなく拒否されます。
 
-## Playwright の実行を record に変える: `experimental_recordStep`
+## Playwright の実行を record に変える: `recordStep`
 
 実装を共有するだけでは record は生まれません。
 Playwright の run が残すのは Playwright 自身の成果物だけで、step record は残りません。
 step record を書くのは executor であり、その home にはそれがないからです。
 既存のスイートは、実装のすべての行を共有していてもなお、harvest できるものを何も残さないことがあります。
 
-`experimental_recordStep` は nukadoko 自身から export されており、この隙間を閉じます。
-experimental という名前が付いているのは意図的で、誰もそこに偶然たどり着かないようにするためです。
-この印が外れる条件は、いまは 1 つだけ残っています。
-この API の形が、nukadoko 自身のテストだけでなく、本物の Playwright Test スイートに対して変更なしに動いた実績です。
+`recordStep` は nukadoko 自身から export されており、この隙間を閉じます。
+この形はいまのところ nukadoko 自身のテストに対してのみ動いており、本物の Playwright Test スイートに対してはまだ動いていません。
 `request` だけでなく注入された `page` にも、すでに対応しています。
 fixture が browser に手を伸ばす step が拒否されるのは、呼び出しが `page` を渡さないときだけです。
 `rootDir` は、`nuka do`/`nuka run` にとっての `nukadoko.config.ts` と `.nukadoko/` が住むのと同じプロジェクトルートです。
 Playwright Test の spec の中では、たいてい `process.cwd()` がそれに当たります。
 
 ```ts
-const opened = await experimental_recordStep(
+const opened = await recordStep(
   openCartStep, {}, { name: "open-cart", rootDir, request },
 );
-const added = await experimental_recordStep(
+const added = await recordStep(
   addItemStep, { sku }, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
 );
 ```
@@ -216,7 +214,7 @@ feature ファイルと step ファイルを削除すれば、Playwright のス�
 これは「共有するのは runner ではなく実装」で述べたのと同じ約束です。
 使っているものが nukadoko を一度も import していないからです。
 
-戻るときに気に留めておくべき唯一の例外が `experimental_recordStep` です。
-これを spec ファイルから直接呼んでいる場合、そのファイルには `import { experimental_recordStep } from "nukadoko"` という行が実際に書かれています。
+戻るときに気に留めておくべき唯一の例外が `recordStep` です。
+これを spec ファイルから直接呼んでいる場合、そのファイルには `import { recordStep } from "nukadoko"` という行が実際に書かれています。
 そのスイート自身の実行を record に変えるためにその呼び出しを足していたなら、それを取り除くことも同じ戻り道の一部です。
 feature ファイルと step ファイルと一緒にその呼び出し箇所も削除すれば、nukadoko を知っていたものは何も残りません。

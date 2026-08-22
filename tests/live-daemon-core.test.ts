@@ -178,7 +178,7 @@ describe("createSessionCore: request dispatch", () => {
   // `entry.step.args.safeParse` directly, which strips an unrecognized key
   // rather than refusing it, so `nuka do --session <live>` was the one form
   // of `nuka do` that still silently accepted one after strictArgsSchema
-  // closed this gap for `nuka do`/`nuka run`/`experimental_recordStep`.
+  // closed this gap for `nuka do`/`nuka run`/`recordStep`.
   it("rejects an extra key echo's args schema does not declare, naming it in the failed step record", async () => {
     const { core } = await newCore();
     const record = expectRecord(
@@ -197,7 +197,7 @@ describe("createSessionCore: request dispatch", () => {
     const { core } = await newCore();
     const record = expectRecord(await core.dispatchRequest({ kind: "do", step: "echo", args: { value: "hi" } }));
     expect(record.status).toBe("ok");
-    // The same `args` shape `nuka do`/`nuka run`/`experimental_recordStep`
+    // The same `args` shape `nuka do`/`nuka run`/`recordStep`
     // record on a passing step (tests/args-strict.test.ts): the schema-
     // validated value, not whatever `--use` merging left `parsedArgs`
     // holding.

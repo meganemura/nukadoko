@@ -35,7 +35,7 @@ import { strictArgsSchema } from "../step/strict-args.js";
 // against `SUPPORTED_FIXTURE_NAMES`, below, before any record exists —
 // plus `page`/`context`, checked separately from that set because they are
 // supported exactly when `options.page` was given for *this* call (this
-// file's own `ExperimentalRecordStepOptions.page` doc comment: no second,
+// file's own `RecordStepOptions.page` doc comment: no second,
 // competing browser ever launches here, so a step naming either without a
 // `page` supplied has nothing this module can build for it).
 // Refusing before `recordId`/`evidenceDir` exist matches `nuka do`'s own
@@ -108,41 +108,23 @@ import { strictArgsSchema } from "../step/strict-args.js";
 // That is also this feature's one real limit, worth stating plainly rather
 // than leaving a caller to discover it by a refusal: `use` here only
 // resolves against an upstream step this same process already ran through
-// `experimental_recordStep` — an id minted by `nuka do`, or by a
-// *different* process's own `experimental_recordStep` calls, reads back
-// fine from disk but was never registered here, so `resolveUse` refuses it
-// the same way it refuses an id naming an unrelated step (loud, not
-// silent, matching this project's own "nothing breaks silently" rule).
-//
-// EXPERIMENTAL, marked by name (`experimental_` first, matching
-// `experimental_callWebmcpTool`'s own convention — src/webmcp/call-tool.ts)
-// rather than by a runtime flag, for the reason that module's own header
-// gives: the whole point is that a caller cannot reach this surface
-// without typing the word. Remove the prefix only once this holds:
-//   - the API shape above (four exported names, one call site) has run
-//     unchanged against a real Playwright Test suite migrated this way,
-//     not only against this package's own tests
-// The other original condition is now met, not merely restated: an
-// injected `page` (`options.page`, not only `request`) is supported, so a
-// step whose fixtures include `page`/`context` is no longer refused
-// outright by this module. A third condition held once and no longer needs
-// restating as a
-// precondition, only as a fact: before `use` existed, a spec that chained
-// calls by passing a previous `result` into the next `args` was not
-// actually practical to harvest (the paragraph above, on `use`, is the
-// record of that).
+// `recordStep` — an id minted by `nuka do`, or by a *different* process's
+// own `recordStep` calls, reads back fine from disk but was never
+// registered here, so `resolveUse` refuses it the same way it refuses an
+// id naming an unrelated step (loud, not silent, matching this project's
+// own "nothing breaks silently" rule).
 
 /** Every `StepFixtures` name this module can always build, regardless of
  * whether a call passes `options.page`
  * (`BUILTIN_FIXTURE_NAMES`, src/context.ts, minus `page`/`context`) — `page`/
  * `context` are supported too, but only on a call that actually supplies
  * `options.page` (this file's own header), so they are checked separately,
- * in `experimental_recordStep` itself, rather than folded into this set. */
+ * in `recordStep` itself, rather than folded into this set. */
 const SUPPORTED_FIXTURE_NAMES = new Set(
   BUILTIN_FIXTURE_NAMES.filter((name) => name !== "page" && name !== "context"),
 );
 
-/** `Step` -> the `name` its own `experimental_recordStep` call was given,
+/** `Step` -> the `name` its own `recordStep` call was given,
  * accumulated across every call this process makes — this file's own header
  * (the `options.use` paragraph) explains why this, not this project's own
  * discovery, is `use`'s name source. Module-scoped on purpose: a `WeakMap`
@@ -163,25 +145,25 @@ export class UnsupportedExternalFixtureError extends Error {
 
   constructor(fixtureName: string) {
     // Reached for `"page"`/`"context"` only when `options.page` was *not*
-    // given — the caller (`experimental_recordStep`, below) already lets
+    // given — the caller (`recordStep`, below) already lets
     // both through without throwing whenever it was, so seeing either name
     // here means specifically "no page was supplied", not "page is
     // unsupported in general".
     const isPageFixture = fixtureName === "page" || fixtureName === "context";
     super(
       isPageFixture
-        ? `experimental_recordStep cannot build fixture "${fixtureName}": this call passed no options.page ` +
+        ? `recordStep cannot build fixture "${fixtureName}": this call passed no options.page ` +
           `(an already-open Playwright page); "page"/"context" are only available on a call that supplies one.`
-        : `experimental_recordStep cannot build fixture "${fixtureName}": only ` +
+        : `recordStep cannot build fixture "${fixtureName}": only ` +
           `${[...SUPPORTED_FIXTURE_NAMES].sort().join(", ")} (plus "page"/"context" when options.page is given) ` +
-          `are available; any other name is a config.fixtures entry, which this experimental function does not resolve.`,
+          `are available; any other name is a config.fixtures entry, which this function does not resolve.`,
     );
     this.name = "UnsupportedExternalFixtureError";
     this.fixtureName = fixtureName;
   }
 }
 
-export interface ExperimentalRecordStepOptions {
+export interface RecordStepOptions {
   /** The vocabulary name nukadoko's own discovery would assign this exact
    * `step` object: its step file's own basename, minus extension
    * (src/discover/discover-steps.ts). Required, not derived, because
@@ -225,12 +207,12 @@ export interface ExperimentalRecordStepOptions {
    * Omit it, or pass `[]`, for a call that fills every `from`-eligible key
    * through `args` directly; unrelated to whether `step` declares `from` at
    * all. Every id here must name a step this same process already recorded
-   * through `experimental_recordStep` — see this file's own header for why
+   * through `recordStep` — see this file's own header for why
    * an id from anywhere else is refused. */
   use?: readonly string[];
 }
 
-export interface ExperimentalStepExecution<TReturns extends z.ZodTypeAny> {
+export interface StepExecution<TReturns extends z.ZodTypeAny> {
   /** `step`'s own validated return value — the same value calling the
    * shared plain function directly would have produced, never the redacted
    * copy this module writes to record.json (this file's own header). */
@@ -272,11 +254,11 @@ export interface ExperimentalStepExecution<TReturns extends z.ZodTypeAny> {
  * required key is a compile error instead of waiting for the run-time
  * `args validation failed` throw.
  */
-export function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
+export function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
   step: Step<TArgs, TReturns>,
   args: z.input<TArgs>,
-  options: ExperimentalRecordStepOptions & { use?: undefined },
-): Promise<ExperimentalStepExecution<TReturns>>;
+  options: RecordStepOptions & { use?: undefined },
+): Promise<StepExecution<TReturns>>;
 /**
  * `args` is `Partial<z.input<TArgs>>` on this overload, not the exact shape
  * the overload above requires: a `Step<TArgs, TReturns>` never carries its
@@ -286,16 +268,16 @@ export function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns ext
  * a real, thrown `args validation failed` error, just at run time instead
  * of at the type checker. See the overload above for `@throws`.
  */
-export function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
+export function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
   step: Step<TArgs, TReturns>,
   args: Partial<z.input<TArgs>>,
-  options: ExperimentalRecordStepOptions & { use: readonly string[] },
-): Promise<ExperimentalStepExecution<TReturns>>;
-export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
+  options: RecordStepOptions & { use: readonly string[] },
+): Promise<StepExecution<TReturns>>;
+export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny>(
   step: Step<TArgs, TReturns>,
   args: Partial<z.input<TArgs>>,
-  options: ExperimentalRecordStepOptions,
-): Promise<ExperimentalStepExecution<TReturns>> {
+  options: RecordStepOptions,
+): Promise<StepExecution<TReturns>> {
   const { name, rootDir, request, page, use = [] } = options;
 
   // Registered before anything else, unconditionally — this call's own
@@ -368,7 +350,7 @@ export async function experimental_recordStep<TArgs extends z.ZodTypeAny, TRetur
         throw new Error(
           `use: key "${key}" is filled by both step "${existingProducer}" and step ` +
             `"${resolved.used.step}". These are different candidate producers for the same ` +
-            `\`from\` key, and experimental_recordStep cannot tell which one should win`,
+            `\`from\` key, and recordStep cannot tell which one should win`,
         );
       }
       useProducerByKey.set(key, resolved.used.step);

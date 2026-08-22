@@ -6,7 +6,7 @@ import openCartStep from "./open-cart.js";
 // `open-cart.ts` — the exact declaration `nuka harvest` needs to render this
 // step's `cartId` as a chain instead of a literal, once the step record it
 // reads names an upstream this same `from` recognizes (this fixture's own
-// task: proving `experimental_recordStep`'s `use` leaves that evidence
+// task: proving `recordStep`'s `use` leaves that evidence
 // behind). Real, executable `run`, same reason open-cart.ts's own header
 // gives.
 

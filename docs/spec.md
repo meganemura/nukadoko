@@ -238,7 +238,7 @@ export default defineStep({
   describe` already publishes each object `args` schema's own
   `additionalProperties: false`, and every path that turns a step's `args`
   into a validated value now parses against that same closed shape (`nuka
-  do`, `nuka do --session <live>`, `nuka run`, `experimental_recordStep`,
+  do`, `nuka do --session <live>`, `nuka run`, `recordStep`,
   and the `call` fixture a part is invoked through, see "Parts"). A key
   `from`/`--use` fills is never flagged, since either can only ever name a
   key the step itself declared. A successful record's own `args` is the
@@ -1507,14 +1507,14 @@ and no step record, because a step record is written by an executor and
 that home has none. An existing suite could therefore share every line of
 its implementation and still leave nothing to harvest.
 
-`experimental_recordStep` is the experiment that closes that, and it is
-marked experimental by name for the reasons its own module gives.
+`recordStep` closes that. Its shape has run against nukadoko's own tests
+so far, not yet against a real suite migrated this way.
 
 ```ts
-const opened = await experimental_recordStep(
+const opened = await recordStep(
   openCartStep, { sku }, { name: "open-cart", rootDir, request },
 );
-const added = await experimental_recordStep(
+const added = await recordStep(
   addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
 );
 ```

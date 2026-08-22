@@ -18,7 +18,7 @@ just until 0.1.
   key then reached the step record it produced. Every path that turns a
   step's `args` into a validated value now parses against that same
   closed shape: `nuka do`, `nuka do --session <live>`, `nuka run`,
-  `experimental_recordStep`, and the `call` fixture a part is invoked
+  `recordStep`, and the `call` fixture a part is invoked
   through. A key `from` or `--use` fills is never flagged, since either
   can only ever name a key the step itself declared. A successful step
   record's own `args` is the validated value now too, so a key filled by
@@ -47,23 +47,20 @@ just until 0.1.
   caught: a spec inside `featuresDir` fails to import and `nuka check`
   names it, and a step file named like a spec becomes a second step with
   the same pattern, reported as `ambiguous-step`.
-- **`experimental_recordStep`, so an existing suite can migrate by
-  running rather than by rewriting.** Sharing an implementation still
-  left a Playwright run producing no step record, because the executor
-  that writes one is not in that home. Calling this from a spec runs the
-  step against that spec's own `request`, enforces its schemas, and
-  writes a step record where `nuka do`'s records land, so the journeys a
-  suite already encodes become drafts through `nuka harvest`. A step
-  record gained `kind: "external"` for it, a third answer to how an
-  execution came about, which `harvest` accepts and which cannot be
-  mistaken for something a person typed. The injected request context is
-  logged and redacted like any other and never disposed, and a step whose
-  fixtures reach for a browser is refused before any record exists unless
-  the call passes a `page` as well (see the next entry). Marked
-  experimental by name, with the one condition left for dropping the
-  prefix written in the module: this shape surviving a real migrated
-  suite rather than only these tests.
-- **`experimental_recordStep` takes a `page` and a `use` list.** A real
+- **`recordStep`, so an existing suite can migrate by running rather
+  than by rewriting.** Sharing an implementation still left a Playwright
+  run producing no step record, because the executor that writes one is
+  not in that home. Calling this from a spec runs the step against that
+  spec's own `request`, enforces its schemas, and writes a step record
+  where `nuka do`'s records land, so the journeys a suite already encodes
+  become drafts through `nuka harvest`. A step record gained `kind:
+  "external"` for it, a third answer to how an execution came about,
+  which `harvest` accepts and which cannot be mistaken for something a
+  person typed. The injected request context is logged and redacted like
+  any other and never disposed, and a step whose fixtures reach for a
+  browser is refused before any record exists unless the call passes a
+  `page` as well (see the next entry).
+- **`recordStep` takes a `page` and a `use` list.** A real
   Playwright suite is written around the browser, so taking only
   `request` would have missed most of what this exists for; the context
   comes from `page.context()` rather than being accepted separately.

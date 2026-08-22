@@ -408,7 +408,7 @@ interface StepRecordBase {
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka
    * run` scenario (docs/spec.md "Records": "the same shape whether the step
    * ran inside a scenario or via `do`"), `"external"` for one run from
-   * inside a Playwright Test spec through `experimental_recordStep`
+   * inside a Playwright Test spec through `recordStep`
    * (src/external/record-step.ts) — a working record the same way `"do"`
    * is, never evidence a sign-off can cite. */
   kind: "do" | "run" | "external";
