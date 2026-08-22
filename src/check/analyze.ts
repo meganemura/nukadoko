@@ -79,6 +79,30 @@ export class CheckFeatureNotFoundError extends Error {
   }
 }
 
+// A `:line` suffix that `nuka run`'s own `parseFeatureTarget`
+// (src/run/select-pickles.ts) would strip and act on is, to `readFileSync`
+// below, just more path text — so a target like `probe.feature:3` fails
+// the same ENOENT a genuinely missing file would, and used to be reported
+// with the identical "feature file not found" wording either way. That
+// wording is wrong for this case specifically: the file is right there.
+// Matches `parseFeatureTarget`'s own pattern (kept as a separate literal
+// here rather than an import — see this module's own file for why: no
+// legitimate `.feature` path ends in `:<digits>` on its own).
+const LINE_SUFFIX_PATTERN = /^(.+):(\d+)$/;
+
+export class CheckLineNotSupportedError extends Error {
+  readonly relativePath: string;
+
+  constructor(relativePath: string, line: string) {
+    super(
+      `nuka check: ${relativePath}:${line}: :line is not supported; check analyzes the whole file, not one scenario. ` +
+        `Run: nuka check ${relativePath}`,
+    );
+    this.name = "CheckLineNotSupportedError";
+    this.relativePath = relativePath;
+  }
+}
+
 // Path resolution matches `nuka run`/`nuka accept` (relative to `rootDir`,
 // absolute paths accepted as-is). No `:line`
 // support: check is a static analysis over a whole
@@ -91,6 +115,20 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
   try {
     source = readFileSync(absolutePath, "utf8");
   } catch {
+    // Genuinely missing and ":line" given but ignored (this module's own
+    // header) read identically here (both fail the same `readFileSync`),
+    // so they are told apart by asking one more question before deciding
+    // which error to throw: does the path with the trailing ":<digits>"
+    // stripped off exist? Only the ":line" case can answer yes, since
+    // stripping nothing off a genuinely missing path still names a
+    // genuinely missing path.
+    const lineMatch = LINE_SUFFIX_PATTERN.exec(relativePath);
+    if (lineMatch) {
+      const [, basePath, line] = lineMatch;
+      if (existsSync(path.join(rootDir, basePath!))) {
+        throw new CheckLineNotSupportedError(basePath!, line!);
+      }
+    }
     throw new CheckFeatureNotFoundError(relativePath);
   }
 
