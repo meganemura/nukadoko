@@ -33,12 +33,12 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## Unreleased
+## 0.6.0 to 0.7.0
 
 One breaking change, plus a behavior change that is not breaking but is
 worth knowing about, since it changes what a script watching `nuka run`'s
 output actually sees. The breaking one: why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+[CHANGELOG.md](../CHANGELOG.md) under `## 0.7.0`.
 
 - **An args key a step's schema does not declare is refused now, not
   silently dropped.** `nuka describe` already published each object
