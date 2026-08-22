@@ -7,6 +7,14 @@ npm ci
 npx playwright install chromium
 ```
 
+Node 24 or newer, because that is the first release carrying npm 11. This
+lockfile was written by npm 11, and npm 10 cannot install from it: four
+copies of `i18next` under the Allure packages ask for `typescript` version
+5, the root asks for 7, and the two npm versions disagree about what to do
+with a peer nothing can satisfy. npm 10 fails with `Missing:
+typescript@5.9.3 from lock file`, which names the wrong culprit. Node 22 is
+still a supported LTS, so this is worth knowing before losing an hour to it.
+
 The second command is not optional. `npm ci` never fetches browsers: the
 `playwright` package declares no install script, and the browsers live in a
 shared cache outside `node_modules` that only `playwright install` fills. If

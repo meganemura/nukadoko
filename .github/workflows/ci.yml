@@ -30,7 +30,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          # 24 rather than the older LTS: this lockfile was produced by npm 11
+          # and npm 10 cannot install from it. See CONTRIBUTING.md.
+          node-version: 24
           cache: npm
 
       # `--ignore-scripts` is also set by this repository's .npmrc. It is
