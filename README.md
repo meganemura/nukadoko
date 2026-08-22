@@ -40,7 +40,8 @@ without it every `nuka` command fails with `No "exports" main defined in
 .../node_modules/nukadoko/package.json`. That message never mentions
 `type`, and nukadoko cannot improve on it, since the CLI hasn't loaded yet
 when Node gives up. You don't need to gitignore `.nukadoko/` yourself:
-`nuka init` writes that.
+`nuka init` writes that. Traces and screenshots inside it are not
+redacted, so the state directory itself is sensitive.
 
 </details>
 
@@ -214,9 +215,10 @@ more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, sign-off (`nuka accept`), tending (`nuka tend`), and two agent
-skills. Not implemented: an AI-assisted glue converter and scenario
-harvesting. See the [roadmap](docs/spec.md#roadmap).
+emitters, sign-off (`nuka accept`), tending (`nuka tend`), scenario
+harvesting (`nuka harvest`), the MCP tool listing (`nuka mcp-tools`), and
+two agent skills. Not implemented: an AI-assisted glue converter. See the
+[roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
 carries a number was measured; where something was only reasoned about,
@@ -291,6 +293,10 @@ export default defineStep({
   never launches a browser. Both hand back Playwright's own
   `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
   existing Playwright knowledge and helpers carry over directly.
+- `request.post("/projects", ...)` above resolves that relative path
+  against `nukadoko.config.ts`'s own `baseURL` (spelled with a capital
+  `URL`, matching Playwright's own key). Leave it unset and only an
+  absolute URL works.
 - `nuka do create-project --args '{"name":"acme"}'` runs this one step
   alone and prints its step record: the unit an agent's explore loop is built
   on, with nothing to stand up first.

@@ -43,6 +43,8 @@ nukadoko は ESM 専用であり、これがないとあらゆる `nuka` コマ�
 Node が諦める時点では、CLI がまだ読み込まれていないからです。
 `.nukadoko/` を自分で gitignore する必要はありません。
 `nuka init` がそれを書き込みます。
+Trace とスクリーンショットは redact されません。
+state directory は機密性の高いものです。
 
 </details>
 
@@ -194,8 +196,8 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、そして 2 つの agent skill です。
-未実装なのは、AI 支援によるグルーの変換と scenario の harvesting です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、MCP のツール一覧(`nuka mcp-tools`)、そして 2 つの agent skill です。
+未実装なのは、AI 支援によるグルーの変換です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
 以下で数字を伴う主張はすべて計測済みです。
@@ -268,6 +270,8 @@ export default defineStep({
   step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません。
   どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
+- 上の `request.post("/projects", ...)` は、その相対パスを `nukadoko.config.ts` 自身の `baseURL` に対して解決します(`URL` が大文字である点は Playwright 自身のキーと同じです)。
+  未設定のままだと、絶対 URL しか通りません。
 - `nuka do create-project --args '{"name":"acme"}'` は、この 1 step だけを実行して step record を出力します。agent の探索ループが成り立つ最小単位で、他に何も用意する必要がありません。
 
 ## What it fixes

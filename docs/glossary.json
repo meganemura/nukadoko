@@ -218,6 +218,11 @@
       "en": ["experimental", "EXPERIMENTAL"],
       "ja": "実験的",
       "note": "形容詞として使うときの訳語。CLI の説明文にある大文字の EXPERIMENTAL もこれに含める。`experimental_` 接頭辞や `nuka experimental` サブコマンドのように識別子そのものを指すときは、identifiers の規則により英語のままバッククォート付きで書く"
+    },
+    {
+      "en": ["trust boundary"],
+      "ja": "信頼境界",
+      "note": "docs/spec.md \"WebMCP tools (experimental)\" で、args を受け取るページ側の JavaScript がこのプロジェクトの信頼できる相手ではないことを述べる段落で入った"
     }
   ],
   "keep_english": [

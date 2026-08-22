@@ -133,8 +133,10 @@ step record を書くのは executor であり、その home にはそれがな�
 
 `experimental_recordStep` は nukadoko 自身から export されており、この隙間を閉じます。
 experimental という名前が付いているのは意図的で、誰もそこに偶然たどり着かないようにするためです。
-この印が外れる条件は 2 つです。
-`request` だけでなく注入された `page` にも対応すること(今のところ、fixture が browser に手を伸ばす step は常に拒否します)、そして、この API の形が nukadoko 自身のテストだけでなく、本物の Playwright Test スイートに対して変更なしに動いた実績ができることです。
+この印が外れる条件は、いまは 1 つだけ残っています。
+この API の形が、nukadoko 自身のテストだけでなく、本物の Playwright Test スイートに対して変更なしに動いた実績です。
+`request` だけでなく注入された `page` にも、すでに対応しています。
+fixture が browser に手を伸ばす step が拒否されるのは、呼び出しが `page` を渡さないときだけです。
 `rootDir` は、`nuka do`/`nuka run` にとっての `nukadoko.config.ts` と `.nukadoko/` が住むのと同じプロジェクトルートです。
 Playwright Test の spec の中では、たいてい `process.cwd()` がそれに当たります。
 
@@ -163,7 +165,8 @@ record は `kind: "external"` を記し、これは実行がどう起きたか�
 `harvest` はそれを受け入れますが、すでに feature を持つ `run` の record を拒否し続けます。
 注入された request context は、他のどの request と同じログと redact を受けるためにラップされますが、破棄されることは一切ありません。
 別の所有者が開けたものを閉じるのは、2 回目の呼び出しで初めて表に出る不具合だからです。
-そして、fixture が browser に手を伸ばす step は、record が存在するより前に拒否されるので、この経路が黙って browser を起動して中途半端に動くことはありません。
+そして、fixture が browser に手を伸ばす step は、呼び出しが `page` も渡さない限り、record が存在するより前に拒否されます。
+どちらの場合も、この経路が自分から browser を起動することはありません。
 
 それでも渡れないままなのが sign-off です。
 `nuka accept` が必要とするのは green なフル実行の `nuka run` とその scenario record であり、external な record はそれではありません。

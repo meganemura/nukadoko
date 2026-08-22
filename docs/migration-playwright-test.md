@@ -144,13 +144,14 @@ nothing to harvest.
 
 `experimental_recordStep`, exported from `nukadoko` itself, closes that
 gap. It is marked experimental by name, on purpose, so nobody reaches it
-by accident, and it drops that mark only once it also supports an
-injected `page`, not only `request` (today it always refuses a step whose
-fixtures reach for a browser resource), and the API shape has run
-unchanged against a real Playwright Test suite, not only against
-nukadoko's own tests. `rootDir` is the same project root
-`nukadoko.config.ts` and `.nukadoko/` live under for `nuka do`/`nuka run`;
-inside a Playwright Test spec that is usually `process.cwd()`.
+by accident, and only one condition still holds that name back: this
+API's shape has to run unchanged against a real Playwright Test suite,
+not only against nukadoko's own tests. It already supports an injected
+`page`, not only `request`, so a step whose fixtures reach for a browser
+resource is refused only when the call passes none. `rootDir` is the
+same project root `nukadoko.config.ts` and `.nukadoko/` live under for
+`nuka do`/`nuka run`; inside a Playwright Test spec that is usually
+`process.cwd()`.
 
 ```ts
 const opened = await experimental_recordStep(
@@ -185,8 +186,8 @@ already has a feature. The injected request context is wrapped for the
 same logging and redaction any other one gets, and it is never disposed,
 since closing what another owner opened is a fault that only appears on
 the second call. And a step whose fixtures reach for a browser is refused
-before any record exists, so this path cannot half-work by quietly
-launching one.
+before any record exists unless the call also passes a `page`; either
+way, this path never launches a browser of its own.
 
 What still does not cross is the sign-off. `nuka accept` needs a green
 full `nuka run` and its scenario record, and an external record is not

@@ -816,6 +816,15 @@ inside them was produced (see "Context API"), so the step record already
 carries whatever the call returned without this function needing to write
 anything of its own.
 
+Crossing that call also crosses a trust boundary, worth stating plainly:
+the page is the system under test, not a trusted party, and the tool
+that receives `args` is code the page itself declared, not code this
+project wrote. `args` crosses into the page as JSON and is read there by
+the page's own JavaScript, so a step whose `args` carries a sensitive
+value, one read through `ctx.requireEnv`, say, hands that value to the
+page being tested. Do not pass a sensitive value through
+`experimental_callWebmcpTool`.
+
 Both halves carry the mark by name, never by a runtime flag: `experimental_`
 on the function, prefixed rather than suffixed so it is still visible at
 the point a step author's own autocomplete would offer it, and
@@ -1520,8 +1529,8 @@ already has a feature. The injected request context is wrapped for the
 same logging and redaction any other one gets, and is never disposed,
 since closing what another owner opened is a fault that only appears on
 the second call. And a step whose fixtures reach for a browser is refused
-before any record exists, so this path cannot half-work by quietly
-launching one.
+before any record exists unless the call also passes a `page`; either
+way, this path never launches a browser of its own.
 
 What still does not cross is the **sign-off**. `nuka accept` needs a green
 full `nuka run` and its scenario record, and an external record is not
@@ -2514,6 +2523,13 @@ claims to describe the system as it is now, so it drifts the moment the
 system moves; "green at commit X" stays true forever. What the record
 deliberately does not claim is that the software still behaves that way
 today.
+
+The record itself is unsigned, plain-text markdown, and nothing in
+nukadoko verifies that it still matches what `nuka accept` originally
+wrote. Detecting a later edit is git's own job: the record is committed
+like any other file, so a change to it after the fact shows up as a diff
+against the commit that added it, in whatever history a project already
+keeps.
 
 ### The acceptance loop
 
