@@ -595,7 +595,9 @@ access to a document you need, say so rather than assuming.
 
 `nuka check` and `nuka run` are both scriptable: each exits `0` when
 everything holds and non-zero the moment something is wrong, so either
-slots into a pipeline as an ordinary step.
+slots into a pipeline as an ordinary step. This is an excerpt; a whole
+copy-pasteable workflow, plus the four things a project coming from `npx
+playwright test` usually has to add by hand, is [docs/ci.md](docs/ci.md).
 
 ```yaml
 # excerpt from a CI workflow

@@ -524,6 +524,8 @@ access to a document you need, say so rather than assuming.
 
 `nuka check` と `nuka run` はどちらもスクリプトから呼べます。
 すべてが保たれていれば `0` で終了し、何かが壊れた瞬間に非ゼロで終了するので、どちらもパイプラインへ普通の 1 step としてそのまま組み込めます。
+これは抜粋です。
+そのままコピーできる workflow 丸ごと 1 つと、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある 4 つのことは [docs/ci.ja.md](docs/ci.ja.md) にあります。
 
 ```yaml
 # excerpt from a CI workflow
