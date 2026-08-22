@@ -25,12 +25,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "pretest": "npm run build",
-    "test": "vitest run",
-    "preselftest": "npm run build",
-    "selftest": "node selftest-suite/run-selftest.mjs",
+    "test": "npm run build && vitest run",
+    "selftest": "npm run build && node selftest-suite/run-selftest.mjs",
     "prepublishOnly": "npm run build",
-    "coverage": "vitest run --coverage"
+    "coverage": "npm run build && vitest run --coverage"
   },
   "keywords": [
     "cucumber",
