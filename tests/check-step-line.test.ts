@@ -16,9 +16,11 @@ interface Issue {
   readonly line?: number;
 }
 
-async function checkReport(): Promise<{ exitCode: number; errors: readonly Issue[] }> {
+async function checkReport(
+  feature = "features/probe.feature",
+): Promise<{ exitCode: number; errors: readonly Issue[] }> {
   const stdout = createCaptureSink();
-  const exitCode = await runCli(["check", "features/probe.feature", "--json"], {
+  const exitCode = await runCli(["check", feature, "--json"], {
     rootDir: fixture("check-step-line-project"),
     stdout,
     stderr: createCaptureSink(),
@@ -41,5 +43,28 @@ describe("nuka check: a feature-derived finding's line is its own step's line", 
     const issue = errors.find((e) => e.code === "unfillable-required-key");
     expect(issue).toBeDefined();
     expect(issue!.line).toBe(4);
+  });
+});
+
+// A step's own line has to survive every construct that nests one. A
+// Background's steps, a Rule's Scenario's steps, and a Scenario Outline's
+// template steps all reach the check through a different branch of the walk
+// that builds the id-to-line map, and dropping any one of them leaves the
+// pickle's own line, which is the enclosing Scenario every time. The outline
+// matters twice over: its useful line is the template's, never the Examples
+// row's, and the row here sits four lines further down so the two cannot be
+// confused for each other.
+describe("nuka check: a step's line inside Background, Rule, and Scenario Outline", () => {
+  it("names each nested step's own line, never the construct that encloses it", async () => {
+    const { exitCode, errors } = await checkReport("features/shapes.feature");
+    expect(exitCode).toBe(1);
+    const lines = errors
+      .filter((e) => e.code === "undefined-step")
+      .map((e) => e.line)
+      .sort((a, b) => (a ?? 0) - (b ?? 0));
+    // 5 is the Background's second step, 10 the step inside the Rule's
+    // Scenario, 14 the outline's own Then. The enclosing lines are 3, 8,
+    // and 12, and the Examples row is 18.
+    expect(lines).toEqual([5, 10, 14]);
   });
 });
