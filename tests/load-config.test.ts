@@ -30,6 +30,47 @@ describe("loadConfig", () => {
     expect(configError.configPath.endsWith("nukadoko.config.ts")).toBe(true);
     expect(configError.message).toContain(configError.configPath);
   });
+
+  it("names the correctly-cased key when an unknown key matches one case-insensitively", async () => {
+    let caught: unknown;
+    try {
+      await loadConfig(fixture("config-key-suggestion-project"));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.message).toContain('unknown key(s): baseUrl (did you mean "baseURL"?)');
+  });
+
+  it("names the correctly-cased key for a match nested inside an environment entry", async () => {
+    let caught: unknown;
+    try {
+      await loadConfig(fixture("config-key-suggestion-nested-project"));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.message).toContain('unknown key(s): baseUrl (did you mean "baseURL"?)');
+  });
+
+  it("suggests nothing for an unknown key with no case-insensitive match", async () => {
+    let caught: unknown;
+    try {
+      await loadConfig(fixture("invalid-config-project"));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    // "typo" is not a case-insensitive match for any real key — a guessed
+    // suggestion would be worse than none (CLAUDE.md: "a check that
+    // guesses is worse than no check"), so this asserts the message names
+    // only the key, never a "(did you mean ...)" aside.
+    expect(configError.message).toContain("unknown key(s): typo");
+    expect(configError.message).not.toContain("did you mean");
+  });
 });
 
 describe("configSchema", () => {
