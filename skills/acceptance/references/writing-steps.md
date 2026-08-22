@@ -53,6 +53,18 @@ fixtures at all writes `run({}, args)`, and one needing neither writes
 `context` and `request` are Playwright's own objects, so reach for
 Playwright's documentation for what to call on them rather than guessing.
 
+## `page.goto` and baseURL
+
+A leading slash in `page.goto("/path")` replaces baseURL's own path, the
+standard URL resolution rule, not something nukadoko adds. Measured
+against Playwright 1.61.1 with `baseURL:
+"https://demo.playwright.dev/todomvc/"`: `goto("/")` lands on
+`https://demo.playwright.dev/`, the host's own root, not the app under
+`/todomvc/`. `goto("./")` and the absolute `goto("/todomvc/")` both land
+on `https://demo.playwright.dev/todomvc/#/` instead. A step whose app
+lives under a path writes one of those two forms for its first
+navigation, never a bare leading slash.
+
 ## Writing a step that checks something
 
 A step fails when its `run` throws and passes when it does not. There is
@@ -178,6 +190,16 @@ Every parameter is `{key:type}`, and the key names the `args` field it
 fills: `"a customer {email:string} is onboarded"` fills `args.email`. An
 unnamed `{string}` is refused outright, so there is no shorter form to
 reach for.
+
+`{key:string}` only matches text wrapped in double quotes; an unquoted
+value does not match at all, and `nuka check` reports the whole line as
+`undefined-step` rather than naming the missing quotes. `"a customer
+{email:string} is onboarded"` binds `a customer "ada@example.com" is
+onboarded`, quotes included in the line but stripped from the captured
+value; `a customer ada@example.com is onboarded` binds nothing. `{word}`
+differs on both counts: it matches one unquoted, space-free token with no
+quotes needed, and if a value is quoted anyway, the quotes stay part of
+the captured text instead of being stripped.
 
 Do not carry a list of type names around. Get one wrong and `nuka check`
 prints the parameter types **this** project has registered, custom ones

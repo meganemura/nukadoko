@@ -40,7 +40,9 @@ import type { WritableSink } from "./writable-sink.js";
 // The template omits `pattern`/`patterns` on purpose: no pattern means
 // CLI-only vocabulary by default (docs/
 // spec.md "Typed steps") — a human adds a pattern by hand when the step is
-// ready to be bound into a feature file. `run` always throws
+// ready to be bound into a feature file. The generated file itself now
+// carries that choice as a commented-out `pattern` line, so a reader
+// cannot mistake "omitted on purpose" for "forgotten". `run` always throws
 // `not implemented: <name>`, so the step is discoverable (`nuka steps`) the
 // moment it's scaffolded but fails every `nuka do`/`nuka run` call until a
 // human replaces the body — "fails until implemented" (docs/spec.md
@@ -62,6 +64,9 @@ function stepTemplate(name: string): string {
     "",
     "export default defineStep({",
     `  description: "TODO: describe ${name}",`,
+    "  // Binds this step to a feature line (cucumber-expressions syntax);",
+    "  // unnecessary for a step that is only ever called by name.",
+    '  // pattern: "TODO: the feature line text this step matches",',
     "  // Give every field a .describe(): `nuka describe` surfaces it, and that is",
     "  // what lets an acceptance criterion's own wording be matched to the field",
     "  // that answers it.",

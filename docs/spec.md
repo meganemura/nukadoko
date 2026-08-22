@@ -352,7 +352,15 @@ The fixture names:
 
 - `page: Page`: Playwright Page, restored from the session's storageState,
   with the configured baseURL wired into the browser context so
-  `page.goto("/path")` resolves against it. The browser launches when a
+  `page.goto("/path")` resolves against it, by the standard URL rule: a
+  leading slash replaces baseURL's own path rather than appending to it.
+  Measured against Playwright 1.61.1 with `baseURL:
+  "https://demo.playwright.dev/todomvc/"`: `goto("/")` lands on
+  `https://demo.playwright.dev/`, the host's own root, not the app under
+  `/todomvc/`; `goto("./")` and the absolute `goto("/todomvc/")` both land
+  on `https://demo.playwright.dev/todomvc/#/` instead. A suite whose app
+  lives under a path writes one of those two forms for its first
+  navigation, never a bare leading slash. The browser launches when a
   step's own bag is built, and only when `page` (or `context`, below) is
   one of the names it destructured, never earlier, and never for a step
   that names neither.

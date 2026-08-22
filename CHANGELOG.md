@@ -42,6 +42,25 @@ just until 0.1.
   to import in the first place. `nuka scaffold`'s generated template
   follows the same shape.
 
+### Changed
+
+- **`nuka init`'s generated `nukadoko.config.ts` (or `.mts`) points at
+  where the rest of its own keys are documented.** A bare
+  `defineConfig({})` gave no hint that `baseURL`, `environments`, and
+  everything else `defineConfig` accepts are all listed in one place; the
+  generated file now carries a one-line comment naming that place
+  (docs/spec.md's config key table), and, when neither `--base-url` nor
+  `--features-dir` filled the object, two of the keys most projects reach
+  for first, `baseURL` and `environments`, commented out as a starting
+  point.
+- **`nuka scaffold`'s generated step template shows a commented-out
+  `pattern` line.** The template already omitted `pattern` on purpose (a
+  scaffolded step defaults to CLI-only vocabulary), but the generated file
+  gave no way to tell that apart from a field simply left unwritten. The
+  commented line now says, in the file itself, that `pattern` binds the
+  step to a feature line and is unnecessary for a step only ever called by
+  name.
+
 ### Fixed
 
 - **`nuka session start` no longer refuses in a deep project.** Its own

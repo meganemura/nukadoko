@@ -97,6 +97,20 @@ function normalizeFeaturesDirArg(rootDir: string, raw: string): string | null {
   return normalized === "" ? null : normalized;
 }
 
+// Every field this comment could name (featuresDir, environments,
+// secrets, fixtures, and the rest) already has its own row in
+// docs/spec.md's key table; pointing there, rather than repeating any of
+// them here, is the one form of this comment that cannot go stale when
+// that table gains a key. The two example keys below are commented out
+// and only added when neither `--base-url` nor `--features-dir` filled
+// the object, so a flag-driven field is never shown twice.
+const CONFIG_KEYS_COMMENT =
+  '  // Every config key nukadoko reads, one line each: docs/spec.md, "Sessions, environments, secrets"';
+const EXAMPLE_KEY_LINES = [
+  '  // baseURL: "https://example.com",',
+  '  // environments: { staging: { baseURL: "https://staging.example.com" } },',
+];
+
 function configTemplate(baseUrl: string | null, featuresDir: string | null): string {
   const fields: string[] = [];
   if (featuresDir !== null) {
@@ -105,7 +119,8 @@ function configTemplate(baseUrl: string | null, featuresDir: string | null): str
   if (baseUrl !== null) {
     fields.push(`  baseURL: ${JSON.stringify(baseUrl)},`);
   }
-  const body = fields.length === 0 ? "{}" : `{\n${fields.join("\n")}\n}`;
+  const exampleLines = fields.length === 0 ? EXAMPLE_KEY_LINES : [];
+  const body = `{\n${[CONFIG_KEYS_COMMENT, ...exampleLines, ...fields].join("\n")}\n}`;
   return [
     'import { defineConfig } from "nukadoko";',
     "",

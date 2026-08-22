@@ -258,6 +258,11 @@ Playwright にとってこのパターンはそれ自身の runner への構築�
 fixture の名前:
 
 - `page: Page`: session の storageState から復元された Playwright の Page で、設定された baseURL が browser context に渡されるため `page.goto("/path")` はそれを基準に解決されます。
+  この解決は標準の URL 規則に従い、先頭のスラッシュは baseURL 自身のパスに追加されるのではなく、そのパス全体を置き換えます。
+  Playwright 1.61.1 で `baseURL: "https://demo.playwright.dev/todomvc/"` を使って実測した結果です。
+  `goto("/")` はホスト自身の根である `https://demo.playwright.dev/` に着地し、`/todomvc/` 配下のアプリには着地しません。
+  一方 `goto("./")` と絶対パスの `goto("/todomvc/")` はどちらも `https://demo.playwright.dev/todomvc/#/` に着地します。
+  アプリがパスの下に載っているスイートは、最初のナビゲーションで先頭が裸のスラッシュではなく、この 2 つの書き方のどちらかを使います。
   ブラウザが起動するのは step 自身の bag が構築される時点で、しかも `page`(または後述の `context`)がその step が分割代入した名前のひとつであるときだけです。
   それより早く起動することはなく、どちらも名指さない step では起動しません。
 - `context: BrowserContext`: `page` がすでに属している `BrowserContext` そのもので(`page.context()`)、2 つ目が作られることはありません。

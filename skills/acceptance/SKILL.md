@@ -265,7 +265,8 @@ Then join "The loop" below at step 4, `nuka check`.
 3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
    record, before it ever touches a feature. Fix and re-run until it does
    what it's supposed to; only move on to the feature-level `nuka run` once
-   every new step in the scenario has passed this way on its own.
+   every new step in the scenario has passed this way on its own. A mid-flow
+   step needs `nuka session start` instead (`references/exploring.md`).
 
 `mutates` defaults to `true`, a new step is assumed to change state unless
 it says `mutates: false`, and `nuka describe <step>` tells you which before
@@ -474,15 +475,14 @@ A record freezes the feature source and the run's step records, but not
 the contracts behind them: change a step's `returns` after accepting,
 edit the feature, or delete a step it cites, and the record still claims
 a green run it can no longer support. Nothing about that stops a future
-run, so `nuka check` never mentions it. `nuka tend` finds it (a stale
-record is its only finding that exits non-zero); run it periodically
-rather than in this loop, since it answers whether the vocabulary and its
-records are healthy, not whether this run can proceed. The fix is to run
-and accept the feature again, or to undo what invalidated it, never to
-edit the record.
+run, so `nuka check` never mentions it. `nuka tend` finds it while the
+feature stays outside `featuresDir` (a stale record is its only finding
+that exits non-zero); run it periodically rather than in this loop, since
+it answers whether the vocabulary and its records are healthy, not
+whether this run can proceed. The fix is to run and accept the feature
+again, or to undo what invalidated it, never to edit the record.
 
-What `nuka tend` reports, and stops reporting, once a feature moves into
-`featuresDir`: `references/maintenance.md`.
+The rest of what `nuka tend` reports: `references/maintenance.md`.
 
 ## What not to do
 

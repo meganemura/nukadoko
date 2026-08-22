@@ -62,7 +62,11 @@ describe("nuka scaffold", () => {
     // dependency's own dependencies to the project's top level.
     expect(content).not.toContain('from "zod"');
     expect(content).toContain("TODO: describe send-invite");
-    expect(content).not.toMatch(/pattern/);
+    // `pattern` shows up only as a commented-out line (see the `patterns:
+    // []` assertion on `nuka steps --json` below), never as an active
+    // field: the template still scaffolds a CLI-only step by default.
+    expect(content).not.toMatch(/^\s*pattern:/m);
+    expect(content).toContain('// pattern: "TODO:');
     expect(content).toContain(".describe(");
 
     const stepsStdout = createCaptureSink();
