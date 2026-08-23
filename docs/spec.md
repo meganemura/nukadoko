@@ -161,7 +161,12 @@ it defines resurface as an unexplained `undefined-step`. Setting
 this same walk, so a build artifact sitting anywhere in that tree can be
 read as glue if its own name happens to end in one of the four extensions
 above; `node_modules` and every dot-directory stay excluded regardless of
-how wide `featuresDir` is set.
+how wide `featuresDir` is set. Widening it changes what `nuka check` does,
+not only what it finds: discovery imports every file it walks, so a module
+that runs something at import time (reading an environment, opening a
+connection, writing a file) runs it during a command that otherwise only
+reads. Point `featuresDir` at a tree that holds the application as well as
+the glue and the application's own top-level code is what gets executed.
 
 ```ts
 import { defineStep, z } from "nukadoko";
