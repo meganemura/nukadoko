@@ -33,7 +33,7 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## 0.7.0 to the next release
+## 0.7.0 to 0.8.0
 
 The Allure report structure has one breaking change. One other behavior
 change affects consumers of `nuka tend --json`.
