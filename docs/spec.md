@@ -2565,10 +2565,39 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   it against anything (see "Tending").
 - The acceptance record is built by the tool from the run it freezes: the
   feature's full text, the scenario record, and each step's own step
-  record with evidence stripped (traces and screenshots stay in
-  `.nukadoko/`, and a CI artifact is where they belong when they are
-  wanted at all). Never transcribed by a human: transcription would demote
-  a measurement back to a claim.
+  record, narrowed to what the step's own contract named rather than
+  what the browser happened to do along the way. Never transcribed by a
+  human: transcription would demote a measurement back to a claim.
+- A step record kept here carries `step_record_id`, `step`, `kind`,
+  `status`, `args`, `result`, `error`, `used`, `mutates`, `observed`,
+  `calls`, `fixtures`, `required_env`, `world`, `started_at`,
+  `finished_at`, `environment`, `session`, `session_execution`,
+  `scenario_record_id`, `run_id`, and `target_version`. It drops
+  `evidence`, `actions`, `truncated`, `page_events`, `http_omitted`,
+  `declared`, `sections`, and `polls`: a live step record under
+  `.nukadoko/` still carries every one of them (see "Records"), but none
+  is something the step's own contract named. A hook entry in the
+  scenario record (see "Records") keeps `type`, `status`, `error`, and
+  `step_index`, and drops `declared`, `trace`, `actions`, and `truncated`
+  for the same reason.
+- The step record embedded here strips by allowlist, never by a list of
+  what to remove: only a field named above survives. A field the live
+  step record gains later is stripped by default until it is named
+  above. The record states, once near the top rather than once per step,
+  every key it stripped from the step and hook records below it. A
+  reader never has to guess what was withheld.
+- The stripped fields are the ones a browser trace grows fastest. On one
+  measured suite, two scenarios covering 14 steps produced a 3,844-line
+  record; `actions` alone was 2,288 of those lines, 60% of the total. A
+  record that size gets gitignored, which leaves the sign-off out of the
+  repository and out of review.
+- Each scenario in the record also carries a one-screen summary table:
+  `step`, `status`, `ms`, `mutates`, `reads`, `writes`. `ms` is the gap
+  between that step's own `started_at` and `finished_at`. `mutates` is
+  the step's own declaration; `reads` and `writes` are its `observed`
+  counts, the same pair "Declared vs observed" compares below. With the
+  JSON this narrow, the summary table is where a reviewer actually reads
+  the record.
 - The record's own tail carries one more section, "Declared vs observed":
   every step across every scenario in the record whose step record declared
   `mutates: false` but was measured making at least one write
@@ -3162,9 +3191,13 @@ What it looks at, and why each one is rot rather than style:
   guarantee a frozen record used to, but whether a record was ever made
   is a different question, unaffected by where the feature runs.
 - **A step whose own trace shows another call landing close behind a
-  navigation call.** Read from a frozen sign-off record's step record
-  alone, never a live run's (`.nukadoko` stays out of this walk the same
-  way it does every other one here): for each `goto`, `reload`, `goBack`,
+  navigation call.** Read from the tool's own step records under
+  `.nukadoko/records/steps/` (see "Records"). A committed sign-off record
+  holds a copy frozen at accept time, so the live step record is the one
+  that still carries what a run measured (see "Sign-off"). This reaches
+  every step that still has a step record on disk, whether or not anyone
+  signed it off: a step nobody has signed off yet already has a step
+  record from the run that exercised it. For each `goto`, `reload`, `goBack`,
   or `goForward` in that step record's own `actions`, the gap to whatever
   call the step made next. A read that lands inside the same step
   record's own `ctx.poll` window is left out: a step written to `poll()`
@@ -3175,18 +3208,18 @@ What it looks at, and why each one is rot rather than style:
   table of which Playwright calls auto-wait is built to guess at it, since a
   table like that would describe a dependency's own semantics rather than
   something this tool measured, and go stale the moment that dependency
-  changed. A step record with no `actions` at all, the shape a record
-  written before that field existed still carries, is silently out of
-  scope, not an error.
+  changed. A step record with no `actions` at all, whether because the
+  step never touched the browser or because it predates that field, is
+  silently out of scope, not an error.
 
 This last finding is the plainest reason the whole list above lives on
-`tend` and not `check`. The step it names already ran green, and its step
-record already froze that pass; nothing about it is broken today, and no
-run is blocked by it. What changed is only that the tool can now see a
-fact about how that pass happened, not that the pass stopped being real.
-`check` exists to answer whether a run can proceed right now, so a step
-that already passed has nothing left for it to say; `tend` exists to
-answer whether what already passed is still healthy, and "has not yet lost
+`tend` and not `check`. The step it names already ran, and its own step
+record already measured that execution; nothing about it is broken today,
+and no run is blocked by it. What changed is only that the tool can now
+see a fact about how that execution went, not that the execution stopped
+being real. `check` exists to answer whether a run can proceed right now,
+so a step that already ran has nothing left for it to say; `tend` exists
+to answer whether what already ran is still healthy, and "has not yet lost
 a race it happens to be running" is exactly the kind of health that
 question is for. Reporting this as an error would treat a symptom that has
 not appeared as though it already had.

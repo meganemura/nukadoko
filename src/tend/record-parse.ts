@@ -25,9 +25,10 @@ import path from "node:path";
 // opinion.
 //
 // `isOldFormat` is added the same defensive way: an acceptance record
-// embeds each step's own record verbatim (render-record.ts's own header),
-// and every step record the current tool writes always carries a
-// `step_record_id` string. A record written before that field existed lacks it
+// embeds each step's own record narrowed to the fields a step's contract
+// named (render-record.ts's own header), and `step_record_id` is one of
+// the fields that survives that narrowing, so every step record the
+// current tool embeds carries a `step_record_id` string. A record written before that field existed lacks it
 // on every step it embeds, so its absence is what this module tests for —
 // never a stored copy of the field's own old name, which would just be
 // another word this module has to keep in sync with the writer by hand. An
@@ -123,25 +124,19 @@ function extractGherkinFence(body: string): string | undefined {
  * `renderHook` emits `{ type, status, ... }` — no `step` key — so filtering
  * on `step` being a string is what tells a step's own record block apart
  * from a hook's, without needing to parse the preceding heading text at
- * all). `actions` is added now so
- * src/tend/post-navigation-read.ts can read it straight off a parsed
- * record: the field is already embedded verbatim by
- * `extractStepRecordLikeBlocks` below (a step record's own JSON, only
- * `evidence` ever stripped, `render-record.ts`'s own header), so this
- * interface only needed a name for it. `polls` is added the same way, for
- * the same module to tell a `ctx.poll`-covered read apart
- * from one that is not. `step_record_id` is added for `isOldFormat` below, kept
+ * all). `step_record_id` is added for `isOldFormat` below, kept
  * `unknown` the same way — the value itself is never used, only whether the
  * key is a string at all. Kept as `unknown`, `result`'s own convention: this
  * module never validates a step record's own shape beyond "is this
- * step-record-like"; a per-entry check of what `actions`/`polls` actually
- * contain is that finding's own job, not this shared parser's. */
+ * step-record-like". `actions`/`polls` were on this interface once, read by
+ * src/tend/post-navigation-read.ts - that finding now reads a live step
+ * record's own `record.json` instead (src/record/read-step-record.ts), so
+ * the frozen copy's own `actions`/`polls` are no longer read by anything,
+ * and this interface dropped the two fields with that reader gone. */
 export interface EmbeddedStepRecordLike {
   readonly step: string;
   readonly status: unknown;
   readonly result?: unknown;
-  readonly actions?: unknown;
-  readonly polls?: unknown;
   readonly step_record_id?: unknown;
 }
 

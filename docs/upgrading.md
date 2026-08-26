@@ -33,6 +33,27 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.8.0 to the next release
+
+The acceptance record has one breaking change. `nuka tend`'s
+`post-navigation-read` note also reads from a different place now. Why is
+in [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+
+- **A record `nuka accept` writes from now on drops `actions`,
+  `page_events`, `sections`, `polls`, `declared`, `http_omitted`, and
+  `truncated` from each step.** A script reading a newly accepted record
+  needs to stop expecting these keys. Every one of them still lands on
+  the step record under `.nukadoko/`; only the copy embedded in the
+  committed record narrows. The committed record's own text names each
+  key it dropped, so a reader is never left guessing.
+- **A record already committed keeps working, unchanged.** Reading an
+  existing acceptance record needs no change.
+- **Each scenario in a record written from now on also carries a summary
+  table**: step, status, ms, mutates, reads, writes.
+- **`nuka tend`'s `post-navigation-read` note now reads step records under
+  `.nukadoko/records/steps/`, not a committed one.** Nothing to do on the
+  project side. To get the note back for a step, run the feature again.
+
 ## 0.7.0 to 0.8.0
 
 The Allure report structure has one breaking change. One other behavior

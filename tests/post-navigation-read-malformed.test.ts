@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -7,10 +7,11 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: this finding's own defensive parsing.
 // tests/post-navigation-read.test.ts's own hand-crafted-record suite
 // already pins the gap math and the poll-window boundary; this file pins
-// the other half, that a hand-edited or partially-written `actions`/`polls`
-// entry is skipped in place rather than thrown on, and never stops a
-// well-formed pair elsewhere on the same step record from still being
-// reported. `isActionLike`/`isPollLike` are this file's own defensive-parse
+// the other half, that a hand-edited or partially-written `record.json` -
+// whether the whole file, or just one `actions`/`polls` entry inside it -
+// is skipped in place rather than thrown on, and never stops a well-formed
+// pair elsewhere in the same project from still being reported.
+// `isActionLike`/`isPollLike` are this file's own defensive-parse
 // convention (src/tend/post-navigation-read.ts's own header): neither is
 // exported, so these are exercised only through `findPostNavigationReads`
 // itself, via `nuka tend --json`, the same public surface every other test
@@ -29,53 +30,20 @@ async function runTendJson(rootDir: string): Promise<Report> {
   return JSON.parse(stdout.text()) as Report;
 }
 
-const COMMIT = "0".repeat(40);
-
-/** Matches tests/post-navigation-read.test.ts's own `buildRecord` shape
- * closely enough for src/tend/record-parse.ts to accept it (duplicated
- * here rather than imported, since that file exports no helpers of its own
- * to share). */
-function buildRecord(options: { stepText: string; stepRecord: Record<string, unknown> }): string {
-  const { stepText, stepRecord } = options;
-  return [
-    "---",
-    "run_id: run-synthetic",
-    `commit: ${COMMIT}`,
-    "feature: features/does-not-exist.feature",
-    "ran_at: 2026-01-01T00:00:00.000Z",
-    "accepted_at: 2026-01-01T00:00:00.000Z",
-    "environment: default",
-    "browser: none",
-    "scenarios:",
-    "  - name: a synthetic scenario",
-    "    line: 2",
-    "    scenario_record_id: scn-synthetic",
-    "---",
-    "",
-    "# Synthetic: green at 0000000",
-    "",
-    "## The scenario as it ran",
-    "",
-    "```gherkin",
-    "Feature: Synthetic",
-    "  Scenario: a synthetic scenario",
-    `    Given ${stepText}`,
-    "```",
-    "",
-    "## What the tool measured",
-    "",
-    "### a synthetic scenario (line 2)",
-    "",
-    `#### ${stepText}`,
-    "",
-    "```json",
-    JSON.stringify(stepRecord, null, 2),
-    "```",
-    "",
-  ].join("\n");
+/** Writes one step record directly under `<rootDir>/.nukadoko/records/
+ * steps/<id>/record.json`, the on-disk shape `nuka do`/`nuka run` produce
+ * and src/tend/post-navigation-read.ts now reads. `stepRecord` is passed
+ * straight through to `JSON.stringify`, so its own `actions`/`polls` (or
+ * lack of either) is exactly what that finding sees. Duplicated from
+ * tests/post-navigation-read.test.ts's own helper of the same shape rather
+ * than imported, since that file exports no helpers of its own to share. */
+async function writeStepRecordFile(rootDir: string, id: string, stepRecord: Record<string, unknown>): Promise<void> {
+  const dir = path.join(rootDir, ".nukadoko", "records", "steps", id);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "record.json"), JSON.stringify(stepRecord, null, 2));
 }
 
-describe("nuka tend: post-navigation-read, malformed actions/polls", () => {
+describe("nuka tend: post-navigation-read, malformed record.json", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -86,22 +54,38 @@ describe("nuka tend: post-navigation-read, malformed actions/polls", () => {
     await removeTempDir(rootDir);
   });
 
+  it("skips a record.json that is not valid JSON, without throwing, and still reports a well-formed record beside it", async () => {
+    const brokenDir = path.join(rootDir, ".nukadoko", "records", "steps", "broken");
+    await mkdir(brokenDir, { recursive: true });
+    // Deliberately unparsable - a truncated write, or a hand edit gone
+    // wrong.
+    await writeFile(path.join(brokenDir, "record.json"), "{not valid json");
+
+    await writeStepRecordFile(rootDir, "well-formed", {
+      step: "a step whose record.json parses fine",
+      status: "ok",
+      actions: [
+        { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
+        { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
+      ],
+    });
+
+    const report = await runTendJson(rootDir);
+    const notes = report.notes.filter((n) => n.code === "post-navigation-read");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.step).toBe("a step whose record.json parses fine");
+  });
+
   it("skips a non-object entry mixed into actions, without throwing, and still reports the valid pair beside it", async () => {
-    await writeFile(
-      path.join(rootDir, "stray-entry.2026-01-01-0000000.md"),
-      buildRecord({
-        stepText: "a step whose actions carry one stray, non-object entry",
-        stepRecord: {
-          step: "a step whose actions carry one stray, non-object entry",
-          status: "ok",
-          actions: [
-            "not an action object",
-            { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
-            { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
-          ],
-        },
-      }),
-    );
+    await writeStepRecordFile(rootDir, "stray-entry", {
+      step: "a step whose actions carry one stray, non-object entry",
+      status: "ok",
+      actions: [
+        "not an action object",
+        { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
+        { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
+      ],
+    });
 
     const report = await runTendJson(rootDir);
     const notes = report.notes.filter((n) => n.code === "post-navigation-read");
@@ -110,46 +94,34 @@ describe("nuka tend: post-navigation-read, malformed actions/polls", () => {
   });
 
   it("ignores a non-object entry mixed into polls, and a well-formed poll on the same step still excludes its read", async () => {
-    await writeFile(
-      path.join(rootDir, "stray-poll.2026-01-01-0000000.md"),
-      buildRecord({
-        stepText: "a step whose polls carry one stray, non-object entry",
-        stepRecord: {
-          step: "a step whose polls carry one stray, non-object entry",
-          status: "ok",
-          actions: [
-            { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
-            // Starts at 00:00:00.100Z, inside the well-formed poll window
-            // below (00:00:00.080Z through 00:00:00.120Z).
-            { method: "expect", at: "2026-01-01T00:00:00.100Z", ms: 5 },
-          ],
-          polls: ["not a poll object", { at: "2026-01-01T00:00:00.080Z", waited_ms: 40 }],
-        },
-      }),
-    );
+    await writeStepRecordFile(rootDir, "stray-poll", {
+      step: "a step whose polls carry one stray, non-object entry",
+      status: "ok",
+      actions: [
+        { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
+        // Starts at 00:00:00.100Z, inside the well-formed poll window
+        // below (00:00:00.080Z through 00:00:00.120Z).
+        { method: "expect", at: "2026-01-01T00:00:00.100Z", ms: 5 },
+      ],
+      polls: ["not a poll object", { at: "2026-01-01T00:00:00.080Z", waited_ms: 40 }],
+    });
 
     const report = await runTendJson(rootDir);
     expect(report.notes.filter((n) => n.code === "post-navigation-read")).toEqual([]);
   });
 
   it("does not exclude, and does not throw, when a poll's own `at` cannot be parsed as a date", async () => {
-    await writeFile(
-      path.join(rootDir, "unparsable-poll-at.2026-01-01-0000000.md"),
-      buildRecord({
-        stepText: "a step whose one poll has an unparsable at",
-        stepRecord: {
-          step: "a step whose one poll has an unparsable at",
-          status: "ok",
-          actions: [
-            { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
-            { method: "expect", at: "2026-01-01T00:00:00.100Z", ms: 5 },
-          ],
-          // Would have covered the read above had `at` been a real
-          // timestamp; instead it is skipped, so the read is reported.
-          polls: [{ at: "not-a-real-timestamp", waited_ms: 40 }],
-        },
-      }),
-    );
+    await writeStepRecordFile(rootDir, "unparsable-poll-at", {
+      step: "a step whose one poll has an unparsable at",
+      status: "ok",
+      actions: [
+        { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
+        { method: "expect", at: "2026-01-01T00:00:00.100Z", ms: 5 },
+      ],
+      // Would have covered the read above had `at` been a real
+      // timestamp; instead it is skipped, so the read is reported.
+      polls: [{ at: "not-a-real-timestamp", waited_ms: 40 }],
+    });
 
     const report = await runTendJson(rootDir);
     const notes = report.notes.filter((n) => n.code === "post-navigation-read");
@@ -157,24 +129,18 @@ describe("nuka tend: post-navigation-read, malformed actions/polls", () => {
   });
 
   it("skips an action pair when one side's own `at` cannot be parsed, and still reports a well-formed pair on the same step", async () => {
-    await writeFile(
-      path.join(rootDir, "unparsable-action-at.2026-01-01-0000000.md"),
-      buildRecord({
-        stepText: "a step whose first navigation has an unparsable at",
-        stepRecord: {
-          step: "a step whose first navigation has an unparsable at",
-          status: "ok",
-          actions: [
-            // Type-shaped (isActionLike passes), but `at` is not a real
-            // timestamp, so the gap from it can never be computed.
-            { method: "goto", at: "not-a-real-timestamp", ms: 50 },
-            { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
-            { method: "goto", at: "2026-01-01T00:00:05.000Z", ms: 50 },
-            { method: "click", at: "2026-01-01T00:00:05.100Z", ms: 5 },
-          ],
-        },
-      }),
-    );
+    await writeStepRecordFile(rootDir, "unparsable-action-at", {
+      step: "a step whose first navigation has an unparsable at",
+      status: "ok",
+      actions: [
+        // Type-shaped (isActionLike passes), but `at` is not a real
+        // timestamp, so the gap from it can never be computed.
+        { method: "goto", at: "not-a-real-timestamp", ms: 50 },
+        { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
+        { method: "goto", at: "2026-01-01T00:00:05.000Z", ms: 50 },
+        { method: "click", at: "2026-01-01T00:00:05.100Z", ms: 5 },
+      ],
+    });
 
     const report = await runTendJson(rootDir);
     const notes = report.notes.filter((n) => n.code === "post-navigation-read");

@@ -121,9 +121,12 @@ import type { TendIssue, TendReport } from "./types.js";
 // the same severity call `findSignoffConditionMismatch` makes just above and
 // for the same reason: nothing here is wrong right now, only a fact worth a
 // human's attention (that module's own header explains why it is never a
-// verdict). It walks the same record source a third, independent time
-// rather than joining either existing walk, matching this file's own
-// standing rule for the other two.
+// verdict). Unlike the other record-walking findings above, it never reads
+// an acceptance record at all: it walks `<stateDir>/records/steps/`
+// directly, so `config.stateDir` is passed through to it rather than a
+// `featuresDir`-shaped path. Every step record counts, signed off or not -
+// this finding is about a step's own body, not about what `nuka accept`
+// has frozen.
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
@@ -166,7 +169,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
     ...findSignoffConditionMismatch(rootDir, config.browserType, config.featuresDir),
-    ...findPostNavigationReads(rootDir),
+    ...findPostNavigationReads(rootDir, config.stateDir),
   ];
 
   const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);

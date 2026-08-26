@@ -5,6 +5,40 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Changed
+
+- **`nuka accept` narrows every step record it embeds down to the fields a
+  step's own contract named.** A record used to carry `actions`,
+  `page_events`, `sections`, `polls`, `declared`, `http_omitted`, and
+  `truncated` as well; it now keeps `step_record_id`, `step`, `kind`,
+  `status`, `args`, `result`, `error`, `used`, `mutates`, `observed`,
+  `calls`, `fixtures`, `required_env`, `world`, `started_at`,
+  `finished_at`, `environment`, `session`, `session_execution`,
+  `scenario_record_id`, `run_id`, and `target_version`. A hook entry keeps
+  `type`, `status`, `error`, and `step_index`. The measurement behind the
+  cut: two scenarios covering 14 steps produced a 3,844-line record, and
+  `actions` alone was 2,288 of those lines. A record that size gets
+  gitignored, which leaves the sign-off out of the repository and out of
+  review. What the dropped fields hold is evidence for diagnosing a
+  failure, and `accept` freezes a green run only, so the run a record
+  freezes never had that failure to diagnose. Every dropped field still
+  lands on the step record under `.nukadoko/`. The narrowing works as an
+  allowlist, so a field the step record gains later stays out until it is
+  named, and the record states once, near the top, every key it dropped.
+- **Each scenario in a record now carries a summary table**: `step`,
+  `status`, `ms`, `mutates`, `reads`, `writes`. With the embedded JSON
+  this narrow, the table is the surface a reviewer reads.
+- **`nuka tend`'s `post-navigation-read` note now reads step records under
+  `.nukadoko/records/steps/`, rather than a committed sign-off record.**
+  The note needs a step's own `actions`, and a step record carrying none
+  is silently out of scope, so leaving the note where it was would have
+  retired it without saying so. Reading the tool's own step records also
+  widens what the note covers: a step nobody has signed off already has a
+  step record from the run that exercised it. A project has nothing to do
+  about this; run a feature again to get the note back for its steps.
+
 ## 0.8.0 — 2026-08-26
 
 ### Added

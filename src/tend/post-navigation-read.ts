@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import path from "node:path";
-import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";
+import { readStepRecord } from "../record/read-step-record.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: docs/spec.md "Tending"'s post-navigation-read note - a
@@ -48,23 +48,31 @@ import type { TendIssue } from "./types.js";
 // step, a step that never calls `ctx.poll`, or a record from before `polls`
 // existed all fall back to this note's original behavior, unchanged.
 //
-// Reads only sign-off records (src/tend/record-parse.ts, the same source
-// signoff-rot.ts and signoff-condition-mismatch.ts already walk), never a
-// live run's own step record - that module's own `EXCLUDED_DIR_NAMES` keeps
-// `.nukadoko` out of every walk built on it, this one included, and nothing
-// here changes that list.
+// Reads every live step record under `<stateDir>/records/steps/`
+// (`readStepRecord`, src/record/read-step-record.ts - the same reader
+// src/report/allure/emitter.ts and `nuka do --use` already share), never a
+// copy embedded in a committed acceptance record. `do`, `run`, and
+// `external` step records all count the same way: this note is about a
+// step's own body, and that body runs the same whichever of the three
+// executors ran it. A step that has never been signed off still shows up
+// here, since sign-off is no longer this note's gate - reporting used to
+// stop at whatever `nuka accept` had frozen, which meant the many steps a
+// project never accepts were never looked at here at all. A record accepted
+// before `render-record.ts` started stripping `actions`/`polls` can still
+// carry an older step record's own copy of either, but that copy is never
+// read here: it is what was true when someone last ran `nuka accept`, not
+// a live measurement, and reading it again would let this note report on a
+// step nobody has actually run since.
 //
 // A Background step runs once per scenario, so a suite with two dozen
-// scenarios produces two dozen step records for that one step, all
-// measuring the same thing: one navigation call, the same call right
-// after it - whether those step records sit in one accepted file or many,
-// since one accepted record already holds one step record per scenario in
-// its own `scenarios:` list. Reporting each of those as its own note would
-// repeat one fact two dozen times rather than say it once - `groupMatches`
-// (below) merges every match sharing the same step, the same navigation
-// method, and the same following method into a single note, naming how
-// many step records it happened in and the gap's own range, before
-// reporting one example record rather than all of them.
+// scenarios produces two dozen step records for that one step every time
+// the suite runs, each in its own `.nukadoko/records/steps/<id>/`
+// directory. Reporting each of those as its own note would repeat one fact
+// two dozen times rather than say it once - `groupMatches` (below) merges
+// every match sharing the same step, the same navigation method, and the
+// same following method into a single note, naming how many step records
+// it happened in and the gap's own range, before reporting one example
+// record rather than all of them.
 
 /** The four navigation calls this note looks for, read verbatim off each
  * action's own `method` (trace's own `before.method`, src/context/
@@ -92,11 +100,14 @@ const NAVIGATION_METHODS = new Set(["goto", "reload", "goBack", "goForward"]);
  */
 const NOT_WORTH_LISTING_ABOVE_MS = 10_000;
 
-/** One action entry, narrowed only enough to compute a gap from. A record's
- * own JSON can be hand-edited, or written before `actions` existed at all,
- * so nothing here is trusted beyond what these three checks confirm - the
- * same reason `EmbeddedStepRecordLike.actions` (record-parse.ts) stays
- * `unknown` rather than `readonly ActionEntry[]` all the way through. */
+/** One action entry, narrowed only enough to compute a gap from. A step
+ * record's own `record.json` can be hand-edited, or written by a build
+ * before `actions` had this shape, so nothing here is trusted beyond what
+ * these three checks confirm - `readStepRecord` (src/record/
+ * read-step-record.ts) casts the file's own parsed JSON straight to
+ * `StepRecord` without validating it, so `StepRecordBase.actions`'s own
+ * compile-time type is a claim about a well-behaved writer, never a
+ * guarantee about the bytes actually on disk. */
 interface ActionLike {
   readonly method: string;
   readonly at: string;
@@ -146,98 +157,100 @@ function isWithinAnyPollWindow(readStartedAt: number, polls: readonly unknown[])
   return false;
 }
 
-/** `findPostNavigationReads` walks every acceptance record under `rootDir`
- * (`discoverMarkdownFiles`, the same walk `findSignoffRot`/
- * `findSignoffConditionMismatch` already use) and, for each step's own
- * frozen `actions`, reports every navigation call immediately followed by
- * another call within `NOT_WORTH_LISTING_ABOVE_MS` of the navigation's own
- * end - unless that next call's own start falls inside a `ctx.poll` window
- * the same step record's own `polls` recorded (this file's own header). A
- * step record with no `actions` field at all (a record from before that
- * field existed, or a step that never called `ctx.page()`) is silently out
- * of scope, never an error - `actions` has always been optional on a step
- * record, and an old record carrying none is the expected case, not a
- * broken one (record-parse.ts's own convention for `condition`). A step
- * record with no `polls` field simply has nothing to exclude with, and
- * falls back to this note's original behavior unchanged. */
+/** `findPostNavigationReads` walks every step record directory under
+ * `<stateDir>/records/steps/` (`readStepRecord`, src/record/
+ * read-step-record.ts) and, for each one's own recorded `actions`, reports
+ * every navigation call immediately followed by another call within
+ * `NOT_WORTH_LISTING_ABOVE_MS` of the navigation's own end - unless that
+ * next call's own start falls inside a `ctx.poll` window the same step
+ * record's own `polls` recorded (this file's own header). A directory
+ * `readStepRecord` cannot read at all (a missing or unparsable
+ * `record.json`) is silently skipped, never an error - a partially written
+ * or hand-edited file is not this note's own defect to report. A step
+ * record with no `actions` field at all (a step that never called
+ * `ctx.page()`) is out of scope the same way, since `actions` has always
+ * been optional on a step record. A step record with no `polls` field
+ * simply has nothing to exclude with, and falls back to this note's
+ * original behavior unchanged. */
 /** One navigation-then-call pair this finding matched, before grouping. A
  * project with a Background step produces one of these per step record
- * that step ran in - a suite with dozens of scenarios can produce dozens
- * of matches that are all the same fact measured again, which is exactly
- * what `groupMatches` (below) exists to collapse. */
+ * that step ran in - a project that has run its suite many times can
+ * produce many matches that are all the same fact measured again, which is
+ * exactly what `groupMatches` (below) exists to collapse. */
 interface Match {
-  readonly relativePath: string;
-  /** Identifies the one step record this match came from, uniquely across
-   * the whole project: `relativePath` alone is not enough, since one
-   * accepted record's own body holds one `#### <step>` block per scenario
-   * section, and a Background step contributes one such block per scenario
-   * in that same file. Built as `${relativePath}#${stepRecordIndex}`,
-   * `stepRecordIndex` being this step record's own position among every
-   * fenced JSON block `extractStepRecordLikeBlocks`
-   * (src/tend/record-parse.ts) read out of that one file, in the order it
-   * read them. */
+  /** This step record's own id: `<stateDir>/records/steps/<id>`'s own
+   * `<id>`, the directory name `generateId` (src/record/record-id.ts)
+   * stamped on it when this execution was recorded - already unique across
+   * the whole project, so no composed key is needed here. */
   readonly stepRecordKey: string;
+  /** `<stateDir>/records/steps/<id>/record.json`, rootDir-relative - the
+   * one file this match's own facts came from, and the path
+   * `TendIssue.file` ends up citing for it. */
+  readonly recordPath: string;
   readonly step: string;
   readonly navigationMethod: string;
   readonly nextMethod: string;
   readonly gapMs: number;
 }
 
-function collectMatches(rootDir: string): Match[] {
+function collectMatches(rootDir: string, stateDir: string): Match[] {
   const matches: Match[] = [];
+  const stepsDir = path.join(rootDir, stateDir, "records", "steps");
 
-  for (const absolutePath of discoverMarkdownFiles(rootDir)) {
-    const relativePath = path.relative(rootDir, absolutePath);
+  let entries;
+  try {
+    entries = readdirSync(stepsDir, { withFileTypes: true });
+  } catch {
+    // No run has ever written a step record here - nothing to report, never
+    // an error (this file's own header: a run that has not happened yet is
+    // not rot).
+    return matches;
+  }
 
-    let content: string;
-    try {
-      content = readFileSync(absolutePath, "utf8");
-    } catch {
-      continue; // Removed between the walk and this read - nothing to report.
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const id = entry.name;
+    const recordDir = path.join(stepsDir, id);
+    const stepRecord = readStepRecord(recordDir);
+    if (stepRecord === null) continue; // Missing or unparsable record.json - out of scope, not an error.
+
+    const actions = stepRecord.actions;
+    if (!Array.isArray(actions)) continue; // No actions at all - out of scope, not an error (this file's own header).
+
+    const polls = Array.isArray(stepRecord.polls) ? stepRecord.polls : [];
+    const recordPath = path.relative(rootDir, path.join(recordDir, "record.json"));
+
+    for (let index = 0; index < actions.length - 1; index++) {
+      const action: unknown = actions[index];
+      const next: unknown = actions[index + 1];
+      if (!isActionLike(action) || !isActionLike(next)) continue;
+      if (!NAVIGATION_METHODS.has(action.method)) continue;
+
+      const navigationEndedAt = new Date(action.at).getTime() + action.ms;
+      const nextStartedAt = new Date(next.at).getTime();
+      if (Number.isNaN(navigationEndedAt) || Number.isNaN(nextStartedAt)) continue;
+
+      const gapMs = nextStartedAt - navigationEndedAt;
+      // A negative gap means the next call started before this navigation
+      // was recorded as finished (overlapping trace entries) - not the
+      // "how long after" question this note answers, so it is left alone
+      // rather than reported as some other kind of fact.
+      if (gapMs < 0 || gapMs > NOT_WORTH_LISTING_ABOVE_MS) continue;
+
+      // A read that a `ctx.poll` call was already retrying was written
+      // the way `docs/spec.md:350-375` asks for - excluded, not reported
+      // (this file's own header).
+      if (isWithinAnyPollWindow(nextStartedAt, polls)) continue;
+
+      matches.push({
+        stepRecordKey: id,
+        recordPath,
+        step: stepRecord.step,
+        navigationMethod: action.method,
+        nextMethod: next.method,
+        gapMs,
+      });
     }
-
-    const parsed = parseAcceptanceRecord(content, relativePath);
-    if (parsed.kind !== "ok") continue; // Not a record, or malformed: another finding's own concern.
-
-    parsed.record.stepRecords.forEach((stepRecord, stepRecordIndex) => {
-      const actions = stepRecord.actions;
-      if (!Array.isArray(actions)) return; // No actions at all - out of scope, not an error (this file's own header).
-
-      const polls = Array.isArray(stepRecord.polls) ? stepRecord.polls : [];
-      const stepRecordKey = `${relativePath}#${stepRecordIndex}`;
-
-      for (let index = 0; index < actions.length - 1; index++) {
-        const action: unknown = actions[index];
-        const next: unknown = actions[index + 1];
-        if (!isActionLike(action) || !isActionLike(next)) continue;
-        if (!NAVIGATION_METHODS.has(action.method)) continue;
-
-        const navigationEndedAt = new Date(action.at).getTime() + action.ms;
-        const nextStartedAt = new Date(next.at).getTime();
-        if (Number.isNaN(navigationEndedAt) || Number.isNaN(nextStartedAt)) continue;
-
-        const gapMs = nextStartedAt - navigationEndedAt;
-        // A negative gap means the next call started before this navigation
-        // was recorded as finished (overlapping trace entries) - not the
-        // "how long after" question this note answers, so it is left alone
-        // rather than reported as some other kind of fact.
-        if (gapMs < 0 || gapMs > NOT_WORTH_LISTING_ABOVE_MS) continue;
-
-        // A read that a `ctx.poll` call was already retrying was written
-        // the way `docs/spec.md:350-375` asks for - excluded, not reported
-        // (this file's own header).
-        if (isWithinAnyPollWindow(nextStartedAt, polls)) continue;
-
-        matches.push({
-          relativePath,
-          stepRecordKey,
-          step: stepRecord.step,
-          navigationMethod: action.method,
-          nextMethod: next.method,
-          gapMs,
-        });
-      }
-    });
   }
 
   return matches;
@@ -278,11 +291,11 @@ function groupMatches(matches: readonly Match[]): TendIssue[] {
     // Every step record this pair happened in, not the raw match count - a
     // step whose own actions repeat the same pair twice in one step record
     // still counts as one record, and two step records that happen to share
-    // one accepted file (two scenarios in the same run both hitting the
-    // same Background step) still count as two.
+    // the same step name (two runs of the same Background step) still
+    // count as two.
     const recordCount = new Set(group.map((match) => match.stepRecordKey)).size;
     const gapRange = formatGapRange(group.map((match) => match.gapMs));
-    const exampleRecord = group[0]!.relativePath;
+    const exampleRecord = group[0]!.recordPath;
 
     return {
       code: "post-navigation-read",
@@ -298,6 +311,6 @@ function groupMatches(matches: readonly Match[]): TendIssue[] {
   });
 }
 
-export function findPostNavigationReads(rootDir: string): TendIssue[] {
-  return groupMatches(collectMatches(rootDir));
+export function findPostNavigationReads(rootDir: string, stateDir: string): TendIssue[] {
+  return groupMatches(collectMatches(rootDir, stateDir));
 }

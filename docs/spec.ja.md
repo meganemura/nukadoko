@@ -1831,8 +1831,25 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   こうすることで「ブラウザを起動しなかった」ことと「読み手が確認し忘れた」ことが区別できるままになります。
   この節ができる前に accept された記録にはこの節がありません。
   `nuka tend` はそれを「条件不明」として扱い、条件を推測することは決してなく、この節による比較の対象にすることもありません(「手入れ」を参照)。
-- acceptance record は、凍結する run からツールが組み立てます: feature の全文、scenario record、そして evidence を取り除いた各 step 自身の step record です(trace とスクリーンショットは `.nukadoko/` に留まり、それらが必要になったときの居場所は CI の artifact です)。
+- acceptance record は、凍結する run からツールが組み立てます: feature の全文、scenario record、そして各 step 自身の step record です。
+  step 自身の契約が名指したものだけに絞り込まれ、run の途中でブラウザがたまたま行ったことは含みません。
   人間が書き写すことは決してありません(書き写しは、計測を主張へと格下げしてしまいます)。
+- ここで保持される step record は `step_record_id`、`step`、`kind`、`status`、`args`、`result`、`error`、`used`、`mutates`、`observed`、`calls`、`fixtures`、`required_env`、`world`、`started_at`、`finished_at`、`environment`、`session`、`session_execution`、`scenario_record_id`、`run_id`、`target_version` を運びます。
+  `evidence`、`actions`、`truncated`、`page_events`、`http_omitted`、`declared`、`sections`、`polls` は外れます。
+  `.nukadoko/` の下にある live な step record にはこれら全部がこれまでどおり残りますが(「Records」を参照)、そのどれも step 自身の契約が名指したものではありません。
+  scenario record の中の hook のエントリ(「Records」を参照)は `type`、`status`、`error`、`step_index` を保持し、同じ理由で `declared`、`trace`、`actions`、`truncated` を外します。
+- ここに埋め込まれる step record は、外すものの一覧によってではなく allowlist によって絞り込まれます。
+  上に名指しされた field だけが残ります。
+  live な step record に後から増える field は、上に名指しされるまで既定で外れます。
+  記録は、外した key の名前を step ごとにではなく、その下に並ぶ step record と hook のエントリすべてについて、冒頭近くで一度だけまとめて記します。
+  読み手が、何が外されたのかを推測する必要は決してありません。
+- 外れる field は、ブラウザの trace が最も速く育つものです。
+  実測では、ある 1 つの suite で、2 つの scenario、14 個の step が 3,844 行の記録を生み、そのうち `actions` だけで 2,288 行、全体の 60% を占めました。
+  この大きさの記録は gitignore され、sign-off はリポジトリからもレビューからも外れます。
+- 記録の中の各 scenario は、1 画面に収まる要約表も運びます: `step`、`status`、`ms`、`mutates`、`reads`、`writes` です。
+  `ms` はその step 自身の `started_at` と `finished_at` の間の差です。
+  `mutates` は step 自身の宣言であり、`reads` と `writes` はその `observed` の値です(下の「Declared vs observed」が比較するのと同じ組です)。
+  JSON がこれだけ細くなった今、レビュアーが実際に読むのはこの要約表です。
 - 記録の末尾にはもう 1 つのセクション、「Declared vs observed」があります。
   記録の中のすべての scenario にまたがるすべての step のうち、step record が `mutates: false` を宣言していながら、少なくとも 1 回の書き込みが計測された(`observed.http_writes > 0`、キーワードの意味論を参照)ものが対象です。
   それは生の事実として述べられます(宣言された値と観測された回数を並べるだけ)。
@@ -2321,18 +2338,20 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   「一度でも sign-off されたか」には答えが 1 つありますが、「心配になるほど長いか」には発明した答えが必要になるからです。
   `featuresDir` の中にあってもこれは黙りません、上の sign-off の staleness の所見とは違います。
   あちらは、走っているスイート自身が、かつて凍結された record が持っていた保証を運ぶようになった時点で黙りますが、record が一度でも作られたかどうかは別の問いであり、その feature がどこで走るかとは関係がありません。
-- **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。** 凍結された sign-off の記録に埋め込まれた step record だけを読みます、live な run の step record は読みません(`.nukadoko` は、ここでの他のすべての walk と同じやり方で、この walk からも除外されたままです)。
+- **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。** `.nukadoko/records/steps/` にあるツール自身の step record を読みます(「Records」を参照)。
+  commit された sign-off の記録が持つのは accept した時点で凍結されたコピーなので、run が計測したものを今も運んでいるのは live な step record のほうです(「Sign-off」を参照)。
+  これは、step record が今もディスク上に残っている step すべてに届きます、誰かが sign-off したかどうかを問いません: まだ誰も sign-off していない step も、それを走らせた run 自身の step record をすでに持っています。
   その step record 自身の `actions` にある `goto`・`reload`・`goBack`・`goForward` のそれぞれについて、その step が次に行った呼び出しまでの経過を見ます。
   同じ step record 自身の `ctx.poll` の窓の中に着地する読みは除外されます: 「Context API」の doctrine がすでに求めているとおり `poll()` を使って書かれた step は、構造上すでにリトライしているのであって、この所見が見分けようとしている対象そのものではありません。
   報告されるのは経過そのものだけであり、判定ではありません: navigation の後にページが描画を終えるまでどれだけかかるかはこのツールには測りようがなく、どの Playwright の呼び出しが auto-wait でどれが一発勝負かを分類するテーブルも、それを推測するために作られてはいません、そのようなテーブルはこのツールが計測したものではなく依存先自身の意味論を書き写すことになり、その依存先が変わるたびに腐るからです。
-  `actions` を一切持たない step record、つまりそのフィールドが存在する前に書かれた記録が今も持っている形は、静かに対象外になります、エラーにはなりません。
+  `actions` を一切持たない step record は、その step がブラウザに一度も触れなかったためであれ、そのフィールドが存在する前の記録であれ、静かに対象外になります、エラーにはなりません。
 
 この最後の所見こそ、上のリスト全体が `check` ではなく `tend` に置かれている理由をいちばん素直に示しています。
-そこで名指しされる step はすでに green で run 済みであり、その step record はすでにその合格を凍結しています。
+そこで名指しされる step はすでに run 済みであり、その step record はすでにその実行を計測しています。
 今日それの何が壊れているわけでもなく、それによって止まる run もありません。
-変わったのは、その合格がどのように起きたかについての事実をツールがいま見えるようになったことだけであり、その合格が本物でなくなったわけではありません。
-`check` は run がいますぐ進めるかどうかに答えるために存在しており、すでに合格した step についてはもう言うことがありません。
-`tend` はすでに合格したものがいまも健全かどうかに答えるために存在しており、「たまたま走っているレースにまだ負けていない」というのは、まさにその問いが扱う健全さの一種です。
+変わったのは、その実行がどのように起きたかについての事実をツールがいま見えるようになったことだけであり、その実行が本物でなくなったわけではありません。
+`check` は run がいますぐ進めるかどうかに答えるために存在しており、すでに run 済みの step についてはもう言うことがありません。
+`tend` はすでに run されたものがいまも健全かどうかに答えるために存在しており、「たまたま走っているレースにまだ負けていない」というのは、まさにその問いが扱う健全さの一種です。
 これをエラーとして報告することは、まだ現れていない症状を、すでに現れたものとして扱うことになります。
 
 所見は、他のすべてと同じく `--json` に対応します。

@@ -2,9 +2,8 @@ import type { StepRecord } from "../record/types.js";
 import type { ScenarioRecord } from "../run/record-types.js";
 
 // Responsibility: render the acceptance record's markdown text (docs/spec.md
-// "Sign-off" — the exact shape mirrors that section's own worked example,
-// reproduced here field for field). Pure string building
-// only: every value this module needs (feature source, parsed feature name,
+// "Sign-off"). Pure string building only: every value this module needs
+// (feature source, parsed feature name,
 // the winning run's scenarios, each step's own step record) is handed in
 // already resolved — cli/accept.ts owns picking the run, checking git, and
 // writing the result to disk; this module never touches the filesystem.
@@ -21,13 +20,21 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // bare `2.4.0` is valid YAML but looks unpleasantly like it could be
 // misread as a number, and quoting it costs nothing.
 //
-// `evidence` is stripped from every step record before it is embedded
-// (docs/spec.md "Sign-off": the `evidence` key is stripped before writing
-// it): trace.zip and screenshots stay under `.nukadoko/`, never copied into a
-// file meant to be committed. Nothing else about a step record is touched
-// — this module does not redact a second time (redaction already happened
-// once, when the step record was first written, src/cli/run.ts's own
-// scenario/step-record pipeline).
+// An acceptance record carries a claim, "this scenario was green at commit
+// X", not a transcript of everything a browser happened to do while proving
+// it. What stays on a step or hook record embedded here is decided by one
+// question: did the step's own contract name this field, or did a page
+// decide it by what it happened to load? `args`/`result` answer to a step's
+// own `returns` schema, so they stay; `actions`/`page_events` answer to
+// nothing but the page, so they go. That question is enforced as an
+// allowlist (`STEP_RECORD_ALLOWLIST`/`HOOK_RECORD_ALLOWLIST`, below), not a
+// denylist of the fields known to be page-shaped: a field neither list has
+// heard of yet is dropped by default, on the same reasoning an unrecognized
+// permission should default to denied rather than granted. Every key this
+// module actually drops from a given record is named once, in the one line
+// under "## What the tool measured" — dropping a field silently would leave
+// a reader with no way to learn it ever existed on the step record measured
+// on disk.
 //
 // A "Declared vs observed" section (docs/spec.md "Sign-off") gives sign-off
 // its own record of what the two step record fields, `mutates` (declared)
@@ -166,6 +173,70 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
   return lines;
 }
 
+// The keep list for a step record embedded in the record body (this file's
+// own header: contract-named, not page-shaped). `status`/`error` are here
+// too, alongside `args`/`result`: a sign-off reader needs to know a step
+// passed or failed and why, and neither is something a page decided on its
+// own. Anything on a step record not named here — today that means
+// `evidence`, `sections`, `calls`'s own trace-derived siblings `actions`/
+// `truncated`, `polls`, `declared`, `page_events`, `http_omitted` — is
+// dropped by `pickAllowed` below and named in the record's own disclosure
+// line, never passed through silently.
+const STEP_RECORD_ALLOWLIST: ReadonlySet<string> = new Set([
+  "step_record_id",
+  "step",
+  "kind",
+  "status",
+  "args",
+  "result",
+  "error",
+  "used",
+  "mutates",
+  "observed",
+  "calls",
+  "fixtures",
+  "required_env",
+  "world",
+  "started_at",
+  "finished_at",
+  "environment",
+  "session",
+  "session_execution",
+  "scenario_record_id",
+  "run_id",
+  "target_version",
+]);
+
+// The same keep list for a hook record (`ScenarioHookRecord`, src/run/
+// record-types.ts) — a hook has no `args`/`result`/`observed` of its own (no
+// step boundary to measure), so its own allowlist is shorter, but the same
+// question decides it: `declared`/`trace`/`actions`/`truncated` all answer
+// to what a page did during that one hook invocation, not to anything the
+// hook itself was contracted to do.
+const HOOK_RECORD_ALLOWLIST: ReadonlySet<string> = new Set(["type", "status", "error", "step_index"]);
+
+/** Keeps only the keys `allowlist` names, in the record's own key order
+ * (`Object.entries` walks a plain object in insertion order, so the filtered
+ * copy reads the same way the original `record.json` on disk does) —
+ * every key dropped along the way is added to `strippedOut`, the running set
+ * `renderAcceptanceRecord` turns into the record's own one-line disclosure
+ * once every scenario has been walked. */
+function pickAllowed(
+  record: Record<string, unknown>,
+  allowlist: ReadonlySet<string>,
+  strippedOut: Set<string>,
+): Record<string, unknown> {
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (allowlist.has(key)) {
+      kept[key] = value;
+    } else {
+      strippedOut.add(key);
+    }
+  }
+  return kept;
+}
+
 // A non-exhaustive ternary (`hook.type === "before" ? ... : ...`) is what
 // let `"after_step"` silently render as "After hook" in the first place —
 // `switch` + a `never`-typed default is the fix: if `ScenarioHookRecord["type"]` ever
@@ -189,8 +260,9 @@ function hookLabel(hook: ScenarioRecord["hooks"][number]): string {
   }
 }
 
-function renderHook(hook: ScenarioRecord["hooks"][number]): string[] {
-  return ["", `#### ${hookLabel(hook)}`, "", "```json", JSON.stringify(hook, null, 2), "```"];
+function renderHook(hook: ScenarioRecord["hooks"][number], strippedKeys: Set<string>): string[] {
+  const kept = pickAllowed(hook as unknown as Record<string, unknown>, HOOK_RECORD_ALLOWLIST, strippedKeys);
+  return ["", `#### ${hookLabel(hook)}`, "", "```json", JSON.stringify(kept, null, 2), "```"];
 }
 
 // Shared by renderStep and the "Declared vs observed" section below: both
@@ -216,23 +288,61 @@ function renderStep(
   scenarioId: string,
   step: ScenarioRecord["steps"][number],
   stepRecords: ReadonlyMap<string, StepRecord | null>,
+  strippedKeys: Set<string>,
 ): string[] {
   const stepRecord = resolveStepRecord(scenarioId, step, stepRecords);
-  // `evidence` is the one key this record deliberately never carries (this
-  // file's own header) — every other field of the step record, `evidence`
-  // included in the destructure only to drop it, passes through untouched.
-  const { evidence: _evidence, ...withoutEvidence } = stepRecord;
-  return ["", `#### ${step.text}`, "", "```json", JSON.stringify(withoutEvidence, null, 2), "```"];
+  const kept = pickAllowed(stepRecord as unknown as Record<string, unknown>, STEP_RECORD_ALLOWLIST, strippedKeys);
+  return ["", `#### ${step.text}`, "", "```json", JSON.stringify(kept, null, 2), "```"];
 }
 
-function renderScenarioSection(scenario: AcceptedScenario): string[] {
+/** One `| step | status | ms | mutates | reads | writes |` row per step, in
+ * scenario order — the surface a reviewer actually reads, now that the JSON
+ * blocks below it no longer carry the page-level detail a reviewer used to
+ * scan them for. `ms` comes from the step record's own
+ * `started_at`/`finished_at` (nothing else on the record times a step);
+ * `mutates: null` (a compat step, no declaration to report) reads as
+ * `compat` rather than the bare string `"null"`, matching the same three-way
+ * distinction `renderDeclaredVsObserved` already draws. Omitted outright
+ * for a scenario with no steps of its own (a hook-only scenario is not one
+ * this build actually produces, but nothing this module reads guarantees
+ * it): a table with a header and no rows would tell a reader less than no
+ * table at all. */
+function renderSummaryTable(
+  record: ScenarioRecord,
+  stepRecords: ReadonlyMap<string, StepRecord | null>,
+): string[] {
+  if (record.steps.length === 0) return [];
+  const lines: string[] = [
+    "",
+    "| step | status | ms | mutates | reads | writes |",
+    "| --- | --- | --- | --- | --- | --- |",
+  ];
+  for (const step of record.steps) {
+    const stepRecord = resolveStepRecord(record.scenario_record_id, step, stepRecords);
+    const ms = Date.parse(stepRecord.finished_at) - Date.parse(stepRecord.started_at);
+    const mutates = stepRecord.mutates === null ? "compat" : String(stepRecord.mutates);
+    // A literal `|` inside a step's own text would otherwise be read as a
+    // column boundary by any markdown table renderer; escaping it here is
+    // the same "the source text can contain anything a Gherkin author
+    // wrote" concern `yamlScalar` above exists for, just for table syntax
+    // instead of YAML.
+    const stepText = step.text.replace(/\|/g, "\\|");
+    lines.push(
+      `| ${stepText} | ${stepRecord.status} | ${ms} | ${mutates} | ${stepRecord.observed.http_reads} | ${stepRecord.observed.http_writes} |`,
+    );
+  }
+  return lines;
+}
+
+function renderScenarioSection(scenario: AcceptedScenario, strippedKeys: Set<string>): string[] {
   const { record, stepRecords } = scenario;
   const lines: string[] = ["", `### ${record.scenario} (line ${record.line})`];
+  lines.push(...renderSummaryTable(record, stepRecords));
   for (const step of record.steps) {
-    lines.push(...renderStep(record.scenario_record_id, step, stepRecords));
+    lines.push(...renderStep(record.scenario_record_id, step, stepRecords, strippedKeys));
   }
   for (const hook of record.hooks) {
-    lines.push(...renderHook(hook));
+    lines.push(...renderHook(hook, strippedKeys));
   }
   return lines;
 }
@@ -334,8 +444,34 @@ function renderCondition(options: RenderAcceptanceRecordOptions): string[] {
   return lines;
 }
 
+/** The record's own disclosure of what it left out — every key `pickAllowed`
+ * actually dropped from a step or hook record embedded below, named once
+ * rather than left for a reader to notice was missing (CLAUDE.md "Nothing
+ * breaks silently"). Alphabetical and comma-separated so the line reads the
+ * same regardless of which scenario happened to be the one that carried a
+ * given field first. Omitted outright when nothing was stripped — a
+ * disclosure with nothing to disclose would end in a bare colon, which says
+ * less than no line at all. */
+function renderStrippedKeysLine(strippedKeys: ReadonlySet<string>): string[] {
+  if (strippedKeys.size === 0) return [];
+  const keys = [...strippedKeys].sort().join(", ");
+  return [
+    "",
+    `Evidence fields are stripped from every record below: ${keys}. They stay under the state directory with the trace and the screenshots, and are not committed.`,
+  ];
+}
+
 export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): string {
   const frontmatter = renderFrontmatter(options);
+
+  // Collected before the disclosure line is written: the line names every
+  // key any scenario's step or hook records actually carried and lost,
+  // which is only known once every scenario has been walked.
+  const strippedKeys = new Set<string>();
+  const scenarioSections: string[] = [];
+  for (const scenario of options.scenarios) {
+    scenarioSections.push(...renderScenarioSection(scenario, strippedKeys));
+  }
 
   const title = options.featureName ?? options.featurePath;
   const body: string[] = [
@@ -354,11 +490,9 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
     "```",
     "",
     "## What the tool measured",
+    ...renderStrippedKeysLine(strippedKeys),
+    ...scenarioSections,
   ];
-
-  for (const scenario of options.scenarios) {
-    body.push(...renderScenarioSection(scenario));
-  }
 
   body.push(...renderDeclaredVsObserved(options.scenarios));
 

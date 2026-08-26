@@ -27,6 +27,25 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.8.0 から次のリリースへ
+
+acceptance record には破壊的変更が 1 つあります。
+`nuka tend` の `post-navigation-read` の note も、いまは違う場所を読みます。
+なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+
+- **これから `nuka accept` が書く記録は、各 step から `actions`、`page_events`、`sections`、`polls`、`declared`、`http_omitted`、`truncated` を外します。**
+  新しく accept された記録を読むスクリプトは、これらのキーを期待しないようにする必要があります。
+  これらはどれも `.nukadoko/` の下にある step record にはこれまでどおり残ります。
+  絞り込まれるのは、commit される記録に埋め込まれるコピーだけです。
+  commit された記録自身の本文が、外した key それぞれの名前を記します。
+  読み手が推測する必要はありません。
+- **すでに commit された記録は、変わらず動き続けます。**
+  既存の acceptance record を読むのに変更は要りません。
+- **これから書かれる記録では、各 scenario が要約表も運びます**: step、status、ms、mutates、reads、writes です。
+- **`nuka tend` の `post-navigation-read` の note は、いまは commit された記録ではなく、`.nukadoko/records/steps/` にある step record を読みます。**
+  プロジェクト側でやることはありません。
+  ある step についてこの note を再び得たければ、その feature を再実行してください。
+
 ## 0.7.0 から 0.8.0 へ
 
 Allure のレポート構造には 1 つの破壊的変更があります。

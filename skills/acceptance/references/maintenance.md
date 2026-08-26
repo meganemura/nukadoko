@@ -8,14 +8,16 @@ to fix it. Every other finding it reports, `signoff-condition-mismatch` and
 rather than something blocking.
 
 `post-navigation-read` is the one worth knowing the shape of, because
-there is a way to make it stop being true and only one. It lists a call a
-step made shortly after its own navigation, and it never says the gap was
-too short, since how long an application takes to render after a
-navigation is not something this tool can know. A read that a `ctx.poll`
-call was already retrying is not listed at all. Reaching for a direct
-browser wait instead does not help: that wait is itself a call right after
-the navigation, so the note comes back naming it, which reads as though
-nothing silences it.
+there is a way to make it stop being true and only one. It reads every
+step record under `.nukadoko/records/steps/`, not only the ones an
+accepted record has frozen a copy of, so a step nobody has signed off yet
+still shows up here. It lists a call a step made shortly after its own
+navigation, and it never says the gap was too short, since how long an
+application takes to render after a navigation is not something this tool
+can know. A read that a `ctx.poll` call was already retrying is not
+listed at all. Reaching for a direct browser wait instead does not help:
+that wait is itself a call right after the navigation, so the note comes
+back naming it, which reads as though nothing silences it.
 
 Once a feature has moved into `featuresDir` (see "What not to do" in
 `SKILL.md`), `nuka tend` stops reporting a stale sign-off or a drifted
@@ -28,8 +30,9 @@ not have parsed either, so there is no placement to judge it by, and a
 file that looks like a record but cannot be read stays worth reporting
 regardless of where the feature lives.
 
-The findings above all start from a record that already exists and ask
-whether its claim still holds. One more starts from the opposite end:
+`signoff-rot` and `signoff-condition-mismatch` above both start from a
+record that already exists and ask whether its claim still holds. One
+more starts from the opposite end:
 `feature-never-signed` names a feature under `featuresDir` or
 `additionalFeatureDirs` that no acceptance record's own `feature:`
 frontmatter has ever named. `nuka accept` has no way to force a red run
