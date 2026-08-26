@@ -43,7 +43,7 @@ just until 0.1.
 
 - **A live Allure report could show an arbitrary stage of a running
   scenario, rather than its newest one.** Allure picks the canonical result
-  among files sharing one `historyId` by the greatest `start`, and falls
+  among files sharing one `retryHash` by the greatest `start`, and falls
   back to ingest order when two of them tie. Every progress snapshot of a
   scenario carried one identical `start`, so that fallback decided the
   outcome, and the directory read `allure generate` uses sorts by file name

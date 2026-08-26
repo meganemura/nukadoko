@@ -120,7 +120,11 @@ import { createAtomicWriter } from "./writer.js";
 // result, never reimplemented here. That shared identity is what makes
 // `allure`'s own retry merge (@allurereport/core 3.14.3's `RetrySubstore`)
 // treat every snapshot and the eventual real result as retries of one same
-// test, picking whichever has the highest `start` as canonical.
+// test, picking whichever has the highest `start` as canonical. The key
+// that merge groups on is `retryHash`, `md5` over `testCaseId`, the
+// non-excluded parameters, and the environment id (`store.js`'s own
+// `calculateRetryHash` call). `historyId` rides along on every snapshot for
+// history and known-issue matching, and takes no part in the grouping.
 //
 // `RetrySubstore.compareResults` (source read directly, 3.14.3) falls back
 // to ingest order only when two results tie on `start`; whenever `start`
@@ -153,21 +157,34 @@ import { createAtomicWriter } from "./writer.js";
 // previous run's own crash left behind, the same moment it (re)writes
 // categories.json/environment.properties.
 //
-// Known limit, upstream in `allure watch`'s own report: once a scenario's
-// detail page has been opened, that page stops following any later switch
-// of canonical result. Its own route embeds the canonical result's uuid in
-// the page's URL fragment at the moment it opens, and the file behind that
-// uuid is never deleted or overwritten (every snapshot and the real result
-// each get their own fresh uuid, the mechanism this comment opened with),
-// so reloading that same open page keeps returning the same, now-stale
-// content; only opening the page again from the list reaches the current
-// canonical result. Serving every update under one reused uuid per
-// scenario, instead of a fresh one each time, would fix the open-page case,
-// but `allure watch` only reacts to a genuinely new path (the same limit
-// this comment opened with), so overwriting one uuid in place would stop
-// live updates from reaching the list view too. The two goals cannot both
-// be met with one uuid per scenario; this module keeps the fresh uuid per
-// snapshot and accepts the open-page limit.
+// Known limit, upstream in the report `allure watch` serves: once a
+// scenario's detail page has been opened, that page stops following any
+// later switch of canonical result. A detail route is the store id, and
+// @allurereport/core's own `convert.js` builds that id as `md5(uuid)` of
+// the result a file carried, so a fresh uuid per snapshot is a fresh route
+// per snapshot. The live channel is a whole-page reload (the static server
+// injects an `EventSource` whose handler calls `window.location.reload()`),
+// and a reload keeps the URL fragment, so the page comes back on the store
+// id it was pinned to. `RetrySubstore.retriesByTr` returns an empty list
+// for a result that is itself a retry, so a pinned page carries no link
+// forward either.
+//
+// A snapshot's uuid and its file name are separable, which leaves a way
+// out this module has not taken: @allurereport/reader reads the uuid out of
+// the JSON body, never off the file name, so one constant uuid per scenario
+// can still arrive under a fresh file name each time, which is all the
+// new-paths-only watcher needs. Measured against 3.14.3 at the file layer:
+// three snapshots sharing one uuid produce a single
+// `data/test-results/<md5(uuid)>.json`, rewritten in place, carrying the
+// newest content, on a route that never moves. Two costs come with it, both
+// measured the same way. `RetrySubstore.upsert` appends on every ingest
+// without checking whether that id is already in the group, so the one
+// result ends up listing itself among its own retries, once per snapshot,
+// and `allure watch` never evicts. And a real result reusing that same uuid
+// would collapse onto the snapshot's store id, where the winner is decided
+// by file read order rather than by `start`. What has not been measured is
+// the browser render after the reload, only the files behind it, so this
+// module keeps the fresh uuid per snapshot until that is measured too.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */

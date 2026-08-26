@@ -2905,17 +2905,23 @@ Each snapshot gets its own `start`, one millisecond above the snapshot before it
 The first sits `stepCount + 2` milliseconds below the scenario start, so the last one still stays below it.
 The final result keeps the scenario start, so Allure selects it as the canonical retry result.
 
-Allure 3 merges files with the same `historyId` as retries.
-It selects the result with the greatest `start` as canonical, and falls back to ingest order when two results share one `start`.
+Allure 3 merges files as retries when they share a `retryHash`, a hash over `testCaseId`, the non-excluded parameters, and the environment id.
+`historyId` rides along on every snapshot for history and known-issue matching, and takes no part in that grouping.
+Allure selects the result with the greatest `start` as canonical, and falls back to ingest order when two results share one `start`.
 Distinct values per snapshot are what keep that fallback out of the decision.
 Ingest order is safe to rely on under `allure watch` and unsafe under `allure generate`, which sorts the directory by file name and reads it concurrently.
 This behavior was measured with Allure 3.14.3, the version this project pins, and confirmed in the `@allurereport/core` source.
 The Allure README does not document this behavior.
 
-One limit stays, and nukadoko cannot close it.
-A scenario detail page opened during a watch session pins the routing id it opened with, and that page keeps showing the snapshot behind that id.
-A fresh page load reaches the newest one.
-Serving every snapshot under one reused file name would fix the routing id and break the updates, because watch discovers a new path and ignores a rewritten one.
+One limit stays for now.
+A scenario detail page opened during a watch session pins the routing id it opened with, and keeps showing the snapshot behind that id.
+The routing id is a hash of the result's own uuid, so a fresh uuid per snapshot is a fresh route per snapshot, and Allure's live channel reloads the whole page while the URL fragment survives.
+A fresh page load reaches the newest snapshot.
+
+A way out exists and is not taken yet.
+Allure reads a result's uuid out of the JSON body rather than off the file name, so one constant uuid per scenario can arrive under a fresh file name each time, which is what the watcher needs to see it at all.
+Two measured costs come with that: Allure appends to a result's retry list on every read without checking the id, so one result lists itself among its own retries once per snapshot, and a final result reusing the same uuid would land on the same routing id, where file read order decides the winner instead of `start`.
+What remains unmeasured is the browser render after the reload, so nukadoko keeps a fresh uuid per snapshot until that measurement exists.
 
 During a live watch session, older unknown snapshots can appear in the running scenario's retries.
 When the scenario ends, nukadoko writes the final result and removes that scenario's progress files.

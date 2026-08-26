@@ -2146,17 +2146,23 @@ snapshot は最終 result と同じ `historyId` を持ちますが、attachment�
 最初の 1 本は scenario 開始の `stepCount + 2` ミリ秒前に置かれるので、最後の 1 本も scenario 開始より前に留まります。
 最終 result は scenario の開始時刻を保つため、Allure は最終 result を canonical なリトライとして選びます。
 
-Allure 3 は同じ `historyId` を持つファイルをリトライとしてまとめます。
-その中では `start` が最大の result を canonical として選び、`start` が同値のときは ingest 順に落とします。
+Allure 3 は `retryHash` が同じファイルをリトライとしてまとめます。これは `testCaseId`、除外されていない parameter、環境 id から作るハッシュです。
+`historyId` は history と known-issue の突き合わせのために各 snapshot に載りますが、このまとめ方には関与しません。
+Allure は `start` が最大の result を canonical として選び、`start` が同値のときは ingest 順に落とします。
 snapshot ごとに異なる値を与えることが、この ingest 順の判定を使わせないための仕組みです。
 ingest 順は `allure watch` では書き込み順と一致しますが、`allure generate` では一致しません。後者はディレクトリをファイル名順に並べ、並行して読むためです。
 この挙動は、このプロジェクトが pin している Allure 3.14.3 で実測し、`@allurereport/core` のソースでも確認しました。
 Allure の README はこの挙動を文書化していません。
 
-ここには nukadoko には閉じられない限界が 1 つ残ります。
+ここにはいまのところ限界が 1 つ残ります。
 watch 中に開いた scenario の詳細ページは、開いた時点の routing id を固定し、その id が指す snapshot を表示し続けます。
-最新のものに届くのは、新しくページを読み込んだときだけです。
-すべての snapshot を 1 つのファイル名で上書きすれば routing id は固定されますが、更新は止まります。watch は新しいパスを見つける仕組みで、書き換えられたパスは無視するためです。
+routing id は result 自身の uuid のハッシュなので、snapshot ごとに uuid が変われば route も変わります。そして Allure のライブ更新はページ全体の再読み込みで、URL のフラグメントはそのまま残ります。
+最新の snapshot に届くのは、新しくページを読み込んだときだけです。
+
+抜け道は在り、まだ採っていません。
+Allure は result の uuid をファイル名ではなく JSON の中身から読むので、シナリオごとに uuid を固定したまま、毎回新しいファイル名で届けられます。watcher が見つけられるのはこの新しいパスです。
+実測した代償が 2 つあります。Allure は result を読むたびにリトライの一覧へ id を確認せずに追加するので、1 つの result が自分自身を snapshot の本数だけリトライとして並べます。そして最終 result が同じ uuid を使うと同じ routing id に乗り、勝者を決めるのが `start` ではなくファイルの読み込み順になります。
+まだ測っていないのは、再読み込み後にブラウザが何を描くかです。その測定ができるまで、nukadoko は snapshot ごとに新しい uuid を使い続けます。
 
 ライブ視聴中は、進行中の scenario のリトライに以前の unknown snapshot が見えることがあります。
 scenario の終了時に、nukadoko は最終 result を書き、その scenario の progress file を削除します。
