@@ -406,20 +406,18 @@ leaves a generated report sitting in your repository root, untracked and
 un-ignored, from nothing more than looking at a report. Sending it under
 `.nukadoko/` puts it where `nuka init` already added a gitignore entry.
 
-`watch` is the one to reach for while iterating: leave it running in one
-terminal, `nuka run` in another, and the report updates step by step as
-each one lands, not just once a whole scenario finishes; a suite row still
-carries the whole scenario's tally, so a long scenario turns red the
-moment one of its steps does rather than only once it ends. It serves on a
-random port (`--port` fixes one) and does not open a browser unless you
-pass `--open`. `nuka init` creates `.nukadoko/export/allure-results/` up front, so
-`watch` can already be running before the first `nuka run`; see [Allure
-emitter](docs/spec.md#allure-emitter) for the live-update mechanics and
-what per-step granularity costs Allure's own history and trend views.
+Use `watch` while iterating. Leave it running in one terminal and run
+`nuka run` in another. Temporary scenario snapshots update the report
+after each completed step. The final result replaces their live view when
+the scenario ends. `watch` serves on a random port (`--port` selects one)
+and opens a browser only with `--open`. `nuka init` creates
+`.nukadoko/export/allure-results/` so `watch` can start before the first
+`nuka run`. See [Allure emitter](docs/spec.md#allure-emitter) for the
+snapshot mechanics and the live retry display.
 
-`allure-results/` is append-only; nukadoko never clears it. A report
-therefore accumulates every run until you delete the directory yourself,
-which is also how you start a fresh launch.
+Completed files in `allure-results/` are append-only, so reports accumulate
+runs until you remove the directory. Temporary `*-progress-result.json`
+files are removed when their scenario ends and when the next run starts.
 
 ## Self-healing, with the deviation on the record
 

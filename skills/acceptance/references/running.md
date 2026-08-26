@@ -85,10 +85,11 @@ guess.
 Open the two for different reasons. Allure is nukadoko's own dashboard:
 every step's trace, HTTP log, and validated result, plus a per-step
 timeline of what it waited for and what it clicked, all in one place with
-zero project wiring. Render it with Allure's own CLI, `npx allure watch
-<dir> --output <report-dir>` while iterating (updates step by step as a
-run writes) or `npx allure generate`/`npx allure open` for one already
-finished; nukadoko never renders HTML itself. `messages.ndjson` is for the
+zero project wiring. Render it with Allure's own CLI. During iteration,
+`npx allure watch <dir> --output <report-dir>` reads temporary scenario
+snapshots that arrive after each completed step. Use `npx allure generate`
+and `npx allure open` for a completed run. Nukadoko never renders HTML
+itself. `messages.ndjson` is for the
 opposite reason: feeding a suite's existing cucumber-js-era formatter or
 JUnit-based CI while it migrates, not for reading by hand.
 

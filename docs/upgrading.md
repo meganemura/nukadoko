@@ -35,8 +35,23 @@ This part does not change release to release.
 
 ## 0.7.0 to the next release
 
-Nothing here needs doing before upgrading. One behavior change is worth
-knowing about if anything you run reads `nuka tend --json`.
+The Allure report structure has one breaking change. One other behavior
+change affects consumers of `nuka tend --json`.
+
+- **Allure now writes one result for each scenario pickle.** Gherkin steps
+  are entries inside that result. The Suites tab no longer groups results
+  by `parentSuite` and `suite`, so a saved Suites view appears flat.
+  Find Features in the Behaviors tab through the `feature` label, or use
+  the result's `titlePath` hierarchy. A plain scenario keeps its existing
+  history. Each Scenario Outline row starts a new history once because
+  its Examples cells are now visible parameters. Live reports still
+  update after each step, but temporary progress snapshots now provide
+  those updates. During a live session, a running scenario's retries can
+  show older unknown snapshots. Nukadoko removes them when the scenario
+  ends, so they do not appear in a report generated after the run.
+  A consumer that reads `allure-results` during a run must treat
+  `*-progress-result.json` as a temporary file. These files do not exist
+  after a completed run.
 
 - **`nuka tend`'s `post-navigation-read` notes are grouped now.** One note
   used to be emitted per step record, so a Background step in a suite with

@@ -44,6 +44,16 @@ just until 0.1.
 
 ### Changed
 
+- **Allure output now follows the allure-cucumberjs scenario structure.**
+  Each pickle produces one scenario result with Gherkin entries in
+  `steps[]`. The former step results, separate `Scenario: ` result,
+  `parentSuite` and `suite` labels, and `nukadoko.grain` label are removed.
+  Results now use `feature`, `package`, and `tag` labels plus `titlePath`.
+  Examples cells are visible parameters. Data tables and doc strings are
+  attachments, and scenario evidence attaches directly to the result.
+  Live reports still update after each step through temporary progress
+  snapshots, which nukadoko removes when the scenario finishes.
+
 - **`nuka init`'s generated `nukadoko.config.ts` (or `.mts`) points at
   where the rest of its own keys are documented.** A bare
   `defineConfig({})` gave no hint that `baseURL`, `environments`, and

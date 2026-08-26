@@ -29,8 +29,20 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.7.0 から次のリリースへ
 
-アップグレードの前にやることはありません。
-`nuka tend --json` を読んでいるものがある場合だけ、挙動の変更を 1 つ知っておいてください。
+Allure のレポート構造には 1 つの破壊的変更があります。
+もう 1 つの挙動変更は `nuka tend --json` の利用者に影響します。
+
+- **Allure は scenario の pickle ごとに 1 つの result を書くようになりました。**
+  Gherkin の step はその result の中の entry です。
+  Suites タブは `parentSuite` と `suite` で result をまとめなくなったため、保存済みの Suites 表示はフラットになります。
+  Feature は `feature` label を使って Behaviors タブで探すか、result の `titlePath` 階層を使ってください。
+  通常の scenario は既存の history を継続します。
+  Scenario Outline の各行は Examples のセルが可視 parameter になったため、1 回だけ新しい history を始めます。
+  ライブレポートは各 step の完了後も更新されますが、一時的な progress snapshot が更新を提供します。
+  ライブ視聴中は、進行中の scenario のリトライに以前の unknown snapshot が見えることがあります。
+  nukadoko は scenario の終了時にそれらを削除するため、run 後に生成したレポートには現れません。
+  run の途中で `allure-results` を読むものは、`*-progress-result.json` を一時ファイルとして扱う必要があります。
+  完了した run の後には、このファイルは存在しません。
 
 - **`nuka tend` の `post-navigation-read` の note がまとめられました。**
   以前は step record 1 件につき 1 つの note を出していました。

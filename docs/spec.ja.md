@@ -1957,100 +1957,137 @@ feature ファイルは耐久性のある成果物であり、真であり続け
 
 ## Allure emitter
 
-`nuka run` は、step が終わるたびに、その step 1 つにつき 1 つの Allure test result を、そして scenario が終わるたびに、その scenario 1 つにつきもう 1 つの Allure test result を、`export/allure-results/` ディレクトリに書き込みます(Allure 2 のファイル形式で、Allure 2 と 3 の両方で読めます)。
-これが nukadoko の唯一の presentation 層であり、nukadoko 自身は何もレンダリングしません。
+`nuka run` は scenario の pickle ごとに 1 つの Allure test result を書きます。
+形式は Allure 2 で、Allure 2 と Allure 3 の両方が読めます。
+既定の出力先は `.nukadoko/export/allure-results/` で、nukadoko 自身は HTML をレンダリングしません。
 
-- 出力先はデフォルトで `.nukadoko/export/allure-results/` です(上で述べた state directory 自身の `export/allure-results/` です)。
-  `nukadoko.config.ts` の `allure.resultsDir` で、root からの相対パスであれば他の任意の場所に移せます。
-  `enabled` フラグも CLI フラグもありません。
-  emitter は常に実行されるため、設定ゼロのままで既に完全なレポートが生成されます。
-  唯一スキップされるのは `nuka run` の呼び出しが 0 件の pickle を選んだときで(その場合 `allure-results/` はまったく作られません)、これは BeforeAll/AfterAll がスキップされるのと同じ理由です。
-- 書き込みは追記のみです: 既存の `allure-results/` ディレクトリがクリアされたり置き換えられたりすることは決してありません。
-  2 回の `nuka run` の呼び出しを 1 つの Allure launch とみなすか 2 つとみなすかは呼び出し側に委ねられています。
-  新しい launch が欲しいユーザーは、自分でそのディレクトリを削除します。
-- `allure-results/` は `nuka run` がまだ実行中でも安全に読めます。
-  そして、実行中に読めることこそが、step を単位にした理由そのものです。
-  数分かかる 20 step の scenario は、これまで最後の step が終わるまでレポートが空白のままでした。
-  Allure が result を持てる最小単位が scenario だったからです。
-  いまは各 step 自身の result がその step の終了と同時に着地するため、すでに開いているダッシュボードは scenario 単位ではなく step 単位で更新されます。
-  着地までの遅延は実測で 150〜351ms でした。
-  `nuka init` はまさにこのために `.nukadoko/export/allure-results/` を空のまま先に作るので(「The state directory」を参照)、最初の `nuka run` が始まるより前から `allure watch` を起動しておけます。
-  `categories.json`/`environment.properties` は run の最初、最初の step が始まる前に、一度だけ書き込まれます。
-  run の途中でそのディレクトリに対して `allure generate` を実行すると、そこまでに着地した step がすべて報告されます。
-  このディレクトリ自身の整合性は、run が完了しているかどうかに何も依存していません。
-- 各 gherkin の step は、それ自身が 1 つの Allure test result になります。
-  これまでのように、scenario の test の中にネストされた Allure step ではありません。
-  scenario はその test の `suite` label になり、feature はこれまでどおり `parentSuite` のままです。
-  Allure の既定のツリーはちょうどこの 2 つでグループ化するため、suite の行はこれまでと同じように scenario 全体の集計を持ち、その step のどれか 1 つが落ちればすぐに赤くなります。
-  ただし `suite` スロット自身はこれまで空でした。
-  各 Before/After フックは、これまでどおりそれぞれ独立した fixture(Allure container)になります。
-- scenario も、それ自身の Allure test result をもう 1 つ、その scenario が終わった時点で得ます。
-  名前は `Scenario: <scenario の名前>` で、ツリーの中でその葉が自分の step のどれかと取り違えられることがありません。
-  自分の step と同じ `suite`/`parentSuite` の対に収まるため、ツリーはこれまでどおり両方の粒度を 1 つの行の下にまとめます。
-  step 自身の test(下の identity の項目を参照)と違い、scenario 自身の test には run をまたいで意図的に安定した identity が与えられます。
-  これが、Allure 自身の history、trend、run をまたいだ flaky 検出を scenario 粒度で再び動かしているものであり、step 自身の test には決して約束できないことです。
-- 自分自身の Before フックで止まった scenario は、いまもすべての step が `skipped` と表示され、失敗はその hook 自身の fixture の中でしか見えません。
-  その step より前に起きた失敗の置き場所が、step レベルの test にはいまも無いからです。
-  変わったのは scenario 自身の test result(上)です: hook の失敗を直接背負い、`failed` と表示されます。
-  `nuka run` 自身の exit code と、それが書く `record.json` が既に報告していたのと同じ status です。
-  scenario 自身の test result を得る前は、hook の失敗が赤くなる場所がレポートのどこにも無かったのに対し、scenario レベルの test はその欠落を埋めます。
-- Attachment: step ごとに、その step 自身の trace、HTTP ログ、バリデーション済みの result が、その step 自身の test result に付きます。
-  scenario 自身のスクリーンショット(`final.png`、teardown で 1 度だけ撮られます)は、代わりに "Scenario evidence" という名前の合成 fixture に付きます。
-  これが撮られる時点では、すべての step 自身の test も、上の scenario 自身の test result も、すでにディスクに書き込まれ終えており、直接付けられる先がもう残っていないからです。
-  それとは別に、step が自分自身について宣言したもの(attachment、link、ログの一行)も出力され、常に `declared:` を接頭辞に付けた名前の下に置かれます。
-  すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
-- step record が存在する step には、合否を問わずすべて、その step record 全体がそのまま `record.json` という attachment として付きます。
-  これはディスクに書き込まれたのと同じオブジェクトです(そこですでに redact 済みなので、ここで 2 度目の redact は行いません)。
-  フィールドごとに分解せず丸ごと添付しているのは意図的なものです: `record.json` に後からフィールドが増えても、emitter を変更しなくてもレポートに自動で届きます。
-  下にある個別にマップされたフィールドもそのまま残ります。
-  1 つの事実を知りたいだけの読み手が attachment を開かなくて済むようにするためです。
-  `record.json` は、個別のマッピングが書かれていない場合でもレポートを完全に保つ、その受け皿です。
-- step 自身の `sections`、`polls`、`actions`(「Records」を参照)は、その step 自身の test の直下にネストされた 1 本の child step タイムラインにまとめられます。
-  これはこの変更より前より 1 段浅くなっています(以前は step 自身が scenario の test の中にネストされ、タイムラインはさらにその中にネストされていました)。
-  マージは `at` の昇順です。
-  同じミリ秒に複数の entry が重なったときは、`sections`、`polls`、`actions` の順という決まった並びを保ちます。
-  同じ step record を読み直すたびに順序が入れ替わって diff が読めなくなる、ということがないようにするためです。
-  section は、自分のラベルを名前に持つ幅ゼロのマーカーとしてレンダリングされます。
-  poll は自分の開始点から `waited_ms` 後まで幅を持ち、名前は `<description> (<attempts> attempts)` です。
-  こうすることで、1 回の試行で解決した待ちと 40 回かかった待ちを、step record を開かなくても読み分けられます。
-  所要時間だけでは両者を見分けられず、その回数こそが名前でしか運べない唯一の事実だからです。
-  poll 自身の outcome は child step の status を決めます: `resolved` は passed、`timed_out` は failed(待っていた条件が満たされなかった、つまり step 自身の契約が成立しなかった)、`failed` は broken(poll のコールバック自身が例外を投げた、それは何を待っていたかとは無関係)です。
-  action は自分の開始点から `ms` 後まで幅を持ち、名前は自分の `method` に、呼び出しが持っていれば `selector` か `url` を添えたものです(例: `goto /orders`)。
-  `expect` の呼び出しだけは代わりに matcher と対象で名付けられます(例: `expect #late to.be.visible`。否定された assertion では `not` が畳み込まれます)。
-  `goto` の対象が `url` から自明であるのと違い、`expect` の matcher と対象はどちらも `method` だけからは分かりません。
-  `ms` も `timeout_ms` も名前には決して入りません: `ms` は child step 自身の幅としてすでに見えており、これは `page_events` の件数を step の名前に入れない理由と同じです。
-  `timeout_ms` は `record.json` という attachment の中にとどまります。
-  action 自身の `outcome` は child step の status を passed か failed のどちらかに決め、第 3 の分類はありません: poll と違い、Playwright の呼び出しは step が求めた通りに解決したか、しなかったかのどちらかだからです。
-  `actions` 自身が 100 件で打ち切られていたとき(「Records」の `truncated.actions` を参照)、タイムラインの末尾にもう 1 つ、幅ゼロで passed の child step が加わり、打ち切りの事実を名指しします(例: `... 4113 more actions not shown`)。
-  これは `page_events` 自身の `truncated` フィールドが存在するのと同じ理由です: タイムラインだけを見た読み手が、打ち切られたリストを全部だと取り違えることが決してないようにするためです。
-  親 step 自身の start/stop の範囲にクランプすることは決してありません。
-  その範囲の外に出た timeline entry は実際に起きたことであり、隠せば読めなくなるだけで、起きなかったことにはなりません。
-- hook の呼び出し自身の trace と `actions`(上の「Compat steps」を参照)は、test result 自身にではなく、その hook 自身の fixture に付きます。
-  trace は `trace` という名前の attachment として、step 自身のものと同じ contentType で付きます。
-  `actions` は、上のブロックが説明したのと同じ仕組みで、その fixture 自身の child step タイムラインにマージされます。
-  hook には合流させる `sections`/`polls` がありません。
-  `section`/`poll` を呼ぶための fixture bag を持たないからです。
-  それでも trace から読み出された `actions` は、step のときと同じようにレンダリングされます。
-  `this.openPage()` に一度も触れなかった hook の呼び出しは、trace の attachment もタイムラインの entry もどちらも持ちません。
-  `page` を一度も分割代入しなかった step が「何も表示するものがない」のと同じです。
-- `page_events`(「Records」を参照)は、最大で 3 つの parameter として表に出ます: `console errors (observed)`、`page errors (observed)`、`failed requests (observed)` です。
-  それぞれ、少なくとも 1 件記録された種類だけに現れます。
-  こうすることで、すべての entry を全文運んでいる `record.json` という attachment を開かなくても、読み手は件数を見られます。
-  収集側が打ち切った種類(「Records」の `page_events.truncated` を参照)は、表示件数の隣に真の総数を示します(例えば `100 of 4213`)。
-  表示件数だけでは、実際に起きたことを過少に見せてしまいます。
-- step の parameter は、その宣言と実際に観測されたものを並べて運びます。
-  計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
-  この 2 つが自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。
-  宣言は nukadoko が信頼し作用する対象であり、observed の回数は実際に起きたことであり、この行は両者を目で見比べられる場所です。
-  observed 側は意味論上の判定ではなく HTTP メソッドによるプロキシです(キーワードの意味論を参照してください)。
-  step が POST ベースの読み取りを呼んでいた場合、正直な `mutates (declared): false` の隣にゼロでない `http writes (observed)` が並ぶことがありますが、それはこのプロキシがテーブルに透けて見えているだけであり、どちらの数値も嘘をついているわけではありません。
-- さらに 3 つの parameter、`nukadoko.run`、`nukadoko.scenario`、`nukadoko.step` が、その step の run id、scenario id、位置をそれぞれ運びます。
-  どれも `mode: "hidden"` なので、3 つとも UI には一切出ません。
-  これらは、それぞれの step 自身の `historyId` を意図的に分けておくために存在します(詳しくは下を参照)。
-  読み手に何かを見せるためのものではありません。
-- 失敗した step のメッセージには `[nukadoko.failure=<kind>]` という接頭辞が付き、その step record が既に持っている同じ `error.kind` を名指しします。
-  同じ `error.kind` は `nukadoko.failure` という result label としても書き出されます。
-  2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。
+`allure.resultsDir` は出力先を root からの別の相対パスへ移します。
+emitter に有効化のフラグはなく、呼び出しが 1 件以上の pickle を選んだときに動きます。
+呼び出しが 0 件の pickle を選んだときはスキップされます。
+これは BeforeAll/AfterAll がスキップされるのと同じ理由で、その場合 `allure-results/` ディレクトリはまったく作られません。
+`categories.json` と `environment.properties` は、run の最初、最初の step が始まる前に、一度だけ書き込まれます。
+`nuka init` は既定のディレクトリを作るため、最初の run より前に `allure watch` を開始できます。
+
+各 result は pickle の名前を持ち、Gherkin の step を `steps[]` に収めます。
+step 名は Gherkin keyword と AST の空白を保ち、`And` も正規化しません。
+各 step entry は status、時間、parameter、attachment、宣言された log、call、計測された子 timeline を保持します。
+
+result は次の label と path を持ちます。
+
+- `feature` は Feature 名を持ちます。
+- `package` はプロジェクト名と feature の path をドットで区切って持ちます。
+- pickle が継承した各 tag は `@` を保った `tag` label になります。
+- 宣言された label と link は scenario result に付きます。
+- `titlePath` はプロジェクト名、feature のディレクトリ要素、Feature 名を持ちます。
+- emitter は `parentSuite` と `suite` を割り当てません。
+  この階層が必要な利用者は、宣言された label で suite label を追加できます。
+
+`fullName` は `{project}:{feature path}#{scenario name}` です。
+SDK は `fullName` から `testCaseId` を作ります。
+`historyId` は `fullName`、`testCaseId`、そして scenario result が持つ `excluded` でないすべての parameter から作られる決定的なハッシュです。
+scenario 自身の名前は独立した hidden parameter ではありません。
+`fullName` を通じてすでに `historyId` に届いています。
+すべての scenario result が identity のために持つ唯一の hidden parameter は `nukadoko.scenario.steps` で、その scenario 自身のすべての step のテキストを順番に連結したものです。
+これは `excluded: true` ではなく `mode: "hidden"` です。
+Allure はハッシュの計算前に `excluded` な parameter を落としてしまい、それでは意図そのものが無効になるからです。
+`hidden` は parameter を UI から外すだけです。
+Scenario Outline の行は、Examples の各セルを可視 parameter として追加し、これも `historyId` に加わります。
+可視セルは以前の隠された行 parameter を置き換え、行を区別します。
+
+2 つの scenario が gherkin の名前を共有することがあります(たいていは 1 つの Scenario Outline の 2 つの行です)。
+それ以上ハッシュに加えるものが無ければ、両方が同じ `historyId` に収束し、2 行目が 1 行目の history に畳み込まれてしまいます。
+`nukadoko.scenario.steps` は通常の scenario についてこの隙間を塞ぎ、Outline の行自身が持つ Examples のセルは行についてこの隙間を塞ぎます。
+どちらも救えないのは、名前と、すべての step 自身のテキストの両方を共有し、区別する Examples の行も無い 2 つの scenario です。
+この組み合わせは、意図的に、区別が付かないままです。
+誤った接続は接続が無いことより悪いため、この identity は見分けられる以上のことを決して推測しません。
+
+この identity により、通常の scenario の history は構造変更の前後で継続します。
+Scenario Outline の行は可視 parameter により identity が変わるため、変更後に 1 回だけ新しい history を始めます。
+emitter は TestOps の移行用フィールド `_fallbackTestCaseId` を書きません。
+
+step entry は run をまたいで残る identity を何も持ちません。
+Allure の step-result モデルには `labels`/`links`/`historyId` のどのフィールドも無いため、ここでは何も組み立てようとしません。
+この設計より前に、それでも identity を計算する方法が 4 通り試されましたが、どれも別々の 2 つの step を同じものであるかのように誤接続しました。
+step のテキストはそれ自身と衝突します(2 つの step がまったく同じ文言を持つことがあります)。
+位置(index、行番号)は、feature ファイルのそれより前のどこかが編集されるたびにずれます。
+出現回数を数える方法は、挿入された重複を元のものと区別できません。
+行番号ベースの方式は、この失敗のしかたを具体的に見せてくれました。
+feature ファイルの冒頭にコメント行を 1 行足しただけで、すべての step が隣の step の history を静かに乗っ取り、それが起きたという手がかりは出力のどこにもありませんでした。
+誤った接続は接続が無いことより悪く、試したすべての方式が誤った接続を生んだため、step entry には identity をまったく与えません。
+1 つの scenario result の中にネストされた 1 エントリとしてのみ読まれます。
+
+`historyPath` は `allurerc.mjs`(nukadoko 自身の設定ではなく Allure 3 自身の設定です)の中で設定するもので、上に述べた scenario の history を実際に見えるようにしているのはこれです。
+これが無いと、scenario 自身の `historyId` がどれだけ安定していても、Allure 3 自身の `generate`/`watch`/`report` は history をまったく組み立てません。
+identity が完全に安定していて `historyPath` の無いプロジェクトは、trend も、regressed/fixed の遷移も、flaky の検出も一切見えず、レポート自身のどこにも、config のキーが欠けていることを指すものがありません。
+`nuka init` は生成する `allurerc.mjs` にこれを無条件で書き込み、`.nukadoko/export/allure-history.jsonl` を指します。
+使い捨ての `allure-results/` ディレクトリの中ではなく、その隣に置かれるため、run のたびに result をクリアしても消えません。
+[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) は、`nuka init` を使わないプロジェクト向けに同じフィールドを持ちます。
+`historyPath` を設定しても、step entry 自身の history が見えるようになるわけではありません。
+step entry はそもそも、それを組み立てるための identity を持たないからです。
+
+既存のスイートを nukadoko に移行するチームは、その移行の前後をまたいでスイート自身の Allure history、trend、retry tracking を運ぶことはできません。
+以前の history は別のツール自身の `historyId` の計算方法で作られたものであり、nukadoko はそれを再利用しないからです。
+これは実装の漏れではなく選択です。
+compat door は nukadoko に移るためのものであり、留まるためのものではありません。
+nukadoko に移った後は、scenario の history が nukadoko 自身の run から新しく積み上がっていきます。
+
+step entry には trace、HTTP log、検証済み result、`record.json`、宣言された attachment が付きます。
+Data table は `Data table` という名前の CSV attachment になります。
+Doc string は text attachment になり、allure-cucumberjs が省く内容も保持します。
+Examples table は `Examples` という名前の scenario attachment になります。
+`final.png` などの scenario evidence は scenario result に直接付きます。
+
+step record が存在する step entry には、合否を問わずすべて、その step record 全体がそのまま `record.json` という attachment として付きます。
+これはディスクに書き込まれたのと同じオブジェクトです。
+そこですでに redact 済みなので、ここで 2 度目の redact は行いません。
+フィールドごとに分解せず丸ごと添付しているのは意図的なものです。
+`record.json` に後からフィールドが増えても、emitter を変更しなくてもレポートに自動で届きます。
+この節の他の場所で個別にマップされたフィールドもそのまま残ります。
+1 つの事実を知りたいだけの読み手が attachment を開かなくて済むようにするためです。
+`record.json` は、個別のマッピングが書かれていない場合でもレポートを完全に保つ、その受け皿です。
+
+宣言された attachment には `declared:` を接頭辞に付けた名前が付きます。
+すべてが同じ result ファイルに収まったとき、この接頭辞こそが provenance(nukadoko によって計測されたのか、step によって自己申告されたのか)の生き残る唯一の場所です。
+
+宣言された log、計測された timeline entry、part の call は Gherkin step の下の子 step になります。
+
+step entry の `sections`、`polls`、`actions`(「Records」を参照)は、その step entry の下にネストされた 1 本の child step タイムラインにまとめられ、`at` の昇順でマージされます。
+同じミリ秒に複数の entry が重なったときは、`sections`、`polls`、`actions` の順という決まった並びを保ちます。
+同じ step record を読み直すたびに順序が入れ替わって diff が読めなくなる、ということがないようにするためです。
+section は、自分のラベルを名前に持つ幅ゼロのマーカーとしてレンダリングされます。
+poll は自分の開始点から `waited_ms` 後まで幅を持ち、名前は `<description> (<attempts> attempts)` です。
+所要時間だけでは、1 回の試行で解決した待ちと 40 回かかった待ちを見分けられず、その回数こそが名前でしか運べない唯一の事実だからです。
+poll 自身の outcome は child step の status を決めます。
+`resolved` は passed、`timed_out` は failed(待っていた条件が満たされなかった、つまり step 自身の契約が成立しなかった)、`failed` は broken(poll のコールバック自身が例外を投げた、それは何を待っていたかとは無関係)です。
+action は自分の開始点から `ms` 後まで幅を持ち、名前は自分の `method` に、呼び出しが持っていれば `selector` か `url` を添えたものです(例: `goto /orders`)。
+`expect` の呼び出しだけは代わりに matcher と対象で名付けられます(例: `expect #late to.be.visible`。否定された assertion では `not` が畳み込まれます)。
+`goto` の対象が `url` から自明であるのと違い、`expect` の matcher と対象はどちらも `method` だけからは分かりません。
+`ms` も `timeout_ms` も名前には決して入りません。
+`ms` は child step 自身の幅としてすでに見えており、これは `page_events` の `observed` count を step の名前に入れない理由と同じです。
+`timeout_ms` は `record.json` という attachment の中にとどまります。
+`actions` 自身が 100 件で打ち切られていたとき(「Records」の `truncated.actions` を参照)、タイムラインの末尾にもう 1 つ、幅ゼロで passed の child step が加わり、打ち切りの事実を名指しします(例: `... 4113 more actions not shown`)。
+タイムラインだけを見た読み手が、打ち切られたリストを全部だと取り違えることが決してないようにするためです。
+親 step entry 自身の start/stop の範囲にクランプすることは決してありません。
+その範囲の外に出た timeline entry は実際に起きたことであり、隠せば読めなくなるだけで、起きなかったことにはなりません。
+
+`page_events`(「Records」を参照)は、最大で 3 つの parameter として表に出ます。
+`console errors (observed)`、`page errors (observed)`、`failed requests (observed)` で、それぞれ少なくとも 1 件記録された種類だけに現れます。
+こうすることで、すべての entry を全文運んでいる `record.json` という attachment を開かなくても、読み手は件数を見られます。
+収集側が打ち切った種類は、表示件数の隣に真の総数を示します(例えば `100 of 4213`)。
+表示件数だけでは、実際に起きたことを過少に見せてしまいます。
+
+step entry の parameter は、その宣言と実際に `observed` されたものを並べて運びます。
+計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
+これは自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。
+宣言は nukadoko が信頼し作用する対象であり、`observed` の回数は実際に起きたことであり、この行は両者を目で見比べられる場所です。
+`observed` は意味論上の判定ではなく HTTP メソッドによるプロキシです(「Keyword semantics」を参照)。
+step が POST ベースの読み取りを呼んでいた場合、正直な `mutates (declared): false` の隣にゼロでない `http writes (observed)` が並ぶことがありますが、それはこのプロキシがテーブルに透けて見えているだけであり、どちらの数値も嘘をついているわけではありません。
+
+失敗した scenario は `statusDetails.message` に `[nukadoko.failure=<kind>]` を書きます。
+元の error message は `statusDetails.trace` に書きます。
+marker は、失敗した step の step record(hook が scenario を止めた場合は、その hook 自身の record)がすでに持つ同じ `error.kind` を名指しし、同じ `error.kind` は `nukadoko.failure` という result label としても書き出されます。
+2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。
+
 - **Allure 2** には result ごとの category フィールドが無いため、emitter は `categories.json` も書き出します(`error.kind` ごとに 1 つの rule、全 7 個、すべての run で、メッセージの接頭辞を正規表現でマッチさせます)。
   メッセージの接頭辞と category の rule は同じ分類を 2 つの視点から見たものであり、利用者側の設定は不要です。
 - **Allure 3** の `allure generate`/`allure report` は、結果ディレクトリの `categories.json` を一切読みません。
@@ -2058,83 +2095,71 @@ feature ファイルは耐久性のある成果物であり、真であり続け
   `nuka init` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、7 個の label-matcher rule を持たせます。
   この 7 個の名前は `NAME_BY_KIND`(`src/report/allure/categories.ts`)から組み立てられるため、emitter 自身が使う名前と決してずれません。
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
-  `init` はこの 6 つの拡張子すべてを先にチェックし、プロジェクトに既にどれか 1 つあれば何も書かず、見つけたファイル名を stderr に出します。
+  `nuka init` はこの 6 つの拡張子すべてを先にチェックし、プロジェクトに既にどれか 1 つあれば何も書かず、見つけたファイル名を stderr に出します。
   そのどれも置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。
   `nuka init` を使わないプロジェクトは、[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
-- **`fullName`(`<feature のパス>#<scenario の名前>#<step のテキスト>`)と `testCaseId`(`fullName` のハッシュ)は、step 自身の test について、公式の cucumberjs 用 Allure adapter と同じ方法で計算されます。
-  `historyId` は意図的にそうなっていません。
-  そのため、Allure の history、trend、そして run をまたいだ flaky 検出は、step 粒度では機能しません。**
-  これらはすべて、`historyId` が run をまたいで一致することを鍵にしています。
-  そして step には、そこに合わせられる安定したものが何もありません。
-  scenario と違い、step は record のどこにも自分自身の id を持っていないからです。
-  それでも identity を計算する方法が 4 通り試されましたが、どれも別々の 2 つの step を同じものであるかのように誤接続します。
-  step のテキストはそれ自身と衝突します(2 つの step がまったく同じ文言を持つことがあります)。
-  位置(index、行番号)は、feature ファイルのそれより前のどこかが編集されるたびにずれます。
-  出現回数を数える方法は、挿入された重複を元のものと区別できません。
-  行番号ベースの方式は、この失敗のしかたを具体的に見せてくれたものでした。
-  feature ファイルの冒頭にコメント行を 1 行足しただけで、すべての step が隣の step の history を静かに乗っ取り、それが起きたという手がかりは出力のどこにもありませんでした。
-  警告もなく、件数のずれもなく、読み手が気づけるものは何もありませんでした。
-  誤った接続は接続が無いことより悪く、試したすべての方式が誤った接続を生む以上、step について最後まで嘘をつかずに済む選択は 1 つだけです。
-  run をまたいで何もつなげない、という選択です。
-  そのため、step 自身の `historyId` は上で述べた 3 つの hidden parameter(`nukadoko.run`/`nukadoko.scenario`/`nukadoko.step`)を運びます。
-  これらは run のたびに値が変わり、step 自身の `historyId` を意図的に引き離します。
-  `excluded: true` ではなく `mode: "hidden"` にしているのにも理由があります。
-  Allure は `excluded` な parameter をハッシュの計算前に落としてしまい、それでは意図そのものが無効になってしまうからです。
-  `hidden` は parameter を UI から外すだけです。
-- **scenario 自身の test は、代わりに `<feature のパス>#<scenario の名前>` という `fullName` を持ち、何も付け足されません。
-  scenario 自身の `historyId` は意図的に run id も scenario id も step の位置も運ばないため、同じ scenario の 2 回の run をまたいで一致します。
-  これが、Allure の history、trend、run をまたいだ flaky 検出をここで scenario 粒度で動かしているものです。
-  ただし `historyPath`(下)が設定されていることが条件です。**
-  step と違い、scenario にはそれを組み立てるための安定した自然な鍵がもとから存在します。
-  自分自身の feature のパスと gherkin の名前です。
-  パスと名前だけの鍵が残す唯一の隙間は、hidden な `nukadoko.scenario.steps` という parameter が塞いでいる隙間と同じものです。
-  2 つの scenario が gherkin の名前を共有することがあり(たいていは 1 つの Scenario Outline の 2 つの行です)、名前だけを鍵にすると両方が同じ `historyId` にハッシュされ、2 行目が 1 行目の history に誤って畳み込まれてしまいます。
-  `nukadoko.scenario.steps`(その scenario 自身のすべての step のテキストを連結したもの)がハッシュに畳み込まれ、両者を区別します。
-  Outline の行自身が持つ Examples の値も、隠さずにハッシュに畳み込まれ、これだけで十分なことがほとんどです。
-  どちらも救えないのは、名前と、すべての step 自身のテキストの両方を共有し、区別する Examples の行も無い 2 つの scenario です。
-  この組み合わせは、意図的に、正直に見分けが付かないままです。
-  上で step 自身の identity をあきらめたのと同じ理由です: 誤った接続は接続が無いことより悪いからです。
-- `historyPath` は `allurerc.mjs`(nukadoko 自身の設定ではなく Allure 3 自身の設定です)の中で設定するもので、上に述べた scenario 自身の history を実際に見えるようにしているのはこれです。
-  これが無いと、scenario 自身の `historyId` がどれだけ安定していても、Allure 3 自身の `generate`/`watch`/`report` は history をまったく組み立てません。
-  identity が完全に安定していて `historyPath` の無いプロジェクトは、trend も、regressed/fixed の遷移も、flaky の検出も一切見えず、レポート自身のどこにも、config のキーが欠けていることを指すものがありません。
-  `nuka init` は生成する `allurerc.mjs` にこれを無条件で書き込みます(`.nukadoko/export/allure-history.jsonl`。使い捨ての `allure-results/` ディレクトリの中ではなく、その隣に置かれるため、run のたびに result をクリアしても消えません)。
-  `nuka init` を使わないプロジェクト向けの [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) も同じフィールドを持つため、手でコピーするだけで category だけでなく history も手に入ります。
-  `historyPath` を設定しても、step 自身の history が見えるようになるわけでは決してありません。
-  見えるようになるのは scenario 自身の history だけです。
-  Allure は `generate`/`watch`/`report` のたびに、自分が見た result 1 つにつき history の点を 1 つ、変わらず追記します。
-  そのため、`historyId` が二度と一致しない step 自身の result も、run のたびに、step の数だけ `history.jsonl` に積み上がり、どれも以前の何かの続きにはなりません。
-  nukadoko 自身は `allure generate` を駆動しておらず、その使い捨ての step 粒度の entry が積み上がるのを止める手段を持ちません。
-- 既存のスイートを nukadoko に移行するチームは、その移行の前後をまたいでスイート自身の Allure history、trend、retry tracking を運ぶことはできません。
-  以前の history は別のツール自身の `historyId` の計算方法で作られたものであり、nukadoko はそれを再利用しないからです。
-  これは実装の漏れではなく選択です。
-  compat door は nukadoko に移るためのものであり、留まるためのものではありません。
-  nukadoko に移った後は、scenario 自身の history が nukadoko 自身の run から scenario 粒度で新しく積み上がっていきます(直前の項目)。
-  step 自身の history はいまも一切積み上がりません。
-  意図的なもので、理由は以前と同じです: このコードベースは step に安定した identity を何も与えていないからです。
-  step 粒度で時間をまたいだ観察には、代わりにここに居場所があります。
-  `nuka tend` の sign-off rot の findings と `post-navigation-read` の note です(「Tending」を参照)。
-  どちらも、report の一連の記録が step の identity を信頼できるという前提を必要とせず、実際に accept されたものから読み取ります。
-- ad-hoc な `do` の step record は作業記録であり、test result ではないため、ダッシュボードには現れません。
-  探索が証明することは、scenario を修復するか新しく書くことで表現され、その scenario の実行こそが Allure に表示されるものです。
-- 1 回の run を見ることは Allure の仕事であり、nukadoko 自身に web UI はありません。
-  history、trend、flakiness も Allure の機能です。
-  上の 2 つの identity の項目のとおり、この emitter はそれらを `historyPath` が設定されていれば scenario 粒度で供給し、step 粒度では決して供給しません。
-  1 回の `nuka run` の呼び出しについて Allure が示すものはそれ自体で完結しており、後の呼び出しの step が今回の呼び出しに紐づくことは何もありません。
-  紐づくのは scenario だけです。
-- `allure-js-commons` 自身の API に対してだけでなく、実際のブラウザに対しても確認済みです。
-  passing な scenario、failing な scenario、Before hook が止める scenario を持つ小さな fixture に対して `nuka run` を実行し、実物の `allure` CLI でレポートを生成し、実物の HTTP サーバでそれを配信し、実物のヘッドレスブラウザでそれを操作するという形です(レポートの SPA は読み込み時に自身の `widgets/*.json` を fetch しますが、`file://` はそれを一切配信できず、それでもシェル自体は変わらず描画されてしまうため、チェックは意味を持つために data-dependent な何かを読む必要があります)。
-  これで確認できたのは次のことです: レポート自身の pass/failed/skipped の件数が、両方の粒度を合わせて `nuka run` 自身の報告と一致すること、各 scenario がそれ自身のグループ行として、自分の step それぞれの葉と並んで自分自身の葉を持つこと、失敗した step の `record.json` の attachment が存在し、しかもその中身が実際に読めること(その step 自身の record id を示します)、`nuka init` 自身が書く `allurerc.mjs`(前述)が実際に失敗を Allure 3 の既定の「Product errors」ではなく固有の category に振り分けること、そして step 自身の `sections`/`polls` がその step の直下の子 step として、2 段ではなく 1 段だけ潜った形で表示されることです。
-  あわせて確認し、たまたまではなく固定した事実として扱っているものがもう 1 つあります: Before hook が止めた scenario は、それ自身の step 粒度の葉がすべて赤くではなく skipped として表示され、これは生成済みのレポートで見えるのと同じ挙動である一方、それ自身の scenario 粒度の葉は `failed` と表示され、この節で先に触れた表示上の欠落を埋めていることが、単体テストだけでなく実物のレポートでも確かめられています。
-  `allure watch` が run の進行中にレポートをライブ配信することも、同じやり方ですでに確かめられています: その結果件数は run の途中で 0 を超えて上がり、run が終了した時点で実際の件数と一致します。
-  まだこの形で試されていないもの: hook 自身の trace の attachment です(後の段階に残しています)。
 
-まだ実装されていないもの: フック自身の duration(record.json は今のところ hook ごとの timestamp を持たないため、フックの開始と終了はどちらも scenario 自身の境界に潰れます)、BeforeAll/AfterAll(emitter がそこから map できる run レベルの record が存在しません)、そして link-template の設定(`@issue:123` のような tag を URL に対応付けるもの)です。
+Before hook と After hook は scenario scope の 1 つの Allure container に残ります。
+各 hook は trace、attachment、子 timeline を持つ fixture になります。
+hook 自身の trace と `actions` は、その hook 自身の fixture に付きます。
+step entry と同じやり方でマップされ、trace は `trace` という名前の attachment として、`actions` は同じマージによって fixture 自身の child step タイムラインに合流します。
+hook には合流させる `sections`/`polls` がありません。
+`section`/`poll` を呼ぶための fixture bag を持たないからです。
+それでも trace から読み出された `actions` は変わらずレンダリングされます。
+`this.openPage()` に一度も触れなかった hook の呼び出しは、trace の attachment もタイムラインの entry もどちらも持ちません。
+`page` に一度も触れなかった step entry が「何も表示するものがない」のと同じです。
+Before hook の失敗は scenario result を failed にし、予定された各 Gherkin step を skipped にします。
+BeforeAll と AfterAll には emitter が対応できる run level の record がありません。
+scenario record は hook ごとの timestamp を持たないため、hook の duration は scenario の境界を使います。
 
-要点はフォーマットの派閥争いではありません: 従来の cucumber の実行が Allure レポートを満たすのは、glue の作者が手で evidence を添付した箇所だけです。
-一方で nukadoko の harness はどのみちすべてを計測しており、Allure 自身のモデル(attachment、label、parameter)には、その全部の一級の置き場所が既にありました。
+`allure-results/` は `nuka run` がまだ実行中でも安全に読めます。
+すべてのファイルは temp file の rename を通じて着地するため、読み手が書きかけの result を目にすることは決してありません。
+scenario 自身の 1 つの本当の result は、その scenario が終わって初めて存在します。
+それまでの間にライブの読み手が目にして更新されているのは、下の progress snapshot です。
+
+emitter は scenario の開始時に progress snapshot を書きます。
+最初の snapshot は予定された全 step を status なしで列挙するため、Allure は各 step を unknown と表示します。
+emitter は各 step の完了後に新しい `<uuid>-progress-result.json` を書きます。
+各 snapshot は、その時点で完了した step の status と時間を使います。
+
+snapshot は最終 result と同じ `historyId` を持ちますが、attachment、hook fixture、除外された文脈 parameter を含みません。
+snapshot の `start` は scenario 開始の 1 ミリ秒前に固定します。
+最終 result は scenario の開始時刻を保つため、Allure は最終 result を canonical なリトライとして選びます。
+
+Allure 3 watch は同じ `historyId` を持つファイルをリトライとしてまとめます。
+その中では `start` が最大の result を canonical として選びます。
+この挙動は Allure 3.15.0 で実測し、`@allurereport/core` のソースでも確認しました。
+Allure の README はこの挙動を文書化していません。
+
+ライブ視聴中は、進行中の scenario のリトライに以前の unknown snapshot が見えることがあります。
+scenario の終了時に、nukadoko は最終 result を書き、その scenario の progress file を削除します。
+run の開始時には、中断した以前の run が残した progress file を削除します。
+この掃除は、1 つの results directory で同時に動く run が 1 つであることを前提にします。
+
+完了した result file は追記のみです。
+既存の `allure-results/` ディレクトリがクリアされたり置き換えられたりすることは決してありません。
+progress file は nukadoko の作業ファイルであり、唯一の例外です。
+2 回の `nuka run` の呼び出しを 1 つの Allure launch とみなすか 2 つとみなすかは呼び出し側に委ねられています。
+新しい launch が欲しい利用者は、自分でそのディレクトリを削除します。
+完了後の results directory は最終 result、container、attachment、launch metadata を持ちます。
+
+将来の Allure がリトライをまとめる挙動を変えた場合、ライブ表示は step 単位の忠実さを失う可能性があります。
+完了後のディレクトリには最終 result だけが残るため、生成したレポートは正しさを保ちます。
+
+ad-hoc な `nuka do` の record はダッシュボードの対象外です。
+探索した内容は feature に記録し、`nuka run` がその scenario を実行した時点でレポートの対象になります。
+
+1 回の run を見ることは Allure の仕事であり、nukadoko 自身に web UI はありません。
+history、trend、flakiness も Allure の機能です。
+上の identity の段落のとおり、この emitter はそれらを `historyPath` が設定されていれば scenario 粒度で供給し、step 粒度では決して供給しません。
+後の呼び出しの step entry が今回の呼び出しに紐づくことは何もなく、紐づくのは scenario だけです。
+
+未実装なのは、`@issue:123` などの tag に対する link-template の設定です。
+
+要点はフォーマットの派閥争いではありません。
+従来の cucumber の実行が Allure レポートを満たすのは、glue の作者が手で evidence を添付した箇所だけですが、nukadoko の harness はどのみちすべてを計測しており、Allure 自身のモデル(attachment、label、parameter)には、その全部の一級の置き場所が既にありました。
 Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日既に見えるようになる場所です。
 下にある messages emitter は 2 つ目の、より狭い出力であり、その役割は計測の余剰ではなく compat の忠実さです。
-
 ## Messages emitter
 
 `nuka run` は呼び出しごとに 1 つの cucumber messages ストリーム(NDJSON、`@cucumber/messages` 経由で 1 行 1 envelope)を書き込み、デフォルトの出力先は `.nukadoko/export/messages.ndjson` です。
