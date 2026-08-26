@@ -2142,13 +2142,21 @@ emitter は各 step の完了後に新しい `<uuid>-progress-result.json` を�
 各 snapshot は、その時点で完了した step の status と時間を使います。
 
 snapshot は最終 result と同じ `historyId` を持ちますが、attachment、hook fixture、除外された文脈 parameter を含みません。
-snapshot の `start` は scenario 開始の 1 ミリ秒前に固定します。
+各 snapshot は固有の `start` を持ち、1 つ前の snapshot より 1 ミリ秒だけ大きくなります。
+最初の 1 本は scenario 開始の `stepCount + 2` ミリ秒前に置かれるので、最後の 1 本も scenario 開始より前に留まります。
 最終 result は scenario の開始時刻を保つため、Allure は最終 result を canonical なリトライとして選びます。
 
-Allure 3 watch は同じ `historyId` を持つファイルをリトライとしてまとめます。
-その中では `start` が最大の result を canonical として選びます。
-この挙動は Allure 3.15.0 で実測し、`@allurereport/core` のソースでも確認しました。
+Allure 3 は同じ `historyId` を持つファイルをリトライとしてまとめます。
+その中では `start` が最大の result を canonical として選び、`start` が同値のときは ingest 順に落とします。
+snapshot ごとに異なる値を与えることが、この ingest 順の判定を使わせないための仕組みです。
+ingest 順は `allure watch` では書き込み順と一致しますが、`allure generate` では一致しません。後者はディレクトリをファイル名順に並べ、並行して読むためです。
+この挙動は、このプロジェクトが pin している Allure 3.14.3 で実測し、`@allurereport/core` のソースでも確認しました。
 Allure の README はこの挙動を文書化していません。
+
+ここには nukadoko には閉じられない限界が 1 つ残ります。
+watch 中に開いた scenario の詳細ページは、開いた時点の routing id を固定し、その id が指す snapshot を表示し続けます。
+最新のものに届くのは、新しくページを読み込んだときだけです。
+すべての snapshot を 1 つのファイル名で上書きすれば routing id は固定されますが、更新は止まります。watch は新しいパスを見つける仕組みで、書き換えられたパスは無視するためです。
 
 ライブ視聴中は、進行中の scenario のリトライに以前の unknown snapshot が見えることがあります。
 scenario の終了時に、nukadoko は最終 result を書き、その scenario の progress file を削除します。

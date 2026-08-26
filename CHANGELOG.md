@@ -39,6 +39,27 @@ just until 0.1.
   step record from the run that exercised it. A project has nothing to do
   about this; run a feature again to get the note back for its steps.
 
+### Fixed
+
+- **A live Allure report could show an arbitrary stage of a running
+  scenario, rather than its newest one.** Allure picks the canonical result
+  among files sharing one `historyId` by the greatest `start`, and falls
+  back to ingest order when two of them tie. Every progress snapshot of a
+  scenario carried one identical `start`, so that fallback decided the
+  outcome, and the directory read `allure generate` uses sorts by file name
+  and then reads concurrently, which leaves its ingest order unrelated to
+  write order. Seven snapshots of a seven-step scenario, captured mid-run
+  and replayed against that path, gave a canonical result showing 0 of the
+  7 steps resolved when ingested in reverse write order, and 4 of the 7 in
+  the alphabetical order that path itself uses. Each snapshot now takes a
+  `start` one millisecond above the snapshot before it, the first one
+  `stepCount + 2` milliseconds below the scenario start, so the greatest
+  `start` alone picks the canonical result and the real result still
+  outranks every snapshot. One limit stays and lives upstream: a scenario
+  detail page opened during `allure watch` pins the routing id it opened
+  with and keeps showing that snapshot, so a fresh page load is what
+  reaches the newest one (docs/spec.md "Allure emitter").
+
 ## 0.8.0 — 2026-08-26
 
 ### Added

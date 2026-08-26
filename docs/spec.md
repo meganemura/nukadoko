@@ -2901,13 +2901,21 @@ The emitter writes a new `<uuid>-progress-result.json` after each completed step
 Each snapshot uses the completed statuses and timings available at that point.
 
 A snapshot has the final result's `historyId`, but excludes attachments, hook fixtures, and excluded context parameters.
-Its `start` is fixed one millisecond before the scenario start.
+Each snapshot gets its own `start`, one millisecond above the snapshot before it.
+The first sits `stepCount + 2` milliseconds below the scenario start, so the last one still stays below it.
 The final result keeps the scenario start, so Allure selects it as the canonical retry result.
 
-Allure 3 watch merges files with the same `historyId` as retries.
-It selects the result with the greatest `start` as canonical.
-This behavior was measured with Allure 3.15.0 and confirmed in the `@allurereport/core` source.
+Allure 3 merges files with the same `historyId` as retries.
+It selects the result with the greatest `start` as canonical, and falls back to ingest order when two results share one `start`.
+Distinct values per snapshot are what keep that fallback out of the decision.
+Ingest order is safe to rely on under `allure watch` and unsafe under `allure generate`, which sorts the directory by file name and reads it concurrently.
+This behavior was measured with Allure 3.14.3, the version this project pins, and confirmed in the `@allurereport/core` source.
 The Allure README does not document this behavior.
+
+One limit stays, and nukadoko cannot close it.
+A scenario detail page opened during a watch session pins the routing id it opened with, and that page keeps showing the snapshot behind that id.
+A fresh page load reaches the newest one.
+Serving every snapshot under one reused file name would fix the routing id and break the updates, because watch discovers a new path and ignores a rewritten one.
 
 During a live watch session, older unknown snapshots can appear in the running scenario's retries.
 When the scenario ends, nukadoko writes the final result and removes that scenario's progress files.

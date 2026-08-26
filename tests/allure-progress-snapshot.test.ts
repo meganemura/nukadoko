@@ -16,8 +16,9 @@ import { createCaptureSink } from "./helpers/fixtures.js";
 // "Allure ライブ更新" design): a progress snapshot appears after
 // `beginScenario` and after every `emitStep`, matches the eventual real
 // result's own identity (fullName/testCaseId/historyId/non-excluded
-// parameters), carries a `start` one millisecond below the real result's
-// own, and is gone the moment `endScenario` writes that real result.
+// parameters), carries a `start` strictly below the real result's own and
+// strictly higher than the snapshot before it in the same scenario, and is
+// gone the moment `endScenario` writes that real result.
 // tests/allure-emitter.test.ts and tests/allure-structure.test.ts already
 // prove the real result's own shape is unaffected by any of this (a
 // progress file never survives past `endScenario`, so their own
@@ -38,6 +39,10 @@ const FEATURE_SOURCE = `Feature: Checkout
       | role   |
       | guest  |
       | member |
+`;
+
+const ZERO_STEP_FEATURE_SOURCE = `Feature: Empty
+  Scenario: nothing happens
 `;
 
 function readProgressFileNames(resultsDir: string): string[] {
@@ -206,21 +211,36 @@ describe("createAllureEmitter: progress snapshots", () => {
     );
   });
 
-  it("freezes every snapshot's own start to one millisecond below the final result's start", () => {
+  it("gives one scenario's own snapshots a strictly increasing start, starting at scenarioStart - (stepCount + 2), all strictly below the real result's own start", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+      text: step.text,
+      status: "passed",
+      step_record_id: null,
+    }));
     const startedAt = new Date("2026-08-01T09:00:00.000Z");
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument, startedAt }));
-    const initialSnapshot = readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { start: number };
-    expect(initialSnapshot.start).toBe(startedAt.getTime() - 1);
-    expect(typeof initialSnapshot.start).toBe("number");
+    const starts: number[] = [
+      (readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { start: number }).start,
+    ];
 
-    emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
-    const laterSnapshots = readProgressFileNames(resultsDir).map((name) => readJson(resultsDir, name) as { start: number });
-    for (const snapshot of laterSnapshots) {
-      expect(snapshot.start).toBe(startedAt.getTime() - 1);
+    for (const [index, step] of steps.entries()) {
+      const before = new Set(readProgressFileNames(resultsDir));
+      emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index }));
+      const added = newProgressFileSince(resultsDir, before);
+      starts.push((readJson(resultsDir, added) as { start: number }).start);
+    }
+
+    // Criterion 3: the first snapshot (`beginScenario`'s own) starts at
+    // scenarioStart - (stepCount + 2).
+    expect(starts[0]).toBe(startedAt.getTime() - (pickle.steps.length + 2));
+
+    // Criterion 1: every later snapshot's own start is strictly higher than
+    // the one before it -- no two snapshots in this scenario tie.
+    for (let i = 1; i < starts.length; i++) {
+      expect(starts[i]!).toBeGreaterThan(starts[i - 1]!);
     }
 
     const record: ScenarioRecord = {
@@ -233,8 +253,8 @@ describe("createAllureEmitter: progress snapshots", () => {
       environment: "staging",
       session: null,
       started_at: startedAt.toISOString(),
-      finished_at: "2026-08-01T09:00:01.000Z",
-      steps: [step],
+      finished_at: "2026-08-01T09:00:02.000Z",
+      steps,
       hooks: [],
       evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
     };
@@ -242,7 +262,58 @@ describe("createAllureEmitter: progress snapshots", () => {
 
     const final = readFinalFileNames(resultsDir).map((name) => readJson(resultsDir, name))[0] as { start: number };
     expect(final.start).toBe(startedAt.getTime());
-    expect(initialSnapshot.start).toBe(final.start - 1);
+
+    // Criterion 2: every snapshot's own start stays strictly below the
+    // real result's own start.
+    for (const start of starts) {
+      expect(start).toBeLessThan(final.start);
+    }
+  });
+
+  it("never throws for a scenario with zero steps, and still keeps its one snapshot's start below the real result's own", () => {
+    const { gherkinDocument, pickles } = parseFeatureSource(ZERO_STEP_FEATURE_SOURCE, "features/empty.feature");
+    const pickle = pickles.find((p) => p.name === "nothing happens")!;
+    expect(pickle.steps).toHaveLength(0);
+    const startedAt = new Date("2026-08-01T09:00:00.000Z");
+
+    expect(() =>
+      emitter.beginScenario(
+        baseBeginScenarioInput({
+          pickle,
+          gherkinDocument,
+          startedAt,
+          relativeFeaturePath: "features/empty.feature",
+        }),
+      ),
+    ).not.toThrow();
+
+    const initialSnapshot = readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { start: number };
+    // Criterion 4: a zero-step scenario's own first (and only) snapshot
+    // still starts at scenarioStart - (0 + 2).
+    expect(initialSnapshot.start).toBe(startedAt.getTime() - 2);
+
+    const record: ScenarioRecord = {
+      scenario_record_id: "scn-empty",
+      run_id: "run-1",
+      feature: "features/empty.feature",
+      scenario: pickle.name,
+      line: pickle.location?.line ?? 0,
+      status: "passed",
+      environment: "staging",
+      session: null,
+      started_at: startedAt.toISOString(),
+      finished_at: "2026-08-01T09:00:00.500Z",
+      steps: [],
+      hooks: [],
+      evidence: { dir: ".nukadoko/records/scenarios/scn-empty", screenshots: [] },
+    };
+    expect(() =>
+      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/empty.feature" }),
+    ).not.toThrow();
+
+    const final = readFinalFileNames(resultsDir).map((name) => readJson(resultsDir, name))[0] as { start: number };
+    expect(final.start).toBe(startedAt.getTime());
+    expect(initialSnapshot.start).toBeLessThan(final.start);
   });
 
   it("lists every pickle step in the initial snapshot, none of them carrying a status yet", () => {

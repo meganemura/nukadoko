@@ -108,31 +108,66 @@ import { createAtomicWriter } from "./writer.js";
 // one is written under its own fresh uuid (writer.ts's own
 // `writeProgressSnapshot`, `<uuid>-progress-result.json`) because
 // `allure watch` only ever discovers a genuinely new file path (polls every
-// 300ms, ignores an overwrite of a path it already read — verified against
-// @allurereport/core 3.15.0), so updating one file in place would only ever
-// be seen once. Every snapshot still carries the exact same `fullName`/
-// `testCaseId`/`historyId`/non-excluded parameters the eventual real result
-// will (map-scenario.ts's own `buildScenarioStepsSignature`/
-// `buildExampleParameters`, both read straight off `pickle`, frozen before
-// a single step runs), computed with allure-js-commons' own
-// `getTestResultTestCaseId`/`getTestResultHistoryId` — the same formula
-// `ReporterRuntime.stopTest` itself calls for the real result, never
-// reimplemented here. That shared identity is what makes `allure watch`'s
-// own retry merge (@allurereport/core 3.15.0's `RetrySubstore`) treat every
-// snapshot and the eventual real result as retries of one same test,
-// picking whichever has the highest `start` as canonical. Every snapshot's
-// own `start` is frozen to one value below the scenario's own real start
-// (`BeginScenarioInput.startedAt`'s own doc comment, below), so the real
-// result — whose own `start` is `record.started_at` itself — always
-// outranks every snapshot that came before it; among the snapshots
-// themselves, `RetrySubstore`'s own tie-break on ingest order picks
-// whichever was written last, which is exactly "the live view always shows
-// the latest completed step" without ever touching a path `allure watch`
-// has already read once. `endScenario` deletes every progress snapshot the
-// scenario ever wrote the moment its real result lands, so a finished
-// run's own `allure-results` directory never carries a stale one; `begin()`
-// sweeps up whatever a previous run's own crash left behind, the same
-// moment it (re)writes categories.json/environment.properties.
+// 300ms, ignores an overwrite of a path it already read; verified against
+// @allurereport/core 3.14.3, the version this repository pins), so updating
+// one file in place would only ever be seen once. Every snapshot still
+// carries the exact same `fullName`/`testCaseId`/`historyId`/non-excluded
+// parameters the eventual real result will (map-scenario.ts's own
+// `buildScenarioStepsSignature`/`buildExampleParameters`, both read
+// straight off `pickle`, frozen before a single step runs), computed with
+// allure-js-commons' own `getTestResultTestCaseId`/`getTestResultHistoryId`,
+// the same formula `ReporterRuntime.stopTest` itself calls for the real
+// result, never reimplemented here. That shared identity is what makes
+// `allure`'s own retry merge (@allurereport/core 3.14.3's `RetrySubstore`)
+// treat every snapshot and the eventual real result as retries of one same
+// test, picking whichever has the highest `start` as canonical.
+//
+// `RetrySubstore.compareResults` (source read directly, 3.14.3) falls back
+// to ingest order only when two results tie on `start`; whenever `start`
+// differs, the higher one wins outright. This module never relies on that
+// fallback: `beginScenario` gives every progress snapshot a `start`
+// strictly higher than the one before it in the same scenario (each
+// `writeProgressSnapshot` call below adds one to the last), so within one
+// scenario `start` alone always picks a canonical result, and the real
+// result's own `start` (`record.started_at` itself) is set above every
+// snapshot's ceiling, so it always outranks all of them.
+//
+// This matters because ingest order does not track write order on every
+// path that reads `allure-results`. `allure watch`'s own live path does
+// track it, but the batch path `allure generate` uses, `readDirectory`,
+// lists the directory with `entries.sort((a, b) =>
+// a.name.localeCompare(b.name))`, an alphabetical sort on each result
+// file's own fresh uuid, then reads every file concurrently through a
+// limited-concurrency pool, so its own ingest order tracks neither the
+// write order nor that alphabetical listing. Seven real progress snapshots
+// of one seven-step scenario were captured mid-run and replayed against
+// that batch path, back when every one of them still shared a single
+// `start`: ingested in reverse write order, the canonical result showed 0
+// of the 7 steps resolved, and ingested in the batch path's own
+// alphabetical order it showed 4 of the 7. Which snapshot won tracked the
+// ingest order it was fed, never how far the run had actually got.
+//
+// `endScenario` deletes every progress snapshot the scenario ever wrote the
+// moment its real result lands, so a finished run's own `allure-results`
+// directory never carries a stale one; `begin()` sweeps up whatever a
+// previous run's own crash left behind, the same moment it (re)writes
+// categories.json/environment.properties.
+//
+// Known limit, upstream in `allure watch`'s own report: once a scenario's
+// detail page has been opened, that page stops following any later switch
+// of canonical result. Its own route embeds the canonical result's uuid in
+// the page's URL fragment at the moment it opens, and the file behind that
+// uuid is never deleted or overwritten (every snapshot and the real result
+// each get their own fresh uuid, the mechanism this comment opened with),
+// so reloading that same open page keeps returning the same, now-stale
+// content; only opening the page again from the list reaches the current
+// canonical result. Serving every update under one reused uuid per
+// scenario, instead of a fresh one each time, would fix the open-page case,
+// but `allure watch` only reacts to a genuinely new path (the same limit
+// this comment opened with), so overwriting one uuid in place would stop
+// live updates from reaching the list view too. The two goals cannot both
+// be met with one uuid per scenario; this module keeps the fresh uuid per
+// snapshot and accepts the open-page limit.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -149,15 +184,16 @@ export interface BeginScenarioInput {
   readonly gherkinDocument: GherkinDocument;
   readonly relativeFeaturePath: string;
   /** Captured by the caller (cli/run.ts) once, right before `runScenario`
-   * itself runs — never later than that call's own `record.started_at`
-   * (nothing async happens between the two), which is what keeps every
-   * progress snapshot's own frozen `start` strictly below the eventual
-   * real result's `start`: @allurereport/core 3.15.0's own
-   * `RetrySubstore.compareResults` picks whichever same-identity result
-   * has the higher `start` as canonical, so the real result — captured
-   * later, hence numerically higher — always outranks every snapshot that
-   * came before it, however many milliseconds of true drift separate this
-   * timestamp from `record.started_at`'s own. */
+   * itself runs, never later than that call's own `record.started_at`
+   * (nothing async happens between the two). `beginScenario` uses this
+   * value as the top of the range every one of this scenario's own
+   * progress snapshots gets its `start` from (this file's own header,
+   * `writeProgressSnapshot`): the highest a snapshot's `start` can reach is
+   * one millisecond below this value, and the real result's own `start` is
+   * `record.started_at` itself, so however many milliseconds of true drift
+   * separate this timestamp from `record.started_at`'s own, the real
+   * result's `start` still lands at or above this value, above every
+   * snapshot the scenario wrote. */
   readonly startedAt: Date;
 }
 
@@ -293,18 +329,21 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
 
   // The state this module carries across `beginScenario`/`emitStep`/
   // `endScenario` — safe only because `nuka run` runs one scenario at a
-  // time (this file's own header). All four are reset both before the
+  // time (this file's own header). All five are reset both before the
   // first `beginScenario` and once `endScenario` has cleared them, so a
   // stray `emitStep` call outside a scenario's own begin/end pair is a
   // no-op rather than attaching to the *previous* scenario's own scope or
-  // buffer. `progressAnchorMs` is `null` exactly when there is no open
-  // scope to write a snapshot under (mirrors `currentScopeUuid` itself);
-  // `progressUuids` collects every progress snapshot's own uuid this
-  // scenario has written so far, so `endScenario` knows exactly which
-  // files to delete.
+  // buffer. `progressAnchorMs`/`progressCeilingMs` are `null` exactly when
+  // there is no open scope to write a snapshot under (mirrors
+  // `currentScopeUuid` itself); `progressUuids` collects every progress
+  // snapshot's own uuid this scenario has written so far, so `endScenario`
+  // knows exactly which files to delete, and doubles as this scenario's
+  // own snapshot count for `writeProgressSnapshot`'s own `start` formula
+  // below.
   let currentScopeUuid: string | null = null;
   let bufferedSteps: MappedGwtStepOutcome[] = [];
   let progressAnchorMs: number | null = null;
+  let progressCeilingMs: number | null = null;
   let progressUuids: string[] = [];
 
   function toAbsolute(relativePath: string): string {
@@ -447,7 +486,12 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
    * same `statusDetails: {}, stage: "pending"` shape a real, still-running
    * result already has at this same point in its own lifecycle. */
   function writeProgressSnapshot(pickle: Pickle, gherkinDocument: GherkinDocument, relativeFeaturePath: string): void {
-    if (progressAnchorMs === null) {
+    // Captured into locals so a null check on either narrows both for the
+    // rest of this call, the same pattern `emitStep`'s own `scopeUuid`
+    // local uses below for `currentScopeUuid`.
+    const anchor = progressAnchorMs;
+    const ceiling = progressCeilingMs;
+    if (anchor === null || ceiling === null) {
       return;
     }
     const posixPath = toPosixPath(relativeFeaturePath);
@@ -457,7 +501,20 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     result.name = pickle.name;
     result.fullName = buildFullName(projectName, posixPath, pickle.name);
     result.titlePath = buildTitlePath(projectName, posixPath, featureName);
-    result.start = progressAnchorMs;
+    // `progressUuids.length` is this scenario's own snapshot count so far
+    // (this function's own `writer.writeProgressSnapshot` call below is
+    // what pushes the current one's uuid, after this line runs), so this
+    // strictly increases by one on every call: `beginScenario`'s own first
+    // call gets `anchor + 0`, the next gets `anchor + 1`, and so on. The
+    // `Math.min` against `ceiling` is a defensive clamp, not part of the
+    // expected count: a scenario with N steps is expected to call this
+    // function exactly N + 1 times (once from `beginScenario`, once per
+    // `emitStep`), and `anchor` already budgets one call more than that
+    // (`beginScenario`'s own comment), so an on-budget run never reaches
+    // `ceiling` at all. If something calls this more times than expected,
+    // the clamp stops `start` from ever reaching or passing the real
+    // result's own `start`, which is `ceiling + 1`.
+    result.start = Math.min(anchor + progressUuids.length, ceiling);
     // Identity only (req 2's own invariant) — `mapScenario`'s own context
     // parameters (environment/session/target_version) are excluded from
     // historyId already, so a snapshot that never carries them changes
@@ -533,6 +590,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       bufferedSteps = [];
       progressUuids = [];
       progressAnchorMs = null;
+      progressCeilingMs = null;
       try {
         currentScopeUuid = runtime.startScope();
       } catch (error) {
@@ -543,9 +601,15 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       if (currentScopeUuid === null) {
         return;
       }
-      // Frozen once, for every progress snapshot this scenario will ever
-      // write (`BeginScenarioInput.startedAt`'s own doc comment).
-      progressAnchorMs = input.startedAt.getTime() - 1;
+      // Set once, for every progress snapshot this scenario will ever
+      // write (`BeginScenarioInput.startedAt`'s own doc comment). The
+      // budget of `steps.length + 2` below the real start is one call
+      // more than the `steps.length + 1` calls a scenario is expected to
+      // make (`beginScenario` itself, plus one per `emitStep`), so an
+      // on-budget run's own last snapshot lands two milliseconds below the
+      // real result, never at `progressCeilingMs` itself.
+      progressAnchorMs = input.startedAt.getTime() - (input.pickle.steps.length + 2);
+      progressCeilingMs = input.startedAt.getTime() - 1;
       try {
         writeProgressSnapshot(input.pickle, input.gherkinDocument, input.relativeFeaturePath);
       } catch (error) {
@@ -620,6 +684,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       const progressUuidsToClean = progressUuids;
       progressUuids = [];
       progressAnchorMs = null;
+      progressCeilingMs = null;
 
       if (scopeUuid !== null) {
         try {
