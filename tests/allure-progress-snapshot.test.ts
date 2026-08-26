@@ -59,9 +59,13 @@ function readJson(resultsDir: string, name: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path.join(resultsDir, name), "utf8")) as Record<string, unknown>;
 }
 
-/** `readdirSync`'s own order is never write order (fresh uuids sort
- * effectively at random) -- this is the one way to name "the progress file
- * a specific `emitStep` call just wrote": diff the directory listing from
+/** `readdirSync`'s own order is never write order: one scenario's own
+ * progress files now share a uuid prefix and vary only by an appended
+ * sequence number, whose string sort does not match its numeric one past a
+ * single digit (`-10-` sorts before `-2-`), and `readdirSync` itself is
+ * free to return entries in whatever order the filesystem happens to keep
+ * them in regardless. This is the one way to name "the progress file a
+ * specific `emitStep` call just wrote": diff the directory listing from
  * immediately before that call against immediately after. */
 function newProgressFileSince(resultsDir: string, before: ReadonlySet<string>): string {
   const added = readProgressFileNames(resultsDir).filter((name) => !before.has(name));
@@ -422,5 +426,90 @@ describe("createAllureEmitter: progress snapshots", () => {
         expect(container.children).not.toContain(uuid);
       }
     }
+  });
+
+  it("gives every progress snapshot in one scenario the same uuid, each under its own file name, deletes them all at endScenario, and gives the final result a different uuid", () => {
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    const pickle = pickles.find((p) => p.name === "a customer checks out")!;
+    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+      text: step.text,
+      status: "passed",
+      step_record_id: null,
+    }));
+
+    emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
+    emitter.emitStep(baseStepInput({ record: steps[0]!, stepRecord: null, gherkinDocument, pickle, index: 0 }));
+    emitter.emitStep(baseStepInput({ record: steps[1]!, stepRecord: null, gherkinDocument, pickle, index: 1 }));
+
+    const fileNames = readProgressFileNames(resultsDir);
+    // Item 2: one write per beginScenario/emitStep call, three distinct file
+    // names.
+    expect(fileNames).toHaveLength(3);
+    expect(new Set(fileNames).size).toBe(3);
+
+    // Item 1: every one of those files still carries the same uuid.
+    const snapshotUuids = fileNames.map((name) => (readJson(resultsDir, name) as { uuid: string }).uuid);
+    expect(new Set(snapshotUuids).size).toBe(1);
+
+    const record: ScenarioRecord = {
+      scenario_record_id: "scn-1",
+      run_id: "run-1",
+      feature: "features/checkout.feature",
+      scenario: pickle.name,
+      line: pickle.location?.line ?? 0,
+      status: "passed",
+      environment: "staging",
+      session: null,
+      started_at: "2026-08-01T00:00:00.000Z",
+      finished_at: "2026-08-01T00:00:02.000Z",
+      steps,
+      hooks: [],
+      evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+    };
+    emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+    // Item 4: endScenario deletes every progress file this scenario wrote --
+    // none left over even though all three shared one uuid.
+    expect(readProgressFileNames(resultsDir)).toHaveLength(0);
+
+    // Item 5: the final result carries its own uuid, never one of the
+    // snapshots' own.
+    const final = readFinalFileNames(resultsDir).map((name) => readJson(resultsDir, name))[0] as { uuid: string };
+    expect(snapshotUuids).not.toContain(final.uuid);
+  });
+
+  it("gives two scenarios in the same run different uuids", () => {
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    const first = pickles.find((p) => p.name === "checkout as guest")!;
+    const second = pickles.find((p) => p.name === "checkout as member")!;
+
+    function runScenario(pickle: typeof first, scenarioId: string): string {
+      const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+      emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
+      const uuid = (readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { uuid: string }).uuid;
+      emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
+      const record: ScenarioRecord = {
+        scenario_record_id: scenarioId,
+        run_id: "run-1",
+        feature: "features/checkout.feature",
+        scenario: pickle.name,
+        line: pickle.location?.line ?? 0,
+        status: "passed",
+        environment: "staging",
+        session: null,
+        started_at: "2026-08-01T00:00:00.000Z",
+        finished_at: "2026-08-01T00:00:01.000Z",
+        steps: [step],
+        hooks: [],
+        evidence: { dir: `.nukadoko/records/scenarios/${scenarioId}`, screenshots: [] },
+      };
+      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+      return uuid;
+    }
+
+    const firstUuid = runScenario(first, "scn-first");
+    const secondUuid = runScenario(second, "scn-second");
+
+    expect(secondUuid).not.toBe(firstUuid);
   });
 });

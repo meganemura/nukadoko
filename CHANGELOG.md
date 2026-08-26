@@ -59,6 +59,23 @@ just until 0.1.
   detail page opened during `allure watch` pins the routing id it opened
   with and keeps showing that snapshot, so a fresh page load is what
   reaches the newest one (docs/spec.md "Allure emitter").
+- **A scenario detail page opened during `allure watch` now follows the run
+  instead of freezing on the step it opened with.** A detail page's route
+  is a hash of the result's own uuid, and a reload keeps the URL fragment,
+  so a fresh uuid per snapshot left every open page pinned to whatever had
+  landed when it opened. Every snapshot of one scenario now shares one
+  uuid, generated when the scenario starts, and arrives under a fresh
+  `<uuid>-<sequence>-progress-result.json` name, which is what the watcher
+  needs to see it at all: Allure reads a result's uuid from the JSON body,
+  never off the file name. Measured against a real run under 3.14.3, a
+  page left open moved 0/7 through 6/7 across eight of its own reloads,
+  where the same page on the previous scheme read 0/7 on all eight; the
+  scenario list stayed populated throughout, polled every 50ms; and the
+  watch process grew roughly a third as much over 250 snapshots. Two
+  limits stay, both measured: that page never reaches the real result,
+  which lands on a route of its own, and it tops out one step short,
+  because a scenario's last snapshot is written and swept inside the 300ms
+  the watcher waits between polls.
 
 ## 0.8.0 — 2026-08-26
 

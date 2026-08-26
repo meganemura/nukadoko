@@ -57,8 +57,8 @@ function copyAtomic(filePath: string, sourcePath: string): void {
 // directory.
 const PROGRESS_SUFFIX = "-progress-result.json";
 
-function progressFileName(uuid: string): string {
-  return `${uuid}${PROGRESS_SUFFIX}`;
+function progressFileName(uuid: string, sequence: number): string {
+  return `${uuid}-${sequence}${PROGRESS_SUFFIX}`;
 }
 
 /** `createAtomicWriter`'s own return type — the bare `Writer` interface
@@ -66,20 +66,29 @@ function progressFileName(uuid: string): string {
  * snapshot operations only emitter.ts's own progress mechanism calls.
  * `ReporterRuntime` never sees these three: they exist because a progress
  * snapshot is written directly, bypassing `ReporterRuntime` entirely (this
- * file's own header, emitter.ts's own header explains why). */
+ * file's own header, emitter.ts's own header explains why).
+ *
+ * `writeProgressSnapshot`/`deleteProgressSnapshot` take a `sequence` number
+ * because a scenario's own snapshots all carry the same `uuid` (a fixed
+ * `uuid` is what keeps `allure watch`'s detail page on one route for the
+ * whole scenario, since that route is `md5(uuid)`) while still needing a
+ * fresh file name on every write (`allure watch` only ever discovers a path
+ * it has not read before, so overwriting one name in place would go
+ * unnoticed after the first write). `sequence` is what tells two snapshots
+ * with the same `uuid` apart on disk. */
 export interface AllureAtomicWriter extends Writer {
   /** Atomically writes one progress snapshot under
-   * `<result.uuid>-progress-result.json` — never `writeResult`'s own
-   * `<uuid>-result.json`, so a real, finished result and a still-updating
-   * snapshot can never collide on one filename even while sharing a
-   * `uuid`-shaped prefix. */
-  writeProgressSnapshot(result: TestResult): void;
-  /** Deletes one scenario's own progress snapshot by the `uuid` it was
-   * written under. Silent when the file is already gone (a repeated
-   * cleanup, or a `uuid` this writer never actually wrote a snapshot for)
-   * — there is nothing left to warn about once the file this call wanted
-   * removed already does not exist. */
-  deleteProgressSnapshot(uuid: string): void;
+   * `<result.uuid>-<sequence>-progress-result.json`, never `writeResult`'s
+   * own `<uuid>-result.json`, so a real, finished result and a still-
+   * updating snapshot can never collide on one filename even while sharing
+   * a `uuid`-shaped prefix. */
+  writeProgressSnapshot(result: TestResult, sequence: number): void;
+  /** Deletes one scenario's own progress snapshot by the `uuid` and
+   * `sequence` it was written under. Silent when the file is already gone
+   * (a repeated cleanup, or a `uuid`/`sequence` pair this writer never
+   * actually wrote a snapshot for). There is nothing left to warn about
+   * once the file this call wanted removed already does not exist. */
+  deleteProgressSnapshot(uuid: string, sequence: number): void;
   /** Deletes every `*-progress-result.json` file already sitting in
    * `resultsDir` — called once, at `nuka run`'s own startup (emitter.ts's
    * own `begin()`), the same moment categories.json/environment.properties
@@ -125,12 +134,12 @@ export function createAtomicWriter(resultsDir: string): AllureAtomicWriter {
     writeGlobals(distFileName: string, info: Globals): void {
       writeAtomic(resolve(distFileName), JSON.stringify(info));
     },
-    writeProgressSnapshot(result: TestResult): void {
-      writeAtomic(resolve(progressFileName(result.uuid)), JSON.stringify(result));
+    writeProgressSnapshot(result: TestResult, sequence: number): void {
+      writeAtomic(resolve(progressFileName(result.uuid, sequence)), JSON.stringify(result));
     },
-    deleteProgressSnapshot(uuid: string): void {
+    deleteProgressSnapshot(uuid: string, sequence: number): void {
       try {
-        unlinkSync(resolve(progressFileName(uuid)));
+        unlinkSync(resolve(progressFileName(uuid, sequence)));
       } catch {
         // Already gone -- nothing left to clean up.
       }

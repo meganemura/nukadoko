@@ -103,16 +103,27 @@ import { createAtomicWriter } from "./writer.js";
 // src/report/step-records.ts's `readStepRecordsForScenario`.
 //
 // Beyond that one real result, `beginScenario` and every `emitStep` also
-// write a disposable *progress* snapshot — never a substitute for the real
-// result, never itself the record `record.json` on disk already is. Each
-// one is written under its own fresh uuid (writer.ts's own
-// `writeProgressSnapshot`, `<uuid>-progress-result.json`) because
-// `allure watch` only ever discovers a genuinely new file path (polls every
-// 300ms, ignores an overwrite of a path it already read; verified against
-// @allurereport/core 3.14.3, the version this repository pins), so updating
-// one file in place would only ever be seen once. Every snapshot still
-// carries the exact same `fullName`/`testCaseId`/`historyId`/non-excluded
-// parameters the eventual real result will (map-scenario.ts's own
+// write a disposable *progress* snapshot, never a substitute for the real
+// result, never itself the record `record.json` on disk already is. Every
+// snapshot in one scenario writes under that same scenario's own uuid,
+// generated once in `beginScenario` and reused for every later snapshot,
+// but always under a fresh file name (writer.ts's own
+// `writeProgressSnapshot`, `<uuid>-<sequence>-progress-result.json`)
+// because `allure watch` only ever discovers a genuinely new file path
+// (polls every 300ms, ignores an overwrite of a path it already read;
+// verified against @allurereport/core 3.14.3, the version this repository
+// pins), so updating one file in place would only ever be seen once. The
+// uuid stays fixed because @allurereport/core's own `convert.js` builds a
+// detail page's route as `md5(uuid)`: a fresh uuid per snapshot would be a
+// fresh route per snapshot, and the live channel `allure watch` serves that
+// page over is a whole-page reload (the static server injects an
+// `EventSource` whose handler calls `window.location.reload()`) that keeps
+// the URL fragment, so a page reloading onto its own route only ever comes
+// back to where it already was. One fixed uuid per scenario is what lets a
+// page left open on that route keep showing whatever landed there most
+// recently, reload after reload. Every snapshot still carries the exact
+// same `fullName`/`testCaseId`/`historyId`/non-excluded parameters the
+// eventual real result will (map-scenario.ts's own
 // `buildScenarioStepsSignature`/`buildExampleParameters`, both read
 // straight off `pickle`, frozen before a single step runs), computed with
 // allure-js-commons' own `getTestResultTestCaseId`/`getTestResultHistoryId`,
@@ -123,8 +134,10 @@ import { createAtomicWriter } from "./writer.js";
 // test, picking whichever has the highest `start` as canonical. The key
 // that merge groups on is `retryHash`, `md5` over `testCaseId`, the
 // non-excluded parameters, and the environment id (`store.js`'s own
-// `calculateRetryHash` call). `historyId` rides along on every snapshot for
-// history and known-issue matching, and takes no part in the grouping.
+// `calculateRetryHash` call), never the uuid, so that grouping and the uuid
+// scheme below are independent of each other. `historyId` rides along on
+// every snapshot for history and known-issue matching, and takes no part in
+// the grouping.
 //
 // `RetrySubstore.compareResults` (source read directly, 3.14.3) falls back
 // to ingest order only when two results tie on `start`; whenever `start`
@@ -136,12 +149,32 @@ import { createAtomicWriter } from "./writer.js";
 // result's own `start` (`record.started_at` itself) is set above every
 // snapshot's ceiling, so it always outranks all of them.
 //
+// That strictly-increasing `start` now carries a second job beyond picking
+// a canonical result: keeping the running scenario list from going empty.
+// Every snapshot in a scenario resolves to the same store id, so
+// `recordIngestOrder` records that id's own ingest position once, at the
+// first snapshot ever seen under it, and every later write under the same
+// uuid reads back that same recorded position. If two of a scenario's own
+// snapshots ever tied on `start`, `RetrySubstore.compareResults` would fall
+// back to that shared ingest position for both sides of the comparison and
+// return 0; a stable sort leaves tied entries in their original order, so
+// the earliest snapshot would keep the canonical slot for good and every
+// later one, including whichever snapshot the run had actually reached,
+// would be marked a retry and drop out of the list. `beginScenario`'s own
+// `start` formula (`scenarioStart - (steps.length + 2)`, just below) and
+// each `writeProgressSnapshot` call's own `+ 1` over the last are what keep
+// that tie from happening today. The two mechanisms now travel as a pair:
+// reusing one uuid across a scenario's snapshots only stays safe as long as
+// their `start` keeps climbing, so a change to that formula that lets two
+// snapshots tie reopens the empty-list failure this paragraph describes,
+// even though nothing about the uuid scheme itself changed.
+//
 // This matters because ingest order does not track write order on every
 // path that reads `allure-results`. `allure watch`'s own live path does
 // track it, but the batch path `allure generate` uses, `readDirectory`,
 // lists the directory with `entries.sort((a, b) =>
 // a.name.localeCompare(b.name))`, an alphabetical sort on each result
-// file's own fresh uuid, then reads every file concurrently through a
+// file's own name, then reads every file concurrently through a
 // limited-concurrency pool, so its own ingest order tracks neither the
 // write order nor that alphabetical listing. Seven real progress snapshots
 // of one seven-step scenario were captured mid-run and replayed against
@@ -157,34 +190,35 @@ import { createAtomicWriter } from "./writer.js";
 // previous run's own crash left behind, the same moment it (re)writes
 // categories.json/environment.properties.
 //
-// Known limit, upstream in the report `allure watch` serves: once a
-// scenario's detail page has been opened, that page stops following any
-// later switch of canonical result. A detail route is the store id, and
-// @allurereport/core's own `convert.js` builds that id as `md5(uuid)` of
-// the result a file carried, so a fresh uuid per snapshot is a fresh route
-// per snapshot. The live channel is a whole-page reload (the static server
-// injects an `EventSource` whose handler calls `window.location.reload()`),
-// and a reload keeps the URL fragment, so the page comes back on the store
-// id it was pinned to. `RetrySubstore.retriesByTr` returns an empty list
-// for a result that is itself a retry, so a pinned page carries no link
-// forward either.
-//
-// A snapshot's uuid and its file name are separable, which leaves a way
-// out this module has not taken: @allurereport/reader reads the uuid out of
-// the JSON body, never off the file name, so one constant uuid per scenario
-// can still arrive under a fresh file name each time, which is all the
-// new-paths-only watcher needs. Measured against 3.14.3 at the file layer:
-// three snapshots sharing one uuid produce a single
+// @allurereport/reader reads a result's uuid out of its JSON body, never
+// off the file name (measured against 3.14.3 at the file layer: three
+// snapshots sharing one uuid produce a single
 // `data/test-results/<md5(uuid)>.json`, rewritten in place, carrying the
-// newest content, on a route that never moves. Two costs come with it, both
-// measured the same way. `RetrySubstore.upsert` appends on every ingest
-// without checking whether that id is already in the group, so the one
-// result ends up listing itself among its own retries, once per snapshot,
-// and `allure watch` never evicts. And a real result reusing that same uuid
-// would collapse onto the snapshot's store id, where the winner is decided
-// by file read order rather than by `start`. What has not been measured is
-// the browser render after the reload, only the files behind it, so this
-// module keeps the fresh uuid per snapshot until that is measured too.
+// newest content, on a route that never moves), which is what makes one
+// fixed uuid per scenario, arriving under a fresh file name each time,
+// enough for the new-paths-only watcher above. Two things ride along with
+// that choice, both already true of what `RetrySubstore` does regardless of
+// which uuid scheme this module picks: `upsert` appends on every ingest
+// without checking whether an id is already in its group, so the retry
+// listing still carries the scenario's id once per snapshot it wrote, the
+// same row count the old, one-uuid-per-snapshot scheme already produced,
+// now all pointing at the one page instead of a different page each. And a
+// real result that reused a snapshot's own uuid would collapse onto that
+// snapshot's store id, where the winner is decided by file read order
+// rather than by `start`; `partialTest` below never sets a `uuid` field of
+// its own, so `ReporterRuntime.startTest` always generates the real
+// result's uuid independently, and it never collides with a snapshot's.
+//
+// Two things a page left open on a scenario's fixed route does not do, both
+// measured against a real run under 3.14.3 rather than reasoned about. It
+// never reaches the real result: `endScenario` writes that on a route of
+// its own, and a reload keeps the URL fragment, so reaching it means
+// walking in from the list again. And it tops out one step short: a
+// scenario of N steps writes N+1 snapshots, the last of them between its
+// final step and `endScenario`'s own cleanup, inside the 300ms the watcher
+// waits between polls, so the newest snapshot that page ever shows is the
+// one taken after step N-1. Both are the report's own behavior, not
+// something this module can write its way out of.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -345,23 +379,28 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   const runtime = new ReporterRuntime({ writer, categories, environmentInfo });
 
   // The state this module carries across `beginScenario`/`emitStep`/
-  // `endScenario` — safe only because `nuka run` runs one scenario at a
-  // time (this file's own header). All five are reset both before the
+  // `endScenario`, safe only because `nuka run` runs one scenario at a
+  // time (this file's own header). All six are reset both before the
   // first `beginScenario` and once `endScenario` has cleared them, so a
   // stray `emitStep` call outside a scenario's own begin/end pair is a
   // no-op rather than attaching to the *previous* scenario's own scope or
-  // buffer. `progressAnchorMs`/`progressCeilingMs` are `null` exactly when
-  // there is no open scope to write a snapshot under (mirrors
-  // `currentScopeUuid` itself); `progressUuids` collects every progress
-  // snapshot's own uuid this scenario has written so far, so `endScenario`
-  // knows exactly which files to delete, and doubles as this scenario's
-  // own snapshot count for `writeProgressSnapshot`'s own `start` formula
-  // below.
+  // buffer. `progressAnchorMs`/`progressCeilingMs`/`progressUuid` are
+  // `null` exactly when there is no open scope to write a snapshot under
+  // (mirrors `currentScopeUuid` itself). `progressUuid` is assigned once
+  // `beginScenario` opens its scope, and every progress snapshot that
+  // scenario writes reuses it (this file's own header explains why one
+  // uuid has to serve a whole scenario). `progressSnapshotCount` counts how
+  // many snapshots this scenario has written so far: it is the `start`
+  // offset `writeProgressSnapshot` computes below, the sequence number that
+  // tells two same-uuid snapshots apart on disk (writer.ts's own `sequence`
+  // parameter), and what `endScenario` needs to know how many files to
+  // delete.
   let currentScopeUuid: string | null = null;
   let bufferedSteps: MappedGwtStepOutcome[] = [];
   let progressAnchorMs: number | null = null;
   let progressCeilingMs: number | null = null;
-  let progressUuids: string[] = [];
+  let progressUuid: string | null = null;
+  let progressSnapshotCount = 0;
 
   function toAbsolute(relativePath: string): string {
     return path.join(options.rootDir, relativePath);
@@ -503,35 +542,40 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
    * same `statusDetails: {}, stage: "pending"` shape a real, still-running
    * result already has at this same point in its own lifecycle. */
   function writeProgressSnapshot(pickle: Pickle, gherkinDocument: GherkinDocument, relativeFeaturePath: string): void {
-    // Captured into locals so a null check on either narrows both for the
-    // rest of this call, the same pattern `emitStep`'s own `scopeUuid`
-    // local uses below for `currentScopeUuid`.
+    // Captured into locals so a null check on any of the three narrows all
+    // of them for the rest of this call, the same pattern `emitStep`'s own
+    // `scopeUuid` local uses below for `currentScopeUuid`.
     const anchor = progressAnchorMs;
     const ceiling = progressCeilingMs;
-    if (anchor === null || ceiling === null) {
+    const uuid = progressUuid;
+    if (anchor === null || ceiling === null || uuid === null) {
       return;
     }
     const posixPath = toPosixPath(relativeFeaturePath);
     const featureName = gherkinDocument.feature?.name ?? "";
 
-    const result = createTestResult(randomUuid());
+    const result = createTestResult(uuid);
     result.name = pickle.name;
     result.fullName = buildFullName(projectName, posixPath, pickle.name);
     result.titlePath = buildTitlePath(projectName, posixPath, featureName);
-    // `progressUuids.length` is this scenario's own snapshot count so far
+    // `progressSnapshotCount` is this scenario's own snapshot count so far
     // (this function's own `writer.writeProgressSnapshot` call below is
-    // what pushes the current one's uuid, after this line runs), so this
-    // strictly increases by one on every call: `beginScenario`'s own first
-    // call gets `anchor + 0`, the next gets `anchor + 1`, and so on. The
-    // `Math.min` against `ceiling` is a defensive clamp, not part of the
-    // expected count: a scenario with N steps is expected to call this
-    // function exactly N + 1 times (once from `beginScenario`, once per
-    // `emitStep`), and `anchor` already budgets one call more than that
-    // (`beginScenario`'s own comment), so an on-budget run never reaches
-    // `ceiling` at all. If something calls this more times than expected,
-    // the clamp stops `start` from ever reaching or passing the real
-    // result's own `start`, which is `ceiling + 1`.
-    result.start = Math.min(anchor + progressUuids.length, ceiling);
+    // what advances it, after this line runs), so this strictly increases
+    // by one on every call: `beginScenario`'s own first call gets
+    // `anchor + 0`, the next gets `anchor + 1`, and so on. The `Math.min`
+    // against `ceiling` is a defensive clamp, not part of the expected
+    // count: a scenario with N steps is expected to call this function
+    // exactly N + 1 times (once from `beginScenario`, once per `emitStep`),
+    // and `anchor` already budgets one call more than that (`beginScenario`'s
+    // own comment), so an on-budget run never reaches `ceiling` at all. If
+    // something calls this more times than expected, the clamp stops
+    // `start` from ever reaching or passing the real result's own `start`,
+    // which is `ceiling + 1`. `sequence` is the same number this
+    // scenario's own file-name scheme needs to tell same-uuid snapshots
+    // apart (writer.ts's own `sequence` parameter): one number plays both
+    // roles at once.
+    const sequence = progressSnapshotCount;
+    result.start = Math.min(anchor + sequence, ceiling);
     // Identity only (req 2's own invariant) — `mapScenario`'s own context
     // parameters (environment/session/target_version) are excluded from
     // historyId already, so a snapshot that never carries them changes
@@ -561,8 +605,8 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       result.statusDetails = { message: classifiedFailure.message, trace: classifiedFailure.rawMessage };
     }
 
-    writer.writeProgressSnapshot(result);
-    progressUuids.push(result.uuid);
+    writer.writeProgressSnapshot(result, sequence);
+    progressSnapshotCount = sequence + 1;
   }
 
   function emitFixture(scopeUuid: string, hook: MappedHook, declaredParameters: readonly MappedParameter[]): void {
@@ -605,9 +649,10 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
 
     beginScenario(input: BeginScenarioInput): void {
       bufferedSteps = [];
-      progressUuids = [];
+      progressSnapshotCount = 0;
       progressAnchorMs = null;
       progressCeilingMs = null;
+      progressUuid = null;
       try {
         currentScopeUuid = runtime.startScope();
       } catch (error) {
@@ -627,6 +672,11 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       // real result, never at `progressCeilingMs` itself.
       progressAnchorMs = input.startedAt.getTime() - (input.pickle.steps.length + 2);
       progressCeilingMs = input.startedAt.getTime() - 1;
+      // One uuid for this whole scenario, fresh from the last one (this
+      // file's own header explains why a fixed uuid per scenario, rather
+      // than a fixed uuid shared across scenarios, is what a detail page
+      // needs).
+      progressUuid = randomUuid();
       try {
         writeProgressSnapshot(input.pickle, input.gherkinDocument, input.relativeFeaturePath);
       } catch (error) {
@@ -698,8 +748,10 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       currentScopeUuid = null;
       const steps = bufferedSteps;
       bufferedSteps = [];
-      const progressUuidsToClean = progressUuids;
-      progressUuids = [];
+      const progressUuidToClean = progressUuid;
+      const progressSnapshotCountToClean = progressSnapshotCount;
+      progressUuid = null;
+      progressSnapshotCount = 0;
       progressAnchorMs = null;
       progressCeilingMs = null;
 
@@ -743,16 +795,23 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       // this scenario wrote is stale the moment `endScenario` is called,
       // real result or not, since nothing will ever `emitStep` into this
       // scenario's own buffer again. Isolated in its own try/catch per
-      // uuid so one file this writer somehow can't remove never masks
-      // (or is masked by) the real result's own success/failure above.
-      for (const uuid of progressUuidsToClean) {
-        try {
-          writer.deleteProgressSnapshot(uuid);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          options.stderr.write(
-            `warning: allure progress cleanup failed for scenario ${input.record.scenario_record_id}: ${message}\n`,
-          );
+      // sequence number so one file this writer somehow can't remove never
+      // masks (or is masked by) the real result's own success/failure
+      // above. `progressUuidToClean` is null exactly when
+      // `progressSnapshotCountToClean` is zero (`writeProgressSnapshot`
+      // only ever advances the count after a successful write under a
+      // non-null uuid), so the loop below never needs a uuid it doesn't
+      // have.
+      if (progressUuidToClean !== null) {
+        for (let sequence = 0; sequence < progressSnapshotCountToClean; sequence++) {
+          try {
+            writer.deleteProgressSnapshot(progressUuidToClean, sequence);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            options.stderr.write(
+              `warning: allure progress cleanup failed for scenario ${input.record.scenario_record_id}: ${message}\n`,
+            );
+          }
         }
       }
     },

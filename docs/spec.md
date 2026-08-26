@@ -2897,8 +2897,12 @@ A scenario's one real result only exists once that scenario ends; what a live re
 
 The emitter writes a progress snapshot when a scenario starts.
 This initial snapshot lists every planned step without a status, so Allure displays each step as unknown.
-The emitter writes a new `<uuid>-progress-result.json` after each completed step.
+The emitter writes a new `<uuid>-<sequence>-progress-result.json` after each completed step.
 Each snapshot uses the completed statuses and timings available at that point.
+
+Every snapshot in one scenario shares one uuid, generated when that scenario starts, and lands under a fresh file name.
+Both halves are needed. A detail page's route is a hash of the result's own uuid, so a moving uuid moves the route out from under any page already open on it, and `allure watch` discovers a new file path while ignoring a rewrite of one it has read.
+Allure reads a result's uuid out of the JSON body rather than off the file name, which is what lets one value stay fixed while the other changes.
 
 A snapshot has the final result's `historyId`, but excludes attachments, hook fixtures, and excluded context parameters.
 Each snapshot gets its own `start`, one millisecond above the snapshot before it.
@@ -2913,15 +2917,19 @@ Ingest order is safe to rely on under `allure watch` and unsafe under `allure ge
 This behavior was measured with Allure 3.14.3, the version this project pins, and confirmed in the `@allurereport/core` source.
 The Allure README does not document this behavior.
 
-One limit stays for now.
-A scenario detail page opened during a watch session pins the routing id it opened with, and keeps showing the snapshot behind that id.
-The routing id is a hash of the result's own uuid, so a fresh uuid per snapshot is a fresh route per snapshot, and Allure's live channel reloads the whole page while the URL fragment survives.
-A fresh page load reaches the newest snapshot.
+The fixed uuid and the climbing `start` only work as a pair.
+Every snapshot in a scenario resolves to one store id, so Allure records that id's ingest position once and reads the same value back for every later write.
+Two snapshots tied on `start` would therefore tie on ingest position too, the comparison would return zero, and a stable sort would leave the earliest snapshot holding the canonical slot for the rest of the run.
+Everything written after it, including whatever step the run had actually reached, would count as a retry and drop out of the scenario list.
+A change to the `start` formula that lets two snapshots tie brings that back, even with the uuid scheme untouched.
 
-A way out exists and is not taken yet.
-Allure reads a result's uuid out of the JSON body rather than off the file name, so one constant uuid per scenario can arrive under a fresh file name each time, which is what the watcher needs to see it at all.
-Two measured costs come with that: Allure appends to a result's retry list on every read without checking the id, so one result lists itself among its own retries once per snapshot, and a final result reusing the same uuid would land on the same routing id, where file read order decides the winner instead of `start`.
-What remains unmeasured is the browser render after the reload, so nukadoko keeps a fresh uuid per snapshot until that measurement exists.
+Two limits stay, both measured against a real run under Allure 3.14.3.
+A detail page opened during a watch session follows its scenario to the end of the run and then stops there: the real result lands on a route of its own, and a reload keeps the URL fragment, so reaching it means walking in from the list again.
+The same page also tops out one step short of the end. A scenario of N steps writes N+1 snapshots, and the last one is written between the final step and the cleanup below, inside the 300ms the watcher waits between polls.
+
+Allure appends to a result's retry list on every read without checking whether that id is already there, so a scenario's retry listing carries one row per snapshot it wrote.
+The row count is the same one a fresh uuid per snapshot produced. What changed is that every row now opens the one page rather than a different frozen snapshot each.
+Those rows exist only in a live watch session; a report generated from a finished results directory carries none of them.
 
 During a live watch session, older unknown snapshots can appear in the running scenario's retries.
 When the scenario ends, nukadoko writes the final result and removes that scenario's progress files.
