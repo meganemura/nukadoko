@@ -33,11 +33,11 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## 0.8.0 to the next release
+## 0.8.0 to 0.9.0
 
 The acceptance record has one breaking change. `nuka tend`'s
 `post-navigation-read` note also reads from a different place now. Why is
-in [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+in [CHANGELOG.md](../CHANGELOG.md) under `## 0.9.0`.
 
 - **A record `nuka accept` writes from now on drops `actions`,
   `page_events`, `sections`, `polls`, `declared`, `http_omitted`, and

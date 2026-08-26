@@ -27,11 +27,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
-## 0.8.0 から次のリリースへ
+## 0.8.0 から 0.9.0 へ
 
 acceptance record には破壊的変更が 1 つあります。
 `nuka tend` の `post-navigation-read` の note も、いまは違う場所を読みます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.9.0` にあります。
 
 - **これから `nuka accept` が書く記録は、各 step から `actions`、`page_events`、`sections`、`polls`、`declared`、`http_omitted`、`truncated` を外します。**
   新しく accept された記録を読むスクリプトは、これらのキーを期待しないようにする必要があります。

@@ -5,7 +5,7 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
-## Unreleased
+## 0.9.0 — 2026-08-27
 
 ### Changed
 
@@ -41,6 +41,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`__waitInfo__` no longer lands among a step's own `actions`.**
+  Playwright's own client library opens an internal console, weberror, and
+  requestfailed watch on every BrowserContext, and that watch's
+  before/after pair skips the check a real API call passes before being
+  recorded, so it reached `trace.trace` under the method name
+  `__waitInfo__` carrying no selector, url, or expression of its own. A
+  step record listed it, and an Allure report drew it as a bare,
+  meaningless step name. It is dropped when the trace is parsed rather
+  than when a report is drawn, since it was never a call the step made.
 - **A live Allure report could show an arbitrary stage of a running
   scenario, rather than its newest one.** Allure picks the canonical result
   among files sharing one `retryHash` by the greatest `start`, and falls
