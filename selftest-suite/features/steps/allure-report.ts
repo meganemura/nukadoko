@@ -3,7 +3,7 @@ import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { chromium, type Locator, type Page } from "playwright";
+import { chromium, type Page } from "playwright";
 import { After, Before, Given, Then, When } from "./runtime.js";
 import type { SelftestWorld } from "../support/world.js";
 
@@ -49,6 +49,24 @@ import type { SelftestWorld } from "../support/world.js";
 // ..." line reach this process's stdout the instant it is printed rather
 // than whenever Python's stdout buffer happens to flush, which is what lets
 // the Before hook below read the real port back out reliably.
+//
+// ## The tree, now that a scenario is the whole test (not a group of them)
+//
+// With no `parentSuite`/`suite` label left to assign, the Awesome plugin's
+// own "Suites" tree groups by each result's own `titlePath` instead
+// (measured against a real generated report): every scenario in one
+// feature file shares the same titlePath (its directory segments, then the
+// Feature's own name), so they collapse into one shared, nested group
+// rather than one group per scenario -- a scenario is a *leaf* of that
+// group now, never a group of its own. Every check below that used to
+// scope a query to "this scenario's own group of step leaves" instead
+// looks a scenario up by its own name directly (unique across this
+// fixture's one feature file), then reads that one leaf's own status, or
+// opens that one leaf's own detail page to read what used to be a step's
+// own separate test (its `steps[]` entries, hoisted labels, attachments --
+// all on the one page now, confirmed empirically: allure-report.ts's own
+// Attachments tab and Overview metadata list both flatten every nesting
+// level into one list, not just the result's own top-level fields).
 
 const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -66,13 +84,10 @@ const allureBin = path.join(repoRoot, "node_modules", "allure", "cli.js");
 
 // --- NDJSON scenario records (the same "scenario name -> status" shape
 // run-selftest.mjs's own swap track already parses `nuka run`'s stdout
-// into), read here for both grains this Allure emitter now writes: each
-// step's own text/status/record (the tab-count check's per-step tally, and
-// the record-attachment check's own step lookup) and, on top of it, each
-// scenario's own top-level `status` -- `nuka run` writes one Allure test
-// result per step and one more per scenario (map-scenario.ts's own
-// `mapScenario`), so a tab total counting only steps would undercount the
-// report's own totals by one per scenario. ---
+// into) -- one Allure test result per scenario now, its own steps nested
+// inside it, so every check below reads a scenario's own top-level
+// `status` for the tab-count/tree-leaf checks and a scenario's own
+// `steps[]` for whatever used to need a specific step's own text. ---
 
 interface RunStepRecord {
   readonly text: string;
@@ -84,7 +99,9 @@ interface RunScenarioRecord {
   readonly scenario: string;
   // "passed" | "failed" only (ScenarioRecord.status, src/run/record-
   // types.ts) -- a scenario's own Allure test result is never `skipped`,
-  // so every skipped tab count below is a step-grain one.
+  // so the report's own Skipped tab never renders at this grain (measured:
+  // Allure's own tab omits itself entirely at "Skipped 0", the same
+  // convention every empty tab already follows).
   readonly status: "passed" | "failed";
   readonly steps: readonly RunStepRecord[];
 }
@@ -98,6 +115,21 @@ function parseRunRecords(stdout: string): RunScenarioRecord[] {
 
 function allSteps(records: readonly RunScenarioRecord[]): RunStepRecord[] {
   return records.flatMap((record) => record.steps);
+}
+
+/** The one scenario record whose own `steps` contains a step matching
+ * `predicate` -- the shared way every Then step below that starts from a
+ * step fact (a failing step, a step whose own text names it) finds which
+ * scenario's own leaf to open, now that a step has no leaf of its own. */
+function scenarioContainingStep(
+  records: readonly RunScenarioRecord[],
+  predicate: (step: RunStepRecord) => boolean,
+): RunScenarioRecord {
+  const found = records.find((record) => record.steps.some(predicate));
+  if (found === undefined) {
+    throw new Error("expected mixed.feature's run to have a scenario whose own step matched, found none");
+  }
+  return found;
 }
 
 // --- HTTP server lifecycle (Before/After hook) ---
@@ -250,10 +282,10 @@ async function openReportPage(world: SelftestWorld): Promise<Page> {
 }
 
 // Allure 3's tree collapses every group by default except one that already
-// contains a failure; a scenario or step whose own group never gets
-// expanded is invisible to `getByTestId("tree-leaf-title")`, so every Then
-// step below that reads the tree calls this first rather than trusting
-// whatever happens to already be open.
+// contains a failure; a scenario whose own group never gets expanded is
+// invisible to `getByTestId("tree-leaf-title")`, so every Then step below
+// that reads the tree calls this first rather than trusting whatever
+// happens to already be open.
 async function expandAllTreeSections(page: Page): Promise<void> {
   for (let pass = 0; pass < 5; pass++) {
     const arrows = page.getByTestId("tree-arrow");
@@ -274,21 +306,6 @@ async function expandAllTreeSections(page: Page): Promise<void> {
   }
 }
 
-// Scopes a query to one scenario's own rows. `tree-section-title` (the
-// group header) and its own leaves are DOM *siblings* under a shared
-// parent, not nested one inside the other -- `tree-content` is the sibling
-// that actually holds them (confirmed against the real generated report) --
-// so a plain `.locator()` chained off the header would search the whole
-// page, not just this scenario's own subtree, and silently double-count a
-// step whose text happens to repeat across scenarios (mixed.feature has
-// exactly this: two different scenarios both call the same native step).
-function sectionContent(page: Page, scenarioName: string): Locator {
-  const header = page.getByTestId("tree-section-title").filter({ hasText: scenarioName });
-  return header.locator(
-    "xpath=./ancestor::*[@data-testid='tree-section'][1]/following-sibling::*[@data-testid='tree-content'][1]",
-  );
-}
-
 async function assertTabText(page: Page, testId: string, expectedText: string): Promise<void> {
   const actual = (await page.getByTestId(testId).innerText()).trim();
   if (actual !== expectedText) {
@@ -296,10 +313,13 @@ async function assertTabText(page: Page, testId: string, expectedText: string): 
   }
 }
 
-async function openStepDetail(world: SelftestWorld, stepText: string): Promise<Page> {
+/** Opens the one scenario whose own name is `scenarioName` -- a scenario
+ * is the whole test now, so this is what `openStepDetail` used to be
+ * (this file's own header). */
+async function openScenarioDetail(world: SelftestWorld, scenarioName: string): Promise<Page> {
   const page = await openReportPage(world);
   await expandAllTreeSections(page);
-  await page.getByTestId("tree-leaf-title").filter({ hasText: stepText }).first().click();
+  await page.getByTestId("tree-leaf-title").filter({ hasText: scenarioName }).first().click();
   // `.count()` below (unlike `.click()`) never auto-waits -- it reads
   // whatever is in the DOM the instant it's called -- so without this, a
   // check that runs no further click of its own (this file's own child-step
@@ -311,60 +331,38 @@ async function openStepDetail(world: SelftestWorld, stepText: string): Promise<P
   return page;
 }
 
-// --- the 5 checks this stage verifies, plus two pins about the
-// before-hook-stopped scenario's own display (a 6th: the step-grain leaf's
-// known skip; a 7th: the scenario-grain leaf's own failed, the fix that
-// closed over it -- both deliberately kept separate from "the 5") ---
+// --- the checks this stage verifies ---
 
-Then("the tab counts match the step and scenario statuses nuka run reported", async function (this: SelftestWorld) {
+Then("the tab counts match the scenario statuses nuka run reported", async function (this: SelftestWorld) {
   const page = await openReportPage(this);
 
   const records = parseRunRecords(this.nukaStdout);
-  const steps = allSteps(records);
-  // Two grains of Allure test land per run now: one per step (unchanged)
-  // and, on top of it, one per scenario (map-scenario.ts's own
-  // mapScenario) -- every tab total below counts both, the same as the
-  // report's own tree does, or this check would keep asserting a total the
-  // report stopped matching.
+  // One Allure test result per scenario now (map-scenario.ts's own
+  // `mapScenario`) -- every tab total below counts scenarios only, never a
+  // step (a step has no test result of its own to be counted at all any
+  // more). `tab-skipped` is never asserted: a scenario's own status is
+  // "passed" | "failed" only, so the report's own Skipped tab never
+  // renders for this run (measured: an empty tab is omitted, not shown as
+  // "Skipped 0").
   const expected = {
-    all: steps.length + records.length,
-    passed:
-      steps.filter((step) => step.status === "passed").length +
-      records.filter((record) => record.status === "passed").length,
-    failed:
-      steps.filter((step) => step.status === "failed").length +
-      records.filter((record) => record.status === "failed").length,
-    skipped: steps.filter((step) => step.status === "skipped").length,
+    all: records.length,
+    passed: records.filter((record) => record.status === "passed").length,
+    failed: records.filter((record) => record.status === "failed").length,
   };
 
   await assertTabText(page, "tab-all", `Total ${expected.all}`);
   await assertTabText(page, "tab-passed", `Passed ${expected.passed}`);
   await assertTabText(page, "tab-failed", `Failed ${expected.failed}`);
-  await assertTabText(page, "tab-skipped", `Skipped ${expected.skipped}`);
 });
 
-Then("every scenario is a tree group and every step is one of its leaves", async function (this: SelftestWorld) {
+Then("every scenario appears as its own tree leaf", async function (this: SelftestWorld) {
   const page = await openReportPage(this);
   await expandAllTreeSections(page);
 
   for (const record of parseRunRecords(this.nukaStdout)) {
-    const groupCount = await page.getByTestId("tree-section-title").filter({ hasText: record.scenario }).count();
-    if (groupCount < 1) {
-      throw new Error(`expected a tree group for scenario "${record.scenario}", found none`);
-    }
-
-    const content = sectionContent(page, record.scenario);
-    const expectedCountByText = new Map<string, number>();
-    for (const step of record.steps) {
-      expectedCountByText.set(step.text, (expectedCountByText.get(step.text) ?? 0) + 1);
-    }
-    for (const [text, expectedCount] of expectedCountByText) {
-      const actualCount = await content.getByTestId("tree-leaf-title").filter({ hasText: text }).count();
-      if (actualCount !== expectedCount) {
-        throw new Error(
-          `expected ${expectedCount} tree leaf(ves) reading "${text}" under scenario "${record.scenario}", found ${actualCount}`,
-        );
-      }
+    const leafCount = await page.getByTestId("tree-leaf-title").filter({ hasText: record.scenario }).count();
+    if (leafCount !== 1) {
+      throw new Error(`expected exactly one tree leaf reading "${record.scenario}", found ${leafCount}`);
     }
   }
 });
@@ -372,12 +370,19 @@ Then("every scenario is a tree group and every step is one of its leaves", async
 Then(
   "the failing step's record.json attachment is readable and matches its own record",
   async function (this: SelftestWorld) {
-    const failingStep = allSteps(parseRunRecords(this.nukaStdout)).find((step) => step.status === "failed");
+    const records = parseRunRecords(this.nukaStdout);
+    const failingStep = allSteps(records).find((step) => step.status === "failed");
     if (failingStep === undefined || failingStep.step_record_id === null) {
       throw new Error("expected mixed.feature's run to have exactly one failed step with a record");
     }
+    // "a step throws its own error" is the one scenario in mixed.feature
+    // with exactly one step -- the Attachments tab below flattens every
+    // nesting level into one list (this file's own header), so this check
+    // only stays unambiguous because there is nothing else on that one
+    // scenario's own page to also be named "record.json".
+    const scenario = scenarioContainingStep(records, (step) => step === failingStep);
 
-    const page = await openStepDetail(this, failingStep.text);
+    const page = await openScenarioDetail(this, scenario.scenario);
     await page.getByTestId("test-result-tab-attachments").click();
     await page.getByTestId("test-result-attachment-header").filter({ hasText: "record.json" }).click();
 
@@ -397,73 +402,63 @@ Then(
 Then(
   "the failing step is categorized as {string}, not {string}",
   async function (this: SelftestWorld, expectedCategory: string, unexpectedCategory: string) {
-    const failingStep = allSteps(parseRunRecords(this.nukaStdout)).find((step) => step.status === "failed");
+    const records = parseRunRecords(this.nukaStdout);
+    const failingStep = allSteps(records).find((step) => step.status === "failed");
     if (failingStep === undefined) {
       throw new Error("expected mixed.feature's run to have a failed step");
     }
+    const scenario = scenarioContainingStep(records, (step) => step === failingStep);
 
-    const page = await openStepDetail(this, failingStep.text);
+    const page = await openScenarioDetail(this, scenario.scenario);
     await page.getByTestId("test-result-tab-overview").click();
 
     const categoryCount = await page.getByText(`Category: ${expectedCategory}`).count();
     if (categoryCount < 1) {
-      throw new Error(`expected the failing step's own detail page to show "Category: ${expectedCategory}"`);
+      throw new Error(`expected the failing scenario's own detail page to show "Category: ${expectedCategory}"`);
     }
     const bodyText = await page.innerText("body");
     if (bodyText.includes(unexpectedCategory)) {
-      throw new Error(`expected the failing step's own detail page not to mention "${unexpectedCategory}"`);
+      throw new Error(`expected the failing scenario's own detail page not to mention "${unexpectedCategory}"`);
     }
   },
 );
 
 Then("the timeline step's section and poll appear as its own child steps", async function (this: SelftestWorld) {
-  const page = await openStepDetail(this, "exists after a section and a poll");
+  const records = parseRunRecords(this.nukaStdout);
+  const scenario = scenarioContainingStep(records, (step) => step.text.includes("exists after a section and a poll"));
+  const page = await openScenarioDetail(this, scenario.scenario);
 
-  // "test-result-step" is the child-step timeline nested directly under this
-  // step's own test result -- one level shallower than before step became
-  // the Allure test-result unit (docs/spec.md "Allure emitter"), which is
-  // exactly what this checks: the section/poll this step's own fixture
-  // recorded must show up here, not two levels down inside the scenario's
-  // own test the way it used to (the scenario now has a test result of its
-  // own again too, but that one carries no step-level timeline of its own).
-  const childSteps = page.getByTestId("test-result-step");
-  const sectionCount = await childSteps.filter({ hasText: "section:" }).count();
-  const pollCount = await childSteps.filter({ hasText: "poll:" }).count();
+  // "test-result-step-title" reaches every nesting level on this one
+  // page now -- this scenario's own two Given/Then steps, and, under the
+  // second one, the section/poll timeline entries its own step record
+  // carries (map-scenario.ts's own `mapTimelineChildSteps`) -- so no
+  // deeper scoping is needed to find them.
+  const stepTitles = page.getByTestId("test-result-step-title");
+  const sectionCount = await stepTitles.filter({ hasText: "section:" }).count();
+  const pollCount = await stepTitles.filter({ hasText: "poll:" }).count();
   if (sectionCount < 1 || pollCount < 1) {
     throw new Error(
-      `expected a "section:"-named and a "poll:"-named child step under this test result; found ${await childSteps.count()} child step(s) total`,
+      `expected a "section:"-named and a "poll:"-named step title on this scenario's own page; found ${await stepTitles.count()} step title(s) total`,
     );
   }
 });
 
 Then("the before-hook-stopped scenario's step shows skipped, not failed", async function (this: SelftestWorld) {
-  const page = await openReportPage(this);
-  await expandAllTreeSections(page);
-
   // Known, accepted limit, pinned rather than hidden (docs/spec.md "Allure
-  // emitter"): a step-level test still has nowhere of its own to put a
-  // failure that happened before that step ever ran, so every step of a
-  // scenario a Before hook stops still shows skipped. `nuka run`'s own exit
-  // code and record.json still say "failed"; the scenario-grain leaf pinned
-  // in the next check now says so too -- only a step-grain leaf still
-  // cannot, and that is what this pins so a future change to either
+  // emitter"): a step still has nowhere of its own to put a failure that
+  // happened before it ever ran, so it still shows skipped even though the
+  // scenario around it failed. `nuka run`'s own exit code, record.json, and
+  // now this scenario's own tree leaf (the next Then step) all say
+  // "failed" -- only the step itself, on its own scenario's detail page,
+  // still cannot, and that is what this pins so a future change to either
   // direction is a deliberate one, not a silent regression.
-  //
-  // Two grains of leaf now sit in this scenario's own tree group: this
-  // scenario's own leaf (title always prefixed "Scenario: ",
-  // map-scenario.ts's own header) and one leaf per step. `nukadoko.grain`
-  // itself is a result label, not something the tree row renders, so the
-  // "Scenario: " prefix is the only thing the tree itself renders that
-  // tells the two apart -- scoping this check away from it here is what
-  // keeps it from re-counting the scenario-grain leaf the next check pins
-  // separately.
-  const content = sectionContent(page, "a before hook stops the scenario before its own step runs");
-  const stepLeaves = content.getByTestId("tree-leaf").filter({ hasNotText: "Scenario: " });
-  const skippedCount = await stepLeaves.locator('[data-testid="tree-leaf-status-skipped"]').count();
-  const failedCount = await stepLeaves.locator('[data-testid="tree-leaf-status-failed"]').count();
+  const page = await openScenarioDetail(this, "a before hook stops the scenario before its own step runs");
+  const step = page.getByTestId("test-result-step").filter({ hasText: "a thing" });
+  const skippedCount = await step.locator('[data-testid="tree-leaf-status-skipped"]').count();
+  const failedCount = await step.locator('[data-testid="tree-leaf-status-failed"]').count();
   if (skippedCount !== 1 || failedCount !== 0) {
     throw new Error(
-      `expected the before-hook-stopped scenario's own step-grain leaf to show skipped, not failed: skipped=${skippedCount} failed=${failedCount}`,
+      `expected the before-hook-stopped scenario's own step to show skipped, not failed: skipped=${skippedCount} failed=${failedCount}`,
     );
   }
 });
@@ -472,20 +467,19 @@ Then("the before-hook-stopped scenario itself shows failed, not skipped", async 
   const page = await openReportPage(this);
   await expandAllTreeSections(page);
 
-  // The gain the check above pins the limit of: a scenario a Before hook
-  // stops now has a scenario-grain leaf of its own too (map-scenario.ts's
-  // own mapScenario, added on top of the step-grain leaves above), and
-  // that leaf carries the scenario's own `record.status` ("failed" --
-  // `nuka run`'s own exit code already said so) directly, closing over the
-  // display gap 0.2.0's own CHANGELOG entry named: before this, a hook's
-  // own failure had nowhere red to land on the report at all.
-  const content = sectionContent(page, "a before hook stops the scenario before its own step runs");
-  const scenarioLeaf = content.getByTestId("tree-leaf").filter({ hasText: "Scenario: " });
-  const failedCount = await scenarioLeaf.locator('[data-testid="tree-leaf-status-failed"]').count();
-  const skippedCount = await scenarioLeaf.locator('[data-testid="tree-leaf-status-skipped"]').count();
+  // The gain the check above pins the limit of: this scenario's own single
+  // tree leaf carries `record.status` directly ("failed" -- `nuka run`'s
+  // own exit code already said so), closing over the display gap 0.2.0's
+  // own CHANGELOG entry named: before that, a hook's own failure had
+  // nowhere red to land on the report at all. There is only one leaf per
+  // scenario now, so this is the whole scenario's own status, not a second
+  // grain to tell apart from the step-level check above.
+  const leaf = page.getByTestId("tree-leaf").filter({ hasText: "a before hook stops the scenario before its own step runs" });
+  const failedCount = await leaf.locator('[data-testid="tree-leaf-status-failed"]').count();
+  const skippedCount = await leaf.locator('[data-testid="tree-leaf-status-skipped"]').count();
   if (failedCount !== 1 || skippedCount !== 0) {
     throw new Error(
-      `expected the before-hook-stopped scenario's own scenario-grain leaf to show failed, not skipped: failed=${failedCount} skipped=${skippedCount}`,
+      `expected the before-hook-stopped scenario's own leaf to show failed, not skipped: failed=${failedCount} skipped=${skippedCount}`,
     );
   }
 });

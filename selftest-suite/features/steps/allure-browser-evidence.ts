@@ -44,7 +44,7 @@ import type { SelftestWorld } from "../support/world.js";
 // no evidence a `data:` URL doesn't already provide.
 //
 // ## Why every assertion below reads `test-result-step-title`, never the
-// wider `test-result-step` testid stage 2 already uses for section:/poll:
+// wider `test-result-step` testid
 //
 // `test-result-step` wraps a whole node's subtree, nested children
 // included. The Before hook's own fixture -- titled exactly "Before" --
@@ -211,12 +211,24 @@ async function expandAllTreeSections(page: Page): Promise<void> {
   }
 }
 
-async function openStepDetail(world: SelftestWorld, stepText: string): Promise<Page> {
+/** Opens the one scenario whose own name is `scenarioName` -- a scenario
+ * is the whole Allure test now, its own steps and fixtures nested under
+ * one page (this file's own header on why a "before" fixture and a
+ * `goto` step both still show up on it). */
+async function openScenarioDetail(world: SelftestWorld, scenarioName: string): Promise<Page> {
   const page = await openReportPage(world);
   await expandAllTreeSections(page);
-  await page.getByTestId("tree-leaf-title").filter({ hasText: stepText }).first().click();
+  await page.getByTestId("tree-leaf-title").filter({ hasText: scenarioName }).first().click();
   await page.getByRole("heading", { level: 1 }).waitFor({ state: "visible", timeout: 10_000 });
   return page;
+}
+
+function theExecutedScenario(nukaStdout: string): RunScenarioRecord {
+  const [scenario] = parseRunRecords(nukaStdout);
+  if (scenario === undefined) {
+    throw new Error("expected browser-evidence.feature's run to have executed exactly one scenario; found none");
+  }
+  return scenario;
 }
 
 function theExecutedStep(nukaStdout: string): RunStepRecord {
@@ -330,14 +342,14 @@ Then(
   "the step's own trace attachment downloads as a non-empty, readable zip",
   { timeout: 30_000 },
   async function (this: SelftestWorld) {
-    const step = theExecutedStep(this.nukaStdout);
-    const page = await openStepDetail(this, step.text);
+    const scenario = theExecutedScenario(this.nukaStdout);
+    const page = await openScenarioDetail(this, scenario.scenario);
     await page.getByTestId("test-result-tab-attachments").click();
 
     const traceHeader = page.getByTestId("test-result-attachment-header").filter({ hasText: "trace" });
     if ((await traceHeader.count()) < 1) {
       throw new Error(
-        `expected a "trace" attachment on ${JSON.stringify(step.text)}'s own Attachments tab; found none (missing attachment)`,
+        `expected a "trace" attachment on ${JSON.stringify(scenario.scenario)}'s own Attachments tab; found none (missing attachment)`,
       );
     }
 
@@ -377,8 +389,8 @@ Then(
 );
 
 Then("the before hook shows up as a fixture in the report", async function (this: SelftestWorld) {
-  const step = theExecutedStep(this.nukaStdout);
-  const page = await openStepDetail(this, step.text);
+  const scenario = theExecutedScenario(this.nukaStdout);
+  const page = await openScenarioDetail(this, scenario.scenario);
   await page.getByTestId("test-result-tab-overview").click();
 
   // Exact match, not `hasText`'s own substring match -- this file's own
@@ -390,14 +402,14 @@ Then("the before hook shows up as a fixture in the report", async function (this
     .count();
   if (fixtureCount < 1) {
     throw new Error(
-      'expected this scenario\'s own Before hook to render as a "Before" fixture on this step\'s own detail page; found none',
+      'expected this scenario\'s own Before hook to render as a "Before" fixture on this scenario\'s own detail page; found none',
     );
   }
 });
 
 Then("the trace's own goto action appears as a child step", async function (this: SelftestWorld) {
-  const step = theExecutedStep(this.nukaStdout);
-  const page = await openStepDetail(this, step.text);
+  const scenario = theExecutedScenario(this.nukaStdout);
+  const page = await openScenarioDetail(this, scenario.scenario);
   await page.getByTestId("test-result-tab-overview").click();
 
   const gotoCount = await page
@@ -443,7 +455,8 @@ Then("the page_events counts in the report match the step's own record", async f
     throw new Error(`expected record ${step.step_record_id} to carry page_events; it carried none`);
   }
 
-  const page = await openStepDetail(this, step.text);
+  const scenario = theExecutedScenario(this.nukaStdout);
+  const page = await openScenarioDetail(this, scenario.scenario);
   await page.getByTestId("test-result-tab-overview").click();
 
   for (const [label, field] of PAGE_EVENT_PARAMETERS) {

@@ -168,16 +168,22 @@ import type { WritableSink } from "./writable-sink.js";
 // call in the pickle loop below is skipped for the rest of this run.
 //
 // A pickle's own `emitStep` calls
-// happen live, once per step, threaded through `runScenario`'s own
+// happen once per step, threaded through `runScenario`'s own
 // `onStepFinished` (never gated on `--quiet`) — well before
 // that pickle's own `stdout.write` below, which only happens once the whole
-// scenario is done. `endScenario` (hooks + scenario-level evidence + the
-// scope those steps' own tests already reference) still happens after the
-// `stdout.write`, the same position `emitScenario` used to hold: stdout's
-// one-line-per-scenario contract must never be disturbed by an emit
-// failure, and none of these three methods ever throws. `record.status`/the
-// run's exit code/stdout's content are all otherwise untouched by any of
-// this.
+// scenario is done. Each call maps that one step, buffers the result, and
+// writes a disposable progress snapshot of the buffer so far
+// (src/report/allure/emitter.ts's own header); the one real Allure test
+// this scenario will end up with still reaches disk only at `endScenario`,
+// which happens after the `stdout.write`, the same position `emitScenario`
+// used to hold: stdout's one-line-per-scenario contract must never be
+// disturbed by an emit failure, and none of these three methods ever
+// throws. `endScenario` is what actually writes this scenario's one real
+// Allure test result (every buffered step nested inside it, hooks mapped
+// into fixtures alongside it), the scope that test and those fixtures
+// share, and deletes every progress snapshot this scenario wrote along the
+// way. `record.status`/the run's exit code/stdout's content are all
+// otherwise untouched by any of this.
 //
 // The messages emitter is
 // built and `begin()`-ed right after the Allure emitter above — same
@@ -728,8 +734,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // exist the moment the
           // first step finishes. `undefined` — a no-op — when this run has
           // no Allure emitter at all (setup failure or zero pickles, this
-          // file's own header).
-          allureEmitter?.beginScenario();
+          // file's own header). `startedAt` is captured here, not read back
+          // out of `record` below: this call always happens before
+          // `runScenario` even starts, so it can only ever be earlier than
+          // or equal to that call's own `record.started_at`, which is what
+          // keeps every progress snapshot's own `start` strictly below the
+          // real result's (src/report/allure/emitter.ts's own
+          // `BeginScenarioInput`).
+          allureEmitter?.beginScenario({
+            pickle,
+            gherkinDocument: feature.gherkinDocument,
+            relativeFeaturePath: feature.relativePath,
+            startedAt: new Date(),
+          });
 
           // One instance per pickle, unlike `onStepEnd` above: it closes
           // over this
@@ -806,10 +823,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // `allureEmitter` is `null` when this run selected zero pickles or
           // its own setup failed above; `endScenario` itself never throws.
           // Every one of this scenario's own steps has already had its own
-          // `emitStep` call by now — this call only maps
-          // hooks/scenario-level evidence into
-          // fixtures and writes the scope those steps' own tests already
-          // reference.
+          // `emitStep` call by now, each one only buffered — this call is
+          // what actually writes this scenario's one Allure test result
+          // (every buffered step nested inside it), maps this scenario's
+          // own hooks into fixtures alongside it, and writes the scope both
+          // share.
           allureEmitter?.endScenario({
             record,
             gherkinDocument: feature.gherkinDocument,

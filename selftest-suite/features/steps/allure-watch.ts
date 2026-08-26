@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,17 +8,22 @@ import { expect } from "playwright/test";
 import { After, Given, Then, When } from "./runtime.js";
 import type { SelftestWorld } from "../support/world.js";
 
-// Responsibility: stage 3 of this suite -- proves `allure
-// watch` (docs/spec.md "Allure emitter": "a dashboard already open updates
-// step by step") actually pushes an
-// update to an already-open browser tab WHILE a run is still executing,
-// not only that a finished report reads correctly (allure-report.ts's own
-// stage 2 already covers that, by reading a report only after `nuka run`
-// has already returned). The one fact this file exists to catch: a count
-// read partway through a run that is neither 0 nor the run's own final
-// total. If that reading is never captured, this scenario has proven
-// nothing about liveness and must fail loudly, not pass on a technicality
-// (the final Then step below enforces this directly).
+// Responsibility: stage 3 of this suite -- proves `allure watch` actually
+// sees a run's own step-granularity progress WHILE that run is still
+// executing, not only that a finished report reads correctly
+// (allure-report.ts's own stage 2 already covers that, by reading a report
+// only after `nuka run` has already returned). Liveness is checked on
+// disk, not through the browser's own rendered count: a scenario's own
+// progress snapshot shares its eventual final result's own retry identity
+// (src/report/allure/emitter.ts's own header), so `allure watch`'s own
+// "Total" tally reaches the run's own scenario count the moment the first
+// scenario starts and never changes again mid-run, unable to tell "no step
+// has finished" apart from "every step has" -- a `*-progress-result.json`
+// file appearing in `allure-results` while `nuka run` is still going, and
+// none left once it has finished, is what this file checks instead. The
+// live browser stays in the mix for the one claim it still uniquely
+// proves: the report reads 0 before any run starts, and the final count
+// once one has finished.
 //
 // ## Why no `.goto()` or `.reload()` anywhere below
 //
@@ -47,11 +53,12 @@ import type { SelftestWorld } from "../support/world.js";
 // ## Why features/slow.feature exists at all
 //
 // See fixture-project/features/steps/slow-thing.ts's own header: ordinary
-// fixture steps run in a few milliseconds, well under `allure watch`'s own
-// 300ms poll interval, so a run of them writes every result file before
-// the first poll ever fires and the report jumps straight from 0 to the
-// final count in one screen paint -- there is no in-between to observe.
-// Do not point the When step below at passing.feature or mixed.feature.
+// fixture steps run in a few milliseconds, so a run of them could write its
+// progress snapshot and its final result, then delete that snapshot again,
+// all before this file's own mid-run Then step ever gets a chance to
+// `readdir` the directory in between -- there would be no in-between to
+// observe. Do not point the When step below at passing.feature or
+// mixed.feature.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureProjectDir = path.resolve(here, "..", "..", "fixture-project");
@@ -67,19 +74,13 @@ const resultsDir = path.join(fixtureProjectDir, ".nukadoko", "export", "allure-r
 // stage 2's own generated report if both scenarios ever ran close together.
 const watchReportDir = path.join(fixtureProjectDir, ".nukadoko", "allure-watch-report");
 
-// One Allure result per executed step, plus one more per scenario
-// (map-scenario.ts's own `mapScenario`, the same total nuka-run.ts's own
-// "one result file per executed step and one per scenario" Then step
-// checks against the on-disk directory) -- the live report tallies the
-// exact same results, so its own final count has to match this total, not
-// the step count alone.
-function parseResultTotal(stdout: string): number {
-  const scenarios = stdout
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as { steps: unknown[] });
-  const totalSteps = scenarios.reduce((sum, scenario) => sum + scenario.steps.length, 0);
-  return totalSteps + scenarios.length;
+// One Allure result per scenario (map-scenario.ts's own `mapScenario`, the
+// same total nuka-run.ts's own "one result file per scenario" Then step
+// checks against the on-disk directory), its own steps nested inside it --
+// the live report tallies one entry per scenario too, so its own final
+// count has to match this total, not the step count.
+function countScenarios(stdout: string): number {
+  return stdout.split("\n").filter((line) => line.length > 0).length;
 }
 
 After({ tags: "@allure-watch" }, async function (this: SelftestWorld) {
@@ -210,32 +211,34 @@ When(
 );
 
 Then(
-  "the live report's result count rises above 0 while the run is still going",
+  "a progress result file appears in allure-results while the run is still going",
   { timeout: 30_000 },
   async function (this: SelftestWorld) {
-    if (this.page === null || this.runProcess === null) {
-      throw new Error("no page or run process: earlier steps did not run first");
+    if (this.runProcess === null) {
+      throw new Error("no run process: the earlier When step did not run first");
     }
-    // The one assertion this whole scenario exists for. `expect(...)`'s own
-    // auto-retry (never a manual poll loop) waits for the SSE-pushed reload to land; reading the
-    // count immediately afterward, then confirming the child process has
-    // not exited yet, is what tells a report that updated *during* the run
-    // apart from one that only happened to update by the time this step
-    // got around to looking. The step's own timeout has to exceed the
-    // `expect`'s own 20s: cucumber-js's default step timeout is 5s and
-    // would otherwise kill this step on a loaded machine before the 20s
-    // wait inside it ever got the chance to succeed.
-    await expect(this.page.getByTestId("tab-all")).toHaveText(/Total [1-9]\d*/, { timeout: 20_000 });
-    const text = await this.page.getByTestId("tab-all").innerText();
-    const match = /Total (\d+)/.exec(text);
-    if (match === null) {
-      throw new Error(`could not read a count out of tab-all's own text "${text}"`);
-    }
-    this.midRunResultCount = Number(match[1]);
+    // The one assertion this whole scenario exists for. `expect.poll` plays
+    // the same role here that Playwright's own auto-retrying `expect` plays
+    // for a DOM read elsewhere in this file: the one way to wait for a fact
+    // that has not happened yet without a bare `setTimeout`/manual loop,
+    // which would only be a proxy for "did we wait long enough", never
+    // evidence a step actually finished. Confirming the child process has
+    // not exited yet, right after, is what tells a file that appeared
+    // *during* the run apart from one that only happened to exist by the
+    // time this step got around to looking. The step's own timeout has to
+    // exceed the `expect.poll`'s own 20s: cucumber-js's default step
+    // timeout is 5s and would otherwise kill this step on a loaded machine
+    // before the 20s wait inside it ever got the chance to succeed.
+    await expect
+      .poll(() => readdirSync(resultsDir).some((name) => name.endsWith("-progress-result.json")), {
+        timeout: 20_000,
+      })
+      .toBe(true);
     if (this.runProcess.exitCode !== null) {
       throw new Error(
-        `nuka run had already exited (code ${this.runProcess.exitCode}) by the time this step read the ` +
-          "report; this proves nothing about a mid-run update -- see fixture-project/features/steps/slow-thing.ts",
+        `nuka run had already exited (code ${this.runProcess.exitCode}) by the time this step found a ` +
+          "progress result file; this proves nothing about a mid-run update -- see " +
+          "fixture-project/features/steps/slow-thing.ts",
       );
     }
   },
@@ -249,47 +252,35 @@ When("I wait for that run to finish", { timeout: 60_000 }, async function (this:
   this.nukaExitCode = result.code;
   this.nukaStdout = result.stdout;
   // Reuses the same two World fields nuka-run.ts's own Then steps already
-  // read ("the run exits {int}", "...one result file per executed step and
-  // one per scenario"), so this scenario shares those checks below instead
-  // of duplicating either one.
+  // read ("the run exits {int}", "...one result file per scenario"), so
+  // this scenario shares those checks below instead of duplicating either
+  // one.
+});
+
+Then("no progress result file remains once the run has finished", function () {
+  // By now `I wait for that run to finish` has already resolved, so every
+  // scenario's own `endScenario` has already run and deleted its own
+  // progress files (src/report/allure/emitter.ts's own header) -- a
+  // straight `readdirSync`, no polling needed, unlike the mid-run Then step
+  // above.
+  const remaining = readdirSync(resultsDir).filter((name) => name.endsWith("-progress-result.json"));
+  if (remaining.length > 0) {
+    throw new Error(`expected no progress result files left in ${resultsDir}, found: ${remaining.join(", ")}`);
+  }
 });
 
 Then(
-  "the live report's final result count matches the number of executed steps and scenarios",
+  "the live report's final result count matches the number of scenarios",
   { timeout: 30_000 },
   async function (this: SelftestWorld) {
     if (this.page === null) {
       throw new Error("no page: earlier steps did not run first");
     }
-    const totalResults = parseResultTotal(this.nukaStdout);
+    const totalScenarios = countScenarios(this.nukaStdout);
     // Same reasoning as the mid-run Then step above: the step's own
     // timeout has to exceed the `expect`'s own 15s, or cucumber-js's 5s
     // default kills the step before the wait inside it gets the chance to
     // succeed.
-    await expect(this.page.getByTestId("tab-all")).toHaveText(`Total ${totalResults}`, { timeout: 15_000 });
-
-    // The other half of the zero-results check above, and the actual proof
-    // this scenario exists to deliver: the mid-run observation being
-    // neither 0 nor the total is what proves liveness. Only checkable now
-    // that totalResults is known: a mid-run reading of 0 would mean nothing had rendered yet,
-    // and a reading equal to totalResults would mean the run had already
-    // finished by the time it was taken -- either way this scenario would
-    // not have shown anything a finished-report read (stage 2) doesn't
-    // already show.
-    if (this.midRunResultCount === null) {
-      throw new Error("no mid-run result count was ever captured -- this scenario proved nothing about liveness");
-    }
-    // stderr only, never stdout: this suite's own baseline track parses
-    // cucumber-js's `--format json` stdout as one JSON document and its
-    // swap track parses `nuka run`'s stdout as NDJSON (run-selftest.mjs),
-    // so any stray stdout write from a step would corrupt one or both.
-    console.error(
-      `selftest-watch: observed 0 -> ${this.midRunResultCount} -> ${totalResults} while features/slow.feature ran`,
-    );
-    if (this.midRunResultCount <= 0 || this.midRunResultCount >= totalResults) {
-      throw new Error(
-        `expected the mid-run count (${this.midRunResultCount}) to be strictly between 0 and the total (${totalResults})`,
-      );
-    }
+    await expect(this.page.getByTestId("tab-all")).toHaveText(`Total ${totalScenarios}`, { timeout: 15_000 });
   },
 );

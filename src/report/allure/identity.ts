@@ -54,9 +54,25 @@ export function toPosixPath(relativePath: string): string {
 }
 
 /** `${projectName}:${posixPath}#${name}`, or `${posixPath}#${name}` when
- * there is no project name. emitter.ts calls this once per step's own test
- * (`name` = `${pickle.name}#${step name}`) and once per scenario's own test
- * (`name` = bare `pickle.name`) — this file's own header. */
+ * there is no project name. emitter.ts calls this once per scenario's own
+ * test, `name` = bare `pickle.name` — this file's own header. */
 export function buildFullName(projectName: string | null, posixPath: string, name: string): string {
   return projectName === null ? `${posixPath}#${name}` : `${projectName}:${posixPath}#${name}`;
+}
+
+/** The report tree's own grouping path for one scenario's test: every
+ * directory segment of its feature file's path, then the Feature's own
+ * name, with the project name prepended when there is one. Verified against
+ * a real allure-cucumberjs 3.10.2 run's own output (a captured result.json's
+ * `titlePath`): `features/sample.feature` under a project named
+ * `allure-sample` produced `["allure-sample", "features", "Sample feature
+ * for allure output inspection"]` — the file name itself (`sample.feature`)
+ * never appears, only the directories above it. A feature file directly at
+ * the project root (no directory segment at all) still gets the Feature
+ * name as this path's only entry (or its only entry after the project
+ * name). */
+export function buildTitlePath(projectName: string | null, posixPath: string, featureName: string): string[] {
+  const directorySegments = posixPath.split("/").slice(0, -1);
+  const titlePath = featureName !== "" ? [...directorySegments, featureName] : directorySegments;
+  return projectName === null ? titlePath : [projectName, ...titlePath];
 }

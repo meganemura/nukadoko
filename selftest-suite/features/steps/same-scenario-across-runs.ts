@@ -142,19 +142,20 @@ interface ScenarioTestResult {
   readonly labels?: readonly { readonly name: string; readonly value: string }[];
 }
 
-// Only `nukadoko.grain: scenario` results (map-scenario.ts's own
-// `mapScenario`) -- every step's own test sits in the exact same
-// data/test-results/ directory, and this suite's own claim is about the
-// scenario-level test specifically, never about a step's.
+// Every result in data/test-results/ is scenario-grain now: one pickle
+// becomes exactly one Allure test result, and the per-step progress
+// snapshots a run writes on the side are already deleted by the time the
+// scenario (and so the run) has ended, before `allure generate` reads the
+// directory. No label filter is needed to isolate the scenario-level
+// result any more; there is no other grain left to filter out.
 async function readScenarioResults(reportDir: string): Promise<ScenarioTestResult[]> {
   const dir = path.join(reportDir, "data", "test-results");
   const fileNames = await readdir(dir);
-  const all = await Promise.all(
+  return Promise.all(
     fileNames
       .filter((name) => name.endsWith(".json"))
       .map(async (name) => JSON.parse(await readFile(path.join(dir, name), "utf8")) as ScenarioTestResult),
   );
-  return all.filter((result) => result.labels?.some((label) => label.name === "nukadoko.grain" && label.value === "scenario"));
 }
 
 // --- Given (shared by all three scenarios) ---

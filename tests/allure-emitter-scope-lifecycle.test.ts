@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
-import { createAllureEmitter, type AllureEmitter, type EmitStepInput } from "../src/report/allure/emitter.js";
+import {
+  createAllureEmitter,
+  type AllureEmitter,
+  type BeginScenarioInput,
+  type EmitStepInput,
+} from "../src/report/allure/emitter.js";
 import type { ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
@@ -29,6 +34,16 @@ function readResultFiles(resultsDir: string): Record<string, unknown>[] {
   return readdirSync(resultsDir)
     .filter((name) => name.endsWith("-result.json"))
     .map((name) => JSON.parse(readFileSync(path.join(resultsDir, name), "utf8")));
+}
+
+function baseBeginScenarioInput(
+  overrides: Partial<BeginScenarioInput> & Pick<BeginScenarioInput, "pickle" | "gherkinDocument">,
+): BeginScenarioInput {
+  return {
+    relativeFeaturePath: "features/checkout.feature",
+    startedAt: new Date("2026-08-01T00:00:00.000Z"),
+    ...overrides,
+  };
 }
 
 function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "record" | "stepRecord">): EmitStepInput {
@@ -121,7 +136,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
     const record = baseScenarioRecord({ scenario_record_id: "scn-double-end", steps: [step] });
 
-    emitter.beginScenario();
+    emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-double-end" }));
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
     const afterFirstEnd = new Set(readdirSync(resultsDir));
@@ -132,24 +147,43 @@ describe("createAllureEmitter: scope lifecycle", () => {
     expect(new Set(readdirSync(resultsDir))).toEqual(afterFirstEnd);
   });
 
-  it("catches a genuine internal failure in endScenario (a scenario evidence file that isn't actually there), warns once to stderr, and leaves the step's own already-written output intact", () => {
+  it("catches a genuine internal failure in endScenario (a scenario evidence file that isn't actually there), warns once to stderr, and leaves an earlier scenario's own already-written output intact", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
+
+    // A healthy scenario, run to completion first, to prove its own output
+    // survives a later scenario's own endScenario failure -- with one
+    // result per scenario now (not one per step), "earlier scenario" is the
+    // unit whose isolation this test can still demonstrate; there is no
+    // longer a second step's own file inside the *same* scenario to isolate
+    // from (this file's own header: a bad attachment now costs the whole
+    // scenario it belongs to).
+    const healthyStep: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
+    emitter.emitStep(baseStepInput({ record: healthyStep, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-healthy" }));
+    emitter.endScenario({
+      record: baseScenarioRecord({ scenario_record_id: "scn-healthy", steps: [healthyStep] }),
+      gherkinDocument,
+      pickle,
+      relativeFeaturePath: "features/checkout.feature",
+    });
+    const healthyFiles = new Set(readdirSync(resultsDir));
+    expect(healthyFiles.size).toBeGreaterThan(0);
+
     const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
     const record = baseScenarioRecord({
       scenario_record_id: "scn-evidence-broken",
       steps: [step],
-      // Names a trace file this test deliberately never writes to disk:
-      // mapScenarioEvidence builds the attachment from this alone, with no
-      // existsSync check of its own (src/report/allure/map-scenario.ts's
-      // own header), so the failure surfaces where writeAttachment's
+      // Names a trace file this test deliberately never writes to disk: the
+      // scenario-wide evidence attachment (map-scenario.ts's own
+      // `mapScenario`) builds it from this alone, with no existsSync check
+      // of its own, so the failure surfaces where writeAttachment's
       // underlying copy actually runs, inside endScenario's own try block.
       evidence: { dir: ".nukadoko/records/scenarios/scn-evidence-broken", trace: "missing-trace.zip", screenshots: [] },
     });
 
-    emitter.beginScenario();
+    emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-evidence-broken" }));
-    const beforeFiles = new Set(readdirSync(resultsDir));
 
     expect(() =>
       emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" }),
@@ -159,7 +193,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
     expect(sink.text()).toContain("scn-evidence-broken");
 
     const afterFiles = new Set(readdirSync(resultsDir));
-    for (const name of beforeFiles) {
+    for (const name of healthyFiles) {
       expect(afterFiles.has(name)).toBe(true);
     }
   });
@@ -185,13 +219,15 @@ describe("createAllureEmitter: ALLURE_LABEL_* environment labels", () => {
 
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+      const record = baseScenarioRecord({ scenario_record_id: "scn-env-label", steps: [step] });
 
-      emitter.beginScenario();
-      emitter.emitStep(baseStepInput({ record, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-env-label" }));
+      emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
+      emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-env-label" }));
+      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
       const results = readResultFiles(resultsDir) as { name?: string; labels?: { name: string; value: string }[] }[];
-      const test = results.find((r) => r.name === "Given the cart has items")!;
+      const test = results.find((r) => r.name === "a customer checks out")!;
       expect(test.labels).toContainEqual({ name: "TOKEN_SECRET", value: "{{secret.TOKEN}}" });
       expect(JSON.stringify(test.labels)).not.toContain(secretValue);
     } finally {

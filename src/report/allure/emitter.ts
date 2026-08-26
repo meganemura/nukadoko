@@ -1,14 +1,18 @@
 import path from "node:path";
-import { Status, type TestResult } from "allure-js-commons";
+import { Status, type StepResult, type TestResult } from "allure-js-commons";
 import type { Category, EnvironmentInfo } from "allure-js-commons/sdk";
 import {
   ReporterRuntime,
-  ensureSuiteLabels,
+  createStepResult,
+  createTestResult,
   getEnvironmentLabels,
   getFrameworkLabel,
   getHostLabel,
   getLanguageLabel,
+  getTestResultHistoryId,
+  getTestResultTestCaseId,
   getThreadLabel,
+  randomUuid,
 } from "allure-js-commons/sdk/reporter";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../../cli/writable-sink.js";
@@ -17,18 +21,23 @@ import type { ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.
 import { redactString } from "../../secrets/redact.js";
 import type { SecretSet } from "../../secrets/types.js";
 import { buildCategories } from "./categories.js";
-import { buildFullName, resolveProjectName, toPosixPath } from "./identity.js";
+import { buildFullName, buildTitlePath, resolveProjectName, toPosixPath } from "./identity.js";
 import {
+  buildExampleParameters,
+  buildScenarioStepsSignature,
+  buildStepName,
+  firstFailure,
+  mapGwtStep,
   mapHooks,
   mapScenario,
-  mapScenarioEvidence,
-  mapStep,
   type MappedAttachment,
   type MappedChildStep,
+  type MappedGwtStep,
+  type MappedGwtStepOutcome,
   type MappedHook,
   type MappedParameter,
+  type MappedScenarioTest,
   type MappedStatus,
-  type MappedStepTest,
 } from "./map-scenario.js";
 import { createAtomicWriter } from "./writer.js";
 
@@ -39,50 +48,91 @@ import { createAtomicWriter } from "./writer.js";
 // Writer plumbing) and the only one that touches the filesystem beyond what
 // the `Writer` itself does (resolving the project name).
 //
-// Three calls per pickle, not one: `beginScenario` opens this scenario's own
-// Allure *scope* before its first step runs; `emitStep` writes one step's
-// own *test* to disk the moment that step finishes — never batched to
-// scenario end, which is the entire point of writing per step rather than
-// per scenario — reading it straight off `ReporterRuntime.startTest`/
-// `writeTest`, which write on call, not on some later flush; `endScenario`
-// writes one more test for the scenario as a whole (map-scenario.ts's own
-// `mapScenario`), maps this scenario's own hooks into fixtures under that
-// same scope, adds a synthetic fixture for whatever browser evidence
-// belongs to the scenario as a whole (map-scenario.ts's own
-// `mapScenarioEvidence`), and only then writes the scope's own container
-// (`writeScope`) — a hook is always mapped once the whole scenario is over,
-// not per step, unlike a step's own test; the scenario's own test is
-// written there for the same reason (record.json's own `status`, `steps`,
-// and `finished_at` are only complete once the scenario is over). This
-// module holds exactly one piece of state across those three calls,
-// `currentScopeUuid` — safe because `nuka run` executes scenarios strictly
+// One pickle, one Allure test result, written once — at `endScenario`, never
+// per step. `beginScenario` opens this scenario's own Allure *scope* and
+// clears this module's own step buffer before its first step can possibly
+// run; `emitStep` maps that one step (map-scenario.ts's own `mapGwtStep`)
+// and appends the result to the buffer — its only I/O is the progress
+// snapshot this file's own header below describes, never the real result
+// itself; `endScenario` folds the whole buffer into one `steps[]` array
+// (map-scenario.ts's own `mapScenario`), maps this scenario's own hooks into
+// fixtures under the same scope, writes the one test, and only then writes
+// the scope's own container (`writeScope`). A step that never runs a real
+// body (never-began, skipped by an earlier failure) still gets its own
+// `emitStep` call and its own `steps[]` entry — `run-scenario.ts`'s own
+// `pushStepRecord` is the one place that appends to `record.steps` and
+// calls this, so every element of that array gets exactly one call, in
+// order, with no gaps.
+//
+// This module holds state across `beginScenario`/`emitStep`/`endScenario`
+// (`currentScopeUuid`, the step buffer, and the progress-snapshot state
+// below) — safe because `nuka run` executes scenarios strictly
 // sequentially, never two at once.
+//
+// **A bad attachment now costs the whole scenario's own Allure result, not
+// just one step's.** Every `writeAttachment` call for every step, every
+// result-level attachment, and the final `writeTest` all happen inside one
+// `try` block at `endScenario` — when everything used to be its own test
+// (before this design), a broken reference in step 2 only lost step 2's own
+// file; now that a scenario is one result, the same failure loses the
+// scenario's entire Allure output (`record.json` on disk, the actual source
+// of truth, is unaffected either way). Accepted rather than fixed with a
+// second, per-attachment try/catch: the damage unit was always "one test",
+// and one test is now the whole scenario.
 //
 // A Before hook's own failure still leaves every step it stops from ever
 // running reported `"skipped"`, never `"failed"` — the failure itself is
-// visible in that Before fixture's own detail view (unaffected by the
-// scenario-level test below). Unlike a step's own test, though, the
-// scenario-level test's own status is `record.status` directly, which the
-// scenario record already sets to `"failed"` whenever any of its steps
-// didn't pass (record-types.ts) — a Before hook stopping every step still
-// turns the scenario-level test red, closing most of the display gap the
-// step = test redesign opened (docs/spec.md "Allure emitter"): the suite
-// tree's own group status already read correctly at the `suite` level for
-// this case; now the scenario's own test does too, even though every step
-// beneath it still reads `"skipped"`.
+// visible in that Before fixture's own detail view. The result's own status
+// is `record.status` directly, which the scenario record already sets to
+// `"failed"` whenever any of its steps didn't pass (record-types.ts), and
+// map-scenario.ts's own `firstFailure` search falls back to a classified
+// hook failure exactly for this case, so a Before-hook-stopped scenario
+// still lands in one of `nuka init`'s own seven categories instead of
+// Allure 3's uninformative "Product errors" catch-all.
 //
 // Known limit: record.json carries no per-hook timestamp of its own, so
-// every before-hook collapses to the
-// scenario's own `started_at` and every after-hook to its `finished_at`,
-// both zero-width (map-scenario.ts's own `mapHooks`).
+// every before-hook collapses to the scenario's own `started_at` and every
+// after-hook to its `finished_at`, both zero-width (map-scenario.ts's own
+// `mapHooks`).
 //
 // AllureEmitterOptions carries no `stateDir` of its own: a step's own step
-// record
-// is handed to `emitStep` directly by the caller (cli/run.ts, threaded from
-// run-scenario.ts's own `onStepFinished`) — this emitter never reads a
-// record.json off disk itself any more, unlike the messages emitter
+// record is handed to `emitStep` directly by the caller (cli/run.ts,
+// threaded from run-scenario.ts's own `onStepFinished`) — this emitter
+// never reads a record.json off disk itself, unlike the messages emitter
 // (src/report/messages/emitter.ts), which still does via
 // src/report/step-records.ts's `readStepRecordsForScenario`.
+//
+// Beyond that one real result, `beginScenario` and every `emitStep` also
+// write a disposable *progress* snapshot — never a substitute for the real
+// result, never itself the record `record.json` on disk already is. Each
+// one is written under its own fresh uuid (writer.ts's own
+// `writeProgressSnapshot`, `<uuid>-progress-result.json`) because
+// `allure watch` only ever discovers a genuinely new file path (polls every
+// 300ms, ignores an overwrite of a path it already read — verified against
+// @allurereport/core 3.15.0), so updating one file in place would only ever
+// be seen once. Every snapshot still carries the exact same `fullName`/
+// `testCaseId`/`historyId`/non-excluded parameters the eventual real result
+// will (map-scenario.ts's own `buildScenarioStepsSignature`/
+// `buildExampleParameters`, both read straight off `pickle`, frozen before
+// a single step runs), computed with allure-js-commons' own
+// `getTestResultTestCaseId`/`getTestResultHistoryId` — the same formula
+// `ReporterRuntime.stopTest` itself calls for the real result, never
+// reimplemented here. That shared identity is what makes `allure watch`'s
+// own retry merge (@allurereport/core 3.15.0's `RetrySubstore`) treat every
+// snapshot and the eventual real result as retries of one same test,
+// picking whichever has the highest `start` as canonical. Every snapshot's
+// own `start` is frozen to one value below the scenario's own real start
+// (`BeginScenarioInput.startedAt`'s own doc comment, below), so the real
+// result — whose own `start` is `record.started_at` itself — always
+// outranks every snapshot that came before it; among the snapshots
+// themselves, `RetrySubstore`'s own tie-break on ingest order picks
+// whichever was written last, which is exactly "the live view always shows
+// the latest completed step" without ever touching a path `allure watch`
+// has already read once. `endScenario` deletes every progress snapshot the
+// scenario ever wrote the moment its real result lands, so a finished
+// run's own `allure-results` directory never carries a stale one; `begin()`
+// sweeps up whatever a previous run's own crash left behind, the same
+// moment it (re)writes categories.json/environment.properties.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -94,6 +144,23 @@ export interface AllureEmitterOptions {
   readonly stderr: WritableSink;
 }
 
+export interface BeginScenarioInput {
+  readonly pickle: Pickle;
+  readonly gherkinDocument: GherkinDocument;
+  readonly relativeFeaturePath: string;
+  /** Captured by the caller (cli/run.ts) once, right before `runScenario`
+   * itself runs — never later than that call's own `record.started_at`
+   * (nothing async happens between the two), which is what keeps every
+   * progress snapshot's own frozen `start` strictly below the eventual
+   * real result's `start`: @allurereport/core 3.15.0's own
+   * `RetrySubstore.compareResults` picks whichever same-identity result
+   * has the higher `start` as canonical, so the real result — captured
+   * later, hence numerically higher — always outranks every snapshot that
+   * came before it, however many milliseconds of true drift separate this
+   * timestamp from `record.started_at`'s own. */
+  readonly startedAt: Date;
+}
+
 export interface EmitStepInput {
   readonly runId: string;
   readonly scenarioId: string;
@@ -102,11 +169,9 @@ export interface EmitStepInput {
   readonly targetVersion?: string;
   readonly record: ScenarioStepRecord;
   /** The exact in-memory object run-scenario.ts's own `writeStepRecord`
-   * call
-   * just persisted for this step, or `null` for a step with no step record
-   * of its own at all — see map-scenario.ts's `MapStepInput.stepRecord` for
-   * the
-   * full reasoning. */
+   * call just persisted for this step, or `null` for a step with no step
+   * record of its own at all — see map-scenario.ts's `MapGwtStepInput.
+   * stepRecord` for the full reasoning. */
   readonly stepRecord: StepRecord | null;
   readonly index: number;
   readonly finishedAt: Date;
@@ -123,18 +188,27 @@ export interface EndScenarioInput {
 }
 
 export interface AllureEmitter {
-  /** Writes categories.json and environment.properties. Once, at the start
-   * of a run. */
+  /** Writes categories.json and environment.properties, and deletes every
+   * `*-progress-result.json` a previous run's own crash left behind. Once,
+   * at the start of a run. */
   begin(): void;
-  /** Opens this scenario's own scope, before its first step runs. Never
-   * throws. */
-  beginScenario(): void;
-  /** Writes one step's own test, the moment that step finishes. Never
-   * throws. */
+  /** Opens this scenario's own scope, clears this module's own step
+   * buffer, and writes this scenario's own initial progress snapshot —
+   * every one of `input.pickle`'s own steps listed as planned, none of
+   * them run yet. Never throws. */
+  beginScenario(input: BeginScenarioInput): void;
+  /** Maps one step, appends it to this scenario's own buffer, and writes an
+   * updated progress snapshot reflecting the buffer so far — a fresh file,
+   * replacing (by superseding, not overwriting: `endScenario` is what
+   * deletes the old one) this scenario's own most recent snapshot.
+   * `endScenario` is still what turns the whole buffer into the one real
+   * Allure test. Never throws. */
   emitStep(input: EmitStepInput): void;
-  /** Maps this scenario's own hooks (and whatever scenario-level evidence it
-   * collected) into fixtures under the scope `beginScenario` opened, then
-   * writes that scope. Never throws. */
+  /** Folds the buffered steps and this scenario's own hooks (and whatever
+   * scenario-level evidence it collected) into one Allure test plus its own
+   * fixtures, writes both, then writes the scope's own container. Deletes
+   * every progress snapshot this scenario ever wrote, regardless of
+   * whether the real result above wrote successfully. Never throws. */
   endScenario(input: EndScenarioInput): void;
 }
 
@@ -149,6 +223,58 @@ function allureStatus(status: MappedStatus): Status {
     case "skipped":
       return Status.SKIPPED;
   }
+}
+
+/** One already-finished child step (a declared log line, a timeline entry,
+ * a call), reshaped for a progress snapshot — recurses on its own nested
+ * `childSteps`, same as `emitter.ts`'s own `writeChildSteps` does for the
+ * real result. `MappedChildStep` carries no attachments of its own at all
+ * (its own header), so there is nothing here to strip the way
+ * `mappedGwtStepToSnapshotStep`, below, has to. */
+function mappedChildStepToSnapshotStep(child: MappedChildStep): StepResult {
+  const result = createStepResult();
+  result.name = child.name;
+  result.status = allureStatus(child.status);
+  result.start = child.startMs;
+  result.stop = child.stopMs;
+  if (child.parameters && child.parameters.length > 0) {
+    result.parameters = [...child.parameters];
+  }
+  if (child.childSteps && child.childSteps.length > 0) {
+    result.steps = child.childSteps.map(mappedChildStepToSnapshotStep);
+  }
+  return result;
+}
+
+/** One already-finished `steps[]` entry, reshaped for a progress snapshot:
+ * every field `writeGwtSteps` (below) eventually renders for the real
+ * result except attachments — a snapshot never carries one (this file's
+ * own header: attachments are final-only, avoiding a duplicate,
+ * possibly-still-being-copied reference racing the real result's own). */
+function mappedGwtStepToSnapshotStep(step: MappedGwtStep): StepResult {
+  const result = createStepResult();
+  result.name = step.name;
+  result.status = allureStatus(step.status);
+  result.start = step.startMs;
+  result.stop = step.stopMs;
+  if (step.parameters.length > 0) {
+    result.parameters = [...step.parameters];
+  }
+  if (step.childSteps.length > 0) {
+    result.steps = step.childSteps.map(mappedChildStepToSnapshotStep);
+  }
+  return result;
+}
+
+/** One `steps[]` entry for a pickle step that has not run yet — named
+ * exactly the way it will read once it actually finishes (`buildStepName`,
+ * map-scenario.ts, shared with `mapGwtStep` itself), status left unset
+ * (`createStepResult`'s own default), so a live viewer sees the whole plan
+ * before any of it has happened. */
+function plannedSnapshotStep(name: string): StepResult {
+  const result = createStepResult();
+  result.name = name;
+  return result;
 }
 
 export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitter {
@@ -167,26 +293,19 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
 
   // The state this module carries across `beginScenario`/`emitStep`/
   // `endScenario` — safe only because `nuka run` runs one scenario at a
-  // time (this file's own header). Both are `null` both before the first
-  // `beginScenario` and once `endScenario` has cleared them, so a stray
-  // `emitStep` call outside a scenario's own begin/end pair is a no-op
-  // rather than attaching to the *previous* scenario's own scope or
-  // classification.
+  // time (this file's own header). All four are reset both before the
+  // first `beginScenario` and once `endScenario` has cleared them, so a
+  // stray `emitStep` call outside a scenario's own begin/end pair is a
+  // no-op rather than attaching to the *previous* scenario's own scope or
+  // buffer. `progressAnchorMs` is `null` exactly when there is no open
+  // scope to write a snapshot under (mirrors `currentScopeUuid` itself);
+  // `progressUuids` collects every progress snapshot's own uuid this
+  // scenario has written so far, so `endScenario` knows exactly which
+  // files to delete.
   let currentScopeUuid: string | null = null;
-  // The first step this scenario ran whose own failure resolved to a
-  // classified `ErrorKind` (mapStep's own `nukadoko.failure` label — a
-  // vocabulary defect like "undefined"/"ambiguous" never gets one, the same
-  // as it never did at step grain). `endScenario` reads this to give the
-  // scenario-level test itself a `nukadoko.failure` label and message when
-  // the scenario failed, the same "mark the first failure" the old
-  // scenario = test design used before step = test replaced it (this
-  // file's own header) — revived here only for this one rollup test, never
-  // for a step's own test, which still carries its own precise
-  // classification unaffected. Without this, every failing scenario's own
-  // test would fall into Allure 3's built-in, uninformative "Product
-  // errors" catch-all instead of one of `nuka init`'s own seven categories,
-  // even though every step under it is already correctly classified.
-  let firstFailure: { readonly kind: string; readonly message: string } | null = null;
+  let bufferedSteps: MappedGwtStepOutcome[] = [];
+  let progressAnchorMs: number | null = null;
+  let progressUuids: string[] = [];
 
   function toAbsolute(relativePath: string): string {
     return path.join(options.rootDir, relativePath);
@@ -207,21 +326,16 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
-  // Every child step nests directly under `rootUuid` (`parentStepUuid`
-  // defaults to `null` at both existing call sites below) — one level
-  // shallower than when a step was itself a child of the scenario's own
-  // test. Verified this still works: parameters and errors are still
-  // preserved, and the lost nesting level is carried by Allure's own
-  // breadcrumb instead. `parentStepUuid` lets a caller nest deeper than
-  // one level — `map-scenario.ts`'s own `mapCalls` builds a
-  // `MappedChildStep` whose own `childSteps` recurses (docs/spec.md
-  // "Parts": "a part that calls a part nests the same way"), and
-  // `startStep`'s own second argument is `ReporterRuntime`'s own
-  // mechanism for exactly that, already built for it, not bent to fit.
+  /** Renders one nested child-step tree (a declared log line, a
+   * sections/polls/actions timeline entry, or a call) under `parentStepUuid`
+   * — never a `steps[]` entry itself, which `writeGwtSteps` below renders
+   * (a `MappedChildStep` carries no attachments/message of its own, unlike
+   * a `MappedGwtStep`, which is the whole reason the two need separate
+   * writer functions). */
   function writeChildSteps(
     rootUuid: string,
     childSteps: readonly MappedChildStep[],
-    parentStepUuid: string | null = null,
+    parentStepUuid: string | null,
   ): void {
     for (const child of childSteps) {
       const uuid = runtime.startStep(rootUuid, parentStepUuid, { name: child.name, start: child.startMs });
@@ -240,17 +354,39 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     }
   }
 
-  // Shared by `emitStep` and `endScenario`'s own scenario-level test below:
-  // both start from a `MappedStepTest` (map-scenario.ts's own shared shape,
-  // one per step or one per scenario) and need the exact same `TestResult`
-  // fields built from it — keeping this in one place is what keeps a field
-  // (`statusDetails.message`, say) from being wired up for one grain and
-  // quietly forgotten for the other.
-  function writeMappedTest(
+  /** Renders every one of this result's own `steps[]` entries — one
+   * `startStep`/`updateStep`/`stopStep` per Given/When/Then/And, each
+   * nesting its own attachments and its own child-step tree
+   * (`writeChildSteps`, above) exactly the way a step's own test used to
+   * before step = test and scenario = test merged back into one. */
+  function writeGwtSteps(rootUuid: string, steps: readonly MappedGwtStep[]): void {
+    for (const step of steps) {
+      const stepUuid = runtime.startStep(rootUuid, null, { name: step.name, start: step.startMs });
+      if (stepUuid === undefined) {
+        continue;
+      }
+      runtime.updateStep(stepUuid, (s) => {
+        s.status = allureStatus(step.status);
+        if (step.parameters.length > 0) {
+          s.parameters = [...s.parameters, ...step.parameters];
+        }
+        if (step.message !== undefined) {
+          s.statusDetails = { message: step.message };
+        }
+      });
+      for (const attachment of step.attachments) {
+        writeMappedAttachment(rootUuid, stepUuid, attachment);
+      }
+      writeChildSteps(rootUuid, step.childSteps, stepUuid);
+      runtime.stopStep(stepUuid, { stop: step.stopMs });
+    }
+  }
+
+  function writeMappedScenarioTest(
     scopeUuid: string,
     fullName: string,
-    suitePath: readonly [string, string],
-    mapped: MappedStepTest,
+    titlePath: readonly string[],
+    mapped: MappedScenarioTest,
   ): void {
     const environmentLabels = getEnvironmentLabels().map((label) => ({
       name: label.name,
@@ -260,6 +396,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     const partialTest: Partial<TestResult> = {
       name: mapped.name,
       fullName,
+      titlePath: [...titlePath],
       status: allureStatus(mapped.status),
       description: mapped.description,
       start: mapped.startMs,
@@ -274,34 +411,84 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       links: mapped.links,
       parameters: mapped.parameters,
       // Allure 2's own categories matching reads `error.message`/
-      // `statusDetails.message` at the *test* level — every failing step
-      // has its own test to carry it (map-scenario.ts's own `mapStep`).
-      // `mapScenario`'s own tests carry one too, but only the first
-      // classified failure's own (this file's own `firstFailure`), since a
-      // scenario's own test has no single step's outcome of its own to
-      // report.
-      ...(mapped.message !== undefined ? { statusDetails: { message: mapped.message } } : {}),
+      // `statusDetails.message` at the *test* level — map-scenario.ts's own
+      // `firstFailure` is what feeds this. `trace` carries the same
+      // failure's own raw, unmarked text (map-scenario.ts's own
+      // `MappedGwtStepOutcome.failure` header) — a detail pane distinct
+      // from `message`'s marked summary, never a replacement for it.
+      ...(mapped.message !== undefined
+        ? { statusDetails: { message: mapped.message, ...(mapped.trace !== undefined ? { trace: mapped.trace } : {}) } }
+        : {}),
       // `testCaseId`/`historyId` are deliberately left unset here: the SDK's
       // own `stopTest` fills both in from `fullName` (plus every
       // non-excluded parameter) the moment it runs, below — no reason to
       // reimplement that formula here (map-scenario.ts's own header).
     };
-    // Mutates `partialTest.labels` in place, appending suite labels only
-    // when none are already present. `[featureName, scenario name]` fills
-    // both `parentSuite` and `suite` for a step's own test and a scenario's
-    // own test alike — the same pair, so both grains sit in the same suite
-    // group in the report's own tree.
-    ensureSuiteLabels(partialTest, suitePath);
 
     const testUuid = runtime.startTest(partialTest, [scopeUuid]);
 
     for (const attachment of mapped.attachments) {
       writeMappedAttachment(testUuid, null, attachment);
     }
-    writeChildSteps(testUuid, mapped.childSteps);
+    writeGwtSteps(testUuid, mapped.steps);
 
     runtime.stopTest(testUuid, { stop: mapped.stopMs });
     runtime.writeTest(testUuid);
+  }
+
+  /** Builds and writes one progress snapshot straight through `writer`,
+   * bypassing `ReporterRuntime` entirely — `startTest`/`stopTest`/
+   * `writeTest` all mutate that runtime's own internal bookkeeping (its own
+   * scope/test state, this file's own header), which a result that
+   * `ReporterRuntime` never itself started or means to keep tracking must
+   * never touch. `createTestResult`/`createStepResult` (allure-js-commons'
+   * own factory functions, the same ones `ReporterRuntime.startTest`/
+   * `startStep` call internally) are what give this snapshot the exact
+   * same `statusDetails: {}, stage: "pending"` shape a real, still-running
+   * result already has at this same point in its own lifecycle. */
+  function writeProgressSnapshot(pickle: Pickle, gherkinDocument: GherkinDocument, relativeFeaturePath: string): void {
+    if (progressAnchorMs === null) {
+      return;
+    }
+    const posixPath = toPosixPath(relativeFeaturePath);
+    const featureName = gherkinDocument.feature?.name ?? "";
+
+    const result = createTestResult(randomUuid());
+    result.name = pickle.name;
+    result.fullName = buildFullName(projectName, posixPath, pickle.name);
+    result.titlePath = buildTitlePath(projectName, posixPath, featureName);
+    result.start = progressAnchorMs;
+    // Identity only (req 2's own invariant) — `mapScenario`'s own context
+    // parameters (environment/session/target_version) are excluded from
+    // historyId already, so a snapshot that never carries them changes
+    // nothing a reader could compare against the real result.
+    result.parameters = [
+      ...buildExampleParameters(gherkinDocument, pickle),
+      { name: "nukadoko.scenario.steps", value: buildScenarioStepsSignature(pickle), mode: "hidden" },
+    ];
+    // The exact same allure-js-commons helpers `ReporterRuntime.stopTest`
+    // itself calls for the real result (map-scenario.ts's own header) —
+    // called explicitly here because a snapshot never reaches `stopTest`
+    // at all (this function's own doc comment).
+    result.testCaseId = getTestResultTestCaseId(result);
+    result.historyId = getTestResultHistoryId(result);
+
+    result.steps = pickle.steps.map((pickleStep, index) => {
+      const outcome = bufferedSteps[index];
+      return outcome !== undefined
+        ? mappedGwtStepToSnapshotStep(outcome.step)
+        : plannedSnapshotStep(buildStepName(gherkinDocument, pickle, index, pickleStep.text));
+    });
+
+    // `hooks: []` — a hook's own outcome is never known mid-scenario, only
+    // once `endScenario` maps `record.hooks` (this file's own header).
+    const classifiedFailure = firstFailure(bufferedSteps, []);
+    if (classifiedFailure !== undefined) {
+      result.statusDetails = { message: classifiedFailure.message, trace: classifiedFailure.rawMessage };
+    }
+
+    writer.writeProgressSnapshot(result);
+    progressUuids.push(result.uuid);
   }
 
   function emitFixture(scopeUuid: string, hook: MappedHook, declaredParameters: readonly MappedParameter[]): void {
@@ -321,7 +508,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     for (const attachment of hook.attachments) {
       writeMappedAttachment(fixtureUuid, null, attachment);
     }
-    writeChildSteps(fixtureUuid, hook.childSteps);
+    writeChildSteps(fixtureUuid, hook.childSteps, null);
     runtime.stopFixture(fixtureUuid, { stop: hook.stopMs });
   }
 
@@ -332,20 +519,38 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       try {
         runtime.writeCategoriesDefinitions();
         runtime.writeEnvironmentInfo();
+        // Crash-abandoned progress files from a previous run — this run's
+        // own `beginScenario` calls are what will write fresh ones (this
+        // file's own header). Never touches a real `*-result.json`.
+        writer.cleanProgressSnapshots();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(`warning: allure begin failed: ${message}\n`);
       }
     },
 
-    beginScenario(): void {
-      firstFailure = null;
+    beginScenario(input: BeginScenarioInput): void {
+      bufferedSteps = [];
+      progressUuids = [];
+      progressAnchorMs = null;
       try {
         currentScopeUuid = runtime.startScope();
       } catch (error) {
         currentScopeUuid = null;
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(`warning: allure beginScenario failed: ${message}\n`);
+      }
+      if (currentScopeUuid === null) {
+        return;
+      }
+      // Frozen once, for every progress snapshot this scenario will ever
+      // write (`BeginScenarioInput.startedAt`'s own doc comment).
+      progressAnchorMs = input.startedAt.getTime() - 1;
+      try {
+        writeProgressSnapshot(input.pickle, input.gherkinDocument, input.relativeFeaturePath);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        options.stderr.write(`warning: allure beginScenario snapshot failed: ${message}\n`);
       }
     },
 
@@ -356,50 +561,53 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       // narrow across a function call the way a local `const` does).
       const scopeUuid = currentScopeUuid;
       if (scopeUuid === null) {
-        // `beginScenario` never ran or itself failed — nothing to attach
-        // this step's own test to. Already warned there; silent here so one
-        // failed scenario doesn't repeat the same warning once per step.
+        // `beginScenario` never ran or itself failed — nothing to buffer
+        // this step's own entry under. Already warned there; silent here so
+        // one failed scenario doesn't repeat the same warning once per
+        // step.
         return;
       }
       try {
-        const posixPath = toPosixPath(input.relativeFeaturePath);
-        const mapped = mapStep({
-          runId: input.runId,
-          scenarioId: input.scenarioId,
-          environment: input.environment,
-          session: input.session,
-          targetVersion: input.targetVersion,
+        const outcome = mapGwtStep({
+          index: input.index,
           record: input.record,
           stepRecord: input.stepRecord,
-          index: input.index,
           finishedAt: input.finishedAt,
           gherkinDocument: input.gherkinDocument,
           pickle: input.pickle,
-          posixPath,
         });
-
-        if (firstFailure === null) {
-          const kindLabel = mapped.labels.find((label) => label.name === "nukadoko.failure");
-          if (kindLabel !== undefined && mapped.message !== undefined) {
-            // `mapped.message` is already `[nukadoko.failure=<kind>] ...`
-            // (map-scenario.ts's own `markedMessage`) whenever `kindLabel`
-            // is present, so this is a straight capture, never a second
-            // marker-formatting call.
-            firstFailure = { kind: kindLabel.value, message: mapped.message };
-          }
-        }
-
-        // `{project}:{featurePath}#{scenario}#{step text}` — a
-        // human-readable identifier, unlike historyId
-        // (this module's own header, and map-scenario.ts's own header for
-        // why historyId is deliberately left to fall apart instead).
-        const fullName = buildFullName(projectName, posixPath, `${input.pickle.name}#${mapped.name}`);
-
-        writeMappedTest(scopeUuid, fullName, [mapped.featureName, input.pickle.name], mapped);
+        bufferedSteps.push(outcome);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(
           `warning: allure emitStep failed for scenario ${input.scenarioId} step ${input.index}: ${message}\n`,
+        );
+        // A minimal fallback entry, not a skipped one: every element of
+        // `record.steps` needs exactly one `steps[]` entry, in order, or
+        // every later step's own position silently shifts, misaligning the
+        // report against the feature file that named them.
+        const t = input.finishedAt.getTime();
+        bufferedSteps.push({
+          step: {
+            name: input.record.text,
+            status: "broken",
+            message,
+            startMs: t,
+            stopMs: t,
+            attachments: [],
+            parameters: [],
+            childSteps: [],
+          },
+          declaredLabels: [],
+          declaredLinks: [],
+        });
+      }
+      try {
+        writeProgressSnapshot(input.pickle, input.gherkinDocument, input.relativeFeaturePath);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        options.stderr.write(
+          `warning: allure progress snapshot failed for scenario ${input.scenarioId} step ${input.index}: ${message}\n`,
         );
       }
     },
@@ -407,53 +615,63 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     endScenario(input: EndScenarioInput): void {
       const scopeUuid = currentScopeUuid;
       currentScopeUuid = null;
-      const scenarioFirstFailure = firstFailure;
-      firstFailure = null;
-      if (scopeUuid === null) {
-        return;
+      const steps = bufferedSteps;
+      bufferedSteps = [];
+      const progressUuidsToClean = progressUuids;
+      progressUuids = [];
+      progressAnchorMs = null;
+
+      if (scopeUuid !== null) {
+        try {
+          const { record, gherkinDocument, pickle, relativeFeaturePath } = input;
+          const posixPath = toPosixPath(relativeFeaturePath);
+
+          const mapped = mapScenario({ record, gherkinDocument, pickle, posixPath, projectName, steps });
+
+          // Bare `pickle.name`: a scenario's own test has nothing to
+          // disambiguate itself from within its own fullName the way a
+          // step's own test used to disambiguate itself from its siblings
+          // (identity.ts's own header).
+          const fullName = buildFullName(projectName, posixPath, pickle.name);
+          const titlePath = buildTitlePath(projectName, posixPath, mapped.featureName);
+
+          writeMappedScenarioTest(scopeUuid, fullName, titlePath, mapped);
+
+          const scenarioStartMs = Date.parse(record.started_at);
+          const scenarioStopMs = Date.parse(record.finished_at);
+          for (const entry of mapHooks(record, scenarioStartMs, scenarioStopMs)) {
+            emitFixture(scopeUuid, entry.hook, entry.declaredParameters);
+          }
+
+          // Attachments before the container, always: every `writeAttachment`
+          // call above (the test's own, and every fixture's own) and the
+          // `writeTest` call already landed synchronously, so `writeScope`
+          // below is the only thing left to write.
+          runtime.writeScope(scopeUuid);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          options.stderr.write(
+            `warning: allure endScenario failed for scenario ${input.record.scenario_record_id}: ${message}\n`,
+          );
+        }
       }
-      try {
-        const { record, gherkinDocument, pickle, relativeFeaturePath } = input;
-        const scenarioStartMs = Date.parse(record.started_at);
-        const scenarioStopMs = Date.parse(record.finished_at);
 
-        const posixPath = toPosixPath(relativeFeaturePath);
-        const mappedScenario = mapScenario({
-          record,
-          gherkinDocument,
-          pickle,
-          environment: record.environment,
-          session: record.session,
-          targetVersion: record.target_version,
-          posixPath,
-          firstFailure: scenarioFirstFailure ?? undefined,
-        });
-        // Bare `pickle.name`, never `${pickle.name}#...` — a scenario's own
-        // test has nothing to disambiguate itself from within its own
-        // fullName the way a step's own test disambiguates itself from its
-        // siblings (identity.ts's own header).
-        const scenarioFullName = buildFullName(projectName, posixPath, pickle.name);
-        writeMappedTest(scopeUuid, scenarioFullName, [mappedScenario.featureName, pickle.name], mappedScenario);
-
-        for (const entry of mapHooks(record, scenarioStartMs, scenarioStopMs)) {
-          emitFixture(scopeUuid, entry.hook, entry.declaredParameters);
+      // Runs regardless of whether the real result above wrote
+      // successfully (or was ever started at all): every progress snapshot
+      // this scenario wrote is stale the moment `endScenario` is called,
+      // real result or not, since nothing will ever `emitStep` into this
+      // scenario's own buffer again. Isolated in its own try/catch per
+      // uuid so one file this writer somehow can't remove never masks
+      // (or is masked by) the real result's own success/failure above.
+      for (const uuid of progressUuidsToClean) {
+        try {
+          writer.deleteProgressSnapshot(uuid);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          options.stderr.write(
+            `warning: allure progress cleanup failed for scenario ${input.record.scenario_record_id}: ${message}\n`,
+          );
         }
-
-        const evidenceFixture = mapScenarioEvidence(record);
-        if (evidenceFixture !== undefined) {
-          emitFixture(scopeUuid, evidenceFixture, []);
-        }
-
-        // Attachments before the container, always: every `writeAttachment`
-        // call above (fixtures) and every `writeTest` call (`emitStep`,
-        // already done by the time this runs) already landed synchronously,
-        // so `writeScope` below is the only thing left to write.
-        runtime.writeScope(scopeUuid);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        options.stderr.write(
-          `warning: allure endScenario failed for scenario ${input.record.scenario_record_id}: ${message}\n`,
-        );
       }
     },
   };
