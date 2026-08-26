@@ -1554,6 +1554,8 @@ scenario record 自身の `steps` 配列が各 step の record を id で名指�
   page のエラーは page についての証跡であり、step についての判定ではないからです。
 - `actions`(空でないときだけ現れます)は、この step 自身の trace chunk(上の `evidence.trace`)から読み出されます。
   この step が `page` fixture を通して行った Playwright の呼び出しすべてで、`expect` の待ちも含み、trace が完了を記録した順に並びます。
+  ただし例外が 1 つあります。
+  Playwright 自身が、すべての browser context について `console`/`weberror`/`requestfailed` イベントを内部で監視しており、その監視は step 自身のコードが行った呼び出しではないため、`actions` からは除外され、報告されません。
   `expect` も fixture ではありません(「Context API」を参照)。
   step は Playwright のテストファイルと同じやり方(`import { expect } from "playwright/test"`)でそこにたどり着き、trace はそのラッパーの下、Playwright 自身の層でその呼び出しを記録します。
   `goto`、`click`、その他すべての呼び出しがすでに同じ場所に載っているのと同じです。

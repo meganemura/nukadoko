@@ -56,6 +56,20 @@ import type { WritableSink } from "../cli/writable-sink.js";
  * "probably fine" is exactly what this file's own header rules out. */
 const KNOWN_TRACE_VERSIONS: readonly number[] = [8];
 
+/** Every `BrowserContext` runs an internal watch for `console`/`weberror`/
+ * `requestfailed` events (Playwright's own client library sets this up,
+ * not anything a step's code asked for), and that watch's own before/after
+ * pair lands in trace.trace under this method name. It bypasses the check
+ * every real API call goes through before being recorded, which is why it
+ * shows up here at all despite not being a call. It never carries a
+ * `selector`/`url`/`expression`, and it is unrelated to nukadoko's own
+ * `page.on("console"/"weberror"/"requestfailed", ...)` listeners
+ * (src/context/browser-evidence.ts): both watch the same browser events,
+ * but this one is Playwright's own bookkeeping. Measured, not guessed: this
+ * is the one exact method name confirmed in a real trace.trace, so only
+ * this exact name is excluded, never a pattern guessed to match others. */
+const INTERNAL_WAIT_METHOD = "__waitInfo__";
+
 /** Capped the same way `page_events` is (src/context/page-events.ts) — a
  * step that clicks through a long flow can rack up hundreds of trace calls,
  * and a step record trying to hold all of them stops being something a
@@ -336,6 +350,9 @@ export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseRe
         continue;
       }
       pendingBefores.delete(entry.callId);
+      if (before.method === INTERNAL_WAIT_METHOD) {
+        continue;
+      }
       const after = readAfter(entry);
       if (after === undefined || header === undefined) {
         continue;

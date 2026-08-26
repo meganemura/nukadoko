@@ -117,6 +117,20 @@ const EXPECT_BEFORE = {
 };
 const EXPECT_AFTER = { type: "after", callId: "call@10", endTime: 1375.991 };
 
+// The exact `__waitInfo__` example already measured against a real trace:
+// Playwright's own per-context watch for console/weberror/requestfailed
+// events, not a call any step made.
+const WAIT_INFO_BEFORE = {
+  type: "before",
+  callId: "call@21",
+  startTime: 594.64,
+  title: 'Wait for event "console"',
+  class: "BrowserContext",
+  method: "__waitInfo__",
+  params: { waitId: "wait@1", phase: "before", event: "console" },
+};
+const WAIT_INFO_AFTER = { type: "after", callId: "call@21", endTime: 599.631 };
+
 describe("parseTraceActions", () => {
   it("turns a before/after expect pair into one action with ms/at/outcome", () => {
     const traceTrace = [headerLine(8), JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join(
@@ -248,6 +262,38 @@ describe("parseTraceActions", () => {
     const traceTrace = [JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join("\n");
     const result = parseTraceActions(Buffer.from(traceTrace, "utf8"));
     expect(result).toEqual({ kind: "unreadable" });
+  });
+
+  it("excludes a __waitInfo__ before/after pair entirely, leaving actions empty", () => {
+    const traceTrace = [
+      headerLine(8),
+      JSON.stringify(WAIT_INFO_BEFORE),
+      JSON.stringify(WAIT_INFO_AFTER),
+    ].join("\n");
+    const result = parseTraceActions(Buffer.from(traceTrace, "utf8"));
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      throw new Error("expected ok");
+    }
+    expect(result.actions).toEqual([]);
+    expect(result.truncatedCount).toBeUndefined();
+  });
+
+  it("drops only the __waitInfo__ pair when mixed with a real action", () => {
+    const traceTrace = [
+      headerLine(8),
+      JSON.stringify(WAIT_INFO_BEFORE),
+      JSON.stringify(WAIT_INFO_AFTER),
+      JSON.stringify(EXPECT_BEFORE),
+      JSON.stringify(EXPECT_AFTER),
+    ].join("\n");
+    const result = parseTraceActions(Buffer.from(traceTrace, "utf8"));
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      throw new Error("expected ok");
+    }
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]?.method).toBe("expect");
   });
 
   it("skips one malformed JSON line without losing the rest", () => {

@@ -2168,7 +2168,10 @@ so a reader can open either first and reach the other from it.
 - `actions` (present only when non-empty) is read out of this step's own
   trace chunk (`evidence.trace`, above): every Playwright call the step made
   through the `page` fixture, `expect` waits included, in the order the
-  trace recorded them finishing. `expect` is deliberately not a fixture
+  trace recorded them finishing. One exception: Playwright itself runs an
+  internal watch for `console`/`weberror`/`requestfailed` events on every
+  browser context, and that watch is not a call the step's own code made, so
+  it is excluded from `actions` rather than reported as one. `expect` is deliberately not a fixture
   either (see "Context API"): a step reaches it the same way a Playwright
   test file would (`import { expect } from "playwright/test"`), and the
   trace records the call underneath that wrapper, at Playwright's own
