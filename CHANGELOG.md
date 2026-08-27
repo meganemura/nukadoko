@@ -5,6 +5,43 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **A step that runs for minutes now shows what it is doing, in a live
+  Allure report.** Between the snapshot written when a step ends and the
+  one written when the next begins, a long step used to leave the report
+  untouched, so a scenario that was working looked identical to one that
+  had hung. The emitter now writes a snapshot every ten seconds while a
+  step runs, drawing that step with no status, a `stop` that advances each
+  tick, and its live activity as child steps one flat level deep. Two
+  sources feed those children, and both carry words a person wrote: a
+  `ctx.poll` call still retrying contributes `waiting for: <description>
+  (attempt N)`, and each `ctx.section` label reached so far contributes
+  `section: <label>`. Measured against a real run under Allure 3.14.3: a
+  page left open on the scenario followed a 48-second poll through
+  `attempt 20` to `attempt 80` with its clock moving 10s to 40s, on its own
+  reloads, with no hand on the keyboard.
+
+  When a running step has neither a poll nor a section to report, nothing
+  is written. A tick that could only say how long the step has been running
+  costs a whole-page reload to tell a reader what they can already see. The
+  consequence to know: a step running with no poll and no section looks
+  exactly like a step that has not started.
+
+  The interval is ten seconds and is not configurable, since it answers how
+  long a person waits before a live view reads as stalled, and that does not
+  vary by project. One step stops after 120 ticks. A live child is redacted
+  where it is built, unlike every other value on a snapshot, which arrives
+  off a step record that was redacted when it was written.
+
+  One cost, bounded by that cap: Allure ingests every snapshot as a retry,
+  so the report a watch session builds lists one retry row per snapshot,
+  and a heartbeat adds rows for time rather than for steps. A report
+  generated afterward from a finished results directory carries none of
+  them.
+
 ## 0.9.0 — 2026-08-27
 
 ### Changed

@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import {
   createAllureEmitter,
+  DEFAULT_HEARTBEAT_CAP,
   type AllureEmitter,
   type BeginScenarioInput,
   type EmitStepInput,
+  type EmitStepProgressInput,
 } from "../src/report/allure/emitter.js";
 import type { ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
@@ -95,6 +97,17 @@ function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "
     finishedAt: new Date("2026-08-01T00:00:01.000Z"),
     gherkinDocument: overrides.gherkinDocument!,
     pickle: overrides.pickle!,
+    relativeFeaturePath: "features/checkout.feature",
+    ...overrides,
+  };
+}
+
+function baseStepProgressInput(
+  overrides: Partial<EmitStepProgressInput> & Pick<EmitStepProgressInput, "gherkinDocument" | "pickle" | "index" | "liveItems">,
+): EmitStepProgressInput {
+  return {
+    scenarioId: "scn-1",
+    startedAt: new Date("2026-08-01T00:00:00.500Z"),
     relativeFeaturePath: "features/checkout.feature",
     ...overrides,
   };
@@ -215,7 +228,7 @@ describe("createAllureEmitter: progress snapshots", () => {
     );
   });
 
-  it("gives one scenario's own snapshots a strictly increasing start, starting at scenarioStart - (stepCount + 2), all strictly below the real result's own start", () => {
+  it("gives one scenario's own snapshots a strictly increasing start, starting at scenarioStart - (stepCount * (heartbeatCap + 1) + 2), all strictly below the real result's own start", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
     const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
@@ -238,8 +251,11 @@ describe("createAllureEmitter: progress snapshots", () => {
     }
 
     // Criterion 3: the first snapshot (`beginScenario`'s own) starts at
-    // scenarioStart - (stepCount + 2).
-    expect(starts[0]).toBe(startedAt.getTime() - (pickle.steps.length + 2));
+    // scenarioStart - (stepCount * (heartbeatCap + 1) + 2), the budget
+    // reserving one full heartbeat allowance per step (this emitter was
+    // built with no explicit `heartbeatCap`, so it falls back to
+    // `DEFAULT_HEARTBEAT_CAP`).
+    expect(starts[0]).toBe(startedAt.getTime() - (pickle.steps.length * (DEFAULT_HEARTBEAT_CAP + 1) + 2));
 
     // Criterion 1: every later snapshot's own start is strictly higher than
     // the one before it -- no two snapshots in this scenario tie.
@@ -511,5 +527,187 @@ describe("createAllureEmitter: progress snapshots", () => {
     const secondUuid = runScenario(second, "scn-second");
 
     expect(secondUuid).not.toBe(firstUuid);
+  });
+
+  describe("emitStepProgress: the running-step heartbeat", () => {
+    // A live item is the one value reaching a progress snapshot without
+    // having been redacted somewhere upstream first: it is composed
+    // mid-step from `ctx.poll`'s own description and `ctx.section`'s own
+    // label, both of which a step can interpolate a value into. Every other
+    // field on a snapshot arrives off an already-redacted step record.
+    it("redacts a live item before it reaches the snapshot on disk", () => {
+      const secretValue = "sekrit-live-item-value";
+      const redactingEmitter = createAllureEmitter({
+        resultsDir,
+        rootDir,
+        environment: "staging",
+        secrets: [{ name: "ORDER_TOKEN", value: secretValue }],
+        stderr: createCaptureSink(),
+      });
+      redactingEmitter.begin();
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles.find((p) => p.name === "a customer checks out")!;
+
+      redactingEmitter.beginScenario(
+        baseBeginScenarioInput({ pickle, gherkinDocument, startedAt: new Date("2026-08-01T00:00:00.000Z") }),
+      );
+      const before = new Set(readProgressFileNames(resultsDir));
+      redactingEmitter.emitStepProgress(
+        baseStepProgressInput({
+          gherkinDocument,
+          pickle,
+          index: 0,
+          startedAt: new Date("2026-08-01T00:00:05.000Z"),
+          liveItems: [`waiting for: order ${secretValue} to settle (attempt 2)`],
+        }),
+      );
+
+      const fileName = newProgressFileSince(resultsDir, before);
+      const raw = readFileSync(path.join(resultsDir, fileName), "utf8");
+      expect(raw).not.toContain(secretValue);
+      expect(raw).toContain("{{secret.ORDER_TOKEN}}");
+    });
+
+    it("writes a running step with no status and an advancing stop, and lists its own live items flat (no nested children)", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles.find((p) => p.name === "a customer checks out")!;
+      const startedAt = new Date("2026-08-01T00:00:00.000Z");
+
+      emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument, startedAt }));
+      const before = new Set(readProgressFileNames(resultsDir));
+      const stepStartedAt = new Date("2026-08-01T00:00:05.000Z");
+      emitter.emitStepProgress(
+        baseStepProgressInput({
+          gherkinDocument,
+          pickle,
+          index: 0,
+          startedAt: stepStartedAt,
+          liveItems: ["waiting for: widget to load (attempt 3)", "section: opening the drawer"],
+        }),
+      );
+
+      const snapshot = readJson(resultsDir, newProgressFileSince(resultsDir, before)) as {
+        steps: {
+          name: string;
+          status?: string;
+          start?: number;
+          stop?: number;
+          steps?: { name: string; status?: string; steps?: unknown[] }[];
+        }[];
+      };
+      const runningStep = snapshot.steps[0]!;
+      // Criterion 4: no status, and a `stop` present (not just carried over
+      // from a missing-`stop`-means-zero-duration fallback).
+      expect(runningStep.status).toBeUndefined();
+      expect(runningStep.start).toBe(stepStartedAt.getTime());
+      expect(runningStep.stop).toBeGreaterThanOrEqual(stepStartedAt.getTime());
+      // Criterion 5: the live items are flat, one level, not nested under
+      // each other.
+      expect(runningStep.steps?.map((s) => s.name)).toEqual([
+        "waiting for: widget to load (attempt 3)",
+        "section: opening the drawer",
+      ]);
+      for (const liveItem of runningStep.steps ?? []) {
+        expect(liveItem.status).toBeUndefined();
+        expect(liveItem.steps ?? []).toHaveLength(0);
+      }
+      // The step after the running one is still untouched, planned.
+      expect(snapshot.steps[1]!.status).toBeUndefined();
+    });
+
+    it("does nothing once that step's own real outcome has already been buffered by emitStep (a stale heartbeat never overwrites a finished step)", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles.find((p) => p.name === "a customer checks out")!;
+      const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+
+      emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
+      emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
+      const before = readProgressFileNames(resultsDir);
+
+      emitter.emitStepProgress(
+        baseStepProgressInput({ gherkinDocument, pickle, index: 0, liveItems: ["section: too late"] }),
+      );
+
+      expect(readProgressFileNames(resultsDir)).toEqual(before);
+    });
+
+    it("does nothing when no scenario scope is open", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles.find((p) => p.name === "a customer checks out")!;
+
+      expect(() =>
+        emitter.emitStepProgress(
+          baseStepProgressInput({ gherkinDocument, pickle, index: 0, liveItems: ["section: x"] }),
+        ),
+      ).not.toThrow();
+      expect(readProgressFileNames(resultsDir)).toHaveLength(0);
+    });
+
+    it("keeps start strictly increasing across a mix of heartbeat and real emitStep writes, all below the final result's own start", () => {
+      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+      const pickle = pickles.find((p) => p.name === "a customer checks out")!;
+      const startedAt = new Date("2026-08-01T09:00:00.000Z");
+
+      emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument, startedAt }));
+      const starts: number[] = [
+        (readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { start: number }).start,
+      ];
+
+      function recordNextStart(write: () => void): void {
+        const before = new Set(readProgressFileNames(resultsDir));
+        write();
+        const added = newProgressFileSince(resultsDir, before);
+        starts.push((readJson(resultsDir, added) as { start: number }).start);
+      }
+
+      recordNextStart(() =>
+        emitter.emitStepProgress(
+          baseStepProgressInput({ gherkinDocument, pickle, index: 0, liveItems: ["waiting for: x (attempt 1)"] }),
+        ),
+      );
+      recordNextStart(() =>
+        emitter.emitStepProgress(
+          baseStepProgressInput({ gherkinDocument, pickle, index: 0, liveItems: ["waiting for: x (attempt 2)"] }),
+        ),
+      );
+      const step0: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+      recordNextStart(() =>
+        emitter.emitStep(baseStepInput({ record: step0, stepRecord: null, gherkinDocument, pickle, index: 0 })),
+      );
+      const step1: ScenarioStepRecord = { text: pickle.steps[1]!.text, status: "passed", step_record_id: null };
+      recordNextStart(() =>
+        emitter.emitStep(baseStepInput({ record: step1, stepRecord: null, gherkinDocument, pickle, index: 1 })),
+      );
+
+      for (let i = 1; i < starts.length; i++) {
+        expect(starts[i]!).toBeGreaterThan(starts[i - 1]!);
+      }
+
+      const record: ScenarioRecord = {
+        scenario_record_id: "scn-1",
+        run_id: "run-1",
+        feature: "features/checkout.feature",
+        scenario: pickle.name,
+        line: pickle.location?.line ?? 0,
+        status: "passed",
+        environment: "staging",
+        session: null,
+        started_at: startedAt.toISOString(),
+        finished_at: "2026-08-01T09:00:02.000Z",
+        steps: [step0, step1],
+        hooks: [],
+        evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+      };
+      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
+
+      const final = readFinalFileNames(resultsDir).map((name) => readJson(resultsDir, name))[0] as { start: number };
+      for (const start of starts) {
+        expect(start).toBeLessThan(final.start);
+      }
+      // `endScenario` deletes every progress snapshot this scenario ever
+      // wrote, including the two heartbeat writes above, not only the ones
+      // `emitStep` itself made.
+      expect(readProgressFileNames(resultsDir)).toHaveLength(0);
+    });
   });
 });

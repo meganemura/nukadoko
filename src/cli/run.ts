@@ -33,10 +33,12 @@ import {
 import { generateRunId } from "../run/run-id.js";
 import {
   doneCallbackMessage,
+  HEARTBEAT_TICK_CAP,
   pendingOrSkippedMessage,
   runScenario,
   runWithTimeout,
   type StepFinishedInfo,
+  type StepHeartbeatInfo,
 } from "../run/run-scenario.js";
 import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -627,6 +629,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             targetVersion,
             secrets,
             stderr,
+            // The exact same cap run-scenario.ts's own heartbeat enforces
+            // per step (src/report/allure/emitter.ts's own
+            // `AllureEmitterOptions.heartbeatCap` doc comment), threaded
+            // through explicitly so the two can never drift apart on their
+            // own.
+            heartbeatCap: HEARTBEAT_TICK_CAP,
           });
           allureEmitter.begin();
         } catch (error) {
@@ -771,6 +779,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               }
             : undefined;
 
+          // Same "no-op unless there's an Allure emitter to write to" shape
+          // as `onStepFinished` just above, built once per pickle for the
+          // same reason: this closure needs that pickle's own
+          // `gherkinDocument`/`relativeFeaturePath`, which
+          // `StepHeartbeatInfo` itself does not carry.
+          const onStepProgress: ((info: StepHeartbeatInfo) => void) | undefined = allureEmitter
+            ? (info) => {
+                allureEmitter?.emitStepProgress({
+                  ...info,
+                  gherkinDocument: feature.gherkinDocument,
+                  pickle,
+                  relativeFeaturePath: feature.relativePath,
+                });
+              }
+            : undefined;
+
           const record = await runScenario({
             rootDir,
             config: runConfig,
@@ -796,6 +820,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             onUnknownTraceVersion,
             onStepEnd,
             onStepFinished,
+            onStepProgress,
             fixtureGraph,
             fixtureProcessCache,
           });

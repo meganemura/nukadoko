@@ -77,11 +77,21 @@ export interface PollOutcome {
  * `fn`'s own throw is rethrown unchanged (`throw error`, not wrapped) — this
  * function only ever observes it to classify it as `"failed"`, never
  * swallows it (docs/spec.md's design principle: nothing breaks silently).
+ *
+ * `onProgress`, when given, is called once per loop iteration, right after
+ * `attempts` is incremented and before `fn` runs. A poll waiting on a value
+ * that never arrives for minutes is still visible attempt by attempt this
+ * way, not only once the whole call finally settles. It must never throw:
+ * this function does not guard the call with its own `try`/`catch`, so a
+ * throwing `onProgress` would escape as if it were `fn`'s own failure. The
+ * one caller today (create-context.ts) only ever assigns into a plain map,
+ * which cannot throw.
  */
 export async function pollWithRecording<T>(
   fn: () => Promise<T | undefined>,
   options: PollOptions,
   onFinish: (outcome: PollOutcome) => void,
+  onProgress?: (attempts: number) => void,
 ): Promise<T> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const interval = options.interval ?? DEFAULT_INTERVAL_MS;
@@ -93,6 +103,7 @@ export async function pollWithRecording<T>(
   try {
     for (;;) {
       attempts += 1;
+      onProgress?.(attempts);
       let value: T | undefined;
       try {
         value = await fn();

@@ -2141,13 +2141,26 @@ emitter は scenario の開始時に progress snapshot を書きます。
 emitter は各 step の完了後に新しい `<uuid>-<連番>-progress-result.json` を書きます。
 各 snapshot は、その時点で完了した step の status と時間を使います。
 
+数分かかる step はこの 2 点の間に何も書かないので、emitter は step の実行中も 10 秒ごとに snapshot を書きます。
+その snapshot では、実行中の step を status 無しで描き、`stop` に書いた時点の時刻を入れ、いまの活動を子ステップとして 1 段の平坦に並べます。
+子の出所は 2 つで、どちらも人が書いた言葉を運びます。まだ再試行中の `ctx.poll` が `waiting for: <description> (attempt N)` を、到達済みの `ctx.section` のラベルが `section: <label>` を出します。
+子の文字列は組み立てた場所で redact します。snapshot の他の値は、書き込み時に redact 済みの step record から来ますが、子にはその一度目がありません。
+
+実行中の step にそのどちらも無いときは、emitter は何も書きません。
+経過時間しか言えない tick は、読み手が既に見ているものを伝えるために、ページ全体の再読み込みを 1 回払うことになります。
+知っておくべき帰結が 1 つあります。poll も section も持たないまま 1 分走る step は、まだ始まっていない step と見分けが付きません。
+
+間隔は 10 秒で、設定項目にしていません。これは人がライブ表示を「止まっている」と読むまでの時間で、プロジェクトごとに変わるものではないためです。
+1 つの step は 120 tick で打ち止めになります。tick ごとに下記の `start` の予算を 1 つ消費すること、そして step のリトライ一覧が書いた snapshot の本数だけ行を増やすことが、上限を置く理由です。
+
 1 つの scenario の全 snapshot は、その scenario の開始時に 1 度だけ生成した uuid を共有し、毎回新しいファイル名で置かれます。
 この両方が要ります。詳細ページの route は result 自身の uuid のハッシュなので、uuid が動くと、すでに開いているページの足元から route が動きます。そして `allure watch` が見つけるのは新しいファイルのパスだけで、読み終えたパスへの上書きは無視します。
 Allure は result の uuid をファイル名ではなく JSON の中身から読むので、一方を固定したまま他方を変えられます。
 
 snapshot は最終 result と同じ `historyId` を持ちますが、attachment、hook fixture、除外された文脈 parameter を含みません。
 各 snapshot は固有の `start` を持ち、1 つ前の snapshot より 1 ミリ秒だけ大きくなります。
-最初の 1 本は scenario 開始の `stepCount + 2` ミリ秒前に置かれるので、最後の 1 本も scenario 開始より前に留まります。
+最初の 1 本は scenario 開始の `stepCount * 121 + 2` ミリ秒前に置かれるので、最後の 1 本も scenario 開始より前に留まります。
+この予算は、step ごとの 1 本と、各 step が足しうる 120 回のハートビートを合わせたものです。1 step 1 本で見積もった式は、step が tick するほど長く走った時点で足りなくなります。
 最終 result は scenario の開始時刻を保つため、Allure は最終 result を canonical なリトライとして選びます。
 
 Allure 3 は `retryHash` が同じファイルをリトライとしてまとめます。これは `testCaseId`、除外されていない parameter、環境 id から作るハッシュです。

@@ -2900,13 +2900,26 @@ This initial snapshot lists every planned step without a status, so Allure displ
 The emitter writes a new `<uuid>-<sequence>-progress-result.json` after each completed step.
 Each snapshot uses the completed statuses and timings available at that point.
 
+A step that runs for minutes writes nothing between those two points, so the emitter also writes a snapshot every ten seconds while a step is still running.
+That snapshot draws the running step with no status, a `stop` set to the moment it was written, and its live activity listed as child steps, one flat level deep.
+Two sources feed those children, and both carry words a person wrote: a `ctx.poll` call still retrying contributes `waiting for: <description> (attempt N)`, and each `ctx.section` label reached so far contributes `section: <label>`.
+A live child is redacted where it is built. Every other value on a snapshot arrives off a step record that was redacted when it was written, and a live child has no such earlier pass to inherit.
+
+When a running step has neither of those to report, the emitter writes nothing at all.
+A tick that could only say how long the step has been running would be telling a reader something they can already see, and paying a whole-page reload for it.
+The consequence to know: a step that runs for a minute with no poll and no section looks exactly like a step that has not started.
+
+The interval is ten seconds and is not configurable, since it answers how long a person waits before a live view reads as stalled, and that does not vary by project.
+One step stops after 120 ticks. The bound exists because each tick spends a snapshot out of the `start` budget below, and because a step's own retry listing gains one row per snapshot it wrote.
+
 Every snapshot in one scenario shares one uuid, generated when that scenario starts, and lands under a fresh file name.
 Both halves are needed. A detail page's route is a hash of the result's own uuid, so a moving uuid moves the route out from under any page already open on it, and `allure watch` discovers a new file path while ignoring a rewrite of one it has read.
 Allure reads a result's uuid out of the JSON body rather than off the file name, which is what lets one value stay fixed while the other changes.
 
 A snapshot has the final result's `historyId`, but excludes attachments, hook fixtures, and excluded context parameters.
 Each snapshot gets its own `start`, one millisecond above the snapshot before it.
-The first sits `stepCount + 2` milliseconds below the scenario start, so the last one still stays below it.
+The first sits `stepCount * (121) + 2` milliseconds below the scenario start, so the last one still stays below it.
+That budget covers one snapshot per step plus the 120 heartbeat ticks each step may add, since a formula sized for one write per step would run out the moment a step ran long enough to tick.
 The final result keeps the scenario start, so Allure selects it as the canonical retry result.
 
 Allure 3 merges files as retries when they share a `retryHash`, a hash over `testCaseId`, the non-excluded parameters, and the environment id.

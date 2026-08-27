@@ -102,10 +102,11 @@ import { createAtomicWriter } from "./writer.js";
 // (src/report/messages/emitter.ts), which still does via
 // src/report/step-records.ts's `readStepRecordsForScenario`.
 //
-// Beyond that one real result, `beginScenario` and every `emitStep` also
-// write a disposable *progress* snapshot, never a substitute for the real
-// result, never itself the record `record.json` on disk already is. Every
-// snapshot in one scenario writes under that same scenario's own uuid,
+// Beyond that one real result, `beginScenario`, every `emitStep`, and every
+// heartbeat tick's own `emitStepProgress` (this file's own header, further
+// down) all write a disposable *progress* snapshot, never a substitute for
+// the real result, never itself the record `record.json` on disk already
+// is. Every snapshot in one scenario writes under that same scenario's own uuid,
 // generated once in `beginScenario` and reused for every later snapshot,
 // but always under a fresh file name (writer.ts's own
 // `writeProgressSnapshot`, `<uuid>-<sequence>-progress-result.json`)
@@ -161,13 +162,34 @@ import { createAtomicWriter } from "./writer.js";
 // the earliest snapshot would keep the canonical slot for good and every
 // later one, including whichever snapshot the run had actually reached,
 // would be marked a retry and drop out of the list. `beginScenario`'s own
-// `start` formula (`scenarioStart - (steps.length + 2)`, just below) and
-// each `writeProgressSnapshot` call's own `+ 1` over the last are what keep
-// that tie from happening today. The two mechanisms now travel as a pair:
-// reusing one uuid across a scenario's snapshots only stays safe as long as
-// their `start` keeps climbing, so a change to that formula that lets two
-// snapshots tie reopens the empty-list failure this paragraph describes,
-// even though nothing about the uuid scheme itself changed.
+// `start` formula (just below) and each `writeProgressSnapshot` call's own
+// `+ 1` over the last are what keep that tie from happening today. The two
+// mechanisms now travel as a pair: reusing one uuid across a scenario's
+// snapshots only stays safe as long as their `start` keeps climbing, so a
+// change to that formula that lets two snapshots tie reopens the
+// empty-list failure this paragraph describes, even though nothing about
+// the uuid scheme itself changed.
+//
+// `beginScenario`'s own formula used to budget one snapshot write per step
+// (`scenarioStart - (steps.length + 2)`): `beginScenario` writes one, and
+// each step's own `emitStep` writes exactly one more, so a scenario of N
+// steps made N + 1 calls to `writeProgressSnapshot` in total, and the old
+// anchor left exactly that much room below `ceiling` before `Math.min`'s
+// clamp could ever collapse two of them onto the same `start`. A step's own
+// heartbeat (src/run/run-scenario.ts's `runWithHeartbeat`) breaks that
+// one-write-per-step assumption: a step still running past its own first
+// tick calls `emitStepProgress` too, up to `heartbeatCap` times, before its
+// own `emitStep` ever lands, so one step can now account for as many as
+// `heartbeatCap + 1` writes, not one. The anchor below budgets for exactly
+// that worst case, per step (`steps.length * (heartbeatCap + 1) + 2`): the
+// `+ 1` inside covers each step's own `emitStep`, the `* steps.length`
+// covers every step needing its own full heartbeat budget, and the `+ 2`
+// at the end is `beginScenario`'s own initial write plus one spare
+// millisecond of headroom, the same margin the old formula already kept.
+// An on-budget run, one where no step's own heartbeat ever reaches
+// `heartbeatCap`, writes far fewer than this budget allows, exactly the
+// way the old formula's own N + 1 was a ceiling, not an expectation, for
+// every scenario that never needed the `Math.min` clamp at all.
 //
 // This matters because ingest order does not track write order on every
 // path that reads `allure-results`. `allure watch`'s own live path does
@@ -209,16 +231,24 @@ import { createAtomicWriter } from "./writer.js";
 // its own, so `ReporterRuntime.startTest` always generates the real
 // result's uuid independently, and it never collides with a snapshot's.
 //
-// Two things a page left open on a scenario's fixed route does not do, both
-// measured against a real run under 3.14.3 rather than reasoned about. It
-// never reaches the real result: `endScenario` writes that on a route of
+// One thing a page left open on a scenario's fixed route does not do,
+// measured against a real run under 3.14.3 rather than reasoned about: it
+// never reaches the real result. `endScenario` writes that on a route of
 // its own, and a reload keeps the URL fragment, so reaching it means
-// walking in from the list again. And it tops out one step short: a
-// scenario of N steps writes N+1 snapshots, the last of them between its
-// final step and `endScenario`'s own cleanup, inside the 300ms the watcher
-// waits between polls, so the newest snapshot that page ever shows is the
-// one taken after step N-1. Both are the report's own behavior, not
+// walking in from the list again. This is the report's own behavior, not
 // something this module can write its way out of.
+//
+// The newest snapshot that page ever shows is always whichever
+// `writeProgressSnapshot` call landed last before `endScenario`'s own
+// cleanup runs, inside the 300ms the watcher waits between polls. Before a
+// step's own heartbeat existed, that was always `emitStep`'s own write for
+// whichever step had most recently finished, so a scenario's own final step
+// was invisible while it ran and only appeared once it (and every step
+// after it, one at a time) had already finished. A step still running past
+// its own first heartbeat tick now writes into that same window while it
+// runs (`emitStepProgress`'s own doc comment below), so the final step of a
+// scenario that runs long enough is no longer a gap in that page's own
+// view. Only every step that finishes inside one 10-second tick still is.
 
 export interface AllureEmitterOptions {
   /** Absolute path. */
@@ -228,7 +258,26 @@ export interface AllureEmitterOptions {
   readonly targetVersion?: string;
   readonly secrets: SecretSet;
   readonly stderr: WritableSink;
+  /** How many heartbeat ticks one step's own `runWithHeartbeat`
+   * (src/run/run-scenario.ts) can produce before it stops. `beginScenario`
+   * needs this same number to size its own `start` budget per step (this
+   * file's own header, the paragraph on `beginScenario`'s formula). Optional
+   * so a caller with nothing running long enough to ever heartbeat (or an
+   * existing test built before this field existed) doesn't have to state
+   * it; defaults to `DEFAULT_HEARTBEAT_CAP`, the same value run-scenario.ts
+   * fixes its own cap at. cli/run.ts passes run-scenario.ts's own exported
+   * `HEARTBEAT_TICK_CAP` explicitly instead of relying on that default, so
+   * the two numbers cannot drift apart on their own. */
+  readonly heartbeatCap?: number;
 }
+
+/** `AllureEmitterOptions.heartbeatCap`'s own default. Must equal run-
+ * scenario.ts's own `HEARTBEAT_TICK_CAP`; cli/run.ts always passes that
+ * value explicitly (this file's own header), so this default only matters
+ * for a caller that never wires the two together at all. Exported so a test
+ * that does not care about the exact cap can compute the same `start`
+ * budget this module does, rather than repeating the number. */
+export const DEFAULT_HEARTBEAT_CAP = 120;
 
 export interface BeginScenarioInput {
   readonly pickle: Pickle;
@@ -267,6 +316,22 @@ export interface EmitStepInput {
   readonly relativeFeaturePath: string;
 }
 
+/** One heartbeat tick for a step that is still running (src/run/run-
+ * scenario.ts's `StepHeartbeatInfo`, threaded through unchanged by
+ * cli/run.ts's own `onStepProgress` wiring). `liveItems` is already the
+ * human-readable text run-scenario.ts built from that step's own in-flight
+ * `ctx.poll` calls and `ctx.section` labels; this module never looks inside
+ * either source itself, only renders the strings it is given. */
+export interface EmitStepProgressInput {
+  readonly scenarioId: string;
+  readonly index: number;
+  readonly startedAt: Date;
+  readonly liveItems: readonly string[];
+  readonly gherkinDocument: GherkinDocument;
+  readonly pickle: Pickle;
+  readonly relativeFeaturePath: string;
+}
+
 export interface EndScenarioInput {
   readonly record: ScenarioRecord;
   readonly gherkinDocument: GherkinDocument;
@@ -291,6 +356,21 @@ export interface AllureEmitter {
    * `endScenario` is still what turns the whole buffer into the one real
    * Allure test. Never throws. */
   emitStep(input: EmitStepInput): void;
+  /** Writes a fresh progress snapshot showing the step at `input.index` as
+   * still running: no `status` at all (so it renders as `?`, the same as a
+   * not-yet-started step), `stop` advanced to the moment this call runs (so
+   * the reader's own missing-`stop`-means-zero-duration fallback never
+   * triggers, and the shown duration keeps growing tick to tick), and
+   * `input.liveItems` listed flat under its own nested `steps[]`, never
+   * nested under each other, since Allure 3's own detail view collapses a
+   * depth-2 child by default. A no-op when no scope is open (`beginScenario`
+   * never ran or itself failed) or when the step at `input.index` has
+   * already been buffered by `emitStep` (that step's own real outcome
+   * always wins over a stale heartbeat; unreachable under normal operation,
+   * since run-scenario.ts's own heartbeat always stops before that step's
+   * `run` call it wraps even returns, kept as a defensive check rather than
+   * an assumption this function bakes in). Never throws. */
+  emitStepProgress(input: EmitStepProgressInput): void;
   /** Folds the buffered steps and this scenario's own hooks (and whatever
    * scenario-level evidence it collected) into one Allure test plus its own
    * fixtures, writes both, then writes the scope's own container. Deletes
@@ -361,6 +441,45 @@ function mappedGwtStepToSnapshotStep(step: MappedGwtStep): StepResult {
 function plannedSnapshotStep(name: string): StepResult {
   const result = createStepResult();
   result.name = name;
+  return result;
+}
+
+/** One `steps[]` entry for the pickle step a heartbeat tick caught still
+ * running (`emitStepProgress`). `status` stays unset, the same
+ * `createStepResult` default `plannedSnapshotStep` above already leaves
+ * alone, so this renders `?` exactly like a not-yet-started step does.
+ * `startMs` is this step's own real start (`StepHeartbeatInfo.startedAt`);
+ * `nowMs` is the moment this tick fires, always later than the one before
+ * it, which is what keeps the shown duration growing instead of reading
+ * `0s` (this file's own header: a missing `stop` reads back as `stop ===
+ * start`). `liveItems` are rendered through `plannedSnapshotStep` itself:
+ * name only, no status, no nested children of their own, which is exactly
+ * what keeps them one flat level rather than a depth-2 tree Allure's own
+ * detail view would collapse by default.
+ *
+ * `liveItems` is the one thing this module redacts itself, against the rule
+ * that everything else here arrives already redacted (this file's own
+ * header: a step record is redacted once, when it is written, and never a
+ * second time here). A live item has no such first pass to inherit. It is
+ * built mid-step, straight off `ctx.poll`'s own `description` and
+ * `ctx.section`'s own label, both of which a step composes at run time and
+ * can interpolate a value into, and it lands in a file under
+ * `allure-results/`. Without this call a secret in a poll description would
+ * reach that file in the clear. */
+function runningSnapshotStep(
+  name: string,
+  startMs: number,
+  nowMs: number,
+  liveItems: readonly string[],
+  secrets: SecretSet,
+): StepResult {
+  const result = createStepResult();
+  result.name = name;
+  result.start = startMs;
+  result.stop = nowMs;
+  if (liveItems.length > 0) {
+    result.steps = liveItems.map((item) => plannedSnapshotStep(redactString(item, secrets)));
+  }
   return result;
 }
 
@@ -541,7 +660,18 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
    * `startStep` call internally) are what give this snapshot the exact
    * same `statusDetails: {}, stage: "pending"` shape a real, still-running
    * result already has at this same point in its own lifecycle. */
-  function writeProgressSnapshot(pickle: Pickle, gherkinDocument: GherkinDocument, relativeFeaturePath: string): void {
+  function writeProgressSnapshot(
+    pickle: Pickle,
+    gherkinDocument: GherkinDocument,
+    relativeFeaturePath: string,
+    // Set only by `emitStepProgress` (below), for the one pickle step a
+    // heartbeat tick caught still running. `undefined` for every call
+    // `beginScenario`/`emitStep` themselves make, which have no running step
+    // to report at all (a step either hasn't started, in which case
+    // `plannedSnapshotStep` already covers it below, or has already
+    // finished, in which case `bufferedSteps` already covers it).
+    running?: { readonly index: number; readonly startedAtMs: number; readonly liveItems: readonly string[] },
+  ): void {
     // Captured into locals so a null check on any of the three narrows all
     // of them for the rest of this call, the same pattern `emitStep`'s own
     // `scopeUuid` local uses below for `currentScopeUuid`.
@@ -562,18 +692,19 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     // (this function's own `writer.writeProgressSnapshot` call below is
     // what advances it, after this line runs), so this strictly increases
     // by one on every call: `beginScenario`'s own first call gets
-    // `anchor + 0`, the next gets `anchor + 1`, and so on. The `Math.min`
-    // against `ceiling` is a defensive clamp, not part of the expected
-    // count: a scenario with N steps is expected to call this function
-    // exactly N + 1 times (once from `beginScenario`, once per `emitStep`),
-    // and `anchor` already budgets one call more than that (`beginScenario`'s
-    // own comment), so an on-budget run never reaches `ceiling` at all. If
-    // something calls this more times than expected, the clamp stops
-    // `start` from ever reaching or passing the real result's own `start`,
-    // which is `ceiling + 1`. `sequence` is the same number this
-    // scenario's own file-name scheme needs to tell same-uuid snapshots
-    // apart (writer.ts's own `sequence` parameter): one number plays both
-    // roles at once.
+    // `anchor + 0`, the next gets `anchor + 1`, and so on, whether that call
+    // came from `beginScenario`, `emitStep`, or a heartbeat tick's own
+    // `emitStepProgress`: every one of them funnels through this same
+    // function and this same counter. The `Math.min` against `ceiling` is a
+    // defensive clamp: `anchor` already budgets for every write a scenario
+    // could make, heartbeats included (`beginScenario`'s own comment on
+    // `progressAnchorMs`), so a run that stays inside that budget never
+    // reaches `ceiling` at all. If something calls this more times than the
+    // budget allows anyway, the clamp stops `start` from ever reaching or
+    // passing the real result's own `start`, which is `ceiling + 1`.
+    // `sequence` is the same number this scenario's own file-name scheme
+    // needs to tell same-uuid snapshots apart (writer.ts's own `sequence`
+    // parameter): one number plays both roles at once.
     const sequence = progressSnapshotCount;
     result.start = Math.min(anchor + sequence, ceiling);
     // Identity only (req 2's own invariant) — `mapScenario`'s own context
@@ -593,9 +724,13 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
 
     result.steps = pickle.steps.map((pickleStep, index) => {
       const outcome = bufferedSteps[index];
-      return outcome !== undefined
-        ? mappedGwtStepToSnapshotStep(outcome.step)
-        : plannedSnapshotStep(buildStepName(gherkinDocument, pickle, index, pickleStep.text));
+      if (outcome !== undefined) {
+        return mappedGwtStepToSnapshotStep(outcome.step);
+      }
+      const name = buildStepName(gherkinDocument, pickle, index, pickleStep.text);
+      return running !== undefined && running.index === index
+        ? runningSnapshotStep(name, running.startedAtMs, Date.now(), running.liveItems, options.secrets)
+        : plannedSnapshotStep(name);
     });
 
     // `hooks: []` — a hook's own outcome is never known mid-scenario, only
@@ -663,14 +798,16 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       if (currentScopeUuid === null) {
         return;
       }
-      // Set once, for every progress snapshot this scenario will ever
-      // write (`BeginScenarioInput.startedAt`'s own doc comment). The
-      // budget of `steps.length + 2` below the real start is one call
-      // more than the `steps.length + 1` calls a scenario is expected to
-      // make (`beginScenario` itself, plus one per `emitStep`), so an
-      // on-budget run's own last snapshot lands two milliseconds below the
-      // real result, never at `progressCeilingMs` itself.
-      progressAnchorMs = input.startedAt.getTime() - (input.pickle.steps.length + 2);
+      // Set once, for every progress snapshot this scenario will ever write
+      // (`BeginScenarioInput.startedAt`'s own doc comment). The budget below
+      // the real start reserves `heartbeatCap + 1` writes per step (one
+      // step's own worst case: every heartbeat tick it can produce, plus its
+      // own `emitStep`) and 2 more for `beginScenario`'s own initial write
+      // plus a spare millisecond of headroom (this file's own header, the
+      // paragraph on this formula). An on-budget run writes far fewer than
+      // this and lands well below `progressCeilingMs`, never at it.
+      const heartbeatCap = options.heartbeatCap ?? DEFAULT_HEARTBEAT_CAP;
+      progressAnchorMs = input.startedAt.getTime() - (input.pickle.steps.length * (heartbeatCap + 1) + 2);
       progressCeilingMs = input.startedAt.getTime() - 1;
       // One uuid for this whole scenario, fresh from the last one (this
       // file's own header explains why a fixed uuid per scenario, rather
@@ -739,6 +876,31 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
         const message = error instanceof Error ? error.message : String(error);
         options.stderr.write(
           `warning: allure progress snapshot failed for scenario ${input.scenarioId} step ${input.index}: ${message}\n`,
+        );
+      }
+    },
+
+    emitStepProgress(input: EmitStepProgressInput): void {
+      // Same "nothing open, nothing to do" no-op as `emitStep` above.
+      if (currentScopeUuid === null) {
+        return;
+      }
+      // The step at `input.index` already has its own real outcome
+      // buffered. See this method's own doc comment on `AllureEmitter` for
+      // why this is a defensive check, not an expected path.
+      if (bufferedSteps[input.index] !== undefined) {
+        return;
+      }
+      try {
+        writeProgressSnapshot(input.pickle, input.gherkinDocument, input.relativeFeaturePath, {
+          index: input.index,
+          startedAtMs: input.startedAt.getTime(),
+          liveItems: input.liveItems,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        options.stderr.write(
+          `warning: allure progress heartbeat failed for scenario ${input.scenarioId} step ${input.index}: ${message}\n`,
         );
       }
     },

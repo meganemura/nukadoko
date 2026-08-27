@@ -92,6 +92,14 @@ import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
 // same bleed-across-steps bug this reset already prevents for
 // `observed`/`used`/`sections`.
 //
+// `beginStep` clears `livePolls` the same way: the current step's own
+// in-flight `ctx.poll` calls, keyed privately per call so more than one
+// running at once never collide (this file's own `LivePollEntry` doc
+// comment). Unlike `polls`, an entry here is removed by `poll`'s own
+// `onFinish` the moment that one call settles, not batched up for a step
+// record. This map is read only while a step is still running, by that
+// step's own heartbeat (src/run/run-scenario.ts), never afterward.
+//
 // `beginStep` resets `pageEvents` the same way again: one collector per `ctx`, created once here and handed to
 // browser-evidence.ts's launch the same way `observed` is, so a later
 // step's step record does not inherit console/uncaught/failed-request
@@ -326,6 +334,16 @@ export interface EvidenceResult {
   http?: string;
 }
 
+/** One `ctx.poll` call that has not finished yet, read by a step's own
+ * heartbeat (src/run/run-scenario.ts) while it waits. `attempts` is
+ * updated in place on every iteration `pollWithRecording`'s own
+ * `onProgress` reports, so a reader mid-wait sees the same count the
+ * eventual `PollRecord` would have shown had the poll already finished. */
+export interface LivePollEntry {
+  readonly description?: string;
+  readonly attempts: number;
+}
+
 export interface DisposeResult {
   evidence: EvidenceResult;
   /** The storageState the executor should persist for this run's
@@ -403,6 +421,15 @@ export interface StepContextHandle {
    * Never exposed on `ctx` — same rule as `observedCounts()`/
    * `sectionsSnapshot()`. */
   pollsSnapshot(): PollRecord[];
+  /** Executor-only: every `ctx.poll` call still waiting right now, in the
+   * order each one started. A finished poll is never in this list (it
+   * moves to `pollsSnapshot()` instead, this file's own `poll`
+   * implementation). Read by a step's own heartbeat
+   * (src/run/run-scenario.ts) while it waits on that step's `run` to
+   * settle, alongside `sectionsSnapshot()`, together the only two sources
+   * a heartbeat tick reads. Never exposed on `ctx`, same rule as
+   * `pollsSnapshot()`. */
+  livePollsSnapshot(): LivePollEntry[];
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError`. Never exposed on `ctx` — same rule as
@@ -648,6 +675,17 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   let currentFixtures: StepFixtures | undefined;
   // Same lifetime rule again, for `ctx.poll`'s own finished-call log.
   const polls = createPollsCollector();
+  // The step boundary's own in-flight `ctx.poll` calls, keyed by a token
+  // private to each call so two polls running at once (a step's own `run`
+  // awaiting more than one concurrently) never overwrite each other's
+  // entry. Reset at `beginStep`, the same lifetime as every other collector
+  // here. Unlike `polls` above, an entry here is removed the moment its own
+  // call finishes rather than kept for the step record, since a finished
+  // poll is already `polls`' own job to remember (this file's own `poll`
+  // implementation, below). This is the "current activity" a step's own
+  // heartbeat (src/run/run-scenario.ts) reads mid-wait, one of the two
+  // things it is built from, alongside `sections`' own call-order log.
+  const livePolls = new Map<symbol, LivePollEntry>();
   // Same lifetime rule again, for `ctx.requireEnv`'s name log.
   const envReads = createEnvReadsCollector();
   // Same lifetime rule again, for console errors/uncaught page errors/
@@ -995,15 +1033,28 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       sections.record(label);
     },
     poll<T>(fn: () => Promise<T | undefined>, options: PollOptions = {}): Promise<T> {
-      return pollWithRecording(fn, options, (finished) => {
-        polls.record({
-          ...(options.description !== undefined ? { description: options.description } : {}),
-          at: finished.at,
-          attempts: finished.attempts,
-          waited_ms: finished.waitedMs,
-          outcome: finished.outcome,
-        });
-      });
+      // `token` is this one `ctx.poll` call's own key into `livePolls`,
+      // private (never returned, never derivable by a caller), so two polls
+      // started from the same step never collide even though neither
+      // carries an id of its own on the public `PollRecord` shape.
+      const token = Symbol("livePoll");
+      return pollWithRecording(
+        fn,
+        options,
+        (finished) => {
+          livePolls.delete(token);
+          polls.record({
+            ...(options.description !== undefined ? { description: options.description } : {}),
+            at: finished.at,
+            attempts: finished.attempts,
+            waited_ms: finished.waitedMs,
+            outcome: finished.outcome,
+          });
+        },
+        (attempts) => {
+          livePolls.set(token, { description: options.description, attempts });
+        },
+      );
     },
     call,
     // `attach`/`path` handed straight through from the
@@ -1158,6 +1209,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return polls.snapshot();
   }
 
+  function livePollsSnapshot(): LivePollEntry[] {
+    return [...livePolls.values()];
+  }
+
   function envReadsSnapshot(): string[] {
     return envReads.snapshot();
   }
@@ -1191,6 +1246,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     calls.reset();
     currentFixtures = undefined;
     polls.reset();
+    livePolls.clear();
     envReads.reset();
     pageEvents.reset();
     httpOmitted.reset();
@@ -1211,6 +1267,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     callsSnapshot,
     beginStepRun,
     pollsSnapshot,
+    livePollsSnapshot,
     envReadsSnapshot,
     pageEventsSnapshot,
     httpOmittedSnapshot,

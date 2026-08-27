@@ -200,6 +200,36 @@ import { writeScenarioRecord } from "./write-record.js";
 // After loop above already has (see that function's own header). Only a
 // step that actually executed reaches it; a skipped/never-began step does
 // not.
+//
+// `runWithHeartbeat` (below) wraps only a step's own `run`: the typed
+// branch's `entry.step.run(fixtures, argsResult.data)` and the compat
+// branch's `runWithTimeout(...)` call, never a Before/After/AfterStep hook.
+// A step that takes minutes is no longer invisible to a report the whole
+// time it runs. `HEARTBEAT_INTERVAL_MS` is fixed at ten seconds: long enough
+// that a step finishing in a few seconds never produces one, short enough
+// that a person watching a live report has already started wondering
+// whether the run is stuck by the time the first one appears.
+// `HEARTBEAT_TICK_CAP` bounds how many heartbeats one step can produce (120
+// * 10s = 20 minutes). This is not a timeout on the step itself, which
+// keeps running past that point untouched; it is only a ceiling on how many
+// more progress snapshots one hung step can force out.
+// `AllureEmitterOptions.heartbeatCap` (src/report/allure/emitter.ts) needs
+// the exact same number to size its own `start` budget per step, so
+// cli/run.ts threads `HEARTBEAT_TICK_CAP`, exported below, into that option
+// rather than let the two numbers drift apart on their own. Neither value
+// is a config field: a project has no legitimate reason to tune how long
+// until a live view starts looking stuck.
+//
+// A tick's own content comes from exactly two sources, read at the moment
+// it fires: `contextHandle.livePollsSnapshot()` (a `ctx.poll` call still
+// waiting inside this step's own `run`) and `contextHandle.sectionsSnapshot()`
+// (every `ctx.section` label this step has recorded so far). Never
+// `page_events` or an HTTP call, neither of which says what a step is
+// *doing* the way a poll's own description or a section's own label does.
+// `reportStepHeartbeat` (below) builds one human-readable line per entry
+// and skips the whole call to `onStepProgress` when both are empty. A step
+// with nothing to say produces no snapshot at all, never a heartbeat whose
+// only content is proof that the run is alive.
 
 /** The declared-mutates read-only refusal message: matches cli/do.ts's own
  * setup-phase rejection wording, since
@@ -245,6 +275,21 @@ export interface StepFinishedInfo {
   readonly stepRecord: StepRecord | null;
   readonly index: number;
   readonly finishedAt: Date;
+}
+
+/** One heartbeat tick fired while a step's own `run` is still pending (this
+ * file's own header, `runWithHeartbeat`). Unlike `StepFinishedInfo`, this
+ * step has not finished; `index`/`startedAt` name which step and when it
+ * began, and `liveItems` is already the human-readable text a report should
+ * show, one entry per in-flight `ctx.poll` call plus one per `ctx.section`
+ * label recorded so far this step (`reportStepHeartbeat`'s own formatting,
+ * below). Never empty, since the caller skips firing this at all when
+ * there is nothing to report (this file's own header). */
+export interface StepHeartbeatInfo {
+  readonly scenarioId: string;
+  readonly index: number;
+  readonly startedAt: Date;
+  readonly liveItems: readonly string[];
 }
 
 export interface RunScenarioOptions {
@@ -357,6 +402,18 @@ export interface RunScenarioOptions {
    * `onStepEnd` — see that function's own header for why every step-record
    * append site funnels through it instead of calling this directly. */
   readonly onStepFinished?: (info: StepFinishedInfo) => void;
+  /** Reports one heartbeat tick while a step's own `run` is still pending
+   * (this file's own header, `runWithHeartbeat`), never gated on `--quiet`,
+   * same reasoning as `onStepFinished` above. The caller (cli/run.ts) builds
+   * one instance per pickle, for the same reason `onStepFinished` needs one:
+   * both need that pickle's own `gherkinDocument`/`relativeFeaturePath` to
+   * do anything with what this reports. `undefined` under `nuka do` (no
+   * scenario, no `runScenario` call) or when this run's own Allure emitter
+   * never got constructed. A heartbeat with nowhere to go never needs to be
+   * computed at all, which is also why this file skips even starting the
+   * interval when this is `undefined` (`runWithHeartbeat`'s own call
+   * sites). */
+  readonly onStepProgress?: (info: StepHeartbeatInfo) => void;
   /** The fixture dependency graph for this run
    * — builtins ∪ `config.fixtures`, built once by cli/run.ts's own setup
    * phase (`src/fixture/graph.ts`'s `buildFixtureGraph`) and passed
@@ -687,6 +744,60 @@ export async function runWithTimeout<T>(
   }
 }
 
+// Fixed by design, never a config field (this file's own header): ten
+// seconds is roughly how long it takes a person watching a live report to
+// start wondering whether a run is stuck, and 120 ticks (20 minutes) is a
+// ceiling on how many heartbeats one hung step can force out, not a timeout
+// on the step itself.
+const HEARTBEAT_INTERVAL_MS = 10_000;
+/** Exported so cli/run.ts can thread the exact same number into
+ * `AllureEmitterOptions.heartbeatCap` (src/report/allure/emitter.ts). That
+ * option sizes how much `start` budget one step's own heartbeats need, and
+ * a value that drifted from this one would let a hung step's own heartbeats
+ * run past the budget emitter.ts planned for. */
+export const HEARTBEAT_TICK_CAP = 120;
+
+/**
+ * Runs `run()` while calling `onTick` every `intervalMs`, up to `cap` times,
+ * for as long as `run()` is still pending: the step-level heartbeat this
+ * file's own header describes. The timer is cleared the moment `run()`
+ * settles (`finally`), whichever way it settles, and again once `cap` ticks
+ * have fired even if `run()` is still pending: `run()` itself is never
+ * touched by that cap, it keeps running exactly as it would have without
+ * this wrapper, only the ticking stops. `timer.unref()` keeps this from
+ * holding the process open on its own. A step that hangs forever must not
+ * turn into a `nuka run` invocation that never exits either.
+ *
+ * `intervalMs`/`cap` are parameters, not part of `RunScenarioOptions`,
+ * purely so a test can drive this exported function directly with a short
+ * interval and a small cap. No `RunScenarioOptions` field and no
+ * `nukadoko.config.ts` key feeds either one: every call site inside this
+ * file leaves both at their default (`HEARTBEAT_INTERVAL_MS`/
+ * `HEARTBEAT_TICK_CAP`), and the only callers that ever override them are
+ * tests calling this function directly.
+ */
+export async function runWithHeartbeat<T>(
+  run: () => Promise<T>,
+  onTick: () => void,
+  intervalMs: number = HEARTBEAT_INTERVAL_MS,
+  cap: number = HEARTBEAT_TICK_CAP,
+): Promise<T> {
+  let ticks = 0;
+  const timer: ReturnType<typeof setInterval> = setInterval(() => {
+    ticks += 1;
+    onTick();
+    if (ticks >= cap) {
+      clearInterval(timer);
+    }
+  }, intervalMs);
+  timer.unref();
+  try {
+    return await run();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 /** Classifies a compat step's/hook's own thrown value into the closed
  * `error.kind` enum — identified by type, never by matching the thrown
  * value's own message text. Only
@@ -754,6 +865,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     onUnknownTraceVersion,
     onStepEnd,
     onStepFinished,
+    onStepProgress,
     fixtureGraph,
     fixtureProcessCache,
   } = options;
@@ -945,6 +1057,65 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       index: stepRecords.length - 1,
       finishedAt,
     });
+  }
+
+  /**
+   * One heartbeat tick for the step at `index`, which began running at
+   * `stepStartedAt`. This is the `onTick` callback both step-execution call
+   * sites below pass to `runWithHeartbeat`. Builds one human-readable line
+   * per in-flight `ctx.poll` call (`contextHandle.livePollsSnapshot()`) and
+   * one per `ctx.section` label recorded so far this step
+   * (`contextHandle.sectionsSnapshot()`), the only two sources a heartbeat
+   * reads (this file's own header), and skips calling `onStepProgress`
+   * entirely when both are empty, so a step with nothing to say produces no
+   * snapshot at all. Runs inside `setInterval`'s own callback
+   * (`runWithHeartbeat`), where an uncaught throw would otherwise crash the
+   * whole process, so this function catches and drops its own failure
+   * rather than let a broken report call ever take a running step down with
+   * it.
+   */
+  function reportStepHeartbeat(index: number, stepStartedAt: Date): void {
+    if (onStepProgress === undefined) {
+      return;
+    }
+    try {
+      const liveItems: string[] = [];
+      for (const poll of contextHandle.livePollsSnapshot()) {
+        liveItems.push(
+          poll.description !== undefined
+            ? `waiting for: ${poll.description} (attempt ${poll.attempts})`
+            : `waiting (attempt ${poll.attempts})`,
+        );
+      }
+      for (const section of contextHandle.sectionsSnapshot()) {
+        liveItems.push(`section: ${section.label}`);
+      }
+      if (liveItems.length === 0) {
+        return;
+      }
+      onStepProgress({ scenarioId, index, startedAt: stepStartedAt, liveItems });
+    } catch {
+      // Measurement must never break execution: same principle every other
+      // report/emit call site in this file already follows. A step's own
+      // heartbeat is a courtesy to a live viewer, never a reason to fail
+      // (or crash) the step it describes.
+    }
+  }
+
+  /**
+   * Runs `run()`, a step's own `run(fixtures, args)` (typed) or its
+   * `runWithTimeout(...)` call (compat), under a heartbeat when this run
+   * actually has somewhere to report one, calling `run()` directly with no
+   * timer at all otherwise (`nuka do`, `--quiet` under `nuka run` without an
+   * Allure emitter, this file's own `onStepProgress` doc comment). A step
+   * whose report nobody will ever read has no reason to hold a `setInterval`
+   * open for the whole time it runs.
+   */
+  function withStepHeartbeat<T>(run: () => Promise<T>, index: number, stepStartedAt: Date): Promise<T> {
+    if (onStepProgress === undefined) {
+      return run();
+    }
+    return runWithHeartbeat(run, () => reportStepHeartbeat(index, stepStartedAt));
   }
 
   /**
@@ -1708,7 +1879,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               // run` so `ctx.call` is ready the moment the step's own body
               // could reach for it.
               contextHandle.beginStepRun(entry.step, fixtures);
-              const runResult = await entry.step.run(fixtures, argsResult.data);
+              // `Promise.resolve(...)`: `Step.run`'s own return type
+              // (`Promise<z.infer<TReturns>> | z.infer<TReturns>`, define-
+              // step.ts) allows a step to return its value synchronously,
+              // never wrapped in a Promise of its own. `withStepHeartbeat`
+              // needs a real `Promise<T>` to race the heartbeat's own
+              // `run()` type against, the same normalization the compat
+              // branch below already needs for the same reason.
+              const runResult = await withStepHeartbeat(
+                () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+                stepIndex,
+                stepStartedAt,
+              );
               const returnsResult = entry.step.returns.safeParse(runResult);
               if (!returnsResult.success) {
                 status = "failed";
@@ -1818,11 +2000,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // `CompatStepDefinition.timeoutMs`) — `undefined` runs
             // unbounded. `?? defaultTimeoutMs` only ever takes effect when
             // this step declared no `{ timeout }` of its own.
-            const returnValue = await runWithTimeout(
-              () => Promise.resolve(entry.compat.fn.apply(world, positionalArgs)),
-              entry.compat.timeoutMs ?? defaultTimeoutMs,
-              "Step",
-              outcome.stepName,
+            const returnValue = await withStepHeartbeat(
+              () =>
+                runWithTimeout(
+                  () => Promise.resolve(entry.compat.fn.apply(world, positionalArgs)),
+                  entry.compat.timeoutMs ?? defaultTimeoutMs,
+                  "Step",
+                  outcome.stepName,
+                ),
+              stepIndex,
+              stepStartedAt,
             );
             // cucumber-js's own pending/skipped return convention —
             // nukadoko doesn't implement either, so this fails loudly
