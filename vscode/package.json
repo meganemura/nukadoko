@@ -1,0 +1,66 @@
+{
+  "name": "nukadoko-vscode",
+  "displayName": "nukadoko",
+  "description": "Syntax highlight for .feature files and nukadoko's typed step pattern capture syntax.",
+  "version": "0.1.0",
+  "publisher": "meganemura",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meganemura/nukadoko.git",
+    "directory": "vscode"
+  },
+  "engines": {
+    "vscode": "^1.134.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": ["onLanguage:gherkin", "onCommand:nukadoko.check"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "gherkin",
+        "aliases": ["Gherkin", "Cucumber"],
+        "extensions": [".feature"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gherkin",
+        "scopeName": "source.gherkin",
+        "path": "./syntaxes/gherkin.tmLanguage.json"
+      },
+      {
+        "scopeName": "nukadoko.pattern-injection",
+        "path": "./syntaxes/nukadoko-pattern-injection.tmLanguage.json",
+        "injectTo": ["source.ts", "source.tsx"]
+      }
+    ],
+    "commands": [
+      {
+        "command": "nukadoko.check",
+        "title": "nukadoko: Check"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && esbuild src/extension.ts --bundle --format=cjs --platform=node --external:vscode --outfile=dist/extension.js && node scripts/copy-wasm-assets.mjs",
+    "test": "vitest run",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "nukadoko": "file:..",
+    "web-tree-sitter": "0.26.12",
+    "tree-sitter-typescript": "0.23.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "@types/vscode": "1.134.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
+  }
+}

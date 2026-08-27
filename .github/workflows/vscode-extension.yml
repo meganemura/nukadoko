@@ -1,0 +1,70 @@
+# The VSCode extension in vscode/ is versioned and released on its own
+# schedule (tag prefix vscode-v*), separate from the npm package this
+# repository's own ci.yml gates. This workflow is that extension's gate: it
+# never touches ci.yml, and ci.yml never touches vscode/.
+#
+# Actions are pinned to commit ids rather than tags, with the version beside
+# them so the line stays readable, matching ci.yml's own convention.
+name: vscode-extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vscode/**"
+      - ".github/workflows/vscode-extension.yml"
+  pull_request:
+    paths:
+      - "vscode/**"
+      - ".github/workflows/vscode-extension.yml"
+
+# Nothing here writes anything back. An injected workflow is limited by what
+# its token may do, so the token is given only what this one needs.
+permissions:
+  contents: read
+
+# A superseded run has nothing left to tell anyone.
+concurrency:
+  group: vscode-extension-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: vscode
+
+jobs:
+  vscode-extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            vscode/package-lock.json
+
+      # vscode/'s own `nukadoko` dependency is `file:..` (the new
+      # nukadoko/matching export this extension reuses isn't in any
+      # published version yet), which resolves to this checkout's root, not
+      # a separate install -- so root's own dist/ has to exist before
+      # `npm ci` in vscode/ can even finish resolving that dependency, let
+      # alone before this extension's tests import it. ci.yml already builds
+      # and tests root on every push regardless, so this is not a second
+      # source of truth for whether root itself builds; it only builds root
+      # here because this job's own checkout does not share that other
+      # workflow's job's workspace.
+      - run: npm ci --ignore-scripts
+        working-directory: .
+      - run: npm run build
+        working-directory: .
+
+      # `--ignore-scripts` is also set by vscode/.npmrc. It is written here
+      # too because the line is where a reader looks, matching ci.yml's own
+      # convention.
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm test
+      - run: npm run package

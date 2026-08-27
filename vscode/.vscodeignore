@@ -1,0 +1,7 @@
+src/**
+tests/**
+scripts/**
+*.test.ts
+tsconfig.json
+node_modules/**
+.npmrc

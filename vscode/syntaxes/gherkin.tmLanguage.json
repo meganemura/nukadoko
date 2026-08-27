@@ -1,0 +1,70 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Gherkin",
+  "scopeName": "source.gherkin",
+  "fileTypes": ["feature"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#docstring" },
+    { "include": "#tags" },
+    { "include": "#section-keywords" },
+    { "include": "#step-keywords" },
+    { "include": "#table" },
+    { "include": "#placeholder" },
+    { "include": "#strings" }
+  ],
+  "repository": {
+    "comments": {
+      "match": "^\\s*#.*$",
+      "name": "comment.line.number-sign.gherkin"
+    },
+    "docstring": {
+      "begin": "^\\s*(\"\"\"|```)\\s*$",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.string.begin.gherkin" }
+      },
+      "end": "^\\s*(\"\"\"|```)\\s*$",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.end.gherkin" }
+      },
+      "name": "string.quoted.docstring.gherkin"
+    },
+    "tags": {
+      "match": "@[A-Za-z0-9_-]+",
+      "name": "entity.name.tag.gherkin"
+    },
+    "section-keywords": {
+      "match": "^\\s*(Feature|Background|Scenario Outline|Scenario Template|Scenario|Rule|Examples|Scenarios)(:)",
+      "captures": {
+        "1": { "name": "keyword.control.section.gherkin" },
+        "2": { "name": "punctuation.separator.key-value.gherkin" }
+      }
+    },
+    "step-keywords": {
+      "match": "^\\s*(Given|When|Then|And|But|\\*)\\b",
+      "name": "keyword.control.step.gherkin"
+    },
+    "table": {
+      "match": "\\|",
+      "name": "punctuation.definition.table.gherkin"
+    },
+    "placeholder": {
+      "match": "<[A-Za-z_][A-Za-z0-9_ ]*>",
+      "name": "variable.parameter.placeholder.gherkin"
+    },
+    "strings": {
+      "begin": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.gherkin" }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.gherkin" }
+      },
+      "name": "string.quoted.double.gherkin",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.gherkin" }
+      ]
+    }
+  }
+}

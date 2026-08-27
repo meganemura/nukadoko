@@ -148,6 +148,28 @@ async function main() {
       throw new Error(`missing from the installed package: ${missing.join(", ")}`);
     }
 
+    // The inverse check: vscode/ is its own npm project (its own
+    // package.json, its own dependencies, released on its own vscode-v*
+    // schedule per .github/workflows/vscode-extension.yml), never a thing
+    // this package's own consumers install. package.json's own `files`
+    // list already leaves it out, by omission rather than an explicit
+    // exclude entry, which is exactly the kind of promise that silently
+    // stops holding the moment someone adds a broader entry to that list;
+    // this checks the real install, not the list itself.
+    const mustNotExist = [path.join(installedPackageDir, "vscode")];
+    const unexpectedlyPresent = [];
+    for (const target of mustNotExist) {
+      try {
+        await access(target);
+        unexpectedlyPresent.push(target);
+      } catch {
+        // Not found is the passing case here.
+      }
+    }
+    if (unexpectedlyPresent.length > 0) {
+      throw new Error(`present in the installed package but should not be: ${unexpectedlyPresent.join(", ")}`);
+    }
+
     log("all stages passed");
   } catch (err) {
     console.error(`pack-check: failed at stage "${stage}": ${err.message}`);

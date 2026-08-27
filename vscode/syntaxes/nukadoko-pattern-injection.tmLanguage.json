@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "nukadoko pattern capture",
+  "scopeName": "nukadoko.pattern-injection",
+  "injectionSelector": "L:string.quoted.double.ts, L:string.quoted.single.ts, L:string.template.ts, L:string.quoted.double.tsx, L:string.quoted.single.tsx, L:string.template.tsx",
+  "patterns": [{ "include": "#capture" }],
+  "repository": {
+    "capture": {
+      "match": "(\\{)([A-Za-z_][A-Za-z0-9_]*)(:)([A-Za-z_][A-Za-z0-9_]*)(\\})",
+      "name": "meta.capture.nukadoko",
+      "captures": {
+        "1": { "name": "punctuation.definition.capture.begin.nukadoko" },
+        "2": { "name": "variable.parameter.capture-name.nukadoko" },
+        "3": { "name": "punctuation.separator.capture.nukadoko" },
+        "4": { "name": "support.type.capture-type.nukadoko" },
+        "5": { "name": "punctuation.definition.capture.end.nukadoko" }
+      }
+    }
+  }
+}
