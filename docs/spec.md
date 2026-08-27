@@ -225,6 +225,18 @@ export default defineStep({
   own optional text `(s)`, no alias needed. When the noun itself changes
   shape rather than just gaining a trailing `s`, use a `patterns` alias
   instead.
+- The capture-stripping-and-matching pipeline above is also exported on its
+  own, as `nukadoko/matching`'s `resolveStaticPattern`: given one pattern
+  (`kind: "typed"` or `"compat"`, string or RegExp), it returns either a
+  plain text-match predicate or a traceable `ok: false` reason, never a
+  silent `false`. It calls the exact matching machinery `nuka run` already
+  builds, not a second implementation, so a caller outside this package (an
+  editor resolving which step a Gherkin line binds to, for instance) and
+  `nuka run` itself can never disagree about what a pattern matches.
+  Resolution uses built-in parameter types only: a workspace's own
+  `config.parameterTypes` or compat `defineParameterType` calls need that
+  workspace's code running to resolve, out of scope for a purely static
+  caller.
 - `args` / `returns` are zod schemas, validated at the run boundary (args
   before execution, returns after). A validation failure is a failed run; no
   result is stored. Captures are coerced by the parameter type (`{int}` →

@@ -17,6 +17,10 @@
       "types": "./dist/compat/index.d.ts",
       "import": "./dist/compat/index.js"
     },
+    "./matching": {
+      "types": "./dist/matching/index.d.ts",
+      "import": "./dist/matching/index.js"
+    },
     "./mcp": {
       "types": "./dist/mcp/index.d.ts",
       "import": "./dist/mcp/index.js"

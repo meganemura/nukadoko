@@ -174,6 +174,12 @@ export default defineStep({
   1 つのエイリアスにまとめてしまうと、その分岐がレビュアーから見えなくなります。
 - 複数形: 純粋な接尾辞の複数形(`message(s)`)には cucumber-expressions 純正の optional text `(s)` を使い、エイリアスは不要です。
   名詞自体の形が変わる場合(末尾に `s` が付くだけではない場合)は、代わりに `patterns` エイリアスを使います。
+- 上記のキャプチャ除去とマッチングの仕組みは、`nukadoko/matching` の `resolveStaticPattern` として単体でも export されています。
+  pattern を 1 つ渡すと(`kind: "typed"` または `"compat"`、string または RegExp)、テキストに一致するかどうかを返す関数か、追跡可能な理由付きの `ok: false` のどちらかを返し、黙って `false` を返すことはありません。
+  これは `nuka run` がすでに構築しているのと同じマッチングの仕組みを呼び出すのであって、2 つ目の実装ではありません。
+  そのため、このパッケージの外にある呼び出し元(たとえば、Gherkin の行がどの step に結び付くかを解決するエディタ)と `nuka run` 自身とが、pattern が何に一致するかについて食い違うことは決してありません。
+  解決に使う parameter type はビルトインだけです。
+  ワークスペース自身の `config.parameterTypes` や compat の `defineParameterType` 呼び出しを解決するにはそのワークスペースのコードを実行する必要があり、純粋に静的な呼び出し元の範囲外です。
 - `args` / `returns` は zod のスキーマで、実行境界でバリデーションされます(args は実行前、returns は実行後)。
   バリデーションの失敗は失敗した実行として扱われ、result は保存されません。
   キャプチャは parameter type によって型強制され(`{int}` → number、カスタム型はそれぞれの transformer による)、そのあとスキーマが契約になります。
