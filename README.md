@@ -5,10 +5,10 @@
 > acceptance criteria and what actually ran.
 
 nukadoko runs Gherkin scenarios under typed step contracts and writes a
-step record for every execution: a record the tool measured rather than the
-agent reported. The criteria stay in the language the people who set them
-use; everything between those sentences and the system under test is typed,
-checked before it runs, and reviewable in a diff.
+step record for every execution. The tool measures this record instead of
+relying on an agent's report. The criteria remain in the language used by
+the people who set them. Everything between those sentences and the system
+under test is typed, checked before execution, and reviewable in a diff.
 
 ## Install
 
@@ -20,35 +20,35 @@ npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .nuk
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
-nukadoko is a devDependency: it ships its own TypeScript source alongside
-`dist/`, so stack traces land on real code and an agent reading
-`node_modules` can see why a thing works, not just its type.
+nukadoko is a devDependency. It ships its TypeScript source alongside
+`dist/`, so stack traces point to the actual code. An agent reading
+`node_modules` can see why something works, not only its type.
 
-Already have a `package.json` with no `"type": "module"` (CommonJS, what a
-plain `npm init -y` writes)? `nuka init` still works: it writes
-`nukadoko.config.mts` instead of `nukadoko.config.ts`, and prints a
-one-line reminder that step files need `.mts` too, since a plain `.ts`
-file is read as CommonJS in that project and nukadoko is ESM-only.
+If an existing `package.json` has no `"type": "module"`, the project uses
+CommonJS, as a plain `npm init -y` does. `nuka init` still works. It writes
+`nukadoko.config.mts` instead of `nukadoko.config.ts` and prints a one-line
+reminder that step files also need `.mts`. In such a project, Node reads a
+plain `.ts` file as CommonJS, while nukadoko supports only ESM.
 
 <details>
 <summary>No `package.json` yet (Rails, Django, and other non-Node repos)?</summary>
 
-Create one first. Skip `npm init -y`: it copies your existing `README.md`'s
-first line into `description` and the directory name into `name`, so it's
-more reliable to write the minimum by hand:
+Create one first. Skip `npm init -y`. It copies the first line of the
+existing `README.md` into `description` and the directory name into `name`.
+Writing the minimum by hand is more reliable:
 
 ```json
 { "private": true, "type": "module" }
 ```
 
-`"type": "module"` keeps every generated file `.ts`, the simpler of the
-two paths above. Leaving it out is not a dead end (see the CommonJS
-paragraph above), but hand-writing `nukadoko.config.ts` yourself in a
-project without it still fails with `No "exports" main defined in
-.../node_modules/nukadoko/package.json`; `nuka init` is what knows to
-write `nukadoko.config.mts` there instead. You don't need to gitignore
-`.nukadoko/` yourself: `nuka init` writes that. Traces and screenshots
-inside it are not redacted, so the state directory itself is sensitive.
+`"type": "module"` keeps every generated file as `.ts`, which is the simpler
+of the two paths above. Leaving it out is still supported (see the CommonJS
+paragraph above). However, manually writing `nukadoko.config.ts` in such a
+project fails with `No "exports" main defined in
+.../node_modules/nukadoko/package.json`. `nuka init` writes
+`nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
+`.gitignore` yourself because `nuka init` does that. Traces and screenshots
+inside it are not redacted, so the state directory contains sensitive data.
 
 </details>
 
@@ -69,10 +69,10 @@ Feature: Projects
     Then the project list includes "acme"
 ```
 
-The vocabulary behind those lines is not something you go read source to
-find. `nuka steps --json` lists it, machine-readable, the same call an
-agent's own explore loop starts from. This repository's `examples/todo`
-ships a small vocabulary already built; one entry from its output:
+You do not need to read the source to find the vocabulary behind those
+lines. `nuka steps --json` lists it in a machine-readable form. An agent's
+exploration loop starts with the same call. This repository's
+`examples/todo` includes a small vocabulary. Its output contains this entry:
 
 ```json
 {
@@ -86,14 +86,14 @@ ships a small vocabulary already built; one entry from its output:
 }
 ```
 
-That entry lives under `steps`, one field of `{ steps, import_failures }`;
-`import_failures` names any step file this call couldn't import, always
-present, empty when nothing failed.
+The entry appears under `steps`, one field of `{ steps, import_failures }`.
+The `import_failures` field names each step file that the call could not
+import. This field is always present and is empty when all imports succeed.
 
-Before any of it runs, `nuka check` reads every feature file and every step
-file and reports what is wrong. An undefined step is the shallow case: no
-step definition matches a line's text, and `check` names the exact line
-before a run would ever reach it.
+Before anything runs, `nuka check` reads every feature file and step file,
+then reports each problem. An undefined step is the simplest case. No step
+definition matches the line's text, so `check` identifies the exact line
+before a run can reach it.
 
 ```
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
@@ -109,13 +109,13 @@ catches it before either step executes:
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
 ```
 
-These two are a sample, not the list. `nuka check --codes` is what answers
-"what can this catch": every finding code it knows about, each with a
-one-line description, not a count written here that would drift the next
-time one is added.
+These two cases are only examples. `nuka check --codes` answers "what can
+this catch?" by listing every known finding code with a one-line
+description. This README does not use a count that would become stale when
+a code is added.
 
-Running one step alone, with no scenario required, shows what actually
-lands afterward: not a pass/fail line, a step record.
+Running one step by itself requires no scenario and shows what remains
+afterward. The result is a step record, not a pass/fail line.
 
 ```json
 {
@@ -142,15 +142,16 @@ freezes one green run as a committed record beside its feature; `tend` is
 the periodic one, and the only one you are meant to *not* run before every
 change.
 
-That accept record is a Markdown file,
+The acceptance record is a Markdown file named
 `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, written beside
-the feature: the feature's full text, the scenario record, and each step's
-own step record with its evidence stripped. It also carries a `Declared vs observed`
-section, listing every step whose step record declared `mutates: false` but was
-measured making a write, so a reviewer can see where the two disagreed
-without re-deriving it. A sign-off itself is scoped to one `(environment,
-browser)` pair read off the run, never declared: Chromium accepted and
-firefox not yet accepted is a normal state, not a stale one. See
+the feature. It contains the full feature text, the scenario record, and
+each step record with its evidence removed. It also contains a
+`Declared vs observed` section. This section lists each step that declared
+`mutates: false` but was measured making a write. A reviewer can therefore
+see each disagreement without deriving it again. A sign-off applies to one
+`(environment, browser)` pair measured during the run, not to a declared
+pair. A state in which Chromium is accepted but firefox is not yet accepted
+is normal, not stale. See
 [Sign-off](docs/spec.md#sign-off).
 
 ## Why this exists now
@@ -163,12 +164,11 @@ fixed *before* it was generated and does not move. Otherwise the thing
 being checked and the thing doing the checking are drawn from the same
 distribution.
 
-Acceptance criteria are already that fixed thing, and they are already
-written in natural language, by the people who decide what the software is
-for. What has been missing is a way to hold them to their word: a layer
-where a sentence someone wrote maps onto an execution that either happened
-or did not, with the mapping pinned down hard enough that it cannot quietly
-drift into agreeing with whatever got built.
+Acceptance criteria are already that fixed thing. The people who decide
+what the software is for already write them in natural language. What has
+been missing is a way to enforce those words. A written sentence must map
+to an execution that either happened or did not. That mapping must be rigid
+enough to prevent it from quietly agreeing with whatever was built.
 
 That is what this is. Every step is a typed contract (schemas validated at
 the boundary, dependencies declared and checked before anything runs), and
@@ -188,22 +188,21 @@ exactly the parts this replaces.
 
 ## Agent-first is a design constraint, not a slogan
 
-An agent must be able to complete the whole loop unassisted: discover the
-vocabulary (`nuka steps --json`), read a contract (`nuka describe`, schemas
-as JSON Schema), execute one step (`nuka do`, step record on stdout, meaningful
-exit code), read the validated result, and decide the next call. When the
-vocabulary lacks an operation, the agent scaffolds and implements a new step
-and a human reviews the PR.
+An agent must be able to complete the whole loop without assistance. It
+discovers the vocabulary (`nuka steps --json`) and reads a contract
+(`nuka describe`, with schemas as JSON Schema). It then executes one step
+(`nuka do`, with a step record on stdout and a meaningful exit code), reads
+the validated result, and selects the next call. When the vocabulary lacks
+an operation, the agent scaffolds and implements a new step. A human then
+reviews the PR.
 
-That constraint is what produced most of the design. A step has to be
-runnable alone, so its dependencies must appear in its signature rather than
-on a World, which is also why `this.foo` stops being a place to hide data
-flow. A result has to be readable by the next call, so it has to be
-validated rather than discarded. An agent's report of a run cannot be the
-record of it, so the tool writes the step record. None of these were built for
-agents and then justified for humans; they are the same properties either
-way, and a suite that an agent can drive turns out to be a suite a person
-can debug.
+That constraint produced most of the design. A step must run by itself, so
+its dependencies must appear in its signature instead of on a World. This
+also prevents `this.foo` from hiding data flow. The next call must be able
+to read a result, so the tool validates the result instead of discarding it.
+An agent's report cannot serve as the run record, so the tool writes the
+step record. These properties serve agents and people alike. A suite that
+an agent can drive is also a suite that a person can debug.
 
 It also directs where this grows. End-to-end execution costs a browser and
 minutes, so how much of a scenario can be judged wrong *without running it*
@@ -234,20 +233,20 @@ this README says so.
 
 ## Upgrading
 
-Use `npm install -D nukadoko@latest`. npm writes a caret range on install,
-and on a `0.0.x` version a caret pins the patch as well, so `npm update`
-alone will never move you off whichever version you first installed. While
-this is 0.x, any release can change the public API, so read the
-[changelog](CHANGELOG.md) rather than trusting the range to keep you safe.
+Use `npm install -D nukadoko@latest`. npm writes a caret range during
+installation. For a `0.0.x` version, a caret also pins the patch, so
+`npm update` alone never moves beyond the initially installed version.
+While this is 0.x, any release can change the public API. Read the
+[changelog](CHANGELOG.md) instead of relying on the range for safety.
 For what to actually fix after a breaking change, see
 [docs/upgrading.md](docs/upgrading.md).
 
 ## Secrets need no manifest
 
-Point `envFiles` at the env files you already have and git classifies them:
-one git doesn't track is a secret source (every value it defines is
-redacted from logs and step records), and a tracked one is plain configuration,
-left alone. Nothing to declare, nothing to hand-copy into a second file.
+Point `envFiles` at the existing env files, and git classifies them. An
+untracked file is a secret source, so every value it defines is redacted
+from logs and step records. A tracked file is plain configuration and stays
+unchanged. No manifest or manual copy into a second file is required.
 
 ## Before / after
 
@@ -306,9 +305,9 @@ export default defineStep({
   against `nukadoko.config.ts`'s own `baseURL` (spelled with a capital
   `URL`, matching Playwright's own key). Leave it unset and only an
   absolute URL works.
-- `nuka do create-project --args '{"name":"acme"}'` runs this one step
-  alone and prints its step record: the unit an agent's explore loop is built
-  on, with nothing to stand up first.
+- `nuka do create-project --args '{"name":"acme"}'` runs this step by
+  itself and prints its step record. This record is the unit of an agent's
+  exploration loop, and the command requires no prior setup.
 
 ## What it fixes
 
@@ -324,28 +323,27 @@ they are most familiar, not because it is the only layer that has them.
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
 | A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the step record for review |
 
-The last one is worth being precise about, because the tool used to fail on
-the count instead of the promise, and that overclaimed. Write detection
-runs on HTTP method, a proxy that breaks for GraphQL, RPC-over-POST, and
-any vendor query API that implements a pure read over POST. A truthful
-`mutates: false` step calling one of those would still get counted as a
-write, for reasons no general HTTP-layer rule can tell apart from a real
-one. So nukadoko trusts the declaration instead: it still counts every
-non-GET call an execution actually made, through its own request context
-and page, but that count now sits on the step record as a fact, not a
-verdict.
+The last row requires precision because the tool once failed on the count
+instead of the promise. That behavior made a claim the measurement could
+not support. Write detection uses the HTTP method as a proxy. This proxy
+fails for GraphQL, RPC-over-POST, and vendor query APIs that perform a pure
+read over POST. A truthful `mutates: false` step that calls one of these
+APIs still looks like a write. No general HTTP-layer rule can distinguish
+that call from a real write. Nukadoko therefore trusts the declaration. It
+still counts every non-GET call made through its request context and page,
+but the step record presents the count as a fact, not a verdict.
 
 ## Reports fill themselves
 
-A classic Cucumber run shows the evidence a team wired up itself: hook
-boilerplate for traces and screenshots, written and maintained per project.
+A classic Cucumber run shows only the evidence that a team wires up. Each
+project must write and maintain hook boilerplate for traces and screenshots.
 [Allure](https://allurereport.org/) is a test-report dashboard; nukadoko
 emits results in its format and never renders HTML itself. The emitter
-fills the report from every step record with zero wiring:
-validated result, trace, HTTP log, observed reads and writes, environment
-and version, including one no report-side effort could ever add, because
-classic Cucumber discards step return values: the validated per-step
-result.
+fills the report from every step record without additional wiring. It adds
+the validated result, trace, HTTP log, observed reads and writes,
+environment, and version. One item cannot be added on the report side in
+classic Cucumber because Cucumber discards step return values: the
+validated result for each step.
 
 Under each step sits a timeline of what happened inside it, built from
 absolute timestamps: the stages it reached, every wait with its real
@@ -384,13 +382,12 @@ npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
 
-A generated report's `index.html` cannot be opened directly with `file://`:
-the report's own SPA fetches `widgets/*.json` on load, and `file://` cannot
-serve that at all, though the page's header and footer still render
-regardless, so a broken report can look opened at a glance. Downloading a
-report artifact from CI and double-clicking `index.html` locally hits
-exactly this: serve it instead, with `npx allure open` or `npx allure
-watch` above.
+A generated report's `index.html` cannot open directly through `file://`.
+The report's SPA fetches `widgets/*.json` during loading, which `file://`
+cannot serve. The header and footer still render, so the broken report can
+look valid at a glance. This problem occurs after someone downloads a CI
+report artifact and opens `index.html` locally. Serve the report with
+`npx allure open` or `npx allure watch` instead.
 
 `nuka init` writes `allurerc.mjs` at the project root (skipped, with a
 message, if a project already has one under any name Allure auto-detects);
@@ -400,7 +397,7 @@ project not using `init` can copy
 [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs)
 by hand.
 
-Pass `--output` on every one of them. Allure defaults it to `allure-report/`
+Pass `--output` to each command. Allure defaults it to `allure-report/`
 in the current directory, and `watch` writes there too, so the default
 leaves a generated report sitting in your repository root, untracked and
 un-ignored, from nothing more than looking at a report. Sending it under
@@ -435,22 +432,22 @@ wrong. The repair loop nukadoko is built for:
    repaired scenario running green: a scenario record and its step records,
    reviewed like any other change.
 
-The point is step 2. **Self-healing without an audit trail is how a suite
-silently stops testing anything**: a scenario quietly rewritten to match
-whatever the app now does still passes, and nobody can see that the thing it
-used to check is gone. Here the deviation is a record a reviewer reads, and
-attestation always flows through the scenario rather than an ad-hoc
+Step 2 is the critical part. **Self-healing without an audit trail lets a
+suite silently stop testing anything.** A scenario rewritten to match the
+app's current behavior still passes, but nobody can see that its former
+check disappeared. Here, the reviewer can read a record of the deviation.
+Attestation always passes through the scenario instead of an ad-hoc
 sequence.
 
 nukadoko's contribution is that every stage leaves a record. The authoring is
 an agent workflow (the bundled skills, below), not engine magic. See
 [Self-healing, audited](docs/spec.md#self-healing-audited).
 
-What this loop does **not** catch is the other way a suite goes hollow: a
-scenario left intact while its `Then` quietly gets weaker. A step record records
-what the execution did, not whether an assertion still means anything. That
-one stays with review, and [What this does not do](#what-this-does-not-do)
-says so plainly.
+This loop does **not** catch another way a suite can become hollow. A
+scenario can remain intact while its `Then` becomes weaker. A step record
+shows what the execution did, but it cannot show whether an assertion still
+has meaning. Review must catch that problem, as
+[What this does not do](#what-this-does-not-do) explains.
 
 ## Skills for coding agents
 
@@ -487,21 +484,19 @@ assertion.
 None of the above assumes an existing suite. This section is for the case
 where there is one.
 
-The migration path for an existing Cucumber + Playwright suite is switching
-one import (`nukadoko/compat` in place of `@cucumber/cucumber`), keeping
-the same pattern syntax, hooks, and World working while nukadoko's harness
-starts measuring step records underneath them. Promoting a step to `defineStep`
-is then a per-step decision rather than a rewrite, and a suite that is half
-promoted keeps passing.
+To migrate an existing Cucumber + Playwright suite, switch one import from
+`@cucumber/cucumber` to `nukadoko/compat`. The same pattern syntax, hooks,
+and World continue to work while nukadoko's harness starts measuring step
+records. Each step can then move to `defineStep` independently, so a
+partially promoted suite continues to pass.
 
-The door is where a suite comes in, not where it settles. A compat step
-does gain evidence and the `observed` counts, which is more than it had.
-But its return value is discarded, the step record records `result: null`, and
-everything downstream of a validated result stays out of reach: no contract
-for `nuka check` to hold a feature against, no `from` to declare a
-dependency with, and a sign-off attesting that steps ran rather than that
-stated contracts held. Those are the reasons to promote, and promoting is
-what the door is for.
+The door is an entry point, not a destination. A compat step gains evidence
+and `observed` counts. However, nukadoko discards its return value, and its
+step record contains `result: null`. Features that require a validated
+result remain unavailable. `nuka check` has no contract to compare with a
+feature, `from` cannot declare a dependency, and a sign-off confirms only
+that the steps ran. It does not confirm that stated contracts held. These
+limits are the reasons to promote each step.
 
 Switching the import back returns a plain cucumber-js suite. That is a
 standing design rule (compat assets must survive both the switch and a
@@ -512,13 +507,12 @@ still moves, since `run` is written against Playwright's own objects, but
 its schemas and everything built on them do not, and nothing here converts
 one back (docs/migration.md "The way back" covers doing it by hand).
 
-How much else has to change was measured rather than assumed: eight public
-cucumber-js suites had their glue read as text against this door, never
-actually run. **None went through on the import alone** when that audit
-ran; closing the blockers it found has since brought two of the eight to
-where nothing in their glue is rejected. The other six still need a short
-mechanical pass first, and every blocker fails loudly at the import or the
-first run rather than quietly changing what the suite does.
+The migration cost was measured instead of assumed. An audit compared the
+glue from eight public cucumber-js suites with this door but did not run
+the suites. **None passed with only the import change** during that audit.
+After the identified blockers were fixed, two of the eight had no rejected
+glue. The other six still require a short mechanical pass. Each blocker
+fails during import or the first run instead of silently changing behavior.
 
 Three of those suites have since been run rather than read, in
 [nukadoko-lab](https://github.com/meganemura/nukadoko-lab),
@@ -600,11 +594,12 @@ access to a document you need, say so rather than assuming.
 
 ## Running this in CI
 
-`nuka check` and `nuka run` are both scriptable: each exits `0` when
-everything holds and non-zero the moment something is wrong, so either
-slots into a pipeline as an ordinary step. This is an excerpt; a whole
-copy-pasteable workflow, plus the four things a project coming from `npx
-playwright test` usually has to add by hand, is [docs/ci.md](docs/ci.md).
+`nuka check` and `nuka run` are both scriptable. Each exits with `0` when
+everything holds and with a nonzero value when something is wrong. Either
+command can therefore run as an ordinary pipeline step. The example below
+is an excerpt. [docs/ci.md](docs/ci.md) contains a complete workflow and
+the four items that projects moving from `npx playwright test` usually add
+manually.
 
 ```yaml
 # excerpt from a CI workflow

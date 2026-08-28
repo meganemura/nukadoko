@@ -6,8 +6,8 @@
 
 > 原文は README.md。相違があれば原文が正。
 
-nukadoko は、型付き step の契約のもとで Gherkin の scenario を実行し、あらゆる実行について step record を書きます。
-それは agent が報告した記録ではなく、ツールが計測した記録です。
+nukadoko は、型付き step の契約のもとで Gherkin の scenario を実行し、実行ごとに step record を書きます。
+この record は agent の報告に頼らず、ツールが計測します。
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
 
@@ -24,33 +24,34 @@ npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
 nukadoko は devDependency です。
-`dist/` と並べて TypeScript のソースそのものも同梱しているため、stack trace は実際のコードを指し、`node_modules` を読む agent は型だけでなく「なぜそう動くか」まで見えます。
+`dist/` と並べて TypeScript のソースも同梱しているため、stack trace は実際のコードを指します。
+`node_modules` を読む agent は、型だけでなく「なぜそう動くか」も確認できます。
 
-すでに `package.json` はあるが `"type": "module"` が無い(CommonJS。ふつうの `npm init -y` が書く形)場合はどうでしょうか。
+既存の `package.json` に `"type": "module"` が無い場合、そのプロジェクトは CommonJS を使います。
+ふつうの `npm init -y` もこの形を書きます。
 `nuka init` はそれでも動きます。
 `nukadoko.config.ts` の代わりに `nukadoko.config.mts` を書き、step ファイルも `.mts` にする必要があることを 1 行で伝えます。
-そのプロジェクトではふつうの `.ts` ファイルが CommonJS として読まれ、nukadoko は ESM 専用だからです。
+このようなプロジェクトでは、Node はふつうの `.ts` ファイルを CommonJS として読みますが、nukadoko は ESM だけをサポートします。
 
 <details>
 <summary>まだ `package.json` がありませんか(Rails、Django など Node 以外のリポジトリ)?</summary>
 
 先に作成してください。
 `npm init -y` は避けてください。
-既存の `README.md` の最初の行を `description` に、ディレクトリ名を `name` にコピーしてしまうため、最小限を手で書くほうが確実です:
+既存の `README.md` の最初の行を `description` に、ディレクトリ名を `name` にコピーしてしまいます。
+最小限を手で書くほうが確実です:
 
 ```json
 { "private": true, "type": "module" }
 ```
 
-`"type": "module"` を付けると、生成されるファイルはすべて `.ts` のままになります。
-上の 2 つの経路のうち簡単な方です。
-省略しても行き止まりにはなりません(上の CommonJS の段落を参照)。
-ただし `"type": "module"` の無いプロジェクトで `nukadoko.config.ts` を自分の手で書くと、`No "exports" main defined in .../node_modules/nukadoko/package.json` で失敗します。
-代わりに `nukadoko.config.mts` を書くべきだと知っているのは `nuka init` の側です。
-`.nukadoko/` を自分で gitignore する必要はありません。
-`nuka init` がそれを書き込みます。
-Trace とスクリーンショットは redact されません。
-state directory は機密性の高いものです。
+`"type": "module"` を付けると、生成されるファイルはすべて `.ts` のままになり、上の 2 つの経路のうち簡単な方を使えます。
+省略してもサポートされます(上の CommonJS の段落を参照)。
+ただし、このようなプロジェクトで `nukadoko.config.ts` を手で書くと、`No "exports" main defined in .../node_modules/nukadoko/package.json` で失敗します。
+代わりに `nuka init` は `nukadoko.config.mts` を書きます。
+`.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
+`nuka init` が追加します。
+中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
 
 </details>
 
@@ -70,11 +71,11 @@ Feature: Projects
     Then the project list includes "acme"
 ```
 
-その行の裏にある語彙は、ソースを読みに行かないと分からないものではありません。
-`nuka steps --json` がそれを機械可読な形で一覧にします。
-agent 自身の探索ループが最初に呼ぶのと同じ呼び出しです。
-このリポジトリの `examples/todo` には、すでに組み立てられた小さな語彙が入っています。
-その出力から 1 件:
+その行の裏にある語彙を調べるために、ソースを読む必要はありません。
+`nuka steps --json` が機械可読な形で一覧にします。
+agent の探索ループも、この呼び出しから始まります。
+このリポジトリの `examples/todo` には、小さな語彙が入っています。
+その出力には次の項目があります:
 
 ```json
 {
@@ -88,12 +89,13 @@ agent 自身の探索ループが最初に呼ぶのと同じ呼び出しです�
 }
 ```
 
-この 1 件は `steps` の下にあります。
-`{ steps, import_failures }` の一方のフィールドです。
-`import_failures` は、この呼び出しが import できなかった step ファイルを名指しし、常に存在し、何も失敗しなければ空です。
+この項目は、`{ steps, import_failures }` の一方のフィールドである `steps` の下にあります。
+`import_failures` は、この呼び出しが import できなかった各 step ファイルを名指しします。
+このフィールドは常に存在し、すべての import が成功すれば空です。
 
-何かが実行される前に、`nuka check` があらゆる feature ファイルとあらゆる step ファイルを読み、何が間違っているかを報告します。
-未定義の step はその中でも浅いケースです: どの step 定義もその行のテキストに一致せず、run がその行にたどり着くよりも前に、`check` がその行そのものを名指しします。
+何かが実行される前に、`nuka check` があらゆる feature ファイルと step ファイルを読み、各問題を報告します。
+未定義の step は、最も単純なケースです。
+どの step 定義もその行のテキストに一致しないため、run がたどり着く前に `check` がその行を名指しします。
 
 ```
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
@@ -107,11 +109,12 @@ step B が `from` を宣言して step A の返り値を読むとして、この
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
 ```
 
-この 2 つは一覧ではなく、あくまで一例です。
-「何を捕まえられるか」に答えるのは `nuka check --codes` です。
-知っているあらゆる finding code を 1 行の説明つきで返すので、ここに数を書いて新しいものが増えるたびにずれていく、ということが起きません。
+この 2 つのケースは一例にすぎません。
+`nuka check --codes` は、既知の finding code を 1 行の説明つきで一覧にし、「何を捕まえられるか」に答えます。
+この README には、新しい code が増えると古くなる件数を書きません。
 
-scenario なしで 1 step だけを単独で実行すると、実際にその後に残るものが分かります: pass/fail の 1 行ではなく、step record です。
+1 つの step を単独で実行するために scenario は必要なく、実行後に何が残るかを確認できます。
+結果は pass/fail の 1 行ではなく、step record です。
 
 ```json
 {
@@ -134,11 +137,12 @@ scenario なしで 1 step だけを単独で実行すると、実際にその後
 
 `check` は安価な静的ゲートであり、`run` は step record の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
-その accept の記録は Markdown ファイルで、`<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で feature の隣に書かれます: feature の全文、scenario の記録、そして各 step 自身の step record(evidence は取り除かれたもの)です。
-それにはさらに `Declared vs observed` という節があり、`mutates: false` と宣言していながら書き込みを行ったと計測された step をすべて一覧します。
-レビュアーはこれによって、自分で計算し直さなくても宣言と計測がどこで食い違ったかを確認できます。
-sign-off 自体は `(environment, browser)` の組ひとつに紐づき、これは run 自身の計測から読み取られるものであって、宣言されるものではありません。
-Chromium は accept 済みで firefox はまだ、という状態は正常であり、古びた記録ではありません。
+acceptance record は `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前の Markdown ファイルで、feature の隣に書かれます。
+このファイルには feature の全文、scenario record、そして evidence を取り除いた各 step record が入ります。
+さらに `Declared vs observed` という節があり、`mutates: false` と宣言しながら書き込みを行ったと計測された各 step を一覧にします。
+これにより、レビュアーは宣言と計測の食い違いを自分で導き直さずに確認できます。
+sign-off は、宣言された組ではなく、run 中に計測された 1 組の `(environment, browser)` に適用されます。
+Chromium は accept 済みで firefox はまだ、という状態は正常であり、古びた状態ではありません。
 詳しくは [Sign-off](docs/spec.ja.md#sign-off) を参照してください。
 
 ## Why this exists now
@@ -151,9 +155,11 @@ Chromium は accept 済みで firefox はまだ、という状態は正常であ
 実装が確率的に生成されるとき、それを正しいと呼ぶには、生成される *前に* 固定されていて動かない何かが要る。
 そうでなければ、検査される側と検査する側が、同じ分布から引かれていることになる。
 
-受け入れ基準は、すでにその固定されたものであり、すでに自然言語で、ソフトウェアが何のためのものかを決める人たち自身の手で書かれている。
-欠けていたのは、それを本人の言葉どおりに守らせる方法だった。
-すなわち、誰かが書いた一文が、起きたか起きなかったかのどちらかである実行へと対応づけられる層であり、その対応づけは出来上がったものに合わせて黙ってずれていくことができないほど固く留められている。
+受け入れ基準は、すでに固定されたものです。
+ソフトウェアが何のためのものかを決める人たちが、すでに自然言語で書いています。
+欠けていたのは、その言葉を守らせる方法です。
+書かれた一文は、起きたか起きなかったかのどちらかである実行へ対応づけられなければなりません。
+その対応づけは、出来上がったものへ黙って同意するようにはずれない強度が必要です。
 
 それが、これの正体である。
 あらゆる step は型付きの契約であり(境界でバリデーションされるスキーマ、宣言され実行前に検査される依存関係)、あらゆる実行は、agent ではなくツールが書いた記録を残す。
@@ -173,16 +179,18 @@ Gherkin は、これが守るものではない。
 **agent-first はスローガンではなく、設計上の制約**
 
 agent は、介助なしにループ全体を完了できなければなりません。
-語彙を発見し(`nuka steps --json`)、契約を読み(`nuka describe`、スキーマは JSON Schema として)、1 つの step を実行し(`nuka do`、step record は stdout に、意味のある exit code とともに)、バリデーション済みの result を読み、次の呼び出しを決めます。
-語彙に操作が欠けているときは、agent が新しい step を scaffold して実装し、人間がその PR をレビューします。
+まず語彙を発見し(`nuka steps --json`)、契約を読みます(`nuka describe`、スキーマは JSON Schema です)。
+次に 1 つの step を実行し(`nuka do`、step record は stdout に出力され、exit code は意味を持ちます)、バリデーション済みの result を読み、次の呼び出しを選びます。
+語彙に操作が欠けているときは、agent が新しい step を scaffold して実装します。
+その後、人間が PR をレビューします。
 
-その制約こそが、この設計の大部分を生み出しました。
-step は単独で実行可能でなければならず、そのため依存関係は World ではなくシグネチャに現れなければなりません。
-だからこそ `this.foo` は、データフローを隠す場所ではなくなるのです。
-result は次の呼び出しから読めなければならず、そのため捨てられるのではなくバリデーションされなければなりません。
-agent によるある実行の報告は、その実行の記録そのものにはなり得ないため、ツールが step record を書きます。
-これらはどれも、agent のために作られ、その後で人間向けに正当化された、というものではありません。
-どちらの立場から見ても同じ性質であり、agent が動かせるスイートは、結局のところ人がデバッグできるスイートでもあるのです。
+その制約が、この設計の大部分を生み出しました。
+step は単独で実行できる必要があるため、依存関係は World ではなくシグネチャに現れます。
+これにより、`this.foo` でデータフローを隠すこともできません。
+次の呼び出しが result を読めるように、ツールは result を捨てずにバリデーションします。
+agent の報告は run の記録にならないため、ツールが step record を書きます。
+これらの性質は、agent と人の両方に役立ちます。
+agent が動かせるスイートは、人もデバッグできるスイートです。
 
 それはまた、この設計がどこへ伸びていくかも決めている。
 end-to-end の実行には、ブラウザと分単位の時間というコストがかかる。
@@ -214,19 +222,20 @@ agent にとっては、そのループが安価なコマンドでできてい�
 **アップグレード**
 
 `npm install -D nukadoko@latest` を使ってください。
-インストール時に npm が書くのはキャレット範囲であり、`0.0.x` のバージョンではキャレットは patch まで固定します。
-つまり `npm update` だけでは、最初に入れたバージョンから決して動きません。
-0.x の間はどのリリースでも public API が変わり得るので、範囲指定に守ってもらうのではなく [changelog](CHANGELOG.md) を読んでください。
+インストール時に npm はキャレット範囲を書きます。
+`0.0.x` のバージョンではキャレットが patch も固定するため、`npm update` だけでは最初に入れたバージョンを超えません。
+0.x の間はどのリリースでも public API が変わり得ます。
+範囲指定に頼らず、[changelog](CHANGELOG.md) を読んでください。
 破壊的変更のあとに実際に何を直すかは、[docs/upgrading.ja.md](docs/upgrading.ja.md) を参照してください。
 
 ## Secrets need no manifest
 
 **secret に manifest は要らない**
 
-すでにある env file を `envFiles` に指定すれば、分類は git が行います。
-git が追跡していないファイルは secret source であり、そこで定義された値はログと step record から伏せられます。
-追跡されているファイルは平文の設定として、そのまま扱われます。
-宣言することも、別のファイルへ手で写すこともありません。
+既存の env file を `envFiles` に指定すると、git が分類します。
+追跡されていないファイルは secret source となり、そこで定義された各値はログと step record から伏せられます。
+追跡されているファイルは平文の設定であり、変更されません。
+manifest も、別のファイルへの手作業によるコピーも必要ありません。
 
 ## Before / after
 
@@ -279,7 +288,8 @@ export default defineStep({
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
 - 上の `request.post("/projects", ...)` は、その相対パスを `nukadoko.config.ts` 自身の `baseURL` に対して解決します(`URL` が大文字である点は Playwright 自身のキーと同じです)。
   未設定のままだと、絶対 URL しか通りません。
-- `nuka do create-project --args '{"name":"acme"}'` は、この 1 step だけを実行して step record を出力します。agent の探索ループが成り立つ最小単位で、他に何も用意する必要がありません。
+- `nuka do create-project --args '{"name":"acme"}'` は、この step だけを実行して step record を出力します。
+  この record は agent の探索ループを構成する単位であり、事前の準備は不要です。
 
 ## What it fixes
 
@@ -296,24 +306,27 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
 | 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
 
-最後の項目は正確に言う価値があります。
-このツールはかつて、約束ではなく計測された回数に対して失敗しており、それは言い過ぎでした。
-書き込みの検出は HTTP メソッドに基づいており、これは GraphQL、RPC-over-POST、そして純粋な読み取りを POST の上に実装するベンダーの query API では破綻するプロキシです。
-そうしたものを呼ぶ正直な `mutates: false` の step は、それでも書き込みとしてカウントされてしまいます。
-一般的な HTTP レイヤーのルールでは、それを本物の書き込みと区別できないからです。
-そこで nukadoko は代わりに宣言を信頼します。
-実行が自分自身の request context と page を通じて実際に行った非 GET な呼び出しはいまも数えますが、その回数はもはや判定ではなく step record 上の記録です。
+最後の項目には、正確な説明が必要です。
+このツールはかつて、約束ではなく計測された回数に対して失敗していました。
+この挙動は、計測が支えられない主張をしていました。
+書き込みの検出は HTTP メソッドをプロキシとして使います。
+このプロキシは、GraphQL、RPC-over-POST、純粋な読み取りを POST 上に実装するベンダーの query API では破綻します。
+そうした API を呼ぶ正直な `mutates: false` の step も、書き込みに見えます。
+一般的な HTTP レイヤーのルールでは、その呼び出しと本物の書き込みを区別できません。
+そこで nukadoko は宣言を信頼します。
+自身の request context と page を通じて行われた非 GET の呼び出しはいまも数えますが、step record はその回数を断定ではなく事実として示します。
 
 ## Reports fill themselves
 
 **レポートはひとりでに埋まる**
 
-従来型の Cucumber の実行がレポートに映す evidence は、チームが自分で仕込んだものです(trace やスクリーンショットのための hook の boilerplate を、プロジェクトごとに書いて保守しています)。
+従来型の Cucumber の実行は、チームが自分で仕込んだ evidence だけをレポートに映します。
+各プロジェクトが、trace やスクリーンショットのための hook の boilerplate を書いて保守します。
 [Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を emit するだけで、HTML 自体は決してレンダリングしません。
-emitter は、何も仕込まずに、あらゆる step record からレポートを満たします。
-バリデーション済みの result、trace、HTTP log、observed な読み書き、environment と version です。
-その中の 1 つ(バリデーション済みの per-step result)は、レポート側のどんな努力を積んでも足せません。
-従来型の Cucumber は step の返り値を捨ててしまうからです。
+emitter は、追加の設定なしで、あらゆる step record からレポートを満たします。
+バリデーション済みの result、trace、HTTP log、observed な読み書き、environment、version を追加します。
+そのうち、各 step のバリデーション済み result は、従来型の Cucumber ではレポート側から追加できません。
+Cucumber が step の返り値を捨てるためです。
 
 各 step の下には、絶対時刻から組み立てられた、その内部で何が起きたかのタイムラインが置かれます。
 到達した段階、それぞれの待ちの実際の所要時間と試行回数、そして assertion を含めて実行された Playwright の呼び出しのすべてです。
@@ -340,16 +353,17 @@ npx allure generate $R --output .nukadoko/allure-report
 npx allure open .nukadoko/allure-report                  # serve one already generated
 ```
 
-生成したレポートの `index.html` は `file://` で直接開けません。
-レポート自身の SPA が読み込み時に `widgets/*.json` を fetch しますが、`file://` はそれを一切配信できず、それでもヘッダとフッタは変わらず描画されてしまうため、壊れたレポートが見た目には開けたように見えてしまいます。
-CI からレポートのアーティファクトを落として手元で `index.html` をダブルクリックする動きは、まさにこれで失敗します。
-サーバを通してください: 上の `npx allure open` や `npx allure watch` を使います。
+生成したレポートの `index.html` は、`file://` では直接開けません。
+レポートの SPA は読み込み時に `widgets/*.json` を fetch しますが、`file://` はそれを配信できません。
+それでもヘッダとフッタは描画されるため、壊れたレポートが一見すると正常に見えます。
+この問題は、CI からレポートの artifact をダウンロードし、手元で `index.html` を開いたときに起きます。
+代わりに、上の `npx allure open` または `npx allure watch` でレポートを配信します。
 
 `nuka init` はプロジェクトの root に `allurerc.mjs` を書き出します(Allure が自動検出するいずれかの名前で既にあれば、書かずにその旨を伝えます)。
 これを置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、7 個の `error.kind` のどれにも分類されません。
 `init` を使わないプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
 
-どれにも `--output` を渡してください。
+各コマンドに `--output` を渡してください。
 Allure はこれを省くとカレントディレクトリの `allure-report/` を既定にし、`watch` もそこへ書き込みます。
 つまり既定のままでは、レポートを見ただけで、追跡もされず ignore もされていない生成物がリポジトリのルートに残ります。
 `.nukadoko/` の下へ出せば、`nuka init` がすでに gitignore に入れた場所に収まります。
@@ -382,20 +396,20 @@ nukadoko が作られているのは、この修復のループのためです�
 3. PR は型付き step または feature ファイルを更新し、その証明となるのは修復された scenario が green で通ることです。
    すなわち scenario の記録とその step record であり、他のどんな変更とも同じようにレビューされます。
 
-要点は手順 2 です。
-**監査証跡のない self-healing は、スイートが気づかないうちに何もテストしなくなる仕組みそのものです。**
-アプリがいま実際に何をしていようと、それに合わせて静かに書き換えられた scenario は、そのまま通り続けます。
-そして、かつてそれが確認していたはずのものが失われたことに、誰も気づけません。
-ここでは逸脱が、レビュアーが読む記録であり、証明は常に scenario を通り、ad-hoc な一連の呼び出しを通ることは決してありません。
+手順 2 が中心です。
+**監査証跡のない self-healing では、スイートが気づかないうちに何もテストしなくなります。**
+アプリの現在の挙動に合わせて書き換えられた scenario は通りますが、以前の確認が消えたことは誰にも見えません。
+ここでは、レビュアーが逸脱の記録を読めます。
+証明は常に scenario を通り、ad-hoc な一連の呼び出しを通りません。
 
 nukadoko の貢献は、すべての段階が記録を残すことです。
 執筆は agent のワークフロー(この下で扱う、同梱の skill)であり、エンジンの魔法ではありません。
 詳しくは [Self-healing, audited](docs/spec.ja.md#self-healing監査付き) を参照してください。
 
-このループが**捕まえられない**のは、スイートが空洞化するもう一つの経路です。
-scenario 自体はそのままに、その `Then` が静かに弱くなっていくというものです。
-step record が記録するのは実行が何をしたかであって、assertion がいまも何かを意味しているかどうかではありません。
-その部分はレビューに委ねられたままであり、[What this does not do](#what-this-does-not-do) がそのことをはっきり述べています。
+このループは、スイートが空洞化する別の経路を**捕まえられません**。
+scenario を保ったまま、その `Then` が弱くなることがあります。
+step record は実行が何をしたかを示しますが、assertion がいまも意味を持つかは示せません。
+この問題はレビューで捕まえる必要があり、[What this does not do](#what-this-does-not-do) でも説明しています。
 
 ## Skills for coding agents
 
@@ -428,16 +442,17 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 ここまでのどれも、既存のスイートがあることを前提にしていません。
 この節は、それがある場合のためのものです。
 
-既存の Cucumber + Playwright スイートの移行経路は、import を 1 つ切り替えることです。
-`@cucumber/cucumber` の代わりに `nukadoko/compat` を使い、同じ pattern の構文、hooks、World をそのまま動かしながら、その裏で nukadoko の harness が step record の計測を始めます。
-step を `defineStep` に昇格させるかどうかは、そこから先は書き換えではなく step ごとの判断になり、半分だけ昇格したスイートもそのまま通り続けます。
+既存の Cucumber + Playwright スイートを移行するには、import を `@cucumber/cucumber` から `nukadoko/compat` に切り替えます。
+同じ pattern の構文、hooks、World はそのまま動き、その間に nukadoko の harness が step record の計測を始めます。
+その後は各 step を個別に `defineStep` へ昇格できるため、一部だけを昇格したスイートも通り続けます。
 
-扉はスイートが入ってくる場所であって、留まる場所ではありません。
-compat の step は evidence と `observed` の件数を新たに得ます。
-それは、それまで持っていなかったものです。
-けれども return 値は捨てられ、step record は `result: null` を記録します。
-バリデーション済みの result より先にあるものは、すべて手の届かないところに残ります: `nuka check` が feature を突き合わせる契約はなく、依存関係を宣言する `from` もなく、sign-off が述べるのは「step が実行された」ことであって「述べられた契約が保たれた」ことではありません。
-それらこそが昇格させる理由であり、昇格させることがこの扉の目的です。
+扉は入口であり、行き先ではありません。
+compat の step は evidence と `observed` の件数を得ます。
+ただし、nukadoko は return 値を捨て、step record には `result: null` が入ります。
+バリデーション済みの result が必要な機能は使えません。
+`nuka check` には feature と比較する契約がなく、`from` は依存関係を宣言できません。
+sign-off が確認するのは step の実行だけであり、宣言された契約が保たれたことではありません。
+これらの制限が、各 step を昇格させる理由です。
 
 import を元に戻せば、ただの cucumber-js スイートに戻ります。
 これは変わらない設計上の規則です(compat の資産は、切り替えにも部分的な移行にも耐えなければなりません)。
@@ -445,11 +460,12 @@ import を元に戻せば、ただの cucumber-js スイートに戻ります。
 それは戦略を組み立てるための性質ではありません。
 `defineStep` に昇格させた step には、切り替えて戻す import がありません: `run` は Playwright 自身のオブジェクトに対して書かれているため body は移りますが、そのスキーマとその上に組まれたものは移らず、ここには元に戻す手段は何もありません(手作業での道筋は docs/migration.ja.md の「戻り道」に書いてあります)。
 
-他に何がどれだけ変わるかは、推測ではなく実測しました。
-公開されている cucumber-js のスイート 8 本について、glue をこの扉に対してテキストとして読んだだけで、実行はしていません。
-監査を行った時点で **import だけで通ったものはゼロでした**。
-監査が見つけた障害をふさいだことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
-残る 6 本は、先に短い機械的な準備が必要で、どの障害も、スイートの振る舞いを静かに変えるのではなく、import の時点か最初の実行でうるさく失敗します。
+移行のコストは、推測ではなく計測しました。
+監査では、公開されている 8 本の cucumber-js スイートから glue を読み、この扉と比較しましたが、スイートは実行しませんでした。
+監査時には、**import の変更だけで通ったものはありませんでした**。
+見つかった障害を修正した後、8 本のうち 2 本では拒否される glue がなくなりました。
+残る 6 本は、先に短い機械的な準備が必要です。
+各障害は import 時または最初の run で失敗し、挙動を黙って変えません。
 
 それらのスイートのうち 3 本は、その後 [nukadoko-lab](https://github.com/meganemura/nukadoko-lab) で、読むのではなく実際に走らせました。
 これは固定された corpus を複製し、import を 1 つ書き換え、その結果に対して `nuka run` を実行するものです。
@@ -530,9 +546,10 @@ access to a document you need, say so rather than assuming.
 **CI で実行する**
 
 `nuka check` と `nuka run` はどちらもスクリプトから呼べます。
-すべてが保たれていれば `0` で終了し、何かが壊れた瞬間に非ゼロで終了するので、どちらもパイプラインへ普通の 1 step としてそのまま組み込めます。
-これは抜粋です。
-そのままコピーできる workflow 丸ごと 1 つと、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある 4 つのことは [docs/ci.ja.md](docs/ci.ja.md) にあります。
+すべてが保たれていれば `0` で終了し、問題があれば非ゼロで終了します。
+そのため、どちらのコマンドもパイプラインへ普通の 1 step として組み込めます。
+以下は抜粋です。
+[docs/ci.ja.md](docs/ci.ja.md) には、完全な workflow と、`npx playwright test` から移るプロジェクトが手作業で追加することが多い 4 項目があります。
 
 ```yaml
 # excerpt from a CI workflow
