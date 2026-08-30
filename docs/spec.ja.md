@@ -538,10 +538,11 @@ use(page); }`)。
 その scenario または実行の終わりに fixture を teardown します。
 `process` スコープは、`nuka run` の実行中に step が最初に名指した時点で fixture を構築します。
 step は直接、または別の fixture を通じて名指せます。
-nukadoko は、その実行のすべての scenario が終わったあとに fixture を teardown します。
+nukadoko は、そのプロセス内のすべての scenario が終わったあとに fixture を teardown します。
+既定の並行度 1 では、そのプロセスが invocation 全体を受け持ちます。
 
-nukadoko はまだ scenario を並列実行しないため、`worker` スコープは存在しません。
-現在の `worker` は `process` と同じ意味になります。
+worker はプロセスであるため、`worker` スコープは存在しません。
+`nuka run --concurrency <n>` は scenario を `n` 個の worker プロセスで実行するため、`process` はすでに 1 つの worker を指します。
 `nuka do` では、1 回の実行に両方の完全な寿命が含まれます。
 したがって、このコマンドでは `process` fixture は `scenario` fixture と同じように動きます。
 
@@ -554,20 +555,21 @@ nukadoko はまだ scenario を並列実行しないため、`worker` スコー�
 1 回の `nuka run` 実行を指すものではありません。
 fixture の値は素の JavaScript オブジェクトであり、別のプロセスへ渡せません。
 したがって、このスコープは常に「プロセスごとに 1 回」を意味します。
-現在は 1 回の `nuka run` 実行が 1 つのプロセスを使うため、2 つの寿命は一致します。
-このスコープは、その一致を保証しません。
+`nuka run --concurrency <n>` の実行は `n` 個のプロセスを使うため、fixture を `n` 回構築します。
+2 つの寿命が一致するのは、既定の並行度 1 のときだけです。
 世界で正確に 1 回だけ実行する必要がある処理に `process` fixture を使わないでください。
 例には、データベースのシード、マイグレーション、ポートを所有するモックサーバがあります。
 プロセスを追加するたびに、その処理が再び実行されます。
 
 step の成否にかかわらず、teardown は構築の逆順を使います。
 step の失敗によって fixture の片付けが省略可能になることはありません。
-nukadoko は fixture の構築と teardown を**直列に**行うため、この逆順は正しく機能します。
-setup と teardown が直列である間、逆順によって各依存はその依存先より長く生きます。
-並列実行は、この規則を静かに無効にします。
-別の fixture が依存を使う前に、1 つの scenario がその依存を teardown する場合があります。
-原因が fixture グラフの形ではなくタイミングにあるため、`check` はこのレースを検出できません。
-並列実行の実装では、最初にこの teardown 規則を改める必要があります。
+nukadoko は 1 つのプロセス内で fixture の構築と teardown を**直列に**行うため、この逆順は正しく機能します。
+逆順によって、各依存はその依存先より長く生きます。
+`nuka run --concurrency <n>` も、この規則を保ちます。
+各 worker はプロセスであり、自分の scenario を順番どおりに実行し、他の worker の fixture を決して見ません。
+したがって、ある scenario が別の scenario がまだ使っている依存を teardown することはありません。
+nukadoko が scenario を 1 つのプロセス内で並行に実行するのではなく worker プロセスで実行するのは、この規則が理由の 1 つです。
+1 つのプロセス内での並行実行は、fixture グラフの形ではなくタイミングによってこの規則を破り、`check` はタイミングを見ることができません。
 
 setup は、その fixture を名指した step の成否を知ることができません。
 `process` スコープでは、setup は run の成否を知ることができません。
@@ -1373,7 +1375,7 @@ Playwright の `test()` は Playwright runner の外では動かないため、i
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--quiet]
+nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1386,10 +1388,60 @@ scenario record は feature のパス、scenario 名、順序付けられた ste
 `nuka run features/` はそれを再帰的に歩いてすべての `.feature` ファイルを見つけ、それらの pickle をすべて上記と同じ 1 つの invocation に畳み込みます: 1 つの run_id、1 つのサマリ、1 つの exit code、1 つの messages ストリーム、1 つの Allure results ツリーです。
 ファイルはリポジトリ相対パスをロケールではなくバイトごとに比較した、決まった順序で処理されます。
 そのため、どの scenario が何番目に実行されたかは run をまたいで安定し、ある record やレポートを別の run のものと比較できます。
+後述の `--concurrency` は、この走査順序を保ちつつ位置は手放します。
+ファイルは同じ順序で配られますが、record は worker が終えた順に並びます。
 ディレクトリに `:line` を付けると拒否されます。
 `:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
 配下のどこにも `.feature` ファイルを持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
 何もしなかった run は、exit 0 で何もしなかったことにするのではなく、それを大声で言わなければならないからです。
+
+`--concurrency <n>` は、複数の feature ファイルを同時に実行します。
+既定値は 1 で、1 のときはこの節の他のすべての段落が説明するとおりに動きます。
+
+nukadoko は、作業を worker プロセスに分散します。
+親プロセスが pickle を選び、feature ファイルをまるごと各 worker に渡し、各 worker は `--concurrency 1` の run と同じ直列エンジンで、渡されたファイルを実行します。
+親プロセスは、run の identity を最後まで保ちます: 1 つの run_id、1 つの stdout ストリーム、1 つの messages ストリーム、1 つの Allure results ツリー、1 つのサマリ、1 つの exit code です。
+そのため scenario record は、worker が作ったものでも直列の run が作ったものでも同じように読めます。
+feature のすべての行をカバーする 1 つの run は、`nuka accept` から依然としてそのように見えます。
+
+この spec が worker プロセスを名指すのは、その選択がこのフラグの約束の中身を決めるからです。
+あとでスレッドや promise に差し替えれば、その約束も変わります。
+scenario は、ブラウザの中、HTTP 呼び出しの中、またはプロジェクト自身の JavaScript の中で時間を使い、この 3 つのうち最後の 1 つだけが 1 つのイベントループを塞ぎます。
+1 つのプロセス内での並行実行は、前の 2 つには届きますが、3 つ目は元と同じだけ遅いまま残し、nukadoko は渡されたスイートがこの 3 つのうちどれでできているかを計測できません。
+あるスイートは速くなるのに、別のスイートは何も変わらないフラグは、ツールが守れない約束です。
+分かれたプロセスは、この 3 つすべてに届きます。
+
+配る単位は feature ファイルです。
+1 つのファイルの中のすべての scenario は、1 つの worker の中でファイル順に実行されるため、Background とその後の scenario は、並行度 1 のときと同じ関係を保ちます。
+ファイルは歩いたときと同じ決まったバイト順で配られるため、どの worker がどのファイルを受け取るかは run をまたいで揺れません。
+したがって、1 つのファイルを名指した run では `--concurrency` が 1 を超えてもすることが何もなく、`nuka run` は、何もすることのない worker を起動する代わりにそう伝えます。
+
+`Feature:` 行に付けた `@serial` タグは、そのファイルを他のどのファイルも実行していない間に実行します。
+これは、nukadoko には見えない何かをファイル同士が共有しているスイートのための宣言です: 1 つのテストアカウント、1 つの行、1 つのキューです。
+fixture の scope は、この問いに決して答えられません。
+scope が届くのは nukadoko 自身が構築するものだけであり、答えが属するのは feature ファイルの側、すでに名指している他のすべての隣だからです。
+タグが読まれるのは `Feature:` 行の上だけです。
+`Scenario:` の上では何もしません。
+1 つのファイルの中の scenario はすでに 1 つの worker の中で実行されるため、`nuka check` はそれを有効な規則であるかのように読ませる代わりに `serial-tag-on-scenario` として報告します。
+
+worker はプロセスであるため、`"process"` スコープの fixture は worker ごとに 1 回構築され、compat の `BeforeAll`/`AfterAll` も worker ごとに 1 回実行されます。
+「Fixtures」節はすでに `process` スコープを、1 つのアドレス空間ごとに 1 回と定義しています。
+このフラグは、その定義が姿を見せる場所です。
+データベースのシードやポートを所有するモックサーバのように、世界で正確に 1 回だけ起こる必要がある処理は、どの並行度でもこの 2 つの場所のどちらにも属しません。
+
+1 を超えると、意図して変わることが 2 つあります。
+親プロセスは worker が報告した瞬間に各 record を書くため、stdout はファイル順ではなく完了順に並びます。
+stderr の step ごとの進捗行は、その scenario 自身が終わるまで保持され、そのあとまとめて書き出されます。
+複数の scenario の行が入り交じっていては誰も読めないからです。
+どちらも record の中身は変えません。
+
+`--session` は、1 を超える並行度と組み合わせられません。
+session は、ログイン状態を 1 つの scenario から次の scenario へ手渡すため、それぞれの scenario は 1 つ前が残したところから始まります。
+`nuka run` は worker を 1 つに落とし、それを stderr に伝えます。
+これは run が書き込んだパスと同じ区分であり、`--quiet` が決して抑止しない区分です。
+
+`--concurrency` はフラグであり、config のキーには決してなりません。
+1 台のマシンが同時に実行できる scenario の数はそのマシンについての事実であり、コミットされた config ファイルはそれを保つ場所として適していません。
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
@@ -2719,7 +2771,15 @@ nuka run <feature[:line]|dir>
                               then every location this run wrote and a summary
                               line; --quiet drops the progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always
+                              always.
+                              --concurrency <n> (default 1) hands whole feature
+                              files to n worker processes while the parent
+                              keeps one run_id, one summary, one exit code, one
+                              messages stream and one Allure results tree.
+                              Above 1, stdout lands in completion order and the
+                              progress lines are held per scenario. A file
+                              tagged @serial runs while no other file runs.
+                              --session drops it back to 1 and says so
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
                               --args is required unless --use supplies
@@ -2886,11 +2946,14 @@ nuka experimental webmcp-tools <url> [--json]
   step の本体をある driver の API から別の API へ書き換えることは、agent が得意とする作業です。
   portability のために先にコストを払うことは、driver の差し替えでないあらゆる変更を遅くしてしまいます。
   見直すのは、その差し替えの確率が上昇したと計測されたときであり、それより前ではありません。
-- テストの並列実行、sharding、CI レポーティングはありません。
+- CI レポーティングはありません。
   前の試行の記録を消す retry もありません。
   nukadoko 自身による outbound のネットワーク I/O もありません。
   HTML のレンダリングもありません。
   それは Allure の仕事です。
+  scenario は並列に実行されます(`nuka run --concurrency <n>`、「Scenario」を参照)が、それは 1 つの invocation の中の worker プロセスをまたぐ並列だけです。
+  1 つのスイートを複数の invocation に分割するフラグはありません。
+  record が複数の run id にまたがって散らばったスイートは、`nuka accept` が 1 つの run として読めないからです。
 
 ## ロードマップ
 
@@ -2927,6 +2990,10 @@ nuka experimental webmcp-tools <url> [--json]
 - **M11(live sessions)**: `nuka session start`/`stop`、プロセス内で開いたまま保持する 1 つの `ctx` です。
   これにより、`nuka do` はすでに途中まで進んだ world に降り立てます(「Live sessions」を参照)。
   ここより前のすべては何もない状態から始まっており、それは読み取りにとっては単に遅いだけですが、繰り返せない作業にとっては不可能を意味します。
+- **M12(concurrency)**: `nuka run --concurrency <n>`、feature ファイルをまるごと持つ worker プロセス、単独で実行しなければならないファイルのための `@serial`、そしてそれらが動く間 run の identity を保つ親プロセスです(「Scenario」を参照)。
+  すべての scenario は依然として同じ直列エンジンの下で実行されます。
+  変わるのは、それらが一度に何個実行されるかだけです。
+  worker プロセスにしたことが、この高速化をスイートが何に時間を使っているかから独立させ、fixture の teardown 規則をそのまま保たせています。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
 
 ## 実装ノート

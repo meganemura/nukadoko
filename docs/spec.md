@@ -689,11 +689,12 @@ It tears the fixture down at the end of that scenario or execution.
 The `process` scope builds a fixture when a step first names it during a
 `nuka run` invocation.
 The step can name it directly or through another fixture.
-nukadoko tears it down after all scenarios in that invocation finish.
+nukadoko tears it down after every scenario in that process finishes.
+At the default concurrency of 1, that process runs the whole invocation.
 
-The `worker` scope does not exist because nukadoko does not run scenarios in
-parallel yet.
-At present, `worker` would have the same meaning as `process`.
+The `worker` scope does not exist because a worker is a process.
+`nuka run --concurrency <n>` runs scenarios in `n` worker processes, so
+`process` already names one worker.
 Under `nuka do`, one execution contains both complete lifetimes.
 Therefore, a `process` fixture behaves like a `scenario` fixture in that command.
 
@@ -708,8 +709,9 @@ A `process` fixture can outlive the scenario that would supply any of these valu
 It does not name one `nuka run` invocation.
 A fixture value is a plain JavaScript object and cannot cross into another process.
 Thus, this scope always means "once per process."
-Today, one `nuka run` invocation uses one process, so the two lifetimes coincide.
-The scope does not guarantee this coincidence.
+A `nuka run --concurrency <n>` invocation uses `n` processes, so it builds the
+fixture `n` times.
+The two lifetimes coincide only at the default concurrency of 1.
 Do not use a `process` fixture for an action that must occur exactly once in the world.
 Examples include a database seed, a migration, or a mock server that owns a port.
 Each additional process performs the action again.
@@ -717,14 +719,16 @@ Each additional process performs the action again.
 Teardown uses the reverse build order, whether the step passes or fails.
 A step failure does not make fixture cleanup optional.
 This reverse order is correct because nukadoko builds and tears down fixtures
-*serially*.
-The reverse order makes each dependency outlive its dependents while setup and
-teardown stay serial.
-Parallel execution would invalidate this rule silently.
-One scenario could tear down a dependency before another fixture uses it.
-`check` cannot find this race because timing causes it, rather than the fixture
-graph shape.
-Any implementation of parallel execution must first revise this teardown rule.
+*serially* within one process.
+The reverse order makes each dependency outlive its dependents.
+`nuka run --concurrency <n>` keeps this rule.
+Each worker is a process that runs its own scenarios in order, and a worker
+never sees another worker's fixtures.
+Therefore no scenario can tear down a dependency that another scenario still uses.
+This rule is one reason nukadoko runs scenarios in worker processes rather than
+concurrently inside one process.
+Concurrency inside one process breaks the rule by timing, rather than by fixture
+graph shape, and `check` cannot see timing.
 
 Setup cannot know the outcome of the step that named the fixture.
 For `process` scope, setup cannot know the outcome of the run.
@@ -1567,7 +1571,7 @@ However, its location shows that the existing suite owns it.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--quiet]
+nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -1584,12 +1588,84 @@ one run_id, one summary, one exit code, one messages stream, one Allure
 results tree. Files are visited in a fixed order, the repo-relative path
 compared byte by byte rather than by locale, so which scenario ran in which
 position stays stable across runs and a record or a report can be compared
-against another one. `:line` on a directory is refused: it selects one
-scenario inside a single file, and a directory names no single file for it
-to select inside. A directory holding no `.feature` file anywhere under it
-is refused too, the same tone `nuka check`'s own `no-step-files-found`
+against another one. `--concurrency` below keeps that visiting order and
+gives up the position: the files are still handed out in it, and the
+records land in the order the workers finish. `:line` on a directory is
+refused: it selects one scenario inside a single file, and a directory
+names no single file for it to select inside. A directory holding no
+`.feature` file anywhere under it is refused too, the same tone
+`nuka check`'s own `no-step-files-found`
 uses: it names exactly what it scanned, because a run that did nothing must
 say so loudly rather than exit 0 having run nothing at all.
+
+`--concurrency <n>` runs more than one feature file at a time. The default
+is 1, and at 1 every other paragraph in this section describes what
+happens.
+
+nukadoko spreads the work across worker processes. The parent selects the
+pickles, hands each worker whole feature files, and each worker executes
+the files it was given with the same serial engine a `--concurrency 1` run
+uses. The parent keeps the
+run's identity throughout: one run_id, one stdout stream, one messages
+stream, one Allure results tree, one summary, one exit code. A scenario
+record therefore reads the same whether a worker produced it or a serial
+run did, and `nuka accept` still sees one run covering every line of a
+feature.
+
+The spec names worker processes because that choice decides what the flag
+can promise, so swapping in threads or promises later would change the
+promise too. A scenario spends its time in a browser, in an HTTP call, or
+in the project's own JavaScript, and only the last of those blocks a
+single event loop. Concurrency inside one process
+would reach the first two and leave the third exactly as slow as it was,
+and nukadoko cannot measure which of the three a suite it was handed is
+made of. A flag that speeds up some suites and silently does nothing for
+others is a promise the tool cannot keep. Separate processes reach all
+three.
+
+The unit of distribution is the feature file. Every scenario in one file
+runs in one worker, in file order, so a Background and the scenarios after
+it keep the relation they have at concurrency 1. Files are handed out in
+the same fixed byte order they are walked in, so which worker gets which
+file does not drift between runs. `--concurrency` above 1 therefore has
+nothing to do for a target naming a single file, and `nuka run` says so
+rather than starting workers that would sit idle.
+
+A `@serial` tag on a `Feature:` line runs that file while no other file
+runs. This is the declaration for a suite whose files share something
+nukadoko cannot see: one test account, one row, one queue. A fixture's
+scope can never answer this question, because a scope reaches only what
+nukadoko itself builds; the feature file is where the answer belongs,
+beside everything else it already names. The tag is read on the `Feature:`
+line only. On a `Scenario:` it would do nothing at all, since the scenarios
+inside one file already run in one worker, so `nuka check` reports it
+(`serial-tag-on-scenario`) instead of letting it read as a rule that is in
+force.
+
+A `"process"`-scope fixture is built once per worker, and a compat
+`BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
+The "Fixtures" section already defines `process` scope as once per address
+space, and this flag is where that definition becomes visible. Something
+that must happen exactly once in the world, a database seed or a mock
+server that owns a port, belongs in neither of those places at any
+concurrency.
+
+Two things change above 1, both deliberately. stdout lands in completion
+order rather than file order, since the parent writes each record the
+moment a worker reports it. The per-step progress lines on stderr are held
+until their own scenario finishes and are then written together, because
+lines from several scenarios interleaved are lines nobody can read.
+Neither changes what a record contains.
+
+`--session` does not combine with a concurrency above 1. A session hands
+login state from one scenario to the next, so each scenario starts from
+what the one before it left. `nuka run` drops to one worker and says so on
+stderr, in the same category as the paths it writes, which `--quiet` never
+suppresses.
+
+`--concurrency` is a flag and never a config key. How many scenarios a
+machine can run at once is a fact about that machine, and a committed
+config file is the wrong place to keep it.
 
 Each run uses two output channels for two readers. stdout contains only NDJSON,
 with one scenario record per line for scripts to parse. stderr contains the
@@ -3180,7 +3256,15 @@ nuka run <feature[:line]|dir>
                               then every location this run wrote and a summary
                               line; --quiet drops the progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always
+                              always.
+                              --concurrency <n> (default 1) hands whole feature
+                              files to n worker processes while the parent
+                              keeps one run_id, one summary, one exit code, one
+                              messages stream and one Allure results tree.
+                              Above 1, stdout lands in completion order and the
+                              progress lines are held per scenario. A file
+                              tagged @serial runs while no other file runs.
+                              --session drops it back to 1 and says so
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
                               --args is required unless --use supplies
@@ -3367,9 +3451,13 @@ would be running against glue it never actually read.
   another is work an agent does well, while paying for portability up front
   would slow every change that isn't a driver swap. Revisit when the
   probability of that swap is measured to have risen, not before.
-- No test parallelism, sharding, or CI reporting, and no retry that
-  discards a prior attempt's record. No outbound network I/O by nukadoko
-  itself. No HTML rendering: that is Allure's job.
+- No CI reporting, and no retry that discards a prior attempt's record. No
+  outbound network I/O by nukadoko itself. No HTML rendering: that is
+  Allure's job. Scenarios do run in parallel (`nuka run --concurrency
+  <n>`, see "Scenarios"), but only across worker processes inside one
+  invocation. There is no flag that splits one suite across several
+  invocations, because a suite whose records are spread over several run
+  ids is one `nuka accept` cannot read as a single run.
 
 ## Roadmap
 
@@ -3431,6 +3519,13 @@ would be running against glue it never actually read.
   partway through (see "Live sessions"). Everything before this started
   from nothing, which is merely slow for reads but impossible for work
   that cannot be repeated.
+- **M12 (concurrency)**: `nuka run --concurrency <n>`, worker processes
+  each holding whole feature files, `@serial` for a file that has to run
+  alone, and the parent that keeps the run's identity while they work (see
+  "Scenarios"). Every scenario still runs under the same serial engine;
+  what changes is how many of them run at once. Worker processes make the
+  gain independent of what a suite spends its time on, and leave the
+  fixture teardown rule standing.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs
   in-place coexistence rather than migration.

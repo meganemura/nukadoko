@@ -242,6 +242,21 @@
         { "when": "GitHub Actions の permissions: フィールドや GITHUB_TOKEN のスコープ", "ja": ["権限"] },
         { "when": "ファイルシステムの権限ビット(chmod)。docs/spec.ja.md の既存訳語", "ja": ["パーミッション"] }
       ]
+    },
+    {
+      "en": ["worker process"],
+      "ja": "worker プロセス",
+      "note": "M12(`nuka run --concurrency <n>`)で入った語。worker は process スコープの process と同じものを指すので、worker は英語のまま残し複合語にする。地の文で worker だけを指すときも英語のまま(ワーカーとカタカナにしない)"
+    },
+    {
+      "en": ["concurrency"],
+      "ja": "並行度",
+      "note": "M12 で入った語。フラグ名 `--concurrency` は常にコードスパンで英語のまま残す。地の文で並行して実行できる度合いを指すときだけ 並行度 を使う。`parallel execution`(並列実行)とは指すものが違うので書き分ける: 並列実行はその実行のさせ方そのもの、並行度はいくつ同時に動くかという数"
+    },
+    {
+      "en": ["parent process", "the parent"],
+      "ja": "親プロセス",
+      "note": "M12 で入った語。worker プロセスに feature ファイルを配り、run の identity(run_id・summary・exit code など)をまとめて保持する側を指す。`the parent` という短い言い方で出てきても親プロセスと訳す(親だけでは何の親か伝わらない)"
     }
   ],
   "keep_english": [
