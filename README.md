@@ -640,15 +640,19 @@ without a retry that failure still turns the run red. A suite that puts
 `nuka run` on a merge gate needs a human to triage that failure, because
 the fix is not always "the wait was in the wrong place."
 
-Parallel execution and sharding are not implemented today. That is a "not
-yet", not a permanent limit: both are implementable and under
-consideration, unlike the retry shape ruled out above. Until then, every
-scenario in a run executes one after another, so a full run's wall-clock
-time grows with the suite's size rather than with how much of it a CI
-runner could otherwise cover at once. That is exactly why the split above,
-`nuka check` on every PR and `nuka run` on merge, deploy, or a nightly
-build, stops being only a convenience and becomes what keeps a growing
-suite's PR gate fast.
+`nuka run --concurrency <n>` runs feature files in parallel, with a default
+of 1. A full run's wall-clock time falls as concurrency rises, until the
+machine runs out of room to add another worker. Measuring where that
+happens is worth more than guessing it: on one ten-core machine, four
+workers beat eight. The distribution unit is a whole feature file, so the
+run cannot divide work within one file, and a suite in few large files
+gains less than the same scenarios spread across many. Sharding one suite across
+multiple invocations is not available because its records would span
+multiple run ids, which `nuka accept` cannot read as one run. Parallel
+execution makes `nuka run` faster, but it still starts browsers and remains
+the more expensive gate. The split above therefore stays the same: run
+`nuka check` on every PR, and run `nuka run` on merge, deploy, or a nightly
+build to keep a growing suite's PR gate fast.
 
 ## What this does not do
 

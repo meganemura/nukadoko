@@ -111,22 +111,18 @@ is a list you can work through, not a hunt.
   anything runs: `nuka check` reports the file as `step-file-import-failed`,
   carrying Node's own error message; if `check` was skipped, the same
   failure surfaces on the first `nuka run` that tries to import the file.
-  This is the one name on this list that stays unsupported by decision, not
-  because support just hasn't caught up yet: nukadoko has no parallel
-  execution today, so there is nothing for a work-assignment callback to
-  actually control. Accepting the call as a
+  This name stays unsupported by decision because `setParallelCanAssign`
+  decides which pickle a worker may receive. nukadoko distributes whole feature
+  files, so its worker assignment has no pickle-level decision for this
+  callback to control. Declare file-level mutual exclusion with an
+  `@serial` tag on the feature. Accepting the call as a
   no-op would be worse than refusing it: it would import cleanly, run, and
   leave a suite believing its parallel-assignment rule was in effect while
   nothing enforced it, exactly the quiet failure this door exists to refuse
   (docs/spec.md "Compat steps (the migration door)"). Failing at the import
   instead keeps that promise, the same way every other name on this list
-  fails. The roadmap's M12 adds `nuka run --concurrency <n>`, which hands
-  whole feature files to worker processes; when it lands,
-  `setParallelCanAssign` gets reconsidered against what that distribution
-  actually needs to control. Nothing here promises the name comes back:
-  a callback that decides which scenario may sit beside which other one
-  is a different mechanism from a file handed to a worker, and the
-  reconsideration can end in the same refusal.
+  fails. `nuka run --concurrency <n>` is what hands those whole feature
+  files to worker processes.
   (`AfterStep`, `Status`, `BeforeAll`, `AfterAll` and `setDefaultTimeout`
   were on this list when the audit ran and are now supported; see above.)
 - **The same kind of name, used only as a type** is a different case, not a
