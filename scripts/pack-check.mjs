@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,6 +69,115 @@ async function runCapture(command, args, options = {}) {
   return stdout;
 }
 
+// Captures diagnostics in a file while retaining the compiler's own exit
+// code. A shell pipeline would report the last process's status instead.
+async function runTypeScriptCapture(args, cwd, outputPath) {
+  const output = await open(outputPath, "w");
+  try {
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn(path.join(repoRoot, "node_modules", ".bin", "tsc"), args, {
+        cwd,
+        stdio: ["ignore", output.fd, output.fd],
+      });
+      child.on("error", reject);
+      child.on("exit", (exitCode, signal) => {
+        if (signal) {
+          reject(new Error(`tsc ${args.join(" ")} was killed by signal ${signal}`));
+        } else {
+          resolve(exitCode);
+        }
+      });
+    });
+    return code;
+  } finally {
+    await output.close();
+  }
+}
+
+async function verifyOptionalPeerTypeIsolation(projectDir) {
+  const checkDir = path.join(projectDir, "peer-isolation");
+  await mkdir(checkDir, { recursive: true });
+
+  const peerDir = path.join(projectDir, "node_modules", "@modelcontextprotocol", "client");
+  try {
+    await access(peerDir);
+    throw new Error(`optional peer is present in the isolated project: ${peerDir}`);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const compilerOptions = {
+    module: "NodeNext",
+    moduleResolution: "NodeNext",
+    target: "ES2022",
+    strict: true,
+    noEmit: true,
+    skipLibCheck: false,
+    typeRoots: [path.join(repoRoot, "node_modules", "@types")],
+    types: ["node"],
+  };
+  const cases = [
+    {
+      name: "public-surfaces",
+      source: [
+        'import * as core from "nukadoko";',
+        'import * as compat from "nukadoko/compat";',
+        'import * as matching from "nukadoko/matching";',
+        "void [core, compat, matching];",
+      ].join("\n"),
+    },
+    {
+      name: "negative-control",
+      source: 'import { __nukadoko_missing_export__ } from "nukadoko";\nvoid __nukadoko_missing_export__;',
+    },
+    {
+      name: "mcp-surface",
+      source: 'import * as mcp from "nukadoko/mcp";\nvoid mcp;',
+    },
+  ];
+
+  const results = new Map();
+  for (const checkCase of cases) {
+    const sourcePath = path.join(checkDir, `${checkCase.name}.ts`);
+    const configPath = path.join(checkDir, `${checkCase.name}.json`);
+    const outputPath = path.join(checkDir, `${checkCase.name}.out`);
+    await writeFile(sourcePath, `${checkCase.source}\n`);
+    await writeFile(
+      configPath,
+      `${JSON.stringify({ compilerOptions, files: [sourcePath] }, null, 2)}\n`,
+    );
+    const code = await runTypeScriptCapture(["--pretty", "false", "-p", configPath], checkDir, outputPath);
+    results.set(checkCase.name, { code, output: await readFile(outputPath, "utf8") });
+  }
+
+  const publicResult = results.get("public-surfaces");
+  if (publicResult.code !== 0) {
+    throw new Error(`public type surfaces failed without the optional peer:\n${publicResult.output}`);
+  }
+  log("public type surfaces passed without the optional peer");
+
+  const negativeResult = results.get("negative-control");
+  if (negativeResult.code === 0) {
+    throw new Error("negative typecheck control passed despite importing a missing export");
+  }
+  log("negative typecheck control failed as expected");
+
+  const mcpResult = results.get("mcp-surface");
+  if (mcpResult.code === 0) {
+    throw new Error("nukadoko/mcp passed without its optional peer");
+  }
+  const diagnostics = mcpResult.output.split("\n").filter((line) => /\berror TS\d+:/.test(line));
+  const unrelatedDiagnostics = diagnostics.filter((line) => !line.includes("@modelcontextprotocol/client"));
+  if (diagnostics.length === 0 || unrelatedDiagnostics.length > 0) {
+    throw new Error(
+      `nukadoko/mcp did not fail only for the optional peer:\n${mcpResult.output}`,
+    );
+  }
+  log("nukadoko/mcp failed only for the missing optional peer");
+}
+
 async function main() {
   // Named after the step about to run, not the step that just finished,
   // so a thrown error always describes the stage that was in progress.
@@ -100,7 +209,7 @@ async function main() {
     await writeFile(projectPackageJsonPath, `${JSON.stringify(projectPackageJson, null, 2)}\n`);
 
     stage = "npm install <tarball>";
-    await runInherit("npm", ["install", tarballPath], { cwd: projectDir });
+    await runInherit("npm", ["install", "--omit=peer", tarballPath], { cwd: projectDir });
 
     const nukaBin = path.join(projectDir, "node_modules", ".bin", "nuka");
 
@@ -169,6 +278,9 @@ async function main() {
     if (unexpectedlyPresent.length > 0) {
       throw new Error(`present in the installed package but should not be: ${unexpectedlyPresent.join(", ")}`);
     }
+
+    stage = "verify optional peer type isolation";
+    await verifyOptionalPeerTypeIsolation(projectDir);
 
     log("all stages passed");
   } catch (err) {
