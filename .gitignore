@@ -52,3 +52,9 @@ coverage/
 # tests create it at the repository root on every `npm test`, empty, and
 # it is regenerated rather than kept.
 test-results/
+
+# A contributor's own machine-local notes, beside the committed CLAUDE.md.
+# Anything that only makes sense on one machine, or that names something a
+# reader of this repository cannot open, belongs here rather than in a file
+# that ships.
+CLAUDE.local.md
