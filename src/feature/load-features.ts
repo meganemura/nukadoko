@@ -66,8 +66,8 @@ export interface FeatureParseError {
   readonly message: string;
 }
 
-/** One `@serial` tag found on a `Scenario:`/`Scenario Outline:` line, where
- * it has no effect at all (`nuka run --concurrency <n>` reads `@serial`
+/** One `@nukadoko:serial` tag found on a `Scenario:`/`Scenario Outline:` line, where
+ * it has no effect at all (`nuka run --concurrency <n>` reads `@nukadoko:serial`
  * only off a `Feature:` line — docs/spec.md "Scenarios (the scripted
  * path)"; every scenario in one file already shares one worker, so a
  * Scenario-level copy of the tag can never mean anything different from
@@ -226,10 +226,10 @@ export function attachStepLines(
   }));
 }
 
-const SERIAL_TAG = "@serial";
+const SERIAL_TAG = "@nukadoko:serial";
 
 /**
- * Every `@serial` tag this document carries on a `Scenario:`/`Scenario
+ * Every `@nukadoko:serial` tag this document carries on a `Scenario:`/`Scenario
  * Outline:` line directly (a Rule's own scenarios included), never one
  * inherited from the `Feature:` line: a gherkin AST node's own `tags` array
  * holds only what was written on that exact line, so this needs the
@@ -307,7 +307,7 @@ export function loadFeaturesFromDirs(
         // (src/run/select-pickles.ts onward to src/run/run-scenario.ts)
         // does — it is only read here, through `attachStepLines` and
         // `findSerialTagOnScenario`, to give each pickle step its own line
-        // and to catch a `@serial` tag in the one place it has no effect,
+        // and to catch a `@nukadoko:serial` tag in the one place it has no effect,
         // before the document itself is dropped.
         const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
         features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });

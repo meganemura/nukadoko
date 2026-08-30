@@ -35,22 +35,9 @@ This part does not change release to release.
 
 ## Unreleased
 
-`nuka check` gains one finding that can turn a green project red without
-that project changing anything. `nuka run` also writes more on stderr.
+`nuka run` writes more on stderr, and `nuka tend` reports one new note.
 Why is in [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
 
-- **`@serial` on a `Scenario:` or `Scenario Outline:` line now fails
-  `nuka check`.** The tag became meaningful with `nuka run --concurrency
-  <n>`: on a `Feature:` line it declares that the file runs while no other
-  file runs. On a scenario line it does nothing at all, since the scenarios
-  inside one file already run in one worker, so `check` reports
-  `serial-tag-on-scenario` as an error rather than letting the tag read as
-  a rule that is in force. Gherkin tags are free text and nukadoko never
-  read this one before, so a suite that already used `@serial` for a
-  meaning of its own sees `check` go red on upgrade. Move the tag to the
-  `Feature:` line if that file really must run alone; rename it if it meant
-  something else. Nothing about how a run executes changed for such a
-  suite: only `check`'s verdict did.
 - **`nuka run` names each failed scenario on stderr, after the summary
   line.** One line per scenario that did not pass, carrying its feature
   path, line, and name, and `--quiet` keeps them the same way it keeps the

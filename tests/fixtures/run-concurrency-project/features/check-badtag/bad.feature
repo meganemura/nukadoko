@@ -1,5 +1,5 @@
 Feature: Bad Tag Placement
 
-  @serial
+  @nukadoko:serial
   Scenario: a scenario wrongly tagged serial
     Given a thing "bad-tag" exists

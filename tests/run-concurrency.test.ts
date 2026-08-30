@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { runCli } from "../src/cli/run-cli.js";
 import { analyzeProject } from "../src/check/analyze.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
@@ -38,6 +40,22 @@ function normalizeVolatile(text: string): string {
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
+}
+
+async function replaceFixtureText(filePath: string, oldText: string, newText: string): Promise<void> {
+  const source = await readFile(filePath, "utf8");
+  const updated = source.replace(oldText, newText);
+  expect(updated).not.toBe(source);
+  await writeFile(filePath, updated, "utf8");
+}
+
+async function delayFixtureSteps(rootDir: string): Promise<void> {
+  const stepPath = path.join(rootDir, "features/steps/thing-exists.ts");
+  await replaceFixtureText(
+    stepPath,
+    "async run({}, args) {",
+    "async run({}, args) {\n    await new Promise((resolve) => setTimeout(resolve, 1000));",
+  );
 }
 
 describe("nuka run --concurrency", () => {
@@ -155,10 +173,11 @@ describe("nuka run --concurrency", () => {
     }
   });
 
-  it("a file tagged @serial on its Feature line never runs alongside the others", async () => {
+  it("a file tagged @nukadoko:serial on its Feature line never runs alongside the others", async () => {
+    await delayFixtureSteps(rootDir);
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/serial/", "--concurrency", "2"], {
+    const exitCode = await runCli(["run", "features/serial/", "--concurrency", "3"], {
       rootDir,
       stdout,
       stderr,
@@ -173,12 +192,36 @@ describe("nuka run --concurrency", () => {
     expect(serialRecord).toBeDefined();
     expect(otherRecords).toHaveLength(2);
 
-    // The whole parallel phase has already exited (this run's own
-    // `Promise.all`) before the @serial file's own worker is even spawned
-    // — so its own start can never be earlier than the latest of the
-    // others' own finish.
+    // The parallel phase exits before the @nukadoko:serial worker starts.
     const latestOtherFinish = Math.max(...otherRecords.map((r) => Date.parse(r.finished_at)));
     expect(Date.parse(serialRecord.started_at)).toBeGreaterThanOrEqual(latestOtherFinish);
+  });
+
+  it("a bare @serial Feature tag neither serializes the file nor produces a check finding", async () => {
+    await delayFixtureSteps(rootDir);
+    const serialFeaturePath = path.join(rootDir, "features/serial/z-only.feature");
+    await replaceFixtureText(serialFeaturePath, "@nukadoko:serial", "@serial");
+    const badTagPath = path.join(rootDir, "features/check-badtag/bad.feature");
+    await replaceFixtureText(badTagPath, "@nukadoko:serial", "@serial");
+
+    const report = await analyzeProject(rootDir);
+    expect(report.errors.filter((issue) => issue.code === "serial-tag-on-scenario")).toHaveLength(0);
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/serial/", "--concurrency", "3"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode, stderr.text()).toBe(0);
+    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
+    const formerlySerialRecord = records.find((r) => r.feature === "features/serial/z-only.feature");
+    const otherRecords = records.filter((r) => r.feature !== "features/serial/z-only.feature");
+    expect(formerlySerialRecord).toBeDefined();
+    const earliestOtherFinish = Math.min(...otherRecords.map((r) => Date.parse(r.finished_at)));
+    expect(Date.parse(formerlySerialRecord.started_at)).toBeLessThan(earliestOtherFinish);
   });
 
   it("--session drops --concurrency to 1 and says so on stderr, even under --quiet", async () => {
@@ -251,7 +294,7 @@ describe("nuka run --concurrency", () => {
     }
   });
 
-  it("nuka check reports serial-tag-on-scenario for @serial on a Scenario line, and does not fire it for the Feature-level tag", async () => {
+  it("nuka check reports serial-tag-on-scenario for @nukadoko:serial on a Scenario line", async () => {
     const report = await analyzeProject(rootDir);
     const badTagIssues = report.errors.filter((issue) => issue.code === "serial-tag-on-scenario");
     expect(badTagIssues).toHaveLength(1);

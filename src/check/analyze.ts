@@ -436,7 +436,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       file: parseError.relativePath,
     });
   }
-  // `@serial` read anywhere but a `Feature:` line does nothing at all
+  // `@nukadoko:serial` read anywhere but a `Feature:` line does nothing at all
   // (`nuka run --concurrency <n>` never looks there) — reported as an
   // error, the same certainty `unterminated-capture`/`unnamed-capture` get,
   // because whether the tag has an effect here is a fact, not a guess, and
@@ -446,7 +446,8 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     errors.push({
       code: "serial-tag-on-scenario",
       message:
-        `@serial on scenario "${issue.name}" has no effect: nuka run --concurrency reads @serial only from ` +
+        `@nukadoko:serial on scenario "${issue.name}" has no effect: nuka run --concurrency reads ` +
+        "@nukadoko:serial only from " +
         "the Feature line. Move the tag there.",
       file: issue.relativePath,
       line: issue.line,

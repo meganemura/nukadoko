@@ -109,7 +109,8 @@ Once more than one feature file is green, `nuka run <feature> [<feature>
 ...] --concurrency <n>` or `nuka run <dir> --concurrency <n>` runs the
 growing suite as one invocation, spread across `n` worker processes. A file
 that must not run at the same time as another, because both share one test
-account or one queue, takes a `@serial` tag on its own `Feature:` line.
+account or one queue, takes a `@nukadoko:serial` tag on its own `Feature:`
+line.
 
 `nuka steps` and `nuka describe` stay usable throughout Stage 1, even while
 some glue files still fail to import: both read step files one at a time,

@@ -1422,13 +1422,14 @@ scenario は、ブラウザの中、HTTP 呼び出しの中、またはプロジ
 ファイルは歩いたときと同じ決まったバイト順で配られるため、どの worker がどのファイルを受け取るかは run をまたいで揺れません。
 したがって、1 つのファイルを名指した run では `--concurrency` が 1 を超えてもすることが何もなく、`nuka run` は、何もすることのない worker を起動する代わりにそう伝えます。
 
-`Feature:` 行に付けた `@serial` タグは、そのファイルを他のどのファイルも実行していない間に実行します。
+`Feature:` 行に付けた `@nukadoko:serial` タグは、そのファイルを他のどのファイルも実行していない間に実行します。
 これは、nukadoko には見えない何かをファイル同士が共有しているスイートのための宣言です: 1 つのテストアカウント、1 つの行、1 つのキューです。
 fixture の scope は、この問いに決して答えられません。
 scope が届くのは nukadoko 自身が構築するものだけであり、答えが属するのは feature ファイルの側、すでに名指している他のすべての隣だからです。
 タグが読まれるのは `Feature:` 行の上だけです。
 `Scenario:` の上では何もしません。
 1 つのファイルの中の scenario はすでに 1 つの worker の中で実行されるため、`nuka check` はそれを有効な規則であるかのように読ませる代わりに `serial-tag-on-scenario` として報告します。
+Gherkin のタグは自由記述なので、名前空間は、短いタグ名をスイートがすでに使っている意味との衝突から守ります。
 
 worker はプロセスであるため、`"process"` スコープの fixture は worker ごとに 1 回構築され、compat の `BeforeAll`/`AfterAll` も worker ごとに 1 回実行されます。
 「Fixtures」節はすでに `process` スコープを、1 つのアドレス空間ごとに 1 回と定義しています。
@@ -2806,7 +2807,7 @@ nuka run <feature[:line]|dir>...
                               messages stream and one Allure results tree.
                               Above 1, stdout lands in completion order and the
                               progress lines are held per scenario. A file
-                              tagged @serial runs while no other file runs.
+                              tagged @nukadoko:serial runs while no other file runs.
                               --session drops it back to 1 and says so
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
@@ -3018,7 +3019,7 @@ nuka experimental webmcp-tools <url> [--json]
 - **M11(live sessions)**: `nuka session start`/`stop`、プロセス内で開いたまま保持する 1 つの `ctx` です。
   これにより、`nuka do` はすでに途中まで進んだ world に降り立てます(「Live sessions」を参照)。
   ここより前のすべては何もない状態から始まっており、それは読み取りにとっては単に遅いだけですが、繰り返せない作業にとっては不可能を意味します。
-- **M12(concurrency)**: `nuka run --concurrency <n>`、feature ファイルをまるごと持つ worker プロセス、単独で実行しなければならないファイルのための `@serial`、そしてそれらが動く間 run の identity を保つ親プロセスです(「Scenario」を参照)。
+- **M12(concurrency)**: `nuka run --concurrency <n>`、feature ファイルをまるごと持つ worker プロセス、単独で実行しなければならないファイルのための `@nukadoko:serial`、そしてそれらが動く間 run の identity を保つ親プロセスです(「Scenario」を参照)。
   すべての scenario は依然として同じ直列エンジンの下で実行されます。
   変わるのは、それらが一度に何個実行されるかだけです。
   worker プロセスにしたことが、この高速化をスイートが何に時間を使っているかから独立させ、fixture の teardown 規則をそのまま保たせています。

@@ -115,7 +115,7 @@ is a list you can work through, not a hunt.
   decides which pickle a worker may receive. nukadoko distributes whole feature
   files, so its worker assignment has no pickle-level decision for this
   callback to control. Declare file-level mutual exclusion with an
-  `@serial` tag on the feature. Accepting the call as a
+  `@nukadoko:serial` tag on the feature. Accepting the call as a
   no-op would be worse than refusing it: it would import cleanly, run, and
   leave a suite believing its parallel-assignment rule was in effect while
   nothing enforced it, exactly the quiet failure this door exists to refuse

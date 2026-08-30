@@ -1,4 +1,4 @@
-@serial
+@nukadoko:serial
 Feature: Serial Only
 
   Scenario: serial only scenario

@@ -84,7 +84,7 @@ glue はテキストとして読むだけで、実行はしていません。
   何かが実行されるより前に捕まります: `nuka check` は、そのファイルを Node 自身のエラーメッセージ付きの `step-file-import-failed` として報告し、`check` を省略していた場合は同じ失敗がそのファイルを import しようとする最初の `nuka run` で表に出ます。
   この名前は、`setParallelCanAssign` が worker に渡せる pickle を決めるため、設計上の判断によって未対応のままです。
   nukadoko は feature ファイル全体を配るため、worker への割り当てには、このコールバックが制御する pickle 単位の判断がありません。
-  feature ファイル単位の相互排他は、feature に付けた `@serial` タグで宣言します。
+  feature ファイル単位の相互排他は、feature に付けた `@nukadoko:serial` タグで宣言します。
   この呼び出しを no-op として受け入れることは、拒否するより悪い結果になります。
   それは import が通って実行され、並列割り当てのルールが効いていると信じたままのスイートに、何も強制しないまま残すことになるからです。
   これはまさに、この扉が拒むために存在する静かな失敗そのものです(docs/spec.ja.md「Compat steps(移行の扉)」)。

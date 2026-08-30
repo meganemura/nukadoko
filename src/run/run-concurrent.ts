@@ -20,12 +20,12 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // "Scenarios (the scripted path)" describes for `--concurrency` above 1).
 //
 // This module never executes a pickle itself. It splits `selected.features`
-// into `@serial` and not (the `Feature:` line's own tags — never a pickle's
-// own merged `tags`, which would make a Scenario-level `@serial` and a
-// Feature-level one indistinguishable), hands the non-`@serial` files to
+// into `@nukadoko:serial` and not (the `Feature:` line's own tags — never a pickle's
+// own merged `tags`, which would make a Scenario-level `@nukadoko:serial` and a
+// Feature-level one indistinguishable), hands the non-`@nukadoko:serial` files to
 // `min(concurrency, file count)` worker processes round-robin in the fixed
 // byte order `nuka run` already selected them in, waits for all of them,
-// then runs every `@serial` file afterward, one worker at a time. Actually
+// then runs every `@nukadoko:serial` file afterward, one worker at a time. Actually
 // executing one file is src/run/run-worker-entry.ts's job, in a process
 // spawned by src/run/spawn-run-worker.ts — see those two files' own headers
 // for why a worker cannot simply be handed this file's own in-memory
@@ -69,7 +69,7 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // file and fails the whole invocation, regardless of what any other
 // worker's own files did.
 
-const SERIAL_TAG = "@serial";
+const SERIAL_TAG = "@nukadoko:serial";
 
 function isSerialFeature(feature: SelectedFeature): boolean {
   return feature.gherkinDocument.feature?.tags.some((tag) => tag.name === SERIAL_TAG) ?? false;
@@ -340,7 +340,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   }
 
   // One worker at a time, strictly after every parallel worker has already
-  // exited (the `await` above already guarantees that) — a `@serial` file's
+  // exited (the `await` above already guarantees that) — a `@nukadoko:serial` file's
   // whole reason to exist is that nothing else may be running while it is.
   for (const feature of serialFeatures) {
     const result = await runWorkerGroup([feature]);

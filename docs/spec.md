@@ -1639,8 +1639,8 @@ file does not drift between runs. `--concurrency` above 1 therefore has
 nothing to do for a target naming a single file, and `nuka run` says so
 rather than starting workers that would sit idle.
 
-A `@serial` tag on a `Feature:` line runs that file while no other file
-runs. This is the declaration for a suite whose files share something
+A `@nukadoko:serial` tag on a `Feature:` line runs that file while no other
+file runs. This is the declaration for a suite whose files share something
 nukadoko cannot see: one test account, one row, one queue. A fixture's
 scope can never answer this question, because a scope reaches only what
 nukadoko itself builds; the feature file is where the answer belongs,
@@ -1649,6 +1649,8 @@ line only. On a `Scenario:` it would do nothing at all, since the scenarios
 inside one file already run in one worker, so `nuka check` reports it
 (`serial-tag-on-scenario`) instead of letting it read as a rule that is in
 force.
+Gherkin tags are free text, so the namespace prevents this tag from
+colliding with a suite's existing meaning for a short name.
 
 A `"process"`-scope fixture is built once per worker, and a compat
 `BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
@@ -3299,7 +3301,7 @@ nuka run <feature[:line]|dir>...
                               messages stream and one Allure results tree.
                               Above 1, stdout lands in completion order and the
                               progress lines are held per scenario. A file
-                              tagged @serial runs while no other file runs.
+                              tagged @nukadoko:serial runs while no other file runs.
                               --session drops it back to 1 and says so
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
@@ -3556,7 +3558,7 @@ would be running against glue it never actually read.
   from nothing, which is merely slow for reads but impossible for work
   that cannot be repeated.
 - **M12 (concurrency)**: `nuka run --concurrency <n>`, worker processes
-  each holding whole feature files, `@serial` for a file that has to run
+  each holding whole feature files, `@nukadoko:serial` for a file that has to run
   alone, and the parent that keeps the run's identity while they work (see
   "Scenarios"). Every scenario still runs under the same serial engine;
   what changes is how many of them run at once. Worker processes make the

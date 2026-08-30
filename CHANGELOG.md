@@ -40,11 +40,11 @@ just until 0.1.
   completion order rather than file order; the per-step and per-scenario
   progress lines on stderr are now held until their own scenario finishes,
   then written together, so lines from two scenarios never interleave. A
-  file tagged `@serial` on its own `Feature:` line runs while no other
-  file runs. `--session` drops concurrency to 1 and says so on stderr,
+  file tagged `@nukadoko:serial` on its own `Feature:` line runs while no
+  other file runs. `--session` drops concurrency to 1 and says so on stderr,
   since a session hands state from one scenario to the next; a target
   naming one feature file has nothing to distribute, so it also runs at 1.
-  `nuka check` reports `serial-tag-on-scenario` when `@serial` is on a
+  `nuka check` reports `serial-tag-on-scenario` when `@nukadoko:serial` is on a
   `Scenario:`/`Scenario Outline:` line instead, where it has no effect.
   `"process"`-scope fixtures and BeforeAll/AfterAll now run once per
   worker rather than once per invocation, which coincides with once per

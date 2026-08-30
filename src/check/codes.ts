@@ -144,7 +144,7 @@ export const CHECK_CODES = {
   },
   "serial-tag-on-scenario": {
     description:
-      "A @serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there.",
+      "A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there.",
     severity: "error",
   },
   "step-file-import-failed": {

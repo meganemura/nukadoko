@@ -29,22 +29,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## Unreleased
 
-`nuka check` に、プロジェクトが何も変えていなくても緑を赤に変えうる所見が 1 つ増えます。
-`nuka run` が stderr に書くものも増えます。
+`nuka run` が stderr に書くものが増え、`nuka tend` は新しい所見を 1 つ報告します。
 理由は [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
 
-- **`Scenario:` または `Scenario Outline:` の行に付いた `@serial` は、`nuka check` を失敗させます。**
-  このタグは `nuka run --concurrency <n>` とともに意味を持つようになりました。
-  `Feature:` 行に付いていれば、そのファイルを他のどのファイルも実行していない間に実行する、という宣言になります。
-  scenario の行では何もしません。
-  1 つのファイルの中の scenario は、もともと 1 つの worker の中で実行されるからです。
-  そのため `check` は `serial-tag-on-scenario` を error として報告します。
-  効いている規則であるかのように読ませないためです。
-  Gherkin のタグは自由記述であり、nukadoko はこれまでこのタグを読んでいませんでした。
-  したがって `@serial` を自分の意味で使っていたスイートは、アップグレードで `check` が赤くなります。
-  そのファイルが本当に単独で実行される必要があるなら、タグを `Feature:` の行へ移してください。
-  別の意味で使っていたなら、名前を変えてください。
-  そのスイートの run の実行のされ方は何も変わっていません。変わったのは `check` の判定だけです。
 - **`nuka run` は、サマリ行の後ろで、失敗した scenario を名指します。**
   通らなかった scenario 1 つにつき 1 行で、feature のパス、行、名前を出します。
   `--quiet` は、サマリを残すのと同じ理由でこれらの行も残します。
