@@ -54,8 +54,10 @@ exploring becomes a path fixed in a sentence, which is the only form
 anything here can gate on. M11 (live sessions) is in: `nuka session
 start` holds one `ctx` open in a process so `nuka do` can land on a world
 that is already partway through, which is what makes exploring possible
-for work that cannot be repeated. Still unimplemented: the AI-assisted
-glue converter.
+for work that cannot be repeated. M12 (concurrency) is in: `nuka run
+--concurrency <n>` distributes whole feature files to worker processes,
+and `@nukadoko:serial` declares a feature that has to run alone. Still
+unimplemented: the AI-assisted glue converter.
 
 ## Naming rule
 
