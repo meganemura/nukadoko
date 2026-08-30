@@ -3193,6 +3193,29 @@ The following findings show what `tend` inspects and why each item is rot rather
   findings above: those go quiet once the running suite carries the
   guarantee a frozen record used to, but whether a record was ever made
   is a different question, unaffected by where the feature runs.
+- **Scenarios that begin with the same steps, and what the repetition
+  cost.** A shared opening is ordinary: several scenarios about one page
+  reasonably start by getting to that page. It turns into rot when the
+  opening is expensive and nothing has been lifted out of it, because the
+  cost grows with every scenario added. This finding is measured rather
+  than read off the feature files. It groups the most recent run's
+  scenario records by their leading step text, reads those steps' own
+  records for what each took, and names the group, its steps, and the
+  total. One finding per family, at the depth where the most time is
+  spent, so one nested group is never counted again at three depths. Two
+  gates keep it quiet: two scenarios at least, and at least 2% of that
+  run's summed scenario time. That floor came from measuring a real
+  suite, where it removed exactly the groups whose cost rounded to zero
+  and gave up 0.2 of the 101.5 seconds the finding otherwise named. The
+  denominator is summed scenario time rather than wall clock, so this
+  reads the same at any `--concurrency`. A run still in progress is read
+  as far as it has got, and its shares are of what it has written so far,
+  since a scenario record carries no mark saying its run has finished. It
+  stops at the number. What to
+  do about a shared opening depends on which of those scenarios write to
+  the state they share, which this tool cannot see, and the place to lift
+  it into is a `process`-scope fixture (see "Fixtures"). Naming a saving
+  would be claiming the lift is possible, which nothing here measured.
 - **A step whose trace shows another call soon after a navigation
   call.** `tend` reads this from the tool's step records under
   `.nukadoko/records/steps/` (see "Records"). A committed sign-off record

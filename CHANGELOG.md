@@ -9,6 +9,12 @@ just until 0.1.
 
 ### Added
 
+- **`nuka tend` reports expensive scenario openings shared in the most
+  recent run.** The `repeated-scenario-prefix` note names the shared steps,
+  scenario count, measured time, and share of summed scenario time. It
+  reports one depth per nested family and stays quiet below two scenarios
+  or two percent.
+
 - **`nuka run --concurrency <n>` runs more than one feature file at a
   time.** The default stays 1, where every scenario runs exactly as it did
   before. Above 1, the run hands whole feature files to `n` worker

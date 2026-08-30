@@ -14,6 +14,7 @@ import { findMissingRationale } from "./missing-rationale.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { findPostNavigationReads } from "./post-navigation-read.js";
+import { findRepeatedScenarioPrefixes } from "./repeated-prefix.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { findSignedFeatureUnscanned } from "./signed-feature-unscanned.js";
 import { findSignoffConditionMismatch } from "./signoff-condition-mismatch.js";
@@ -127,6 +128,11 @@ import type { TendIssue, TendReport } from "./types.js";
 // `featuresDir`-shaped path. Every step record counts, signed off or not -
 // this finding is about a step's own body, not about what `nuka accept`
 // has frozen.
+//
+// `findRepeatedScenarioPrefixes` also reads live records, but starts from
+// `<stateDir>/records/scenarios/`. It limits its timing groups to the latest
+// run before it reads the cited step records, so two runs never count the
+// same scenario work twice.
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
@@ -170,6 +176,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findFixturesTouchingApp(fixtureGraph),
     ...findSignoffConditionMismatch(rootDir, config.browserType, config.featuresDir),
     ...findPostNavigationReads(rootDir, config.stateDir),
+    ...findRepeatedScenarioPrefixes(rootDir, config.stateDir),
   ];
 
   const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);

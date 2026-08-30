@@ -7,6 +7,10 @@ to fix it. Every other finding it reports, `signoff-condition-mismatch` and
 `post-navigation-read` among them, is a note a project is allowed to carry
 rather than something blocking.
 
+`repeated-scenario-prefix` shows which scenarios in the most recent run
+shared the same opening steps. It also shows the measured time for that
+opening and its share of the run's summed scenario time.
+
 `post-navigation-read` is the one worth knowing the shape of, because
 there is a way to make it stop being true and only one. It reads every
 step record under `.nukadoko/records/steps/`, not only the ones an
