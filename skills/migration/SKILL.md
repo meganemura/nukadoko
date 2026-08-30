@@ -105,10 +105,10 @@ category flag cleans all three, `--dry-run` previews the same plan it
 would act on without removing anything, and it refuses the whole command,
 every category, while any `nuka session` anywhere is still live.
 
-Once more than one feature file is green, `nuka run <dir> --concurrency
-<n>` runs the growing suite as one invocation, spread across `n` worker
-processes, instead of one `nuka run <feature>` call per file. A file that
-must not run at the same time as another, because both share one test
+Once more than one feature file is green, `nuka run <feature> [<feature>
+...] --concurrency <n>` or `nuka run <dir> --concurrency <n>` runs the
+growing suite as one invocation, spread across `n` worker processes. A file
+that must not run at the same time as another, because both share one test
 account or one queue, takes a `@serial` tag on its own `Feature:` line.
 
 `nuka steps` and `nuka describe` stay usable throughout Stage 1, even while

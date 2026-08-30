@@ -9,6 +9,21 @@ just until 0.1.
 
 ### Added
 
+- **`nuka run` accepts more than one feature target.** Each positional can
+  name a file, a `file:line` selection, or a directory. The run deduplicates
+  the selected files, sorts their repository-relative paths in byte order,
+  and keeps one run_id, summary, exit code, messages stream, and Allure
+  results tree for the full selection.
+
+- **`nuka check` identifies an omitted pair of quotes for a string
+  parameter.** When exactly one registered pattern explains the undefined
+  line, the finding names that step and pattern and gives the rewritten
+  Gherkin line.
+
+- **`nuka run` names failed scenarios after its summary.** Each line gives
+  the feature, line, and scenario name. Serial and concurrent runs print the
+  lines, and `--quiet` keeps them.
+
 - **`nuka tend` reports expensive scenario openings shared in the most
   recent run.** The `repeated-scenario-prefix` note names the shared steps,
   scenario count, measured time, and share of summed scenario time. It

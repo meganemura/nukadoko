@@ -1381,6 +1381,12 @@ import { Given, When, Then } from "nukadoko/compat";
   `no-step-files-found` reports a scan that found no candidate files. Each
   finding identifies what discovery inspected. The `scanned:` line from
   `nuka tend` uses the same rule so that a reader can verify the finding.
+  An `undefined-step` finding can also identify a missing pair of quotes.
+  The finding applies when one registered pattern fits the same position and
+  all its captures are `{...:string}` parameters. It names the step and
+  pattern and gives the rewritten Gherkin line. It stays silent when two or
+  more patterns can explain the line, because that choice belongs to the
+  author.
   **Only `nuka run` can report these failures**: a step or hook returns
   `"pending"` or `"skipped"`, or glue uses a done callback. These failures
   depend on what the step does during execution. Import analysis cannot
@@ -1571,7 +1577,7 @@ However, its location shows that the existing suite owns it.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
+nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -1581,11 +1587,13 @@ the steps in order. It writes one step record for each step and one scenario
 record for each pickle. The scenario record contains the feature path, scenario
 name, ordered step record ids, and per-step status.
 
-`nuka run` also takes a directory in place of a single feature file:
-`nuka run features/` walks it recursively for every `.feature` file and
-folds all of their pickles into the one invocation above, in file order,
-one run_id, one summary, one exit code, one messages stream, one Allure
-results tree. Files are visited in a fixed order, the repo-relative path
+`nuka run` takes one or more targets. Each target can be a feature file, a
+`file:line` selection, or a directory. A directory target is walked
+recursively for every `.feature` file. The selected files form one
+deduplicated set, and a full-file selection includes any line selections for
+that file. All selected pickles belong to one invocation: one run_id, one
+summary, one exit code, one messages stream, and one Allure results tree.
+Files are visited in a fixed order, the repo-relative path
 compared byte by byte rather than by locale, so which scenario ran in which
 position stays stable across runs and a record or a report can be compared
 against another one. `--concurrency` below keeps that visiting order and
@@ -1673,7 +1681,9 @@ output for a person who watches the run: a boundary before each pickle, one
 line after each step, the paths written by the run, and a one-line summary.
 `--quiet` suppresses the per-step and per-scenario progress lines. The paths
 and summary still appear because the flag makes the terminal quieter, not
-silent.
+silent. After the summary line, stderr names each failed scenario with its
+feature path, line, and name. These lines appear for serial and concurrent
+runs, and `--quiet` keeps them.
 
 The paths line matters even when nothing was configured: `allure` and
 `messages` output already exist with zero configuration, and their config
@@ -3264,20 +3274,23 @@ fixes up a dirty tree.
 The npm package is `nukadoko`. The one command it installs is `nuka`.
 
 ```
-nuka run <feature[:line]|dir>
+nuka run <feature[:line]|dir>...
                               execute scenarios; step records + allure-results.
                               :line runs one scenario, for iteration only. A
-                              partial run can never be accepted. A directory
-                              is walked recursively for .feature files, in
-                              deterministic byte order, folded into this one
-                              invocation: one run_id, one summary, one exit
-                              code, one messages stream, one Allure results
-                              tree. :line on a directory is refused, and a
+                              partial run can never be accepted. Each target
+                              can be a file, file:line, or directory. Targets
+                              form one deduplicated set in deterministic byte
+                              order and one invocation: one run_id, one
+                              summary, one exit code, one messages stream, and
+                              one Allure results tree. :line on a directory is
+                              refused, and a
                               directory with no .feature file anywhere under
                               it fails setup, naming what it walked. stderr
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
-                              line; --quiet drops the progress lines only.
+                              line. Each failed scenario follows with its
+                              feature, line, and name. --quiet drops the
+                              progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always.
                               --concurrency <n> (default 1) hands whole feature

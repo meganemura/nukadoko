@@ -1195,6 +1195,9 @@ import { Given, When, Then } from "nukadoko/compat";
   `.cjs` ファイルが `featuresDir` の下にあるときの `step-file-unsupported-extension`(nukadoko がそれを import しない理由は前述の「型付き step」を参照)と、歩いた結果として試せるものが何もなかったときの `no-step-files-found` です。
   どちらも、実際に何を見た結果なのかを名指しします。
   これは、`nuka tend` 自身の `scanned:` 行が従っているのと同じ「所見が嘘のとき、それに気づけるように」という論拠です。
+  `undefined-step` の所見は、引用符の付け忘れも示せます。
+  同じ位置に合う登録済み pattern が 1 つあり、その capture がすべて `{...:string}` parameter である場合、所見は step と pattern を名指しし、書き直した Gherkin の行を示します。
+  その行を説明できる pattern が 2 つ以上ある場合、どれを選ぶかは書き手が決めるため、このヒントは表示されません。
   **`nuka run` だけが報告できる失敗**: step や hook が `"pending"` / `"skipped"` を返す場合と、glue が done callback を使う場合です。
   これらの失敗は、step が実行中に行うことに依存します。
   import の解析では識別できません。
@@ -1375,7 +1378,7 @@ Playwright の `test()` は Playwright runner の外では動かないため、i
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run features/checkout.feature[:12] [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
+nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1384,8 +1387,11 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 各 step に 1 つの step record を書き込み、各 pickle に 1 つの scenario record を書き込みます。
 scenario record は feature のパス、scenario 名、順序付けられた step record id、step ごとの status を含みます。
 
-`nuka run` は 1 つの feature ファイルの代わりにディレクトリも受け取ります。
-`nuka run features/` はそれを再帰的に歩いてすべての `.feature` ファイルを見つけ、それらの pickle をすべて上記と同じ 1 つの invocation に畳み込みます: 1 つの run_id、1 つのサマリ、1 つの exit code、1 つの messages ストリーム、1 つの Allure results ツリーです。
+`nuka run` は 1 つ以上の対象を受け取ります。
+各対象には feature ファイル、`ファイル:行`、ディレクトリのいずれかを指定できます。
+ディレクトリは再帰的に走査され、その下のすべての `.feature` ファイルが選ばれます。
+選ばれたファイルは重複を除いた 1 つの集合になり、ファイル全体の指定は、そのファイルに対する行指定を含みます。
+選ばれたすべての pickle は 1 つの invocation に属します: 1 つの run_id、1 つのサマリ、1 つの exit code、1 つの messages ストリーム、1 つの Allure results ツリーです。
 ファイルはリポジトリ相対パスをロケールではなくバイトごとに比較した、決まった順序で処理されます。
 そのため、どの scenario が何番目に実行されたかは run をまたいで安定し、ある record やレポートを別の run のものと比較できます。
 後述の `--concurrency` は、この走査順序を保ちつつ位置は手放します。
@@ -1448,6 +1454,8 @@ stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJS
 run を見守る人向けの出力は stderr に置きます: 各 pickle の前の境界、各 step の後の 1 行、run が書いたパス、1 行のサマリです。
 `--quiet` は step ごとと scenario ごとの進捗行を抑止します。
 このフラグは端末を静かにしますが、無音にはしないため、パスとサマリは表示されます。
+サマリ行の後では、失敗した各 scenario を feature のパス、行、名前とともに stderr に表示します。
+この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
 
 書き込み先の行は、何も設定していないときにこそ効きます。
 `allure` と `messages` の出力はすでにゼロ設定で動いており、それぞれの config キーは書き込み先を移動させるだけです。
@@ -2773,20 +2781,23 @@ sign-off の所見は非ゼロの exit code で終了し、定期実行される
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
 
 ```
-nuka run <feature[:line]|dir>
+nuka run <feature[:line]|dir>...
                               execute scenarios; step records + allure-results.
                               :line runs one scenario, for iteration only. A
-                              partial run can never be accepted. A directory
-                              is walked recursively for .feature files, in
-                              deterministic byte order, folded into this one
-                              invocation: one run_id, one summary, one exit
-                              code, one messages stream, one Allure results
-                              tree. :line on a directory is refused, and a
+                              partial run can never be accepted. Each target
+                              can be a file, file:line, or directory. Targets
+                              form one deduplicated set in deterministic byte
+                              order and one invocation: one run_id, one
+                              summary, one exit code, one messages stream, and
+                              one Allure results tree. :line on a directory is
+                              refused, and a
                               directory with no .feature file anywhere under
                               it fails setup, naming what it walked. stderr
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
-                              line; --quiet drops the progress lines only.
+                              line. Each failed scenario follows with its
+                              feature, line, and name. --quiet drops the
+                              progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always.
                               --concurrency <n> (default 1) hands whole feature
