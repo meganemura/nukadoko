@@ -9,6 +9,26 @@ just until 0.1.
 
 ### Added
 
+- **`nuka run --concurrency <n>` runs more than one feature file at a
+  time.** The default stays 1, where every scenario runs exactly as it did
+  before. Above 1, the run hands whole feature files to `n` worker
+  processes: each worker runs its own files through the same serial engine
+  a `--concurrency 1` run uses, and the parent keeps one run_id, one
+  summary, one exit code, one messages stream, and one Allure results
+  tree. stdout still carries one scenario record per line, now in
+  completion order rather than file order; the per-step and per-scenario
+  progress lines on stderr are now held until their own scenario finishes,
+  then written together, so lines from two scenarios never interleave. A
+  file tagged `@serial` on its own `Feature:` line runs while no other
+  file runs. `--session` drops concurrency to 1 and says so on stderr,
+  since a session hands state from one scenario to the next; a target
+  naming one feature file has nothing to distribute, so it also runs at 1.
+  `nuka check` reports `serial-tag-on-scenario` when `@serial` is on a
+  `Scenario:`/`Scenario Outline:` line instead, where it has no effect.
+  `"process"`-scope fixtures and BeforeAll/AfterAll now run once per
+  worker rather than once per invocation, which coincides with once per
+  invocation at the default concurrency of 1: a worker is a process, and a
+  `"process"`-scope fixture already meant "once per process."
 - **A step that runs for minutes now shows what it is doing, in a live
   Allure report.** Between the snapshot written when a step ends and the
   one written when the next begins, a long step used to leave the report

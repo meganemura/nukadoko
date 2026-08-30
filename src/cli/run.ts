@@ -24,6 +24,7 @@ import {
 } from "../report/messages/emitter.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { probeGitState } from "../run/probe-git.js";
+import { runConcurrentPickles } from "../run/run-concurrent.js";
 import {
   createStepProgressLogger,
   writeOutputLocations,
@@ -263,6 +264,20 @@ import type { WritableSink } from "./writable-sink.js";
 // anywhere in this: a CI log wants this exact progress just as much as an
 // interactive terminal does, and stderr staying busy costs nothing stdout's
 // own NDJSON readers can see.
+//
+// `--concurrency` above 1 diverts to src/run/run-concurrent.ts, in one
+// branch placed after every setup-phase check above (bindings, from,
+// fixtures, tag expressions) and before `registerAllureRuntime` below —
+// every one of those checks still runs project-wide, once, exactly as it
+// does at concurrency 1, so a `--concurrency <n>` invocation refuses the
+// same broken project a `--concurrency 1` one would, before spawning a
+// single worker. The branch itself only fires once two disqualifying cases
+// are excluded (a live `--session`, a target naming one feature file — this
+// file's own comment right above the branch explains why each drops
+// concurrency back to 1 instead of refusing outright): from there on, this
+// function's own execution-phase code below it is what a `--concurrency 1`
+// run — the overwhelming majority of invocations, and the default — always
+// takes, completely unchanged by `--concurrency` existing at all.
 
 export interface RunRunOptions {
   rootDir: string;
@@ -274,12 +289,29 @@ export interface RunRunOptions {
    * output-location and summary lines at the
    * end of a run are written either way; see this file's own header. */
   quiet: boolean;
+  /** `--concurrency`'s raw value; default 1 (cli/run-cli.ts's own `??`). At
+   * 1, every other paragraph in this file's own header describes what
+   * happens — the branch near this function's own `restoreAllureRuntime`
+   * call is the only place a value above 1 changes anything (docs/spec.md
+   * "Scenarios (the scripted path)"). */
+  concurrency: number;
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, featureArg, session, env, quiet, stdout, stderr } = options;
+  const { rootDir, featureArg, session, env, quiet, concurrency, stdout, stderr } = options;
+
+  // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
+  // `--concurrency` value into `NaN` rather than refusing it, and accepts a
+  // fraction like `2.5` without complaint either way — neither is a setup
+  // failure yargs itself can catch, so both are refused here, in the same
+  // "any failure here writes nothing" phase every other setup check below
+  // already belongs to.
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    stderr.write(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).\n`);
+    return 1;
+  }
 
   // This whole invocation's own start — read
   // again just before the summary line is written, near this function's own
@@ -564,6 +596,96 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
     };
 
+    // Root-relative (src/config/schema.ts's own doc comment for each of
+    // these two keys) — computed here, ahead of the `--concurrency`
+    // branch just below, since both the parallel path (src/run/
+    // run-concurrent.ts) and the unchanged path right after it need the
+    // exact same resolved value for the output-location line near this
+    // function's own `return`.
+    const allureResultsDirRel =
+      config.allure?.resultsDir ?? path.join(config.stateDir, "export", "allure-results");
+    const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "export", "messages.ndjson");
+
+    // `--concurrency` above 1 has two disqualifying cases, each dropping it
+    // straight back to 1 with a one-line, `--quiet`-proof reason (docs/
+    // spec.md "Scenarios (the scripted path)", same category as the paths
+    // line): a live session hands storageState from one scenario to the
+    // next, which cannot happen across worker processes, and a target
+    // naming one file has nothing to distribute across more than one
+    // worker in the first place. Checked, and dropped, before any worker
+    // is ever spawned.
+    let effectiveConcurrency = concurrency;
+    if (session !== null && effectiveConcurrency > 1) {
+      effectiveConcurrency = 1;
+      stderr.write(
+        "--session drops --concurrency to 1: a session hands off state from one scenario to the next, " +
+          "which cannot happen across worker processes.\n",
+      );
+    } else if (effectiveConcurrency > 1 && selected.features.length <= 1) {
+      effectiveConcurrency = 1;
+      stderr.write("--concurrency has nothing to distribute: this run selects one feature file.\n");
+    }
+
+    if (effectiveConcurrency > 1) {
+      const { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, messagesEmitter } =
+        await runConcurrentPickles({
+          rootDir,
+          config: runConfig,
+          runId,
+          envArg: env,
+          environment: resolvedEnv.name,
+          targetVersion,
+          secrets,
+          quiet,
+          concurrency: effectiveConcurrency,
+          selected,
+          flatPickles,
+          allureResultsDirRel,
+          messagesOutputRel,
+          stdout,
+          stderr,
+        });
+
+      messagesEmitter?.end(allPassed);
+
+      writeOutputLocations(stderr, [
+        ...(scenariosWritten > 0
+          ? [
+              {
+                label: "steps",
+                relativePath: path.join(config.stateDir, "records", "steps"),
+                kind: "dir" as const,
+                count: stepRecordsWritten,
+              },
+              {
+                label: "scenarios",
+                relativePath: path.join(config.stateDir, "records", "scenarios"),
+                kind: "dir" as const,
+                count: scenariosWritten,
+              },
+            ]
+          : []),
+        ...(flatPickles.length > 0
+          ? [
+              { label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const },
+              {
+                label: "messages",
+                relativePath: messagesRunOutputPath(messagesOutputRel, runId),
+                kind: "file" as const,
+              },
+            ]
+          : []),
+      ]);
+      writeRunSummary(stderr, {
+        total: scenariosWritten,
+        passed: scenariosPassed,
+        failed: scenariosWritten - scenariosPassed,
+        durationMs: Date.now() - invocationStartedAt.getTime(),
+      });
+
+      return allPassed ? 0 : 1;
+    }
+
     // --- Execution phase proper: registered once for every pickle below
     // — see this file's own header. ---
     const restoreAllureRuntime = registerAllureRuntime();
@@ -596,23 +718,20 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // — an empty cache's own teardown is a no-op.
       const fixtureProcessCache = createFixtureCache();
 
-      // Root-relative (src/config/schema.ts's own doc comment for each of
-      // these two keys) — computed once, ahead of `resultsDir`/`output`
-      // below, so this exact resolved value (config default already
-      // applied, the actual write destination rather than the config key
-      // itself) is available for the output-location line near this
-      // function's own `return` too,
-      // whether or not the emitter that writes there actually succeeds.
-      // `messagesOutputRel` itself feeds two different things below: the
-      // emitter's own `output` (the stable, config-facing path it copies
-      // its finished stream onto), and, run-id-suffixed via
-      // `messagesRunOutputPath`, the row that output-location line names —
-      // a concurrent second invocation can replace the stable path's
-      // contents before a reader gets to it, but never this run's own
-      // suffixed file (src/report/messages/emitter.ts's own header).
-      const allureResultsDirRel =
-        config.allure?.resultsDir ?? path.join(config.stateDir, "export", "allure-results");
-      const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "export", "messages.ndjson");
+      // `allureResultsDirRel`/`messagesOutputRel` are computed once, above
+      // the `--concurrency` branch this block sits after — the exact
+      // resolved value (config default already applied, the actual write
+      // destination rather than the config key itself) both this block and
+      // src/run/run-concurrent.ts need for the output-location line near
+      // this function's own `return`, whether or not the emitter that
+      // writes there actually succeeds. `messagesOutputRel` itself feeds
+      // two different things below: the emitter's own `output` (the
+      // stable, config-facing path it copies its finished stream onto),
+      // and, run-id-suffixed via `messagesRunOutputPath`, the row that
+      // output-location line names — a concurrent second invocation can
+      // replace the stable path's contents before a reader gets to it, but
+      // never this run's own suffixed file (src/report/messages/
+      // emitter.ts's own header).
 
       // See this file's own header for why this is gated on `hasPickles`,
       // why construction and

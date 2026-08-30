@@ -7,6 +7,7 @@ import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-ki
 import { discoverSteps } from "../discover/discover-steps.js";
 import {
   attachStepLines,
+  findSerialTagOnScenario,
   loadFeaturesFromDirs,
   parseFeatureSource,
   type LoadFeaturesResult,
@@ -134,19 +135,24 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
   }
 
   try {
-    // `attachStepLines` mirrors src/feature/load-features.ts's own
-    // `loadFeaturesFromDirs` — the same "resolve each pickle step's own
-    // line from the GherkinDocument before it's dropped" step, done here
-    // too since this function is the featureArg path's own equivalent of
-    // that walk, not a call through it.
+    // `attachStepLines`/`findSerialTagOnScenario` mirror src/feature/
+    // load-features.ts's own `loadFeaturesFromDirs` — the same two
+    // "read the GherkinDocument before it's dropped" steps, done here too
+    // since this function is the featureArg path's own equivalent of that
+    // walk, not a call through it.
     const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
-    return { features: [{ relativePath, pickles: attachStepLines(pickles, gherkinDocument) }], parseErrors: [] };
+    return {
+      features: [{ relativePath, pickles: attachStepLines(pickles, gherkinDocument) }],
+      parseErrors: [],
+      serialTagOnScenario: findSerialTagOnScenario(gherkinDocument, relativePath),
+    };
   } catch (error) {
     return {
       features: [],
       parseErrors: [
         { relativePath, message: error instanceof Error ? error.message : String(error) },
       ],
+      serialTagOnScenario: [],
     };
   }
 }
@@ -412,7 +418,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
-  const { features, parseErrors } =
+  const { features, parseErrors, serialTagOnScenario } =
     featureArg === undefined
       ? // additionalFeatureDirs joins featuresDir here too: a no-argument
         // `nuka check` is one of the two commands whose default scan
@@ -428,6 +434,22 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       code: "feature-parse-error",
       message: parseError.message,
       file: parseError.relativePath,
+    });
+  }
+  // `@serial` read anywhere but a `Feature:` line does nothing at all
+  // (`nuka run --concurrency <n>` never looks there) — reported as an
+  // error, the same certainty `unterminated-capture`/`unnamed-capture` get,
+  // because whether the tag has an effect here is a fact, not a guess, and
+  // a project that trusts it into forcing mutual exclusion between files
+  // gets silent data-race exposure instead.
+  for (const issue of serialTagOnScenario) {
+    errors.push({
+      code: "serial-tag-on-scenario",
+      message:
+        `@serial on scenario "${issue.name}" has no effect: nuka run --concurrency reads @serial only from ` +
+        "the Feature line. Move the tag there.",
+      file: issue.relativePath,
+      line: issue.line,
     });
   }
   const featureResult = checkFeatures(features, vocabulary, bindingResult.patterns, config.parameterTypes);

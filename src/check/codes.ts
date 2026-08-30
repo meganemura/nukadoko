@@ -142,6 +142,11 @@ export const CHECK_CODES = {
       "A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted.",
     severity: "warning",
   },
+  "serial-tag-on-scenario": {
+    description:
+      "A @serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there.",
+    severity: "error",
+  },
   "step-file-import-failed": {
     description: "A step file under featuresDir failed to import, so any step it defines never reaches the vocabulary.",
     severity: "error",

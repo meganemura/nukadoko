@@ -90,26 +90,28 @@ export type FixtureFn = (deps: FixtureDeps, use: UseFn) => Promise<void> | void;
 
 /** `"scenario"` (default) rebuilds per scenario (or per `nuka do`
  * execution) and tears down at that scenario's own end; `"process"` builds
- * once — the first time any step in the whole `nuka run` invocation names
- * it (or its own dependents do) — and tears down once, after every
- * scenario has finished. Under `nuka do` the two collapse to the same
+ * once per process — the first time any step that process runs names it (or
+ * its own dependents do) — and tears down once, after every scenario that
+ * process ran has finished. Under `nuka do` the two collapse to the same
  * single-execution lifetime.
  *
- * `"worker"` is deliberately not a member: there is no parallel execution
- * yet, so it would be a synonym for `"process"` with none of the meaning a
- * name should only be spent on once that distinction actually exists.
+ * `"worker"` is deliberately not a member: `nuka run --concurrency <n>`
+ * runs scenarios in `n` worker processes, and a worker *is* a process, so
+ * `"process"` already names one worker. A separate `"worker"` scope would
+ * be a synonym with nothing left for it to mean on its own.
  *
- * `"process"` names one address space, not one `nuka run` invocation:
- * a fixture's own value is a plain JS object
- * and cannot cross into another process, so this scope can only ever mean
- * "once per process" no matter how many times anything is invoked against
- * it. Today one `nuka run` invocation is one process, so the two happen to
- * coincide, but that coincidence is not a guarantee this scope makes.
- * Something that has to happen exactly once in the world, no matter how
- * many processes ever run against it — seeding a database, running a
- * migration, starting a mock server that owns a port — does not belong in
- * a `"process"`-scope fixture: run more than one process and it happens
- * again. */
+ * `"process"` names one address space, not one `nuka run` invocation: a
+ * fixture's own value is a plain JS object and cannot cross into another
+ * process, so this scope can only ever mean "once per process" no matter
+ * how many times anything is invoked against it. At `--concurrency 1` one
+ * invocation is one process, so the two happen to coincide; at
+ * `--concurrency <n>` the same invocation is `n` processes, and this scope
+ * builds the fixture `n` times, once per worker, never once for the whole
+ * invocation. Something that has to happen exactly once in the world, no
+ * matter how many processes ever run against it — seeding a database,
+ * running a migration, starting a mock server that owns a port — does not
+ * belong in a `"process"`-scope fixture: run more than one process and it
+ * happens again. */
 export type FixtureScope = "scenario" | "process";
 
 export interface FixtureOptions {

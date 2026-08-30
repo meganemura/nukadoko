@@ -66,9 +66,23 @@ export interface FeatureParseError {
   readonly message: string;
 }
 
+/** One `@serial` tag found on a `Scenario:`/`Scenario Outline:` line, where
+ * it has no effect at all (`nuka run --concurrency <n>` reads `@serial`
+ * only off a `Feature:` line — docs/spec.md "Scenarios (the scripted
+ * path)"; every scenario in one file already shares one worker, so a
+ * Scenario-level copy of the tag can never mean anything different from
+ * having no tag there). `nuka check`'s own `serial-tag-on-scenario` finding
+ * is built straight from this shape (src/check/analyze.ts). */
+export interface SerialTagOnScenario {
+  readonly relativePath: string;
+  readonly line: number;
+  readonly name: string;
+}
+
 export interface LoadFeaturesResult {
   readonly features: readonly FeatureFile[];
   readonly parseErrors: readonly FeatureParseError[];
+  readonly serialTagOnScenario: readonly SerialTagOnScenario[];
 }
 
 /** Exported for src/run/select-pickles.ts's own directory-target walk —
@@ -212,6 +226,49 @@ export function attachStepLines(
   }));
 }
 
+const SERIAL_TAG = "@serial";
+
+/**
+ * Every `@serial` tag this document carries on a `Scenario:`/`Scenario
+ * Outline:` line directly (a Rule's own scenarios included), never one
+ * inherited from the `Feature:` line: a gherkin AST node's own `tags` array
+ * holds only what was written on that exact line, so this needs the
+ * document itself, not a pickle's `tags` (`@cucumber/gherkin`'s `compile()`
+ * merges Feature + Rule + Scenario tags onto every pickle, which is exactly
+ * what would make the two indistinguishable). Called where
+ * `parseFeatureSource`'s own `gherkinDocument` is still in hand, before a
+ * caller that has no use for it (`nuka run`'s own directory walk) drops it.
+ */
+export function findSerialTagOnScenario(
+  gherkinDocument: GherkinDocument,
+  relativePath: string,
+): readonly SerialTagOnScenario[] {
+  const feature = gherkinDocument.feature;
+  if (feature === undefined) {
+    return [];
+  }
+
+  const issues: SerialTagOnScenario[] = [];
+  const checkScenario = (scenario: Scenario): void => {
+    if (scenario.tags.some((tag) => tag.name === SERIAL_TAG)) {
+      issues.push({ relativePath, line: scenario.location.line, name: scenario.name });
+    }
+  };
+
+  for (const child of feature.children) {
+    if (child.scenario) {
+      checkScenario(child.scenario);
+    } else if (child.rule) {
+      for (const ruleChild of child.rule.children) {
+        if (ruleChild.scenario) {
+          checkScenario(ruleChild.scenario);
+        }
+      }
+    }
+  }
+  return issues;
+}
+
 export interface LoadFeaturesFromDirsResult extends LoadFeaturesResult {
   /** Which `additionalFeatureDirs` entries (never `featuresDir` — see this
    * file's own header) do not exist on disk, in the order they were given. */
@@ -231,6 +288,7 @@ export function loadFeaturesFromDirs(
   const features: FeatureFile[] = [];
   const parseErrors: FeatureParseError[] = [];
   const missingAdditionalDirs: string[] = [];
+  const serialTagOnScenario: SerialTagOnScenario[] = [];
   const seenAbsolutePaths = new Set<string>();
 
   const collect = (dir: string): void => {
@@ -247,11 +305,13 @@ export function loadFeaturesFromDirs(
         // against, so it never keeps the `gherkinDocument`
         // `parseFeatureSource` also returns the way `nuka run`'s own path
         // (src/run/select-pickles.ts onward to src/run/run-scenario.ts)
-        // does — it is only read here, through `attachStepLines`, to give
-        // each pickle step its own line before the document itself is
-        // dropped.
+        // does — it is only read here, through `attachStepLines` and
+        // `findSerialTagOnScenario`, to give each pickle step its own line
+        // and to catch a `@serial` tag in the one place it has no effect,
+        // before the document itself is dropped.
         const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
         features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
+        serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
       } catch (error) {
         parseErrors.push({
           relativePath,
@@ -274,5 +334,5 @@ export function loadFeaturesFromDirs(
     collect(dir);
   }
 
-  return { features, parseErrors, missingAdditionalDirs };
+  return { features, parseErrors, serialTagOnScenario, missingAdditionalDirs };
 }

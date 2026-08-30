@@ -66,8 +66,11 @@ import { createAtomicWriter } from "./writer.js";
 //
 // This module holds state across `beginScenario`/`emitStep`/`endScenario`
 // (`currentScopeUuid`, the step buffer, and the progress-snapshot state
-// below) — safe because `nuka run` executes scenarios strictly
-// sequentially, never two at once.
+// below) — safe because one `createAllureEmitter()` instance lives in one
+// process, and that process (the whole invocation at `--concurrency 1`, one
+// worker above it) executes its own scenarios strictly sequentially, never
+// two at once. `--concurrency <n>` gives every worker its own instance of
+// this module's own state, never one shared across them.
 //
 // **A bad attachment now costs the whole scenario's own Allure result, not
 // just one step's.** Every `writeAttachment` call for every step, every
@@ -498,9 +501,10 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   const runtime = new ReporterRuntime({ writer, categories, environmentInfo });
 
   // The state this module carries across `beginScenario`/`emitStep`/
-  // `endScenario`, safe only because `nuka run` runs one scenario at a
-  // time (this file's own header). All six are reset both before the
-  // first `beginScenario` and once `endScenario` has cleared them, so a
+  // `endScenario`, safe only because the process holding this one instance
+  // runs one scenario at a time (this file's own header). All six are
+  // reset both before the first `beginScenario` and once `endScenario` has
+  // cleared them, so a
   // stray `emitStep` call outside a scenario's own begin/end pair is a
   // no-op rather than attaching to the *previous* scenario's own scope or
   // buffer. `progressAnchorMs`/`progressCeilingMs`/`progressUuid` are

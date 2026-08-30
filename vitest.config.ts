@@ -77,6 +77,7 @@ export default defineConfig({
         "tests/**",
         "src/cli.ts",
         "src/live/daemon-entry.ts",
+        "src/run/run-worker-entry.ts",
         "src/config/define-config.ts",
       ],
       reporter: ["text-summary", "json-summary"],

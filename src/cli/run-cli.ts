@@ -121,6 +121,11 @@ interface RunArgs {
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
   quiet?: boolean;
+  /** yargs' own `type: "number"` accepts `NaN`/a fraction without
+   * complaint; run.ts's own setup phase is what actually refuses either
+   * (that file's own header explains why the check lives there and not
+   * here). */
+  concurrency?: number;
 }
 
 interface HarvestArgs {
@@ -456,6 +461,13 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe: "suppress the per-step/per-scenario progress lines (output locations and the summary still print)",
+        })
+        .option("concurrency", {
+          type: "number",
+          default: 1,
+          describe:
+            "run n worker processes at once, one whole feature file per worker (default 1; has nothing to do " +
+            "for a target naming one file, and drops back to 1 under --session)",
         }) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
@@ -465,6 +477,7 @@ export async function runCli(
         session: args.session ?? null,
         env: args.env ?? null,
         quiet: args.quiet ?? false,
+        concurrency: args.concurrency ?? 1,
         stdout,
         stderr,
       });

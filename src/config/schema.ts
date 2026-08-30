@@ -166,7 +166,7 @@ const fixtureDefinitionSchema: z.ZodType<FixtureDefinition> = z
     if (obj.scope !== undefined && obj.scope !== "scenario" && obj.scope !== "process") {
       ctx.addIssue(
         `fixture options.scope must be "scenario" or "process" (got ${JSON.stringify(obj.scope)}); "worker" does ` +
-          'not exist yet: there is no parallel execution for it to mean anything different from "process"',
+          'not exist: a nuka run --concurrency worker is a process, so "process" already names one worker',
       );
     }
     if (obj.timeout !== undefined && (typeof obj.timeout !== "number" || !(obj.timeout > 0))) {
