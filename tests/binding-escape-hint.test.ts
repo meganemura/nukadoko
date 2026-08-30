@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { escapeReservedChars } from "../src/binding/escape-hint.js";
 
 describe("escapeReservedChars", () => {
+  it("is idempotent for every string", () =>
+    hegel.test((tc) => {
+      const pattern = tc.draw(gs.text());
+      const escaped = escapeReservedChars(pattern);
+      expect(escapeReservedChars(escaped)).toBe(escaped);
+    }));
+
   it("escapes bare parentheses in literal text", () => {
     expect(escapeReservedChars("the amount (USD) is {string}")).toBe(
       "the amount \\(USD\\) is {string}",

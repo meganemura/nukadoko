@@ -80,6 +80,7 @@
   "devDependencies": {
     "@cucumber/cucumber": "13.2.0",
     "@cucumber/junit-xml-formatter": "0.14.0",
+    "@hegeldev/hegel": "0.4.5",
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@types/node": "26.1.1",

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { parseCaptureToken } from "../src/binding/capture.js";
 import { InvalidCaptureKeyError, UnnamedCaptureError, UnterminatedCaptureError } from "../src/binding/errors.js";
 import { stripCaptureNames } from "../src/binding/pattern.js";
@@ -37,6 +39,29 @@ describe("parseCaptureToken", () => {
 });
 
 describe("stripCaptureNames", () => {
+  it("only throws its declared pattern errors for arbitrary strings", () =>
+    hegel.test((tc) => {
+      const kind = tc.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+      const text = tc.draw(gs.text());
+      const pattern =
+        kind === 0
+          ? text
+          : kind === 1
+            ? `{${text.replaceAll(":", "")}}`
+            : kind === 2
+              ? `{1${text}:string}`
+              : `unterminated {${text}`;
+      try {
+        stripCaptureNames(pattern);
+      } catch (error) {
+        expect(
+          error instanceof UnnamedCaptureError ||
+            error instanceof InvalidCaptureKeyError ||
+            error instanceof UnterminatedCaptureError,
+        ).toBe(true);
+      }
+    }));
+
   it("strips a single named capture down to the plain cucumber-expressions form", () => {
     expect(stripCaptureNames("a project {name:string} exists")).toEqual({
       strippedPattern: "a project {string} exists",

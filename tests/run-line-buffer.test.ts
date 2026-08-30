@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { createLineBuffer } from "../src/run/line-buffer.js";
 
 // Responsibility: src/run/run-concurrent.ts reads a worker's own stdout as
@@ -9,7 +11,66 @@ import { createLineBuffer } from "../src/run/line-buffer.js";
 // splits a real pipe can actually produce, independent of any worker
 // process ever running.
 
+const unicodeLines = gs
+  .tuples(gs.arrays(gs.text()), gs.booleans())
+  .map(([lines, trailingNewline]) => `日本語🙂${lines.join("\n")}${trailingNewline ? "\n" : ""}`);
+
+function collectLines(input: string, cuts: readonly number[]): string[] {
+  const bytes = Buffer.from(input, "utf8");
+  const boundaries = [0, ...cuts, bytes.length].sort((a, b) => a - b);
+  const lines: string[] = [];
+  const buffer = createLineBuffer((line) => lines.push(line));
+  for (let i = 1; i < boundaries.length; i += 1) {
+    const start = boundaries[i - 1]!;
+    const end = boundaries[i]!;
+    if (start !== end) buffer.push(bytes.subarray(start, end));
+  }
+  buffer.flush();
+  return lines;
+}
+
 describe("createLineBuffer", () => {
+  it("produces the same lines for every byte split", () =>
+    hegel.test((tc) => {
+      const input = tc.draw(unicodeLines);
+      const byteLength = Buffer.byteLength(input, "utf8");
+      const cuts = tc.draw(
+        gs.arrays(gs.integers({ minValue: 1, maxValue: byteLength - 1 }), {
+          minSize: 1,
+          unique: true,
+        }),
+      );
+      expect(collectLines(input, cuts)).toEqual(collectLines(input, []));
+    }));
+
+  it("can reconstruct every input from the emitted lines", () =>
+    hegel.test((tc) => {
+      const input = tc.draw(unicodeLines);
+      const byteLength = Buffer.byteLength(input, "utf8");
+      const cuts = tc.draw(
+        gs.arrays(gs.integers({ minValue: 1, maxValue: byteLength - 1 }), {
+          minSize: 1,
+          unique: true,
+        }),
+      );
+      const lines = collectLines(input, cuts);
+      const reconstructed = `${lines.join("\n")}${input.endsWith("\n") ? "\n" : ""}`;
+      expect(reconstructed).toBe(input);
+    }));
+
+  it("never emits a newline inside a line", () =>
+    hegel.test((tc) => {
+      const input = tc.draw(unicodeLines);
+      const byteLength = Buffer.byteLength(input, "utf8");
+      const cuts = tc.draw(
+        gs.arrays(gs.integers({ minValue: 1, maxValue: byteLength - 1 }), {
+          minSize: 1,
+          unique: true,
+        }),
+      );
+      expect(collectLines(input, cuts).every((line) => !line.includes("\n"))).toBe(true);
+    }));
+
   it("emits nothing until a newline arrives", () => {
     const lines: string[] = [];
     const buffer = createLineBuffer((line) => lines.push(line));

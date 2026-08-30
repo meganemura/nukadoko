@@ -110,6 +110,14 @@ change against before writing it.
 
 ## Hard rules
 
+- **Use property-based tests with Hegel by default for new tests of pure
+  functions.** A hand-written example tests the case its author already
+  thought of. `src/run/line-buffer.ts` shipped a decoder that corrupted any
+  multi-byte character a chunk boundary cut through, and the line still
+  parsed as JSON, so nothing failed: the property that catches it says the
+  emitted lines do not depend on where the input was split, which is not a
+  sentence anyone writes as a single example. Existing tests stay as they
+  are; this is about what a new test should be.
 - Dependencies are exact-pinned. Adding, removing, or changing a version
   requires the user's explicit approval first (their policy: release must be
   7+ days old with no superseding security fix). Never loosen a pin.
