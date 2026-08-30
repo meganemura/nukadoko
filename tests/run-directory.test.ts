@@ -58,6 +58,79 @@ describe("nuka run <dir>", () => {
     expect(stderr.text()).toMatch(/scenario 2\/2 {2}features\/multi\/beta\.feature:3/);
   });
 
+  it("runs two feature file arguments in one invocation with one run_id", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/multi/alpha.feature", "features/multi/beta.feature"],
+      { rootDir, stdout, stderr: createCaptureSink() },
+    );
+
+    expect(exitCode).toBe(0);
+    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
+    expect(records.map((record) => record.feature)).toEqual([
+      "features/multi/alpha.feature",
+      "features/multi/beta.feature",
+    ]);
+    expect(new Set(records.map((record) => record.run_id)).size).toBe(1);
+  });
+
+  it("runs a repeated feature file argument only once", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/multi/alpha.feature", "features/multi/alpha.feature"],
+      { rootDir, stdout, stderr: createCaptureSink() },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(nonEmptyLines(stdout.text()).map((line) => JSON.parse(line))).toHaveLength(1);
+  });
+
+  it("runs a file included by both a directory and a file argument only once", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/multi", "features/multi/alpha.feature"],
+      { rootDir, stdout, stderr: createCaptureSink() },
+    );
+
+    expect(exitCode).toBe(0);
+    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
+    expect(records.map((record) => record.feature)).toEqual([
+      "features/multi/alpha.feature",
+      "features/multi/beta.feature",
+    ]);
+  });
+
+  it("sorts the combined feature set by repo-relative byte order, not argument order", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/multi/beta.feature", "features/multi/alpha.feature"],
+      { rootDir, stdout, stderr: createCaptureSink() },
+    );
+
+    expect(exitCode).toBe(0);
+    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
+    expect(records.map((record) => record.feature)).toEqual([
+      "features/multi/alpha.feature",
+      "features/multi/beta.feature",
+    ]);
+  });
+
+  it("mixes a line-selected feature with another feature file", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/line-mix/b.feature", "features/line-mix/a.feature:3"],
+      { rootDir, stdout, stderr: createCaptureSink() },
+    );
+
+    expect(exitCode).toBe(0);
+    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
+    expect(records.map((record) => record.feature)).toEqual([
+      "features/line-mix/a.feature",
+      "features/line-mix/b.feature",
+    ]);
+    expect(records.map((record) => record.scenario)).toEqual(["selected scenario", "other file scenario"]);
+  });
+
   it("walks a directory in deterministic byte order of the repo-relative path, not directory-then-file name order", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "features/order"], {
@@ -109,5 +182,20 @@ describe("nuka run <dir>", () => {
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toMatch(/:line/);
     expect(stderr.text()).toContain("features/:12");
+  });
+
+  it("names every scanned target when none contains a feature file", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/empty", "features/empty/"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).not.toBe(0);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain('"features/empty"');
+    expect(stderr.text()).toContain('"features/empty/"');
   });
 });

@@ -83,13 +83,52 @@ describe("nuka run --concurrency", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(0);
+    expect(exitCode, stderr.text()).toBe(0);
     const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
     expect(records).toHaveLength(2);
     expect(records.map((r) => r.feature).sort()).toEqual(["features/basic/a.feature", "features/basic/b.feature"]);
     expect(records.every((r) => r.status === "passed")).toBe(true);
     expect(new Set(records.map((r) => r.run_id)).size).toBe(1);
     expect(stderr.text()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
+  });
+
+  it("runs two file arguments at --concurrency 2 with one shared run_id", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(
+      [
+        "run",
+        "features/basic/b.feature",
+        "features/basic/a.feature",
+        "--concurrency",
+        "2",
+      ],
+      { rootDir, stdout, stderr },
+    );
+
+    expect(exitCode).toBe(0);
+    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
+    expect(records.map((record) => record.feature).sort()).toEqual([
+      "features/basic/a.feature",
+      "features/basic/b.feature",
+    ]);
+    expect(new Set(records.map((record) => record.run_id)).size).toBe(1);
+  });
+
+  it("names a failed scenario after the summary at --concurrency 2", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/failure/", "--concurrency", "2", "--quiet"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    const lines = nonEmptyLines(stderr.text());
+    const summaryIndex = lines.findIndex((line) => line.startsWith("2 scenarios: 1 passed, 1 failed"));
+    expect(summaryIndex).toBeGreaterThanOrEqual(0);
+    expect(lines[summaryIndex + 1]).toBe("failed  features/failure/a.feature:3  named concurrent failure");
   });
 
   it("a --concurrency 2 run's records can be accepted, one file at a time", async () => {

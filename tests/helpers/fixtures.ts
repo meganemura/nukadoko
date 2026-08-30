@@ -184,6 +184,10 @@ const SCENARIO_BOUNDARY_LINE = /^scenario \d+\/\d+  /;
 const STEP_PROGRESS_LINE = /^ {2}step \d+\/\d+  /;
 const OUTPUT_LOCATION_LINE = /^(?:steps|scenarios|allure|messages)\b/;
 const RUN_SUMMARY_LINE = /^\d+ scenarios?: \d+ passed, \d+ failed {2}\(/;
+// The per-failure lines the summary is followed by, one per scenario that
+// did not pass. Chrome of the same kind as the summary itself, so a test
+// asserting "nothing unexpected happened" should not see them either.
+const FAILED_SCENARIO_LINE = /^failed {2}\S+:\d+ {2}/;
 
 /** Strips `nuka run`'s own progress-log lines
  * out of captured stderr text, leaving any warning/error line a test still
@@ -198,7 +202,8 @@ export function stripRunProgressLines(text: string): string {
         !SCENARIO_BOUNDARY_LINE.test(line) &&
         !STEP_PROGRESS_LINE.test(line) &&
         !OUTPUT_LOCATION_LINE.test(line) &&
-        !RUN_SUMMARY_LINE.test(line),
+        !RUN_SUMMARY_LINE.test(line) &&
+        !FAILED_SCENARIO_LINE.test(line),
     )
     .join("\n");
 }

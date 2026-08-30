@@ -114,7 +114,7 @@ interface DoArgs {
 }
 
 interface RunArgs {
-  feature: string;
+  feature: string[];
   session?: string;
   env?: string;
   /** Suppresses the per-step/per-scenario progress lines — the
@@ -438,12 +438,13 @@ export async function runCli(
   };
 
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
-    command: "run <feature>",
+    command: "run <feature..>",
     describe: "execute scenarios from a feature file or a directory of them; step records + scenario records",
     builder: (y: Argv) =>
       y
         .positional("feature", {
           type: "string",
+          array: true,
           demandOption: true,
           describe:
             "feature file path, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
@@ -473,7 +474,7 @@ export async function runCli(
       if (argsFailed) return;
       exitCode = await runRun({
         rootDir,
-        featureArg: args.feature,
+        featureArgs: args.feature,
         session: args.session ?? null,
         env: args.env ?? null,
         quiet: args.quiet ?? false,

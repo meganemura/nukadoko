@@ -7,7 +7,7 @@ import type { NukadokoConfig } from "../config/schema.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
-import { writeScenarioBoundary } from "./progress-log.js";
+import { type FailedScenario, writeScenarioBoundary } from "./progress-log.js";
 import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "./line-buffer.js";
@@ -111,6 +111,7 @@ export interface RunConcurrentResult {
   readonly stepRecordsWritten: number;
   readonly allureEmitter: AllureEmitter | null;
   readonly messagesEmitter: MessagesEmitter | null;
+  readonly failedScenarios: readonly FailedScenario[];
 }
 
 /**
@@ -187,6 +188,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   let scenariosWritten = 0;
   let scenariosPassed = 0;
   let stepRecordsWritten = 0;
+  const failedScenarios: FailedScenario[] = [];
   // The one counter a worker cannot compute for itself (this file's own
   // header) — shared across every worker and every phase, so a scenario's
   // own boundary line always reads as "the Nth one to finish, out of the
@@ -209,6 +211,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       scenariosPassed += 1;
     } else {
       allPassed = false;
+      failedScenarios.push({ feature: record.feature, line: record.line, scenario: record.scenario });
     }
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
 
@@ -250,7 +253,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     const tmpDir = await mkdtemp(path.join(tmpdir(), "nukadoko-run-"));
     const featureListPath = path.join(tmpDir, "features.txt");
     try {
-      await writeFile(featureListPath, `${files.map((f) => f.relativePath).join("\n")}\n`, "utf8");
+      const featureTargets = files.flatMap((feature) =>
+        feature.selectedLines === null
+          ? [feature.relativePath]
+          : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
+      );
+      await writeFile(featureListPath, `${featureTargets.join("\n")}\n`, "utf8");
       const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath });
       const filesWithRecords = new Set<string>();
 
@@ -362,5 +370,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     allPassed = false;
   }
 
-  return { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, allureEmitter, messagesEmitter };
+  return {
+    allPassed,
+    scenariosWritten,
+    scenariosPassed,
+    stepRecordsWritten,
+    allureEmitter,
+    messagesEmitter,
+    failedScenarios,
+  };
 }

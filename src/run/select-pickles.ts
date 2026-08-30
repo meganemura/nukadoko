@@ -10,8 +10,9 @@ import {
   NoMatchingScenarioError,
 } from "./errors.js";
 
-// Responsibility: turn `nuka run`'s `<feature[:line]>|<dir>` argument into
-// the pickle(s) it selects — the one place that argument's syntax and
+// Responsibility: turn `nuka run`'s `<feature[:line]>|<dir>` arguments into
+// the pickles they select, as one sorted and deduplicated file set. This is
+// the one place that each argument's syntax and
 // gherkin's own pickle `location` are both known. A missing file, a parse
 // failure, `:line` matching zero pickles, a directory carrying `:line`, or
 // a directory with no `.feature` file anywhere under it are all setup
@@ -19,8 +20,7 @@ import {
 // run.ts turns them into stderr + exit 1 the same way it already does for
 // config/environment errors.
 //
-// The single positional also accepts a directory — still exactly one
-// positional, never a variadic list. `selectPickles` decides
+// Each positional also accepts a directory. `selectPickles` decides
 // file-vs-directory by `statSync`, tried first: a path that doesn't exist
 // at all falls straight through to the same `readFileSync`-then-catch that
 // already raises `FeatureFileNotFoundError` for a file target, so that
@@ -66,6 +66,9 @@ export interface SelectedFeature {
    * file's pickle borrow a different file's document). */
   readonly gherkinDocument: GherkinDocument;
   readonly pickles: readonly Pickle[];
+  /** `null` selects the full file. Otherwise, workers use these lines to
+   * preserve this file's partial selection. */
+  readonly selectedLines: readonly number[] | null;
 }
 
 export interface SelectedScenarios {
@@ -109,7 +112,7 @@ function parseOneFeatureFile(rootDir: string, relativePath: string): SelectedFea
     throw new FeatureParseFailedError(relativePath, error);
   }
 
-  return { relativePath, gherkinDocument, pickles };
+  return { relativePath, gherkinDocument, pickles, selectedLines: null };
 }
 
 /** Plain UTF-16 code-unit comparison (`<`/`>`), deliberately not
@@ -123,20 +126,11 @@ function compareByteOrder(a: string, b: string): number {
   return 0;
 }
 
-function selectDirectory(rootDir: string, relativePath: string): SelectedScenarios {
+function featureFilesInDirectory(rootDir: string, relativePath: string): string[] {
   const absolutePath = path.join(rootDir, relativePath);
-
-  const relativeFilePaths = walkFeatureFiles(absolutePath)
+  return walkFeatureFiles(absolutePath)
     .map((absoluteFilePath) => path.relative(rootDir, absoluteFilePath))
     .sort(compareByteOrder);
-
-  if (relativeFilePaths.length === 0) {
-    throw new NoFeatureFilesFoundError(relativePath, absolutePath);
-  }
-
-  const features = relativeFilePaths.map((filePath) => parseOneFeatureFile(rootDir, filePath));
-  const totalPickles = features.reduce((sum, feature) => sum + feature.pickles.length, 0);
-  return { features, totalPickles };
 }
 
 /**
@@ -151,40 +145,69 @@ function selectDirectory(rootDir: string, relativePath: string): SelectedScenari
  * (`statSync`) to one; every other case, including a path that doesn't
  * exist at all, is a single-file target.
  */
-export function selectPickles(rootDir: string, featureArg: string): SelectedScenarios {
-  const target = parseFeatureTarget(featureArg);
-  const absolutePath = path.join(rootDir, target.relativePath);
+export function selectPickles(rootDir: string, featureArgs: string | readonly string[]): SelectedScenarios {
+  const args = typeof featureArgs === "string" ? [featureArgs] : featureArgs;
+  const selections = new Map<string, Set<number> | null>();
+  const scannedDirectories: { readonly relativePath: string; readonly absolutePath: string }[] = [];
 
-  let isDirectory = false;
-  try {
-    isDirectory = statSync(absolutePath).isDirectory();
-  } catch {
-    // Doesn't exist (or isn't statable) at all — not this function's
-    // business to report: falls through to the file-target path below,
-    // whose own `readFileSync` catch is what actually raises
-    // `FeatureFileNotFoundError`.
-    isDirectory = false;
-  }
-
-  if (isDirectory) {
-    if (target.line !== null) {
-      throw new DirectoryTargetLineError(target.relativePath, target.line);
+  for (const featureArg of args) {
+    const target = parseFeatureTarget(featureArg);
+    const absolutePath = path.join(rootDir, target.relativePath);
+    const normalizedRelativePath = path.relative(rootDir, path.resolve(rootDir, target.relativePath));
+    let isDirectory = false;
+    try {
+      isDirectory = statSync(absolutePath).isDirectory();
+    } catch {
+      isDirectory = false;
     }
-    return selectDirectory(rootDir, target.relativePath);
+
+    if (isDirectory) {
+      if (target.line !== null) {
+        throw new DirectoryTargetLineError(target.relativePath, target.line);
+      }
+      scannedDirectories.push({ relativePath: target.relativePath, absolutePath });
+      for (const relativePath of featureFilesInDirectory(rootDir, target.relativePath)) {
+        selections.set(relativePath, null);
+      }
+      continue;
+    }
+
+    if (target.line === null) {
+      selections.set(normalizedRelativePath, null);
+      continue;
+    }
+
+    if (selections.get(normalizedRelativePath) === null && selections.has(normalizedRelativePath)) {
+      continue;
+    }
+    const lines = selections.get(normalizedRelativePath) ?? new Set<number>();
+    lines.add(target.line);
+    selections.set(normalizedRelativePath, lines);
   }
 
-  const feature = parseOneFeatureFile(rootDir, target.relativePath);
-
-  if (target.line === null) {
-    return { features: [feature], totalPickles: feature.pickles.length };
+  if (selections.size === 0) {
+    const relativePaths = scannedDirectories.map(({ relativePath }) => relativePath).join('" and "');
+    const absolutePaths = scannedDirectories.map(({ absolutePath }) => absolutePath).join(", ");
+    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths);
   }
 
-  const matching = feature.pickles.filter((pickle) => pickle.location?.line === target.line);
-  if (matching.length === 0) {
-    throw new NoMatchingScenarioError(target.relativePath, target.line);
-  }
-  return {
-    features: [{ ...feature, pickles: matching }],
-    totalPickles: feature.pickles.length,
-  };
+  let totalPickles = 0;
+  const features = [...selections.entries()]
+    .sort(([a], [b]) => compareByteOrder(a, b))
+    .map(([relativePath, selectedLines]) => {
+      const feature = parseOneFeatureFile(rootDir, relativePath);
+      totalPickles += feature.pickles.length;
+      if (selectedLines === null) {
+        return feature;
+      }
+      for (const line of selectedLines) {
+        if (!feature.pickles.some((pickle) => pickle.location?.line === line)) {
+          throw new NoMatchingScenarioError(relativePath, line);
+        }
+      }
+      const pickles = feature.pickles.filter((pickle) => selectedLines.has(pickle.location?.line ?? 0));
+      return { ...feature, pickles, selectedLines: [...selectedLines].sort((a, b) => a - b) };
+    });
+
+  return { features, totalPickles };
 }

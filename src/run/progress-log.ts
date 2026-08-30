@@ -120,6 +120,12 @@ export interface RunSummary {
   readonly durationMs: number;
 }
 
+export interface FailedScenario {
+  readonly feature: string;
+  readonly line: number;
+  readonly scenario: string;
+}
+
 function formatSummaryDuration(durationMs: number): string {
   const totalSeconds = Math.round(Math.max(0, durationMs) / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -146,4 +152,13 @@ export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +
       `${summary.failed} failed  (${formatSummaryDuration(summary.durationMs)})\n`,
   );
+}
+
+/** Names only the scenario records counted as failures by the summary.
+ * The caller retains these three display values instead of retaining every
+ * record from the run. */
+export function writeFailedScenarios(stderr: WritableSink, failures: readonly FailedScenario[]): void {
+  for (const failure of failures) {
+    stderr.write(`failed  ${failure.feature}:${failure.line}  ${failure.scenario}\n`);
+  }
 }

@@ -27,6 +27,8 @@ import { probeGitState } from "../run/probe-git.js";
 import { runConcurrentPickles } from "../run/run-concurrent.js";
 import {
   createStepProgressLogger,
+  type FailedScenario,
+  writeFailedScenarios,
   writeOutputLocations,
   writeRunSummary,
   writeScenarioBoundary,
@@ -281,8 +283,8 @@ import type { WritableSink } from "./writable-sink.js";
 
 export interface RunRunOptions {
   rootDir: string;
-  /** `<feature[:line]>`, e.g. "features/checkout.feature:12". */
-  featureArg: string;
+  /** One or more `<feature[:line]>` or directory targets. */
+  featureArgs: readonly string[];
   session: string | null;
   env: string | null;
   /** Suppresses the per-step and per-scenario progress lines — the
@@ -300,7 +302,7 @@ export interface RunRunOptions {
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, featureArg, session, env, quiet, concurrency, stdout, stderr } = options;
+  const { rootDir, featureArgs, session, env, quiet, concurrency, stdout, stderr } = options;
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -400,7 +402,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     let selected;
     try {
-      selected = selectPickles(rootDir, featureArg);
+      selected = selectPickles(rootDir, featureArgs);
     } catch (error) {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
@@ -422,9 +424,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // silent every time. `:line` on a directory target is refused in setup
     // (src/run/select-pickles.ts's `DirectoryTargetLineError`), so reaching
     // here with a non-null `line` always means a single-file target.
-    if (parseFeatureTarget(featureArg).line !== null) {
+    const lineTargets = featureArgs.filter((featureArg) => parseFeatureTarget(featureArg).line !== null);
+    if (lineTargets.length > 0) {
+      const selectionDescription =
+        featureArgs.length === 1
+          ? `${lineTargets[0]} selects ${flatPickles.length} of ${selected.totalPickles} scenarios.`
+          : `this run includes line targets ${lineTargets.join(", ")} and selects ${flatPickles.length} of ` +
+            `${selected.totalPickles} scenarios across all targets.`;
       stderr.write(
-        `Partial run: ${featureArg} selects ${flatPickles.length} of ${selected.totalPickles} scenarios. ` +
+        `Partial run: ${selectionDescription} ` +
           "A partial run cannot be accepted; `nuka accept` needs a run of the whole feature.\n",
       );
     }
@@ -627,7 +635,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     if (effectiveConcurrency > 1) {
-      const { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, messagesEmitter } =
+      const { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, messagesEmitter, failedScenarios } =
         await runConcurrentPickles({
           rootDir,
           config: runConfig,
@@ -682,6 +690,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
+      writeFailedScenarios(stderr, failedScenarios);
 
       return allPassed ? 0 : 1;
     }
@@ -703,6 +712,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       let scenariosWritten = 0;
       let scenariosPassed = 0;
       let stepRecordsWritten = 0;
+      const failedScenarios: FailedScenario[] = [];
 
       // Skipped entirely for a run that selects zero pickles: no pickle
       // selected means BeforeAll/AfterAll never run —
@@ -981,6 +991,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           messagesEmitter?.emitScenario({ record, pickle });
           if (record.status !== "passed") {
             allPassed = false;
+            failedScenarios.push({ feature: record.feature, line: record.line, scenario: record.scenario });
           }
         }
       }
@@ -1077,6 +1088,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
+      writeFailedScenarios(stderr, failedScenarios);
 
       return allPassed ? 0 : 1;
     } finally {

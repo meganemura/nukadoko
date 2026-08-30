@@ -53,6 +53,9 @@ describe("nuka run: from's scenario-order guard", () => {
     expect(record.steps[0].error.message).toContain("archive-project");
     expect(record.steps[0].error.message).toContain("create-project");
     expect(record.steps[0].error.message).toContain("never bound anywhere in this scenario");
+    const lines = nonEmptyLines(stderr.text());
+    const summaryIndex = lines.findIndex((line) => line.startsWith("1 scenario: 0 passed, 1 failed"));
+    expect(lines[summaryIndex + 1]).toBe("failed  features/chain.feature:11  the upstream hasn't run yet");
   });
 
   it("fails the scenario before any step runs when the upstream is bound only after this line", async () => {

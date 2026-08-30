@@ -26,6 +26,10 @@ function scenarioBoundaryLines(stderrText: string): string[] {
   return nonEmptyLines(stderrText).filter((line) => /^scenario \d+\/\d+ {2}/.test(line));
 }
 
+function failedScenarioLines(stderrText: string): string[] {
+  return nonEmptyLines(stderrText).filter((line) => line.startsWith("failed  "));
+}
+
 describe("nuka run: progress output", () => {
   let rootDir: string;
 
@@ -128,6 +132,33 @@ describe("nuka run: progress output", () => {
     expect(text).toContain("allure");
     expect(text).toContain("messages");
     expect(text).toMatch(/1 scenario: 1 passed, 0 failed {2}\(/);
+  });
+
+  it("names each failed scenario after the summary, including under --quiet", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/failing.feature", "--quiet"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    const lines = nonEmptyLines(stderr.text());
+    const summaryIndex = lines.findIndex((line) => line.startsWith("1 scenario: 0 passed, 1 failed"));
+    expect(summaryIndex).toBeGreaterThanOrEqual(0);
+    expect(lines[summaryIndex + 1]).toBe(
+      "failed  features/failing.feature:3  an operation fails partway through",
+    );
+  });
+
+  it("writes no failed scenario line when every scenario passes", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(failedScenarioLines(stderr.text())).toHaveLength(0);
   });
 
   it("output-location lines name only what this run actually wrote: none for a run that selects zero pickles", async () => {
