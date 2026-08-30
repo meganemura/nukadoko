@@ -1,8 +1,10 @@
 // Responsibility: build the escaped variant of an already-name-stripped
 // pattern (src/binding/pattern.ts's `strippedPattern`, equivalently a
 // CucumberExpression's own `.source`) that powers `nuka check`'s
-// undefined-step near-miss hint (src/check/feature-check.ts) alone — never
-// consulted by the real matching path (src/run/match-step.ts is untouched).
+// undefined-step near-miss hint (src/check/feature-check.ts). This helper is
+// never consulted by the real matching path. The adjacent quote hint gets
+// literal boundaries from pattern.ts's canonical scan, which preserves that
+// scan's matching outputs.
 // docs/spec.md "Typed steps": bare `(` `)` mean optional text and bare `/`
 // means alternation to cucumber-expressions, so prose that meant them
 // literally has to escape them; this module answers "would escaping this

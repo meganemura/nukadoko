@@ -166,7 +166,7 @@ describe("nuka check", () => {
     const undefinedIssues = report.errors.filter(
       (issue: { code: string }) => issue.code === "undefined-step",
     );
-    expect(undefinedIssues).toHaveLength(2);
+    expect(undefinedIssues).toHaveLength(7);
 
     const hinted = undefinedIssues.find((issue: { message: string }) =>
       issue.message.includes('the amount (USD) is "100"'),
@@ -181,6 +181,39 @@ describe("nuka check", () => {
     );
     expect(unrelated).toBeDefined();
     expect(unrelated.message).not.toContain("hint:");
+
+    const unquoted = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes('the probe is green"'),
+    );
+    expect(unquoted).toBeDefined();
+    expect(unquoted.message).toContain('step "amount-step" exists at this position with pattern "the probe is {amount:string}"');
+    expect(unquoted.message).toContain("{amount:string}");
+    expect(unquoted.message).toContain("quoted value");
+    expect(unquoted.message).toContain('Given the probe is "green"');
+
+    const spaces = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes('the probe state is not"'),
+    );
+    expect(spaces).toBeDefined();
+    expect(spaces.message).toContain('Given the probe state "is not"');
+
+    const ambiguous = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes('the ambiguous probe is green"'),
+    );
+    expect(ambiguous).toBeDefined();
+    expect(ambiguous.message).not.toContain("hint:");
+
+    const extraText = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes('unrelated the probe is green"'),
+    );
+    expect(extraText).toBeDefined();
+    expect(extraText.message).not.toContain("hint:");
+
+    const escapedLiteral = undefinedIssues.find((issue: { message: string }) =>
+      issue.message.includes('literal {string} green"'),
+    );
+    expect(escapedLiteral).toBeDefined();
+    expect(escapedLiteral.message).toContain('Given literal {string} "green"');
 
     expect(exitCode).toBe(1);
   });

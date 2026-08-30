@@ -8,7 +8,14 @@ import { defineStep } from "../../nukadoko-shim.js";
 // text that actually contains "(USD)" — the fineract/e-petitions near-miss
 // this fixture reproduces for the escape-hint diagnostic.
 export default defineStep({
-  pattern: "the amount (USD) is {amount:string}",
+  patterns: [
+    "the amount (USD) is {amount:string}",
+    "the probe is {amount:string}",
+    "the probe state {amount:string}",
+    "the ambiguous probe is {amount:string}",
+    "the ambiguous probe {amount:string}",
+    "literal \\{string\\} {amount:string}",
+  ],
   description: "d",
   args: z.object({ amount: z.string() }),
   returns: z.object({}),

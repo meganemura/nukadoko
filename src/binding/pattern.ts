@@ -19,10 +19,22 @@ export type { Capture };
 // Argument.build() (cucumber-expressions) returns matched values in — what
 // lets `nuka run` zip captures back onto keys later without this module
 // knowing anything about matching.
+//
+// The same walk also owns literal-fragment boundaries for diagnostics. This
+// keeps escaped braces out of parameter-token detection without making a
+// diagnostic implement a second cucumber-expression scanner. The walk adds
+// literal recording to the same branches that build `strippedPattern` and
+// `captures`. `stripCaptureNames` projects those two unchanged matching
+// outputs. Literal fragments only remove the escape marker, and the matcher
+// still decides whether a diagnostic candidate is valid.
 
 export interface StrippedPattern {
   readonly strippedPattern: string;
   readonly captures: readonly Capture[];
+}
+
+interface ScannedPattern extends StrippedPattern {
+  readonly literalFragments: readonly string[];
 }
 
 /**
@@ -32,15 +44,19 @@ export interface StrippedPattern {
  *   identifier.
  * @throws {UnterminatedCaptureError} an unescaped `{` has no matching `}`.
  */
-export function stripCaptureNames(pattern: string): StrippedPattern {
+function scanPattern(pattern: string): ScannedPattern {
   let strippedPattern = "";
   const captures: Capture[] = [];
+  const literalFragments: string[] = [];
+  let literal = "";
 
   let i = 0;
   while (i < pattern.length) {
     const ch = pattern[i];
     if (ch === "\\" && i + 1 < pattern.length) {
-      strippedPattern += pattern.slice(i, i + 2);
+      const escaped = pattern.slice(i, i + 2);
+      strippedPattern += escaped;
+      literal += pattern[i + 1]!;
       i += 2;
       continue;
     }
@@ -51,13 +67,27 @@ export function stripCaptureNames(pattern: string): StrippedPattern {
       }
       const capture = parseCaptureToken(pattern.slice(i + 1, end));
       captures.push(capture);
+      literalFragments.push(literal);
+      literal = "";
       strippedPattern += `{${capture.type}}`;
       i = end + 1;
       continue;
     }
     strippedPattern += ch;
+    literal += ch;
     i += 1;
   }
 
+  literalFragments.push(literal);
+  return { strippedPattern, captures, literalFragments };
+}
+
+export function stripCaptureNames(pattern: string): StrippedPattern {
+  const { strippedPattern, captures } = scanPattern(pattern);
   return { strippedPattern, captures };
+}
+
+/** Supplies the quote-hint diagnostic with boundaries from the canonical pattern scan. */
+export function patternLiteralFragments(pattern: string): readonly string[] {
+  return scanPattern(pattern).literalFragments;
 }

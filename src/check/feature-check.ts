@@ -1,6 +1,7 @@
 import { CucumberExpression } from "@cucumber/cucumber-expressions";
 import { PickleStepType } from "@cucumber/messages";
 import { escapeReservedChars } from "../binding/escape-hint.js";
+import { findQuoteHint } from "../binding/quote-hint.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
@@ -15,7 +16,7 @@ import { checkUnfillableKeys } from "./unfillable-key.js";
 // against the vocabulary's patterns (already built once by
 // src/check/binding-check.ts, reused here rather than re-parsed) and produce
 // this module's per-feature check items: undefined steps (with a
-// scaffold hint, plus a near-miss escape hint — see findEscapeHint below),
+// scaffold hint, plus the escape and missing-quote near-miss hints below),
 // ambiguous matches (2+ steps matching one pickle step), Then-position steps
 // whose kind can't be statically cleared, and a table/docstring's "exactly
 // one unconsumed required key" rule. Deliberately knows nothing about *why*
@@ -130,6 +131,19 @@ function findEscapeHint(
   return undefined;
 }
 
+function gherkinKeyword(type: PickleStepType | undefined): string {
+  if (type === PickleStepType.CONTEXT) {
+    return "Given";
+  }
+  if (type === PickleStepType.ACTION) {
+    return "When";
+  }
+  if (type === PickleStepType.OUTCOME) {
+    return "Then";
+  }
+  return "*";
+}
+
 export function matchPickleStepText(text: string, patterns: readonly CheckedPattern[]): MatchResult {
   const byStep = new Map<string, CheckedPattern>();
   for (const candidate of patterns) {
@@ -180,8 +194,11 @@ export function checkFeatures(
           }
           reportedUndefinedText.add(step.text);
           const escapeHint = findEscapeHint(step.text, patterns, customTypes);
+          const quoteHint = findQuoteHint(step.text, patterns);
           const hintSuffix = escapeHint
             ? `; hint: would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation`
+            : quoteHint
+              ? `; hint: step "${quoteHint.stepName}" exists at this position with pattern "${quoteHint.pattern}"; a {...:string} parameter takes a quoted value; rewrite as: ${gherkinKeyword(step.type)} ${quoteHint.rewrittenText}`
             : "";
           errors.push({
             code: "undefined-step",
