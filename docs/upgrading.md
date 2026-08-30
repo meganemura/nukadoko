@@ -33,10 +33,10 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## Unreleased
+## 0.9.0 to 0.10.0
 
 `nuka run` writes more on stderr, and `nuka tend` reports one new note.
-Why is in [CHANGELOG.md](../CHANGELOG.md) under `## Unreleased`.
+Why is in [CHANGELOG.md](../CHANGELOG.md) under `## 0.10.0`.
 
 - **`nuka run` names each failed scenario on stderr, after the summary
   line.** One line per scenario that did not pass, carrying its feature

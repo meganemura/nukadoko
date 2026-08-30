@@ -27,10 +27,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
-## Unreleased
+## 0.9.0 から 0.10.0 へ
 
 `nuka run` が stderr に書くものが増え、`nuka tend` は新しい所見を 1 つ報告します。
-理由は [CHANGELOG.md](../CHANGELOG.md) の `## Unreleased` にあります。
+理由は [CHANGELOG.md](../CHANGELOG.md) の `## 0.10.0` にあります。
 
 - **`nuka run` は、サマリ行の後ろで、失敗した scenario を名指します。**
   通らなかった scenario 1 つにつき 1 行で、feature のパス、行、名前を出します。
