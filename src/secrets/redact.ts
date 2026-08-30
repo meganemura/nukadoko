@@ -19,7 +19,10 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //     part of a longer one that happens to contain it as a substring;
 //   - when two keys share the same value, the alphabetically-first key name
 //     wins, so which name a step record shows is deterministic rather than
-//     dependent on iteration order.
+//     dependent on iteration order;
+//   - object keys are redacted exactly like string values are, and if two
+//     distinct keys end up identical after redaction, redact throws rather
+//     than picking one and dropping the other's subtree (see redactInner).
 
 interface Replacement {
   readonly value: string;
@@ -66,8 +69,29 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
   }
   if (value !== null && typeof value === "object") {
     const result: Record<string, unknown> = {};
+    // A key can carry a secret exactly as a value can (a suffix built from
+    // request params, an id copied from a header), so it goes through the
+    // same replacements. That reopens a risk a value-only walk never had:
+    // two distinct original keys can redact to the identical string (e.g.
+    // one key already spells out `{{secret.TOKEN}}` verbatim as ordinary
+    // data, while a sibling key holds the raw secret value that token
+    // stands for — after redaction both keys read `{{secret.TOKEN}}`).
+    // Plain assignment would let the second key silently overwrite the
+    // first, discarding a whole subtree with no trace it ever existed,
+    // which is the one outcome "nothing breaks silently" rules out.
+    // Throwing surfaces the collision immediately instead of shipping a
+    // step record quietly missing data.
+    const originalKeyOf = new Map<string, string>();
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      result[key] = redactInner(val, replacements);
+      const redactedKey = applyReplacements(key, replacements);
+      const priorKey = originalKeyOf.get(redactedKey);
+      if (priorKey !== undefined) {
+        throw new Error(
+          `redact: keys ${JSON.stringify(priorKey)} and ${JSON.stringify(key)} both redact to ${JSON.stringify(redactedKey)}`,
+        );
+      }
+      originalKeyOf.set(redactedKey, key);
+      result[redactedKey] = redactInner(val, replacements);
     }
     return result;
   }

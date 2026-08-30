@@ -91,6 +91,55 @@ describe("redact", () => {
   it("redacts a bare string value directly (not just object/array containers)", () => {
     expect(redact("sekrit-value", secrets)).toBe("{{secret.TOKEN}}");
   });
+
+  it("redacts a secret found inside an object key, not just its value", () => {
+    const input = { ["prefix-sekrit-value-suffix"]: 1 };
+    expect(redact(input, secrets)).toEqual({ "prefix-{{secret.TOKEN}}-suffix": 1 });
+  });
+
+  it("redacts a key-borne secret nested inside an array of objects", () => {
+    const input = [{ ["k-sekrit-value"]: 1 }, { plain: 2 }];
+    expect(redact(input, secrets)).toEqual([{ "k-{{secret.TOKEN}}": 1 }, { plain: 2 }]);
+  });
+
+  it("redacts a key-borne secret nested inside an object inside an object", () => {
+    const input = { outer: { ["sekrit-value-inner"]: "ok" } };
+    expect(redact(input, secrets)).toEqual({ outer: { "{{secret.TOKEN}}-inner": "ok" } });
+  });
+
+  it("throws instead of silently dropping a key when two keys collide after redaction", () => {
+    // Two SecretSet entries can share a name while differing in value (the
+    // executor doesn't dedupe by name before calling redact). Both then
+    // resolve to the identical `{{secret.NAME}}` token, so two distinct
+    // keys carrying those two different secrets collapse to one string.
+    // Picking a winner and dropping the other key's subtree would violate
+    // this tool's "nothing breaks silently" rule and hand back a step
+    // record silently missing data. Failing loudly surfaces the malformed
+    // SecretSet instead.
+    const colliding: SecretEntry[] = [
+      { name: "SAME", value: "aaaa" },
+      { name: "SAME", value: "bbbb" },
+    ];
+    const input = { aaaa: 1, bbbb: 2 };
+    expect(() => redact(input, colliding)).toThrow(
+      'redact: keys "aaaa" and "bbbb" both redact to "{{secret.SAME}}"',
+    );
+  });
+
+  it("throws when a key already spelling out a secret's token collides with a sibling key holding the raw secret", () => {
+    // Reachable from a perfectly ordinary, single-entry SecretSet (unlike
+    // the test above, no duplicate name is involved): the collision comes
+    // from the *data*, not from a malformed SecretSet. One key already
+    // spells `{{secret.TOKEN}}` as plain data (a fixture value, a template
+    // string captured before its own substitution ran); a sibling key
+    // holds the raw secret. Redacting the second key produces the exact
+    // string the first key already was.
+    const secrets: SecretEntry[] = [{ name: "TOKEN", value: "sekrit-value" }];
+    const input = { "{{secret.TOKEN}}": "already a token", "sekrit-value": "raw" };
+    expect(() => redact(input, secrets)).toThrow(
+      'redact: keys "{{secret.TOKEN}}" and "sekrit-value" both redact to "{{secret.TOKEN}}"',
+    );
+  });
 });
 
 // Property-based tests below. `redact`'s own contract (see redact.ts) never
@@ -100,6 +149,17 @@ describe("redact", () => {
 // sub-threshold ones, because a short secret sharing a value with (or being
 // a substring of) an eligible one is exactly the interaction these
 // properties exist to probe (see the substring generator note below).
+//
+// The generator also plants secrets inside object keys, not just values
+// (see `secretKey` below) — a key is now an ordinary redaction target, so a
+// property claiming to cover "anywhere in the structure" has to cover keys
+// too, or it is quietly scoped to the half of the tree redact.ts no longer
+// treats specially. Once a key can carry a secret, two distinct original
+// keys can redact to the same string, which is exactly the case
+// redact.ts's redactInner throws on rather than silently dropping a
+// subtree (see redact.ts and the "throws when..." unit tests above) — a
+// case the properties below treat as an expected, already-covered outcome
+// and skip, not a violation to report (see `redactOrSkip`).
 
 interface NestedFixture {
   readonly structure: unknown;
@@ -155,8 +215,22 @@ function buildNested(tc: TestCase, secretValues: readonly string[], remainingDep
     return branches;
   }
   const result: Record<string, unknown> = { spine };
-  for (let i = 0; i < branchCount; i += 1) result[`k${i}`] = leaf(tc, secretValues);
+  for (let i = 0; i < branchCount; i += 1) {
+    const key = tc.draw(gs.booleans()) ? secretKey(tc, i, secretValues) : `k${i}`;
+    result[key] = leaf(tc, secretValues);
+  }
   return result;
+}
+
+// A key with a secret embedded in it, for the property tests that need
+// keys to change under redaction. The `k${index}` prefix is fixed text
+// that no drawn secret value can plausibly consume, so it keeps this key
+// distinct from its `k${index}` sibling (the plain-key alternative at the
+// same loop position) and from the fixed "spine" key — any key collision
+// the property tests below hit is one redact.ts produced, not one this
+// generator introduced by drawing the same original key twice.
+function secretKey(tc: TestCase, index: number, secretValues: readonly string[]): string {
+  return `k${index}-${embed(tc, tc.draw(gs.sampledFrom(secretValues)))}`;
 }
 
 const nestedFixtureGen = gs.composite<NestedFixture>((tc) => {
@@ -193,11 +267,17 @@ const nestedFixtureGen = gs.composite<NestedFixture>((tc) => {
   return { structure, secrets, eligible };
 });
 
+// Walks both keys and values: a key is redacted exactly like a value is
+// (redact.ts), so "no secret survives anywhere" has to check the key
+// strings too, not just what Object.values sees.
 function collectStrings(node: unknown): string[] {
   if (typeof node === "string") return [node];
   if (Array.isArray(node)) return node.flatMap(collectStrings);
   if (node !== null && typeof node === "object") {
-    return Object.values(node as Record<string, unknown>).flatMap(collectStrings);
+    return Object.entries(node as Record<string, unknown>).flatMap(([key, value]) => [
+      key,
+      ...collectStrings(value),
+    ]);
   }
   return [];
 }
@@ -211,7 +291,30 @@ function shapeOf(node: unknown): Shape {
   return typeof node as Shape;
 }
 
-function assertSameShape(original: unknown, redacted: unknown): void {
+// What "structure preserved" means now that a key is an ordinary
+// redaction target: key *spelling* is exactly the thing allowed to
+// change, so checking that original and redacted key sets are equal (the
+// old assertion here) would now fail on the one case this test exists to
+// exercise. What redact() still promises, and what this checks instead:
+//   - every node's kind (object/array/string/number/boolean/null) is
+//     unchanged at every corresponding position — redact never turns a
+//     container into a leaf or a string into a number;
+//   - an array's length and per-index order are unchanged — redact
+//     rewrites string content, it never reorders or drops an element;
+//   - an object's key *count* is unchanged — redact renames a key, it
+//     never adds or drops one (short of the collision it throws on
+//     instead of silently dropping a subtree, which is the caller's own
+//     responsibility to avoid and is covered by the unit tests above, not
+//     by this property);
+//   - every original key maps forward to a key present in the redacted
+//     object, and that expected key is exactly `redactString(key,
+//     secrets)` — the same transform redact.ts applies to string values,
+//     applied to the key text. Using the already-tested `redactString` as
+//     the oracle here, rather than re-deriving the expected key by
+//     re-implementing redactInner's own logic, pins down *what* the key
+//     correspondence has to be without coupling this test to *how*
+//     redactInner walks the tree to get there.
+function assertSameShape(original: unknown, redacted: unknown, secrets: SecretEntry[]): void {
   const originalShape = shapeOf(original);
   const redactedShape = shapeOf(redacted);
   if (originalShape !== redactedShape) {
@@ -223,16 +326,47 @@ function assertSameShape(original: unknown, redacted: unknown): void {
     if (originalArray.length !== redactedArray.length) {
       throw new Error(`array length changed: ${originalArray.length} -> ${redactedArray.length}`);
     }
-    originalArray.forEach((item, index) => assertSameShape(item, redactedArray[index]));
+    originalArray.forEach((item, index) => assertSameShape(item, redactedArray[index], secrets));
   } else if (originalShape === "object") {
-    const originalKeys = Object.keys(original as Record<string, unknown>).sort();
-    const redactedKeys = Object.keys(redacted as Record<string, unknown>).sort();
-    if (originalKeys.join(" ") !== redactedKeys.join(" ")) {
-      throw new Error(`key set changed: ${JSON.stringify(originalKeys)} -> ${JSON.stringify(redactedKeys)}`);
+    const originalObject = original as Record<string, unknown>;
+    const redactedObject = redacted as Record<string, unknown>;
+    const originalKeys = Object.keys(originalObject);
+    const redactedKeyCount = Object.keys(redactedObject).length;
+    if (originalKeys.length !== redactedKeyCount) {
+      throw new Error(`key count changed: ${originalKeys.length} -> ${redactedKeyCount}`);
     }
     for (const key of originalKeys) {
-      assertSameShape((original as Record<string, unknown>)[key], (redacted as Record<string, unknown>)[key]);
+      const expectedKey = redactString(key, secrets);
+      if (!Object.prototype.hasOwnProperty.call(redactedObject, expectedKey)) {
+        throw new Error(
+          `key ${JSON.stringify(key)} redacts to ${JSON.stringify(expectedKey)}, missing from the result`,
+        );
+      }
+      assertSameShape(originalObject[key], redactedObject[expectedKey], secrets);
     }
+  }
+}
+
+const KEY_COLLISION_PREFIX = "redact: keys ";
+
+// Now that a secret can land inside a key (see `secretKey`), two distinct
+// original keys can redact to the same string — the case redact.ts throws
+// on by design instead of silently dropping a subtree (see redact.ts's
+// redactInner and the "throws when..." unit test above). That throw is
+// correct behavior, not a violation for the properties below to report,
+// so a case that hits it is skipped: what it looks like is already pinned
+// down by its own unit tests, not by these properties.
+function redactOrSkip(
+  structure: unknown,
+  secrets: SecretEntry[],
+): { skipped: true } | { skipped: false; value: unknown } {
+  try {
+    return { skipped: false, value: redact(structure, secrets) };
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith(KEY_COLLISION_PREFIX)) {
+      return { skipped: true };
+    }
+    throw err;
   }
 }
 
@@ -240,8 +374,9 @@ describe("redact property-based", () => {
   it("leaves no eligible secret anywhere in the redacted result, at any depth", () => {
     hegel.test((tc) => {
       const { structure, secrets, eligible } = tc.draw(nestedFixtureGen);
-      const result = redact(structure, secrets);
-      const strings = collectStrings(result);
+      const outcome = redactOrSkip(structure, secrets);
+      if (outcome.skipped) return;
+      const strings = collectStrings(outcome.value);
       for (const { name, value } of eligible) {
         if (strings.some((candidate) => candidate.includes(value))) {
           throw new Error(`secret ${name} (${JSON.stringify(value)}) survived redaction`);
@@ -253,9 +388,11 @@ describe("redact property-based", () => {
   it("is idempotent: redacting an already-redacted value changes nothing further", () => {
     hegel.test((tc) => {
       const { structure, secrets } = tc.draw(nestedFixtureGen);
-      const once = redact(structure, secrets);
-      const twice = redact(once, secrets);
-      expect(twice).toEqual(once);
+      const once = redactOrSkip(structure, secrets);
+      if (!once.skipped) {
+        const twice = redact(once.value, secrets);
+        expect(twice).toEqual(once.value);
+      }
 
       const s = tc.draw(gs.text());
       const onceStr = redactString(s, secrets);
@@ -264,11 +401,12 @@ describe("redact property-based", () => {
     });
   });
 
-  it("preserves structure: key sets, array lengths, and leaf types", () => {
+  it("preserves structure: node kind, array order, and each key's own redaction", () => {
     hegel.test((tc) => {
       const { structure, secrets } = tc.draw(nestedFixtureGen);
-      const result = redact(structure, secrets);
-      assertSameShape(structure, result);
+      const outcome = redactOrSkip(structure, secrets);
+      if (outcome.skipped) return;
+      assertSameShape(structure, outcome.value, secrets);
     });
   });
 });
