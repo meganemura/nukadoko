@@ -395,10 +395,25 @@ edit the feature, or delete a step it cites, and the record still claims
 a green run it can no longer support. Nothing about that stops a future
 run, so `nuka check` never mentions it. `nuka tend` finds it while the
 feature stays outside `featuresDir` (a stale record is its only finding
-that exits non-zero); run it periodically rather than in this loop, since
-it answers whether the vocabulary and its records are healthy, not
-whether this run can proceed. The fix is to run and accept the feature
-again, or to undo what invalidated it, never to edit the record.
+that exits non-zero). It answers whether the vocabulary and its records
+are healthy, not whether this run can proceed, so it never gates the loop
+above. The fix is to run and accept the feature again, or to undo what
+invalidated it, never to edit the record.
+
+**Run it once after `nuka accept` succeeds, when you report the
+sign-off.** That is the moment where nothing depends on the answer: the
+work is done, the record is written, and the user is reading a result
+rather than waiting on one. "Periodically" names no moment an agent can
+recognize, so a skill that says only that gets `nuka tend` run never.
+
+Report what it found and stop there. Each finding is about something the
+user chose, so acting on one without being asked replaces their choice
+with yours. Two shapes come up often enough to name: a step nothing binds
+any more is usually a deletion someone forgot to finish, and a fixture
+nothing names is usually setup that outlived the scenario that needed it.
+Say which findings you would act on and what each would change, then wait.
+Nothing here is urgent; a finding that has waited a week can wait for an
+answer.
 
 The rest of what `nuka tend` reports: `references/maintenance.md`.
 
