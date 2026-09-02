@@ -179,7 +179,10 @@ function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
     message:
       `${node.count} scenarios begin with the same ${node.texts.length} ` +
       `step${node.texts.length === 1 ? "" : "s"}, which took ${seconds} seconds across them, ` +
-      `${percentage}% of this run's summed scenario time. The shared steps: ${steps}.`,
+      `${percentage}% of this run's summed scenario time. The shared steps: ${steps}. ` +
+      `The place to lift a shared opening into is a "process"-scope fixture (nukadoko.config.ts fixtures); ` +
+      `whether these scenarios can share what it builds depends on which of them write to that state, ` +
+      `which this tool cannot see.`,
   };
 }
 
