@@ -285,6 +285,22 @@ import type { WritableSink } from "./writable-sink.js";
 // run — the overwhelming majority of invocations, and the default — always
 // takes, completely unchanged by `--concurrency` existing at all.
 
+/** The `nuka check` codes that mean a step's pattern did not build at all
+ * (src/check/binding-check.ts's own classification of a pattern error, plus
+ * an invalid `config.parameterTypes` entry, which leaves no registry to
+ * build any pattern against). A pattern that did not build matches nothing,
+ * which is what the pre-run warning below is about; every other binding
+ * issue leaves a pattern that still matches. */
+const UNBUILDABLE_PATTERN_CODES: ReadonlySet<string> = new Set([
+  "unnamed-capture",
+  "invalid-capture-key",
+  "unterminated-capture",
+  "unknown-parameter-type",
+  "pattern-syntax-error",
+  "pattern-error",
+  "parameter-type-invalid",
+]);
+
 export interface RunRunOptions {
   rootDir: string;
   /** One or more `<feature[:line]>` or directory targets. */
@@ -489,8 +505,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // scenario uses, and refusing the whole run for it would block every
     // other feature over a mistake check already names. The parent alone
     // says it: a worker rebuilds the same patterns for itself but its own
-    // notes would repeat this line once per worker.
+    // notes would repeat this line once per worker. Only the issues that
+    // mean a pattern did not build are said here: `checkBindings` also
+    // reports two patterns that normalize to the same text
+    // (`duplicate-pattern`), and both of those build, so a line meant for
+    // them reports as ambiguous and names both steps on its own.
     for (const issue of bindingIssues) {
+      if (!UNBUILDABLE_PATTERN_CODES.has(issue.code)) continue;
       stderr.write(
         `Warning: ${issue.message} Every line meant for this step reports as undefined; ` +
           `nuka check names this as ${issue.code}.\n`,
