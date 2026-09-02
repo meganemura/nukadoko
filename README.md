@@ -656,6 +656,11 @@ the more expensive gate. The split above therefore stays the same: run
 `nuka check` on every PR, and run `nuka run` on merge, deploy, or a nightly
 build to keep a growing suite's PR gate fast.
 
+`nuka run --repeat <n>` runs every selected scenario `n` times in one
+invocation, for a failure that reproduces one time in several. Each
+execution is its own record under one run id, and a scenario that failed
+at least once is tallied after the summary, `<passed> of <n> passed`.
+
 ## What this does not do
 
 - **Step records are not unforgeable.** An agent with shell access can write

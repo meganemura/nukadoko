@@ -51,6 +51,13 @@ goes unchecked.
    while iterating, but the run this step ends on must cover the whole
    feature: `accept` never treats a partial run as a candidate, however
    green it was.
+3. A failure that reproduces one time in several is a case for
+   `nuka run <feature>:<line> --repeat <n>`, not for a shell loop: every
+   execution lands under one run id, the summary counts executions, and a
+   scenario that failed at least once gets a `repeat` line after the
+   failed list, `<passed> of <n> passed`. Read the failing executions'
+   records and screenshots (`references/diagnosing.md`) rather than the
+   count alone: the count says how often, never why.
 
 ## Accepting
 

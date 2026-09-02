@@ -5,6 +5,38 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **`nuka run --repeat <n>` runs every selected scenario `n` times in one
+  invocation.** The whole selection runs once, then again, so a failure
+  that depends on what ran before it meets the same neighbours on every
+  pass. Each execution is its own scenario record under the one run_id,
+  the summary counts executions, and a scenario that failed at least once
+  gets a `repeat` line after the failed list, `<passed> of <n> passed`,
+  with no verdict attached. Under `--concurrency`, each worker repeats its
+  own files; a target naming one file still runs at 1. Asked for by a
+  project that had chased a failure reproducing one time in three with
+  shell loops of 12 and 14 `nuka run` invocations, which spread the
+  evidence over that many run ids.
+
+- **`nuka run` says before running when a step's pattern could not be
+  built.** A pattern with an unnamed capture (`{state}` with no `:type`)
+  or an unregistered parameter type matches nothing, so its line used to
+  report as undefined with the same red an assertion failure gets, and
+  nothing said which. The run now prints one warning per such step before
+  the first scenario, naming the step, the pattern, the reason, and the
+  `nuka check` code that reports it. A warning rather than a refusal: the
+  broken step may be one no selected scenario uses.
+
+- **The `repeated-scenario-prefix` note names where a lift goes.** It now
+  ends by saying that the place to lift a shared opening into is a
+  `"process"`-scope fixture, and that whether the scenarios can share what
+  it builds depends on which of them write to that state, which the tool
+  cannot see. The spec already said so; the note reaches a reader who
+  never opens the spec.
+
 ## 0.11.0 — 2026-09-02
 
 ### Breaking

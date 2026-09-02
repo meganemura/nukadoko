@@ -1597,7 +1597,7 @@ However, its location shows that the existing suite owns it.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--quiet]
+nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -1671,6 +1671,23 @@ inside one file already run in one worker, so `nuka check` reports it
 force.
 Gherkin tags are free text, so the namespace prevents this tag from
 colliding with a suite's existing meaning for a short name.
+
+`--repeat <n>` runs every selected scenario `n` times in this one
+invocation: the whole selection once, then again, so a failure that depends
+on what ran before it meets the same neighbours on every pass. Each
+execution is its own scenario record under the one run_id, the summary
+counts executions, and a scenario that failed at least once gets a `repeat`
+line after the failed list, `<passed> of <n> passed`, with no verdict
+attached: a scenario that fails every time is not flaky, and the count is
+what a reader needs. The flag exists for a failure that reproduces one time
+in several. Without it, the answer was a shell loop of `nuka run`, which
+spreads the evidence over that many run ids, while `nuka accept` and `nuka
+tend` read one. In the messages stream each execution is its own
+`testCase`, not a retry of one, so a formatter that lists test cases lists
+every execution. Under `--concurrency`, each worker repeats its own files,
+so the unit of distribution stays the file: a target naming one file still
+runs at 1, and running one scenario on several workers at once is not what
+this flag does.
 
 A `"process"`-scope fixture is built once per worker, and a compat
 `BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
@@ -3257,11 +3274,11 @@ The following findings show what `tend` inspects and why each item is rot rather
   reads the same at any `--concurrency`. A run still in progress is read
   as far as it has got, and its shares are of what it has written so far,
   since a scenario record carries no mark saying its run has finished. It
-  stops at the number. What to
-  do about a shared opening depends on which of those scenarios write to
-  the state they share, which this tool cannot see, and the place to lift
-  it into is a `process`-scope fixture (see "Fixtures"). Naming a saving
-  would be claiming the lift is possible, which nothing here measured.
+  stops at the number, and names the place a lift goes: a `process`-scope
+  fixture (see "Fixtures"). What to do about a shared opening depends on
+  which of those scenarios write to the state they share, which this tool
+  cannot see. Naming a saving would be claiming the lift is possible,
+  which nothing here measured.
 - **A step whose trace shows another call soon after a navigation
   call.** `tend` reads this from the tool's step records under
   `.nukadoko/records/steps/` (see "Records"). A committed sign-off record
@@ -3339,7 +3356,12 @@ nuka run <feature[:line]|dir>...
                               Above 1, stdout lands in completion order and the
                               progress lines are held per scenario. A file
                               tagged @nukadoko:serial runs while no other file runs.
-                              --session drops it back to 1 and says so
+                              --session drops it back to 1 and says so.
+                              --repeat <n> (default 1) runs every selected
+                              scenario n times in this one invocation, each
+                              execution its own record under the one run_id;
+                              a scenario that failed at least once gets a
+                              repeat line after the failed list
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
                               --args is required unless --use supplies

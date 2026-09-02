@@ -596,6 +596,9 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 したがって、上で述べた分け方は変わりません。
 スイートが大きくなっても PR ゲートを速く保つため、あらゆる PR で `nuka check` を実行し、merge、deploy、夜間の build で `nuka run` を実行します。
 
+`nuka run --repeat <n>` は、選ばれたすべての scenario を 1 回の呼び出しの中で `n` 回実行します。数回に 1 回だけ再現する失敗のためのものです。
+各実行は 1 つの run id の下でそれぞれ自分の record になり、1 回でも失敗した scenario は summary の後に `<passed> of <n> passed` の形で集計されます。
+
 ## What this does not do
 
 **これがやらないこと**
