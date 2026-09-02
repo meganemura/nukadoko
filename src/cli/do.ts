@@ -26,6 +26,7 @@ import { sendLiveRequest } from "../live/client.js";
 import { removeLiveSockDir } from "../live/live-sock.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
+import { retentionNote } from "../record/retention.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -438,8 +439,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // if any `--use` value is bad.
     const resolvedUses: ResolveUseSuccess[] = [];
     for (const recordId of use) {
-      const resolved = resolveUse(recordId, entry.step, stepNameOf, (id) =>
-        readStepRecordById(rootDir, config.stateDir, id),
+      const resolved = resolveUse(
+        recordId,
+        entry.step,
+        stepNameOf,
+        (id) => readStepRecordById(rootDir, config.stateDir, id),
+        retentionNote(config.retention),
       );
       if (!resolved.ok) {
         stderr.write(`${resolved.message}\n`);

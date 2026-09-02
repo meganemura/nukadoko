@@ -26,6 +26,7 @@ import {
 } from "../fixture/resolver.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
+import { retentionNote } from "../record/retention.js";
 import type { ErrorKind, EvidenceMeta, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -456,8 +457,12 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     const use = request.use ?? [];
     const resolvedUses: ResolveUseSuccess[] = [];
     for (const recordId of use) {
-      const resolved = resolveUse(recordId, entry.step, stepNameOf, (id) =>
-        readStepRecordById(rootDir, config.stateDir, id),
+      const resolved = resolveUse(
+        recordId,
+        entry.step,
+        stepNameOf,
+        (id) => readStepRecordById(rootDir, config.stateDir, id),
+        retentionNote(config.retention),
       );
       if (!resolved.ok) {
         return { status: "rejected", message: resolved.message };

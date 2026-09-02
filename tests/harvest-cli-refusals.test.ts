@@ -32,6 +32,7 @@ describe("nuka harvest: bad ids", () => {
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("no such step record: does-not-exist");
+    expect(stderr.text()).toContain("older than the newest 20 runs");
   });
 
   it("reports every bad id given, not just the first", async () => {

@@ -2,6 +2,7 @@ import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildDraft } from "../harvest/build-draft.js";
 import { readStepRecordById } from "../record/read-step-record.js";
+import { retentionNote } from "../record/retention.js";
 import type { StepRecord } from "../record/types.js";
 import { buildStepBindings } from "../run/match-step.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -69,7 +70,7 @@ export async function runHarvest(options: RunHarvestOptions): Promise<number> {
   for (const id of stepRecordIds) {
     const record = readStepRecordById(rootDir, config.stateDir, id);
     if (record === null) {
-      setupErrors.push(`no such step record: ${id}`);
+      setupErrors.push(`no such step record: ${id}. ${retentionNote(config.retention)}`);
       continue;
     }
     if (record.kind === "run") {

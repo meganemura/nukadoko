@@ -277,5 +277,8 @@ describe("nuka do --use", () => {
     expect(archiveStdout.text()).toBe("");
     expect(archiveStderr.text()).toContain("step-20260101-000000-zzzz");
     expect(archiveStderr.text()).toContain("no such step record");
+    // The id may have been right once: the refusal says records have a
+    // lifetime, with the numbers in force.
+    expect(archiveStderr.text()).toContain("older than the newest 20 runs");
   });
 });

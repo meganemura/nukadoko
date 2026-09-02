@@ -12,6 +12,7 @@ import { mergeTruncated } from "../context/evidence.js";
 import { omitUsedResults } from "../context/used.js";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
 import { readStepRecordById } from "../record/read-step-record.js";
+import { retentionNote } from "../record/retention.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
@@ -328,8 +329,12 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
 
   const resolvedUses: ResolveUseSuccess[] = [];
   for (const useRecordId of use) {
-    const resolved = resolveUse(useRecordId, step, useStepNameOf, (id) =>
-      readStepRecordById(rootDir, config.stateDir, id),
+    const resolved = resolveUse(
+      useRecordId,
+      step,
+      useStepNameOf,
+      (id) => readStepRecordById(rootDir, config.stateDir, id),
+      retentionNote(config.retention),
     );
     if (!resolved.ok) {
       throw new Error(resolved.message);

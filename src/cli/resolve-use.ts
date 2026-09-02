@@ -74,10 +74,17 @@ export function resolveUse(
   step: Step,
   stepNameOf: ReadonlyMap<Step, string>,
   readStepRecord: (recordId: string) => StepRecord | null,
+  /** Appended to the unknown-id refusal: the one case where the id may
+   * have been right and the record is simply gone (src/record/
+   * retention.ts's `retentionNote`). */
+  missingNote?: string,
 ): ResolveUseResult {
   const stepRecord = readStepRecord(recordId);
   if (stepRecord === null) {
-    return { ok: false, message: `--use ${recordId}: no such step record` };
+    return {
+      ok: false,
+      message: `--use ${recordId}: no such step record${missingNote !== undefined ? `. ${missingNote}` : ""}`,
+    };
   }
 
   if (stepRecord.status !== "ok") {

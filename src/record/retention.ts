@@ -340,3 +340,15 @@ export function formatRetention(outcome: RetentionOutcome, policy: RetentionPoli
   if (parts.length === 0) return null;
   return `retention: removed ${parts.join(", and ")}`;
 }
+
+/** The sentence a "no such step record" refusal carries, so a person
+ * whose `--use`/`harvest` id stopped resolving learns that records have a
+ * lifetime before they go looking for a typo. Built from the policy in
+ * force, since the numbers are the whole answer. */
+export function retentionNote(policy: RetentionPolicy): string {
+  return (
+    `A step record is removed once its run is older than the newest ${plural(policy.runs, "run", "runs")}, ` +
+    `and a record no run owns once it is older than ${plural(policy.adHocDays, "day", "days")} ` +
+    "(retention in nukadoko.config.ts)"
+  );
+}
