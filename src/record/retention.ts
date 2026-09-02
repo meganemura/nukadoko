@@ -90,7 +90,7 @@ export function planRunRetention(runs: readonly RunSummary[], keep: number): Run
 
 export interface DatedEntry {
   readonly id: string;
-  /** Epoch milliseconds, or `null` when nothing could date the entry — an
+  /** Epoch milliseconds, or `null` when nothing could date the entry. An
    * undatable entry is never removed. */
   readonly at: number | null;
 }
