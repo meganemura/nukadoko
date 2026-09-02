@@ -5,6 +5,27 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## 0.10.1 — 2026-09-02
+
+### Fixed
+
+- **A secret spelled inside an object key survived into a step record.**
+  `redact` walked object values and copied every key through untouched, so
+  a key carrying a secret reached the record verbatim while the same secret
+  in a value was replaced. The function's own docstring said it redacts
+  every string found anywhere inside the value, so the code contradicted
+  the contract it published. Reachable through a step's own `returns` or
+  `declared`, where keys come from user code rather than a type; the
+  fixed-shape records were never affected, and a secret in a URL's query
+  string was already redacted because the URL is a value.
+
+  Keys now go through the same replacements values do. Two distinct keys
+  can therefore redact to one string, and rather than let the second
+  silently overwrite the first and drop a whole subtree, `redact` throws
+  and names both keys. The shape that reaches it is one key already
+  spelling `{{secret.TOKEN}}` as ordinary data beside a sibling holding the
+  raw value that token stands for.
+
 ## 0.10.0 — 2026-08-30
 
 ### Added

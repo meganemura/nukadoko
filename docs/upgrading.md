@@ -33,6 +33,25 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.10.0 to 0.10.1
+
+One fix, with two things a project could notice.
+
+- **A record's own object keys can now read differently.** `redact` used to
+  walk object values and copy keys through untouched, so a secret spelled
+  inside a key reached a step record verbatim. Keys go through the same
+  replacements now. A script that reads a record by a key holding a secret
+  was reading a leaked secret; it now reads `{{secret.NAME}}` in that
+  position. Nothing else about a record moves, and the fixed-shape fields
+  never carried a secret in a key to begin with.
+- **`redact` can now throw where it silently dropped data before.** Two
+  distinct keys can redact to one string, and the old code would have let
+  the second overwrite the first and take a whole subtree with it. It
+  throws and names both keys instead. The shape that reaches this is one
+  key already spelling `{{secret.TOKEN}}` as ordinary data beside a sibling
+  holding the raw value that token stands for. A run that hits it was
+  losing data before this release without saying so.
+
 ## 0.9.0 to 0.10.0
 
 `nuka run` writes more on stderr, and `nuka tend` reports one new note.
