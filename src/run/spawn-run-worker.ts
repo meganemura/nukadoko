@@ -37,6 +37,8 @@ export interface SpawnRunWorkerOptions {
    * line, in the order this worker should run them (src/run/worker-
    * protocol.ts's own argv contract). */
   readonly featureListPath: string;
+  /** `--repeat`: how many times this worker runs its own files. */
+  readonly repeat: number;
 }
 
 function packageRoot(here: string): string {
@@ -44,11 +46,11 @@ function packageRoot(here: string): string {
 }
 
 export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
-  const { rootDir, runId, env, quiet, featureListPath } = options;
+  const { rootDir, runId, env, quiet, featureListPath, repeat } = options;
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
-  const args = [rootDir, runId, env ?? "", quiet ? "1" : "0", featureListPath];
+  const args = [rootDir, runId, env ?? "", quiet ? "1" : "0", featureListPath, String(repeat)];
 
   return ext === ".ts"
     ? spawn(path.join(packageRoot(here), "node_modules", ".bin", "tsx"), [workerEntry, ...args], {

@@ -121,6 +121,9 @@ interface RunArgs {
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
   quiet?: boolean;
+  /** Same `NaN`/fraction caveat as `concurrency` below; run.ts refuses
+   * anything but a whole number of 1 or more. */
+  repeat?: number;
   /** yargs' own `type: "number"` accepts `NaN`/a fraction without
    * complaint; run.ts's own setup phase is what actually refuses either
    * (that file's own header explains why the check lives there and not
@@ -469,6 +472,14 @@ export async function runCli(
           describe:
             "run n worker processes at once, one whole feature file per worker (default 1; has nothing to do " +
             "for a target naming one file, and drops back to 1 under --session)",
+        })
+        .option("repeat", {
+          type: "number",
+          default: 1,
+          describe:
+            "run every selected scenario n times in this one invocation, whole selection first and then again " +
+            "(default 1); for a failure that reproduces one time in several. Each execution is its own scenario " +
+            "record under the one run_id, and a scenario that failed at least once gets a `repeat` line after the summary",
         }) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
@@ -479,6 +490,7 @@ export async function runCli(
         env: args.env ?? null,
         quiet: args.quiet ?? false,
         concurrency: args.concurrency ?? 1,
+        repeat: args.repeat ?? 1,
         stdout,
         stderr,
       });

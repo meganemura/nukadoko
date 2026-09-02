@@ -154,6 +154,54 @@ export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void
   );
 }
 
+export interface RepeatTally {
+  readonly feature: string;
+  readonly line: number;
+  readonly scenario: string;
+  readonly passed: number;
+  readonly total: number;
+}
+
+export interface RepeatTallyCollector {
+  note(record: { readonly feature: string; readonly line: number; readonly scenario: string; readonly status: string }): void;
+  /** Every scenario seen, in first-seen order. */
+  list(): RepeatTally[];
+}
+
+/** Counts, per scenario, how many of its executions passed: the one
+ * fact a `--repeat` run exists to produce, kept as three display values
+ * plus two counters per scenario rather than as every record. Keyed by
+ * feature and line, the same identity `nuka accept` uses for a scenario. */
+export function createRepeatTally(): RepeatTallyCollector {
+  const tallies = new Map<string, { feature: string; line: number; scenario: string; passed: number; total: number }>();
+  return {
+    note(record): void {
+      const key = `${record.feature}\u0000${record.line}`;
+      const entry = tallies.get(key) ?? { feature: record.feature, line: record.line, scenario: record.scenario, passed: 0, total: 0 };
+      entry.total += 1;
+      if (record.status === "passed") entry.passed += 1;
+      tallies.set(key, entry);
+    },
+    list(): RepeatTally[] {
+      return [...tallies.values()];
+    },
+  };
+}
+
+/** After the failed list, one line per scenario that failed at least once
+ * under `--repeat`: `repeat  <feature>:<line>  <name>  <passed> of <total>
+ * passed`. A scenario that passed every time is already covered by the
+ * summary, and a run without `--repeat` has nothing to say here, so both
+ * stay silent. Neither "flaky" nor any other verdict is written: a
+ * scenario failing every time is not flaky, and the count is what a
+ * reader needs to decide. */
+export function writeRepeatTallies(stderr: WritableSink, tallies: readonly RepeatTally[]): void {
+  for (const tally of tallies) {
+    if (tally.passed === tally.total) continue;
+    stderr.write(`repeat  ${tally.feature}:${tally.line}  ${tally.scenario}  ${tally.passed} of ${tally.total} passed\n`);
+  }
+}
+
 /** Names only the scenario records counted as failures by the summary.
  * The caller retains these three display values instead of retaining every
  * record from the run. */

@@ -32,6 +32,8 @@ import {
   writeOutputLocations,
   writeRunSummary,
   writeScenarioBoundary,
+  writeRepeatTallies,
+  createRepeatTally,
 } from "../run/progress-log.js";
 import { generateRunId } from "../run/run-id.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
@@ -299,12 +301,21 @@ export interface RunRunOptions {
    * call is the only place a value above 1 changes anything (docs/spec.md
    * "Scenarios (the scripted path)"). */
   concurrency: number;
+  /** `--repeat`'s raw value; default 1. Above 1, every selected scenario
+   * runs that many times in this one invocation, whole selection first
+   * and then again, each execution its own scenario record under the one
+   * run_id. Exists for a failure that reproduces one time in several: the
+   * alternative is a shell loop of `nuka run`, which spreads the evidence
+   * over that many run ids, and `nuka accept` and `nuka tend` read one.
+   * Under `--concurrency`, each worker repeats its own files; a target
+   * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
+  repeat: number;
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, featureArgs, session, env, quiet, concurrency, stdout, stderr } = options;
+  const { rootDir, featureArgs, session, env, quiet, concurrency, repeat, stdout, stderr } = options;
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -312,6 +323,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // failure yargs itself can catch, so both are refused here, in the same
   // "any failure here writes nothing" phase every other setup check below
   // already belongs to.
+  if (!Number.isInteger(repeat) || repeat < 1) {
+    stderr.write(`--repeat must be a whole number of 1 or more (got ${options.repeat}).\n`);
+    return 1;
+  }
   if (!Number.isInteger(concurrency) || concurrency < 1) {
     stderr.write(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).\n`);
     return 1;
@@ -676,11 +691,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     if (effectiveConcurrency > 1) {
-      const { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, messagesEmitter, failedScenarios } =
+      const { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, messagesEmitter, failedScenarios, repeatTallies } =
         await runConcurrentPickles({
           rootDir,
           config: runConfig,
           runId,
+          repeat,
           envArg: env,
           environment: resolvedEnv.name,
           targetVersion,
@@ -732,6 +748,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
       writeFailedScenarios(stderr, failedScenarios);
+      writeRepeatTallies(stderr, repeatTallies);
       await pruneAfterRun();
 
       return allPassed ? 0 : 1;
@@ -867,8 +884,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
 
+      // Iteration-major under `--repeat`: the whole selection once, then
+      // again, so a failure that depends on what ran before it meets the
+      // same neighbours on every pass. `executionIndex` numbers the
+      // boundary lines across every pass (1..total), not per pass.
+      const repeatTally = createRepeatTally();
       if (hasPickles && !beforeAllFailed) {
+        for (let iteration = 0; iteration < repeat; iteration += 1) {
         for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
+          const executionIndex = iteration * flatPickles.length + pickleIndex;
           let storageState: StorageState | null = null;
           if (session !== null) {
             try {
@@ -901,8 +925,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // "never began" shape a missing feature file already gets.
           if (!quiet) {
             writeScenarioBoundary(stderr, {
-              index: pickleIndex + 1,
-              total: flatPickles.length,
+              index: executionIndex + 1,
+              total: flatPickles.length * repeat,
               relativeFeaturePath: feature.relativePath,
               line: pickle.location?.line ?? 0,
               name: pickle.name,
@@ -1005,6 +1029,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           if (record.status === "passed") {
             scenariosPassed += 1;
           }
+          if (repeat > 1) repeatTally.note(record);
           stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
           // A `"scenario"`-scope fixture's own teardown failure — already
           // recorded on `record.teardown_
@@ -1036,6 +1061,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             allPassed = false;
             failedScenarios.push({ feature: record.feature, line: record.line, scenario: record.scenario });
           }
+        }
         }
       }
 
@@ -1132,6 +1158,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
       writeFailedScenarios(stderr, failedScenarios);
+      writeRepeatTallies(stderr, repeatTally.list());
       await pruneAfterRun();
 
       return allPassed ? 0 : 1;

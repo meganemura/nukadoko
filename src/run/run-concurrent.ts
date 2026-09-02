@@ -8,7 +8,7 @@ import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitte
 import { runExportsManifestPath } from "../record/run-exports.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
-import { type FailedScenario, writeScenarioBoundary } from "./progress-log.js";
+import { type FailedScenario, writeScenarioBoundary, createRepeatTally, type RepeatTally } from "./progress-log.js";
 import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "./line-buffer.js";
@@ -92,6 +92,9 @@ export interface RunConcurrentOptions {
   readonly secrets: SecretSet;
   readonly quiet: boolean;
   readonly concurrency: number;
+  /** `--repeat`; each worker runs its own files this many times
+   * (src/cli/run.ts's `RunRunOptions.repeat`). */
+  readonly repeat: number;
   readonly selected: SelectedScenarios;
   readonly flatPickles: readonly { readonly feature: SelectedFeature; readonly pickle: Pickle }[];
   readonly allureResultsDirRel: string;
@@ -113,6 +116,8 @@ export interface RunConcurrentResult {
   readonly allureEmitter: AllureEmitter | null;
   readonly messagesEmitter: MessagesEmitter | null;
   readonly failedScenarios: readonly FailedScenario[];
+  /** Empty unless `repeat` is above 1. */
+  readonly repeatTallies: readonly RepeatTally[];
 }
 
 /**
@@ -133,6 +138,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     secrets,
     quiet,
     concurrency,
+    repeat,
     selected,
     flatPickles,
     allureResultsDirRel,
@@ -191,6 +197,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   let scenariosPassed = 0;
   let stepRecordsWritten = 0;
   const failedScenarios: FailedScenario[] = [];
+  const repeatTally = createRepeatTally();
   // The one counter a worker cannot compute for itself (this file's own
   // header) — shared across every worker and every phase, so a scenario's
   // own boundary line always reads as "the Nth one to finish, out of the
@@ -215,12 +222,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       allPassed = false;
       failedScenarios.push({ feature: record.feature, line: record.line, scenario: record.scenario });
     }
+    if (repeat > 1) repeatTally.note(record);
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
 
     if (!quiet) {
       writeScenarioBoundary(stderr, {
         index: completedCount,
-        total: flatPickles.length,
+        total: flatPickles.length * repeat,
         relativeFeaturePath: record.feature,
         line: record.line,
         name: record.scenario,
@@ -261,7 +269,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
       );
       await writeFile(featureListPath, `${featureTargets.join("\n")}\n`, "utf8");
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath });
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath, repeat });
       const filesWithRecords = new Set<string>();
 
       const stdoutBuffer = createLineBuffer((line) => {
@@ -357,7 +365,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         "This run is incomplete and cannot be treated as a pass.\n",
     );
     allPassed = false;
-  } else if (scenariosWritten !== flatPickles.length) {
+  } else if (scenariosWritten !== flatPickles.length * repeat) {
     // The total check `failedFiles` cannot make. That set catches a worker
     // that produced nothing at all for a file it was given, which is the
     // loud case. A record lost some other way (an unreadable envelope line,
@@ -366,7 +374,8 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     // signal green. Counting closes that gap for every cause at once,
     // including causes nobody has thought of yet.
     stderr.write(
-      `This run selected ${flatPickles.length} scenarios and wrote ${scenariosWritten} records. ` +
+      `This run selected ${flatPickles.length} scenarios${repeat > 1 ? ` to run ${repeat} times each` : ""} ` +
+        `and wrote ${scenariosWritten} records. ` +
         "The missing ones cannot be accounted for, so this run is incomplete.\n",
     );
     allPassed = false;
@@ -377,6 +386,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     scenariosWritten,
     scenariosPassed,
     stepRecordsWritten,
+    repeatTallies: repeatTally.list(),
     allureEmitter,
     messagesEmitter,
     failedScenarios,

@@ -76,14 +76,16 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // warning, an Allure emitter setup failure, a BeforeAll/AfterAll failure, a
 // fixture teardown failure) — each becomes a `"note"` envelope instead.
 
-const [rootDirArg, runIdArg, envArg0, quietRawArg, featureListPathArg] = process.argv.slice(2);
+const [rootDirArg, runIdArg, envArg0, quietRawArg, featureListPathArg, repeatRawArg] = process.argv.slice(2);
 
 if (
   rootDirArg === undefined ||
   runIdArg === undefined ||
   envArg0 === undefined ||
   quietRawArg === undefined ||
-  featureListPathArg === undefined
+  featureListPathArg === undefined ||
+  repeatRawArg === undefined ||
+  !/^[1-9][0-9]*$/.test(repeatRawArg)
 ) {
   process.exit(1);
 }
@@ -98,6 +100,7 @@ const runId: string = runIdArg;
 const featureListPath: string = featureListPathArg;
 const env = envArg0 === "" ? null : envArg0;
 const quiet = quietRawArg === "1";
+const repeat: number = Number(repeatRawArg);
 
 function emit(envelope: WorkerEnvelope): void {
   process.stdout.write(serializeWorkerEnvelope(envelope));
@@ -240,6 +243,9 @@ async function main(): Promise<void> {
     }
 
     if (hasPickles && !beforeAllFailed) {
+      // Iteration-major, the same order src/cli/run.ts's own serial loop
+      // uses under `--repeat`: this worker's whole list once, then again.
+      for (let iteration = 0; iteration < repeat; iteration += 1) {
       for (const { feature, pickle } of flatPickles) {
         const stepLines: string[] = [];
         const onStepEnd = quiet ? undefined : createStepProgressLogger({
@@ -327,6 +333,7 @@ async function main(): Promise<void> {
         if (record.status !== "passed") {
           allPassed = false;
         }
+      }
       }
     }
 

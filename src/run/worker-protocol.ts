@@ -17,9 +17,11 @@ import type { ScenarioRecord } from "./record-types.js";
 //   { "kind": "note", "text": string }
 //
 // Argv contract (never yargs — this is not a CLI command):
-//   <rootDir> <runId> <env|""> <quiet:0|1> <featureListPath>
+//   <rootDir> <runId> <env|""> <quiet:0|1> <featureListPath> <repeat>
 // `featureListPath` names a temp file, one repo-relative `.feature` path per
-// line, in the exact order this worker should run them.
+// line, in the exact order this worker should run them. `repeat` is how
+// many times the worker runs that whole list (`nuka run --repeat`), a
+// whole number of 1 or more that the parent has already validated.
 //
 // Framing choice, decided once here rather than reargued at each call site:
 // both a finished scenario's own record *and* its progress text ride the
