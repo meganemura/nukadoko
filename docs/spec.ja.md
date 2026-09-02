@@ -1439,15 +1439,25 @@ scope が届くのは nukadoko 自身が構築するものだけであり、答�
 Gherkin のタグは自由記述なので、名前空間は、短いタグ名をスイートがすでに使っている意味との衝突から守ります。
 
 `--repeat <n>` は、選ばれたすべての scenario をこの 1 回の呼び出しの中で `n` 回実行します。
-選択全体を 1 回、それからもう 1 回、という順です。前に走ったものに依存する失敗が、毎回同じ隣人と出会うためです。
+選択全体を 1 回、それからもう 1 回、という順です。
+前に走ったものに依存する失敗が、毎回同じ隣人と出会うためです。
 各実行は 1 つの run_id の下でそれぞれ自分の scenario record になり、summary は実行の回数を数えます。
-1 回でも失敗した scenario は、failed の一覧の後に `repeat` の行を 1 つ得ます。`<passed> of <n> passed` の形で、判定は付けません。
+1 回でも失敗した scenario は、failed の一覧の後に `repeat` の行を 1 つ得ます。
+`<passed> of <n> passed` の形で、判定は付けません。
 毎回失敗する scenario は flaky ではなく、読み手に要るのは回数だからです。
 このフラグは、数回に 1 回だけ再現する失敗のためにあります。
-これが無いときの答えはシェルで `nuka run` を回すループで、それは証拠をその回数ぶんの run id に散らします。`nuka accept` と `nuka tend` が読むのは 1 つの run です。
-messages ストリームでは、各実行は 1 つの retry ではなく、それぞれ自分の `testCase` になります。test case を列挙する formatter は、すべての実行を列挙します。
+これが無いときの答えはシェルで `nuka run` を回すループで、それは証拠をその回数ぶんの run id に散らします。
+`nuka accept` と `nuka tend` が読むのは 1 つの run です。
+messages ストリームでは、各実行は 1 つの retry ではなく、それぞれ自分の `testCase` になります。
+test case を列挙する formatter は、すべての実行を列挙します。
+Allure では、各実行が scenario 自身の identity を持つため、レポートは 1 つのテストとして表示し、他の実行をその retry として並べます。
+ときどき失敗する scenario が最も読みやすいのはそこです。
+green な繰り返し run に対する `nuka accept` は、各 scenario の最後の実行を埋め込み、Condition 節に各 scenario が何回走ったかを書きます。
+3 回 green は 1 回 green とは別の主張であり、record の読み手は他の 2 つのコピー無しにその回数を得ます。
+`nuka tend` は、何回走ったかによらず scenario を 1 回と数えます。
 `--concurrency` の下では、各 worker が自分のファイルを繰り返すので、配る単位はファイルのままです。
-1 つのファイルを名指す target は変わらず 1 で走り、1 つの scenario を複数の worker で同時に走らせることは、このフラグの仕事ではありません。
+1 つのファイルを名指す target は変わらず 1 で走ります。
+1 つの scenario を複数の worker で同時に走らせることは、このフラグの仕事ではありません。
 
 worker はプロセスであるため、`"process"` スコープの fixture は worker ごとに 1 回構築され、compat の `BeforeAll`/`AfterAll` も worker ごとに 1 回実行されます。
 「Fixtures」節はすでに `process` スコープを、1 つのアドレス空間ごとに 1 回と定義しています。
@@ -2763,7 +2773,9 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   実行中の run は、そこまでに書かれたところまでを読みます。
   割合もそこまでに書かれたぶんに対する割合になります。
   scenario record には、その run が終わったことを示す印が無いためです。
-  この所見が報告するのは数値までで、切り出し先だけを名指します。`process` スコープの fixture です(「Fixtures」を参照)。
+  その run で 2 回以上走った scenario(`--repeat`)は、最後の実行として 1 回だけ数えます。
+  この所見が報告するのは数値までで、切り出し先だけを名指します。
+  `process` スコープの fixture です(「Fixtures」を参照)。
   同じ始まりに対する処置は、それらの scenario が共有する状態へ書き込むかどうかに左右され、その事実はこのツールからは見えません。
   節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
 - **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。** `tend` はこれを `.nukadoko/records/steps/` にあるツール自身の step record から読みます(「Records」を参照)。

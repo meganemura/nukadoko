@@ -1684,10 +1684,17 @@ in several. Without it, the answer was a shell loop of `nuka run`, which
 spreads the evidence over that many run ids, while `nuka accept` and `nuka
 tend` read one. In the messages stream each execution is its own
 `testCase`, not a retry of one, so a formatter that lists test cases lists
-every execution. Under `--concurrency`, each worker repeats its own files,
-so the unit of distribution stays the file: a target naming one file still
-runs at 1, and running one scenario on several workers at once is not what
-this flag does.
+every execution. In Allure, every execution carries the scenario's own
+identity, so a report shows one test with the other executions as its
+retries, which is where a scenario that sometimes fails is easiest to read.
+`nuka accept` on a green repeated run embeds each scenario's last execution
+and says in its Condition section how many times each ran: green three
+times is a different claim from green once, and a reader of the record
+gets the count without the other two copies. `nuka tend` counts a scenario
+once however many times it ran. Under `--concurrency`, each worker repeats
+its own files, so the unit of distribution stays the file: a target naming
+one file still runs at 1, and running one scenario on several workers at
+once is not what this flag does.
 
 A `"process"`-scope fixture is built once per worker, and a compat
 `BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
@@ -3273,7 +3280,9 @@ The following findings show what `tend` inspects and why each item is rot rather
   denominator is summed scenario time rather than wall clock, so this
   reads the same at any `--concurrency`. A run still in progress is read
   as far as it has got, and its shares are of what it has written so far,
-  since a scenario record carries no mark saying its run has finished. It
+  since a scenario record carries no mark saying its run has finished. A
+  scenario that ran more than once in that run (`--repeat`) counts once,
+  as its last execution. It
   stops at the number, and names the place a lift goes: a `process`-scope
   fixture (see "Fixtures"). What to do about a shared opening depends on
   which of those scenarios write to the state they share, which this tool

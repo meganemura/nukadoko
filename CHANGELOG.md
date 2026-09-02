@@ -30,6 +30,16 @@ just until 0.1.
   `nuka check` code that reports it. A warning rather than a refusal: the
   broken step may be one no selected scenario uses.
 
+- **`nuka accept` after a `--repeat` run embeds each scenario once, the
+  last execution, and says the count.** Every execution in the accepted
+  run was green (accept required that already); the record's Condition
+  section gains `- repeat: each scenario ran n times in this run`, since
+  green three times is a different claim from green once, and a reader
+  gets the count without the other copies. `nuka tend`'s
+  `repeated-scenario-prefix` counts a scenario once however many times it
+  ran, rather than reading the repetition as a shared opening between "n
+  scenarios" that are the same one.
+
 - **The `repeated-scenario-prefix` note names where a lift goes.** It now
   ends by saying that the place to lift a shared opening into is a
   `"process"`-scope fixture, and that whether the scenarios can share what
