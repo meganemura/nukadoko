@@ -112,7 +112,13 @@ const MAX_FAILED_SCENARIOS_NAMED = 5;
 // commit); this brings "red"/"partial-only" in line with that, rather
 // than leaving them the only refusals in this file that don't.
 function formatFailedScenarios(group: readonly ScenarioRecord[]): string {
-  const failed = group.filter((record) => record.status !== "passed").sort((a, b) => a.line - b.line);
+  // One entry per line: a `--repeat` run can fail the same scenario more
+  // than once, and naming it once is what the person fixing it needs.
+  const seenLines = new Set<number>();
+  const failed = group
+    .filter((record) => record.status !== "passed")
+    .sort((a, b) => a.line - b.line)
+    .filter((record) => (seenLines.has(record.line) ? false : (seenLines.add(record.line), true)));
   const shown = failed.slice(0, MAX_FAILED_SCENARIOS_NAMED);
   const parts = shown.map((record) => `${record.scenario} (line ${record.line}) failed`);
   const omitted = failed.length - shown.length;
@@ -425,7 +431,25 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   }
 
   // --- Every condition cleared: build and write the record. ---
-  const sortedGroup = [...group].sort((a, b) => a.line - b.line);
+  // One execution per line. A `--repeat` run holds several records for one
+  // scenario, every one of them green here (`selectAcceptableRun` already
+  // required that); the record embeds the last one and says in its
+  // Condition section how many times each scenario ran. Embedding all of
+  // them would repeat every section that many times for a reader who
+  // wants the one fact, and picking one without saying so would hide the
+  // repetition that made this run worth accepting.
+  const lastByLine = new Map<number, ScenarioRecord>();
+  let executionsPerLine = 1;
+  for (const record of group) {
+    const previous = lastByLine.get(record.line);
+    if (previous === undefined || Date.parse(record.started_at) >= Date.parse(previous.started_at)) {
+      lastByLine.set(record.line, record);
+    }
+  }
+  for (const line of lastByLine.keys()) {
+    executionsPerLine = Math.max(executionsPerLine, group.filter((record) => record.line === line).length);
+  }
+  const sortedGroup = [...lastByLine.values()].sort((a, b) => a.line - b.line);
   const scenarios: AcceptedScenario[] = sortedGroup.map((record) => ({
     record,
     stepRecords: readStepRecordsForScenario(rootDir, record),
@@ -445,6 +469,7 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
       targetVersion: anyRecord.target_version,
       browser: browserRecord,
       scenarios,
+      executionsPerScenario: executionsPerLine,
     });
   } catch (error) {
     if (error instanceof MissingStepRecordError) {

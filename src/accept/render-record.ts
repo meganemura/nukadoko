@@ -107,6 +107,13 @@ export interface RenderAcceptanceRecordOptions {
   readonly acceptedAt: string;
   readonly environment: string;
   readonly targetVersion: string | undefined;
+  /** How many times each scenario ran in the accepted run: 1 for an
+   * ordinary run, `n` for a `nuka run --repeat <n>` one. Above 1, the
+   * record embeds each scenario's last execution and the Condition
+   * section says so; the number is a condition of the sign-off (green
+   * three times is a different claim from green once), so it lives beside
+   * environment and browser rather than in a footnote. */
+  readonly executionsPerScenario?: number;
   /** The accepted group's own measured browser condition (docs/spec.md
    * "Sign-off") — `undefined` when no scenario in the group
    * launched one at all. Never `config.browserType` itself (docs/spec.md
@@ -441,6 +448,12 @@ function renderCondition(options: RenderAcceptanceRecordOptions): string[] {
       ? "- browser: not launched (no step in this run destructured page/context)"
       : `- browser: ${options.browser.type} ${options.browser.version}`,
   );
+  if (options.executionsPerScenario !== undefined && options.executionsPerScenario > 1) {
+    lines.push(
+      `- repeat: each scenario ran ${options.executionsPerScenario} times in this run (nuka run --repeat), ` +
+        "every execution green; the last one is embedded below",
+    );
+  }
   return lines;
 }
 
