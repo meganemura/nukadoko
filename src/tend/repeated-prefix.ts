@@ -186,8 +186,29 @@ function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
   };
 }
 
+/** One record per scenario (feature and line), the latest started: a
+ * `nuka run --repeat <n>` run holds `n` records for one scenario, and
+ * counting them would report the scenario's own repetition as a shared
+ * opening between "n scenarios" that are the same one. */
+function onePerScenario(records: readonly ScenarioRecord[]): ScenarioRecord[] {
+  const latest = new Map<string, ScenarioRecord>();
+  for (const record of records) {
+    // A record with no numeric `line` (an older or hand-written one) is its
+    // own scenario: never folded into another, never dropped.
+    const key =
+      typeof record.line === "number"
+        ? `${record.feature}\u0000${record.line}`
+        : `${record.feature}\u0000${String(record.scenario_record_id ?? Math.random())}`;
+    const previous = latest.get(key);
+    if (previous === undefined || Date.parse(record.started_at) >= Date.parse(previous.started_at)) {
+      latest.set(key, record);
+    }
+  }
+  return [...latest.values()];
+}
+
 export function findRepeatedScenarioPrefixes(rootDir: string, stateDir: string): TendIssue[] {
-  const records = latestRun(readScenarioRecords(rootDir, stateDir));
+  const records = onePerScenario(latestRun(readScenarioRecords(rootDir, stateDir)));
   if (records.length === 0) return [];
   const totalScenarioMs = records.reduce(
     (total, record) => total + elapsedMs(record.started_at, record.finished_at),
