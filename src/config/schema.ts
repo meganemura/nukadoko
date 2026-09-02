@@ -97,6 +97,17 @@ const parameterTypeConfigSchema = z
  * default here beyond the list itself, see `configSchema` below). */
 export type ParameterTypeConfig = z.infer<typeof parameterTypeConfigSchema>;
 
+/** `retention.runs`'s default. 20 is a judgment, not a measurement: the
+ * heaviest suite measured so far costs about 50 MB per run once trace
+ * attachments are hard links rather than copies, so 20 runs is about 1 GB
+ * for that suite and far less for a suite without a browser. Fewer than
+ * that and the failure a person was chasing an hour ago is already gone on
+ * a suite run every few minutes. */
+export const DEFAULT_RETENTION_RUNS = 20;
+/** `retention.adHocDays`'s default: long enough that a `nuka do` chain
+ * started one week and harvested the next still resolves. */
+export const DEFAULT_RETENTION_AD_HOC_DAYS = 7;
+
 /** `APIRequest.newContext`'s options (`requestContext` below) have no named
  * export from Playwright the way `BrowserContextOptions` does
  * (`browserContext` below) — `APIRequest.newContext`'s argument is declared
@@ -386,6 +397,24 @@ export const configSchema = z
      * above — zero configuration already gets a full stream. No CLI flag
      * either. */
     messages: z.object({ output: z.string().optional() }).strict().optional(),
+    /** How long measurement stays on disk (docs/spec.md "Artifacts").
+     * `runs`: the newest N `nuka run` invocations keep every record and
+     * export file they wrote; at the end of each `nuka run`, an older run's
+     * are removed. `adHocDays`: a record no run owns (`nuka do`,
+     * `recordStep`, a live session's own `do`, a run that stopped before
+     * writing a scenario record) is removed once it is older than this
+     * many days, since `nuka do --use` and `nuka harvest` read those
+     * across days by design. Neither has an "off" value: a project that
+     * wants more history raises the number, and the measurement that
+     * motivated the defaults (one heavy suite reached 19 GB in four days
+     * with nothing removed) is why "keep everything" is not a setting. */
+    retention: z
+      .object({
+        runs: z.number().int().min(1).default(DEFAULT_RETENTION_RUNS),
+        adHocDays: z.number().int().min(1).default(DEFAULT_RETENTION_AD_HOC_DAYS),
+      })
+      .strict()
+      .default({ runs: DEFAULT_RETENTION_RUNS, adHocDays: DEFAULT_RETENTION_AD_HOC_DAYS }),
   })
   .strict();
 

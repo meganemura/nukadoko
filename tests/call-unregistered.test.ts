@@ -34,6 +34,7 @@ function baseConfig(): NukadokoConfig {
     fixtures: {},
     fixtureTimeout: 60_000,
     secrets: { public: [], redact: [] },
+    retention: { runs: 20, adHocDays: 7 },
     browserType: "chromium",
   };
 }

@@ -35,6 +35,7 @@ import {
 } from "../run/progress-log.js";
 import { generateRunId } from "../run/run-id.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
+import { applyRetention, formatRetention } from "../record/retention.js";
 import {
   doneCallbackMessage,
   HEARTBEAT_TICK_CAP,
@@ -539,6 +540,28 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     const runId = generateRunId();
     const git = await probeGitState(rootDir);
+
+    // Retention (src/record/retention.ts) runs last in both branches
+    // below, after this run's own records and export files are complete,
+    // so this run is the newest one the run rule sees and is never what it
+    // removes. Its line goes out under `--quiet` too: a deletion is worth
+    // a line to the person whose state directory just shrank. A failure
+    // here never changes the exit code, which is the run's own verdict.
+    const pruneAfterRun = async (): Promise<void> => {
+      try {
+        const outcome = await applyRetention({
+          rootDir,
+          stateDir: config.stateDir,
+          policy: config.retention,
+          now: new Date(),
+          messagesOutputRel,
+        });
+        const line = formatRetention(outcome, config.retention);
+        if (line !== null) stderr.write(`${line}\n`);
+      } catch (error) {
+        stderr.write(`Warning: retention failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
+    };
     // One instance for this whole `nuka run` invocation — passed unchanged
     // into every `runScenario` call below, so a run whose several steps
     // (across one scenario or several) each hit an unreadable trace
@@ -692,6 +715,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
       writeFailedScenarios(stderr, failedScenarios);
+      await pruneAfterRun();
 
       return allPassed ? 0 : 1;
     }
@@ -1091,6 +1115,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
       writeFailedScenarios(stderr, failedScenarios);
+      await pruneAfterRun();
 
       return allPassed ? 0 : 1;
     } finally {
