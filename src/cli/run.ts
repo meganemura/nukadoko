@@ -463,7 +463,24 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // "undefined" exactly like it already does). Built once, shared by
     // `usedStepNames` below and by every pickle's own from-order guard
     // (src/run/run-scenario.ts's `RunScenarioOptions.patterns`).
-    const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
+    const { patterns, issues: bindingIssues } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
+    // A pattern that failed to build matches nothing, so every line meant
+    // for it reports as undefined below, in the same red an assertion
+    // failure gets. The cause is known right here, so it is said once,
+    // before anything runs. `nuka check` reports the same issue as an
+    // error, but a run started without check would otherwise leave a reader
+    // to tell "not registered" from "does not pass" on their own. A warning
+    // rather than a refusal: the broken step may be one no selected
+    // scenario uses, and refusing the whole run for it would block every
+    // other feature over a mistake check already names. The parent alone
+    // says it: a worker rebuilds the same patterns for itself but its own
+    // notes would repeat this line once per worker.
+    for (const issue of bindingIssues) {
+      stderr.write(
+        `Warning: ${issue.message} Every line meant for this step reports as undefined; ` +
+          `nuka check names this as ${issue.code}.\n`,
+      );
+    }
 
     // Which typed step names this run's own selected pickles actually
     // resolve to (this file's own header) — undefined/ambiguous lines
