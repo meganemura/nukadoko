@@ -53,12 +53,20 @@ export async function removeTempDir(dir: string): Promise<void> {
  * (see that function's own comment) and so running `nuka run`/`nuka do`
  * against it (the CLI runs only against a temp
  * copy) never writes `.nukadoko/` state into the committed example
- * directory.
+ * directory. A `.nukadoko/` already sitting under the example (left by
+ * someone exploring it by hand; it is gitignored, so what is there
+ * depends on the machine) is not copied: a test that ran against it would
+ * inherit that machine's records, and retention would then remove the old
+ * ones and say so on stderr, in a test asserting on a clean run.
  */
 export async function copyExampleToTempDir(name: string): Promise<string> {
   await mkdir(tempFixturesRoot, { recursive: true });
   const dest = await mkdtemp(path.join(tempFixturesRoot, "example-"));
-  await cp(path.join(repoRoot, "examples", name), dest, { recursive: true });
+  const source = path.join(repoRoot, "examples", name);
+  await cp(source, dest, {
+    recursive: true,
+    filter: (candidate) => path.relative(source, candidate).split(path.sep)[0] !== ".nukadoko",
+  });
   return dest;
 }
 
