@@ -39,6 +39,8 @@ async function seedRecords(rootDir: string): Promise<void> {
   await writeFile(path.join(stateDir(rootDir), "records", "steps", "step-aaa", "record.json"), "{}");
   await mkdir(path.join(stateDir(rootDir), "records", "scenarios", "scenario-bbb"), { recursive: true });
   await writeFile(path.join(stateDir(rootDir), "records", "scenarios", "scenario-bbb", "record.json"), "{}");
+  await mkdir(path.join(stateDir(rootDir), "records", "runs", "run-ccc"), { recursive: true });
+  await writeFile(path.join(stateDir(rootDir), "records", "runs", "run-ccc", "exports"), "");
 }
 
 async function seedCache(rootDir: string, environment = "default"): Promise<void> {
@@ -105,6 +107,7 @@ describe("nuka clean", () => {
     const text = stdout.text();
     expect(text).toContain(path.join(".nukadoko", "records", "steps", "step-aaa"));
     expect(text).toContain(path.join(".nukadoko", "records", "scenarios", "scenario-bbb"));
+    expect(text).toContain(path.join(".nukadoko", "records", "runs", "run-ccc"));
     expect(text).toContain(path.join(".nukadoko", "cache", "sessions", "default", "alpha.json"));
     expect(text).toContain(path.join(".nukadoko", "export", "allure-results"));
     expect(text).toContain(path.join(".nukadoko", "export", "messages.ndjson"));
@@ -137,13 +140,14 @@ describe("nuka clean", () => {
     expect(report.dry_run).toBe(true);
   });
 
-  it("deletes accumulated records/steps and records/scenarios", async () => {
+  it("deletes accumulated records/steps, records/scenarios, and records/runs", async () => {
     await seedRecords(rootDir);
 
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
     expect(existsSync(path.join(stateDir(rootDir), "records", "scenarios", "scenario-bbb"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "records", "runs", "run-ccc"))).toBe(false);
   });
 
   it("deletes a non-live session's cache files", async () => {

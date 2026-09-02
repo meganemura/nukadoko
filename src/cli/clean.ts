@@ -12,18 +12,18 @@ import type { WritableSink } from "./writable-sink.js";
 // Responsibility: `nuka clean`'s actual work — delete the disposable half
 // of the state directory (docs/spec.md "Artifacts": Measurement and Cache
 // and Export), kept out of run-cli.ts so it's unit-testable without going
-// through yargs (same split as cli/do.ts, cli/check.ts). Nothing here ever
-// runs on its own: `nuka do`/`nuka run` never call this module, because a
-// step record is an exploration's own material (`nuka do --use` reads one
-// back, `nuka harvest` reads a chain of them) right up until the moment
-// someone decides otherwise — a decision only a human or agent invoking
-// this exact command makes.
+// through yargs (same split as cli/do.ts, cli/check.ts). This is the
+// whole-category operation; the routine, bounded removal is retention
+// (src/record/retention.ts), which `nuka run` applies on its own at the
+// end of every run. `clean` stays for what retention deliberately never
+// touches: everything at once, a results directory that predates the
+// per-run manifests retention needs, and the cache.
 //
 // Path resolution is inlined here rather than shared with cli/do.ts,
 // cli/run.ts, or src/session/manage.ts's own `clearAllSessions`: those are
 // the state directory's own fixed segments (docs/spec.md "The state
-// directory" names all three: `records/steps`, `records/scenarios`,
-// `cache/sessions/<env>/`), not this module's own invention, but a helper
+// directory" names all of them: `records/steps`, `records/scenarios`,
+// `records/runs`, `cache/sessions/<env>/`), not this module's own invention, but a helper
 // only this one new caller uses is a second source of truth, not a
 // reduction in duplication — it earns its existence once cli/do.ts and
 // cli/run.ts actually move onto it, which this change does not do.
@@ -131,7 +131,9 @@ async function findLiveSession(rootDir: string, stateDir: string): Promise<LiveS
 }
 
 /** Every step/scenario record id directory under `records/steps/` and
- * `records/scenarios/`, rootDir-relative — one entry per accumulated run's
+ * `records/scenarios/`, and every run's own directory under
+ * `records/runs/` (its exports manifest, src/record/run-exports.ts),
+ * rootDir-relative — one entry per accumulated run's
  * own leftovers, which is the granularity a preview of "what five `nuka
  * run`s left behind" needs (a single "records/" line would say nothing
  * about how much piled up). Missing directories (nothing ever recorded)
@@ -139,7 +141,7 @@ async function findLiveSession(rootDir: string, stateDir: string): Promise<LiveS
  * answer" rule `session list` already follows. */
 async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<string[]> {
   const paths: string[] = [];
-  for (const kind of ["steps", "scenarios"] as const) {
+  for (const kind of ["steps", "scenarios", "runs"] as const) {
     const dir = path.join(rootDir, stateDir, "records", kind);
     let entries;
     try {
