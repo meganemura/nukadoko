@@ -412,9 +412,11 @@ and opens a browser only with `--open`. `nuka init` creates
 `nuka run`. See [Allure emitter](docs/spec.md#allure-emitter) for the
 snapshot mechanics and the live retry display.
 
-Completed files in `allure-results/` are append-only, so reports accumulate
-runs until you remove the directory. Temporary `*-progress-result.json`
-files are removed when their scenario ends and when the next run starts.
+Completed files in `allure-results/` are never rewritten. A run's files
+leave with the run once it is older than the newest `retention.runs` runs
+(default 20), so a report shows that many runs; `nuka clean --export`
+empties the directory at once. Temporary `*-progress-result.json` files
+are removed when their scenario ends and when the next run starts.
 
 ## Self-healing, with the deviation on the record
 

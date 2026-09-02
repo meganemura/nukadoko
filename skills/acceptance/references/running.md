@@ -100,5 +100,8 @@ writes its own stream first, to a run-id-suffixed file beside the
 configured path (`messages.<run_id>.ndjson`), so tailing the configured
 path to watch a run live shows nothing until that run finishes; use
 `npx allure watch` for a live view instead. Each of those per-run files
-stays on disk afterward, one per `nuka run` invocation, until `nuka clean
-[--export]` removes them along with the configured path's own copy.
+stays on disk for as long as its run does: `nuka run` keeps the newest
+`retention.runs` runs (default 20) and removes older ones, records and
+export files alike, at the end of every run, printing one `retention:`
+line when it did. `nuka clean [--export]` removes all of them at once
+along with the configured path's own copy.

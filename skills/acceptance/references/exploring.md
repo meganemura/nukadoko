@@ -139,10 +139,18 @@ environment (`default` when omitted); a live one refuses to clear until
 it is stopped first, since clearing only ever touches files, never a
 running process.
 
+A step record has a lifetime without anyone cleaning: `nuka run` keeps the
+newest `retention.runs` runs (default 20) and a record no run owns, which
+is what a `nuka do` record is, for `retention.adHocDays` days (default 7),
+both set in `nukadoko.config.ts`. A `--use <id>` or `harvest <id>` whose
+record aged out is refused with those numbers in the message, so an id
+that resolved last week and does not today is that, not a typo. Chain and
+harvest within the window, or raise `adHocDays` for a longer exploration.
+
 `nuka clean [--records] [--cache] [--export] [--dry-run]` is the wider
 version of the same idea, once you are done exploring rather than mid-way
-through it: it removes accumulated step/scenario records, session cache
-files, and the Allure/messages export output, all disposable by design
+through it: it removes every step/scenario record, session cache file, and
+the Allure/messages export output at once, all disposable by design
 (see "Artifacts" in `docs/spec.md`). No category flag cleans all three;
 `--dry-run` prints the same plan the real run would act on without
 removing anything. It refuses the whole command, every category, while

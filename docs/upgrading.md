@@ -33,6 +33,40 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.10.1 to 0.11.0
+
+`nuka run` now removes old records on its own, and a trace file exists once
+on disk instead of twice.
+
+- **The first `nuka run` after upgrading removes every run older than the
+  newest 20.** Runs are read from the scenario records already on disk,
+  so a state directory that grew for weeks shrinks at the end of that first
+  run, and the run prints one `retention:` line saying how many runs went.
+  If that is not wanted, set `retention.runs` in `nukadoko.config.ts`
+  before running; there is no "keep everything" value, only a larger
+  number. `retention.adHocDays` (default 7) is the separate lifetime of a
+  record no run owns, such as a `nuka do` record.
+- **`nuka accept` and `nuka tend` see only the retained runs.** A feature
+  whose last green run is older than the newest `retention.runs` runs now
+  reads as never run; run it again before accepting it. Sign-off records
+  already written are unaffected: they live beside the feature, not under
+  `.nukadoko/`.
+- **`nuka do --use <id>` and `nuka harvest <id>` can now refuse an id that
+  used to resolve.** The refusal says the record may have aged out and
+  names the policy in force, rather than only "no such step record".
+- **`allure-results/` written by 0.10 and earlier is not pruned.**
+  Retention removes an export file only through the manifest the run that
+  wrote it left under `.nukadoko/records/runs/<run_id>/`, and older runs
+  left none. Run `nuka clean --export` once to drop that directory; every
+  run from now on removes its own files when it ages out.
+- **A trace or screenshot under `allure-results/` is now a hard link to
+  the file under `records/steps/<id>/`.** Nothing reads differently.
+  Copying `.nukadoko/` with a tool that does not preserve links makes two
+  files again, as before; `allure.resultsDir` on another filesystem falls
+  back to a copy on its own.
+- **`nuka clean --records` also removes `.nukadoko/records/runs/`.** A
+  project that scripted a clean by path should include that directory.
+
 ## 0.10.0 to 0.10.1
 
 One fix, with two things a project could notice.

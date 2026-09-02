@@ -96,9 +96,9 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>` | the tool | no | until `nuka clean` removes it | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
+| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
 | Sign-off | `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
-| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter, until `nuka clean` removes it) | the tool | no | disposable | other tools |
+| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter) | the tool | no | with the run that wrote it | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
 The table names files. The distinctions between its columns answer two
@@ -115,20 +115,40 @@ questions: "what happens if this is deleted" and "who gets to change it":
   the promise ran green. Measurement is never committed. `nuka init`
   gitignores its state directory because the working record from one run says
   nothing about the next run.
-- **Measurement's "one run" lifetime was aspirational until `nuka clean`
-  existed.** A run did not remove its step or scenario records when it ended.
-  `nuka do --use` and `nuka harvest` intentionally read records from previous
-  days, so automatic deletion was never an option. The explicit operation is
-  now `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]`.
-  With no category flag, it cleans all three categories. One category flag
-  limits the operation to that category. `--dry-run` prints the same plan that
-  the real run would use, but removes nothing. If any session is live anywhere,
-  the command refuses the complete operation for every category. The session
-  process can still write records and export output. This rule applies to all
-  environments for the same reason that `nuka session clear` refuses a live
-  lock. One export file is always exempt. `export/allure-history.jsonl` sits
-  beside `allure-results/`, not inside it. It is the only artifact here that a
-  new run cannot reproduce.
+- **Measurement has a lifetime, and `nuka run` enforces it.** At the end of
+  every run, the newest `retention.runs` runs (default 20) keep everything
+  they wrote. Every older run loses its scenario records, the step records
+  they cite, the export files its own `records/runs/<run_id>/exports`
+  lists, and its messages stream. A run is every scenario record that
+  shares one `run_id`, dated by its earliest `started_at`: the same rule
+  `nuka accept` and `nuka tend` use to name the newest run, so the three
+  commands never disagree about which run that is. A record no retained
+  run owns (a `nuka do` or `recordStep` record, a record whose run is
+  gone, a scenario directory whose `record.json` cannot be read, a run
+  that stopped before its first scenario finished) is removed once it is
+  older than `retention.adHocDays` (default 7). `nuka do --use` and `nuka
+  harvest` read those across days by design, which is why they get days
+  rather than a run count, and a `--use` on a record that aged out is
+  refused with the policy in force, never answered with nothing. Neither
+  number has an "off" value; a project that wants more history raises it.
+  The defaults are a judgment: the heaviest suite measured so far costs
+  about 50 MB per run, so 20 runs is about 1 GB, and fewer would lose the
+  failure a person was chasing an hour ago on a suite that runs every few
+  minutes. Retention is skipped, and says so, while a live session is up,
+  since that process writes records for as long as it runs. An export file
+  is removed only through a run's own manifest, never by age: a results
+  directory can be shared with another tool's Allure output, and a file
+  nukadoko did not write is not nukadoko's to remove.
+  `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` is the
+  whole-category operation that remains. With no category flag, it cleans
+  all three categories. One category flag limits the operation to that
+  category. `--dry-run` prints the same plan that the real run would use,
+  but removes nothing. If any session is live anywhere, the command
+  refuses the complete operation for every category, for the same reason
+  that `nuka session clear` refuses a live lock. One export file is exempt
+  from both retention and `clean`. `export/allure-history.jsonl` sits
+  beside `allure-results/`, not inside it. It is the only artifact here
+  that a new run cannot reproduce.
 - **Step records and scenario records share one row.** They differ only in
   grain. A scenario record and each of its step records answer the same
   question at two resolutions, not two different questions. `nuka do` has no
@@ -2309,6 +2329,7 @@ or to the section for its feature.
 | `envFiles` | top-level env files, appended to per environment (below) |
 | `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
 | `stateDir` | where nukadoko writes at run time (default `.nukadoko`, see "The state directory") |
+| `retention` | how long measurement stays: `runs` (default 20) newest runs kept whole, `adHocDays` (default 7) for a record no run owns (see "Artifacts") |
 | `browserType` | which Playwright engine `ctx.page()` launches: `chromium` (default), `firefox`, or `webkit` (below) |
 | `browser` | Playwright's own `LaunchOptions`, passed to that engine's `launch` (below) |
 | `browserContext` | Playwright's own `BrowserContextOptions`, passed to `browser.newContext()` (below) |
@@ -2428,10 +2449,19 @@ for separate purposes (see "Artifacts"):
   per-test `test-results/` convention one level up. No whole-scenario
   trace.zip here: each step's own trace lives under that step's own
   `records/steps/<id>/` instead (see "Running")
+- `records/runs/<run_id>/`: one directory per `nuka run` invocation,
+  holding `exports`: every result, container, and attachment file that run
+  wrote under `export/`, one root-relative path per line, appended by
+  whichever process wrote the file (under `--concurrency`, the worker
+  processes do). It is what lets a run's export output leave with the run
+  (see "Artifacts"). It carries no status or timing: every scenario record
+  already carries its run's `run_id` and `started_at`
 - `cache/sessions/<env>/<name>.json`: storageState; live credentials in
   plaintext, created with restricted permissions
-- `export/allure-results/`: the emitter's output, appended to across runs
-  and safe to delete whenever a fresh Allure launch is wanted; `init` also
+- `export/allure-results/`: the emitter's output, holding the same runs
+  `records/` holds, since a run's files leave with the run (see
+  "Artifacts"), and safe to delete whenever a fresh Allure launch is
+  wanted; `init` also
   creates it empty, since Allure's own CLI refuses to start against a
   missing directory but accepts an empty one, letting `allure watch` already
   be running before the first `nuka run`
@@ -2440,15 +2470,19 @@ for separate purposes (see "Artifacts"):
   atomically once that run finishes; each invocation's real, in-progress
   write target is a run-id-suffixed sibling beside it instead
   (`messages.<run_id>.ndjson`, truncated at that invocation's own start),
-  one per `nuka run` invocation, left on disk afterward (see "Messages
-  emitter"). `nuka clean [--export]` is what removes the accumulated ones
+  one per `nuka run` invocation, removed with its run (see "Messages
+  emitter")
 
+The routine removal is retention, which `nuka run` applies itself at the end
+of every run (see "Artifacts").
 `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` deletes data
-across all three directories. With no category flag, it deletes every category.
-One category flag limits deletion to that category. The command refuses all
-categories while any `nuka session` is live. That session process can still
-write to `records/` and `export/` (see "Artifacts" for the full reason). The
-command never touches `export/allure-history.jsonl`. This file is beside
+across all three directories at once. With no category flag, it deletes every
+category. One category flag limits deletion to that category. It is also the
+operation for an `allure-results/` directory written before runs kept a
+manifest of their files, which retention never touches. The command refuses
+all categories while any `nuka session` is live. That session process can
+still write to `records/` and `export/` (see "Artifacts" for the full reason).
+The command never touches `export/allure-history.jsonl`. This file is beside
 `export/allure-results/`, outside that directory. It is the only artifact under
 `.nukadoko/` that a new run cannot reproduce.
 
@@ -2977,10 +3011,10 @@ zero pickles.
   the finished copy. A crash mid-run leaves the previous run's own
   complete file at the configured path, never a truncated one; watching a
   run live is Allure's job (`npx allure watch`), not this stream's.
-- Each invocation file remains beside the configured path.
-  Nothing removes these files automatically, for the reason "Artifacts"
-  gives for every other measurement artifact; `nuka clean [--export]`
-  removes the accumulated ones along with the configured path's own copy.
+- Each invocation file remains beside the configured path for as long as
+  its run does, under the retention rule "Artifacts" gives for every other
+  measurement artifact; `nuka clean [--export]` removes all of them at once
+  along with the configured path's own copy.
 - This emitter has the inverse role of the Allure emitter. Allure exposes
   nukadoko's measurement surplus, while this emitter preserves compat
   fidelity. Its only job is to ensure that a migrated suite's existing
@@ -3291,7 +3325,10 @@ nuka run <feature[:line]|dir>...
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. Each failed scenario follows with its
-                              feature, line, and name. --quiet drops the
+                              feature, line, and name. Then one retention
+                              line, when a run older than the newest
+                              retention.runs was removed (see "Artifacts");
+                              --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always.

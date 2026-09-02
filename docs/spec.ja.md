@@ -95,9 +95,9 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>` | ツール | しない | `nuka clean` が消すまで | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
+| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
 | Sign-off | `<feature のベース名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
-| Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも。こちらも `nuka clean` が消すまで残る) | ツール | しない | 使い捨て | 他のツール |
+| Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも) | ツール | しない | 書いた run と同じ | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
 この表が名指しているのはファイルです。
@@ -117,17 +117,24 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   Measurement は決してコミットされません。
   `nuka init` は Measurement を置く state directory を gitignore します。
   1 回の run の作業記録は、次の run について何も語らないからです。
-- **Measurement の「run ごと」という寿命は、`nuka clean` ができるまでは願望にすぎませんでした。**
-  run が終了しても、その step record と scenario record は削除されませんでした。
-  `nuka do --use` と `nuka harvest` は意図的に過去の日の record を読むため、自動削除は選択肢になりませんでした。
-  現在は、`nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` が明示的に削除します。
+- **Measurement には寿命があり、`nuka run` がそれを守らせます。**
+  毎回の run の終わりに、最新 `retention.runs` 回分(既定 20)の run は、書いたものをすべて保ちます。
+  それより古い run は、scenario record、それが引用する step record、その run 自身の `records/runs/<run_id>/exports` が列挙する export ファイル、そして messages ストリームを失います。
+  run とは、1 つの `run_id` を共有する scenario record の全体で、最も早い `started_at` で日付を持ちます。
+  `nuka accept` と `nuka tend` が最新の run を名指すときの規則と同じなので、3 つのコマンドが「どの run か」で食い違うことはありません。
+  保持された run のどれにも属さない record(`nuka do` や `recordStep` の record、run が消えた record、`record.json` が読めない scenario ディレクトリ、最初の scenario が終わる前に止まった run)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
+  `nuka do --use` と `nuka harvest` は設計上、日をまたいでそれらを読むため、run の回数ではなく日数を与えています。
+  寿命を過ぎた record への `--use` は、有効な方針を添えて拒否され、何も返さないまま終わることはありません。
+  どちらの数字にも「無効」の値はなく、履歴を長く持ちたいプロジェクトは数字を上げます。
+  既定値は判断です。これまでに測った最も重いスイートは run 1 回あたり約 50 MB なので、20 回で約 1 GB です。それより少ないと、数分おきに走るスイートでは 1 時間前に追っていた失敗が消えてしまいます。
+  live session が 1 つでもある間、retention は何もせず、そう告げます。そのプロセスは動いている間ずっと record を書くからです。
+  export ファイルは、run 自身の一覧を通してだけ消され、古さで消されることはありません。results ディレクトリは他のツールの Allure 出力と共有されることがあり、nukadoko が書いていないファイルは nukadoko が消してよいものではないからです。
+  `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、カテゴリ丸ごとを消す操作として残ります。
   カテゴリのフラグを指定しなければ、3 つのカテゴリをすべて消します。
   カテゴリのフラグを 1 つ指定すると、操作をそのカテゴリだけに限定します。
   `--dry-run` は実際の run と同じ計画を出力しますが、何も消しません。
-  どこかに live な session が 1 つでもある場合、このコマンドはすべてのカテゴリについて操作全体を拒否します。
-  session のプロセスが records と export の出力を引き続き書く可能性があるためです。
-  この規則は、`nuka session clear` が live な lock を拒否するのと同じ理由で、すべての environment に適用されます。
-  1 つの export ファイルだけは常に例外です。
+  どこかに live な session が 1 つでもある場合、このコマンドはすべてのカテゴリについて操作全体を拒否します。`nuka session clear` が live な lock を拒否するのと同じ理由です。
+  1 つの export ファイルだけは、retention と `clean` の両方の例外です。
   `export/allure-history.jsonl` は `allure-results/` の中ではなく、その隣にあります。
   ここにある成果物のうち、新しい run で再現できないものはこのファイルだけです。
 - **step record と scenario record は同じ 1 行にいます。**
@@ -1910,6 +1917,7 @@ Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使いま�
 | `envFiles` | トップレベルの env file。environment ごとに追記される(下記) |
 | `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
 | `stateDir` | nukadoko が実行時に書き込む場所(デフォルトは `.nukadoko`。「State directory」を参照) |
+| `retention` | Measurement を残す長さ。`runs`(既定 20)は丸ごと残す最新の run の数、`adHocDays`(既定 7)はどの run にも属さない record の日数(「成果物」を参照) |
 | `browserType` | `ctx.page()` が起動する Playwright のエンジン: `chromium`(デフォルト)、`firefox`、`webkit`(下記) |
 | `browser` | Playwright 自身の `LaunchOptions`。そのエンジンの `launch` にそのまま渡される(下記) |
 | `browserContext` | Playwright 自身の `BrowserContextOptions`。`browser.newContext()` に渡される(下記) |
@@ -2010,20 +2018,26 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
   scenario 全体をまたぐ trace.zip はここにはありません。
   各 step 自身の trace は、その step 自身の `records/steps/<id>/` の下に置かれます(「実行」を参照)。
+- `records/runs/<run_id>/`(`nuka run` の呼び出しごとに 1 つのディレクトリ。`exports` を持ちます)。
+  `exports` は、その run が `export/` の下に書いた result、container、attachment のすべてのファイルを、ルートからの相対パスで 1 行に 1 つ列挙したものです。
+  ファイルを書いたプロセス自身が追記します(`--concurrency` では worker プロセスが書きます)。
+  これがあるので、run の export 出力は run と一緒に消えます(「成果物」を参照)。
+  状態や時刻は持ちません。各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。
 - `cache/sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
-- `export/allure-results/`(emitter の出力。run をまたいで追記され、新しい Allure launch が欲しければ削除してよい)。
+- `export/allure-results/`(emitter の出力。`records/` が持つのと同じ run を持ちます。run のファイルは run と一緒に消えるからです(「成果物」を参照)。新しい Allure launch が欲しければ削除してよい)。
   `init` もこれを空のまま作ります。
   Allure 自身の CLI は、存在しないディレクトリでは起動を拒む一方、空のディレクトリなら受け付けるからです。
   これにより、最初の `nuka run` より前から `allure watch` を起動しておけます。
 - `export/messages.ndjson`(messages emitter の出力)。
   このパスが持つのは常に、直近に *完了した* run 自身のストリームだけで、その run が終わった瞬間に原子的に置き換えられます。
   各呼び出し自身の、実行中の本当の書き込み先はその隣にある run-id 付きの兄弟ファイルです(`messages.<run_id>.ndjson`、その呼び出し自身の開始時に truncate される)。
-  `nuka run` の呼び出し 1 回につき 1 つで、終わったあともディスクに残ります(Messages emitter を参照)。
-  溜まったものを消すのは `nuka clean [--export]` です。
+  `nuka run` の呼び出し 1 回につき 1 つで、その run と一緒に消えます(Messages emitter を参照)。
 
-`nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、この 3 つのディレクトリすべてにまたがって消すコマンドです。
+日常の削除は retention で、`nuka run` 自身が毎回の run の終わりに適用します(「成果物」を参照)。
+`nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、この 3 つのディレクトリすべてにまたがって一度に消すコマンドです。
 カテゴリのフラグを 1 つも与えなければ、既定はその全部です。
 カテゴリのフラグを 1 つ与えると、削除をそのカテゴリに限定します。
+run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。retention はそこに決して触れません。
 どこかで `nuka session` が 1 つでも live であれば、カテゴリを問わずコマンド全体を拒否します。
 その session 自身のプロセスが、いままさに `records/` と `export/` に書き込んでいるからです(理由の全体は「成果物」を参照)。
 カテゴリを問わず決して触れないファイルが 1 つあります。
@@ -2542,9 +2556,9 @@ Allure と同様に、この emitter には `enabled` フラグも CLI フラグ
   `end` が完成したコピーを置くときに 1 回だけ変わります。
   run の途中でクラッシュしても、設定されたパスに残るのは直前の run 自身の完全なファイルであり、truncate されたファイルではありません。
   run をライブで見るのは Allure の仕事(`npx allure watch`)であり、このストリームの仕事ではありません。
-- 各呼び出しのファイルは、設定されたパスの隣に残ります。
-  「成果物」が示す理由により、これらのファイルを自動で消すものはありません。
-  溜まったものを、設定されたパス自身のコピーとあわせて消すのは `nuka clean [--export]` です。
+- 各呼び出しのファイルは、その run が残る間、設定されたパスの隣に残ります。
+  「成果物」が他のすべての Measurement に示す retention の規則に従います。
+  すべてを一度に、設定されたパス自身のコピーとあわせて消すのは `nuka clean [--export]` です。
 - この emitter は Allure emitter と逆の役割を持ちます。
   Allure は nukadoko の計測の余剰を公開し、この emitter は compat の忠実さを保ちます。
   唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko の run を従来の cucumber-js の run と同じように読み続けられるようにすることです。
@@ -2797,7 +2811,10 @@ nuka run <feature[:line]|dir>...
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. Each failed scenario follows with its
-                              feature, line, and name. --quiet drops the
+                              feature, line, and name. Then one retention
+                              line, when a run older than the newest
+                              retention.runs was removed (see "Artifacts");
+                              --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
                               always.

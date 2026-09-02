@@ -5,6 +5,62 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Breaking
+
+- **`nuka run` keeps the newest `retention.runs` runs (default 20) and
+  removes every older one at the end of each run.** A run is every
+  scenario record sharing one `run_id`, dated by its earliest `started_at`,
+  the same rule `nuka accept` and `nuka tend` use to name the newest run.
+  An older run loses its scenario records, the step records they cite, the
+  export files listed in its own `.nukadoko/records/runs/<run_id>/exports`,
+  and its messages stream. A record no retained run owns (a `nuka do` or
+  `recordStep` record, a record whose run is gone, an unreadable scenario
+  directory, a run that stopped before its first scenario finished) is
+  removed once older than `retention.adHocDays` (default 7). Neither number
+  has an "off" value. Retention is skipped, and says so, while a live
+  session is up. The line it prints goes out under `--quiet` too.
+
+  The measurement behind it: one project ran 202 times in four days and
+  left 70,229 step records and a 19 GB state directory, with `nuka tend`
+  taking 20 seconds to walk it, and nobody had noticed. The defaults are a
+  judgment: at about 50 MB per run for that suite once attachments are
+  hard links, 20 runs is about 1 GB, and fewer would lose the failure a
+  person was chasing an hour ago on a suite run every few minutes.
+
+  What this changes for a project already on nukadoko, including the
+  one-time `nuka clean --export` for a results directory written before
+  runs kept a manifest, is in `docs/upgrading.md`.
+
+### Added
+
+- **Each run records which export files it wrote**, under
+  `.nukadoko/records/runs/<run_id>/exports`, one root-relative path per
+  line, appended by whichever process wrote the file. This is what lets a
+  run's Allure output leave with the run: an attachment's name is chosen by
+  allure-js-commons and written into the result before the writer sees it,
+  so a run cannot stamp its id into the name, and the parent of a
+  `--concurrency` run never holds the names its workers chose.
+  `nuka clean --records` removes these directories with the other records.
+
+- **`nuka do --use`, `nuka harvest`, a live session's `do`, and
+  `recordStep` say that a missing step record may have aged out**, naming
+  the retention policy in force, rather than only "no such step record".
+
+### Fixed
+
+- **A trace zip or screenshot was stored twice, once under
+  `records/steps/<id>/` and once as its Allure attachment.** The Allure
+  writer copied every attachment into `allure-results/`; on the project
+  above that was 9.0 GB of trace zips under `records/` and the same 9.0 GB
+  again under `allure-results/`. The writer now hard-links the file, to the
+  temp name first and then renamed, so the atomicity `allure watch`
+  depends on holds as before; Allure opens the file by name and never
+  writes to it, and the link keeps the bytes alive after `nuka clean
+  --records` removes the original. A link that fails (another filesystem,
+  or one without hard links) falls back to the copy it made before.
+
 ## 0.10.1 — 2026-09-02
 
 ### Fixed

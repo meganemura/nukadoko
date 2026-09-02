@@ -141,11 +141,12 @@ jobs:
   そちらでは `webServer` という設定フィールドが、1 つ目の spec が走るより前に自動でアプリを起動します。
   `nuka run` と `nuka do` は `playwright.config.ts` を一切読みません([docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照)。
   だから明示の起動 step が無いと、`page` や `request` に触れる最初の step が、何が欠けていたかを名指すことも無いまま `ECONNREFUSED` で失敗します。
-- **積み上がるものを消す何かが要ります。** `nuka run` は step record と scenario record を書き込みますし、それ自身と `nuka do`/session の利用は `.nukadoko/cache/` の下にもファイルを残します。
-  そのどれも自動では消えません(docs/spec.ja.md の「成果物」を参照)。
-  GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこでは自然に積み上がることはありません。
-  セルフホストや、それ以外の理由で永続するランナーでは積み上がるので、2 つのどちらかの手当てが要ります。
-  ジョブの先頭で `rm -rf .nukadoko` するか、`npx nuka clean`(まさにこの理由のために足されたコマンド。自身の `--help` を参照)を叩くかです。
+- **run が残すものには上限があり、それ以外にはありません。** `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
+  だから永続するランナーでも、`.nukadoko/records/` と export の出力はその回数ぶんの大きさに留まります。
+  決して消さないのは `.nukadoko/cache/`(`nuka do`/session の利用が残す session ファイル)と、nukadoko が run ごとのファイル一覧を残すようになる前に書かれた `allure-results/` です。
+  GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこではどちらも問題になりません。
+  セルフホストや、それ以外の理由で永続するランナーでは、その 2 つに対して手当てが 2 つあります。
+  ジョブの先頭で `rm -rf .nukadoko` するか、`npx nuka clean`(自身の `--help` を参照)を叩くかです。
   後者は同じことをより狭く行い、そのランナー上でまだ生きている `nuka session` があれば、それを理由に丸ごと拒否します。
 - **`nuka tend` は自分自身のトリガーを必要とします。** workflow が明示しない限り、これを定期的に走らせるものは何もありません。
   上の `tend` job がそのトリガーで、`check`/`run` の経路からは意図的に外してあります(docs/spec.ja.md の「Tending(手入れ)」を参照)。

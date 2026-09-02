@@ -377,7 +377,8 @@ scenario が終わると、最終 result がライブ表示を置き換えます
 `nuka init` は `.nukadoko/export/allure-results/` を作るため、最初の `nuka run` より前に `watch` を開始できます。
 snapshot の仕組みとライブ視聴中のリトライ表示は [Allure emitter](docs/spec.ja.md#allure-emitter) を参照してください。
 
-`allure-results/` にある完了済みのファイルは追記のみで、自分でディレクトリを削除するまで run が積み上がります。
+`allure-results/` にある完了済みのファイルは書き換えられません。
+run のファイルは、その run が最新 `retention.runs` 回(既定 20)より古くなった時点で run と一緒に消えるので、レポートに載るのはその回数ぶんの run です。`nuka clean --export` はディレクトリを一度に空にします。
 一時的な `*-progress-result.json` は scenario の終了時と次の run の開始時に削除されます。
 
 ## Self-healing, with the deviation on the record

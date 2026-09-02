@@ -169,17 +169,20 @@ of the above; these four are what changes.
   without an explicit start step, the first step that touches `page` or
   `request` fails with `ECONNREFUSED`, not with anything that names what
   went missing.
-- **Something has to remove what accumulates.** `nuka run` writes step
-  and scenario records, and both it and `nuka do`/session use can leave
-  files under `.nukadoko/cache/`; none of it is deleted automatically (see
-  "Artifacts" in [docs/spec.md](spec.md#artifacts)). A GitHub-hosted
-  runner is a fresh virtual machine per job, so this never accumulates
-  there on its own. A self-hosted or otherwise persistent runner does
-  accumulate it, and needs one of two fixes: `rm -rf .nukadoko` at the
-  start of the job, or `npx nuka clean` (added for exactly this reason;
-  see its own `--help`), which does the same thing more narrowly and
-  refuses outright if a live `nuka session` is somehow still running
-  against that runner.
+- **What a run leaves behind is bounded, and the rest is not.** `nuka run`
+  keeps the newest `retention.runs` runs and removes older ones itself at
+  the end of every run (see "Artifacts" in
+  [docs/spec.md](spec.md#artifacts)), so on a persistent runner
+  `.nukadoko/records/` and the export output stay the size of that many
+  runs. What it never removes is `.nukadoko/cache/` (session files a
+  `nuka do`/session use can leave) and an `allure-results/` directory
+  written before nukadoko kept a per-run manifest of its files. A
+  GitHub-hosted runner is a fresh virtual machine per job, so neither
+  matters there. A self-hosted or otherwise persistent runner has two
+  fixes for them: `rm -rf .nukadoko` at the start of the job, or
+  `npx nuka clean` (see its own `--help`), which does the same thing more
+  narrowly and refuses outright if a live `nuka session` is somehow still
+  running against that runner.
 - **`nuka tend` needs its own trigger.** Nothing runs it periodically
   unless a workflow says so; the `tend` job above is that trigger, kept
   off the `check`/`run` path on purpose (see "Tending" in

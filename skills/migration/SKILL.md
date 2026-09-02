@@ -98,12 +98,14 @@ description of what triggers it, so a code that shows up mid-migration and
 isn't self-explanatory can be looked up without leaving the CLI.
 
 A migration repeats that loop far more than a finished suite ever runs
-`nuka run` again, so `.nukadoko/` accumulates step/scenario records,
-session cache files, and export output quickly. `nuka clean [--records]
-[--cache] [--export] [--dry-run]` removes what piled up; giving no
-category flag cleans all three, `--dry-run` previews the same plan it
-would act on without removing anything, and it refuses the whole command,
-every category, while any `nuka session` anywhere is still live.
+`nuka run` again. `nuka run` keeps only the newest `retention.runs` runs
+(default 20) and removes older records and export files itself, so
+`.nukadoko/` stays that size on its own; session cache files are the part
+it never touches. `nuka clean [--records] [--cache] [--export] [--dry-run]`
+removes everything at once; giving no category flag cleans all three,
+`--dry-run` previews the same plan it would act on without removing
+anything, and it refuses the whole command, every category, while any
+`nuka session` is still live.
 
 Once more than one feature file is green, `nuka run <feature> [<feature>
 ...] --concurrency <n>` or `nuka run <dir> --concurrency <n>` runs the

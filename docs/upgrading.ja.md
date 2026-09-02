@@ -27,6 +27,28 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.10.1 から 0.11.0 へ
+
+`nuka run` が古い record を自分で消すようになり、trace ファイルはディスク上に 2 つではなく 1 つになりました。
+
+- **アップグレード後の最初の `nuka run` が、最新 20 回より古い run をすべて消します。**
+  run は既にディスクにある scenario record から読み取るので、何週間も育った state directory はその最初の run の終わりに縮み、run は消した run の数を 1 行の `retention:` として出力します。
+  それを望まないなら、走らせる前に `nukadoko.config.ts` の `retention.runs` を設定します。「すべて残す」値はなく、あるのは大きな数字だけです。
+  `retention.adHocDays`(既定 7)は、`nuka do` の record のような、どの run にも属さない record の寿命で、別の設定です。
+- **`nuka accept` と `nuka tend` は、保持された run だけを見ます。**
+  最後の green な run が最新 `retention.runs` 回より古い feature は、一度も走っていないものとして読まれます。accept する前にもう一度走らせてください。
+  既に書かれた sign-off record は影響を受けません。feature の隣にあり、`.nukadoko/` の下にはないからです。
+- **`nuka do --use <id>` と `nuka harvest <id>` が、以前は解決できた id を拒否することがあります。**
+  拒否の文面は、record が寿命を過ぎた可能性と、有効な方針を述べます。「no such step record」だけでは終わりません。
+- **0.10 以前が書いた `allure-results/` は刈られません。**
+  retention が export ファイルを消すのは、書いた run が `.nukadoko/records/runs/<run_id>/` に残した一覧を通してだけで、古い run はそれを残していません。
+  `nuka clean --export` を 1 回走らせてそのディレクトリを空にしてください。以後の run は、寿命を過ぎたときに自分のファイルを自分で消します。
+- **`allure-results/` の下の trace と screenshot は、`records/steps/<id>/` の下のファイルへの hard link になりました。**
+  読む側には何も変わりません。
+  link を保たないツールで `.nukadoko/` をコピーすると、以前と同じく 2 つのファイルに戻ります。`allure.resultsDir` が別のファイルシステムにあるときは、自動でコピーに戻ります。
+- **`nuka clean --records` は `.nukadoko/records/runs/` も消します。**
+  パスを指定して clean をスクリプトにしているプロジェクトは、このディレクトリを含めてください。
+
 ## 0.10.0 から 0.10.1 へ
 
 修正が 1 つ。プロジェクト側から見える変化が 2 つあります。
