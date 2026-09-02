@@ -407,7 +407,9 @@ export const configSchema = z
      * across days by design. Neither has an "off" value: a project that
      * wants more history raises the number, and the measurement that
      * motivated the defaults (one heavy suite reached 19 GB in four days
-     * with nothing removed) is why "keep everything" is not a setting. */
+     * with nothing removed) is why "keep everything" is not a setting.
+     * Export files are removed only inside the project root: an
+     * `allure.resultsDir` above it keeps its files. */
     retention: z
       .object({
         runs: z.number().int().min(1).default(DEFAULT_RETENTION_RUNS),

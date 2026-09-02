@@ -31,10 +31,22 @@ import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-export
 //    `nuka harvest` read these across days by design, which is why they
 //    get days rather than a run count.
 //
+// A run owns exactly the step records its scenario records' `steps[]`
+// cite. That set is complete: a part invoked through the `call` fixture
+// runs inside its caller and lands as a `calls[]` entry on the caller's
+// own record (src/record/types.ts's `CallEntry`, which has no record id),
+// never as a `records/steps/<id>/` of its own, and a hook's evidence lives
+// inside the scenario's own directory. Only `nuka do`, a live session, and
+// `recordStep` write a step record no scenario cites, and those are what
+// the age rule is for.
+//
 // Export files are removed only through a manifest. A results directory
 // can be shared with another tool's Allure output, so a file nothing here
 // wrote is never touched, however old; `nuka clean --export` is the
-// operation for a directory that predates manifests.
+// operation for a directory that predates manifests. A manifest line that
+// resolves outside the project root is skipped as well: `allure.resultsDir`
+// can point above the project, and a removal that leaves the project is
+// not one this tool makes on its own.
 //
 // Skipped entirely, and said so, while a live session (`nuka session
 // start`'s daemon) is up anywhere: that process writes records for as long

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -14,7 +14,7 @@ import {
   planRunRetention,
   type RunSummary,
 } from "../src/record/retention.js";
-import { runExportsManifestPath } from "../src/record/run-exports.js";
+import { readExportsManifest, runExportsManifestPath } from "../src/record/run-exports.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: what retention removes and what it must never touch.
@@ -48,8 +48,14 @@ describe("planRunRetention", () => {
     hegel.test((tc) => {
       const runs = tc.draw(runsGen);
       const keep = tc.draw(gs.integers({ minValue: 1, maxValue: 40 }));
-      const reversed = [...runs].reverse();
-      expect(planRunRetention(reversed, keep)).toEqual(planRunRetention(runs, keep));
+      // A drawn permutation, not a fixed reversal, so two runs tied on
+      // startedAt also arrive in either order.
+      const keys = runs.map(() => tc.draw(gs.integers({ minValue: 0, maxValue: 1_000_000 })));
+      const shuffled = runs
+        .map((run, index) => ({ run, key: keys[index]! }))
+        .sort((a, b) => a.key - b.key)
+        .map((entry) => entry.run);
+      expect(planRunRetention(shuffled, keep)).toEqual(planRunRetention(runs, keep));
     }));
 
   it("breaks a tie on startedAt by run id, the later id ranking newer", () => {
@@ -308,5 +314,62 @@ describe("nuka run applies retention", () => {
     expect(results.length).toBe(1);
     const messages = readdirSync(path.join(rootDir, ".nukadoko", "export")).filter((name) => name.startsWith("messages.run-"));
     expect(messages.length).toBe(1);
+  });
+});
+
+describe("nuka run --concurrency applies retention", () => {
+  let rootDir: string;
+  const resultsDir = (root: string): string => path.join(root, ".nukadoko", "export", "allure-results");
+  const runFiles = (root: string): string[] =>
+    readdirSync(resultsDir(root))
+      .filter((name) => name !== "environment.properties" && name !== "categories.json")
+      .map((name) => path.join(".nukadoko", "export", "allure-results", name))
+      .sort();
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("run-concurrency-project");
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 } });\n',
+    );
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("collects every export file the worker processes wrote into the run's manifest, and prunes them by it next run", async () => {
+    // The parent never sees the names a worker's writer chose, so the
+    // manifest is the only account of them. Fresh directory: every file
+    // under allure-results/ except the two shared ones is this run's.
+    const first = createCaptureSink();
+    expect(
+      await runCli(["run", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr: first }),
+      first.text(),
+    ).toBe(0);
+    const runsDir = path.join(rootDir, ".nukadoko", "records", "runs");
+    const [firstRunId] = readdirSync(runsDir);
+    expect(readdirSync(runsDir)).toHaveLength(1);
+    const firstManifest = readExportsManifest(path.join(runsDir, firstRunId!, "exports"));
+    expect([...firstManifest].sort()).toEqual(runFiles(rootDir));
+    const resultFiles = firstManifest.filter((name) => name.endsWith("-result.json"));
+    expect(resultFiles).toHaveLength(2);
+    const resultTexts = resultFiles.map((relative) => readFileSync(path.join(rootDir, relative), "utf8"));
+    expect(resultTexts.some((text) => text.includes("features/basic/a.feature"))).toBe(true);
+    expect(resultTexts.some((text) => text.includes("features/basic/b.feature"))).toBe(true);
+
+    const second = createCaptureSink();
+    expect(
+      await runCli(["run", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr: second }),
+      second.text(),
+    ).toBe(0);
+    expect(second.text()).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");
+    for (const relative of firstManifest) {
+      expect(existsSync(path.join(rootDir, relative)), relative).toBe(false);
+    }
+    expect(existsSync(path.join(runsDir, firstRunId!))).toBe(false);
+    expect(readdirSync(runsDir)).toHaveLength(1);
+    expect(readdirSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toHaveLength(2);
+    expect(existsSync(path.join(resultsDir(rootDir), "environment.properties"))).toBe(true);
   });
 });
