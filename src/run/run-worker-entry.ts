@@ -14,6 +14,7 @@ import { probeVersion } from "../environment/probe-version.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
+import { runExportsManifestPath } from "../record/run-exports.js";
 import { buildStepBindings, type StepBinding } from "./match-step.js";
 import { probeGitState } from "./probe-git.js";
 import { createStepProgressLogger } from "./progress-log.js";
@@ -177,6 +178,7 @@ async function main(): Promise<void> {
       allureEmitter = createAllureEmitter({
         resultsDir: path.join(rootDir, allureResultsDirRel),
         rootDir,
+        exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
         environment: resolvedEnv.name,
         targetVersion,
         secrets,

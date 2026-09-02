@@ -5,6 +5,7 @@ import type { Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../cli/writable-sink.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
+import { runExportsManifestPath } from "../record/run-exports.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
 import { type FailedScenario, writeScenarioBoundary } from "./progress-log.js";
@@ -154,6 +155,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       allureEmitter = createAllureEmitter({
         resultsDir,
         rootDir,
+        exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
         environment,
         targetVersion,
         secrets,

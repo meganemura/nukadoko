@@ -74,6 +74,14 @@ export type LinkFile = (existingPath: string, newPath: string) => void;
 export interface AtomicWriterOptions {
   /** Defaults to `linkSync`. */
   readonly link?: LinkFile;
+  /** Called with the absolute path of every result, container, and
+   * attachment file this writer completes (after the rename, so the path
+   * names a finished file). Never called for `environment.properties`,
+   * `categories.json`, a globals file, or a progress snapshot: the first
+   * three are rewritten by every run and belong to none, and a snapshot is
+   * deleted by the run that wrote it. This is what lets one run own its
+   * export files (src/record/run-exports.ts). */
+  readonly onWrite?: (absolutePath: string) => void;
 }
 
 // A progress snapshot's own filename always ends in this — nested inside
@@ -136,19 +144,30 @@ export function createAtomicWriter(resultsDir: string, options: AtomicWriterOpti
   const link: LinkFile = options.link ?? linkSync;
 
   const resolve = (name: string): string => path.join(resultsDir, name);
+  const noteWritten = (filePath: string): void => {
+    options.onWrite?.(filePath);
+  };
 
   return {
     writeResult(result: TestResult): void {
-      writeAtomic(resolve(`${result.uuid}-result.json`), JSON.stringify(result));
+      const filePath = resolve(`${result.uuid}-result.json`);
+      writeAtomic(filePath, JSON.stringify(result));
+      noteWritten(filePath);
     },
     writeGroup(result: TestResultContainer): void {
-      writeAtomic(resolve(`${result.uuid}-container.json`), JSON.stringify(result));
+      const filePath = resolve(`${result.uuid}-container.json`);
+      writeAtomic(filePath, JSON.stringify(result));
+      noteWritten(filePath);
     },
     writeAttachment(distFileName: string, content: Buffer): void {
-      writeAtomic(resolve(distFileName), content);
+      const filePath = resolve(distFileName);
+      writeAtomic(filePath, content);
+      noteWritten(filePath);
     },
     writeAttachmentFromPath(distFileName: string, from: string): void {
-      linkOrCopyAtomic(resolve(distFileName), from, link);
+      const filePath = resolve(distFileName);
+      linkOrCopyAtomic(filePath, from, link);
+      noteWritten(filePath);
     },
     writeEnvironmentInfo(info: EnvironmentInfo): void {
       // Mirrors FileSystemWriter.writeEnvironmentInfo exactly (verified in

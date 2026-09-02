@@ -120,6 +120,22 @@ describe("createAtomicWriter", () => {
     assertNoTempFilesLeftOver(dir);
   });
 
+  it("reports each result, container, and attachment it completes through onWrite, and nothing else", () => {
+    const written: string[] = [];
+    const writer = createAtomicWriter(dir, { onWrite: (filePath) => written.push(path.basename(filePath)) });
+    writer.writeResult({ uuid: "r1", statusDetails: {}, stage: "pending" as never, steps: [], attachments: [], parameters: [], labels: [], links: [] } as never);
+    writer.writeGroup({ uuid: "g1", children: [], befores: [], afters: [] });
+    writer.writeAttachment("a1-attachment.txt", Buffer.from("x", "utf8"));
+    const source = path.join(dir, "source.zip");
+    writeFileSync(source, "zip bytes");
+    writer.writeAttachmentFromPath("a2-attachment.zip", source);
+    writer.writeEnvironmentInfo({ environment: "default" });
+    writer.writeCategoriesDefinitions([]);
+    writer.writeGlobals("globals.json", {} as never);
+    writer.writeProgressSnapshot({ uuid: "r1" } as never, 1);
+    expect(written).toEqual(["r1-result.json", "g1-container.json", "a1-attachment.txt", "a2-attachment.zip"]);
+  });
+
   it("never removes files that were already there", () => {
     writeFileSync(path.join(dir, "pre-existing-result.json"), "{}");
     const writer = createAtomicWriter(dir);

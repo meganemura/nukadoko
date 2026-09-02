@@ -40,6 +40,7 @@ import {
   type MappedStatus,
 } from "./map-scenario.js";
 import { createAtomicWriter } from "./writer.js";
+import { createExportsManifest } from "../../record/run-exports.js";
 
 // Responsibility: the thin layer that turns map-scenario.ts's flat
 // description into actual `ReporterRuntime` calls — the only module in this
@@ -257,6 +258,13 @@ export interface AllureEmitterOptions {
   /** Absolute path. */
   readonly resultsDir: string;
   readonly rootDir: string;
+  /** Absolute path of this run's own exports manifest
+   * (src/record/run-exports.ts). Every result, container, and attachment
+   * file this emitter's writer completes is appended there, root-relative,
+   * so retention can later remove this run's export output together with
+   * its records. Omitted only by tests that assert on the results
+   * directory alone. */
+  readonly exportsManifestPath?: string;
   readonly environment: string;
   readonly targetVersion?: string;
   readonly secrets: SecretSet;
@@ -488,7 +496,13 @@ function runningSnapshotStep(
 
 export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitter {
   const projectName = resolveProjectName(options.rootDir);
-  const writer = createAtomicWriter(options.resultsDir);
+  const manifest =
+    options.exportsManifestPath !== undefined
+      ? createExportsManifest(options.exportsManifestPath, options.rootDir)
+      : null;
+  const writer = createAtomicWriter(options.resultsDir, {
+    ...(manifest !== null ? { onWrite: (filePath: string) => manifest.note(filePath) } : {}),
+  });
   const environmentInfo: EnvironmentInfo = {
     environment: options.environment,
     // `target_version` is a run-level value: unlike record.json/

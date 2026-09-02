@@ -34,6 +34,7 @@ import {
   writeScenarioBoundary,
 } from "../run/progress-log.js";
 import { generateRunId } from "../run/run-id.js";
+import { runExportsManifestPath } from "../record/run-exports.js";
 import {
   doneCallbackMessage,
   HEARTBEAT_TICK_CAP,
@@ -754,6 +755,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           allureEmitter = createAllureEmitter({
             resultsDir,
             rootDir,
+            exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
             environment: resolvedEnv.name,
             targetVersion,
             secrets,
