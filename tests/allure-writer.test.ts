@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -62,14 +62,34 @@ describe("createAtomicWriter", () => {
     assertNoTempFilesLeftOver(dir);
   });
 
-  it("writeAttachmentFromPath copies the source file with no temp file left behind", () => {
+  it("writeAttachmentFromPath hard-links the source file, so the bytes exist once, with no temp file left behind", () => {
     const source = path.join(dir, "source.txt");
     writeFileSync(source, "source content");
     const writer = createAtomicWriter(dir);
-    writer.writeAttachmentFromPath("copied.txt", source);
-    const file = path.join(dir, "copied.txt");
+    writer.writeAttachmentFromPath("linked.txt", source);
+    const file = path.join(dir, "linked.txt");
     expect(existsSync(file)).toBe(true);
     expect(readFileSync(file, "utf8")).toBe("source content");
+    // Same inode from both names: the attachment did not duplicate the
+    // source's bytes.
+    expect(statSync(file).ino).toBe(statSync(source).ino);
+    expect(statSync(file).nlink).toBe(2);
+    assertNoTempFilesLeftOver(dir);
+  });
+
+  it("writeAttachmentFromPath falls back to a copy when linking fails, with no temp file left behind", () => {
+    const source = path.join(dir, "source.txt");
+    writeFileSync(source, "source content");
+    const writer = createAtomicWriter(dir, {
+      link: () => {
+        throw Object.assign(new Error("EXDEV: cross-device link not permitted"), { code: "EXDEV" });
+      },
+    });
+    writer.writeAttachmentFromPath("copied.txt", source);
+    const file = path.join(dir, "copied.txt");
+    expect(readFileSync(file, "utf8")).toBe("source content");
+    expect(statSync(file).ino).not.toBe(statSync(source).ino);
+    expect(statSync(file).nlink).toBe(1);
     assertNoTempFilesLeftOver(dir);
   });
 

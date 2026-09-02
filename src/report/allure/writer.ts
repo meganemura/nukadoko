@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, linkSync, mkdirSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stringifyEnvInfo, type Writer } from "allure-js-commons/sdk/reporter";
 import type { Category, EnvironmentInfo } from "allure-js-commons/sdk";
@@ -43,10 +43,37 @@ function writeAtomic(filePath: string, data: Buffer | string): void {
   renameSync(tempPath, filePath);
 }
 
-function copyAtomic(filePath: string, sourcePath: string): void {
+// An attachment that already exists as a file (a step's own trace.zip or
+// screenshot under `records/steps/<id>/`) is hard-linked into `resultsDir`
+// rather than copied. The two directories otherwise hold every byte of
+// every trace twice: measured on a project that ran 202 times in four days,
+// 9.0 GB of trace zips under `records/` and the same 9.0 GB again under
+// `allure-results/`. A hard link costs one directory entry, reads
+// identically to a copy from Allure's side (it opens the file by name and
+// never writes to it), and outlives `nuka clean --records` removing the
+// original, since the link count, not the original path, keeps the bytes
+// alive. The link is made to the temp name and then renamed, so the
+// atomicity the header describes holds for links exactly as for writes.
+// Linking fails across filesystems (`allure.resultsDir` can point anywhere)
+// and on filesystems without hard links, so any link failure falls back to
+// a copy of the same bytes; the outcome differs only in disk usage.
+function linkOrCopyAtomic(filePath: string, sourcePath: string, link: LinkFile): void {
   const tempPath = path.join(path.dirname(filePath), tempNameFor(path.basename(filePath)));
-  copyFileSync(sourcePath, tempPath);
+  try {
+    link(sourcePath, tempPath);
+  } catch {
+    copyFileSync(sourcePath, tempPath);
+  }
   renameSync(tempPath, filePath);
+}
+
+/** `linkSync`'s own shape, injectable so a test can force the copy
+ * fallback without needing a second filesystem. */
+export type LinkFile = (existingPath: string, newPath: string) => void;
+
+export interface AtomicWriterOptions {
+  /** Defaults to `linkSync`. */
+  readonly link?: LinkFile;
 }
 
 // A progress snapshot's own filename always ends in this — nested inside
@@ -104,8 +131,9 @@ export interface AllureAtomicWriter extends Writer {
  * under `resultsDir` are never touched — only added to (never delete an
  * existing allure-results directory); a `*-progress-result.json` file is
  * the one exception (this file's own header). */
-export function createAtomicWriter(resultsDir: string): AllureAtomicWriter {
+export function createAtomicWriter(resultsDir: string, options: AtomicWriterOptions = {}): AllureAtomicWriter {
   mkdirSync(resultsDir, { recursive: true });
+  const link: LinkFile = options.link ?? linkSync;
 
   const resolve = (name: string): string => path.join(resultsDir, name);
 
@@ -120,7 +148,7 @@ export function createAtomicWriter(resultsDir: string): AllureAtomicWriter {
       writeAtomic(resolve(distFileName), content);
     },
     writeAttachmentFromPath(distFileName: string, from: string): void {
-      copyAtomic(resolve(distFileName), from);
+      linkOrCopyAtomic(resolve(distFileName), from, link);
     },
     writeEnvironmentInfo(info: EnvironmentInfo): void {
       // Mirrors FileSystemWriter.writeEnvironmentInfo exactly (verified in
