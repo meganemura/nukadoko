@@ -489,13 +489,21 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   // filename" indistinguishable from "happened not to need one this time"
   // at a glance, and never a version (the engine's type is enough for
   // acceptance; the version lives in the record body).
-  const basename = path.basename(featurePath, ".feature");
+  // The whole feature file name, extension included, not its basename:
+  // `launcher.feature.2026-09-03-42a4e15.default.no-browser.md` lists
+  // right after `launcher.feature`, where a reader looks for it, while
+  // `launcher.2026-...` sorted before the feature (a digit sorts before
+  // `f`), and two records put two lines between a feature and its
+  // neighbour. Nothing reads a record by its name: tend and accept find
+  // records by frontmatter (src/tend/record-parse.ts, `isAcceptanceRecord
+  // Path` above), so records written under the old name keep working.
+  const featureFileName = path.basename(featurePath);
   const dateStamp = localDateStamp(startedAt.toISOString());
   const sha7 = runGit.commit.slice(0, 7);
   const browserSegment = browserRecord === undefined ? "no-browser" : browserRecord.type;
   const outputPath = path.join(
     path.dirname(absoluteFeaturePath),
-    `${basename}.${dateStamp}-${sha7}.${anyRecord.environment}.${browserSegment}.md`,
+    `${featureFileName}.${dateStamp}-${sha7}.${anyRecord.environment}.${browserSegment}.md`,
   );
 
   await writeFile(outputPath, content);

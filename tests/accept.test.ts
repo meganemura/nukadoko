@@ -93,7 +93,7 @@ describe("nuka accept: a green run", () => {
     // (environment, then the browser segment — "no-browser" here, since
     // this fixture's own steps never destructure page/context).
     expect(relativePath).toMatch(
-      new RegExp(`^features/greeting\\.\\d{4}-\\d{2}-\\d{2}-${commit.slice(0, 7)}\\.default\\.no-browser\\.md$`),
+      new RegExp(`^features/greeting\\.feature\\.\\d{4}-\\d{2}-\\d{2}-${commit.slice(0, 7)}\\.default\\.no-browser\\.md$`),
     );
 
     const content = await readFile(path.join(rootDir, relativePath), "utf8");

@@ -96,7 +96,7 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
 | Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
-| Sign-off | `<feature のベース名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
+| Sign-off | `<feature のファイル名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
 | Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも) | ツール | しない | 書いた run と同じ | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
@@ -2129,7 +2129,10 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   verdict のフィールドも失敗の記録もありません。
   プロジェクトは通らなかった scenario を直して再実行します。
   プロジェクトは試行ではなく結果を残します。
-- 記録は、それが由来する feature の隣に `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前で書かれ、accept した run 自身の条件が名前に織り込まれます(`<browser>` は、run がブラウザを一切起動しなかった場合は文字どおり `no-browser` になります)。
+- 記録は、それが由来する feature の隣に `<feature-filename>.<date>-<sha>.<environment>.<browser>.md` という名前で書かれ、accept した run 自身の条件が名前に織り込まれます(`<browser>` は、run がブラウザを一切起動しなかった場合は文字どおり `no-browser` になります)。
+  接頭辞は拡張子を含む feature のファイル名です(`launcher.feature.2026-09-03-42a4e15.default.no-browser.md`)。
+  一覧で record が feature の直後に並ぶためで、日付が先頭だと feature の前に並んでいました。
+  record を名前で読むものはありません。ツールは frontmatter で record を見つけるので、以前の `<feature のベース名>.` の形で書かれた record もそのまま読めます。
   こうすることで、同じ commit の同じ日であっても、2 つの条件が衝突して互いを黙って上書きすることがなくなります。
   browser の**バージョン**はファイル名には決して入りません。
   エンジンの種別だけで、その記録がどの条件のものかを識別するのに十分だからで、バージョンは記録の本文にだけ残ります(後述)。

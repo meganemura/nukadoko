@@ -330,7 +330,7 @@ nuka accept features/todo.feature       # freezes that run beside the feature
 
 `accept` refuses unless the most recent full run of the feature is green,
 the working tree is clean, and HEAD is the commit that run recorded. It
-writes `features/todo.<date>-<sha>.default.no-browser.md`: the feature's
+writes `features/todo.feature.<date>-<sha>.default.no-browser.md`: the feature's
 own text, one summary table per scenario (step, status, time, `mutates`,
 reads, writes), each step's validated `args` and `result`, and a closing
 "Declared vs observed" section listing any step that declared

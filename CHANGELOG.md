@@ -7,6 +7,18 @@ just until 0.1.
 
 ## 0.12.0 — 2026-09-03
 
+### Breaking
+
+- **The acceptance record's name now starts with the whole feature file
+  name, extension included:** `launcher.feature.2026-09-03-42a4e15.default.no-browser.md`
+  rather than `launcher.2026-09-03-...`. A listing shows the record right
+  after its feature; the old name sorted before it, since a digit sorts
+  before `f`, and two records put two lines between a feature and its
+  neighbour. Nothing reads a record by its name (tend and accept find
+  records by frontmatter), so records already written keep working, and a
+  glob on `<basename>.*.md` matches both forms. Reported from a suite
+  reading its features directory by eye.
+
 ### Added
 
 - **`nuka run --repeat <n>` runs every selected scenario `n` times in one

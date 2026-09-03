@@ -33,6 +33,23 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.11.0 to 0.12.0
+
+Additions, one fix, and one name.
+
+- **New acceptance records are named `<feature-filename>.<date>-<sha>...`,
+  extension included.** Records already written keep their old name and
+  keep working: nothing reads a record by its name. A script that globs
+  `<basename>.*.md` matches both forms; one that globs `<basename>.20*.md`
+  matches only the old one and needs `<basename>.feature.*.md` as well.
+- **A step can take one key from `from` and another from a table or
+  docstring on the same line.** A suite that had made the chained key
+  optional to get past `table-docstring-key-mismatch` can make it required
+  again, which restores the from-order check for that step.
+- **`nuka run --repeat <n>`, `nuka tend --fail-on <code>`, and the Condition
+  section's declared-vs-observed count** are additions; nothing already in
+  place changes.
+
 ## 0.10.1 to 0.11.0
 
 `nuka run` now removes old records on its own, and a trace file exists once

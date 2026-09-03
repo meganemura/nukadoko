@@ -97,7 +97,7 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
 | Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
-| Sign-off | `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
+| Sign-off | `<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
 | Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter) | the tool | no | with the run that wrote it | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
@@ -184,7 +184,11 @@ A wider setting changes what `nuka check` does, not only what it finds.
 Discovery imports every file that it walks. Thus, a module can read an
 environment, open a connection, or write a file during an otherwise read-only
 command. If `featuresDir` contains the application and the glue, discovery
-executes the application's top-level code.
+executes the application's top-level code. A file a scenario runs as a
+process, such as a fake server or a fixture script, belongs outside
+`featuresDir` for the same reason: discovery would import it on every
+`nuka check`, and a module that starts a child process or listens on a
+socket at its top level would do so there.
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -2596,7 +2600,12 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   record. The project fixes and reruns a scenario that did not pass. It keeps
   the outcome instead of the attempts.
 - Nukadoko writes the record beside its source feature. The name is
-  `<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, the
+  `<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, extension
+  included (`launcher.feature.2026-09-03-42a4e15.default.no-browser.md`),
+  so a listing shows the record right after its feature rather than before
+  it, where a date sorted. Nothing reads a record by its name: the tool
+  finds records by their frontmatter, so a record written under the older
+  `<feature-basename>.` form keeps working. `<date>-<sha>` is the
   accepted run's own condition folded into the name (`<browser>` is the
   literal `no-browser` when the run launched none) so two conditions never
   collide, silently overwriting one another, at the same commit on the

@@ -137,7 +137,8 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 
 `check` は安価な静的ゲートであり、`run` は step record の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
-acceptance record は `<feature-basename>.<date>-<sha>.<environment>.<browser>.md` という名前の Markdown ファイルで、feature の隣に書かれます。
+acceptance record は `<feature-filename>.<date>-<sha>.<environment>.<browser>.md` という名前の Markdown ファイルで、feature の隣に書かれます。
+一覧では、その feature の直後に並びます。
 このファイルには feature の全文、scenario record、そして evidence を取り除いた各 step record が入ります。
 さらに `Declared vs observed` という節があり、`mutates: false` と宣言しながら書き込みを行ったと計測された各 step を一覧にします。
 これにより、レビュアーは宣言と計測の食い違いを自分で導き直さずに確認できます。

@@ -27,6 +27,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.11.0 から 0.12.0 へ
+
+追加がいくつか、修正が 1 つ、名前が 1 つです。
+
+- **新しい acceptance record の名前は `<feature のファイル名>.<date>-<sha>...` で、拡張子を含みます。**
+  既に書かれた record は古い名前のまま、そのまま読めます。record を名前で読むものはありません。
+  `<ベース名>.*.md` で glob するスクリプトは両方の形に一致します。`<ベース名>.20*.md` で glob しているものは古い形にしか一致しないので、`<ベース名>.feature.*.md` も足してください。
+- **1 つの step が、同じ行で 1 つのキーを `from` から、もう 1 つを table や docstring から受け取れます。**
+  `table-docstring-key-mismatch` を避けるために chain するキーを optional にしていたスイートは、required に戻せます。その step の from-order の検査が戻ります。
+- **`nuka run --repeat <n>`、`nuka tend --fail-on <code>`、Condition 節の declared vs observed の件数**は追加で、既にあるものは変わりません。
+
 ## 0.10.1 から 0.11.0 へ
 
 `nuka run` が古い record を自分で消すようになり、trace ファイルはディスク上に 2 つではなく 1 つになりました。

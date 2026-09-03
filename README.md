@@ -143,8 +143,8 @@ the periodic one, and the only one you are meant to *not* run before every
 change.
 
 The acceptance record is a Markdown file named
-`<feature-basename>.<date>-<sha>.<environment>.<browser>.md`, written beside
-the feature. It contains the full feature text, the scenario record, and
+`<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, written beside
+the feature, where a listing shows it right after that feature. It contains the full feature text, the scenario record, and
 each step record with its evidence removed. It also contains a
 `Declared vs observed` section. This section lists each step that declared
 `mutates: false` but was measured making a write. A reviewer can therefore
