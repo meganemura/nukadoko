@@ -305,3 +305,54 @@ walkthrough just did.
 The edits above are yours to make and discard — this directory's committed
 step files stay v1-shaped, so restart the app without `--v2` (or just
 re-clone) and you're back to Part 1's starting point.
+
+## Part 3 — sign-off
+
+Parts 1 and 2 end at a green run. The claim this tool exists for is one
+step further: that a scenario was green at a named commit, frozen in a file
+a reviewer can read without the state directory. That is `nuka accept`.
+
+It needs two things a walkthrough copy inside this repository does not have
+by default: the example under its own git history, and a clean tree at the
+commit the run happened on. So do this part in a copy of `examples/todo`
+that you have `git init`ed and committed, with nukadoko installed as a
+dependency (the shorthand from "Prerequisites" no longer applies there).
+
+```sh
+nuka run features/todo.feature          # every scenario green
+nuka accept features/todo.feature       # freezes that run beside the feature
+```
+
+`accept` refuses unless the most recent full run of the feature is green,
+the working tree is clean, and HEAD is the commit that run recorded. It
+writes `features/todo.<date>-<sha>.default.no-browser.md`: the feature's
+own text, one summary table per scenario (step, status, time, `mutates`,
+reads, writes), each step's validated `args` and `result`, and a closing
+"Declared vs observed" section listing any step that declared
+`mutates: false` while measured making a write. `no-browser` is in the
+name because every step here goes through `request`, never `page`; a
+browser suite gets `chromium` there instead. Commit the `.md` with the
+feature: it is the durable artifact, and the `.nukadoko/` records it was
+built from are not.
+
+A reviewer who writes no code opens two files in the PR: the `.feature`,
+to check it says what the ticket meant, and this `.md`, to check what ran.
+Nothing else is theirs to read.
+
+To tie a feature to a ticket, write the ticket in the feature itself; there
+is no separate field, on purpose. A tag or a description line above the
+first scenario is enough:
+
+```gherkin
+@ticket:ACME-123
+Feature: Todo list
+  Acceptance criteria for ACME-123 (add, complete, bulk add).
+```
+
+The tag reaches the Allure report as a label, and the record embeds the
+feature text, so the ticket travels with both. `ACME-123` here is a
+placeholder, not a real ticket.
+
+After the record exists, `nuka check` reports `signoff-feature-changed` if
+the feature text drifts from what was accepted, and `nuka tend` reports
+`feature-never-signed` for any feature that still has no record.
