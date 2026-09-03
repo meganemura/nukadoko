@@ -1,8 +1,15 @@
+import DepugReporter from "@meganemura/depug/reporter";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // depug: a failed test prints the path of a JSON holding the frames on
+    // the stack when the assertion was built, and the exact command to rerun
+    // that one test, so a runtime value gets read from evidence rather than
+    // inferred from source. The reporter only writes on failure; a green run
+    // costs nothing but the import.
+    reporters: ["default", new DepugReporter()],
     // Vitest sizes its worker pool from the core count, which is the wrong
     // measure for this suite: three files launch a real chromium
     // (browser-evidence, session-browser, run-browser) and one spawns the
