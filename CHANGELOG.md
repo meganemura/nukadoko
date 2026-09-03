@@ -5,7 +5,7 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
-## 0.12.0 — 2026-09-03
+## 0.12.0 — 2026-09-04
 
 ### Breaking
 
@@ -68,6 +68,15 @@ just until 0.1.
   of a record with several scenarios may never reach the end, and the
   count is what says whether to.
 
+- **The `repeated-scenario-prefix` note names where a lift goes.** It now
+  ends by saying that the place to lift a shared opening into is a
+  `"process"`-scope fixture, and that whether the scenarios can share what
+  it builds depends on which of them write to that state, which the tool
+  cannot see. The spec already said so; the note reaches a reader who
+  never opens the spec.
+
+### Fixed
+
 - **A step can take one args key from `from` and the other from a table or
   docstring on the same line.** `nuka check` and `nuka run` counted the
   key a table or docstring fills among the keys a named capture had not
@@ -79,13 +88,6 @@ just until 0.1.
   share; `from-unused` and `unfillable-required-key` read the same rule.
   Reported by a suite that had worked around it by making the chained key
   optional, which weakened the from-order check for that step.
-
-- **The `repeated-scenario-prefix` note names where a lift goes.** It now
-  ends by saying that the place to lift a shared opening into is a
-  `"process"`-scope fixture, and that whether the scenarios can share what
-  it builds depends on which of them write to that state, which the tool
-  cannot see. The spec already said so; the note reaches a reader who
-  never opens the spec.
 
 ## 0.11.0 — 2026-09-02
 
