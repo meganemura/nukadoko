@@ -40,6 +40,15 @@ just until 0.1.
   ran, rather than reading the repetition as a shared opening between "n
   scenarios" that are the same one.
 
+- **`nuka tend --fail-on <code>` turns one note into a red exit for that
+  invocation.** Repeatable or comma-separated. The finding stays a note in
+  the output; only the exit code changes, and stderr says which code fired
+  and how often. A code `tend` never reports is refused up front. This is
+  what lets a PR job gate on `feature-never-signed` while `tend` stays
+  non-blocking everywhere else, which a review of how a team would run the
+  acceptance loop under deadline pressure found missing: the only way to
+  notice an unsigned feature was a weekly note nobody had to read.
+
 - **The acceptance record's Condition section states how many steps
   declared `mutates: false` and were measured making writes.** The list
   stays in the closing "Declared vs observed" section, since it is computed

@@ -176,6 +176,8 @@ interface CheckArgs {
 
 interface TendArgs {
   json?: boolean;
+  /** `--fail-on`; yargs collects a repeated flag into an array. */
+  "fail-on"?: string[];
 }
 
 interface CleanArgs {
@@ -760,16 +762,26 @@ export async function runCli(
     command: "tend",
     describe: "what is rotting rather than what is broken: unused declarations, undescribed fields, missing rationale",
     builder: (y: Argv) =>
-      y.option("json", {
-        type: "boolean",
-        default: false,
-        describe: "machine-readable output",
-      }) as Argv<TendArgs>,
+      y
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "machine-readable output",
+        })
+        .option("fail-on", {
+          type: "string",
+          array: true,
+          describe:
+            "exit 1 when a finding with this code is reported (repeatable, or comma-separated); every finding " +
+            "stays a note in the output, only the exit code changes. For a job that gates on one note, such as " +
+            "feature-never-signed",
+        }) as Argv<TendArgs>,
     handler: async (args: Arguments<TendArgs>) => {
       if (argsFailed) return;
       exitCode = await runTend({
         rootDir,
         json: args.json ?? false,
+        failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
         stdout,
         stderr,
       });

@@ -1,5 +1,5 @@
 import { analyzeTend } from "../tend/analyze.js";
-import type { TendIssue, TendSummary } from "../tend/types.js";
+import { TEND_CODES, type TendIssue, type TendSummary } from "../tend/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "./writable-sink.js";
 
@@ -38,6 +38,9 @@ export interface RunTendOptions {
   json: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
+  /** `--fail-on`: codes whose presence turns this invocation's exit code
+   * red. Empty by default, so a note stays a note (docs/spec.md "Tending"). */
+  failOn: readonly string[];
 }
 
 function formatLocation(issue: TendIssue): string {
@@ -76,7 +79,19 @@ function formatSummaryLines(summary: TendSummary): string[] {
 }
 
 export async function runTend(options: RunTendOptions): Promise<number> {
-  const { rootDir, json, stdout, stderr } = options;
+  const { rootDir, json, failOn, stdout, stderr } = options;
+
+  // Refused before anything is analyzed: a code tend never emits would
+  // otherwise be a flag that never fires, and a team gating a PR on it
+  // would read that silence as "nothing to fail on".
+  const unknown = failOn.filter((code) => !TEND_CODES.has(code));
+  if (unknown.length > 0) {
+    stderr.write(
+      `--fail-on: ${unknown.map((code) => `"${code}"`).join(", ")} ${unknown.length === 1 ? "is not a code" : "are not codes"} ` +
+        `nuka tend reports. The codes are: ${[...TEND_CODES].sort().join(", ")}.\n`,
+    );
+    return 1;
+  }
 
   let report;
   try {
@@ -108,5 +123,17 @@ export async function runTend(options: RunTendOptions): Promise<number> {
     }
   }
 
-  return report.errors.length > 0 ? 1 : 0;
+  // `--fail-on` turns a chosen note into a red exit for this invocation
+  // only; the finding itself stays a note in the output, since what
+  // changed is the team's policy, not the finding's nature. Said on
+  // stderr, once per code, so the exit code never changes silently.
+  let failed = false;
+  for (const code of failOn) {
+    const count = [...report.errors, ...report.notes].filter((issue) => issue.code === code).length;
+    if (count > 0) {
+      failed = true;
+      stderr.write(`fail-on: ${code} reported ${count} ${count === 1 ? "finding" : "findings"}\n`);
+    }
+  }
+  return report.errors.length > 0 || failed ? 1 : 0;
 }

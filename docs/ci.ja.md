@@ -168,6 +168,7 @@ jobs:
   ```
 
   record の名前は feature のベース名で始まります(docs/spec.ja.md の「Sign-off」を参照)。この検査が知る必要があるのはそれだけです。
+  PR が触った feature だけでなくすべての feature に署名を求めるチームは、そのジョブで代わりに `npx nuka tend --fail-on feature-never-signed` を回します。
 - **`tend` のジョブへの通知 step。**
   終了コードを赤にする finding は、古くなった sign-off record の 1 つだけです。
   Actions のタブでだけ赤くなる週次のジョブは、誰も読まないジョブです。

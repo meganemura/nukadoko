@@ -5,7 +5,10 @@ the only finding that exits non-zero, so a periodic job can act on it; read
 what it prints for which of the record's own claims stopped holding and how
 to fix it. Every other finding it reports, `signoff-condition-mismatch` and
 `post-navigation-read` among them, is a note a project is allowed to carry
-rather than something blocking.
+rather than something blocking. A job that must block on one of them
+passes `--fail-on <code>` (for instance `feature-never-signed`); the
+finding stays a note in the output, and only that invocation's exit code
+turns red.
 
 `repeated-scenario-prefix` shows which scenarios in the most recent run
 shared the same opening steps. It also shows the measured time for that

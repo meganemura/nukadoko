@@ -205,7 +205,9 @@ Three things the workflow above leaves to the team, each small.
   ```
 
   The record's name starts with the feature's basename (see "Sign-off" in
-  [docs/spec.md](spec.md#sign-off)), which is all this needs to know.
+  [docs/spec.md](spec.md#sign-off)), which is all this needs to know. A
+  team that wants every feature signed, not only the ones a PR touched,
+  runs `npx nuka tend --fail-on feature-never-signed` in that job instead.
 - **A notification step on the `tend` job.** The only finding that turns
   its exit code red is a stale sign-off record; a weekly job that goes red
   in the Actions tab and nowhere else is a job nobody reads.

@@ -82,3 +82,33 @@ export interface TendReport {
   readonly notes: readonly TendIssue[];
   readonly summary: TendSummary;
 }
+
+/** Every code a `nuka tend` finding can carry. `nuka tend --fail-on <code>`
+ * refuses a code outside this set, so a typo cannot become a flag that
+ * never fires; tests/tend-fail-on.test.ts keeps this list equal to the
+ * literals under src/tend/. */
+export const TEND_CODES: ReadonlySet<string> = new Set([
+  "additional-feature-dir-missing",
+  "feature-never-signed",
+  "fixture-touches-app",
+  "fixture-unused",
+  "from-unused",
+  "import-failures-unseen",
+  "parameter-type-support-origin",
+  "parameter-type-unused",
+  "pattern-unbound",
+  "post-navigation-read",
+  "repeated-scenario-prefix",
+  "schema-field-undescribed",
+  "secrets-public-key-unknown",
+  "secrets-redact-key-unknown",
+  "signed-feature-unscanned",
+  "signoff-condition-mismatch",
+  "signoff-feature-changed",
+  "signoff-feature-missing",
+  "signoff-record-old-format",
+  "signoff-record-unreadable",
+  "signoff-result-invalid",
+  "signoff-step-missing",
+  "step-rationale-missing",
+]);
