@@ -152,6 +152,30 @@ jobs:
   上の `tend` job がそのトリガーで、`check`/`run` の経路からは意図的に外してあります(docs/spec.ja.md の「Tending(手入れ)」を参照)。
   今日対処しなくてよい note が PR を遅くしないためです。
 
+## チームがその上に足すもの
+
+上の workflow がチームに委ねているものが 3 つあります。どれも小さいものです。
+
+- **PR が触った feature すべてに sign-off が在ることを確かめる PR の検査。**
+  `feature-never-signed` は `nuka tend` の note です。週次で、終了コードを赤にすることはありません。
+  だから `nuka accept` 無しで merge された feature は、誰かがその note を読むまで署名されないままです。
+  PR のジョブが自分でその問いを立てられます。
+
+  ```sh
+  for f in $(git diff --name-only origin/main...HEAD -- 'features/**/*.feature'); do
+    ls "${f%.feature}".*.md >/dev/null 2>&1 || { echo "no sign-off beside $f"; exit 1; }
+  done
+  ```
+
+  record の名前は feature のベース名で始まります(docs/spec.ja.md の「Sign-off」を参照)。この検査が知る必要があるのはそれだけです。
+- **`tend` のジョブへの通知 step。**
+  終了コードを赤にする finding は、古くなった sign-off record の 1 つだけです。
+  Actions のタブでだけ赤くなる週次のジョブは、誰も読まないジョブです。
+- **ランナー自身の速さに合わせた `retention.runs`。**
+  既定は最新 20 回の run を残します。
+  merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka accept` は保持された run しか読みません。
+  数字を決める前に、1 週間の速さを測ってください。
+
 ## このページが主張しないこと
 
 上の workflow は GitHub Actions の中で実際に実行してはいません。
@@ -163,3 +187,9 @@ jobs:
 上の `uses:` 行にある 2 つのコミット SHA は、GitHub 自身の API に照らして確かめました。
 `repos/actions/checkout/git/ref/tags/v7.0.1` と `setup-node` の同等のエンドポイントをそれぞれ 1 回ずつ呼び、それぞれがコメントの主張どおりのコミットを名指ししていて、他の何も指していないことを確かめました。
 この workflow は、実際のランナー上で green になるのを見届けたファイルとしてではなく、手を加えるための出発点として読んでください。
+
+ジョブの後で Allure の出力がどこへ行くかについても、このページは何も言いません。
+trace と screenshot は伏せられません(docs/spec.ja.md の「Sessions, environments, secrets」を参照)。
+隣の `http.jsonl` は秘密を置き換えてありますが、trace はブラウザ自身の状態を cookie ごと持ち、screenshot は画面に出ていたものをそのまま持ちます。
+artifact としてアップロードした `allure-results/` や、チャットに貼った生成済みレポートは、そのすべてを運びます。
+ランナーの中に留めるか、最初のアップロードの前に誰が開いてよいかを決めてください。

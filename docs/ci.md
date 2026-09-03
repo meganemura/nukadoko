@@ -189,6 +189,31 @@ of the above; these four are what changes.
   [docs/spec.md](spec.md#tending)) so a note nobody has to act on today
   never slows down a PR.
 
+## What a team adds on top
+
+Three things the workflow above leaves to the team, each small.
+
+- **A PR check that every feature the PR touched has a sign-off.**
+  `feature-never-signed` is a `nuka tend` note: weekly, and never a failing
+  exit code, so a feature merged without `nuka accept` stays unsigned until
+  someone reads that note. A PR job can ask the question itself:
+
+  ```sh
+  for f in $(git diff --name-only origin/main...HEAD -- 'features/**/*.feature'); do
+    ls "${f%.feature}".*.md >/dev/null 2>&1 || { echo "no sign-off beside $f"; exit 1; }
+  done
+  ```
+
+  The record's name starts with the feature's basename (see "Sign-off" in
+  [docs/spec.md](spec.md#sign-off)), which is all this needs to know.
+- **A notification step on the `tend` job.** The only finding that turns
+  its exit code red is a stale sign-off record; a weekly job that goes red
+  in the Actions tab and nowhere else is a job nobody reads.
+- **`retention.runs` sized to the runner's own pace.** The default keeps
+  the newest 20 runs. A persistent runner that runs every merge and every
+  night reaches 20 in days, and `nuka accept` reads only the retained runs,
+  so measure the pace for a week before deciding the number.
+
 ## What this page does not claim
 
 The workflow above has not been run inside GitHub Actions itself; nothing
@@ -207,3 +232,12 @@ were checked against GitHub's own API, one call each against
 equivalent, confirming each names the commit its comment claims and
 nothing else. Read the workflow as a starting shape to adapt, not as a
 file this project has watched go green on a real runner.
+
+It also says nothing about where the Allure output goes after the job.
+Traces and screenshots are not redacted (see "Sessions, environments,
+secrets" in [docs/spec.md](spec.md#sessions-environments-secrets)): the
+`http.jsonl` beside them has secrets replaced, but a trace holds the
+browser's own state, cookies included, and a screenshot holds whatever the
+page showed. An `allure-results/` directory uploaded as an artifact, or a
+generated report posted to a chat, carries all of that. Keep it inside the
+runner, or decide who may open it before the first upload.
