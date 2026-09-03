@@ -212,6 +212,17 @@ by side is the obvious one. The other is worth naming because it is the
 smaller ask of a team whose Playwright suite is the asset: put
 `featuresDir` inside the directory their specs already live in.
 
+One thing to check first: nukadoko depends on `playwright` at an exact
+version (`npm ls playwright` shows which), and it is a dependency rather
+than a peer, so a project already on a different Playwright version gets
+two copies, two browser downloads, and two `Page` types. Pin the project's
+own Playwright to the version `npm ls` reports under nukadoko, or upgrade
+nukadoko to one that matches (`package.json` in the installed package
+names the pin). That `playwright` is a
+dependency and not a peer is a choice, made so that a project without any
+Playwright of its own installs nothing else, and it holds until a real
+conflict between the two copies is reported.
+
 ```
 e2e/
   cart.spec.ts          <- Playwright finds this
