@@ -317,8 +317,13 @@ by default: the example under its own git history, and a clean tree at the
 commit the run happened on. So do this part in a copy of `examples/todo`
 that you have `git init`ed and committed, with nukadoko installed as a
 dependency (the shorthand from "Prerequisites" no longer applies there).
+Gitignore the state directory before the first commit: `nuka init` does
+that for a new project, and a copy made by hand has to do it itself, or
+`accept` refuses because the run just left `.nukadoko/` in the tree.
 
 ```sh
+echo '.nukadoko/' >> .gitignore
+git add -A && git commit -m "todo example"
 nuka run features/todo.feature          # every scenario green
 nuka accept features/todo.feature       # freezes that run beside the feature
 ```
