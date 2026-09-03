@@ -7,7 +7,7 @@ export and nothing else, and the file name is the step's name: the
 `nuka do <name>` you call it by, and the name every finding and step
 record uses for it. Feature files and step files both live under the
 configured `featuresDir`, `features` unless the project says otherwise,
-with feature files ending in `.feature`.
+with feature files ending in `.feature`. A file a scenario runs as a process (a fake server, a fixture script) belongs outside `featuresDir`: discovery imports every module under it on every `nuka check`, top-level code included.
 
 Step files end in `.ts`, except in a CommonJS project (no
 `"type": "module"` in `package.json`), where they end in `.mts` instead:

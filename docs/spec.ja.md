@@ -171,6 +171,8 @@ nukadoko は ESM-only です。
 discovery は歩いた各ファイルをインポートします。
 そのため、モジュールは本来読み取り専用のコマンド中に環境を読み、接続を開き、ファイルを書けます。
 `featuresDir` がアプリケーションと glue の両方を含む場合、discovery はアプリケーションのトップレベルのコードを実行します。
+scenario がプロセスとして実行するファイル(偽のサーバ、fixture のスクリプト)は、同じ理由で `featuresDir` の外に置きます。
+discovery は `nuka check` のたびにそれを import し、トップレベルで子プロセスを起こしたり socket で listen したりするモジュールは、そこでそうしてしまうからです。
 
 ```ts
 import { defineStep, z } from "nukadoko";
