@@ -283,8 +283,10 @@ export default defineStep({
   regardless: what changed here is what gets accepted, not what gets
   written down.
 - A data table or docstring attached to the step binds to the one required
-  args key the named captures left unconsumed (tables as `string[][]`,
-  docstrings as `string`), validated by the schema like everything else.
+  args key that neither a named capture nor a `from` declaration speaks for
+  (tables as `string[][]`, docstrings as `string`), validated by the schema
+  like everything else. A step can therefore take one key from an earlier
+  step and another from the attachment on the same line.
   Gherkin tables get types for the first time. Zero or several unconsumed
   required keys with an attachment present is a `check`/`run` error; no
   reserved key name exists.

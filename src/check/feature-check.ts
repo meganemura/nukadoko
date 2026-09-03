@@ -257,14 +257,18 @@ export function checkFeatures(
         ) {
           const shape = asObjectShape(entry.step.args);
           if (shape) {
-            const consumed = new Set(matched.captures.map((c) => c.key));
+            // Captures and `from`-declared keys are both spoken for before
+            // the attachment is placed: the same set src/run/match-step.ts's
+            // `bindStepArgs` builds, mirrored here so check and run never
+            // disagree about which key a table/docstring fills.
+            const consumed = new Set([...matched.captures.map((c) => c.key), ...Object.keys(entry.step.from)]);
             const unconsumedRequired = Object.entries(shape)
               .filter(([key, fieldSchema]) => !consumed.has(key) && isRequiredField(fieldSchema))
               .map(([key]) => key);
             if (unconsumedRequired.length !== 1) {
               const detail =
                 unconsumedRequired.length === 0
-                  ? "every args key is already consumed by named captures"
+                  ? "every args key is already consumed by named captures or declared from"
                   : `${unconsumedRequired.length} args keys are left unconsumed (${unconsumedRequired.join(", ")}); exactly one is required`;
               errors.push({
                 code: "table-docstring-key-mismatch",

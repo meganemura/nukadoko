@@ -269,17 +269,18 @@ describe("nuka harvest", () => {
     // *is* among the given ids.
     expect(stdoutText).toContain("literal-value");
     expect(stdoutText).not.toMatch(/not among the ids given/);
-    // The line still does not read back, for an unrelated, genuine reason
-    // this fixture deliberately exercises too: `bindStepArgs` itself
-    // (src/run/match-step.ts) counts every required schema key not bound
-    // by a named capture as "unconsumed" when deciding whether a table/
-    // docstring can bind at all — it does not know about `from` — so a
-    // step that leaves one key to chain and needs an attachment for
-    // another can never bind on a real `nuka run` either. The round trip
-    // catching that is correct: it is what stops harvest from asserting a
-    // line "reads back" when nukadoko's own binding rule would refuse it.
+    // The line still does not read back, for a genuine reason this fixture
+    // deliberately exercises: both of link-projects' keys are declared
+    // `from`, and `bindStepArgs` (src/run/match-step.ts) treats a `from`
+    // key as spoken for before placing a table/docstring, so the docstring
+    // carrying secondaryId's literal has no key left to fill. A feature
+    // line has no way to say "this docstring overrides that key's `from`",
+    // which is exactly what the --args override did at `do` time. The
+    // round trip catching that is correct: it is what stops harvest from
+    // asserting a line "reads back" when nukadoko's own binding rule would
+    // refuse it.
     expect(stdoutText).toMatch(/does not read back/);
-    expect(stdoutText).toContain("left unconsumed");
+    expect(stdoutText).toContain("every args key is already consumed by named captures or declared from");
   });
 
   it("a docstring fills the one required key a capture left unconsumed, and the line reads back", async () => {

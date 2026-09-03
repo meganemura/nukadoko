@@ -56,6 +56,18 @@ just until 0.1.
   of a record with several scenarios may never reach the end, and the
   count is what says whether to.
 
+- **A step can take one args key from `from` and the other from a table or
+  docstring on the same line.** `nuka check` and `nuka run` counted the
+  key a table or docstring fills among the keys a named capture had not
+  consumed, and never subtracted the keys `from` declares, so a step with
+  one key chained from an earlier step and one required docstring key was
+  refused with `table-docstring-key-mismatch` ("2 args keys are left
+  unconsumed") on both sides. Both now treat a `from` key as spoken for,
+  the same way a captured key is, in the one binding rule check and run
+  share; `from-unused` and `unfillable-required-key` read the same rule.
+  Reported by a suite that had worked around it by making the chained key
+  optional, which weakened the from-order check for that step.
+
 - **The `repeated-scenario-prefix` note names where a lift goes.** It now
   ends by saying that the place to lift a shared opening into is a
   `"process"`-scope fixture, and that whether the scenarios can share what

@@ -187,7 +187,10 @@ export default defineStep({
 
 The pattern captures nothing, so the docstring binds to `expectedTitles`,
 the one required `args` key it leaves unfilled (see "Typed steps" in
-`docs/spec.md` for how a table or docstring binds to an `args` key).
+`docs/spec.md` for how a table or docstring binds to an `args` key). A key
+the step declares `from` for is spoken for the same way a captured key is,
+so a step can read one key from an earlier step and the other from the
+docstring on the same line.
 
 ## Writing the pattern
 

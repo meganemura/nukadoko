@@ -216,6 +216,12 @@ export function bindStepArgs(
   values: readonly unknown[],
   attachment: PickleStepArgument | undefined,
   argsSchema: z.ZodTypeAny,
+  /** The keys the step declares `from` for. A key `from` fills is spoken
+   * for before a table/docstring is placed, the same way a captured key
+   * is, so a step can take one key from an earlier step and the other from
+   * the attachment on the same line. Whether the declared upstream ran is
+   * a separate question (the from-order guard), not this function's. */
+  fromKeys: ReadonlySet<string> = new Set(),
 ): BindArgsResult {
   const value: Record<string, unknown> = {};
   captures.forEach((capture, index) => {
@@ -236,14 +242,14 @@ export function bindStepArgs(
     };
   }
 
-  const consumedKeys = new Set(captures.map((c) => c.key));
+  const consumedKeys = new Set([...captures.map((c) => c.key), ...fromKeys]);
   const unconsumedRequired = Object.entries(shape)
     .filter(([key, fieldSchema]) => !consumedKeys.has(key) && isRequiredField(fieldSchema))
     .map(([key]) => key);
   if (unconsumedRequired.length !== 1) {
     const detail =
       unconsumedRequired.length === 0
-        ? "every args key is already consumed by named captures"
+        ? "every args key is already consumed by named captures or declared from"
         : `${unconsumedRequired.length} args keys are left unconsumed (${unconsumedRequired.join(", ")}); exactly one is required`;
     return {
       ok: false,

@@ -156,12 +156,15 @@ function fromOrderAmbiguousMessage(stepName: string, key: string, names: readonl
 }
 
 /**
- * The one required, uncaptured args key this pickle step's own table/
+ * The one required, unspoken-for args key this pickle step's own table/
  * docstring attachment (if any) resolves to filling — `undefined` when there
  * is no attachment, no object shape to check it against, or zero/several
  * such keys (in which case binding itself fails for an unrelated reason,
  * src/run/match-step.ts's own `bindStepArgs`; nothing here needs to say so a
- * second time).
+ * second time). `spokenFor` is the captured keys plus the keys the step
+ * declares `from` for: a key `from` fills is never the attachment's, so a
+ * step can take one key from an earlier step and the other from the
+ * attachment on the same line, which is the shape a real suite wrote first.
  *
  * Exported so ./unfillable-key.ts's own check
  * asks this exact same question rather than growing a third copy of "exactly
@@ -170,7 +173,7 @@ function fromOrderAmbiguousMessage(stepName: string, key: string, names: readonl
  */
 export function attachmentFilledKey(
   pickleStep: PickleStep,
-  consumedByCapture: ReadonlySet<string>,
+  spokenFor: ReadonlySet<string>,
   argsShape: ReturnType<typeof asObjectShape>,
 ): string | undefined {
   const attachment = pickleStep.argument;
@@ -179,7 +182,7 @@ export function attachmentFilledKey(
     return undefined;
   }
   const unconsumedRequired = Object.entries(argsShape)
-    .filter(([shapeKey, fieldSchema]) => !consumedByCapture.has(shapeKey) && isRequiredField(fieldSchema))
+    .filter(([shapeKey, fieldSchema]) => !spokenFor.has(shapeKey) && isRequiredField(fieldSchema))
     .map(([shapeKey]) => shapeKey);
   return unconsumedRequired.length === 1 ? unconsumedRequired[0] : undefined;
 }
@@ -221,11 +224,19 @@ export function checkFromOrder(
     const argsShape = asObjectShape(entry.step.args);
     const matched = matches[stepIndex]!.matched;
     const consumedByCapture = new Set(matched?.captures.map((capture) => capture.key) ?? []);
-    const attachmentFillsKey = attachmentFilledKey(pickleStep, consumedByCapture, argsShape);
+    // The attachment can only fill a key neither a capture nor `from` speaks
+    // for, so a `from` key is never `attachmentFillsKey`; the check below
+    // keeps the comparison for the one thing that does override `from`, a
+    // capture of the same key.
+    const attachmentFillsKey = attachmentFilledKey(
+      pickleStep,
+      new Set([...consumedByCapture, ...fromEntries.map(([key]) => key)]),
+      argsShape,
+    );
 
     for (const [key, entryValue] of fromEntries) {
       if (consumedByCapture.has(key) || key === attachmentFillsKey) {
-        continue; // A pattern capture or the table/docstring already wins this key.
+        continue; // A pattern capture already wins this key.
       }
 
       const fieldSchema = argsShape?.[key];

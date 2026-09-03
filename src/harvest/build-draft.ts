@@ -294,6 +294,7 @@ function runRoundTrip(entries: readonly Entry[], bindings: readonly StepBinding[
       outcome.values,
       pickleStep.argument,
       vocabularyEntry.step.args,
+      new Set(Object.keys(vocabularyEntry.step.from)),
     );
     if (!bound.ok) {
       entry.roundTripFailure = `this line does not read back to the same args: ${flatten(bound.message)}`;

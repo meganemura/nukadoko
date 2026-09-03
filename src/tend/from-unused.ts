@@ -1,25 +1,23 @@
 import { asObjectShape } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
-import { attachmentFilledKey } from "../check/from-order.js";
 import type { TendIssue } from "./types.js";
 import type { StepOccurrences } from "./step-bindings.js";
 
 // Responsibility: docs/spec.md "Tending"'s "A `from` declaration nothing
 // exercises" finding — a typed step's `from.<key>` whose declared producer
 // never actually gets a chance to supply a value, because every line that
-// binds this step already fills that key some other way (a pattern capture,
-// or the one table/docstring key a line's attachment resolves to). A step
+// binds this step already fills that key with a pattern capture. A step
 // never bound anywhere is *not* this finding's business —
 // that is pattern-unbound.ts's question, not this one's.
 //
-// "Filled some other way" is decided by the exact same two facts
-// src/check/from-order.ts already computes to decide whether `from` even
-// applies on a given line (that file's own `consumedByCapture`/
-// `attachmentFilledKey` check, right before it looks at ordering) — reused
-// here via `attachmentFilledKey` itself plus each occurrence's own
-// `matched.captures`, never re-derived, so this finding and from-order.ts's
-// own "does `from` even apply here" gate can never quietly disagree with
-// each other.
+// A capture is the only other filler. A table/docstring is placed against
+// the keys neither a capture nor `from` speaks for (src/run/match-step.ts's
+// `bindStepArgs`, mirrored by src/check/from-order.ts's own gate), so it can
+// never land on a `from` key; that rule is what lets one line take a key
+// from an earlier step and another from its attachment. "Filled by a
+// capture" is read from each occurrence's own `matched.captures`, the same
+// fact from-order.ts reads, never re-derived, so this finding and that gate
+// can never quietly disagree with each other.
 //
 // Reported as a fact, not a verdict: the
 // message never says to delete the declaration — `nuka do --use` can still
@@ -45,18 +43,18 @@ export function findUnusedFromDeclarations(vocabulary: Vocabulary, occurrences: 
     const argsShape = asObjectShape(entry.step.args);
 
     for (const [key] of fromEntries) {
-      const everyOccurrenceFillsKey = stepOccurrences.every((occurrence) => {
-        const consumedByCapture = new Set(occurrence.matched.captures.map((capture) => capture.key));
-        if (consumedByCapture.has(key)) {
-          return true;
-        }
-        const attachmentFillsKey = attachmentFilledKey(
-          occurrence.pickleStep,
-          consumedByCapture,
-          argsShape,
-        );
-        return key === attachmentFillsKey;
-      });
+      // A capture of the same key is the only thing that fills a `from` key
+      // some other way: a table/docstring is placed against the keys
+      // neither a capture nor `from` speaks for (src/run/match-step.ts's
+      // `bindStepArgs`), so it can never land on this one. `argsShape` is
+      // still read so a non-object `args` keeps this finding silent, the
+      // same way `attachmentFilledKey` keeps quiet for it.
+      const everyOccurrenceFillsKey =
+        argsShape !== undefined &&
+        stepOccurrences.every((occurrence) => {
+          const consumedByCapture = new Set(occurrence.matched.captures.map((capture) => capture.key));
+          return consumedByCapture.has(key);
+        });
 
       if (everyOccurrenceFillsKey) {
         issues.push({

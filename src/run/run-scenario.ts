@@ -1799,6 +1799,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           outcome.values,
           pickleStep.argument,
           entry.step.args,
+          new Set(Object.keys(entry.step.from)),
         );
 
         const stepStartedAt = new Date();

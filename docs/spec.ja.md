@@ -243,7 +243,8 @@ export default defineStep({
   読み手が生の値をもっとも必要とするのがそこだからです。
   part 自身の `CallEntry.args`(「Records」を参照)は、どちらの結果でも生のままです。
   ここで変わったのは何を受け入れるかであり、何を書き残すかではありません。
-- step に付いた data table や docstring は、名前付きキャプチャが消費せずに残した唯一の必須 args キーに結び付きます(table は `string[][]` として、docstring は `string` として)。
+- step に付いた data table や docstring は、名前付きキャプチャも `from` の宣言も引き受けていない唯一の必須 args キーに結び付きます(table は `string[][]` として、docstring は `string` として)。
+  だから 1 つの step が、同じ行で 1 つのキーを前の step から、もう 1 つを添付から受け取れます。
   他のものと同様にスキーマでバリデーションされます。
   Gherkin の table が初めて型を持つことになります。
   attachment が存在するのに未消費の必須キーが 0 個または複数ある場合は `check`/`run` のエラーになります。

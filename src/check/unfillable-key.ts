@@ -91,7 +91,10 @@ export function checkUnfillableKeys(
     // Safe: `stepNames.length === 1` above is exactly the condition
     // `matchPickleStepText` sets `matched` under.
     const consumedByCapture = new Set(matched!.captures.map((capture) => capture.key));
-    const attachmentFillsKey = attachmentFilledKey(pickleStep, consumedByCapture, argsShape);
+    const fromKeys = new Set(Object.keys(entry.step.from));
+    // Same set `bindStepArgs` places the attachment against: a key `from`
+    // speaks for is never the attachment's.
+    const attachmentFillsKey = attachmentFilledKey(pickleStep, new Set([...consumedByCapture, ...fromKeys]), argsShape);
 
     // An attachment that does *not* resolve to filling exactly one key (0 or
     // 2+ still-uncaptured required keys) is already `table-docstring-key-
