@@ -492,8 +492,11 @@ and World continue to work while nukadoko's harness starts measuring step
 records. Each step can then move to `defineStep` independently, so a
 partially promoted suite continues to pass.
 
-The door is an entry point, not a destination. A compat step gains evidence
-and `observed` counts. However, nukadoko discards its return value, and its
+The door is an entry point, not a destination. A compat step gains a step
+record with status and timing from the first run; evidence and `observed`
+counts follow once its glue opens the browser or request through
+`this.openPage()` / `this.openRequest()` (the measured upgrade in
+[docs/migration.md](docs/migration.md)). However, nukadoko discards its return value, and its
 step record contains `result: null`. Features that require a validated
 result remain unavailable. `nuka check` has no contract to compare with a
 feature, `from` cannot declare a dependency, and a sign-off confirms only
@@ -720,6 +723,16 @@ run, they would train everyone to skim past the lines that do stop one.
 It opens with where the bed is (how much of the vocabulary is typed rather
 than still compat), because that number was previously only visible by
 reading a directory of step records, which nobody does.
+
+## Who reads what
+
+A person who approves without writing code opens two files in a PR: the
+`.feature`, to check it says what the ticket meant, and the sign-off `.md`
+beside it, to check what ran and at which commit. Everything under
+`.nukadoko/` and every `nuka` verb belongs to the agent or to CI. The
+sign-off record is written for that first reader: the feature's own text,
+one summary table per scenario, and a closing section naming any step
+that declared `mutates: false` while measured making a write.
 
 ## Design
 

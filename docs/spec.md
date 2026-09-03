@@ -2431,7 +2431,9 @@ version?: () => string | Promise<string> }`. Its `baseURL` overrides the
 top-level value. Its `envFiles` follow the top-level list, and later files win.
 This order provides the common and override layers familiar to dotenv users.
 Only an environment can define `policy` and `version`. Without `--env`, the
-environment name is `default`, which needs no entry. An explicitly named
+environment name is `default`, which needs no entry. An entry named `default`
+is still allowed, and `policy: "read-only"` on it is what keeps a `nuka do`
+typed without `--env` from writing anywhere. An explicitly named
 environment must exist because its name asserts that it exists. The `version`
 probe is a function because config is executable TypeScript. A URL and
 jsonPath DSL would only provide a more complex form of `fetch`. The tool calls

@@ -448,7 +448,8 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 その後は各 step を個別に `defineStep` へ昇格できるため、一部だけを昇格したスイートも通り続けます。
 
 扉は入口であり、行き先ではありません。
-compat の step は evidence と `observed` の件数を得ます。
+compat の step は、最初の run から status と時間を持つ step record を得ます。
+evidence と `observed` の件数が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/migration.ja.md](docs/migration.ja.md) の measured upgrade)。
 ただし、nukadoko は return 値を捨て、step record には `result: null` が入ります。
 バリデーション済みの result が必要な機能は使えません。
 `nuka check` には feature と比較する契約がなく、`from` は依存関係を宣言できません。
@@ -635,6 +636,15 @@ description のないスキーマフィールドは、ファイルを見る人�
 
 これは、床がいまどこにあるか(語彙のうちどれだけが、まだ compat のままではなく型付きになっているか)から始まります。
 それは、その数がこれまで step record のディレクトリを読むことでしか見えず、そんなことをする者は誰もいなかったからです。
+
+## 誰が何を読むか
+
+コードを書かずに承認する人が PR で開くのは 2 つのファイルです。
+`.feature` を開いて、チケットの意図どおりに書かれているかを確かめます。
+その隣の sign-off の `.md` を開いて、何がどの commit で走ったかを確かめます。
+`.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
+sign-off record はその最初の読み手のために書かれています。
+feature の本文、scenario ごとのサマリ表、そして `mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節です。
 
 ## Design
 

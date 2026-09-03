@@ -2003,6 +2003,8 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。
 `policy` と `version` は environment ごとにしか存在しません。
 `--env` を指定しないことは名前 `default` を意味し、これはエントリを必要としません。
+それでも `default` という名前のエントリは書けます。
+そこに `policy: "read-only"` を置くことが、`--env` 無しで打った `nuka do` をどこにも書き込ませない手段です。
 明示的に名前を付けた environment は存在していなければなりません。
 名前を付けるということは、それが存在すると主張することだからです。
 `version` プローブが関数になっているのは、config がすでに実行可能な TypeScript だからです(URL と jsonPath の DSL は `fetch` を書くにはより悪い方法でしょう)。
