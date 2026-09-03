@@ -234,6 +234,7 @@ describe("nuka accept: condition", () => {
     // "condition unknown" (an old record) must stay distinguishable from
     // "condition known: no browser" (this one).
     expect(content).toContain("- browser: not launched (no step in this run destructured page/context)");
+    expect(content).toContain("- declared vs observed: no step declared `mutates: false` and was measured making a write");
   });
 
   it("writes the accepted run's own measured engine and version into the record body when a browser was launched", async () => {

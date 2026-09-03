@@ -174,11 +174,17 @@ describe("renderAcceptanceRecord: Declared vs observed", () => {
       scenario: "a visitor browses",
     });
 
-    const section = declaredVsObservedSection(renderAcceptanceRecord(optionsFor([scenario])));
+    const rendered = renderAcceptanceRecord(optionsFor([scenario]));
+    const section = declaredVsObservedSection(rendered);
 
     expect(section).toContain(
       '- "the todo list is fetched" (scenario "a visitor browses"): declared mutates: false, observed 2 writes',
     );
+    // The count is also up front, in Condition, ahead of every scenario
+    // section: the tail is where the list lives, not the only place the
+    // fact appears.
+    expect(rendered.indexOf("- declared vs observed: 1 step declared `mutates: false` and was measured making writes; listed at the end")).toBeGreaterThan(-1);
+    expect(rendered.indexOf("- declared vs observed:")).toBeLessThan(rendered.indexOf("## The scenario as it ran"));
   });
 
   it("omits a step that declared mutates: false but was measured making zero writes", () => {

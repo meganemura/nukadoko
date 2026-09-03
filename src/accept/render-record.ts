@@ -454,6 +454,19 @@ function renderCondition(options: RenderAcceptanceRecordOptions): string[] {
         "every execution green; the last one is embedded below",
     );
   }
+  // The count, up front; the list stays at the tail (this function's own
+  // comment above). A reviewer of a record with several scenarios reads
+  // the Condition and the summary tables and may never reach the last
+  // section, and that section is the only place a step's declaration is
+  // set against what was measured. The number here is what tells them
+  // whether the tail is worth scrolling to.
+  const { mismatches } = collectDeclaredVsObserved(options.scenarios);
+  lines.push(
+    mismatches.length === 0
+      ? "- declared vs observed: no step declared `mutates: false` and was measured making a write"
+      : `- declared vs observed: ${mismatches.length} step${mismatches.length === 1 ? "" : "s"} declared ` +
+          `\`mutates: false\` and ${mismatches.length === 1 ? "was" : "were"} measured making writes; listed at the end`,
+  );
   return lines;
 }
 

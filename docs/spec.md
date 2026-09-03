@@ -2613,7 +2613,13 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 - Near the top, the record body contains a "Condition" section. It contains the
   `environment` and the measured browser engine and version when a browser ran.
   Otherwise, the section explicitly says that no browser ran. This statement
-  distinguishes that condition from an unchecked blank field. Older records
+  distinguishes that condition from an unchecked blank field. It also
+  carries the count from the closing "Declared vs observed" section (below):
+  how many steps declared `mutates: false` and were measured making writes,
+  or that none did. The list stays at the end, since it is computed from
+  the detail above it; the count is up front, since a reviewer of a record
+  with several scenarios may never reach the end, and the count is what
+  says whether to. Older records
   can lack this section. `nuka tend` treats their condition as unknown, does
   not infer a condition, and excludes them from comparisons (see "Tending").
 - The tool builds the acceptance record from the frozen run. It includes the
@@ -3326,7 +3332,13 @@ not appeared as if it had.
 
 Findings support `--json`, like the other output. The sign-off finding exits
 non-zero so a periodic job can act on it; the rest do not, because a
-project is allowed to carry them.
+project is allowed to carry them. `--fail-on <code>` (repeatable, or
+comma-separated) makes one invocation exit non-zero when a finding with
+that code is reported, and says so on stderr. The finding itself stays a
+note in the output: what changed is the team's policy for that job, not
+the finding's nature. A code `tend` never reports is refused up front, so a
+typo cannot become a flag that never fires. This is how a PR job gates on
+`feature-never-signed` without `tend` turning red for everyone else.
 
 `tend` reports but does not repair. Repair means writing a description,
 deleting a step, or re-accepting a feature: decisions with an author
@@ -3441,14 +3453,17 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               removed
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
-nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
+nuka tend [--json] [--fail-on <code>]
+                              scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
                               vocabulary is typed rather than compat, how
                               many typed steps are read-only, and how much
                               of it declares what it could, then a sign-off
                               that no longer matches the code it froze (the
-                              one finding that exits non-zero), a step file
+                              one finding that exits non-zero; --fail-on
+                              <code> makes a named note exit non-zero too,
+                              for that invocation), a step file
                               that failed to import, a `from` nothing
                               exercises, a patterned step no
                               feature binds, a schema field with no

@@ -40,6 +40,13 @@ just until 0.1.
   ran, rather than reading the repetition as a shared opening between "n
   scenarios" that are the same one.
 
+- **The acceptance record's Condition section states how many steps
+  declared `mutates: false` and were measured making writes.** The list
+  stays in the closing "Declared vs observed" section, since it is computed
+  from the detail above it; the count is now up front, because a reviewer
+  of a record with several scenarios may never reach the end, and the
+  count is what says whether to.
+
 - **The `repeated-scenario-prefix` note names where a lift goes.** It now
   ends by saying that the place to lift a shared opening into is a
   `"process"`-scope fixture, and that whether the scenarios can share what

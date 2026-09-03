@@ -334,7 +334,9 @@ writes `features/todo.<date>-<sha>.default.no-browser.md`: the feature's
 own text, one summary table per scenario (step, status, time, `mutates`,
 reads, writes), each step's validated `args` and `result`, and a closing
 "Declared vs observed" section listing any step that declared
-`mutates: false` while measured making a write. `no-browser` is in the
+`mutates: false` while measured making a write; the Condition section at
+the top states that count, so a reader knows whether to scroll to the
+list. `no-browser` is in the
 name because every step here goes through `request`, never `page`; a
 browser suite gets `chromium` there instead. Commit the `.md` with the
 feature: it is the durable artifact, and the `.nukadoko/` records it was

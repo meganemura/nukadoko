@@ -2136,6 +2136,9 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   そして stderr には、プロジェクトが上ですでに答えたのと同じ問いを書きます: この feature が述べているのは変更なのか、それともプロダクト自身の経路なのか、そしてどちらの答えがどこに置くべきかを意味するのか、です。
   これは verdict ではなく案内です: このコマンドにはどちらであるかを計測する手段が無く、選択肢を名指しできるだけだからです。
 - 記録本文自身は、冒頭近くに「Condition」節を運びます: `environment` と、accept した run がブラウザを起動していればその計測済みのエンジンとバージョンです。
+  末尾の「Declared vs observed」節の件数もここに載ります。`mutates: false` と宣言しながら書き込みが計測された step が何個あるか、あるいは 1 つも無いか、です。
+  一覧は末尾のままです。上の詳細から導かれるものだからです。
+  件数は先頭に置きます。複数の scenario を持つ record の読み手は末尾まで届かないことがあり、末尾まで行くべきかどうかを告げるのがこの件数だからです。
   起動していなければ、空欄のままにするのではなく、その節がそのことを明示します。
   こうすることで「ブラウザを起動しなかった」ことと「読み手が確認し忘れた」ことが区別できるままになります。
   この節ができる前に accept された記録にはこの節がありません。
@@ -2810,6 +2813,10 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 sign-off の所見は非ゼロの exit code で終了し、定期実行されるジョブがそれに反応できるようにします。
 残りの所見はそうしません。
 プロジェクトはそれらを抱えたままでいることが許されているからです。
+`--fail-on <code>`(繰り返し指定、またはカンマ区切り)は、その code の所見が報告されたときに、その 1 回の呼び出しを非ゼロで終了させ、stderr にそう告げます。
+所見そのものは出力の中で note のままです。変わったのはそのジョブに対するチームの方針であって、所見の性質ではないからです。
+`tend` が報告しない code は最初に拒否されるので、打ち間違いが「決して発火しないフラグ」になることはありません。
+これが、他の全員の `tend` を赤くせずに、PR のジョブが `feature-never-signed` でゲートを掛ける方法です。
 
 `tend` は報告するだけで、修復はしません。
 直すということは、description を書くこと、step を削除すること、feature を再び accept することを意味します。
@@ -2923,14 +2930,17 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               removed
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it
-nuka tend [--json]            scans featuresDir plus additionalFeatureDirs,
+nuka tend [--json] [--fail-on <code>]
+                              scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
                               vocabulary is typed rather than compat, how
                               many typed steps are read-only, and how much
                               of it declares what it could, then a sign-off
                               that no longer matches the code it froze (the
-                              one finding that exits non-zero), a step file
+                              one finding that exits non-zero; --fail-on
+                              <code> makes a named note exit non-zero too,
+                              for that invocation), a step file
                               that failed to import, a `from` nothing
                               exercises, a patterned step no
                               feature binds, a schema field with no

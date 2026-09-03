@@ -645,6 +645,7 @@ description のないスキーマフィールドは、ファイルを見る人�
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 sign-off record はその最初の読み手のために書かれています。
 feature の本文、scenario ごとのサマリ表、そして `mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節です。
+その step の件数は、冒頭の Condition 節に先に書かれています。
 
 ## Design
 

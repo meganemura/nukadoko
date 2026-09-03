@@ -732,7 +732,8 @@ beside it, to check what ran and at which commit. Everything under
 `.nukadoko/` and every `nuka` verb belongs to the agent or to CI. The
 sign-off record is written for that first reader: the feature's own text,
 one summary table per scenario, and a closing section naming any step
-that declared `mutates: false` while measured making a write.
+that declared `mutates: false` while measured making a write, with the
+count of those steps already stated in the Condition section at the top.
 
 ## Design
 
