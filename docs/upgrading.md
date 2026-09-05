@@ -91,8 +91,16 @@ on disk instead of twice.
 - **`allure-results/` written by 0.10 and earlier is not pruned.**
   Retention removes an export file only through the manifest the run that
   wrote it left under `.nukadoko/records/runs/<run_id>/`, and older runs
-  left none. Run `nuka clean --export` once to drop that directory; every
-  run from now on removes its own files when it ages out.
+  left none. Every run from now on removes its own files when it ages out,
+  so what stays forever is only what was written before the upgrade.
+
+  `nuka clean --export` empties the whole directory, which also drops the
+  reports of the runs kept since the upgrade. To keep those, delete only
+  what predates the upgrade instead, which nothing tracks either way:
+
+  ```sh
+  find .nukadoko/export/allure-results -type f ! -newermt '<the day you upgraded>' -delete
+  ```
 - **A trace or screenshot under `allure-results/` is now a hard link to
   the file under `records/steps/<id>/`.** Nothing reads differently.
   Copying `.nukadoko/` with a tool that does not preserve links makes two

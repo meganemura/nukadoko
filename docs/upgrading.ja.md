@@ -67,7 +67,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   拒否の文面は、record が寿命を過ぎた可能性と、有効な方針を述べます。「no such step record」だけでは終わりません。
 - **0.10 以前が書いた `allure-results/` は刈られません。**
   retention が export ファイルを消すのは、書いた run が `.nukadoko/records/runs/<run_id>/` に残した一覧を通してだけで、古い run はそれを残していません。
-  `nuka clean --export` を 1 回走らせてそのディレクトリを空にしてください。以後の run は、寿命を過ぎたときに自分のファイルを自分で消します。
+  以後の run は寿命を過ぎたときに自分のファイルを自分で消すので、永久に残るのは上げる前に書かれたものだけです。
+
+  `nuka clean --export` はディレクトリ全体を空にします。上げてから保持している run のレポートも一緒に消えます。
+  それを残したいなら、上げた日より古いものだけを消してください。どちらにせよ、それらを追跡しているものはありません。
+
+  ```sh
+  find .nukadoko/export/allure-results -type f ! -newermt '<上げた日>' -delete
+  ```
 - **`allure-results/` の下の trace と screenshot は、`records/steps/<id>/` の下のファイルへの hard link になりました。**
   読む側には何も変わりません。
   link を保たないツールで `.nukadoko/` をコピーすると、以前と同じく 2 つのファイルに戻ります。`allure.resultsDir` が別のファイルシステムにあるときは、自動でコピーに戻ります。
