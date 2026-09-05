@@ -13,6 +13,7 @@ import type { ScenarioRecord } from "./record-types.js";
 // `rootDir` (see run-worker-entry.ts's own header) and reports back only
 // plain data, over its own stdout, as one JSON object per line:
 //
+//   { "kind": "scenario-started", "feature": string, "line": number, "name": string }
 //   { "kind": "scenario", "record": ScenarioRecord, "stepLines": string[], "notes": string[] }
 //   { "kind": "note", "text": string }
 //
@@ -58,6 +59,20 @@ import type { ScenarioRecord } from "./record-types.js";
 // the parent simply relays the text as its own stderr line, unconditional
 // on `--quiet` exactly as `nuka run` already treats each of them today.
 
+/** Sent the moment a worker begins one pickle, before its first step runs.
+ * The parent turns it into the one line that says what is running now
+ * (src/run/progress-log.ts's `writeScenarioStarted`): without it, the
+ * parent's only signal about a scenario arrives when that scenario ends,
+ * so a run that hangs leaves a log whose last line names the scenario
+ * before the one that hung. Carries no index — the parent numbers
+ * completions, not starts (that file's own comment). */
+export interface WorkerScenarioStartedEnvelope {
+  readonly kind: "scenario-started";
+  readonly feature: string;
+  readonly line: number;
+  readonly name: string;
+}
+
 export interface WorkerScenarioEnvelope {
   readonly kind: "scenario";
   readonly record: ScenarioRecord;
@@ -70,7 +85,7 @@ export interface WorkerNoteEnvelope {
   readonly text: string;
 }
 
-export type WorkerEnvelope = WorkerScenarioEnvelope | WorkerNoteEnvelope;
+export type WorkerEnvelope = WorkerScenarioStartedEnvelope | WorkerScenarioEnvelope | WorkerNoteEnvelope;
 
 export function serializeWorkerEnvelope(envelope: WorkerEnvelope): string {
   return `${JSON.stringify(envelope)}\n`;
@@ -92,7 +107,7 @@ export function parseWorkerEnvelope(line: string): WorkerEnvelope | undefined {
     return undefined;
   }
   const kind = (parsed as { kind?: unknown }).kind;
-  if (kind === "scenario" || kind === "note") {
+  if (kind === "scenario-started" || kind === "scenario" || kind === "note") {
     return parsed as WorkerEnvelope;
   }
   return undefined;

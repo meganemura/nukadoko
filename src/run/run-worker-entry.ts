@@ -247,6 +247,14 @@ async function main(): Promise<void> {
       // uses under `--repeat`: this worker's whole list once, then again.
       for (let iteration = 0; iteration < repeat; iteration += 1) {
       for (const { feature, pickle } of flatPickles) {
+        // Before anything this pickle does, so the parent's log names what
+        // is running rather than what last finished.
+        emit({
+          kind: "scenario-started",
+          feature: feature.relativePath,
+          line: pickle.location?.line ?? 0,
+          name: pickle.name,
+        });
         const stepLines: string[] = [];
         const onStepEnd = quiet ? undefined : createStepProgressLogger({
           write(chunk: string): boolean {

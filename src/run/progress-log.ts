@@ -81,6 +81,32 @@ export function writeScenarioBoundary(stderr: WritableSink, boundary: ScenarioBo
   );
 }
 
+export interface ScenarioStart {
+  /** 1-based, the parent's own bucket number for the worker that is
+   * running this scenario. */
+  readonly worker: number;
+  readonly relativeFeaturePath: string;
+  readonly line: number;
+  readonly name: string;
+}
+
+/** One line when a scenario *begins*, written only by a `--concurrency <n>`
+ * run's parent (src/run/run-concurrent.ts). A serial run's own boundary
+ * line above is already written at that moment, so it needs no second one;
+ * a parallel run's is not, because the parent only hears from a worker when
+ * a scenario ends, which leaves the last line of a hung run naming the
+ * scenario before the one that hung.
+ *
+ * No index, deliberately: `writeScenarioBoundary`'s own number means "the
+ * Nth to finish", and reusing it here would give one number two meanings in
+ * one log. The worker number is what this line adds instead, so a reader
+ * can tell which of several in-flight scenarios a later line belongs to. */
+export function writeScenarioStarted(stderr: WritableSink, start: ScenarioStart): void {
+  stderr.write(
+    `scenario start  worker ${start.worker}  ${start.relativeFeaturePath}:${start.line}  ${start.name}\n`,
+  );
+}
+
 /** One row of "where this run wrote" — `count` is omitted for a stream
  * this run either wrote in full or not at all (`allure`, `messages`),
  * never a count of anything. `kind` only decides the trailing slash: a

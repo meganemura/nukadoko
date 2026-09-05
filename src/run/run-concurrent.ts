@@ -8,7 +8,13 @@ import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitte
 import { runExportsManifestPath } from "../record/run-exports.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
-import { type FailedScenario, writeScenarioBoundary, createRepeatTally, type RepeatTally } from "./progress-log.js";
+import {
+  type FailedScenario,
+  writeScenarioBoundary,
+  writeScenarioStarted,
+  createRepeatTally,
+  type RepeatTally,
+} from "./progress-log.js";
 import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "./line-buffer.js";
@@ -204,9 +210,21 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   // whole run's total", parallel phase and serial phase alike.
   let completedCount = 0;
 
-  function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>): void {
+  function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>, worker: number): void {
     if (envelope.kind === "note") {
       stderr.write(`${envelope.text}\n`);
+      return;
+    }
+
+    if (envelope.kind === "scenario-started") {
+      if (!quiet) {
+        writeScenarioStarted(stderr, {
+          worker,
+          relativeFeaturePath: envelope.feature,
+          line: envelope.line,
+          name: envelope.name,
+        });
+      }
       return;
     }
 
@@ -259,7 +277,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     messagesEmitter?.emitScenario({ record, pickle: match.pickle });
   }
 
-  async function runWorkerGroup(files: readonly SelectedFeature[]): Promise<WorkerGroupResult> {
+  async function runWorkerGroup(files: readonly SelectedFeature[], worker: number): Promise<WorkerGroupResult> {
     const tmpDir = await mkdtemp(path.join(tmpdir(), "nukadoko-run-"));
     const featureListPath = path.join(tmpDir, "features.txt");
     try {
@@ -281,7 +299,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           stderr.write(`Warning: a worker produced an unreadable line on its own stdout: ${line}\n`);
           return;
         }
-        handleEnvelope(envelope, filesWithRecords);
+        handleEnvelope(envelope, filesWithRecords, worker);
       });
       // Relayed raw, never parsed — this worker's own real stderr only ever
       // carries a pre-try/catch Node crash (this module's own header, and
@@ -337,7 +355,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       buckets[index % workerCount]!.push(feature);
     });
 
-    const results = await Promise.all(buckets.map((bucket) => runWorkerGroup(bucket)));
+    const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1)));
     for (const [bucketIndex, result] of results.entries()) {
       if (result.exitCode !== 0) {
         for (const feature of buckets[bucketIndex]!) {
@@ -353,7 +371,9 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   // exited (the `await` above already guarantees that) — a `@nukadoko:serial` file's
   // whole reason to exist is that nothing else may be running while it is.
   for (const feature of serialFeatures) {
-    const result = await runWorkerGroup([feature]);
+    // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
+    // second number to tell it apart from.
+    const result = await runWorkerGroup([feature], 1);
     if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
       failedFiles.add(feature.relativePath);
     }
