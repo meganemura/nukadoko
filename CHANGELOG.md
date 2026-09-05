@@ -5,6 +5,19 @@ with one caveat stated in the README: while this is 0.x, the public API can
 change in any release. That holds for the whole 0.x range, up to 1.0, not
 just until 0.1.
 
+## Unreleased
+
+### Added
+
+- **The acceptance skill's maintenance reference says not to delete an old
+  record before re-taking one.** A record's name carries the commit it
+  froze, so a fresh `nuka accept` writes a new file beside the old one.
+  Deleting first makes the tree dirty and `accept` refuses: it sets an
+  existing record aside when it checks for a dirty tree, but a deleted one
+  cannot be read and so cannot be recognised as a record. Reported by a
+  project whose `rm -f features/*.md` was refused, correctly, and then
+  committed by the next command in the same `&&` chain.
+
 ## 0.12.0 — 2026-09-04
 
 ### Breaking

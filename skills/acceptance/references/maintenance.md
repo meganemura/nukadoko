@@ -10,6 +10,17 @@ passes `--fail-on <code>` (for instance `feature-never-signed`); the
 finding stays a note in the output, and only that invocation's exit code
 turns red.
 
+Re-taking a record never means deleting the old one first. A record's name
+carries the commit it froze, so a fresh `nuka accept` writes a new file
+beside the old one. Deleting first is worse than unnecessary: `accept`
+sets an existing acceptance record aside when it checks for a dirty tree,
+which is why a second feature can be accepted without committing the
+first one's record, but a *deleted* record cannot be read and so cannot be
+recognised as one. It counts as an ordinary dirty path, and `accept`
+refuses. Delete an old record when `nuka tend` reports
+`signoff-feature-changed` against it, which is when it has stopped being
+true, and not before.
+
 `repeated-scenario-prefix` shows which scenarios in the most recent run
 shared the same opening steps. It also shows the measured time for that
 opening and its share of the run's summed scenario time.
