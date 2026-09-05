@@ -7,7 +7,45 @@ just until 0.1.
 
 ## Unreleased
 
+### Breaking
+
+- **A typed step's own `run` now has a deadline: twenty minutes by
+  default.** A step that never returns used to take the whole run with it.
+  A project's CI hit its job limit six times in a row, about two and a half
+  hours of runner time, because one step waited on a Playwright mouse call
+  that carries no timeout of its own: 106 of 107 scenarios finished and the
+  run never reached its summary. The step is now failed with
+  `error.kind: "timeout"`, and the run continues to the next scenario and
+  reaches its summary, naming which step ran out of time.
+
+  `stepTimeout` in `nukadoko.config.ts` sets the limit for the project and
+  `defineStep({ timeout })` overrides it for one step. There is no value
+  meaning "no limit". The default is not a guess about step durations: it is
+  the horizon this tool already had, 120 Allure heartbeat ticks of ten
+  seconds, so one run has one horizon rather than two. It sits far above
+  what steps take in practice, measured at a median of 66ms and a maximum of
+  14s across 800 step records sampled from a real browser suite, with none
+  over 30 seconds. A project with a legitimately longer step raises the
+  number; `docs/upgrading.md` says how.
+
+  Compat steps are deliberately not covered and still run unbounded unless
+  their own glue declares `{ timeout }` or calls `setDefaultTimeout`, which
+  is what keeps a migrating suite's slow step from failing purely from
+  switching.
+
 ### Added
+
+- **A `--concurrency <n>` run says which scenario a worker is running, not
+  only which one finished.** The parent hears from a worker when a scenario
+  ends, so the line naming a scenario used to arrive after it was over, and
+  a hung scenario left a log whose last line named the one before it. A
+  worker now announces each pickle as it begins, and the parent writes one
+  line naming the worker, the feature and line, and the scenario. It carries
+  no index, since the finishing line's number means "the Nth to finish" and
+  one number should not mean two things in one log. `--quiet` suppresses
+  both. A serial run is unchanged, its boundary line having always been
+  written at the start. Reported by a project that recovered a hung
+  scenario's name six times by diffing its CI log against a local run.
 
 - **The acceptance skill's maintenance reference says not to delete an old
   record before re-taking one.** A record's name carries the commit it

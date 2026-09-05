@@ -294,6 +294,15 @@ export interface StepDefinitionInput<
    * stays one-line-per-step); shown in `nuka describe`. No default — omit it
    * and `Step.rationale` is `undefined`, same as omitting `pattern`. */
   rationale?: string;
+  /** How long this step's own `run` may take, in milliseconds, before the
+   * execution is failed with `error.kind: "timeout"`. Omit it and the
+   * project's `stepTimeout` applies (`nukadoko.config.ts`, default twenty
+   * minutes). Raise it for a step that legitimately takes longer than the
+   * project default; there is no value meaning "no limit", because a step
+   * that never returns takes the whole run with it, which is what this
+   * exists to stop. The limit is on the `run` call itself, so a `ctx.poll`
+   * inside it still enforces its own, shorter deadline first. */
+  timeout?: number;
   /** Other steps this step's own `run` may call through the `call` fixture
    * (docs/spec.md "Parts") — a step that calls a part it did not list here
    * is refused at the call site, never at the call's own body: `call` reads
@@ -334,6 +343,11 @@ export interface Step<
    * unconditionally). */
   readonly from: StepFromMap;
   readonly rationale: string | undefined;
+  /** `undefined` when the step declares none, which is the common case: the
+   * project's own `stepTimeout` is what applies then. Never resolved to a
+   * number here: the config this step will run under is not known at
+   * definition time, and a step object outlives any one run. */
+  readonly timeout: number | undefined;
   /** Empty (`[]`) when the step declares no `parts` at all — the same
    * "default fills the gap" convention `from`'s own `{}` default already
    * follows (this file's own header on `Step.from`), so every reader can
@@ -384,6 +398,7 @@ export function defineStep<
     // to begin with.
     from: (definition.from ?? {}) as StepFromMap,
     rationale: definition.rationale,
+    timeout: definition.timeout,
     parts: definition.parts ?? [],
     run: definition.run,
     [STEP_BRAND]: true,

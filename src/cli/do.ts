@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { runWithTimeout, classifyCaughtError } from "../run/run-scenario.js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { formatValidationIssues } from "../binding/format-issues.js";
@@ -679,7 +680,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // `ctx.call` is ready the moment the step's own body could reach
         // for it.
         contextHandle.beginStepRun(entry.step, fixtures);
-        const runResult = await entry.step.run(fixtures, argsResult.data);
+        const runResult = await runWithTimeout(
+          () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+          entry.step.timeout ?? config.stepTimeout,
+          "Step",
+          name,
+          entry.step.timeout === undefined ? "config" : "step",
+        );
         const returnsResult = entry.step.returns.safeParse(runResult);
         if (!returnsResult.success) {
           status = "failed";
@@ -690,9 +697,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
           result = returnsResult.data;
         }
       } catch (error) {
+        // `classifyCaughtError` for the same reason src/run/run-scenario.ts
+        // routes its own typed catch through it: this `run` executes under
+        // `runWithTimeout` now, so the limit firing has to record as
+        // `"timeout"` rather than as the step's own throw.
         status = "failed";
         errorMessage = error instanceof Error ? error.message : String(error);
-        errorKind = "step_error";
+        errorKind = classifyCaughtError(error);
       }
     }
 

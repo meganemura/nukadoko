@@ -33,6 +33,23 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.12.0 to the next release
+
+One behaviour change worth knowing before upgrading.
+
+- **A typed step that runs longer than twenty minutes now fails.** It used
+  to run forever, taking the run with it. The limit is `stepTimeout` in
+  `nukadoko.config.ts`; one step raises its own with
+  `defineStep({ timeout })`. If a step in this project legitimately takes
+  longer, set the number before upgrading, since the failure looks like an
+  ordinary step failure with `error.kind: "timeout"`. There is no value
+  meaning "no limit". Compat steps are unaffected: they still run unbounded
+  unless their own glue declares `{ timeout }` or calls `setDefaultTimeout`.
+- **A `--concurrency <n>` run writes one extra line per scenario**, naming
+  the worker and the scenario as it starts. A script parsing stderr for the
+  existing `scenario <n>/<total>` line is unaffected; one matching every
+  line starting with `scenario ` now sees both. `--quiet` suppresses both.
+
 ## 0.11.0 to 0.12.0
 
 Additions, one fix, and one name.

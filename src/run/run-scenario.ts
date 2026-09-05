@@ -654,9 +654,21 @@ function fromInjectionHint(
  * exported — only `runWithTimeout` below builds one, and that function
  * itself is what cli/run.ts's own BeforeAll/AfterAll reuses (see this
  * file's own header). */
-function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number): string {
-  return `${kind} "${name}" timed out after ${timeoutMs}ms (its own registered timeout)`;
+function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number, source: TimeoutSource = "registered"): string {
+  const where =
+    source === "registered"
+      ? "its own registered timeout"
+      : source === "step"
+        ? "the step's own timeout"
+        : "stepTimeout in nukadoko.config.ts; raise it, or give this step its own timeout";
+  return `${kind} "${name}" timed out after ${timeoutMs}ms (${where})`;
 }
+
+/** Which knob produced the limit that fired, so the message can name the
+ * one to turn. `"registered"` is the compat path's own wording, unchanged:
+ * there the limit came from the glue's `{ timeout }` or `setDefaultTimeout`,
+ * neither of which nukadoko owns. */
+type TimeoutSource = "registered" | "step" | "config";
 
 /** cucumber-js interprets the string returns `"pending"`/`"skipped"`
  * as their own outcomes; nukadoko's step/scenario record schema has no such status
@@ -724,6 +736,7 @@ export async function runWithTimeout<T>(
   timeoutMs: number | undefined,
   kind: "Step" | "Hook",
   name: string,
+  source: TimeoutSource = "registered",
 ): Promise<T> {
   if (timeoutMs === undefined) {
     return run();
@@ -733,7 +746,7 @@ export async function runWithTimeout<T>(
   let timer: ReturnType<typeof setTimeout>;
   const timedOut = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(
-      () => reject(new CompatTimeoutError(timeoutMessage(kind, name, timeoutMs))),
+      () => reject(new CompatTimeoutError(timeoutMessage(kind, name, timeoutMs, source))),
       timeoutMs,
     );
   });
@@ -809,12 +822,11 @@ export async function runWithHeartbeat<T>(
  * `instanceof` would silently miss it there; see that function's own header)
  * are identifiable this way; anything else — including a non-`Error` thrown
  * value — falls back to `"step_error"`, the default whenever classification
- * is uncertain. Not applied to a typed step's own throw: a typed
- * step never touches a World or `runWithTimeout` (no `this`, no timeout
- * mechanism — this file's own header), so that catch site hardcodes
- * `"step_error"` directly rather than call through here for a case that can
- * never actually occur. */
-function classifyCaughtError(error: unknown): ErrorKind {
+ * is uncertain. A typed step's own catch site calls through here too: it
+ * cannot produce a `WorldWriteValidationError` (no `this`), but it does run
+ * under `runWithTimeout` now, so a `CompatTimeoutError` reaches it and has
+ * to classify as `"timeout"` rather than as the step's own throw. */
+export function classifyCaughtError(error: unknown): ErrorKind {
   if (error instanceof CompatTimeoutError) return "timeout";
   if (isWorldWriteValidationError(error)) return "world_invalid";
   return "step_error";
@@ -1887,8 +1899,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               // needs a real `Promise<T>` to race the heartbeat's own
               // `run()` type against, the same normalization the compat
               // branch below already needs for the same reason.
+              // The heartbeat only watches; the timeout is what ends a step
+              // that never returns. Inside the heartbeat, so a step that is
+              // about to be failed for time still shows what it was doing
+              // in the live report right up to that point.
               const runResult = await withStepHeartbeat(
-                () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+                () =>
+                  runWithTimeout(
+                    () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+                    entry.step.timeout ?? config.stepTimeout,
+                    "Step",
+                    outcome.stepName,
+                    entry.step.timeout === undefined ? "config" : "step",
+                  ),
                 stepIndex,
                 stepStartedAt,
               );
@@ -1902,15 +1925,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
                 result = returnsResult.data;
               }
             } catch (error) {
-              // Always "step_error", never routed through
-              // `classifyCaughtError` (this file's own header): a typed
-              // step's `run(fixtures, args)` never
-              // receives `this` and has no timeout mechanism, so neither a
-              // `WorldWriteValidationError` nor a `CompatTimeoutError` can
-              // ever reach this catch.
+              // Routed through `classifyCaughtError` for the one kind that
+              // can reach here: a typed step's `run` now executes under
+              // `runWithTimeout`, so the limit firing arrives as a
+              // `CompatTimeoutError` and must record as `"timeout"`, not as
+              // the step's own throw. A `WorldWriteValidationError` still
+              // cannot reach here (a typed step receives no `this`), and the
+              // classifier's own fallback covers everything else.
               status = "failed";
               errorMessage = error instanceof Error ? error.message : String(error);
-              errorKind = "step_error";
+              errorKind = classifyCaughtError(error);
             }
           }
         }

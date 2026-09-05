@@ -103,6 +103,16 @@ export type ParameterTypeConfig = z.infer<typeof parameterTypeConfigSchema>;
  * for that suite and far less for a suite without a browser. Fewer than
  * that and the failure a person was chasing an hour ago is already gone on
  * a suite run every few minutes. */
+/** `stepTimeout`'s default: twenty minutes. Not a guess about how long a
+ * step should take, but the horizon this tool already had. The Allure
+ * emitter draws a running step for at most `HEARTBEAT_TICK_CAP` ticks of
+ * `HEARTBEAT_INTERVAL_MS` (120 x 10s, src/run/run-scenario.ts), which is
+ * where its author already decided a step has stopped being worth watching.
+ * Setting the limit anywhere else would give one run two horizons. It is
+ * deliberately far above what steps actually take: 800 step records
+ * sampled from a real browser suite ran a median of 66ms, a 99th
+ * percentile of 10.7s, and a maximum of 14s, with none over 30s. */
+export const DEFAULT_STEP_TIMEOUT_MS = 1_200_000;
 export const DEFAULT_RETENTION_RUNS = 20;
 /** `retention.adHocDays`'s default: long enough that a `nuka do` chain
  * started one week and harvested the next still resolves. */
@@ -397,6 +407,15 @@ export const configSchema = z
      * above — zero configuration already gets a full stream. No CLI flag
      * either. */
     messages: z.object({ output: z.string().optional() }).strict().optional(),
+    /** How long a typed step's own `run` may take before the execution is
+     * failed with `error.kind: "timeout"`, in milliseconds. A step's own
+     * `timeout` overrides it. Compat steps are deliberately not covered:
+     * they run unbounded unless their glue declares `{ timeout }` or calls
+     * `setDefaultTimeout`, which is what keeps a migrating suite's slow
+     * step from starting to fail purely from switching
+     * (src/compat/registry.ts, docs/migration.md). A typed step is not a
+     * migrating asset, so the same reasoning does not reach it. */
+    stepTimeout: z.number().positive().default(DEFAULT_STEP_TIMEOUT_MS),
     /** How long measurement stays on disk (docs/spec.md "Artifacts").
      * `runs`: the newest N `nuka run` invocations keep every record and
      * export file they wrote; at the end of each `nuka run`, an older run's

@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { runWithTimeout } from "../run/run-scenario.js";
 import path from "node:path";
 import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
@@ -450,7 +451,13 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
     try {
       const fixtures = await buildStepFixtures(contextHandle.ctx, fixtureNames);
       contextHandle.beginStepRun(step, fixtures);
-      const runResult = await step.run(fixtures, argsResult.data);
+      const runResult = await runWithTimeout(
+        () => Promise.resolve(step.run(fixtures, argsResult.data)),
+        step.timeout ?? config.stepTimeout,
+        "Step",
+        options.name,
+        step.timeout === undefined ? "config" : "step",
+      );
       const returnsResult = step.returns.safeParse(runResult);
       if (!returnsResult.success) {
         status = "failed";

@@ -27,6 +27,20 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.12.0 から次のリリースへ
+
+上げる前に知っておく挙動の変化が 1 つあります。
+
+- **20 分を超えて走る typed step は、失敗するようになりました。**
+  以前は無制限に走り、run 全体を道連れにしていました。
+  制限は `nukadoko.config.ts` の `stepTimeout` で、1 つの step は `defineStep({ timeout })` で自分の値を持てます。
+  このプロジェクトに、正当にそれより長くかかる step があるなら、上げる前に数字を設定してください。失敗の見え方は `error.kind: "timeout"` を持つふつうの step の失敗です。
+  「制限なし」を意味する値はありません。
+  compat step は影響を受けません。glue 自身が `{ timeout }` を宣言するか `setDefaultTimeout` を呼ばない限り、無制限で走ります。
+- **`--concurrency <n>` の run は、scenario ごとに 1 行増えます。** 開始時に worker と scenario を名指す行です。
+  既存の `scenario <n>/<total>` の行を拾っている script は影響を受けません。`scenario ` で始まる行をすべて拾っているものは、両方を見ることになります。
+  `--quiet` はどちらも抑えます。
+
 ## 0.11.0 から 0.12.0 へ
 
 追加がいくつか、修正が 1 つ、名前が 1 つです。

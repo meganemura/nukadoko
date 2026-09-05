@@ -20,6 +20,7 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
     fixtureTimeout: 60_000,
     secrets: { public: [], redact: [] },
     retention: { runs: 20, adHocDays: 7 },
+    stepTimeout: 1_200_000,
     browserType: "chromium",
     ...overrides,
   };

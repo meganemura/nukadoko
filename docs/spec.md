@@ -789,6 +789,29 @@ Without the first check, a fixture that never reaches `use()` could block the ru
 
 Setup and teardown each receive a separate timeout budget.
 `config.fixtureTimeout` sets the default budget to 60 seconds.
+
+A typed step's own `run` has a deadline. `stepTimeout` in
+`nukadoko.config.ts` sets it for the project, twenty minutes by default,
+and `defineStep({ timeout })` overrides it for one step. Passing it is what
+turns a step that never returns into a failed step with
+`error.kind: "timeout"`, so the run continues to the next scenario and
+reaches its summary. There is no value meaning "no limit": a step that
+never returns takes the whole run with it, which is what this exists to
+stop, and a run that never ends reports nothing at all.
+
+The default is not a guess about how long a step should take. It is the
+horizon this tool already had: the Allure emitter draws a running step for
+at most 120 heartbeat ticks of ten seconds (see "Allure emitter"), which is
+where a step stops being worth watching. One run, one horizon. It sits far
+above what steps actually take: 800 step records sampled from a real
+browser suite ran a median of 66ms and a maximum of 14s, none over 30s.
+
+A compat step is deliberately not covered. It runs unbounded unless its own
+glue declares `{ timeout }` or calls `setDefaultTimeout`, because adopting
+cucumber-js's own five-second default would fail an existing suite's slow
+step purely from switching (see "Compat steps"). A typed step is not a
+migrating asset, so that reasoning does not reach it.
+
 A fixture can override it through `options.timeout`.
 A timeout report names both the fixture and the phase.
 
@@ -2368,6 +2391,7 @@ or to the section for its feature.
 | `parameterTypes` | custom cucumber-expressions parameter types (below) |
 | `fixtures` | user-defined fixtures (see "Fixtures") |
 | `fixtureTimeout` | default setup/teardown timeout per fixture instance, in ms (see "Fixtures") |
+| `stepTimeout` | how long a typed step's own `run` may take, in ms (default 1,200,000; `defineStep({ timeout })` overrides it, compat steps are not covered) |
 | `allure` | only `resultsDir` (see "Allure emitter") |
 | `messages` | only `output` (see "Messages emitter") |
 

@@ -613,6 +613,23 @@ fixture は、nukadoko が `use()` で中断し、teardown 中に再開するコ
 
 setup と teardown は、それぞれ別のタイムアウト予算を受け取ります。
 `config.fixtureTimeout` は既定の予算を 60 秒に設定します。
+
+typed step 自身の `run` には締め切りがあります。
+`nukadoko.config.ts` の `stepTimeout` がプロジェクトの既定を決め、既定値は 20 分です。
+`defineStep({ timeout })` は 1 つの step についてそれを上書きします。
+これがあることで、返らない step は `error.kind: "timeout"` の失敗した step になり、run は次の scenario へ進んで summary に到達します。
+「制限なし」を意味する値はありません。返らない step は run 全体を道連れにし、終わらない run は何も報告しないからです。それを止めるためにあります。
+
+既定値は「step はこれくらいで終わるはずだ」という見積もりではありません。
+この道具が既に持っていた地平です。Allure emitter は走っている step を 10 秒の heartbeat 120 回ぶんまで描き(「Allure emitter」を参照)、そこが step を見続ける価値の切れる場所です。
+1 つの run に地平は 1 つです。
+実際の step の所要時間からは遠く離れています。実物のブラウザのスイートから 800 件の step record を無作為抽出したところ、中央値 66 ms、最大 14 秒で、30 秒を超えたものはありませんでした。
+
+compat step は意図して対象外です。
+glue 自身が `{ timeout }` を宣言するか `setDefaultTimeout` を呼ばない限り、無制限で走ります。
+cucumber-js 自身の 5 秒の既定を持ち込むと、切り替えただけで既存のスイートの遅い step が落ち始めるからです(「Compat steps」を参照)。
+typed step は移行してくる資産ではないので、その理由は届きません。
+
 fixture は `options.timeout` で上書きできます。
 タイムアウトの報告は fixture と局面の両方を名指します。
 
@@ -1950,6 +1967,7 @@ Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使いま�
 | `parameterTypes` | カスタムの cucumber-expressions parameter type(下記) |
 | `fixtures` | ユーザー定義の fixture(「Fixtures」を参照) |
 | `fixtureTimeout` | fixture インスタンスごとの setup/teardown の既定タイムアウト(ms)(「Fixtures」を参照) |
+| `stepTimeout` | typed step 自身の `run` に許す時間(ms、既定 1,200,000。`defineStep({ timeout })` が上書きし、compat step は対象外) |
 | `allure` | `resultsDir` のみ(Allure emitter を参照) |
 | `messages` | `output` のみ(Messages emitter を参照) |
 
