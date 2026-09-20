@@ -23,14 +23,32 @@ export type {
 // stayed importable for exactly as long as it recorded nothing.
 export { PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./context/poll.js";
+export type { ObservedCounts } from "./context/observed.js";
+export type { HttpOmittedCounts } from "./context/http-omitted.js";
 export type {
+  ConsoleErrorEntry,
+  FailedRequestEntry,
+  PageErrorEntry,
+  PageEventsSnapshot,
+  PageEventsTruncated,
+} from "./context/page-events.js";
+export type { ActionEntry } from "./context/trace-actions.js";
+export type { UsedEntry, UsedEntryWithResult } from "./context/used.js";
+export type { FixtureUsageEntry } from "./fixture/resolver.js";
+export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
+export type {
+  CallEntry,
   ErrorKind,
+  EvidenceAttachmentEntry,
   EvidenceMeta,
+  PollRecord,
+  ScreenshotEntry,
+  SectionEntry,
   StepRecord,
   StepRecordFailed,
   StepRecordOk,
 } from "./record/types.js";
-export type { Step, StepDefinitionInput } from "./step/define-step.js";
+export type { FromCandidate, FromMap, Step, StepDefinitionInput } from "./step/define-step.js";
 export { defineStep } from "./step/define-step.js";
 // EXPERIMENTAL: see call-tool.ts's own header for why the name carries the
 // mark, and the condition that would let it be dropped.

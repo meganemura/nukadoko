@@ -35,6 +35,12 @@ just until 0.1.
 
 ### Added
 
+- **`src/index.ts` now exports 22 internal types by name.** `StepRecordOk.observed`
+  held an `ObservedCounts` value, but a consumer could not import `ObservedCounts`
+  from `nukadoko` to write a function parameter type over that field. Found by
+  walking every type `index.ts` exports and listing each declaration it reached
+  that `index.ts` itself did not export by name. No type's shape changed.
+
 - **A `--concurrency <n>` run says which scenario a worker is running, not
   only which one finished.** The parent hears from a worker when a scenario
   ends, so the line naming a scenario used to arrive after it was over, and
