@@ -4,7 +4,7 @@ Typed Gherkin / step contracts with tool-measured step records. Scenarios can fa
 
 It is not an untyped free-form agent runner, and it is not a substitute for human sign-off of accept.
 
-Agent skills: [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md), [skills/migration/SKILL.md](skills/migration/SKILL.md) (`nuka skill` prints the skills directory).
+Agent skills: [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md), [skills/migration/SKILL.md](skills/migration/SKILL.md). Each entry says when to use it and which `references/` file beside it holds the procedure. `nuka skill` prints the skills directory.
 
 Installed package: `node_modules/nukadoko/skills/...` (this file at `node_modules/nukadoko/llms.txt`).
 

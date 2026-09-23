@@ -1,5 +1,12 @@
 # Fixtures: shared setup, cleanup, and waiting
 
+When a scenario needs a project resource a step merely borrows (a tenant, a
+seeded database row, an uploaded file), don't write its teardown inside the
+step: that puts something in the feature file that is not itself an
+acceptance condition. Declare it as a fixture instead, under
+`nukadoko.config.ts`'s own `fixtures`, using `defineFixtures` (from the
+`nukadoko` package).
+
 ## Declaring a fixture
 
 ```ts

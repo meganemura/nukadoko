@@ -1,5 +1,56 @@
 # Writing a step
 
+## Reading the vocabulary
+
+`nuka steps --json` lists the whole vocabulary; `nuka describe <step>`
+gives one step's full contract. Read the JSON itself for the field
+shapes rather than a description of them here, since a shape written
+down twice is the one that goes stale. Both name any step file that
+failed to import beside everything else they could still read, so a
+broken file elsewhere never hides the rest of the vocabulary; `nuka check`
+is where to fix the import itself.
+
+Two fields carry less than they look like they do. A `needs` of `null`
+means this tool could not read that step's `run()`, so its fixture
+contract is unknown, not empty. A `needs_inferred` list is a lexical
+guess at the same question: a starting inventory, never a finished one,
+and never grounds for concluding a step needs no browser.
+
+Prefer what already exists. If an acceptance condition can be expressed
+with an existing step, use it; do not scaffold a new one just because a
+criterion's wording doesn't match a pattern verbatim.
+
+## When the vocabulary has no step for it
+
+1. `nuka scaffold <name>`, kebab-case, one file per step.
+2. Implement it. The shape of that file is the next section.
+3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
+   record, before it ever touches a feature. Fix and re-run until it does
+   what it's supposed to; only move on to the feature-level `nuka run` once
+   every new step in the scenario has passed this way on its own. A mid-flow
+   step needs `nuka session start` instead (`references/exploring.md`).
+
+`mutates` defaults to `true`, a new step is assumed to change state unless
+it says `mutates: false`, and `nuka describe <step>` tells you which before
+you ever run it, so there's no need to guess. Before the *first* run of a
+step whose contract says `mutates: true`, tell the user what it's about to
+change and get their go-ahead, once per step, not on every retry while
+fixing it, or trial-and-error stops being possible. Steps with `mutates:
+false` are observation only (the Then side); they don't need this.
+
+With nobody to ask mid-task, because the caller handed the task over
+rather than sitting in the conversation, the go-ahead has to exist before
+the work starts. Either the instruction already covered these steps, and
+your report says which, or it did not, and you list what you intend to
+run and what each changes before starting. Running one and mentioning it
+afterwards, because asking was inconvenient, is the one wrong answer.
+
+If the same step still fails after three fix-and-retry cycles, stop and
+report where it stands instead of guessing further. A prompt asking for a
+different amount of patience ("try up to 10 times") overrides this
+default; it is not a config setting. The same budget covers `nuka do
+--use` while diagnosing a failed run (`references/diagnosing.md`).
+
 ## The shape of a step file
 
 One step per file, as the file's `default` export. Discovery reads that

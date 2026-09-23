@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **The acceptance and migration skills now open as short routes.**
+  Each `SKILL.md` says when to use it, what not to do, and which file
+  under `references/` holds the procedure for the step you are on.
+  The prose-to-requirements stage moved to
+  `skills/acceptance/references/from-prose.md`. The three migration
+  starting points moved to `skills/migration/references/`. The commands
+  are unchanged.
+
 ### Breaking
 
 - **A typed step's own `run` now has a deadline: twenty minutes by

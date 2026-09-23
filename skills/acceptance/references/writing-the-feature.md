@@ -6,6 +6,18 @@ title, and acceptance criteria in the reviewer's own words, unparaphrased.
 How you reached it doesn't matter and isn't worth recording; that the
 record can be traced back to what it accepted does.
 
+nukadoko has no concept of a ticket, so the feature file is the only place
+that link is recorded, and `nuka accept` freezes the whole file into the
+record read back months later. Don't write a field you couldn't fill: an
+empty `Ticket:` line is worse than no line at all, because it reads as a
+link that was lost rather than one that was never available.
+
+Each scenario is those criteria translated into the vocabulary
+(`references/writing-steps.md`, "Reading the vocabulary"), whether they
+arrived straight from a ticket or through the requirements stage below.
+Where that translation is a judgment call, the judgment is what review of
+the feature is for.
+
 ```gherkin
 @PROJ-123
 Feature: Sign in with valid credentials

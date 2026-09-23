@@ -1,5 +1,27 @@
 # Diagnosing a failed run
 
+## Work through the failed step first
+
+Before repeating `nuka run <feature>`, read the failed step's own step
+record in this order. The sections below are how to read the items that
+need more than a glance.
+
+1. Its `used` entries: each carries the full validated `result` of the
+   upstream step it read from, sitting right on the step record that
+   failed.
+2. `actions`, then the rest of the timeline ("Reading a step record as a
+   timeline"): every Playwright call this step made through the `page`
+   fixture, `expect` waits included, each with its own duration and
+   outcome.
+3. `page_events`, if the step opened a browser: a console error, an
+   uncaught page error, or a failed request recorded there can explain a
+   failure nothing else on the step record mentions.
+4. `nuka do <step> --use <upstream-step-record-id>` when the record
+   sharpens a hypothesis rather than confirming it ("Testing a hypothesis
+   without a full re-run").
+5. Re-run the whole feature last, once the step itself passes under `do`,
+   not as the first thing tried after a failure.
+
 ## Reading a step record as a timeline
 
 Read the failed step's own step record as one timeline rather than a bag of
@@ -51,8 +73,8 @@ If a step record only sharpens a hypothesis rather than confirming it, test
 the hypothesis with `nuka do <step> --use <upstream-step-record-id>`
 instead of re-running the scenario. It executes the one step in question,
 seconds, where a full `nuka run` costs minutes, and it still counts toward
-the same three-fix-and-retry-cycles rule described under "When an operation
-is missing" in `SKILL.md`.
+the same three-fix-and-retry-cycles rule in `references/writing-steps.md`
+("When the vocabulary has no step for it").
 
 Re-run the whole feature last, once the step itself passes under `do`, not
 as the first thing tried after a failure. Repeating `nuka run` end to end

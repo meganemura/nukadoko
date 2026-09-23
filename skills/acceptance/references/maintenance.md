@@ -1,5 +1,36 @@
 # Keeping records honest over time
 
+## When to run it, and what to do with the answer
+
+A record freezes the feature source and the run's step records, but not
+the contracts behind them. Change a step's `returns` after accepting, edit
+the feature, or delete a step it cites, and the record still claims a
+green run it can no longer support. Nothing about that stops a future
+run, so `nuka check` never mentions it. `nuka tend` is what finds it. It
+answers whether the vocabulary and its records are healthy, not whether
+this run can proceed, so it never gates the acceptance loop. The fix is
+to run and accept the feature again, or to undo what invalidated the
+record, never to edit the record.
+
+Run `nuka tend` once after `nuka accept` succeeds, when you report the
+sign-off. That is the moment where nothing depends on the answer: the
+work is done, the record is written, and the user is reading a result
+rather than waiting on one. "Periodically" names no moment an agent can
+recognize, so an instruction that says only that gets `nuka tend` run
+never.
+
+Report what it found and stop there. Each finding is about something the
+user chose, so acting on one without being asked replaces their choice
+with yours. Two shapes come up often enough to name here; the rest of
+this file is what each finding actually means. A step nothing binds any
+more is usually a deletion someone forgot to finish, and a fixture
+nothing names is usually setup that outlived the scenario that needed it.
+Say which findings you would act on and what each would change, then
+wait. Nothing here is urgent; a finding that has waited a week can wait
+for an answer.
+
+## What it reports
+
 `nuka tend` finds a record whose claims stopped holding: a stale record is
 the only finding that exits non-zero, so a periodic job can act on it; read
 what it prints for which of the record's own claims stopped holding and how

@@ -9,413 +9,97 @@ license: MIT
 
 ## What this is for
 
-A sign-off records that a scenario ran green at one commit: write the
-scenario once, run it until green, and sign it off. Signing off and
-running the scenario in CI answer different questions, sign-off for that
-one commit, CI for whether the criteria still hold today, and nukadoko
+A sign-off records that a scenario ran green at one commit. Signing off
+and running the scenario in CI answer different questions: sign-off for
+that one commit, CI for whether the criteria still hold today. nukadoko
 never re-runs a signed scenario on its own.
 
-Right after signing off, decide which of the two this scenario is for
-from here on. A ticket's acceptance criteria are usually about the change
-itself, and once that change has landed there is nothing left for a
-re-run to confirm, so the feature stays where it is. Some scenarios
-describe a path through the product that stays true long after the
-ticket closes; running those on every future commit is worth doing, so
-the feature moves into `featuresDir` instead (see "What not to do").
+This skill is the path from whatever you start with (raw prose, general
+acceptance criteria, a scenario ready to write, or a path already
+explored one `nuka do` call at a time) through that sign-off and the
+placement decision right after it. Open the reference named on a step
+before doing that step. This file is the order, not the procedure.
 
-This skill covers the whole path from whatever you start with (raw prose,
-general acceptance criteria, a scenario ready to write, or a path you
-already explored one `nuka do` call at a time) through to that sign-off
-and the placement decision right after it. "Where to start" below
-picks the entry point for what you have.
+## Before the first command
 
-## Say what you are about to do, before doing it
+The person watching has not decided to trust this tool yet. Before the
+first command, say in two or three sentences what the loop is for and
+what it will touch. After that, name anything that costs time, changes
+state, or outlives the command, one line each. Four of those surprise
+people:
 
-Assume the person watching has not decided to trust this tool yet. They
-are about to see an agent scaffold files, launch a browser, change real
-state, and leave a process running: each alarming without a reason, fine
-with one.
-
-Before the first command, say in two or three sentences what the loop is
-for and what it will touch. After that, name anything that costs time,
-changes state, or outlives the command, one line each. Four surprise people:
-
-- **`nuka do` on a `mutates: true` step** changes real state in the
-  selected environment. That one needs a go-ahead, not a mention (see
-  "When an operation is missing").
+- **`nuka do` on a `mutates: true` step** changes real state. That one
+  needs a go-ahead before the first run of that step, not a mention
+  afterwards, and not again on every retry
+  (`references/writing-steps.md`).
 - **`nuka run`** opens a browser and takes minutes.
 - **`nuka session start`** leaves a process holding a browser and live
-  credentials after it returns. Say `nuka session stop <name>` with it.
-- **`nuka accept`** writes a sign-off file beside the feature, meant to
-  be committed and kept, and it is the only artifact here that claims
-  anything.
+  credentials. Say `nuka session stop <name>` with it
+  (`references/exploring.md`).
+- **`nuka accept`** writes a sign-off file meant to be committed. It is
+  the only artifact here that claims anything.
 
-Limits reassure more than descriptions do. nukadoko itself makes no
-outbound network calls: what leaves the machine is what your own steps
-send to the application you pointed them at. Everything written at run
-time lands under `.nukadoko/`, gitignored by `nuka init` and holding live
-credentials in plaintext. Nothing here commits, pushes, or publishes on
-its own.
-
-Keep it short: trust comes from being predictable, and a paragraph before
-every command is its own way of being hard to follow.
+nukadoko itself makes no outbound network calls. What leaves the machine
+is what your own steps send to the application you pointed them at.
+Everything written at run time lands under `.nukadoko/`, gitignored by
+`nuka init`, holding live credentials in plaintext. Nothing here commits,
+pushes, or publishes on its own. Keep the narration short: a paragraph
+before every command is its own way of being hard to follow.
 
 ## Where to start
 
-Every path below funnels into the same loop, the same `nuka accept`, and
-the same placement judgment right after it (see "What not to do"). What
-differs is only where you enter:
+If the project is not initialized, run `nuka init` first. A CommonJS
+project (no `"type": "module"` in `package.json`) gets
+`nukadoko.config.mts`, and step files need `.mts` too.
 
 1. **All you have is prose** (a ticket, a request, a conversation), nothing
-   that reads as a testable statement yet: start at "From prose to
-   requirements" below.
-2. **You already have general acceptance-criteria sentences** (a ticket's
-   bullet list, a "the system shall..." statement) but no scenario yet:
-   start at "From requirements to scenarios" below.
-3. **You already have, or can write directly, a concrete scenario**: skip
-   ahead to "The loop" below.
-4. **You already ran the path**, exploring with `nuka do` call by call, and
-   want what you found fixed in a scenario: start at "From an exploration
-   to a scenario" below.
+   that reads as a testable statement yet:
+   `references/from-prose.md`, then
+   `references/writing-the-feature.md`.
+2. **You already have general acceptance-criteria sentences** but no
+   scenario yet: `references/writing-the-feature.md` ("From requirements
+   to scenarios").
+3. **You already have, or can write directly, a concrete scenario**: "The
+   loop" below.
+4. **You already ran the path** with `nuka do` and want it fixed in a
+   scenario: `references/exploring.md`, then join the loop at step 4
+   (`nuka check`).
 
-If none of the four is true, there is nothing yet to interrogate: ask the
-user what this is supposed to do before writing anything, since a scenario
-started without knowing what it proves just proves the wrong thing.
-
-Everything below assumes the project is already initialized (run `nuka init`
-if not; a CommonJS project gets `nukadoko.config.mts`, not `.ts`).
-
-## From prose to requirements
-
-Nothing in this stage runs a `nuka` command; a ticket, a request, or a
-conversation isn't vocabulary yet, so there is nothing here for the CLI to
-check. What this stage produces is text: a set of requirement statements,
-each either complete or carrying a named question for the person who can
-answer it.
-
-Read the prose against the five EARS patterns as a checklist for what a
-requirement needs to say to be actionable, not as a template to generate
-polished-sounding wording from. A pattern's slots come from the prose
-itself; a slot the prose doesn't state is a question, never a guess:
-
-- **Ubiquitous**: "The `<system>` shall `<response>`." Always true, no
-  trigger and no condition.
-- **Event-driven**: "When `<trigger>`, the `<system>` shall `<response>`."
-- **State-driven**: "While `<state>`, the `<system>` shall `<response>`."
-- **Unwanted behaviour**: "If `<trigger or condition>`, then the
-  `<system>` shall `<response>`."
-- **Optional feature**: "Where `<feature is present>`, the `<system>`
-  shall `<response>`."
-
-For each requirement-shaped statement in the prose:
-
-1. Decide which pattern fits, or notice the sentence is actually several
-   requirements compounded into one and split it first: a sentence with
-   "and" joining two different responses, or an implicit "unless," is
-   usually more than one requirement wearing one sentence.
-2. Fill each slot only with words the prose actually supports.
-3. Anything a slot needs that the prose doesn't state stays open: write it
-   as a question addressed to whoever can answer it, and leave the slot
-   unfilled rather than choosing a plausible value to move forward.
-4. Keep each requirement's own open questions attached to that
-   requirement, never pooled into one list, so a reader can see which
-   sentence is still unanswered rather than which set is.
-
-For example, a ticket that says "the export should fail gracefully if the
-file is too large" reads as an unwanted-behaviour candidate: "If `<file too
-large>`, then the system shall `<fail gracefully>`." Both slots are
-actually open. "Too large" names no threshold: what size, or what resource
-limit, triggers it? "Fail gracefully" names no response: does the user see
-a message, is the upload retried, is partial output cleaned up? Neither
-gets a value invented to fill the pattern; both become questions back to
-whoever wrote the ticket.
-
-Once a requirement's slots are all filled from stated fact, and every open
-slot has been resolved into an answered question, it is ready for the next
-stage, "From requirements to scenarios" below. A model drafting this
-classification is fine; the discipline lives in refusing to fill a slot the
-source didn't support, not in refusing to draft at all.
-
-## From requirements to scenarios
-
-This is where information gets added that no requirement sentence stated:
-concrete values, boundaries, negative paths. Surface every assumption
-beside the scenario rather than leaving a literal value to speak for
-itself, keep the trace from the requirement sentence that produced a
-scenario readable later, and reach for a decision table instead of one
-scenario per case once a rule combines several conditions. A model
-drafting this translation is fine; what the stage forbids is a draft
-whose assumptions never surface at all, not the act of drafting one.
-
-Picking concrete values a requirement never stated, a worked example,
-why a reviewer needs the assumption visible, and how many combining
-conditions push a rule toward a decision table instead of a scenario:
-`references/writing-the-feature.md`.
-
-## From an exploration to a scenario
-
-When the work started by exploring rather than from criteria: you drove
-`nuka do` call by call, reading each step record and deciding the next
-one, and now the path that matters is the one you just took. `nuka
-harvest` turns that path into a draft.
-
-Still exploring and stuck? A step's `returns` hiding too much, an
-operation with several moves, or one that cannot be repeated at all each
-have their own move, the probe step, a part, and `nuka session start`
-respectively: `references/exploring.md`.
-
-```sh
-nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
-```
-
-The ids are the ones `nuka do` printed. What comes back is deliberately
-unfinished, every keyword `*` and both names placeholders: replace each
-`*`, name the `Feature:` and `Scenario:`, and delete any line that was a
-probe rather than part of the story. Why `harvest` takes explicit ids
-rather than a time window, why one call is one scenario, and each
-finishing step in full: `references/exploring.md`.
-
-Then join "The loop" below at step 4, `nuka check`.
+If none of the four is true, ask what this is supposed to do before
+writing anything. A scenario started without knowing what it proves
+proves the wrong thing.
 
 ## The loop
 
 1. Read the vocabulary: `nuka steps --json`, then `nuka describe <step>`
-   for the contract of anything that looks relevant.
-2. When an operation is missing, `nuka scaffold <name>`, implement it, and
-   exercise it alone with `nuka do` until its step record looks right.
-3. Write the feature. A tag and the description under `Feature:` carry the
-   ticket id and the criteria in the reviewer's words; the scenarios are
-   those criteria translated into the vocabulary.
-4. `nuka check <feature>`: every static inconsistency it can catch, before
-   anything runs (see "Running and accepting").
-5. Commit. A run can only be frozen if it happened on a clean tree at the
-   commit still checked out, so debugging runs against a dirty tree are
-   fine; they simply cannot be accepted.
-6. `nuka run <feature>` until green; when it fails, diagnose from the
-   failed step's own step record before repeating the whole run (see "When
-   a run fails"). `run` always needs a target named, unlike `check`, which
-   walks the project when given none: checking everything is cheap and
-   running everything is not.
+   for anything that looks relevant. `references/writing-steps.md`
+   ("Reading the vocabulary").
+2. When an operation is missing: `nuka scaffold <name>`, implement it,
+   exercise it alone with `nuka do`. `references/writing-steps.md`
+   ("When the vocabulary has no step for it"). The same file:
+   chaining (`from`, "Chaining a value from an earlier step"),
+   helper vs part vs step ("Helper, part, or step?"),
+   a second scenario that needs part of a step
+   ("Splitting a step a second scenario needs half of",
+   "Generalizing a step that is too concrete").
+3. Write the feature. `references/writing-the-feature.md`. A resource the
+   scenario borrows, a wait for an effect that lands elsewhere, or a
+   required environment variable: `references/fixtures.md`.
+   Application-specific evidence: `references/evidence.md`.
+4. `nuka check <feature>`. `references/running.md`.
+5. Commit. A run can only be frozen on a clean tree at the commit still
+   checked out. Debugging against a dirty tree is fine; it cannot be
+   accepted.
+6. `nuka run <feature>` until green. `references/running.md`. When it
+   fails, diagnose from the failed step's own step record before
+   repeating the run: `references/diagnosing.md`. `run` needs a target;
+   `check` walks the project when given none.
 7. `nuka accept <feature>`, then commit the record it wrote.
-
-## Reading the vocabulary
-
-- `nuka steps --json` lists the whole vocabulary; `nuka describe <step>`
-  gives one step's full contract. Read the JSON itself for the field
-  shapes rather than a description of them here, since a shape written
-  down twice is the one that goes stale. Both name any step file that
-  failed to import beside everything else they could still read, so a
-  broken file elsewhere never hides the rest of the vocabulary; `nuka check`
-  is where to fix the import itself.
-- Two fields carry less than they look like they do. A `needs` of `null`
-  means this tool could not read that step's `run()`, so its fixture
-  contract is unknown, not empty. A `needs_inferred` list is a lexical
-  guess at the same question: a starting inventory, never a finished one,
-  and never grounds for concluding a step needs no browser.
-- Prefer what already exists. If an acceptance condition can be expressed
-  with an existing step, use it; do not scaffold a new one just because a
-  criterion's wording doesn't match a pattern verbatim.
-
-## When an operation is missing
-
-1. `nuka scaffold <name>`, kebab-case, one file per step.
-2. Implement it.
-3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
-   record, before it ever touches a feature. Fix and re-run until it does
-   what it's supposed to; only move on to the feature-level `nuka run` once
-   every new step in the scenario has passed this way on its own. A mid-flow
-   step needs `nuka session start` instead (`references/exploring.md`).
-
-`mutates` defaults to `true`, a new step is assumed to change state unless
-it says `mutates: false`, and `nuka describe <step>` tells you which before
-you ever run it, so there's no need to guess. Before the *first* run of a
-step whose contract says `mutates: true`, tell the user what it's about to
-change and get their go-ahead, once per step, not on every retry while
-fixing it, or trial-and-error stops being possible. Steps with `mutates:
-false` are observation only (the Then side); they don't need this.
-
-With nobody to ask mid-task, because the caller handed the task over
-rather than sitting in the conversation, the go-ahead has to exist before
-the work starts. Either the instruction already covered these steps, and
-your report says which, or it did not, and you list what you intend to
-run and what each changes before starting. Running one and mentioning it
-afterwards, because asking was inconvenient, is the one wrong answer.
-
-If the same step still fails after three fix-and-retry cycles, stop and
-report where it stands instead of guessing further. A prompt asking for a
-different amount of patience ("try up to 10 times") overrides this
-default; it is not a config setting. The same budget covers `nuka do
---use` while diagnosing a failed run (see "When a run fails").
-
-A complete step file, how a Then step asserts and what it should return,
-pattern rules, aliasing a fixture, the `do`/`run` gap, what a step should
-return beyond what a later step cites, what `rationale` is for, and why
-every `args` and `returns` field wants a zod `.describe()`:
-`references/writing-steps.md`.
-
-## Chaining a value from an earlier step
-
-Reach for `from: { key: [otherStep, "resultKey"] }` when a step needs a
-value an earlier step produced: the value is filled in before the step
-runs, and `nuka check` verifies the producing step actually appears earlier
-in the same scenario, before anything runs.
-
-The `resultOf` fixture fallback, a value with two possible producers, and
-why a chained value is never fetched by nukadoko on its own initiative:
-`references/writing-steps.md`.
-
-## Helper, part, or step?
-
-Judge each operation on one axis first: does it mean something to the
-person reading the scenario, not to the code moving data between steps?
-Yes, make it a step. No, ask what should be knowable about it after a
-failure: a **part** if it has a contract worth stating, an ordinary
-function under `features/steps/lib/` if it has neither.
-
-The full reasoning, the kind of line this keeps out of a feature file, and
-what a `calls` entry records: `references/writing-steps.md`.
-
-## A second scenario needs part of a step you already have
-
-Two refactors, and the difference is whether the agreed sentence changes.
-Hardcoding a value the next scenario needs to vary: add the `args` key and
-capture it in the pattern, which rewrites the feature line and needs
-whoever agreed it. Doing two things where the next scenario needs one:
-split it into parts instead, and that feature line does not move.
-
-The procedure for each, giving a part a pattern later, and what `nuka
-check` refuses: `references/writing-steps.md`.
-
-## A resource that needs its own cleanup
-
-When a scenario needs a project resource a step merely borrows (a tenant, a
-seeded database row, an uploaded file), don't write its teardown inside the
-step: that puts something in the feature file that is not itself an
-acceptance condition. Declare it as a fixture instead, under
-`nukadoko.config.ts`'s own `fixtures`, using `defineFixtures` (from the
-`nukadoko` package).
-
-A step that writes to a system whose effect lands elsewhere asynchronously
-needs a wait for that effect, with the `poll` fixture, not a later step
-that merely reads it.
-
-The fixture example, build order and scope options, the full `poll`
-discussion (what a wait function should and shouldn't wait for), and
-`requireEnv` versus reading `env` directly: `references/fixtures.md`.
-
-## Adding your own evidence
-
-The automatic evidence (screenshot, trace, `http.jsonl`, `page_events`)
-never covers something application-specific: an API response body, a DB
-row, a generated file's contents. Reach for the `evidence` fixture for
-that instead of logging it away with no place on the step record to
-point back at.
-
-`evidence.attach(name, body)`, attachment shapes, `evidence.path()`, and
-the secrets rule: `references/evidence.md`.
-
-## Writing the feature
-
-Everything you were able to learn about the ticket goes into the feature
-file: nukadoko has no concept of a ticket, so the feature is the only
-place that link is recorded, and accepting it freezes the whole file into
-the record read back months later. Carry across the ticket's id, URL,
-title, and acceptance criteria in the reviewer's own words, unparaphrased,
-under a tag and free text below `Feature:`. Don't write a field you
-couldn't fill: an empty `Ticket:` line is worse than no line at all, it
-reads as a link that was lost rather than one that was never available.
-
-Each scenario is that same criteria translated into the vocabulary from
-"Reading the vocabulary" above, whether it arrived there straight from a
-ticket or through the requirements and scenario stages earlier in this
-skill. Where the translation is a judgment call, that judgment is what PR
-review of the feature is for.
-
-Choosing Given, When, or Then, the tag shape, a worked example, where a
-premise belongs when there is no ticket, how `And`/`But`/`*` take their
-position, and how Outline rows and Background steps expand into pickles:
-`references/writing-the-feature.md`.
-
-## Running and accepting
-
-`nuka check <feature>` catches every static inconsistency before anything
-executes (see "The loop" above); `nuka check --codes` lists every finding
-code it can produce. All the trial and error, `nuka do` while building a
-step, `nuka run` while getting the feature green, happens against a
-verification environment named with `--env`, never a production-pointing
-one.
-
-`nuka accept <feature>` freezes the newest all-green run of that feature
-under the current environment and `browserType`, matched against what was
-actually measured, never a declaration; stderr also asks the placement
-question (see "What not to do").
-
-Condition matching, stderr/stdout shapes during `nuka run`, the
-`<feature>:<line>` narrowing option, environments (`--env`, and a
-read-only one's reach into parts), and what a run writes for a report:
-`references/running.md`.
-
-## When a run fails
-
-Before repeating `nuka run <feature>`, work through the failed step's own
-step record in this order:
-
-1. Its `used` entries: each carries the full validated `result` of the
-   upstream step it read from, sitting right on the step record that
-   failed.
-2. `actions`: every Playwright call this step made through the `page`
-   fixture (`expect` waits included), each with its own duration and
-   outcome, read straight off the step's own trace.
-3. `page_events`, if the step opened a browser: a console error, an
-   uncaught page error, or a failed request recorded there can explain a
-   failure nothing else on the step record mentions.
-4. `nuka do <step> --use <upstream-step-record-id>` to test a hypothesis
-   directly: seconds, where a full `nuka run` costs minutes, and it still
-   counts toward the same three-fix-and-retry-cycles rule as any other fix.
-5. Re-run the whole feature last, once the step itself passes under `do`,
-   not as the first thing tried after a failure.
-
-Reading the step record as one ordered timeline, the `final.png` gotcha,
-and when to reach for the trace viewer: `references/diagnosing.md`.
-
-## When accept refuses
-
-`accept` always says which refusal condition fired, in stderr, along with
-the next command to run: act on that message rather than guessing. "No
-run to freeze" can mean a green run exists, just not under the condition
-just checked.
-
-The full refusal message shape: `references/diagnosing.md`.
-
-## Keeping records honest over time
-
-A record freezes the feature source and the run's step records, but not
-the contracts behind them: change a step's `returns` after accepting,
-edit the feature, or delete a step it cites, and the record still claims
-a green run it can no longer support. Nothing about that stops a future
-run, so `nuka check` never mentions it. `nuka tend` finds it while the
-feature stays outside `featuresDir` (a stale record is its only finding
-that exits non-zero). It answers whether the vocabulary and its records
-are healthy, not whether this run can proceed, so it never gates the loop
-above. The fix is to run and accept the feature again, or to undo what
-invalidated it, never to edit the record.
-
-**Run it once after `nuka accept` succeeds, when you report the
-sign-off.** That is the moment where nothing depends on the answer: the
-work is done, the record is written, and the user is reading a result
-rather than waiting on one. "Periodically" names no moment an agent can
-recognize, so a skill that says only that gets `nuka tend` run never.
-
-Report what it found and stop there. Each finding is about something the
-user chose, so acting on one without being asked replaces their choice
-with yours. Two shapes come up often enough to name: a step nothing binds
-any more is usually a deletion someone forgot to finish, and a fixture
-nothing names is usually setup that outlived the scenario that needed it.
-Say which findings you would act on and what each would change, then wait.
-Nothing here is urgent; a finding that has waited a week can wait for an
-answer.
-
-The rest of what `nuka tend` reports: `references/maintenance.md`.
+   `references/running.md`. A refusal names the condition and the next
+   command: `references/diagnosing.md` ("When accept refuses").
+8. Run `nuka tend` once while reporting the sign-off, then stop.
+   `references/maintenance.md`.
+9. Decide where the feature belongs. See "What not to do".
 
 ## What not to do
 
@@ -425,11 +109,19 @@ The rest of what `nuka tend` reports: `references/maintenance.md`.
   in `additionalFeatureDirs` in `nukadoko.config.ts` so `nuka check` and
   `nuka tend` still see the steps it binds, instead of reporting them
   unbound, without it ever running unattended. If you can't touch the
-  config, pass the feature path to `nuka check` instead (see "Running and
-  accepting"). A feature describing the product's own core path moves into
-  `featuresDir` instead, so `nuka run` picks it up on every future
-  commit; see "Keeping records honest over time" for what changes on
+  config, pass the feature path to `nuka check` instead
+  (`references/running.md`). A feature describing the product's own core
+  path moves into `featuresDir` instead, so `nuka run` picks it up on
+  every future commit; `references/maintenance.md` says what changes on
   `nuka tend` once it does.
+- Don't fill in a requirement the source never stated. A missing slot is
+  a question for a person, never a guessed value
+  (`references/from-prose.md`).
+- Don't run a `mutates: true` step the first time without a go-ahead, and
+  don't keep fixing the same step past three cycles. Report where it
+  stands (`references/writing-steps.md`). A prompt that asks for a
+  different amount of patience overrides the three; it is not a config
+  setting.
 - Don't hand-edit a written record. It exists because it was measured, not
   claimed; editing it by hand turns it back into a claim.
 - Don't delete a record and redo it to get a cleaner one. Its git history
