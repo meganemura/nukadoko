@@ -62,7 +62,8 @@
     "dist",
     "docs",
     "skills",
-    "src"
+    "src",
+    "llms.txt"
   ],
   "engines": {
     "node": ">=20"
