@@ -24,8 +24,8 @@ would ship whatever `dist/` happened to be there, which may be older
 than `src/` or missing entirely.
 
 The workflow stores no `NPM_TOKEN`. The repository secrets do not keep
-one either. There is no token bootstrap: the package already exists, so
-a Trusted Publisher can be attached directly.
+one either. There is no token bootstrap. The package already exists, and
+its Trusted Publisher is already registered.
 
 The VS Code extension under `vscode/` is a different package, tagged
 `vscode-v*`. A filter of only `v*` would match that prefix too, so the
@@ -33,18 +33,28 @@ workflow also excludes `vscode-v*`. It does not publish the extension.
 
 ## One-time setup
 
-These are human steps. Nothing in this repository creates the
-Environment or registers the trusted publisher.
+The Environment and the trusted publisher are already configured, as of
+23 September 2026. Recreate either only when it is missing. These are
+human steps. Nothing in this repository creates the Environment or
+registers the trusted publisher.
 
-1. On the GitHub repository `meganemura/nukadoko`, create an Environment
-   named `publish` and require reviewers. The workflow job sets
-   `environment: publish`, so a run waits until a reviewer approves it.
-   Create the Environment before the first tag. Otherwise GitHub creates
-   it on the first run with no required reviewers, and that run publishes
-   as soon as the checks pass.
+1. The GitHub repository `meganemura/nukadoko` has an Environment named
+   `publish` with required reviewers. The workflow job sets
+   `environment: publish`, so a `v*` tag run waits there until a
+   reviewer approves it.
 
-2. On the `nukadoko` package on npmjs.com, add one GitHub Actions trusted
-   publisher. The fields are case-sensitive:
+   Registering the trusted publisher does not open a pending approval.
+   The approval appears only when a `v*` tag run enters the Environment
+   `publish`.
+
+   If the Environment is missing, create it and require reviewers before
+   the next tag. Otherwise GitHub creates it on the first run with no
+   required reviewers, and that run publishes as soon as the checks pass.
+
+2. The `nukadoko` package on npmjs.com has one GitHub Actions trusted
+   publisher, allowed to run `npm publish`. The fields are
+   case-sensitive. If the publisher is missing, add it with these
+   values:
 
    - Organization or user: `meganemura`
    - Repository: `nukadoko`
@@ -60,9 +70,9 @@ Environment or registers the trusted publisher.
    `git+https://github.com/meganemura/nukadoko.git`. npm checks that URL
    against the workflow repository.
 
-3. After the first publish from Actions succeeds, the package settings
-   can require two-factor authentication and disallow token publishing.
-   The trusted publisher keeps working.
+3. After OIDC publishing from Actions works, the package settings can
+   require two-factor authentication and disallow token publishing.
+   That is optional hardening. The trusted publisher keeps working.
 
 ## Each version
 
@@ -82,19 +92,22 @@ Environment or registers the trusted publisher.
    commit and the tag. The tag push starts the workflow. This publish
    is `publish.yml` only. Do not run `npm publish` from a checkout.
 
-4. Approve the `publish` environment on that Actions run. The workflow
-   uses Node 24 on `ubuntu-latest` with the npm registry URL set. It
-   requires npm 11.5.1 or newer, the release that can exchange a GitHub
-   OIDC token for a publish. It runs `npm ci --ignore-scripts`, installs
-   Playwright's Chromium (the suite launches it, and `npm ci` never
-   does), `npm run build`, `npm run typecheck`, `npm test`, `npm run
-   selftest`, and `npm run pack-check`, then refuses the run if any
-   tracked file changed. `dist/` is gitignored, so the new build output
-   is expected and is what gets packed. Then it runs `npm publish`.
-   Actions are pinned to commit ids, the same way `ci.yml` is: this
-   repository requires that pin, and a tag would be refused before the
-   job ran. The package `engines` field stays `>=20`. Node 24 is the
-   publish job, not a new requirement for people running `nuka`.
+4. Approve the `publish` Environment when that Actions run asks for it.
+   The pending approval is that run entering the Environment. The
+   workflow uses Node 24 on `ubuntu-latest` with the npm registry URL
+   set. It requires npm 11.5.1 or newer, the release that can exchange a
+   GitHub OIDC token for a publish. It runs `npm ci --ignore-scripts`,
+   installs Playwright's Chromium (the suite launches it, and `npm ci`
+   never does), `npm run build`, `npm run typecheck`, `npm test`,
+   `npm run selftest`, and `npm run pack-check`, then refuses the run
+   if any tracked file changed. `dist/` is gitignored, so the new build
+   output is expected and is what gets packed. Then it runs
+   `npm publish`. Actions are pinned to a full-length commit SHA, written
+   `uses: action@<40-hex> # vX.Y.Z`, the same way `ci.yml` is. This
+   repository has `sha_pinning_required` enabled, so a tag would be
+   refused before the job ran. The package `engines` field stays `>=20`.
+   Node 24 is the publish job, not a new requirement for people running
+   `nuka`.
 
 5. `--notes-file CHANGELOG.md` would paste every version's notes into
    the release, so extract that version's section first. Set `version`
