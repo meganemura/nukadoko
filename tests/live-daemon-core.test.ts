@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { createConnection } from "node:net";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendLiveRequest } from "../src/live/client.js";
 import { createSessionCore, runSessionDaemon, type SessionCore } from "../src/live/daemon.js";
 import type { LiveResponse } from "../src/live/protocol.js";
@@ -386,6 +386,56 @@ describe("createSessionCore: idle timeout", () => {
     await slow;
     // Left genuinely idle from here, the session still times out on its
     // own: this behavior re-arms the countdown, it does not disable it.
+    await waitFor(() => exitCalls.length > 0, 3000);
+    expect(exitCalls).toEqual([0]);
+  });
+
+  it("a refused request still re-arms the idle timer, not only a successful one", async () => {
+    const exitCalls: number[] = [];
+    const result = await createSessionCore({
+      rootDir,
+      env: null,
+      name: "idle-refused",
+      idleTimeoutMs: 1_000,
+      exit: (code: number) => exitCalls.push(code),
+    });
+    if (!result.ok) {
+      throw new Error("createSessionCore setup failed unexpectedly");
+    }
+    openCores.push(result.core);
+    const core = result.core;
+
+    // The refusal re-arms inside dispatchRequest, on this process's own
+    // clock. Sleeping in a test process after `nuka do` returns measures a
+    // later instant: the daemon has already started the new window, and the
+    // CLI still has to deliver the refusal back to the caller. Under load
+    // that gap exceeds the slack between the sleep and a 1s timeout, so the
+    // process is already gone when the alive check runs, even though the
+    // refusal itself succeeded. One fake clock makes "past the original
+    // deadline, inside the re-armed window" and "that window still elapses"
+    // exact. Timers are faked only after setup: discovery and the lock are
+    // real I/O, and nothing arms the idle timer until start() below.
+    vi.useFakeTimers();
+    try {
+      core.start();
+      await vi.advanceTimersByTimeAsync(700);
+
+      const rejected = await core.dispatchRequest({ kind: "do", step: "no-such-step", args: {} });
+      expectRejected(rejected, "Unknown step");
+
+      // 700ms after the refusal is past the original 1000ms deadline and
+      // still inside the window the refusal just armed.
+      await vi.advanceTimersByTimeAsync(700);
+      expect(exitCalls).toEqual([]);
+
+      // Cross the re-armed deadline without awaiting cleanup. The callback
+      // only schedules it; the filesystem work finishes on the real clock
+      // below. Awaiting it here would run that work against the fake clock.
+      vi.advanceTimersByTime(300);
+    } finally {
+      vi.useRealTimers();
+    }
+
     await waitFor(() => exitCalls.length > 0, 3000);
     expect(exitCalls).toEqual([0]);
   });

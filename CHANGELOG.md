@@ -7,6 +7,17 @@ just until 0.1.
 
 ## Unreleased
 
+### Fixed
+
+- **A refused live-session request's idle-timer re-arm is checked on one clock.**
+  The assertion slept in the test process, then checked that the daemon
+  process was still alive. The daemon arms its timer when it finishes the
+  refused request, before `nuka do` returns, and under CI load that gap
+  exceeded the slack in a 1s timeout. The publish for `v0.13.0` failed the
+  alive check after the refusal itself had succeeded. The assertion now
+  runs the session core in-process and advances a fake clock, so the
+  re-armed window and the timeout after it are both exact.
+
 ## 0.13.0 — 2026-09-23
 
 ### Changed

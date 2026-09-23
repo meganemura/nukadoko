@@ -122,16 +122,16 @@ describe("nuka session start/stop (live sessions)", () => {
   });
 
   /** Starts a session and returns its daemon's own pid, tracked for
-   * `afterEach`'s cleanup. Asserts `start` itself succeeded — every test
+   * `afterEach`'s cleanup. Asserts `start` itself succeeded: every test
    * below needs a live session to exist before its own assertions begin.
-   * `idleTimeoutSeconds` defaults to the long, effectively-never-fires value
-   * every other test in this file wants; only the idle-timer re-arm test
-   * below passes a short one on purpose. */
-  async function start(name: string, idleTimeoutSeconds = IDLE_TIMEOUT_SECONDS): Promise<number> {
+   * The idle timeout is long enough that it never fires during a test in
+   * this file. Whether a refusal re-arms that timer is covered in-process,
+   * where the clock can be advanced exactly (live-daemon-core.test.ts). */
+  async function start(name: string): Promise<number> {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["session", "start", name, "--idle-timeout", String(idleTimeoutSeconds)],
+      ["session", "start", name, "--idle-timeout", String(IDLE_TIMEOUT_SECONDS)],
       { rootDir, stdout, stderr },
     );
     expect(exitCode, `session start failed: ${stderr.text()}`).toBe(0);
@@ -359,26 +359,5 @@ describe("nuka session start/stop (live sessions)", () => {
     expect(afterCrash.stderr).toContain(
       'Session "gale-live" is not live; running this step in a fresh browser, from its saved state',
     );
-  });
-
-  it("a refused request still re-arms the idle timer, not only a successful one", async () => {
-    const idleTimeoutSeconds = 1;
-    const pid = await start("gwen", idleTimeoutSeconds);
-
-    // Sent partway through the original idle window, and refused (unknown
-    // step) rather than executed. If a refusal did not re-arm the timer,
-    // the *original* deadline (1s after `start`) would already have
-    // passed by the time the check below runs.
-    await new Promise((resolve) => setTimeout(resolve, idleTimeoutSeconds * 1000 * 0.7));
-    const rejected = await doStep("no-such-step", "{}", "gwen");
-    expect(rejected.exitCode).toBe(1);
-    expect(rejected.stderr).toContain("Unknown step");
-
-    await new Promise((resolve) => setTimeout(resolve, idleTimeoutSeconds * 1000 * 0.6));
-    expect(isProcessAlive(pid)).toBe(true);
-
-    // Left genuinely idle from here, the session still times out on its
-    // own — this fix re-arms the countdown, it does not disable it.
-    await waitUntilDead(pid, idleTimeoutSeconds * 1000 + 5000);
   });
 });
