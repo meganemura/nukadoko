@@ -54,22 +54,15 @@ resolve to.
 
 ## Releasing
 
-Build before publishing, in a separate command:
+The publish path is [docs/releasing.md](docs/releasing.md). Pushing a
+`v*` tag runs `.github/workflows/publish.yml`, which publishes with
+GitHub Actions OIDC. Do not `npm publish` from a checkout, and do not
+put an `NPM_TOKEN` in repository secrets.
 
-```sh
-npm run build
-npm publish
-```
-
-Run `npm run pack-check` before either command: it installs the real
-tarball into a throwaway project outside this repository and drives the
-CLI there, which is the only way to catch a `bin` that depends on a
-package this repository only lists as a devDependency.
-
-`package.json` declares `prepublishOnly`, and with `ignore-scripts` on it
-does not fire. Publishing without building first ships whatever `dist/`
-happened to be there, which may be older than `src/` or missing entirely.
-The explicit build is what guarantees the tarball matches the commit.
+`package.json` declares `prepublishOnly`, and with `ignore-scripts` on
+it does not fire. The workflow builds before it publishes. The same
+page has the one-time Trusted Publisher setup and the steps for each
+version, including `npm run pack-check`.
 
 ## Conventions
 

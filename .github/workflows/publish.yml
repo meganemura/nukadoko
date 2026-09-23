@@ -1,0 +1,104 @@
+# Publishes this repository's own npm package for a v* tag. It is not the
+# recipe a project using nukadoko should copy: that one is docs/ci.md.
+#
+# Boundary: checkout the tag, build dist/, run the release checks, and
+# npm publish. The GitHub Environment `publish` approves the run. npm
+# authenticates with that environment's OIDC token. This file never reads
+# NPM_TOKEN.
+#
+# Actions are pinned to commit ids rather than tags, with the version beside
+# them so the line stays readable, matching ci.yml. This repository requires
+# that pinning at the settings level, so a tag here would be refused before
+# it ran.
+#
+# `dist/` is gitignored. The build below is what the tarball ships.
+# `.npmrc` sets `ignore-scripts=true`, so `prepublishOnly` does not fire
+# during `npm publish`, and the explicit build is the one that fills `dist/`.
+name: Publish
+
+on:
+  push:
+    tags:
+      # The npm package. `v*` also matches `vscode-v*`, the extension's own
+      # prefix, so that prefix is excluded. vscode-extension.yml never
+      # publishes npm.
+      - "v*"
+      - "!vscode-v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: publish
+    # ci.yml's own budget for typecheck, test, and selftest, plus pack-check
+    # installing the tarball.
+    timeout-minutes: 45
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          # A release build installs from the lockfile only. The setup-node
+          # package cache is a write path from other workflows.
+          package-manager-cache: false
+
+      - name: Require Node 24 and npm 11.5.1
+        run: |
+          node --version
+          npm --version
+          node <<'EOF'
+          const [nodeMajor] = process.versions.node.split(".").map(Number);
+          if (nodeMajor !== 24) {
+            console.error(`Node ${process.versions.node} is not Node 24`);
+            process.exit(1);
+          }
+          const {execSync} = require("node:child_process");
+          const [major, minor, patch] = execSync("npm --version", {encoding: "utf8"})
+            .trim()
+            .split(".")
+            .map(Number);
+          if (!(major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))))) {
+            console.error(`npm ${major}.${minor}.${patch} is older than 11.5.1`);
+            process.exit(1);
+          }
+          EOF
+
+      - name: Match the tag to package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}" >&2
+            exit 1
+          fi
+
+      # `--ignore-scripts` is also set by this repository's .npmrc. It is
+      # written here too because the line is where a reader looks.
+      - run: npm ci --ignore-scripts
+
+      # Browsers are never installed by `npm ci`. They live in a cache
+      # outside node_modules that only this command fills, and a fresh
+      # runner has none. Chromium is the only one the suite launches.
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run selftest
+      - run: npm run pack-check
+
+      - name: Refuse unexpected changes to tracked files
+        run: |
+          # The package publishes compiled dist/, and dist/ is gitignored, so
+          # the build is expected to add untracked output. Refuse only
+          # modifications of files git already tracks. Do not treat a new
+          # dist/ as a dirty tagged tree.
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            git status --porcelain --untracked-files=no
+            exit 1
+          fi
+
+      - run: npm publish
