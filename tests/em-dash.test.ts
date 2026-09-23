@@ -5,8 +5,9 @@ import { repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: enforce the project's no-em-dash-in-prose rule (CLAUDE.md
 // "Hard rules") across the surfaces a reader outside this repository
-// actually opens: docs/, README.md, README.ja.md, CONTRIBUTING.md, skills/. The rule has
-// drifted back three times without a check (README.ja.md, docs/spec.ja.md,
+// actually opens: docs/, README.md (including its Japanese section),
+// CONTRIBUTING.md, skills/. The rule has
+// drifted back three times without a check (the Japanese README, docs/spec.ja.md,
 // skills/migration/SKILL.md all needed a later cleanup pass) because a
 // prose rule with no test is a rule only as durable as whoever remembers to
 // reread it. src/ is excluded because CLAUDE.md itself marks its ~1200
@@ -26,7 +27,7 @@ import { repoRoot } from "./helpers/fixtures.js";
 const EM_DASH = "—";
 
 const targetDirs = ["docs", "skills"];
-const targetFiles = ["README.md", "README.ja.md", "CONTRIBUTING.md"];
+const targetFiles = ["README.md", "CONTRIBUTING.md"];
 
 async function listMarkdownFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true, recursive: true });
@@ -64,7 +65,7 @@ function findEmDashesOutsideFences(content: string): Array<{ line: number; text:
 }
 
 describe("no em-dash in prose", () => {
-  it("finds none in docs/, skills/, README.md, README.ja.md, or CONTRIBUTING.md outside fenced code blocks", async () => {
+  it("finds none in docs/, skills/, README.md, or CONTRIBUTING.md outside fenced code blocks", async () => {
     const files: string[] = [];
     for (const relDir of targetDirs) {
       files.push(...(await listMarkdownFiles(path.join(repoRoot, relDir))));

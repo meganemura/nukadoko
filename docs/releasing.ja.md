@@ -12,7 +12,8 @@ GitHub の Environment `publish` が人のゲートです。
 パッケージが載せるのは、`dist/` にコンパイルした JavaScript(`nuka` の bin は `dist/cli.js`)、それに `src/`、`docs/`、`skills/`、`CHANGELOG.md`、`llms.txt` です。
 `dist/` は `.gitignore` に入っています。
 workflow が tag の付いた commit からそれをビルドします。
-`README.md`、`README.ja.md`、`LICENSE`、`package.json` は npm が常に tarball へ入れるので、それらも入ります。
+`README.md`、`LICENSE`、`package.json` は npm が常に tarball へ入れるので、それらも入ります。
+日本語の README は `README.md` の `## Japanese` 節なので、そのファイルと一緒に入ります。
 
 `package.json` は `prepublishOnly` を宣言していますが、`.npmrc` が `ignore-scripts=true` なので、`npm publish` のあいだその hook は走りません。
 workflow が自分で `npm run build` を実行します。

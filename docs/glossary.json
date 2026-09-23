@@ -1,5 +1,5 @@
 {
-  "note": "英日の訳語対応。README.ja.md / docs/spec.ja.md / docs/migration.ja.md を書くとき・レビューするときに引く。ここにあるのはその3ファイルで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
+  "note": "英日の訳語対応。README.md の Japanese 節 / docs/spec.ja.md / docs/migration.ja.md を書くとき・レビューするときに引く。ここにあるのはそこで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
   "usage": [
     "jq -r '.terms[] | select(.en | index(\"contract\")) | .ja' docs/glossary.json",
     "jq -r '.terms[] | select(any(.en[]; test(\"wir\"; \"i\")))' docs/glossary.json",
@@ -49,7 +49,7 @@
     {
       "en": ["server"],
       "ja": "サーバ",
-      "note": "長音を付けない。docs/spec.ja.md で サーバ 9 件に対し サーバー 2 件と割れていたのを多数派へ揃えた(2026-08-21)。README.ja.md にも 1 件あったので同時に直してある"
+      "note": "長音を付けない。docs/spec.ja.md で サーバ 9 件に対し サーバー 2 件と割れていたのを多数派へ揃えた(2026-08-21)。README の Japanese 節にも 1 件あったので同時に直してある"
     },
     {
       "en": ["journey"],
@@ -212,7 +212,7 @@
     {
       "en": ["parser", "parsers"],
       "ja": "パーサ",
-      "note": "長音を付けない。docs/spec.ja.md が @cucumber/gherkin を指してすでにこう書いており、ブラウザ・フォーマッタと同じ扱い。README.ja.md にだけ パーサー が 1 件あって割れていたのを 2026-08-08 に揃えた。長音の扱いは語ごとに違う(ユーザー は付ける)ので、規則ではなくこの語の決定として読むこと"
+      "note": "長音を付けない。docs/spec.ja.md が @cucumber/gherkin を指してすでにこう書いており、ブラウザ・フォーマッタと同じ扱い。README の Japanese 節にだけ パーサー が 1 件あって割れていたのを 2026-08-08 に揃えた。長音の扱いは語ごとに違う(ユーザー は付ける)ので、規則ではなくこの語の決定として読むこと"
     },
     {
       "en": ["experimental", "EXPERIMENTAL"],
@@ -309,7 +309,7 @@
     { "term": "evidence", "why": "step record の evidence フィールドと直接対応する" },
     { "term": "trace", "why": "Playwright の trace (trace.zip) という具体物を指す" },
     { "term": "World", "why": "cucumber-js 由来の this オブジェクトの正式名称。固有名詞的に大文字のまま" },
-    { "term": "harness", "why": "3ファイルとも英語のまま。README.ja.md だけ ハーネス だったが統一済み" },
+    { "term": "harness", "why": "README の Japanese 節、docs/spec.ja.md、docs/migration.ja.md とも英語のまま。README の Japanese 節だけ ハーネス だったが統一済み" },
     { "term": "hook", "why": "cucumber/gherkin のドメイン語" },
     { "term": "pickle", "why": "cucumber/gherkin のドメイン語" },
     { "term": "glue", "why": "cucumber/gherkin のドメイン語" },
@@ -347,7 +347,7 @@
     },
     {
       "term": "workflow",
-      "why": "GitHub Actions の .github/workflows/ という実在のディレクトリ名・ファイル種別を指すときは英語のまま(docs/ci.md)。エージェントの一連の作業を指す一般語としての「ワークフロー」(README.ja.md で既に使用)とは別の使われ方"
+      "why": "GitHub Actions の .github/workflows/ という実在のディレクトリ名・ファイル種別を指すときは英語のまま(docs/ci.md)。エージェントの一連の作業を指す一般語としての「ワークフロー」(README の Japanese 節で既に使用)とは別の使われ方"
     },
     {
       "term": "action",
@@ -380,7 +380,7 @@
   },
   "headings": {
     "note": "ファイルごとに規則が違う。これは歴史的な経緯であって設計ではない。統一する価値はあるが、既存の見出しを動かすとリンクのアンカーが壊れるので、まとめてやるときに一度で行う",
-    "README.ja.md": {
+    "README.md ## Japanese": {
       "rule": "英語のまま残し、直下に太字の日本語訳を本文1行目として置く",
       "exceptions": "なし。19個すべてがこの書式(2026-08-04 の再構成で 16 から 19 に)"
     },
@@ -405,7 +405,7 @@
       "rule": "日本語化する。ただし版番号(0.0.5 など)や `Unreleased` のような版のラベルはそのまま残す"
     },
     "docs/ci.ja.md": {
-      "rule": "日本語化する。ただしコードスパンで書かれたコマンド名と、fenced code block 内の YAML(コメント含む)はそのまま残す。README.ja.md の CI 節にある既存の workflow 抜粋がすでにこの扱い(コメント込みで英語のまま)なので、それに揃える"
+      "rule": "日本語化する。ただしコードスパンで書かれたコマンド名と、fenced code block 内の YAML(コメント含む)はそのまま残す。README.md の Japanese 節の CI 節にある既存の workflow 抜粋がすでにこの扱い(コメント込みで英語のまま)なので、それに揃える"
     },
     "docs/releasing.ja.md": {
       "rule": "日本語化する。ただしコードスパンで書かれたコマンド名、npm の設定画面のラベル(Trusted Publisher の各フィールド名)、fenced code block 内のシェルはそのまま残す"

@@ -127,10 +127,11 @@ change against before writing it.
   visibility, deploys). Prepare the state and let the user execute.
 - Commits are semantic units, in English, matching the existing message
   style; the user reviews direction, the session reviews code.
-- Paired files are kept in sync: README.md/README.ja.md,
-  docs/spec.md/docs/spec.ja.md, docs/migration.md/docs/migration.ja.md
+- Paired files are kept in sync: docs/spec.md/docs/spec.ja.md,
+  docs/migration.md/docs/migration.ja.md
   (Japanese: one sentence per line; the English file is the source of
-  truth). **Query `docs/glossary.json` before translating anything** — it
+  truth). The Japanese README is the `## Japanese` section at the end of
+  `README.md`. **Query `docs/glossary.json` before translating anything** — it
   holds the settled term pairs, which words stay in English and why, and
   the per-file rule for headings. JSON rather than prose because what reads
   it is a model with `jq`: `en` is an array, so
@@ -143,7 +144,7 @@ change against before writing it.
   a comma, a colon, or parentheses, picking whichever one the em-dash was
   standing in for (a break, an aside, an apposition). Code blocks are
   exempt. Japanese prose already banned it, unwritten, and it came back
-  twice anyway (19 in README.ja.md, 41 in docs/spec.ja.md): the rule needs
+  twice anyway (19 in the Japanese README, 41 in docs/spec.ja.md): the rule needs
   a place to live or it drifts back the next time someone forgets it was a
   rule at all. A string the CLI shows a user (a finding's message, a
   refusal's text, stderr) is prose under this rule too: the code-block

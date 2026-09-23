@@ -14,8 +14,9 @@ until it is approved.
 The package ships compiled JavaScript in `dist/` (the `nuka` bin is
 `dist/cli.js`), plus `src/`, `docs/`, `skills/`, `CHANGELOG.md`, and
 `llms.txt`. `dist/` is gitignored. The workflow builds it from the
-tagged commit. `README.md`, `README.ja.md`, `LICENSE`, and
-`package.json` are in the tarball because npm always packs them.
+tagged commit. `README.md`, `LICENSE`, and `package.json` are in the
+tarball because npm always packs them. The Japanese README is the
+`## Japanese` section of `README.md`, so it ships with that file.
 
 `package.json` declares `prepublishOnly`, and `.npmrc` sets
 `ignore-scripts=true`, so that hook does not fire during `npm publish`.
