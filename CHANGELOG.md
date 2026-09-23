@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.13.1 — 2026-09-23
+
 ### Fixed
 
 - **A refused live-session request's idle-timer re-arm is checked on one clock.**
