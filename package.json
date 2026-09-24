@@ -90,7 +90,8 @@
     "@vitest/coverage-v8": "4.1.10",
     "allure": "3.14.3",
     "typescript": "7.0.2",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "archstrict": "file:../archstrict"
   },
   "peerDependencies": {
     "@modelcontextprotocol/client": "2.0.0"
