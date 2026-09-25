@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile } from "@cucumber/gherkin";
+import { OathParseError, parseOathSource } from "./parse-oath.js";
+import { resolveOathPaths } from "./resolve-oaths.js";
 import {
   IdGenerator,
   type GherkinDocument,
@@ -17,8 +19,10 @@ import {
 // deliberately owns as little as possible"). This module does not interpret
 // a pickle's steps at all (matching them against the vocabulary is
 // src/check/feature-check.ts's job) — it only turns `.feature` text into
-// the pickles @cucumber/gherkin produces. A malformed feature file is
-// collected as a per-file parse error rather than thrown, so one broken
+// the pickles @cucumber/gherkin produces. `oaths` names Markdown files
+// compiled by parse-oath.ts into that same shape, so a sign-off record
+// or a README is not a scenario unless it is named. A malformed feature
+// file is collected as a per-file parse error rather than thrown, so one broken
 // file doesn't stop `nuka check` from reporting every other feature's
 // issues too (mirrors src/discover/discover-steps.ts's own tolerance for a
 // missing featuresDir: an empty/partial answer beats a crash).
@@ -64,6 +68,10 @@ export interface FeatureFile {
 export interface FeatureParseError {
   readonly relativePath: string;
   readonly message: string;
+  /** Set when the failure is an oath and the parser could point at a line.
+   * A Gherkin parse error leaves this unset: cucumber's own message already
+   * carries the location it knows about. */
+  readonly line?: number;
 }
 
 /** One `@nukadoko:serial` tag found on a `Scenario:`/`Scenario Outline:` line, where
@@ -284,6 +292,7 @@ export function loadFeaturesFromDirs(
   rootDir: string,
   featuresDir: string,
   additionalFeatureDirs: readonly string[],
+  oaths: readonly string[] = [],
 ): LoadFeaturesFromDirsResult {
   const features: FeatureFile[] = [];
   const parseErrors: FeatureParseError[] = [];
@@ -332,6 +341,34 @@ export function loadFeaturesFromDirs(
       continue;
     }
     collect(dir);
+  }
+
+  // Oaths are selected by name, not by living under featuresDir, so a
+  // sign-off record or a README beside a feature is not an oath unless
+  // `oaths` says so. Parsed after the `.feature` walk and de-duplicated
+  // by the same absolute-path set, so a path named twice is one document.
+  const resolved = resolveOathPaths(rootDir, oaths);
+  for (const problem of resolved.problems) {
+    parseErrors.push({ relativePath: problem.path, message: problem.message });
+  }
+  for (const relativePath of resolved.files) {
+    const filePath = path.join(rootDir, relativePath);
+    if (seenAbsolutePaths.has(filePath)) {
+      continue;
+    }
+    seenAbsolutePaths.add(filePath);
+    const source = readFileSync(filePath, "utf8");
+    try {
+      const { gherkinDocument, pickles } = parseOathSource(source, relativePath);
+      features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
+      serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
+    } catch (error) {
+      parseErrors.push({
+        relativePath,
+        message: error instanceof Error ? error.message : String(error),
+        line: error instanceof OathParseError ? error.line : undefined,
+      });
+    }
   }
 
   return { features, parseErrors, serialTagOnScenario, missingAdditionalDirs };

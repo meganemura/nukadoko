@@ -217,6 +217,13 @@ export const configSchema = z
      * whole point, not an oversight. Default `[]`: nothing extra is scanned
      * unless named. */
     additionalFeatureDirs: z.array(z.string()).default([]),
+    /** Markdown oaths compiled into the same pickles as a `.feature`
+     * file (src/feature/parse-oath.ts). Each entry is a file or a
+     * directory of `*.md`. Default `[]`: a sign-off record and a README
+     * are not scenarios until named. `nuka check` and `nuka tend` read
+     * the list. `nuka run` reads an entry when the path is given, or
+     * when a directory target contains it. */
+    oaths: z.array(z.string()).default([]),
     stateDir: z.string().default(".nukadoko"),
     baseURL: z.string().optional(),
     envFiles: z.array(z.string()).optional(),

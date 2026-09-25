@@ -82,7 +82,11 @@ proves the wrong thing.
    a second scenario that needs part of a step
    ("Splitting a step a second scenario needs half of",
    "Generalizing a step that is too concrete").
-3. Write the feature. `references/writing-the-feature.md`. A resource the
+3. Write the feature. `references/writing-the-feature.md`. The same
+   criteria can live in a Markdown oath instead of a `.feature` file:
+   name it in `oaths`, or pass the `.md` path to `nuka check` and
+   `nuka run`. A sentence no pattern matches is `undefined-step`.
+   The grammar is in docs/spec.md ("Markdown oaths"). A resource the
    scenario borrows, a wait for an effect that lands elsewhere, or a
    required environment variable: `references/fixtures.md`.
    Application-specific evidence: `references/evidence.md`.

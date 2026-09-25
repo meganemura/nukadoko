@@ -99,4 +99,49 @@ describe("examples/todo", () => {
     expect(records.some((record) => record.status === "failed")).toBe(true);
     expect(exitCode).toBe(1);
   });
+
+  it("runs features/todo.md green against the v1 app", async () => {
+    const started = await startTodoApp({ v2: false });
+    server = started.server;
+    rootDir = await copyExampleToTempDir("todo");
+    await ensureNukadokoShim();
+    await pointConfigAt(rootDir, started.baseURL);
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/todo.md"], { rootDir, stdout, stderr });
+
+    expect(stripRunProgressLines(stderr.text()), stderr.text()).toBe("");
+    const records = stdout
+      .text()
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as { status: string });
+    expect(records).toHaveLength(4);
+    for (const record of records) {
+      expect(record.status).toBe("passed");
+    }
+    expect(exitCode).toBe(0);
+  });
+});
+
+describe("examples/todo oath check", () => {
+  let rootDir: string;
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("nuka check is clean for the committed feature and its Markdown oath", async () => {
+    rootDir = await copyExampleToTempDir("todo");
+    await ensureNukadokoShim();
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check"], { rootDir, stdout, stderr });
+
+    expect(stderr.text()).toBe("");
+    expect(stdout.text()).toContain("ok: no issues found");
+    expect(exitCode).toBe(0);
+  });
 });

@@ -64,6 +64,7 @@ nukadoko は意図的に、所有する範囲を最小限にとどめていま�
 | **Session、environment、secret** | **nukadoko** |
 | **キーワードの意味論(Then は mutate してはならない)** | **nukadoko** |
 | **Sign-off の記録** | **nukadoko** |
+| Markdown oaths(「Markdown oaths」のサブセット) | **nukadoko**(`.feature` ファイルと同じ pickle にコンパイルする) |
 
 ## 課題
 
@@ -1400,6 +1401,68 @@ Playwright の `test()` は Playwright runner の外では動かないため、i
 モジュールは step を定義しないため、discovery が import しても問題はありません。
 しかし、その場所は既存のスイートが共有ファイルを所有することを示します。
 
+## Markdown oaths
+
+Gherkin は scenario の 1 つの表側です。
+Markdown oath はもう 1 つの表側であり、同じ型付き step と、同じ step record の上にあります。
+ファイルは、人や agent が読める文書であり、narration と印を付けられていない文はすべて step です。
+nukadoko は Varar を埋め込みません。
+step の戻り値を文の中の語句と比べることもありません。
+`Then` は依然として `run` の中で表明し、`returns` は戻ってきた値を検証します。
+計測はここにとどまります。
+
+`nukadoko.config.ts` の `oaths` は、ファイル、または `*.md` のディレクトリを名指しします。
+デフォルトは `[]` です。
+sign-off の記録、README、プロジェクト配下の他の Markdown は、名指しされるまで scenario ではありません。
+ディレクトリの走査は `node_modules` とドットで始まるディレクトリを飛ばします。
+存在しないパス、または Markdown ファイルでもディレクトリでもないパスは `feature-parse-error` です。
+`nuka check` または `nuka run` に渡した `.md` のパスは、`oaths` に無くても oath です。
+`nuka run` のディレクトリ対象は、その配下にある設定済みの oath を含み、`.feature` ファイルもこれまで通り歩きます。
+引数なしの `nuka check` と `nuka tend` は、`featuresDir` と `additionalFeatureDirs` に加えて `oaths` を読みます。
+そのため、oath だけが結び付ける step は結び付けられています。
+
+このスライスが読む範囲は次のとおりです。
+
+- 最初の `#` 見出しが feature 名です。
+  無ければ、ファイルの basename が名前です。
+- それ以降の見出し(後から来る `#` を含む)は、その見出しを名前とする scenario を始めます。
+  ハイフンが 3 つ以上だけの行も同じです。
+  その scenario の名前は最初の step から取り、80 文字で切り、同じ名前が既にあれば ` (2)` を付けます。
+  空行は scenario を始めません。
+- 1 行に複数の文を置けます。
+  区切りは、二重引用符の外にあり、空白または行末が続く `.` `!` `?` です。
+  同じ記号の連続(`...`)は区切りではありません。
+  終端記号は step のテキストに含まれないので、末尾のピリオドを書かない pattern でもマッチします。
+- 任意の `Given`、`When`、`Then`、`And`、`But`、`*` の接頭辞はキーワードであり、マッチするテキストの一部ではありません。
+  Gherkin と同じです。
+  `And` と `But` は直前の step の位置を引き継ぎます。
+  リスト記号(`-`、`*`、`+`、`1.`)はキーワードより先に外すので、`* Given foo` は Given です。
+- 引用(`>`)とフェンスされたコードブロックは narration です。
+  step ではなく、所見でもありません。
+  このスライスが散文を受け入れるのはここです。
+  閉じられていないフェンス、または閉じられていない HTML コメント(`<!--`)はパースエラーです。
+  YAML frontmatter は取り除きません。
+  先頭の `---` は scenario の区切りであり、その前に何も無ければ何もしません。
+- step の下のパイプ表は、その step のデータ表です。
+  区切り行は構文です。
+  見出し行はデータ行ではありません。
+  Markdown には見出しが必要で、nukadoko のデータ表は見出しの規約を持たない `string[][]` だからです。
+  本体の行が表です。
+  step のテキストが `<column>` のプレースホルダを含み、その名前がすべて見出しのセルであるとき、表は代わりに Examples になり、`compile()` が本体の行ごとに 1 つの pickle を展開します。
+  Examples の列名の重複、step の前に無い表、区切りの欠落、データ行の無い表、セル数の不一致、1 つの step に対する 2 つ目の表、1 つの scenario に対する 2 つ目の Examples は、行を名指しするパースエラーです。
+
+どの pattern にもマッチしない文は、既存の `undefined-step` 所見です。
+書かれた Markdown の行に付きます。
+`nuka run` は、その step を、未定義の Gherkin 行と同じように失敗させます。
+所見は新しいコードではなく、文は捨てられません。
+
+`examples/todo` は、`features/todo.feature` の隣に `features/todo.md` を持ち、`oaths` に列挙しています。
+
+このスライスに無いもの: 1 つの文の中の複数 step のマッチ、step の戻り値と文中の語句の比較、doc string、tag、Markdown の中の `@nukadoko:serial`、そして Varar の残り(すべての方言、そのテストランナー、その playground)です。
+何にもマッチしない段落は、ここでは例を終わらせません。
+パーサがまだ語彙を持たないからです。
+scenario は見出しか `---` で分け、narration は引用かフェンスにします。
+
 ## 実行
 
 ### Scenario(スクリプト化された経路)
@@ -1415,8 +1478,8 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 scenario record は feature のパス、scenario 名、順序付けられた step record id、step ごとの status を含みます。
 
 `nuka run` は 1 つ以上の対象を受け取ります。
-各対象には feature ファイル、`ファイル:行`、ディレクトリのいずれかを指定できます。
-ディレクトリは再帰的に走査され、その下のすべての `.feature` ファイルが選ばれます。
+各対象には feature ファイル、Markdown oath(`.md` で終わるパス。「Markdown oaths」を参照)、`ファイル:行`、ディレクトリのいずれかを指定できます。
+ディレクトリは再帰的に走査され、その下のすべての `.feature` ファイルと、その配下にある設定済みの oath が選ばれます。
 選ばれたファイルは重複を除いた 1 つの集合になり、ファイル全体の指定は、そのファイルに対する行指定を含みます。
 選ばれたすべての pickle は 1 つの invocation に属します: 1 つの run_id、1 つのサマリ、1 つの exit code、1 つの messages ストリーム、1 つの Allure results ツリーです。
 ファイルはリポジトリ相対パスをロケールではなくバイトごとに比較した、決まった順序で処理されます。
@@ -1425,7 +1488,7 @@ scenario record は feature のパス、scenario 名、順序付けられた ste
 ファイルは同じ順序で配られますが、record は worker が終えた順に並びます。
 ディレクトリに `:line` を付けると拒否されます。
 `:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
-配下のどこにも `.feature` ファイルを持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
+配下のどこにも `.feature` ファイルも設定済みの oath も持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
 何もしなかった run は、exit 0 で何もしなかったことにするのではなく、それを大声で言わなければならないからです。
 
 `--concurrency <n>` は、複数の feature ファイルを同時に実行します。
@@ -1954,6 +2017,7 @@ Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使いま�
 | --- | --- |
 | `featuresDir` | feature ファイルと step のコード。`nuka run` が無人で実行する集合そのもの(デフォルトは `features`。Cucumber 流のやり方) |
 | `additionalFeatureDirs` | `nuka check`/`nuka tend` が語彙を結び付ける対象を広げる追加のディレクトリ。`featuresDir` そのものを広げることはない(デフォルトは `[]`。下記) |
+| `oaths` | `.feature` ファイルと同じ scenario にコンパイルされる Markdown ファイル、またはそのディレクトリ(デフォルトは `[]`。「Markdown oaths」を参照) |
 | `baseURL` | トップレベルの base URL。environment ごとに上書きされる(下記) |
 | `envFiles` | トップレベルの env file。environment ごとに追記される(下記) |
 | `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
@@ -1982,6 +2046,12 @@ Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使いま�
 プロダクト自身の中核の経路を述べる feature は、accept された後 `featuresDir` へ移り、ここへのエントリは要りません。
 ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
 `nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` は同じ事実を注記として報告します。
+
+`oaths` のデフォルトは `[]` です。
+各エントリは Markdown ファイル、または `*.md` のディレクトリであり、`.feature` ファイルと同じ pickle にコンパイルされます(「Markdown oaths」を参照)。
+名指しされるまで、プロジェクト配下の何も oath ではないので、sign-off の記録は scenario ではありません。
+`nuka check` と `nuka tend` はこの一覧を読みます。
+`nuka run` は、パスが渡されたとき、またはディレクトリ対象がそのファイルを含むときに、エントリを読みます。
 
 `browserType` は `ctx.page()` が起動する Playwright のエンジンを選びます: `"chromium"`(デフォルト)、`"firefox"`、`"webkit"` のいずれかです。
 これは `browser` の中のフィールドではなく、別のキーです。
@@ -3103,7 +3173,11 @@ nuka experimental webmcp-tools <url> [--json]
   すべての scenario は依然として同じ直列エンジンの下で実行されます。
   変わるのは、それらが一度に何個実行されるかだけです。
   worker プロセスにしたことが、この高速化をスイートが何に時間を使っているかから独立させ、fixture の teardown 規則をそのまま保たせています。
+- **M13(Markdown oaths)**: Gherkin の隣にある 2 つ目の表側です。
+  名指しされた Markdown ファイルは同じ pickle にコンパイルされ、同じ `defineStep` の語彙に結び付き、どの pattern にもマッチしない文では `nuka check` が失敗します(「Markdown oaths」を参照)。
+  これは oath の表面であり、Varar のエンジンではありません。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
+  Varar の完全な対応(すべての方言、step の戻り値と文中の語句の比較、doc string、tag、Markdown の中の `@nukadoko:serial`)もここに残します。
 
 ## 実装ノート
 

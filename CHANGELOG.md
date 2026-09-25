@@ -7,6 +7,17 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **Markdown oaths are a second front beside Gherkin.**
+  `oaths` in `nukadoko.config.ts` names Markdown files, or a directory of
+  them, that compile into the same scenarios, bind the same typed steps,
+  and show up in `nuka check` and `nuka run` with step records. A sentence
+  no pattern matches is `undefined-step`. The default is `[]`. An explicit
+  `.md` path is an oath even when it is not listed.
+  `examples/todo/features/todo.md` is the worked example. What this slice
+  reads, and what it leaves, is in docs/spec.md ("Markdown oaths").
+
 ## 0.13.1 — 2026-09-23
 
 ### Fixed

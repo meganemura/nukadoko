@@ -66,7 +66,7 @@ export const CHECK_CODES = {
     severity: "warning",
   },
   "feature-parse-error": {
-    description: "A .feature file could not be parsed, so nothing in it was checked.",
+    description: "A .feature file or a Markdown oath could not be parsed, so nothing in it was checked.",
     severity: "error",
   },
   "features-dir-missing": {

@@ -444,7 +444,8 @@ export async function runCli(
 
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
     command: "run <feature..>",
-    describe: "execute scenarios from a feature file or a directory of them; step records + scenario records",
+    describe:
+      "execute scenarios from a feature file, a Markdown oath, or a directory of them; step records + scenario records",
     builder: (y: Argv) =>
       y
         .positional("feature", {
@@ -452,8 +453,8 @@ export async function runCli(
           array: true,
           demandOption: true,
           describe:
-            "feature file path, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
-            "walked recursively for .feature files (:line is refused on a directory)",
+            "feature file or Markdown oath, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
+            "walked recursively for .feature files and for Markdown files named in oaths (:line is refused on a directory)",
         })
         .option("session", {
           type: "string",
@@ -686,7 +687,7 @@ export async function runCli(
         .positional("feature", {
           type: "string",
           describe:
-            "check only this feature file instead of every feature under featuresDir (no :line)",
+            "check only this feature file or Markdown oath instead of every feature under featuresDir and every path in oaths (no :line)",
         })
         .option("json", {
           type: "boolean",

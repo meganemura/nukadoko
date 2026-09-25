@@ -146,6 +146,23 @@ sign-off は、宣言された組ではなく、run 中に計測された 1 組�
 Chromium は accept 済みで firefox はまだ、という状態は正常であり、古びた状態ではありません。
 詳しくは [Sign-off](docs/spec.ja.md#sign-off) を参照してください。
 
+## Markdown oaths
+
+**Markdown oath**
+
+Gherkin は、同じ型付き step に対する 1 つの表側です。
+Markdown oath は、もう 1 つの表側です。
+`nukadoko.config.ts` の `oaths` は、ファイル、またはそのディレクトリを名指しします。
+デフォルトは `[]` なので、sign-off の記録とこの README は scenario ではありません。
+
+引用またはフェンスされたコードブロックの外にある文は step であり、`.feature` の行と同じ `defineStep` の pattern にマッチします。
+どの pattern にもマッチしない文は、書かれた行の `undefined-step` です。
+`nuka check features/todo.md` と `nuka run features/todo.md` は、`oaths` に無くても、明示的な `.md` のパスを受けます。
+ディレクトリ対象は、その配下にある設定済みの oath を含み、`.feature` ファイルはこれまで通り歩きます。
+
+`examples/todo/features/todo.md` は、`features/todo.feature` と同じ todo の基準に、outline の行を 1 つ足したものです。
+このスライスが読むもの、後に残すものは [docs/spec.ja.md](docs/spec.ja.md#markdown-oaths) にあります。
+
 ## Why this exists now
 
 **いま、これが存在する理由**
@@ -211,8 +228,8 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、MCP のツール一覧(`nuka mcp-tools`)、そして 2 つの agent skill です。
-未実装なのは、AI 支援によるグルーの変換です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、MCP のツール一覧(`nuka mcp-tools`)、Markdown oath、そして 2 つの agent skill です。
+未実装なのは、AI 支援によるグルーの変換と、Varar の残り(step の戻り値と文中の語句の比較、すべての方言)です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
 以下で数字を伴う主張はすべて計測済みです。

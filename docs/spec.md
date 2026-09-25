@@ -66,6 +66,7 @@ nukadoko deliberately owns as little as possible:
 | **Sessions, environments, secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
 | **Sign-off records** | **nukadoko** |
+| Markdown oaths (the subset in "Markdown oaths") | **nukadoko**: compiled into the same pickles a `.feature` file becomes |
 
 ## Problem
 
@@ -1621,6 +1622,79 @@ In both arrangements, place the shared file outside `featuresDir`.
 Discovery could import it without harm because the module defines no step.
 However, its location shows that the existing suite owns it.
 
+## Markdown oaths
+
+Gherkin is one front for a scenario. A Markdown oath is another, over the
+same typed steps and the same step records. The file is documentation a
+person or an agent can read, and every sentence that is not marked as
+narration is a step. nukadoko does not embed Varar, and it does not
+compare a step's return value to a slot in the sentence. A `Then` still
+asserts inside `run`, and `returns` still validates what came back.
+Measurement stays here.
+
+`oaths` in `nukadoko.config.ts` names the files, or a directory of
+`*.md` files. The default is `[]`: a sign-off record, a README, and any
+other Markdown under the project are not scenarios until named. A
+directory walk skips `node_modules` and dot-directories. A missing path,
+or a path that is neither a Markdown file nor a directory, is
+`feature-parse-error`. An explicit `.md` path given to `nuka check` or
+`nuka run` is an oath even when `oaths` does not list it. A directory
+target of `nuka run` includes a configured oath that lives under that
+directory, and still walks `.feature` files. `nuka check` and `nuka tend`
+with no argument read `oaths` along with `featuresDir` and
+`additionalFeatureDirs`, so a step that only an oath binds is bound.
+
+The subset this slice reads:
+
+- The first `#` heading is the feature name. With none, the name is the
+  file's basename.
+- A later heading, including a later `#`, starts a scenario named by
+  that heading. A line of three or more hyphens does the same, and the
+  scenario is named from its first step (truncated at 80 characters,
+  with a ` (2)` suffix when the name is already used). A blank line does
+  not start a scenario.
+- A line may hold several sentences. The split is `.` `!` `?` outside
+  double quotes, followed by whitespace or the end of the line. A run of
+  the same mark (`...`) is not a split. The terminator is not part of
+  the step text, so a pattern written without a trailing period still
+  matches.
+- An optional `Given`, `When`, `Then`, `And`, `But`, or `*` prefix is
+  the keyword, not part of the matched text, the same way Gherkin works.
+  `And` and `But` inherit the previous step's position. A list marker
+  (`-`, `*`, `+`, or `1.`) is peeled before the keyword, so `* Given foo`
+  is a Given.
+- A blockquote (`>`) and a fenced code block are narration. They are not
+  steps and they are not findings. That is how this slice accepts prose.
+  An unclosed fence or an unclosed HTML comment (`<!--`) is a parse
+  error. YAML frontmatter is not stripped: a leading `---` is a scenario
+  break, and it is a no-op when nothing precedes it.
+- A pipe table under a step is that step's data table. The separator row
+  is syntax. The header row is not a data row: Markdown requires a
+  header, and a nukadoko data table is `string[][]` with no header
+  convention. Body rows are the table. When step text contains
+  `<column>` placeholders and every placeholder name is a header cell,
+  the table is Examples instead, and `compile()` expands one pickle per
+  body row. A repeated Examples column name, a table with no step before
+  it, a missing separator, a table with no data rows, a cell-count
+  mismatch, a second table on one step, or a second Examples table on
+  one scenario is a parse error that names the line.
+
+A sentence no pattern matches is the existing `undefined-step` finding,
+on the Markdown line it was written on. `nuka run` fails that step the
+same way it fails an undefined Gherkin line. The finding is not a new
+code, and the sentence is not dropped.
+
+`examples/todo` carries `features/todo.md` beside `features/todo.feature`,
+listed in `oaths`.
+
+Later, and not in this slice: matching several steps inside one sentence,
+comparing a step's return value to words in the sentence, doc strings,
+tags, `@nukadoko:serial` in Markdown, and the rest of Varar (every dialect,
+its test runner, its playground). A paragraph that matches nothing does
+not end the example here, because the parser does not have the vocabulary
+yet. Separate scenarios with a heading or `---`, and mark narration as a
+blockquote or a fence.
+
 ## Running
 
 ### Scenarios (the scripted path)
@@ -1637,8 +1711,10 @@ record for each pickle. The scenario record contains the feature path, scenario
 name, ordered step record ids, and per-step status.
 
 `nuka run` takes one or more targets. Each target can be a feature file, a
+Markdown oath (a path ending in `.md`; see "Markdown oaths"), a
 `file:line` selection, or a directory. A directory target is walked
-recursively for every `.feature` file. The selected files form one
+recursively for every `.feature` file, and also includes a configured oath
+that lives under that directory. The selected files form one
 deduplicated set, and a full-file selection includes any line selections for
 that file. All selected pickles belong to one invocation: one run_id, one
 summary, one exit code, one messages stream, and one Allure results tree.
@@ -1650,7 +1726,8 @@ gives up the position: the files are still handed out in it, and the
 records land in the order the workers finish. `:line` on a directory is
 refused: it selects one scenario inside a single file, and a directory
 names no single file for it to select inside. A directory holding no
-`.feature` file anywhere under it is refused too, the same tone
+`.feature` file anywhere under it, and no configured oath under it either,
+is refused too, the same tone
 `nuka check`'s own `no-step-files-found`
 uses: it names exactly what it scanned, because a run that did nothing must
 say so loudly rather than exit 0 having run nothing at all.
@@ -2378,6 +2455,7 @@ or to the section for its feature.
 | --- | --- |
 | `featuresDir` | feature files and step code, `nuka run`'s own unattended set (default `features`, Cucumber-style) |
 | `additionalFeatureDirs` | extra directories `nuka check`/`nuka tend` bind vocabulary against, without joining `featuresDir` (default `[]`, below) |
+| `oaths` | Markdown files, or directories of them, compiled into the same scenarios as `.feature` files (default `[]`, see "Markdown oaths") |
 | `baseURL` | top-level base URL, overridden per environment (below) |
 | `envFiles` | top-level env files, appended to per environment (below) |
 | `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
@@ -2408,6 +2486,13 @@ does not run unattended. An accepted feature that describes a core product
 path moves into `featuresDir` and needs no additional entry. A missing entry
 is a config error. `nuka check` reports `additional-feature-dir-missing`, and
 `nuka tend` reports the same condition as a note.
+
+`oaths` defaults to `[]`. Each entry is a Markdown file, or a directory
+of `*.md` files, compiled into the same pickles as a `.feature` file
+(see "Markdown oaths"). Nothing under the project is an oath until it
+is named, so a sign-off record is not a scenario. `nuka check` and
+`nuka tend` read the list. `nuka run` reads an entry when the path is
+given, or when a directory target contains it.
 
 `browserType` selects the Playwright engine that `ctx.page()` launches. The
 choices are `"chromium"` (default), `"firefox"`, and `"webkit"`. It is separate
@@ -3684,9 +3769,15 @@ would be running against glue it never actually read.
   what changes is how many of them run at once. Worker processes make the
   gain independent of what a suite spends its time on, and leave the
   fixture teardown rule standing.
+- **M13 (Markdown oaths)**: a second front beside Gherkin. Selected
+  Markdown files compile into the same pickles, bind the same `defineStep`
+  vocabulary, and fail `nuka check` on a sentence no pattern matches (see
+  "Markdown oaths"). This is the oath surface, not Varar's engine.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs
-  in-place coexistence rather than migration.
+  in-place coexistence rather than migration. Full Varar parity (every
+  dialect, comparing a step's return value to words in the sentence, doc
+  strings, tags, and `@nukadoko:serial` inside Markdown) stays here too.
 
 ## Implementation notes
 

@@ -108,3 +108,11 @@ person's attention instead of deciding.
 which is gherkin's own rule rather than a nukadoko choice, so an `And`
 under `Then` sits in Then position too. A `*` line has no position and is
 held to none of this.
+
+## A Markdown oath
+
+The same steps can be written in a Markdown file named in `oaths`
+(`nukadoko.config.ts`). `nuka check <file.md>` and `nuka run <file.md>`
+also read that path when it is not listed. A sentence that matches no
+pattern is `undefined-step`. The grammar, and what this slice does not
+read, is docs/spec.md ("Markdown oaths").

@@ -360,6 +360,10 @@
     {
       "term": "Trusted Publisher",
       "why": "npm のパッケージ設定にある機能名そのもの。docs/releasing.ja.md では英語のまま。訳すと npmjs.com の画面のラベルと一致しなくなる"
+    },
+    {
+      "term": "oath",
+      "why": "config の `oaths` と、Varar が Markdown の実行可能な例を呼ぶ語。誓いと訳すと config のキーとの対応が切れ、Varar の文書とも一致しなくなる。見出しは英語のまま(`Markdown oaths`)。地の文でも oath のまま使う"
     }
   ],
   "identifiers": {

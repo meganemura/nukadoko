@@ -7,6 +7,7 @@ import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps } from "../discover/discover-steps.js";
+import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { probeVersion } from "../environment/probe-version.js";
@@ -435,7 +436,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     let selected;
     try {
-      selected = selectPickles(rootDir, featureArgs);
+      selected = selectPickles(rootDir, featureArgs, resolveOathPaths(rootDir, config.oaths).files);
     } catch (error) {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;

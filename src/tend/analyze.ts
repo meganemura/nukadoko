@@ -148,6 +148,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     rootDir,
     config.featuresDir,
     config.additionalFeatureDirs,
+    config.oaths,
   );
   const occurrences = resolveStepOccurrences(features, patterns);
 

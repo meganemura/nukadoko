@@ -12,6 +12,8 @@ import {
   parseFeatureSource,
   type LoadFeaturesResult,
 } from "../feature/load-features.js";
+import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
+import { isOathPath } from "../feature/resolve-oaths.js";
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../step/validate-fixtures.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { validateStepParts } from "../step/validate-parts.js";
@@ -140,7 +142,9 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
     // "read the GherkinDocument before it's dropped" steps, done here too
     // since this function is the featureArg path's own equivalent of that
     // walk, not a call through it.
-    const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
+    const { gherkinDocument, pickles } = isOathPath(relativePath)
+      ? parseOathSource(source, relativePath)
+      : parseFeatureSource(source, relativePath);
     return {
       features: [{ relativePath, pickles: attachStepLines(pickles, gherkinDocument) }],
       parseErrors: [],
@@ -150,7 +154,11 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
     return {
       features: [],
       parseErrors: [
-        { relativePath, message: error instanceof Error ? error.message : String(error) },
+        {
+          relativePath,
+          message: error instanceof Error ? error.message : String(error),
+          line: error instanceof OathParseError ? error.line : undefined,
+        },
       ],
       serialTagOnScenario: [],
     };
@@ -427,13 +435,14 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
         // itself is config-check.ts's own `additional-feature-dir-missing`,
         // not repeated here; `missingAdditionalDirs` is intentionally
         // unread.
-        loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs)
+        loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths)
       : loadSingleFeature(rootDir, featureArg);
   for (const parseError of parseErrors) {
     errors.push({
       code: "feature-parse-error",
       message: parseError.message,
       file: parseError.relativePath,
+      line: parseError.line,
     });
   }
   // `@nukadoko:serial` read anywhere but a `Feature:` line does nothing at all

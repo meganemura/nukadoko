@@ -54,10 +54,13 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
 
 ## Layout
 
-- `nukadoko.config.ts` — `baseURL` only, no `envFiles` (this app needs no
-  secrets).
-- `features/todo.feature` — 3 scenarios: adding a todo, completing a todo,
+- `nukadoko.config.ts`: `baseURL`, and `oaths` naming
+  `features/todo.md`. No `envFiles` (this app needs no secrets).
+- `features/todo.feature`: 3 scenarios: adding a todo, completing a todo,
   and adding several at once via a data table.
+- `features/todo.md`: the same three scenarios as a Markdown oath, plus
+  one outline row. `nuka check` and `nuka run features/todo.md` exercise
+  it. See [Markdown oath](#markdown-oath) below.
 - `features/steps/*.ts` — 5 typed steps, each importing `defineStep` from
   `"nukadoko"` and `z` from `"zod"`, each actually calling the app above
   (nothing here is a stub):
@@ -68,6 +71,24 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
     `PATCH /todos/:id`
   - `todo-list-includes.ts` / `todo-is-marked-done.ts` — read-only
     (`mutates: false`) assertions bound in `Then` position
+
+## Markdown oath
+
+`features/todo.md` is the twin of `features/todo.feature`. It is listed
+in `oaths`, so `nuka check` with no argument reads it. An explicit path
+works the same way:
+
+```sh
+nuka check
+nuka check features/todo.md
+nuka run features/todo.md
+```
+
+`nuka check` needs no server. `nuka run` needs the app from above, the
+same as the `.feature` file. The oath is four scenario records: the
+three from the feature file, plus one outline row (`Buy milk`). What
+the Markdown slice reads is in
+[docs/spec.md](../../docs/spec.md#markdown-oaths).
 
 ## Part 1 — adaptive authoring
 
@@ -131,7 +152,10 @@ nuka check
 
 ```
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
+error	undefined-step	features/todo.md:14	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
 ```
+
+The second line is the same step in the Markdown oath. Both files name it.
 
 **5. Scaffold it:**
 

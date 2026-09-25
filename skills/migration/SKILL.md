@@ -74,3 +74,7 @@ the same rule.
 - **Don't guess at a fix `nuka check` or `nuka run` didn't ask for.** Their
   output is the evidence for what's wrong; changing something they didn't
   flag is a change made on a hunch, not on what actually broke.
+- **Don't treat a Markdown oath as a Varar import.** `oaths` is a front
+  for criteria written here, matched by the same steps as a `.feature`
+  file. The cucumber-js door is unchanged: an existing suite still comes
+  in through `nukadoko/compat`.

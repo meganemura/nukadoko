@@ -2,6 +2,8 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { parseFeatureSource, walkFeatureFiles } from "../feature/load-features.js";
+import { parseOathSource } from "../feature/parse-oath.js";
+import { isOathPath } from "../feature/resolve-oaths.js";
 import {
   DirectoryTargetLineError,
   FeatureFileNotFoundError,
@@ -15,7 +17,7 @@ import {
 // the one place that each argument's syntax and
 // gherkin's own pickle `location` are both known. A missing file, a parse
 // failure, `:line` matching zero pickles, a directory carrying `:line`, or
-// a directory with no `.feature` file anywhere under it are all setup
+// a directory with no `.feature` file and no configured oath anywhere under it are all setup
 // failures, thrown here before anything about the run is decided; cli/
 // run.ts turns them into stderr + exit 1 the same way it already does for
 // config/environment errors.
@@ -27,7 +29,8 @@ import {
 // error's own wording and behavior for "nothing at this path" is
 // unchanged. A directory is walked recursively for every `.feature` file
 // via src/feature/load-features.ts's own `walkFeatureFiles` (reused, not
-// duplicated), then re-sorted here by rootDir-relative path in plain byte
+// duplicated). Configured oath files that live under that directory are
+// added to the same set. The result is re-sorted by rootDir-relative path in plain byte
 // order — never `localeCompare`, whose collation can legally differ
 // between machines/ICU builds, exactly the run-to-run instability this
 // sort exists to rule out. `:line` on a directory is refused outright: it
@@ -107,7 +110,9 @@ function parseOneFeatureFile(rootDir: string, relativePath: string): SelectedFea
   let gherkinDocument: GherkinDocument;
   let pickles: readonly Pickle[];
   try {
-    ({ gherkinDocument, pickles } = parseFeatureSource(source, relativePath));
+    ({ gherkinDocument, pickles } = isOathPath(relativePath)
+      ? parseOathSource(source, relativePath)
+      : parseFeatureSource(source, relativePath));
   } catch (error) {
     throw new FeatureParseFailedError(relativePath, error);
   }
@@ -124,6 +129,19 @@ function compareByteOrder(a: string, b: string): number {
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;
+}
+
+/** True when `fileRelative` is a file inside `directoryRelative`, both
+ * root-relative. A trailing separator on the directory is what keeps
+ * `features` from matching `features-extra`. `.` means the project root. */
+function isInsideDirectory(directoryRelative: string, fileRelative: string): boolean {
+  const directory = path.normalize(directoryRelative);
+  const file = path.normalize(fileRelative);
+  if (directory === ".") {
+    return file !== ".." && !file.startsWith(`..${path.sep}`);
+  }
+  const prefix = directory.endsWith(path.sep) ? directory : `${directory}${path.sep}`;
+  return file.startsWith(prefix);
 }
 
 function featureFilesInDirectory(rootDir: string, relativePath: string): string[] {
@@ -145,7 +163,11 @@ function featureFilesInDirectory(rootDir: string, relativePath: string): string[
  * (`statSync`) to one; every other case, including a path that doesn't
  * exist at all, is a single-file target.
  */
-export function selectPickles(rootDir: string, featureArgs: string | readonly string[]): SelectedScenarios {
+export function selectPickles(
+  rootDir: string,
+  featureArgs: string | readonly string[],
+  oathFiles: readonly string[] = [],
+): SelectedScenarios {
   const args = typeof featureArgs === "string" ? [featureArgs] : featureArgs;
   const selections = new Map<string, Set<number> | null>();
   const scannedDirectories: { readonly relativePath: string; readonly absolutePath: string }[] = [];
@@ -169,6 +191,11 @@ export function selectPickles(rootDir: string, featureArgs: string | readonly st
       for (const relativePath of featureFilesInDirectory(rootDir, target.relativePath)) {
         selections.set(relativePath, null);
       }
+      for (const relativePath of oathFiles) {
+        if (isInsideDirectory(normalizedRelativePath, relativePath)) {
+          selections.set(relativePath, null);
+        }
+      }
       continue;
     }
 
@@ -188,7 +215,7 @@ export function selectPickles(rootDir: string, featureArgs: string | readonly st
   if (selections.size === 0) {
     const relativePaths = scannedDirectories.map(({ relativePath }) => relativePath).join('" and "');
     const absolutePaths = scannedDirectories.map(({ absolutePath }) => absolutePath).join(", ");
-    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths);
+    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths, oathFiles.length > 0);
   }
 
   let totalPickles = 0;

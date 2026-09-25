@@ -156,6 +156,25 @@ pair. A state in which Chromium is accepted but firefox is not yet accepted
 is normal, not stale. See
 [Sign-off](docs/spec.md#sign-off).
 
+## Markdown oaths
+
+Gherkin is one front for the same typed steps. A Markdown oath is another.
+`nukadoko.config.ts`'s `oaths` names the files, or a directory of them.
+The default is `[]`, so a sign-off record and this README are not scenarios.
+
+A sentence outside a blockquote or a fenced code block is a step, matched
+by the same `defineStep` patterns a `.feature` line uses. A sentence no
+pattern matches is an `undefined-step`, on the line it was written on.
+`nuka check features/todo.md` and `nuka run features/todo.md` take an
+explicit `.md` path even when `oaths` does not list it. A directory
+target includes a configured oath that lives under that directory, and
+still walks `.feature` files the way it always has.
+
+`examples/todo/features/todo.md` is the same todo criteria as
+`features/todo.feature`, plus one outline row. What this slice reads,
+and what it leaves for later, is in
+[docs/spec.md](docs/spec.md#markdown-oaths).
+
 ## Why this exists now
 
 Code is increasingly written the way this sentence was: someone describes
@@ -225,8 +244,11 @@ more of the roadmap has landed, not that the surface has frozen.
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), tending (`nuka tend`), scenario
-harvesting (`nuka harvest`), the MCP tool listing (`nuka mcp-tools`), and
-two agent skills. Not implemented: an AI-assisted glue converter. See the
+harvesting (`nuka harvest`), the MCP tool listing (`nuka mcp-tools`),
+Markdown oaths (a second front beside Gherkin; see
+[Markdown oaths](#markdown-oaths)), and two agent skills. Not implemented:
+an AI-assisted glue converter, and the rest of Varar (comparing a step's
+return value to words in the sentence, every dialect). See the
 [roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
