@@ -7,10 +7,12 @@
 > acceptance criteria and what actually ran.
 
 nukadoko runs Gherkin scenarios under typed step contracts and writes a
-step record for every execution. The tool measures this record instead of
-relying on an agent's report. The criteria remain in the language used by
-the people who set them. Everything between those sentences and the system
-under test is typed, checked before execution, and reviewable in a diff.
+step record for every execution. It accepts Varar-style Markdown oaths as
+well, as another front over those same typed steps and step records. The
+tool measures this record instead of relying on an agent's report. The
+criteria remain in the language used by the people who set them.
+Everything between those sentences and the system under test is typed,
+checked before execution, and reviewable in a diff.
 
 ## Install
 
@@ -158,7 +160,8 @@ is normal, not stale. See
 
 ## Markdown oaths
 
-Gherkin is one front for the same typed steps. A Markdown oath is another.
+Gherkin is one front for the same typed steps and step records. A
+Varar-style Markdown oath is another.
 `nukadoko.config.ts`'s `oaths` names the files, or a directory of them.
 The default is `[]`, so a sign-off record and this README are not scenarios.
 
@@ -245,7 +248,7 @@ Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), tending (`nuka tend`), scenario
 harvesting (`nuka harvest`), the MCP tool listing (`nuka mcp-tools`),
-Markdown oaths (a second front beside Gherkin; see
+Varar-style Markdown oaths (a second front beside Gherkin; see
 [Markdown oaths](#markdown-oaths)), and two agent skills. Not implemented:
 an AI-assisted glue converter, and the rest of Varar (comparing a step's
 return value to words in the sentence, every dialect). See the

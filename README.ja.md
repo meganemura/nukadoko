@@ -7,6 +7,7 @@
 > 原文は README.md。相違があれば原文が正。
 
 nukadoko は、型付き step の契約のもとで Gherkin の scenario を実行し、実行ごとに step record を書きます。
+Varar 式の Markdown oath も、同じ型付き step と step record の上にあるもう 1 つの表側として受け付けます。
 この record は agent の報告に頼らず、ツールが計測します。
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
@@ -150,8 +151,8 @@ Chromium は accept 済みで firefox はまだ、という状態は正常であ
 
 **Markdown oath**
 
-Gherkin は、同じ型付き step に対する 1 つの表側です。
-Markdown oath は、もう 1 つの表側です。
+Gherkin は、同じ型付き step と step record に対する 1 つの表側です。
+Varar 式の Markdown oath は、もう 1 つの表側です。
 `nukadoko.config.ts` の `oaths` は、ファイル、またはそのディレクトリを名指しします。
 デフォルトは `[]` なので、sign-off の記録とこの README は scenario ではありません。
 
@@ -228,7 +229,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、MCP のツール一覧(`nuka mcp-tools`)、Markdown oath、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、MCP のツール一覧(`nuka mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と、Varar の残り(step の戻り値と文中の語句の比較、すべての方言)です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
