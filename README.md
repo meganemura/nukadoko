@@ -1,6 +1,6 @@
 # nukadoko
 
-[![npm version](https://img.shields.io/npm/v/nukadoko)](https://www.npmjs.com/package/nukadoko)
+[![npm version](https://img.shields.io/npm/v/nukadoko?logo=npm)](https://www.npmjs.com/package/nukadoko)
 
 > Implementations are generated now. What checks them cannot be. Typed step
 > contracts and tool-measured step records between natural-language
