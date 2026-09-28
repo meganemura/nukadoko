@@ -2,8 +2,7 @@ import type { Pickle, PickleStep } from "@cucumber/messages";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { isStep, tryFromCandidates, type Step } from "../step/define-step.js";
-import type { CheckedPattern } from "./binding-check.js";
-import { matchPickleStepText } from "./feature-check.js";
+import type { StepTextMatcher } from "./feature-check.js";
 
 // Responsibility: docs/spec.md "Chaining steps"' "Declaring `from` buys a
 // check that costs nothing to be sure about" paragraph, made real, for one
@@ -26,8 +25,7 @@ import { matchPickleStepText } from "./feature-check.js";
 // honored would be noise in the one place noise is fatal (docs/spec.md
 // "Chaining steps").
 //
-// Reuses src/check/feature-check.ts's own `matchPickleStepText`/
-// `CheckedPattern` to resolve
+// Reuses src/check/feature-check.ts's own `StepTextMatcher` to resolve
 // each pickle step's own bound name — the exact same resolution undefined-
 // step/ambiguous-step detection already does, never a second implementation
 // of it. A line that resolves to zero or two-or-more candidates is left
@@ -190,14 +188,13 @@ export function attachmentFilledKey(
 export function checkFromOrder(
   pickle: Pickle,
   vocabulary: Vocabulary,
-  patterns: readonly CheckedPattern[],
+  match: StepTextMatcher,
 ): readonly FromOrderIssue[] {
   const issues: FromOrderIssue[] = [];
 
   // One resolution pass over this pickle's own steps, reused for every
-  // `from` key on every step below: patterns are
-  // matched here, never rebuilt.
-  const matches = pickle.steps.map((step) => matchPickleStepText(step.text, patterns));
+  // `from` key on every step below.
+  const matches = pickle.steps.map((step) => match(step.text));
   const resolvedNames = matches.map((match) => (match.stepNames.length === 1 ? match.stepNames[0] : undefined));
 
   const stepNameOf = new Map<Step, string>();

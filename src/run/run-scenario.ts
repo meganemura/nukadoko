@@ -10,6 +10,7 @@ import {
 import type { z } from "zod";
 import { formatValidationIssues } from "../binding/format-issues.js";
 import type { CheckedPattern } from "../check/binding-check.js";
+import { createStepTextMatcher } from "../check/feature-check.js";
 import { checkFromOrder } from "../check/from-order.js";
 import { checkUnfillableKeys } from "../check/unfillable-key.js";
 import { DataTable } from "../compat/data-table.js";
@@ -919,8 +920,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // unfillable-key.ts) joins `checkFromOrder` at this exact guard — same
   // judgment `nuka check` makes, same "never began" shape, one shared list of
   // per-step messages below rather than a second guard block.
-  const orderIssues = checkFromOrder(pickle, vocabulary, patterns);
-  const unfillableKeyIssues = checkUnfillableKeys(pickle, vocabulary, patterns);
+  const match = createStepTextMatcher(patterns);
+  const orderIssues = checkFromOrder(pickle, vocabulary, match);
+  const unfillableKeyIssues = checkUnfillableKeys(pickle, vocabulary, match);
   if (orderIssues.length > 0 || unfillableKeyIssues.length > 0) {
     // Mirrors the existing undefined-step shape (docs/spec.md "an execution
     // that never began must not be citable"): every pickle step still gets

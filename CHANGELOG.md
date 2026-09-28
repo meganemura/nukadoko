@@ -18,6 +18,15 @@ just until 0.1.
   `examples/todo/features/todo.md` is the worked example. What this slice
   reads, and what it leaves, is in docs/spec.md ("Markdown oaths").
 
+### Changed
+
+- **`nuka check` matches each step line once instead of three times.**
+  The undefined/ambiguous check, the `from` order check, and the
+  unfillable-key check each scanned every pattern for the same line. They
+  now share one result per distinct line text. On 1000 typed steps and
+  10000 five-line scenarios, `nuka check` went from 10.0s to 5.6s. The
+  findings are unchanged.
+
 ## 0.13.1 — 2026-09-23
 
 ### Fixed

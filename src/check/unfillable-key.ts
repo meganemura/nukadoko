@@ -1,9 +1,8 @@
 import type { Pickle } from "@cucumber/messages";
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
-import type { CheckedPattern } from "./binding-check.js";
 import { attachmentFilledKey } from "./from-order.js";
-import { matchPickleStepText } from "./feature-check.js";
+import type { StepTextMatcher } from "./feature-check.js";
 
 // Responsibility: docs/spec.md "Typed steps"' args/returns paragraph
 // ("statically checkable in both directions") made real for the direction
@@ -29,8 +28,8 @@ import { matchPickleStepText } from "./feature-check.js";
 // step/validate-from.ts's structural one), and this module must not repeat
 // either finding under a third code.
 //
-// Reuses, never re-derives: `matchPickleStepText` (src/check/feature-
-// check.ts) for the same per-line pattern resolution every other check in
+// Reuses, never re-derives: `StepTextMatcher` (src/check/feature-check.ts)
+// for the same per-line pattern resolution every other check in
 // this package already shares, and `attachmentFilledKey` (src/check/from-
 // order.ts, exported for this file) for the table/docstring "exactly one
 // unconsumed required key" rule — the same computation src/check/feature-
@@ -69,12 +68,12 @@ function unfillableKeyMessage(stepName: string, key: string): string {
 export function checkUnfillableKeys(
   pickle: Pickle,
   vocabulary: Vocabulary,
-  patterns: readonly CheckedPattern[],
+  match: StepTextMatcher,
 ): readonly UnfillableKeyIssue[] {
   const issues: UnfillableKeyIssue[] = [];
 
   pickle.steps.forEach((pickleStep, stepIndex) => {
-    const { stepNames, matched } = matchPickleStepText(pickleStep.text, patterns);
+    const { stepNames, matched } = match(pickleStep.text);
     if (stepNames.length !== 1) {
       return; // Undefined/ambiguous at this line — feature-check.ts's own concern.
     }
@@ -89,7 +88,7 @@ export function checkUnfillableKeys(
     }
 
     // Safe: `stepNames.length === 1` above is exactly the condition
-    // `matchPickleStepText` sets `matched` under.
+    // `StepTextMatcher` sets `matched` under.
     const consumedByCapture = new Set(matched!.captures.map((capture) => capture.key));
     const fromKeys = new Set(Object.keys(entry.step.from));
     // Same set `bindStepArgs` places the attachment against: a key `from`
