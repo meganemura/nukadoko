@@ -7,7 +7,15 @@ workflow は tag と `package.json` を突き合わせ、その commit をイン
 npm は GitHub Actions の OIDC で認証します。
 リポジトリとパッケージがどちらも公開されているので、npm の provenance は自動で付きます。
 GitHub の Environment `publish` が人のゲートです。
-ジョブは承認されるまでそこで待ちます。
+publish ジョブは承認されるまでそこで待ちます。
+
+`npm publish` が成功したあと、別のジョブがそのバージョンの GitHub release を作ります。
+そのジョブは publish ジョブが checkout したのと同じ commit を checkout し、`CHANGELOG.md` からそのバージョンの節だけを取り出し、`gh release create --verify-tag` を実行します。
+同じ tag の release が既にあれば、そのまま残します。
+同じ tag を再実行しても失敗しません。
+publish ジョブの権限は `id-token: write` と `contents: read` です。
+release ジョブの権限は `contents: write` です。
+そのジョブは npm の OIDC トークンを持ちません。
 
 パッケージが載せるのは、`dist/` にコンパイルした JavaScript(`nuka` の bin は `dist/cli.js`)、それに `src/`、`docs/`、`skills/`、`CHANGELOG.md`、`llms.txt` です。
 `dist/` は `.gitignore` に入っています。
@@ -88,11 +96,7 @@ workflow は `NPM_TOKEN` を読みません。
    パッケージの `engines` は `>=20` のままです。
    Node 24 は publish ジョブであって、`nuka` を動かす人への新しい要件ではありません。
 
-5. `--notes-file CHANGELOG.md` はすべてのバージョンのノートをリリースへ貼るので、先にそのバージョンの節だけ取り出します。
-   `version` は tag したバージョンにします。
-
-   ```sh
-   version=0.12.0
-   awk -v version="$version" '$0 ~ "^## " version {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
-   gh release create "v$version" --title "v$version" --notes-file notes.md
-   ```
+5. workflow の `release` ジョブが、`npm publish` のあとに GitHub release を作ります。
+   `CHANGELOG.md` は、publish ジョブが checkout した commit から読みます。
+   `--notes-file CHANGELOG.md` はすべてのバージョンのノートを貼るので、ジョブは見出しが `##` とそのバージョンと空白で始まる節だけを取り出してから、`--verify-tag` 付きで `gh release create` を実行します。
+   release を作るのはそのジョブです。

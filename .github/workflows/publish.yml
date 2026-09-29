@@ -2,9 +2,13 @@
 # recipe a project using nukadoko should copy: that one is docs/ci.md.
 #
 # Boundary: checkout the tag, build dist/, run the release checks, and
-# npm publish. The GitHub Environment `publish` approves the run. npm
-# authenticates with that environment's OIDC token. This file never reads
-# NPM_TOKEN.
+# npm publish. A second job then creates the GitHub release. The GitHub
+# Environment `publish` approves the publish run. npm authenticates with
+# that environment's OIDC token. This file never reads NPM_TOKEN.
+#
+# The publish job's permissions are id-token: write and contents: read.
+# contents: write belongs to the release job, which starts only after
+# publish has succeeded and never holds the npm OIDC token.
 #
 # Actions are pinned to commit ids rather than tags, with the version beside
 # them so the line stays readable, matching ci.yml. This repository requires
@@ -32,11 +36,16 @@ jobs:
     # ci.yml's own budget for typecheck, test, and selftest, plus pack-check
     # installing the tarball.
     timeout-minutes: 45
+    outputs:
+      # The release job checks this out. The notes have to come from the
+      # tree this job published.
+      sha: ${{ steps.checkout.outputs.commit }}
     permissions:
       id-token: write
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
@@ -102,3 +111,34 @@ jobs:
           fi
 
       - run: npm publish
+
+  # Runs only after npm publish succeeds. A separate job keeps contents:write
+  # away from the job that holds the npm OIDC token.
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The publish job's checkout SHA, so the notes match the tree that was published.
+          ref: ${{ needs.publish.outputs.sha }}
+
+      - name: Create the GitHub release from this version's changelog section
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # --notes-file CHANGELOG.md would carry every version, so extract only this one.
+          awk -v v="$version" '$0 ~ "^## " v " " {in_version=1; next} /^## /{in_version=0} in_version' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md has no section for ${version}" >&2
+            exit 1
+          fi
+          # A re-run of the same tag must not fail on a release that already exists.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} already exists"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

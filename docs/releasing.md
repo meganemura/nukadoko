@@ -6,10 +6,19 @@ whose name is `v` plus the `package.json` version. Pushing that tag runs
 workflow checks the tag against `package.json`, installs the tagged
 commit, builds `dist/`, runs the same checks this repository's own CI
 runs, runs `npm run pack-check`, and runs `npm publish`. npm
-authenticates with GitHub Actions OIDC. Provenance is attached
-automatically because the repository and the package are public. The
-GitHub Environment `publish` is the human gate: the job waits there
-until it is approved.
+authenticates with GitHub Actions OIDC.
+Provenance is attached automatically because the repository and the
+package are public. The GitHub Environment `publish` is the human
+gate: the publish job waits there until it is approved.
+
+After `npm publish` succeeds, a second job creates the GitHub release
+for that version. It checks out the same commit the publish job
+checked out, extracts this version's section of `CHANGELOG.md`, and
+runs `gh release create --verify-tag`. A release that already exists
+is left in place, so running the same tag again does not fail. The
+publish job's permissions are `id-token: write` and `contents: read`.
+The release job's permission is `contents: write`. That job does not
+hold the npm OIDC token.
 
 The package ships compiled JavaScript in `dist/` (the `nuka` bin is
 `dist/cli.js`), plus `src/`, `docs/`, `skills/`, `CHANGELOG.md`, and
@@ -109,12 +118,10 @@ registers the trusted publisher.
    Node 24 is the publish job, not a new requirement for people running
    `nuka`.
 
-5. `--notes-file CHANGELOG.md` would paste every version's notes into
-   the release, so extract that version's section first. Set `version`
-   to the version you tagged:
-
-   ```sh
-   version=0.12.0
-   awk -v version="$version" '$0 ~ "^## " version {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
-   gh release create "v$version" --title "v$version" --notes-file notes.md
-   ```
+5. The workflow's `release` job creates the GitHub release after
+   `npm publish`. It reads `CHANGELOG.md` from the commit the publish
+   job checked out. `--notes-file CHANGELOG.md` would paste every
+   version's notes, so the job extracts only the section whose heading
+   starts with `##` plus that version and a space, then runs
+   `gh release create` with `--verify-tag`. Creating the release is
+   that job.

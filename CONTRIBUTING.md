@@ -56,7 +56,8 @@ resolve to.
 
 The publish path is [docs/releasing.md](docs/releasing.md). Pushing a
 `v*` tag runs `.github/workflows/publish.yml`, which publishes with
-GitHub Actions OIDC. Do not `npm publish` from a checkout, and do not
+GitHub Actions OIDC and then creates the GitHub release for that
+version. Do not `npm publish` from a checkout, and do not
 put an `NPM_TOKEN` in repository secrets.
 
 `package.json` declares `prepublishOnly`, and with `ignore-scripts` on
