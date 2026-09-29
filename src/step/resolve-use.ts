@@ -1,6 +1,6 @@
 import type { UsedEntryWithResult } from "../context/used.js";
 import type { StepRecord } from "../record/types.js";
-import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
+import { malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
 // Responsibility: `nuka do --use <record-id>`'s own lookup (docs/spec.md
 // "Single steps (the agent path)", the `--use` paragraph) — turns one

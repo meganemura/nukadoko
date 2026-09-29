@@ -1,8 +1,7 @@
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { findLiveSessions, type LiveSessionRef } from "../live/live-session-notice.js";
-import { messagesRunOutputPath } from "../report/messages/emitter.js";
-import type { ScenarioRecord } from "../run/record-types.js";
+import { messagesRunOutputPath } from "./messages-output.js";
+import type { ScenarioRecord } from "./scenario-record.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
 
 // Responsibility: what leaves the state directory on its own, and when.
@@ -51,8 +50,10 @@ import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-export
 // Skipped entirely, and said so, while a live session (`nuka session
 // start`'s daemon) is up anywhere: that process writes records for as long
 // as it runs, and a rule that removes records has no business under it,
-// the same reason `nuka clean` refuses. A lock with no socket is not a
-// live session in this sense: it is a `nuka run --session`/`nuka do
+// the same reason `nuka clean` refuses. The caller (src/cli/run.ts) is the
+// one that asks the live module whether anything is up and passes the
+// answer in. This module does not look. A lock with no socket is not a
+// live session in that sense: it is a `nuka run --session`/`nuka do
 // --session` holding the name for the length of one command, and at the
 // end of `nuka run` that command is the one running retention.
 //
@@ -215,11 +216,22 @@ export interface ApplyRetentionOptions {
   /** Root-relative `messages.ndjson` path, as `nuka run` resolves it,
    * so a run's own run-id-suffixed stream can be named beside it. */
   readonly messagesOutputRel: string;
+  /** Live sessions the caller already found. Retention does not look for
+   * them itself: discovering a daemon is the live module's job, and this
+   * module must not import it. An empty list means nothing is live. */
+  readonly liveSessions: readonly RetentionLiveSession[];
+}
+
+/** The fields retention prints when it skips. Structural on purpose, so
+ * this module does not import the live module's own session ref. */
+export interface RetentionLiveSession {
+  readonly environment: string;
+  readonly name: string;
 }
 
 export interface RetentionOutcome {
   /** Non-null when nothing was examined at all. */
-  readonly skipped: { readonly liveSessions: readonly LiveSessionRef[] } | null;
+  readonly skipped: { readonly liveSessions: readonly RetentionLiveSession[] } | null;
   readonly runsKept: number;
   readonly runsRemoved: number;
   /** Step records, scenario directories, and run directories the age rule
@@ -246,9 +258,8 @@ async function removeRunExports(
 }
 
 export async function applyRetention(options: ApplyRetentionOptions): Promise<RetentionOutcome> {
-  const { rootDir, stateDir, policy, now, messagesOutputRel } = options;
+  const { rootDir, stateDir, policy, now, messagesOutputRel, liveSessions } = options;
 
-  const liveSessions = await findLiveSessions(rootDir, stateDir);
   if (liveSessions.length > 0) {
     return { skipped: { liveSessions }, runsKept: 0, runsRemoved: 0, unownedRemoved: 0 };
   }

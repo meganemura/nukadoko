@@ -8,7 +8,7 @@ import {
   type Step as GherkinStep,
 } from "@cucumber/messages";
 import type { z } from "zod";
-import { formatValidationIssues } from "../binding/format-issues.js";
+import { formatValidationIssues } from "../issues/format-issues.js";
 import type { CheckedPattern } from "../check/binding-check.js";
 import { createStepTextMatcher } from "../check/feature-check.js";
 import { checkFromOrder } from "../check/from-order.js";
@@ -35,9 +35,13 @@ import {
   createFixtureCache,
   resolveFixtures,
   teardownFixtureCache,
+  type CachedFixture,
   type FixtureCache,
+  type FixtureInstance,
   type FixtureUsageEntry,
 } from "../fixture/resolver.js";
+
+export type { CachedFixture, FixtureInstance };
 import { generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
@@ -51,7 +55,7 @@ import { strictArgsSchema } from "../step/strict-args.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "./record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../record/scenario-record.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
 

@@ -23,18 +23,17 @@ import type { Step } from "./step/define-step.js";
 // is therefore knowable, before it ever runs, to need no browser at all.
 //
 // `StepContext` is the older, internal shape: still function-based
-// (`page(): Promise<Page>`), still exported from here, because src/
-// compat/world.ts's `World.openPage()`/`openRequest()` — untouched by this
-// task, `src/compat/**` is out of scope — is typed against it directly and
-// this package cannot edit that file to point it at something else. Every
-// executor internal that still needs lazy, on-demand access (compat's
-// World, and src/context/create-context.ts's own `buildStepFixtures`, which
-// resolves a `StepFixtures` bag *from* one of these) keeps using this type;
-// only a typed step's own `run` moved to the bag. Kept in sync by
-// construction, not by hand: `buildStepFixtures` is the one place a
-// `StepContext` ever turns into a `StepFixtures`, so the two shapes cannot
-// silently drift apart from each other's members — a name added to one
-// without the other fails to compile there.
+// (`page(): Promise<Page>`), still exported from here. Compat's World does
+// not import it. World only calls `page()` and `request()`, and it declares
+// that pair itself (src/compat/world.ts) so the compat package stays a
+// leaf. Every executor internal that still needs lazy, on-demand access
+// (src/context/create-context.ts's own `buildStepFixtures`, which resolves
+// a `StepFixtures` bag *from* one of these) keeps using this type; only a
+// typed step's own `run` moved to the bag. Kept in sync by construction,
+// not by hand: `buildStepFixtures` is the one place a `StepContext` ever
+// turns into a `StepFixtures`, so the two shapes cannot silently drift
+// apart from each other's members. A name added to one without the other
+// fails to compile there.
 //
 // `resultOf` imports `Step` from step/define-step.ts, which itself imports
 // `StepFixtures` from here for its own `run` signature — a type-only cycle

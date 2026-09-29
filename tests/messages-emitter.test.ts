@@ -4,9 +4,10 @@ import path from "node:path";
 import type { Envelope } from "@cucumber/messages";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
-import { createMessagesEmitter, messagesRunOutputPath, type MessagesEmitter } from "../src/report/messages/emitter.js";
+import { messagesRunOutputPath } from "../src/record/messages-output.js";
+import { createMessagesEmitter, type MessagesEmitter } from "../src/report/messages/emitter.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 import { readOwnVersion } from "../src/version.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 

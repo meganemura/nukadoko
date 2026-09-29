@@ -15,10 +15,10 @@ import { parseFeatureSource } from "../feature/load-features.js";
 import { findLiveSessions, formatLiveSessionNotice } from "../live/live-session-notice.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { listDirtyPaths, probeGitState } from "../run/probe-git.js";
-import type { ScenarioRecord } from "../run/record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 import { parseAcceptanceRecord } from "../tend/record-parse.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka accept <feature>`'s actual work, kept out of
 // run-cli.ts so it's unit-testable without going through yargs (same split

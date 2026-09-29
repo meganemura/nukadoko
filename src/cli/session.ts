@@ -10,14 +10,14 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { sendLiveRequest } from "../live/client.js";
-import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME, removeLiveSockDir } from "../live/live-sock.js";
+import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME, removeLiveSockDir } from "../session/live-sock.js";
 import { checkSockPathLength, spawnDaemon, waitForDaemonStartup } from "../live/spawn-daemon.js";
 import { clearAllSessions, clearSession, listSessions } from "../session/manage.js";
 import { liveLockOwner, readLockInfo } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionCrashLogPath, sessionLockPath } from "../session/paths.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka session list`/`clear`/`start`/`stop`'s CLI-facing
 // wiring, kept out of run-cli.ts so it's unit-testable without going

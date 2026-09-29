@@ -1,5 +1,5 @@
 import { ParameterType, ParameterTypeRegistry } from "@cucumber/cucumber-expressions";
-import type { ParameterTypeConfig } from "../config/schema.js";
+import type { ParameterTypeConfig } from "./parameter-type-config.js";
 import { ParameterTypeCollisionError } from "./parameter-type-errors.js";
 
 // Responsibility: the one ParameterTypeRegistry `nuka check` and `nuka run`

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { ScenarioRecord } from "./record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: measure the commit and working-tree cleanliness a `nuka
 // run` invocation started at, and the dirty paths themselves for
@@ -79,7 +79,7 @@ export async function probeGitState(rootDir: string): Promise<GitState | undefin
 // is about the hot path (`nuka run`, once per invocation); this one only
 // runs from `nuka accept`'s dirty-tree refusal, an error path taken at most
 // once per rejected `accept`. Adding paths to `GitState` instead would leak
-// into every stored `ScenarioRecord.git` (src/run/record-types.ts), which
+// into every stored `ScenarioRecord.git` (src/record/scenario-record.ts), which
 // has no use for them.
 //
 // Porcelain output (v1 or v2, with or without `-C`) is always relative to

@@ -9,7 +9,7 @@ import {
   type BeginScenarioInput,
   type EmitStepInput,
 } from "../src/report/allure/emitter.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: tests/allure-emitter.test.ts already drives the full

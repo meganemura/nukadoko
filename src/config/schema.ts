@@ -1,5 +1,6 @@
 import type { APIRequest, BrowserContextOptions, LaunchOptions } from "playwright";
 import { z } from "zod";
+import type { ParameterTypeConfig as BindingParameterTypeConfig } from "../binding/parameter-type-config.js";
 import type { FixtureDefinition } from "../fixture/types.js";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
@@ -96,6 +97,17 @@ const parameterTypeConfigSchema = z
 /** One `parameterTypes[]` entry, defaults not applied (there is nothing to
  * default here beyond the list itself, see `configSchema` below). */
 export type ParameterTypeConfig = z.infer<typeof parameterTypeConfigSchema>;
+
+// The registry owns the name `ParameterTypeConfig` (src/binding/
+// parameter-type-config.ts) and must not import this file to get it.
+// This alias fails typecheck when the zod inference and that interface
+// stop being the same shape.
+type _ParameterTypeConfigMatchesBinding = [ParameterTypeConfig] extends [BindingParameterTypeConfig]
+  ? [BindingParameterTypeConfig] extends [ParameterTypeConfig]
+    ? true
+    : never
+  : never;
+const _parameterTypeConfigMatchesBinding: _ParameterTypeConfigMatchesBinding = true;
 
 /** `retention.runs`'s default. 20 is a judgment, not a measurement: the
  * heaviest suite measured so far costs about 50 MB per run once trace

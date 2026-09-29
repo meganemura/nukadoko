@@ -4,7 +4,7 @@ import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { isCommonJsProject } from "../config/module-kind.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka scaffold <name>`'s actual work, kept out of
 // run-cli.ts so it's unit-testable without going

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { runCli } from "../src/cli/run-cli.js";
-import { messagesRunOutputPath } from "../src/report/messages/emitter.js";
+import { messagesRunOutputPath } from "../src/record/messages-output.js";
 import {
   applyRetention,
   formatRetention,
@@ -149,7 +149,7 @@ describe("applyRetention", () => {
     // A shared file: written by every run, listed by none.
     await writeFile(abs(stateDir, "export", "allure-results", "environment.properties"), "x=y\n");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [] });
     expect(outcome).toEqual({ skipped: null, runsKept: 2, runsRemoved: 1, unownedRemoved: 0 });
 
     for (const gone of [
@@ -188,7 +188,7 @@ describe("applyRetention", () => {
     );
     await seedRun("run-short", "2026-09-01T01:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, liveSessions: [] });
     expect(outcome.runsRemoved).toBe(1);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-short-0"))).toBe(true);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-long-late"))).toBe(false);
@@ -199,7 +199,7 @@ describe("applyRetention", () => {
     await seedAdHocStep("step-old-do", "2026-08-20T00:00:00Z");
     await seedAdHocStep("step-new-do", "2026-09-01T00:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [] });
     expect(outcome).toEqual({ skipped: null, runsKept: 1, runsRemoved: 0, unownedRemoved: 1 });
     expect(existsSync(abs(stateDir, "records", "steps", "step-old-do"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "steps", "step-new-do"))).toBe(true);
@@ -223,7 +223,7 @@ describe("applyRetention", () => {
     await writeFile(manifestPath, `${path.join(stateDir, "export", "allure-results", "crashed-result.json")}\n`);
     await utimes(path.dirname(manifestPath), old, old);
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [] });
     expect(outcome.unownedRemoved).toBe(2);
     expect(existsSync(brokenDir)).toBe(false);
     expect(existsSync(path.join(resultsDir, "crashed-result.json"))).toBe(false);
@@ -241,7 +241,7 @@ describe("applyRetention", () => {
       await writeFile(manifestPath, `${path.relative(rootDir, victim)}\n`);
       await utimes(path.dirname(manifestPath), old, old);
 
-      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel });
+      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [] });
       expect(existsSync(victim)).toBe(true);
     } finally {
       rmSync(outside, { recursive: true, force: true });
@@ -252,21 +252,17 @@ describe("applyRetention", () => {
     await seedRun("run-a", "2026-09-01T00:00:00Z");
     await seedRun("run-b", "2026-09-01T01:00:00Z");
     await seedRun("run-c", "2026-09-01T02:00:00Z");
-    // A live session is a `nuka session start` daemon: a lock whose pid is
-    // alive *and* whose socket exists (src/live/live-session-notice.ts). A
-    // lock without a socket is a `nuka do --session`/`nuka run --session`
-    // holding its name for the length of one command, and that one is
-    // the invocation running retention itself.
-    const sessionsDir = abs(stateDir, "cache", "sessions", "default");
-    await mkdir(sessionsDir, { recursive: true });
-    const sock = path.join(sessionsDir, "alpha.sock");
-    await writeFile(sock, "");
-    await writeFile(
-      path.join(sessionsDir, "alpha.lock"),
-      JSON.stringify({ pid: process.pid, started_at: now.toISOString(), sock }),
-    );
-
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel });
+    // Discovery of a live daemon lives in src/live/live-session-notice.ts
+    // and is passed in by `nuka run`. Retention only decides what to do
+    // with the list it was given.
+    const outcome = await applyRetention({
+      rootDir,
+      stateDir,
+      policy,
+      now,
+      messagesOutputRel,
+      liveSessions: [{ environment: "default", name: "alpha" }],
+    });
     expect(outcome.skipped?.liveSessions.map((session) => session.name)).toEqual(["alpha"]);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-a-0"))).toBe(true);
     expect(formatRetention(outcome, policy)).toContain('session "alpha" (environment "default") is live');
@@ -274,7 +270,7 @@ describe("applyRetention", () => {
 
   it("says nothing when nothing was removed", async () => {
     await seedRun("run-a", "2026-09-01T00:00:00Z");
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [] });
     expect(formatRetention(outcome, policy)).toBeNull();
   });
 });

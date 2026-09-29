@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import type { ScenarioRecord } from "../run/record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: pick the one `nuka run` invocation `nuka accept <feature>`
 // is allowed to freeze (docs/spec.md "Sign-off" — identifying the target run
@@ -24,7 +24,7 @@ import type { ScenarioRecord } from "../run/record-types.js";
 // are compared on one axis only: the earliest `started_at` among their own
 // records (this file's own stand-in for "when did this run begin" — no
 // single field carries that; `run_id` only names *which* records share one
-// invocation, docs/spec.md "Sign-off" / src/run/record-types.ts's own
+// invocation, docs/spec.md "Sign-off" / src/record/scenario-record.ts's own
 // header). The newest such group wins; ties (same
 // millisecond) keep whichever was seen first, an outcome this module makes
 // no promise about since two runs starting in the same millisecond is not a

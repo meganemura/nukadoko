@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { ConfigError } from "../config/errors.js";
 import { loadConfig } from "../config/load-config.js";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import type { NukadokoConfig } from "../config/schema.js";
@@ -11,12 +10,14 @@ import {
   type Vocabulary,
   type VocabularyEntry,
 } from "../discover/discover-steps.js";
-import { DuplicateCompatStepError, DuplicateStepError } from "../discover/errors.js";
+import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
 import { stepNeeds } from "../step/step-needs.js";
+
+export { formatVocabularyError };
 
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
 // load the project's config, then discover its vocabulary. Kept out of
@@ -727,25 +728,4 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
     args: z.toJSONSchema(entry.step.args),
     returns: z.toJSONSchema(entry.step.returns),
   };
-}
-
-/**
- * Renders any error this CLI can encounter while loading a project's
- * vocabulary into a single line safe to print to stderr. ConfigError,
- * DuplicateStepError, and DuplicateCompatStepError already carry a complete,
- * specific message; anything else (e.g. a syntax error thrown by importing a
- * broken step file) falls back to its own message.
- */
-export function formatVocabularyError(error: unknown): string {
-  if (
-    error instanceof ConfigError ||
-    error instanceof DuplicateStepError ||
-    error instanceof DuplicateCompatStepError
-  ) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
 }

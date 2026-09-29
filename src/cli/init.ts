@@ -7,7 +7,7 @@ import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka init`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs

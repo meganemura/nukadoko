@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { runWithTimeout, classifyCaughtError } from "../run/run-scenario.js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { formatValidationIssues } from "../binding/format-issues.js";
+import { formatValidationIssues } from "../issues/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -24,7 +24,7 @@ import {
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
 import { sendLiveRequest } from "../live/client.js";
-import { removeLiveSockDir } from "../live/live-sock.js";
+import { removeLiveSockDir } from "../session/live-sock.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
@@ -48,9 +48,9 @@ import {
   validateStepFixtures,
 } from "../step/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
-import { resolveUse, type ResolveUseSuccess } from "./resolve-use.js";
+import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka do`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs (same split as vocabulary.ts).

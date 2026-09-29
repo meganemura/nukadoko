@@ -20,9 +20,9 @@ import {
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import {
   createMessagesEmitter,
-  messagesRunOutputPath,
   type MessagesEmitter,
 } from "../report/messages/emitter.js";
+import { messagesRunOutputPath } from "../record/messages-output.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { probeGitState } from "../run/probe-git.js";
 import { runConcurrentPickles } from "../run/run-concurrent.js";
@@ -65,7 +65,7 @@ import {
 } from "../step/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs (same split as cli/do.ts). Two
@@ -609,6 +609,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           policy: config.retention,
           now: new Date(),
           messagesOutputRel,
+          liveSessions: await findLiveSessions(rootDir, config.stateDir),
         });
         const line = formatRetention(outcome, config.retention);
         if (line !== null) stderr.write(`${line}\n`);

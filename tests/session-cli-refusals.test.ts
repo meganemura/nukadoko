@@ -275,7 +275,7 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
     await expect(rm(lockPath)).rejects.toThrow();
     await expect(rm(sockPath)).rejects.toThrow();
     // The mkdtemp'd directory itself is gone too, not just the socket file
-    // inside it (live/live-sock.ts's own `removeLiveSockDir`) — nothing
+    // inside it (session/live-sock.ts's own `removeLiveSockDir`) — nothing
     // under the OS's own temp dir should survive reaping a dead session.
     expect(existsSync(sockDir)).toBe(false);
   });

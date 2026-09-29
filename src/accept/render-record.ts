@@ -1,5 +1,5 @@
 import type { StepRecord } from "../record/types.js";
-import type { ScenarioRecord } from "../run/record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: render the acceptance record's markdown text (docs/spec.md
 // "Sign-off"). Pure string building only: every value this module needs

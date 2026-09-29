@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { parseEnvFile } from "../context/env.js";
+import { parseEnvFile } from "../env/parse-env-file.js";
 import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types.js";
 
 // Responsibility: turn secret-source envFiles (every value they define,
@@ -17,8 +17,8 @@ import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types
 // still can't be redacted without wrecking ordinary step record text, whether
 // it got into this set by being untracked or by being named explicitly.
 //
-// This reads and parses each file itself, sharing env.ts's own
-// `parseEnvFile` rather than calling `loadEnvFiles`: this module only ever
+// This reads and parses each file itself, sharing src/env/parse-env-file.ts
+// rather than calling `loadEnvFiles`: this module only ever
 // needs specific subsets of a run's configured envFiles (secret sources,
 // and now the `redact`-named slice of tracked files), a different scope
 // than the executor's own full-list merge for `ctx.env`

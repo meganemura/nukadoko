@@ -25,7 +25,7 @@ import { SessionLockConflictError } from "./errors.js";
 //
 // `sock` is what turns "a live process holds this lock" into "and here is
 // its socket": a live session daemon's own unix socket lives under the OS's
-// own temp directory now (live/live-sock.ts), a path this file's own reader
+// own temp directory now (session/live-sock.ts), a path this file's own reader
 // has no other way to reach, since nothing about a project's own layout
 // determines it any more. `LockInfo.sock`'s own doc comment (below) is the
 // full contract; every reader that needs to reach a live session goes
@@ -117,7 +117,7 @@ export async function liveLockOwner(lockPath: string): Promise<LockInfo | null> 
  * Acquires the lock for `sessionName`, stealing a stale (dead-pid) or
  * missing one silently. Throws `SessionLockConflictError` when another live
  * process already holds it. `sock`, when given, is a live session daemon's
- * own socket path (live/live-sock.ts), written into the lock in the same
+ * own socket path (session/live-sock.ts), written into the lock in the same
  * call that writes `pid`/`started_at` — the two never exist one without the
  * other, so a reader never has to guess whether a lock mid-write is safe to
  * treat as a live session's own. Omitted by every non-live caller (a plain

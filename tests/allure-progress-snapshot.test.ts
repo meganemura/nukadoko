@@ -11,7 +11,7 @@ import {
   type EmitStepInput,
   type EmitStepProgressInput,
 } from "../src/report/allure/emitter.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: the step-granularity liveness mechanism itself (the

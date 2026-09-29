@@ -15,9 +15,9 @@ import {
   randomUuid,
 } from "allure-js-commons/sdk/reporter";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
-import type { WritableSink } from "../../cli/writable-sink.js";
+import type { WritableSink } from "../../sink/writable-sink.js";
 import type { StepRecord } from "../../record/types.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../../run/record-types.js";
+import type { ScenarioRecord, ScenarioStepRecord } from "../../record/scenario-record.js";
 import { redactString } from "../../secrets/redact.js";
 import type { SecretSet } from "../../secrets/types.js";
 import { buildCategories } from "./categories.js";

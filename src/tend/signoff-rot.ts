@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { formatValidationIssues } from "../binding/format-issues.js";
+import { formatValidationIssues } from "../issues/format-issues.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { isFeatureWithinDir } from "./feature-within-dir.js";
 import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";

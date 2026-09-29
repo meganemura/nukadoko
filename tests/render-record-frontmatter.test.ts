@@ -5,7 +5,7 @@ import {
   type AcceptedScenario,
   type RenderAcceptanceRecordOptions,
 } from "../src/accept/render-record.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for render-record.ts's own frontmatter details
 // tests/render-record.test.ts and the E2E accept*.test.ts files never

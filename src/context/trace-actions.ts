@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { inflateRawSync } from "node:zlib";
-import type { WritableSink } from "../cli/writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: turn one step's own trace.zip (browser-evidence.ts's
 // per-step chunk, opened/closed by create-context.ts) into the step

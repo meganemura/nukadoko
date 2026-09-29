@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { formatValidationIssues } from "../binding/format-issues.js";
+import { formatValidationIssues } from "../issues/format-issues.js";
 import { ReservedWorldKeyWriteError, WorldWriteValidationError } from "./errors.js";
 
 // Responsibility: the wrap mechanism behind "measurement is always on,

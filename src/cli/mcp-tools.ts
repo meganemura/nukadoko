@@ -1,4 +1,4 @@
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka mcp-tools -- <command> [args...]`'s CLI-facing
 // wiring — connect to the given command as an MCP server over stdio, print

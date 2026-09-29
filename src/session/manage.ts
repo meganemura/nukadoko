@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { removeLiveSockDir } from "../live/live-sock.js";
+import { removeLiveSockDir } from "./live-sock.js";
 import { SessionLockConflictError, SessionNotFoundError } from "./errors.js";
 import { liveLockOwner, readLockInfo } from "./lock.js";
 import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "./paths.js";

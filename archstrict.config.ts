@@ -1,23 +1,23 @@
 import type { Config } from "./archstrict.types.js";
 
-// Public surface: other modules may import a directory module only through
-// its own surface file (named by `surface` below), or through the files its own
-// package.json exports map names. An import that reaches any other file in
-// the directory is a violation. A directory module with no such file is
-// entirely private. A module whose glob names one file is that file, so its
-// entry names the file itself as its surface.
+// Module boundaries follow how this package grows.
+//
+// The step contract (config, the context file, the context directory,
+// fixtures, records, and step definitions) changes together, and one
+// ignored cycle names that component. Everything else is a directory
+// module with the files other modules already import as its surface.
+// A new file stays private until a caller outside the module needs it,
+// which is the moment the surface has to be updated on purpose.
+//
+// Layers run from the leaves up to the two process entries. A layer may
+// depend on an earlier one. Checks, the runner, compat, matching, and
+// mcp are not one module, so a change in one of them is not a change to
+// all of them.
+//
+// After an edit here, run `archstrict init` to regenerate archstrict.types.ts.
 export default {
   schemaVersion: 1,
   surface: ["index.ts", "index.tsx", "index.mts", "index.cts"],
-  // Kept out of analysis entirely:
-  // - archstrict's own two files, which are never module content;
-  // - hidden directories at any depth (.git, tool state), which tsc's own
-  //   default include also skips;
-  // - common noise directories that init found on disk (tests, examples).
-  //   Remove one of these entries if that directory holds module content.
-  // - colocated test files, found on disk (*.test.ts, *.spec.ts).
-  //   A test file imports across modules as a fixture; boundary rules read production code.
-  //   Remove both matching entries below (root and nested form) if that file must stay analyzed.
   exclude: [
     "archstrict.config.ts",
     "archstrict.types.ts",
@@ -35,19 +35,290 @@ export default {
     "vscode/**",
     "*.ts",
   ],
-  // init's per-directory modules were collapsed onto the package exports.
-  // "." compiles from src/index.ts, so everything under src/ that is not a
-  // subpath export is one module, core, and that file is its surface
-  // (surface left unset: these directories have no package.json of their
-  // own, so the project default index.ts is the entry each export builds).
-  // The three subpath exports are their own modules. A more specific glob
-  // wins, so files under those directories are not also core.
-  // After an edit, run archstrict init to regenerate archstrict.types.ts.
-  declaredModules: [
-    { name: "core", glob: "src/**" },
-    { name: "compat", glob: "src/compat/**" },
-    { name: "matching", glob: "src/matching/**" },
-    { name: "mcp", glob: "src/mcp/**" },
+  // Naming one pair exempts the whole component those two modules belong
+  // to. Today that component is config, context, context-types, fixture,
+  // record, and step: record field types live next to the collectors that
+  // produce them, the config schema types fixtures, and context.ts and the
+  // context directory import each other. A cycle that pulls in a module
+  // outside that set is a new component and is not covered by this entry.
+  ignoredCycles: [["context", "step"]],
+  mustBeEmpty: [
+    {
+      glob: "src/core/**",
+      because:
+        "there is no mega-core directory. A new check, matcher, compat file, or command goes in its own module.",
+    },
+    {
+      glob: "src/utils/**",
+      because:
+        "a utils directory becomes the next mega-core. A shared function gets a named module (sink, issues, env) instead.",
+    },
+    {
+      glob: "src/shared/**",
+      because:
+        "a shared directory hides which seam a change belongs to. Name the module for the thing it is.",
+    },
   ],
-  because: "package exports are the boundaries: core is the root export, and compat, matching, and mcp are the three subpath exports",
+  // Leaves and package doors that should not accumulate frozen debt.
+  // A bypass here is fixed by extending that module's surface, not by
+  // writing it into the todo file.
+  strict: ["binding", "check", "compat", "entry", "env", "feature", "issues", "matching", "mcp", "sink", "version"],
+  classify: [
+    { glob: "src/env/**", tags: ["layer:leaf", "pkghost:library"] },
+    { glob: "src/issues/**", tags: ["layer:leaf", "pkghost:library"] },
+    { glob: "src/binding/**", tags: ["layer:base", "pkghost:library"] },
+    { glob: "src/compat/**", tags: ["layer:base", "pkghost:library"] },
+    { glob: "src/secrets/**", tags: ["layer:base", "pkghost:library"] },
+    { glob: "src/session/**", tags: ["layer:base", "pkghost:library"] },
+    { glob: "src/sink/**", tags: ["layer:base", "pkghost:library"] },
+    { glob: "src/config/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/context.ts", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/context/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/fixture/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/record/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/step/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/discover/**", tags: ["layer:read", "pkghost:library"] },
+    { glob: "src/feature/**", tags: ["layer:read", "pkghost:feature"] },
+    { glob: "src/version.ts", tags: ["layer:read", "pkghost:library"] },
+    { glob: "src/check/**", tags: ["layer:service", "pkghost:library"] },
+    { glob: "src/environment/**", tags: ["layer:service", "pkghost:library"] },
+    { glob: "src/report/**", tags: ["layer:service", "pkghost:library"] },
+    { glob: "src/run/**", tags: ["layer:run", "pkghost:library"] },
+    { glob: "src/accept/**", tags: ["layer:workflow", "pkghost:library"] },
+    { glob: "src/harvest/**", tags: ["layer:workflow", "pkghost:library"] },
+    { glob: "src/live/**", tags: ["layer:workflow", "pkghost:library"] },
+    { glob: "src/mcp/**", tags: ["layer:workflow", "pkghost:mcp"] },
+    { glob: "src/tend/**", tags: ["layer:workflow", "pkghost:library"] },
+    { glob: "src/webmcp/**", tags: ["layer:workflow", "pkghost:library"] },
+    { glob: "src/cli/**", tags: ["layer:adapter", "pkghost:cli"] },
+    { glob: "src/external/**", tags: ["layer:adapter", "pkghost:library"] },
+    { glob: "src/cli.ts", tags: ["layer:entry", "pkghost:cli"] },
+    { glob: "src/index.ts", tags: ["layer:entry", "pkghost:library"] },
+    { glob: "src/matching/**", tags: ["layer:entry", "pkghost:library"] },
+  ],
+  edges: {
+    order: [
+      {
+        tagNamespace: "layer",
+        sequence: {
+          "": ["leaf", "base", "contract", "read", "service", "run", "workflow", "adapter", "entry"],
+        },
+        direction: "downward-only",
+        because:
+          "foundation first. Checks, the runner, compat, matching, and mcp sit above the step contract, so a change in one of them does not reach back into a lower layer.",
+      },
+    ],
+    allowDeny: [
+      {
+        source: "pkghost:library",
+        targetNamespace: "pkg",
+        deny: ["@modelcontextprotocol/client", "yargs", "@cucumber/gherkin"],
+        because:
+          "the MCP client, yargs, and the Gherkin parser each have one home. Library code does not grow a second one.",
+      },
+      {
+        source: "pkghost:cli",
+        targetNamespace: "pkg",
+        deny: ["@modelcontextprotocol/client", "@cucumber/gherkin"],
+        because:
+          "the CLI may parse argv with yargs. The MCP client stays behind a dynamic import of the mcp module, and feature files are parsed by the feature module.",
+      },
+      {
+        source: "pkghost:mcp",
+        targetNamespace: "pkg",
+        deny: ["yargs", "@cucumber/gherkin"],
+        because:
+          "mcp is the only module that links the optional MCP client. It does not parse argv or feature files.",
+      },
+      {
+        source: "pkghost:feature",
+        targetNamespace: "pkg",
+        deny: ["@modelcontextprotocol/client", "yargs"],
+        because:
+          "feature is the only module that links @cucumber/gherkin. It does not parse argv or talk to an MCP server.",
+      },
+    ],
+  },
+  declaredModules: [
+    { name: "env", glob: "src/env/**", surface: ["parse-env-file.ts"] },
+    { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
+    {
+      name: "binding",
+      glob: "src/binding/**",
+      surface: [
+        "capture.ts",
+        "errors.ts",
+        "escape-hint.ts",
+        "expression.ts",
+        "parameter-type-config.ts",
+        "parameter-type-errors.ts",
+        "pattern.ts",
+        "quote-hint.ts",
+        "registry.ts",
+        "schema-shape.ts",
+      ],
+    },
+    {
+      name: "compat",
+      glob: "src/compat/**",
+      surface: [
+        "allure-runtime.ts",
+        "data-table.ts",
+        "declared.ts",
+        "define-world.ts",
+        "errors.ts",
+        "hooks.ts",
+        "index.ts",
+        "registry.ts",
+        "run-hooks.ts",
+        "tag-expression.ts",
+        "world.ts",
+      ],
+    },
+    {
+      name: "secrets",
+      glob: "src/secrets/**",
+      surface: ["build-secret-set.ts", "classify-env-files.ts", "redact.ts", "types.ts"],
+    },
+    {
+      name: "session",
+      glob: "src/session/**",
+      surface: ["live-sock.ts", "lock.ts", "manage.ts", "name.ts", "paths.ts", "storage-state.ts", "store.ts"],
+    },
+    { name: "sink", glob: "src/sink/**", surface: ["writable-sink.ts"] },
+    {
+      name: "config",
+      glob: "src/config/**",
+      surface: ["define-config.ts", "errors.ts", "load-config.ts", "module-kind.ts", "schema.ts"],
+    },
+    { name: "context-types", glob: "src/context.ts", surface: "context.ts" },
+    {
+      name: "context",
+      glob: "src/context/**",
+      surface: [
+        "create-context.ts",
+        "env.ts",
+        "errors.ts",
+        "evidence.ts",
+        "http-omitted.ts",
+        "observed.ts",
+        "page-events.ts",
+        "poll.ts",
+        "trace-actions.ts",
+        "used.ts",
+      ],
+    },
+    {
+      name: "fixture",
+      glob: "src/fixture/**",
+      surface: ["define-fixtures.ts", "graph.ts", "resolver.ts", "types.ts"],
+    },
+    {
+      name: "record",
+      glob: "src/record/**",
+      surface: [
+        "messages-output.ts",
+        "read-step-record.ts",
+        "record-id.ts",
+        "retention.ts",
+        "run-exports.ts",
+        "scenario-record.ts",
+        "types.ts",
+        "write-step-record.ts",
+      ],
+    },
+    {
+      name: "step",
+      glob: "src/step/**",
+      surface: [
+        "define-step.ts",
+        "fixture-names.ts",
+        "infer-needs.ts",
+        "resolve-use.ts",
+        "step-fixture-names.ts",
+        "step-needs.ts",
+        "strict-args.ts",
+        "validate-fixtures.ts",
+        "validate-from.ts",
+        "validate-parts.ts",
+      ],
+    },
+    {
+      name: "discover",
+      glob: "src/discover/**",
+      surface: ["discover-steps.ts", "format-vocabulary-error.ts"],
+    },
+    {
+      name: "feature",
+      glob: "src/feature/**",
+      surface: ["load-features.ts", "parse-oath.ts", "resolve-oaths.ts"],
+    },
+    { name: "version", glob: "src/version.ts", surface: "version.ts" },
+    {
+      name: "check",
+      glob: "src/check/**",
+      surface: [
+        "analyze.ts",
+        "binding-check.ts",
+        "codes.ts",
+        "config-check.ts",
+        "feature-check.ts",
+        "from-order.ts",
+        "types.ts",
+        "unfillable-key.ts",
+      ],
+    },
+    {
+      name: "environment",
+      glob: "src/environment/**",
+      surface: ["name.ts", "probe-version.ts", "resolve-environment.ts"],
+    },
+    {
+      name: "report",
+      glob: "src/report/**",
+      surface: ["allure/categories.ts", "allure/emitter.ts", "messages/emitter.ts", "step-records.ts"],
+    },
+    {
+      name: "run",
+      glob: "src/run/**",
+      surface: [
+        "match-step.ts",
+        "probe-git.ts",
+        "progress-log.ts",
+        "run-concurrent.ts",
+        "run-id.ts",
+        "run-scenario.ts",
+        "select-pickles.ts",
+      ],
+    },
+    { name: "accept", glob: "src/accept/**", surface: ["render-record.ts", "select-run.ts"] },
+    { name: "harvest", glob: "src/harvest/**", surface: ["build-draft.ts"] },
+    {
+      name: "live",
+      glob: "src/live/**",
+      surface: ["client.ts", "live-session-notice.ts", "spawn-daemon.ts"],
+    },
+    {
+      name: "mcp",
+      glob: "src/mcp/**",
+      surface: ["index.ts"],
+      friends: [
+        {
+          file: "list-tools.ts",
+          from: "src/cli/**",
+          because:
+            "nuka mcp-tools dynamic-imports this file so the optional MCP client stays off every other command. It is not part of the nukadoko/mcp package surface.",
+        },
+      ],
+    },
+    { name: "tend", glob: "src/tend/**", surface: ["analyze.ts", "record-parse.ts", "types.ts"] },
+    { name: "webmcp", glob: "src/webmcp/**", surface: ["call-tool.ts", "list-tools.ts"] },
+    { name: "cli", glob: "src/cli/**", surface: ["run-cli.ts"] },
+    { name: "external", glob: "src/external/**", surface: ["record-step.ts"] },
+    { name: "bin", glob: "src/cli.ts", surface: "cli.ts" },
+    { name: "entry", glob: "src/index.ts", surface: "index.ts" },
+    { name: "matching", glob: "src/matching/**" },
+  ],
+  because:
+    "seams follow growth. The step contract is one component. Checks, compat, matching, mcp, and the CLI are separate modules with explicit surfaces, so a new file in one of them does not land in a single core.",
 } satisfies Config;

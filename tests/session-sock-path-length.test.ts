@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runSessionStart } from "../src/cli/session.js";
-import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME } from "../src/live/live-sock.js";
+import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME } from "../src/session/live-sock.js";
 import { checkSockPathLength } from "../src/live/spawn-daemon.js";
 import { sessionCrashLogPath, sessionLockPath } from "../src/session/paths.js";
 import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";

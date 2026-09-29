@@ -1,4 +1,4 @@
-import type { ScenarioRecord } from "./record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: the private contract between src/run/run-concurrent.ts
 // (the parent, spawned by `nuka run --concurrency <n>`) and src/run/

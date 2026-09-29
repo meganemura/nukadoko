@@ -2,6 +2,8 @@ import type { StepContext, StepFixtures } from "../context.js";
 import { buildStepFixtures } from "../context/create-context.js";
 import { closeFixtureNames, resolveDependencyEdge, type FixtureGraph, type FixtureNode } from "./graph.js";
 import { startFixture, type FixtureInstance } from "./lifecycle.js";
+
+export type { FixtureInstance };
 import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 
 // Responsibility: the *runtime* counterpart to src/fixture/graph.ts's
@@ -69,7 +71,7 @@ export interface FixtureTeardownError {
   readonly message: string;
 }
 
-interface CachedFixture {
+export interface CachedFixture {
   readonly node: FixtureNode;
   readonly instance: FixtureInstance;
   readonly builtOrder: number;

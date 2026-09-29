@@ -2,7 +2,7 @@ import { attachment, label } from "allure-js-commons";
 import { Before, Given } from "../../nukadoko-compat-shim.js";
 
 // Proves item 4/5: a hook has no step record of its own, so its own declared
-// data lands on record.hooks[].declared instead (src/run/record-types.ts).
+// data lands on record.hooks[].declared instead (src/record/scenario-record.ts).
 // Tagged so this fixture project's *other* feature files (this whole
 // features/ tree is discovered together, regardless of which single file a
 // given `nuka run` invocation selects — src/discover/discover-steps.ts walks

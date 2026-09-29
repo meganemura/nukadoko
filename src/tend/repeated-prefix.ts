@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readStepRecordById } from "../record/read-step-record.js";
-import type { ScenarioRecord } from "../run/record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: find repeated scenario openings in the latest run's live

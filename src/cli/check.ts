@@ -2,7 +2,7 @@ import { analyzeProject } from "../check/analyze.js";
 import { listCheckCodes } from "../check/codes.js";
 import type { CheckIssue } from "../check/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka check`'s actual work, kept out of run-cli.ts so
 // it's unit-testable without going through yargs

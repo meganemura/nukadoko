@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderAcceptanceRecord, type AcceptedScenario, type RenderAcceptanceRecordOptions } from "../src/accept/render-record.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 
 // Responsibility: pins down two things an acceptance record's body must do
 // that the rest of the render-record.ts test suite doesn't check. First, an

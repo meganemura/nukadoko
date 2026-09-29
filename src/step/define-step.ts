@@ -151,7 +151,7 @@ export type FromMap<TFrom, TArgs extends z.ZodTypeAny> = {
  * its `returns` keys to read. Exported so every module reading `Step.from`
  * shares this one tuple shape (`readonly [Step, string]`) instead of each
  * re-declaring it — src/step/validate-from.ts, src/check/from-order.ts,
- * src/run/run-scenario.ts's `injectFrom`, src/cli/resolve-use.ts, and
+ * src/run/run-scenario.ts's `injectFrom`, src/step/resolve-use.ts, and
  * src/cli/vocabulary.ts's rendering. */
 export type FromCandidate = readonly [step: Step, key: string];
 
@@ -168,7 +168,7 @@ export type FromCandidate = readonly [step: Step, key: string];
  * every consumer reads either shape uniformly instead of re-deriving which
  * one a given entry is. Consumers (src/run/run-scenario.ts's injection,
  * src/step/validate-from.ts's runtime check, src/check/from-order.ts,
- * src/cli/resolve-use.ts, src/cli/vocabulary.ts's `nuka steps --json`/`nuka
+ * src/step/resolve-use.ts, src/cli/vocabulary.ts's `nuka steps --json`/`nuka
  * describe`) all read this shape. */
 export type StepFromMap = Readonly<Record<string, FromCandidate | readonly FromCandidate[]>>;
 
@@ -216,7 +216,7 @@ function isCandidateTuple(value: unknown): value is FromCandidate {
  * candidates would have, losing the reason. `null`'s own type instead
  * forces every caller to decide at compile time what a malformed entry
  * means for it: src/step/validate-from.ts turns it into a reported
- * `FromIssue` instead of a crash; src/cli/resolve-use.ts,
+ * `FromIssue` instead of a crash; src/step/resolve-use.ts,
  * src/cli/vocabulary.ts, src/harvest/categorize-args.ts,
  * src/run/run-scenario.ts, and src/external/record-step.ts each turn it
  * into a message naming the broken key (`malformedFromEntryMessage`

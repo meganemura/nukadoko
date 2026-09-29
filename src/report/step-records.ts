@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readStepRecord } from "../record/read-step-record.js";
 import type { StepRecord } from "../record/types.js";
-import type { ScenarioRecord } from "../run/record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: read every record.json a scenario record's own steps
 // reference, once per record — pulled up from

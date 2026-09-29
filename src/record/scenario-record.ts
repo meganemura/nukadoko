@@ -93,7 +93,7 @@
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { ActionEntry } from "../context/trace-actions.js";
-import type { ErrorKind, ScreenshotEntry } from "../record/types.js";
+import type { ErrorKind, ScreenshotEntry } from "./types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 

@@ -17,7 +17,7 @@ import {
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { StepRecord } from "../../record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord, ScenarioStepStatus } from "../../run/record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord, ScenarioStepStatus } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module:

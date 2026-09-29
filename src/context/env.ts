@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parseEnvFile } from "../env/parse-env-file.js";
+
+export { parseEnvFile };
 
 // Responsibility: `ctx.env` per docs/spec.md "Context API" — parse each
 // configured envFile (KEY=VALUE text) and merge them in order, later files
@@ -11,39 +14,10 @@ import path from "node:path";
 // must produce the same ctx.env on any machine, whether or not it happens to
 // have unrelated variables already set.
 //
-// `parseEnvFile` is exported so src/secrets/build-secret-set.ts can reuse the
-// exact same KEY=VALUE parsing when it merges only the secret-source subset
-// of envFiles into a SecretSet, without either module re-implementing the
-// format or this module taking on any secrets-specific knowledge itself.
-
-export function parseEnvFile(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (line === "" || line.startsWith("#")) {
-      continue;
-    }
-    const withoutExport = line.startsWith("export ")
-      ? line.slice("export ".length).trim()
-      : line;
-    const eq = withoutExport.indexOf("=");
-    if (eq === -1) {
-      continue;
-    }
-    const key = withoutExport.slice(0, eq).trim();
-    if (key === "") {
-      continue;
-    }
-    let value = withoutExport.slice(eq + 1).trim();
-    const isDoubleQuoted = value.length >= 2 && value.startsWith('"') && value.endsWith('"');
-    const isSingleQuoted = value.length >= 2 && value.startsWith("'") && value.endsWith("'");
-    if (isDoubleQuoted || isSingleQuoted) {
-      value = value.slice(1, -1);
-    }
-    result[key] = value;
-  }
-  return result;
-}
+// The KEY=VALUE parser itself is src/env/parse-env-file.ts. Re-exported
+// here so a caller that already loads `ctx.env` can parse one file with
+// the same function. Secrets imports the parser from that module directly:
+// importing it from here would make secrets depend on context.
 
 /**
  * Reads and merges `envFiles` (paths relative to `rootDir`) into a single

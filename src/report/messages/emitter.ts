@@ -11,8 +11,9 @@ import {
   type Meta,
   type Pickle,
 } from "@cucumber/messages";
-import type { WritableSink } from "../../cli/writable-sink.js";
-import type { ScenarioRecord } from "../../run/record-types.js";
+import type { WritableSink } from "../../sink/writable-sink.js";
+import { messagesRunOutputPath } from "../../record/messages-output.js";
+import type { ScenarioRecord } from "../../record/scenario-record.js";
 import { readOwnVersion } from "../../version.js";
 import { readStepRecordsForScenario } from "../step-records.js";
 import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
@@ -78,34 +79,6 @@ export interface MessagesEmitterOptions {
    * `output`'s own name to build the file this emitter actually writes to
    * (`messagesRunOutputPath`, below). */
   readonly runId: string;
-}
-
-/** The file this emitter actually writes to for one invocation: `output`
- * with its own basename (extension stripped) followed by `.<runId>.ndjson`,
- * beside `output` itself. Always a literal `.ndjson` extension, regardless
- * of `output`'s own — the name only needs to be unique and self-describing,
- * not to mirror a user-chosen extension. Exported so `nuka clean`
- * (src/cli/clean.ts) can build the same name without re-deriving this
- * rule. */
-export function messagesRunOutputPath(output: string, runId: string): string {
-  const base = path.basename(output, path.extname(output));
-  return path.join(path.dirname(output), `${base}.${runId}.ndjson`);
-}
-
-/** True for any file this emitter's own naming produces beside `output`
- * for *some* run id, never for `output` itself. `output` can be relocated
- * to a user-owned directory (`messages.output` in `nukadoko.config.ts`),
- * so this only matches on the one part of a run id's own format
- * (src/run/run-id.ts) that is safe to depend on here, its `run-` prefix —
- * matching any `<base>.<anything>.ndjson` instead would let `nuka clean`
- * delete an unrelated file a project happens to keep beside its own
- * configured path (e.g. a hand-kept `messages.backup.ndjson`). */
-export function isMessagesRunOutputFileName(output: string, candidateFileName: string): boolean {
-  if (candidateFileName === path.basename(output)) {
-    return false;
-  }
-  const base = path.basename(output, path.extname(output));
-  return candidateFileName.startsWith(`${base}.run-`) && candidateFileName.endsWith(".ndjson");
 }
 
 /** One feature file's own contribution to `begin()` (a directory-target

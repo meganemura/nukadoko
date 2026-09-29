@@ -1,7 +1,7 @@
 import { analyzeTend } from "../tend/analyze.js";
 import { TEND_CODES, type TendIssue, type TendSummary } from "../tend/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka tend`'s actual work, kept out of run-cli.ts the same
 // way cli/check.ts's own `runCheck` is (unit-testable without going through

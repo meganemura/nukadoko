@@ -1,4 +1,4 @@
-import type { WritableSink } from "../cli/writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s own progress output — what src/context.ts
 // and src/compat/allure-runtime.ts used to call "a future progress-log

@@ -1,9 +1,20 @@
 import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
-import type { StepContext } from "../context.js";
 import { extensionForMediaType, toAttachmentBuffer, type DeclaredCollector } from "./declared.js";
 import { WorldNotOpenedError } from "./errors.js";
 import { instrumentWorld, type WorldInstrumentationHandle } from "./world-instrumentation.js";
+
+export type { WorldInstrumentationHandle };
+
+/** The two methods World actually calls on a typed step's context.
+ * Declared here, rather than importing `StepContext`, so compat stays a
+ * leaf: the context module imports record shapes that import compat, and
+ * this file only needs `page()` and `request()`. `StepContext` satisfies
+ * the shape. */
+interface MeasuredPageContext {
+  page(): Promise<Page>;
+  request(): Promise<APIRequestContext>;
+}
 
 // Responsibility: cucumber-js's own World shape (a single-argument
 // constructor receiving `{ attach, log, link, parameters }`, all four just
@@ -87,7 +98,7 @@ export type IWorldOptions = WorldConstructorParams;
 
 export type WorldConstructor = new (params: WorldConstructorParams) => World;
 
-const runtimeByWorld = new WeakMap<World, StepContext>();
+const runtimeByWorld = new WeakMap<World, MeasuredPageContext>();
 const pageByWorld = new WeakMap<World, Page>();
 const requestByWorld = new WeakMap<World, APIRequestContext>();
 
@@ -205,7 +216,7 @@ export interface InstantiatedWorld {
  * pointer) for the module-identity reason this file's own header explains.
  */
 export function instantiateWorldForPickle(
-  ctx: StepContext,
+  ctx: MeasuredPageContext,
   declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>>,
   declaredCollector: DeclaredCollector,
 ): InstantiatedWorld {

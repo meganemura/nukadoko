@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Pickle } from "@cucumber/messages";
-import type { WritableSink } from "../cli/writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { runExportsManifestPath } from "../record/run-exports.js";

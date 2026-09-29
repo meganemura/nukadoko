@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
 import type { z } from "zod";
-import { formatValidationIssues } from "../binding/format-issues.js";
+import { formatValidationIssues } from "../issues/format-issues.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext, StepFixtures } from "../context.js";
 import type { CallEntry, ErrorKind, PollRecord, ScreenshotEntry, SectionEntry } from "../record/types.js";

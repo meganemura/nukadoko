@@ -12,7 +12,7 @@ import {
   type MappedGwtStepOutcome,
 } from "../src/report/allure/map-scenario.js";
 import type { ErrorKind, StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for map-scenario.ts's pure transform. No
 // allure-js-commons, no filesystem: every step record is a plain object built

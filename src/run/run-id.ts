@@ -8,7 +8,7 @@ import { generateId } from "../record/record-id.js";
 // id.ts already set. One id is generated once per `nuka run` invocation
 // (cli/run.ts), never per pickle, so every scenario record that invocation
 // writes can carry the same value (`ScenarioRecord.run_id`,
-// src/run/record-types.ts) — the fact `nuka accept` (not yet implemented)
+// src/record/scenario-record.ts) — the fact `nuka accept` (not yet implemented)
 // will eventually need to identify "every record this one run wrote".
 
 export function generateRunId(now: Date = new Date()): string {

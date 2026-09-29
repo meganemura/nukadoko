@@ -14,7 +14,7 @@ import {
 // runtime shim (src/compat/allure-runtime.ts) and the declared bucket it and
 // the World channel (src/compat/world.ts) both write into (src/compat/
 // declared.ts), surfaced on the step record/hook-record's own `declared` field
-// (src/record/types.ts, src/run/record-types.ts):
+// (src/record/types.ts, src/record/scenario-record.ts):
 //
 //   - compat glue calling the allure-js facade directly (the door's own
 //     main path — no import switch, `import ... from "allure-js-commons"`

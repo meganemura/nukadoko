@@ -31,7 +31,7 @@ import {
   summarize,
   toImportFailureSummaries,
 } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: wires the commands this slice ships (`steps`, `describe`,
 // `do`, `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
@@ -82,7 +82,7 @@ import type { WritableSink } from "./writable-sink.js";
 // invocation fails fast, before yargs even parses `argv`, rather than
 // falling through to a wrong or guessed version string.
 
-export type { WritableSink } from "./writable-sink.js";
+export type { WritableSink } from "../sink/writable-sink.js";
 
 export interface RunCliOptions {
   rootDir?: string;

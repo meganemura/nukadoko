@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { mapScenario } from "../src/report/messages/map-scenario.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/run/record-types.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for map-scenario.ts's pure transform. No
 // node:fs, no real IdGenerator.uuid(): every

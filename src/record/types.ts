@@ -25,7 +25,7 @@
 // This shape was called `Receipt` before this rename. Step-level and
 // scenario-level records both answer the same question, what did this
 // execution actually do, but had used two unrelated words for it: `Receipt`
-// here, `record` for the scenario level (src/run/record-types.ts). One
+// here, `record` for the scenario level (src/record/scenario-record.ts). One
 // purpose, two vocabularies. The old name also carried little of that
 // meaning on its own: a receipt, in the everyday sense, is proof a
 // transaction happened, not a record of what happened during one. What the
@@ -209,7 +209,7 @@
 // `ctx.page()`, read back out of that step's own trace chunk
 // (`evidence.trace`, now a per-step file rather than one spanning the whole
 // scenario — see this file's own `evidence.trace`-adjacent notes below and
-// `ScenarioEvidence` in src/run/record-types.ts). Parsing lives in
+// `ScenarioEvidence` in src/record/scenario-record.ts). Parsing lives in
 // src/context/trace-actions.ts, which also documents the allowlist that
 // keeps a call's own `params` from ever landing on the step record whole (a
 // `setContent` call's own HTML body is the case that motivated it). Present
@@ -223,7 +223,7 @@
 // here — it runs *after* a step's own step record is already closed (this
 // file's own header convention: a step record is what happened during this
 // one execution), so a teardown failure lands on
-// `ScenarioRecord.teardown_errors` (src/run/record-types.ts) instead, the
+// `ScenarioRecord.teardown_errors` (src/record/scenario-record.ts) instead, the
 // scenario-level counterpart to this field.
 //
 // `EvidenceMeta.attachments` is added now: the one gap the
@@ -402,7 +402,10 @@ export interface EvidenceMeta {
   attachments?: readonly EvidenceAttachmentEntry[];
 }
 
-interface StepRecordBase {
+// Exported by name: `StepRecordOk` and `StepRecordFailed` extend it, and a
+// surface that publishes those two without publishing this name leaks the
+// shared fields as an anonymous type.
+export interface StepRecordBase {
   step_record_id: string;
   step: string;
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka

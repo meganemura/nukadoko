@@ -572,7 +572,7 @@ describe("recordStep: page", () => {
 
 describe("recordStep: use", () => {
   // The mechanical points `use` itself is responsible for — `nuka do
-  // --use`'s own meaning, reached through the same src/cli/resolve-use.ts
+  // --use`'s own meaning, reached through the same src/step/resolve-use.ts
   // function (src/external/record-step.ts's own header). The heavier claim
   // this option exists for (a harvested draft built from a `use`-chained
   // execution stays green across a swapped backend) is

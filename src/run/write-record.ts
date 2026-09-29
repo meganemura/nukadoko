@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ScenarioRecord } from "./record-types.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: the one place a scenario record actually reaches disk —
 // the scenario-level counterpart to record/write-step-record.ts, kept

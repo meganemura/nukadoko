@@ -1,6 +1,8 @@
 import { createConnection } from "node:net";
 import { encodeLine, type LiveRequest, type LiveResponse } from "./protocol.js";
 
+export type { LiveRecordResponse, LiveRejectedResponse, LiveResponse, LiveStoppedResponse } from "./protocol.js";
+
 // Responsibility: the caller side of protocol.ts's line-delimited JSON —
 // one connection, one request written, one response line read back, then
 // the connection closes. Used by cli/do.ts (a `LiveDoRequest`, delegating

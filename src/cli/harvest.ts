@@ -6,7 +6,7 @@ import { retentionNote } from "../record/retention.js";
 import type { StepRecord } from "../record/types.js";
 import { buildStepBindings } from "../run/match-step.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka harvest`'s actual work, kept out of run-cli.ts so
 // it's unit-testable without going through yargs (same split as cli/do.ts,

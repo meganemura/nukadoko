@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { isMessagesRunOutputFileName } from "../src/report/messages/emitter.js";
-import type { ScenarioRecord } from "../src/run/record-types.js";
+import { isMessagesRunOutputFileName } from "../src/record/messages-output.js";
+import type { ScenarioRecord } from "../src/record/scenario-record.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: two `nuka run` invocations against the same project,

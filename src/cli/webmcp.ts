@@ -1,7 +1,7 @@
 import { loadConfig } from "../config/load-config.js";
 import { listWebmcpTools } from "../webmcp/list-tools.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka experimental webmcp-tools <url>`'s CLI-facing
 // wiring, kept out of run-cli.ts so it is unit-testable without going

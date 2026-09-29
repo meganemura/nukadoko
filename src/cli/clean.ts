@@ -3,11 +3,11 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
-import { isMessagesRunOutputFileName } from "../report/messages/emitter.js";
+import { isMessagesRunOutputFileName } from "../record/messages-output.js";
 import { liveLockOwner } from "../session/lock.js";
 import { sessionsDir, sessionsRootDir } from "../session/paths.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import type { WritableSink } from "./writable-sink.js";
+import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka clean`'s actual work — delete the disposable half
 // of the state directory (docs/spec.md "Artifacts": Measurement and Cache

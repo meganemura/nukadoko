@@ -3,8 +3,8 @@ import { runWithTimeout } from "../run/run-scenario.js";
 import path from "node:path";
 import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
-import { formatValidationIssues } from "../binding/format-issues.js";
-import { resolveUse, type ResolveUseSuccess } from "../cli/resolve-use.js";
+import { formatValidationIssues } from "../issues/format-issues.js";
+import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { loadConfig } from "../config/load-config.js";
 import { BUILTIN_FIXTURE_NAMES } from "../context.js";
 import { buildStepFixtures, createStepContext, type DisposeResult } from "../context/create-context.js";
@@ -82,7 +82,7 @@ import { strictArgsSchema } from "../step/strict-args.js";
 //
 // `options.use` (added after this module first shipped without it) is
 // `nuka do --use`'s own meaning, reached through the same mechanism
-// (src/cli/resolve-use.ts's `resolveUse`): a spec that reads a previous
+// (src/step/resolve-use.ts's `resolveUse`): a spec that reads a previous
 // call's own `result` and passes it into the next call's `args` — the
 // natural way to write chained calls by hand — never left anything in
 // `used` for that chain, so `nuka harvest` (which only ever sees the step

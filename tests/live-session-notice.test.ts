@@ -28,7 +28,7 @@ async function writeLiveSession(
   let sock: string | undefined;
   if (options.withSocket) {
     // A real file, standing in for the socket a real daemon's mkdtemp'd
-    // directory would hold (live/live-sock.ts) — `findLiveSessions` only
+    // directory would hold (session/live-sock.ts) — `findLiveSessions` only
     // ever checks `existsSync`, never dials it.
     const sockDir = await mkdtemp(path.join(os.tmpdir(), "nk-live-notice-"));
     sock = path.join(sockDir, "live.sock");

@@ -26,7 +26,7 @@ import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";
 // socket path used to depend on this project's own path too (it was
 // `cache/sessions/<env>/<name>.sock`, docs/spec.md "Live sessions"), which
 // is what this whole task fixed: the socket now lives under the OS's own
-// temp directory (src/live/live-sock.ts), independent of where this
+// temp directory (src/session/live-sock.ts), independent of where this
 // project sits.
 //
 // The counter step (`count`) is what actually proves world persistence: a
@@ -321,7 +321,7 @@ describe("nuka session start/stop (live sessions)", () => {
     expect(existsSync(sockPath)).toBe(false);
     // `listSessions`'s own reap removes the socket's whole mkdtemp'd
     // directory, not only the socket file inside it (session/manage.ts's
-    // own reap branch, live/live-sock.ts's own `removeLiveSockDir`) —
+    // own reap branch, session/live-sock.ts's own `removeLiveSockDir`) —
     // nothing under the OS's own temp dir should survive reaping a dead
     // session.
     expect(existsSync(sockDir)).toBe(false);
