@@ -14,7 +14,7 @@ import type {
 } from "../compat/registry.js";
 import type { RunHookRegistration } from "../compat/run-hooks.js";
 import type { InstantiatedWorld } from "../compat/world.js";
-import type { StepContext } from "../context.js";
+import type { StepContext } from "../step/context.js";
 import { isStep, type Step } from "../step/define-step.js";
 import {
   DuplicateCompatStepError,

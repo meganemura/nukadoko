@@ -14,7 +14,7 @@ import {
 } from "../feature/load-features.js";
 import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
 import { isOathPath } from "../feature/resolve-oaths.js";
-import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../step/validate-fixtures.js";
+import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../fixture/validate-fixtures.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { validateStepParts } from "../step/validate-parts.js";
 import { checkBindings } from "./binding-check.js";
@@ -386,7 +386,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // malformed step is judged identically whether it's caught here or at run
   // time. An unknown fixture name, or a `run()` whose first
   // argument isn't a plain object-destructuring pattern, is reported once per
-  // typed step (src/step/validate-fixtures.ts's own `validateStepFixtures`),
+  // typed step (src/fixture/validate-fixtures.ts's own `validateStepFixtures`),
   // same "once per declaration, not once per occurrence" reasoning as above.
   // `knownNames` widens the closed builtin-only set this check first shipped
   // against to builtins ∪ `config.fixtures` — a step
@@ -419,7 +419,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // hard-coded, since a CommonJS project reads its config from
   // nukadoko.config.mts, not nukadoko.config.ts. The fixture's own name is
   // already part of each issue's `message`
-  // (src/step/validate-fixtures.ts), so `step` is left unset rather than
+  // (src/fixture/validate-fixtures.ts), so `step` is left unset rather than
   // repurposed for a subject it was never meant to carry.
   const configFileName = resolveConfigFileName(rootDir);
   for (const issue of validateFixtureDefinitions(config)) {

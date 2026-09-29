@@ -1,3 +1,5 @@
+import type { HttpOmittedCounts } from "../record/types.js";
+
 // Responsibility: the "what got left out of http.jsonl" tally docs/spec.md's
 // "Records" (`http_omitted`) describes. A page load's own
 // image/stylesheet/script/etc requests are deliberately never written to
@@ -20,13 +22,6 @@
 // out, and of what kind" — the two numbers are not expected to add up to
 // each other, and neither http-log.ts nor page-http-log.ts ever tries to
 // make them (docs/spec.md "Records").
-
-/** Dropped-request counts by Playwright's own `request.resourceType()`
- * (`"image"`, `"stylesheet"`, `"script"`, ...) — the step record's own
- * `http_omitted` shape, e.g. `{ "image": 34, "stylesheet": 5 }`. */
-export interface HttpOmittedCounts {
-  [resourceType: string]: number;
-}
 
 export interface HttpOmittedCollector {
   /** Tallies one request left out of http.jsonl, by its own resourceType. */

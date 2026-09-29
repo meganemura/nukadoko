@@ -1,3 +1,5 @@
+import type { UsedEntry, UsedEntryWithResult } from "../record/types.js";
+
 // Responsibility: the provenance tally docs/spec.md's "Records" (`used`)
 // describes — which earlier steps' validated results this execution actually
 // read, whether through `ctx.resultOf`
@@ -59,7 +61,7 @@
 // at all, since assignability only ever looks at shape. Renaming the
 // interface or duplicating its fields into an unrelated one doesn't change
 // that either. The only way to make TypeScript actually refuse the wider
-// shape is an *exclusion marker*: `result?: never` on `UsedEntry` below says
+// shape is an *exclusion marker*: `result?: never` on `UsedEntry` (src/record/types.ts) says
 // "this field, if present at all, can never hold a value" — an optional
 // `never` still allows a plain `{ step_record_id, step }` object through
 // untouched (no `result` key at all satisfies "optional and absent"), but
@@ -74,29 +76,6 @@
 // swallowing a new variant is what turned this codebase toward `switch` +
 // `never` in the first place — `never` as "the compiler proves this branch
 // (here, this field) cannot be reached with a real value."
-
-export interface UsedEntry {
-  readonly step_record_id: string;
-  readonly step: string;
-  /** Exclusion marker, not a real field (see this file's header) — always
-   * absent on an actual `UsedEntry`. Its only job is to make a
-   * result-bearing `UsedEntryWithResult` fail to structurally satisfy
-   * `UsedEntry` wherever an array of it is expected, so a step-record-
-   * construction site that forgets to call `omitUsedResults` before handing
-   * an "ok" step record its `used` array gets a compile error instead of a
-   * silent leak. */
-  readonly result?: never;
-}
-
-/** `UsedEntry` with its exclusion marker replaced by a real, required
- * `result` — the upstream step record's full validated result. `Omit` first
- * (rather than intersecting `UsedEntry` directly with `{ result: unknown }`)
- * because `result?: never` intersected with `result: unknown` collapses to
- * `result: never`, an uninhabitable field; `Omit` removes the marker before
- * `unknown` replaces it, so this type is actually constructible. */
-export type UsedEntryWithResult = Omit<UsedEntry, "result"> & {
-  readonly result: unknown;
-};
 
 export interface UsedCollector {
   /** Tallies one successful read (`ctx.resultOf`, or a `from` injection) by

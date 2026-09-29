@@ -1,7 +1,6 @@
 import type { APIRequestContext, BrowserContext, Page } from "playwright";
 import type { z } from "zod";
-import type { PollOptions } from "./context/poll.js";
-import type { Step } from "./step/define-step.js";
+import type { Step } from "./define-step.js";
 
 // Responsibility: two related shapes, both types only — no implementation
 // (the harness that actually launches a browser, restores session state,
@@ -14,7 +13,7 @@ import type { Step } from "./step/define-step.js";
 // it is a construction instruction — `page`/`context`/`request` are values,
 // not functions, precisely so that a step never has an *action* to reach
 // for the browser, only a *name* to have already asked for. `check` (and
-// `nuka run`/`nuka do`, sharing the same judgment via src/step/
+// `nuka run`/`nuka do`, sharing the same judgment via src/fixture/
 // validate-fixtures.ts) reads `run`'s own first-argument destructuring
 // straight out of its source text (src/step/fixture-names.ts) — the same
 // "static declaration drives what actually gets built" shape `from`
@@ -121,6 +120,19 @@ import type { Step } from "./step/define-step.js";
 // the directory itself is executor-only knowledge (create-context.ts's
 // `beginStep` is the only thing that ever moves it), so a step can name an
 // attachment but can never learn, or control, where it actually lands.
+
+export interface PollOptions {
+  /** Total time budget for polling, in milliseconds. */
+  timeout?: number;
+  /** Delay between poll attempts, in milliseconds. */
+  interval?: number;
+  /** Human-readable label. Included in `PollTimeoutError`'s message when
+   * this poll times out, and in the step record's own `polls` entry
+   * regardless of how the poll ended (docs/spec.md "Records") — the same label both
+   * names the failure and identifies the record of the wait that produced
+   * it. */
+  description?: string;
+}
 
 export interface StepFixtures {
   /** Playwright Page; the browser launches when this name is destructured

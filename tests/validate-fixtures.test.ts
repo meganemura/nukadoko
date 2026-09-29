@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineStep, type Step } from "../src/step/define-step.js";
-import { formatFixtureIssues, validateStepFixtures } from "../src/step/validate-fixtures.js";
+import { formatFixtureIssues, validateStepFixtures } from "../src/fixture/validate-fixtures.js";
 
-// Responsibility: unit tests for src/step/validate-fixtures.ts's pure
+// Responsibility: unit tests for src/fixture/validate-fixtures.ts's pure
 // functions — no discovery, no
 // tsx, no filesystem, mirroring tests/validate-from.test.ts's own shape for
 // the same reasons that file's header gives: most cases here reach the

@@ -4,8 +4,18 @@ import { request as playwrightRequest, type APIRequestContext, type Page } from 
 import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { StepContext, StepFixtures } from "../context.js";
-import type { CallEntry, ErrorKind, PollRecord, ScreenshotEntry, SectionEntry } from "../record/types.js";
+import type { PollOptions, StepContext, StepFixtures } from "../step/context.js";
+import type {
+  CallEntry,
+  ErrorKind,
+  HttpOmittedCounts,
+  ObservedCounts,
+  PageEventsSnapshot,
+  PollRecord,
+  ScreenshotEntry,
+  SectionEntry,
+  UsedEntryWithResult,
+} from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
@@ -22,13 +32,13 @@ import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
 import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
-import { createHttpOmittedCollector, type HttpOmittedCounts } from "./http-omitted.js";
-import { createObservedCollector, type ObservedCounts } from "./observed.js";
-import { createPageEventsCollector, type PageEventsSnapshot } from "./page-events.js";
-import { pollWithRecording, type PollOptions } from "./poll.js";
+import { createHttpOmittedCollector } from "./http-omitted.js";
+import { createObservedCollector } from "./observed.js";
+import { createPageEventsCollector } from "./page-events.js";
+import { pollWithRecording } from "./poll.js";
 import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
-import { createUsedCollector, type UsedEntryWithResult } from "./used.js";
+import { createUsedCollector } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution builds
 // a typed step's fixture bag from (`buildStepFixtures`, below) — env,
@@ -1305,7 +1315,7 @@ export async function buildStepFixtures(
   names: readonly string[],
 ): Promise<StepFixtures> {
   // `-readonly`: `StepFixtures`'s own members are `readonly` for a step
-  // reading them (this file's own header, and context.ts's), but this
+  // reading them (this file's own header, and src/step/context.ts's), but this
   // function is the one place that is allowed to write them, once, while
   // building the bag it then hands back as the (readonly-again) public
   // type.
@@ -1350,7 +1360,7 @@ export async function buildStepFixtures(
       default:
         throw new Error(
           `internal: unknown fixture name "${name}" reached buildStepFixtures, ` +
-            "src/step/validate-fixtures.ts should have refused this before execution began",
+            "src/fixture/validate-fixtures.ts should have refused this before execution began",
         );
     }
   }

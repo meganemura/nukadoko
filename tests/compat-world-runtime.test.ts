@@ -21,7 +21,7 @@ import {
   setWorldConstructor,
   type WorldConstructorParams,
 } from "../src/compat/world.js";
-import type { StepContext } from "../src/context.js";
+import type { StepContext } from "../src/step/context.js";
 
 // Responsibility: direct unit coverage for compat's own runtime surface
 // (World, its instrumentation wrap, defineWorld's registration buffer, and

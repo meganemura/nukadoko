@@ -1,4 +1,4 @@
-import type { FixtureDefinition } from "./types.js";
+import type { FixtureDefinition } from "../step/fixture-types.js";
 
 // Responsibility: the one identity helper that gives a config author's
 // fixture object literal full type inference under `strict` TypeScript —
@@ -6,7 +6,7 @@ import type { FixtureDefinition } from "./types.js";
 // nothing" role src/config/define-config.ts's own `defineConfig` plays for
 // the whole config object. Validation (`auto: true`, an unknown fixture
 // name, a cycle, a scope violation, `page-override-unowned`, ...) all
-// happens later, over the *resolved* config (src/step/validate-fixtures.ts)
+// happens later, over the *resolved* config (src/fixture/validate-fixtures.ts)
 // — the same defineConfig/loadConfig split this mirrors.
 //
 // Why this needs to exist at all (measured): a plain

@@ -1,13 +1,13 @@
-import { fixtureReachesBrowser, type FixtureGraph } from "../fixture/graph.js";
-import { stepFixtureNames } from "./step-fixture-names.js";
-import type { Step } from "./define-step.js";
+import { fixtureReachesBrowser, type FixtureGraph } from "./graph.js";
+import { stepFixtureNames } from "../step/step-fixture-names.js";
+import type { Step } from "../step/define-step.js";
 
 // Responsibility: `nuka steps --json`'s own reading of a step's fixture
 // destructuring — exposure, not judgment. The
 // extraction this reads (`stepFixtureNames`, src/step/step-fixture-names.ts
 // — a step's own names closed transitively over `parts`) and the
 // validation that decides whether a name is legitimate
-// (`validateStepFixtures`, src/step/validate-fixtures.ts) both already
+// (`validateStepFixtures`, src/fixture/validate-fixtures.ts) both already
 // exist; this file adds nothing new to either, it only turns the same
 // static reading `check` already has into a value a caller outside `check`
 // can render. A step whose `run()` (or a part's) can't be parsed at all

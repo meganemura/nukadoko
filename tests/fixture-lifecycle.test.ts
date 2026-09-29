@@ -5,7 +5,7 @@ import {
   FixtureUseNotCalledError,
   startFixture,
 } from "../src/fixture/lifecycle.js";
-import type { FixtureFn } from "../src/fixture/types.js";
+import type { FixtureFn } from "../src/step/fixture-types.js";
 
 // Responsibility: unit tests for src/fixture/lifecycle.ts's `startFixture` —
 // the use()-suspend/teardown-resume coroutine P5's own "前提" says has to be

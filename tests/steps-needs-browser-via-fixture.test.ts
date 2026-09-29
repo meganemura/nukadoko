@@ -5,7 +5,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `needs_
 // browser` is `true` for a step that reaches `page` only *through* a
-// fixture (never directly), the transitive closure src/step/step-needs.ts's
+// fixture (never directly), the transitive closure src/fixture/step-needs.ts's
 // `stepNeeds` now takes over the fixture dependency graph (scope item 11).
 // Read-only against tests/fixtures/fixture-touches-browser-project — `nuka
 // steps` never executes a step, so no temp copy is needed (same choice

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import { BUILTIN_FIXTURE_NAMES } from "../context.js";
+import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import {
   discoverSteps,
   type Vocabulary,
@@ -15,7 +15,7 @@ import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
-import { stepNeeds } from "../step/step-needs.js";
+import { stepNeeds } from "../fixture/step-needs.js";
 
 export { formatVocabularyError };
 
@@ -353,7 +353,7 @@ export interface StepSummary {
   readonly description?: string;
   readonly mutates?: boolean;
   /** The fixture names this step's own `run()` destructures, alphabetized
-   * (`src/step/step-needs.ts`'s `stepNeeds`) — present and possibly `[]`
+   * (`src/fixture/step-needs.ts`'s `stepNeeds`) — present and possibly `[]`
    * for a typed entry (a step that needs no fixtures still gets the key, so
    * "no needs" reads differently from "not a typed entry", which omits it,
    * the same convention `mutates` already follows), absent entirely for a
@@ -440,7 +440,7 @@ export interface StepSummary {
  * fixture/graph.ts's own `FixtureGraph` doc comment), so a caller that
  * built one hands back exactly that; a caller with no config-derived graph
  * at all falls back to builtins alone, same as `opensBrowser` does in src/
- * step/step-needs.ts for the same reason. */
+ * fixture/step-needs.ts for the same reason. */
 function knownFixtureNamesFor(graph: FixtureGraph | undefined): ReadonlySet<string> {
   return graph !== undefined ? new Set(graph.nodes.keys()) : new Set(BUILTIN_FIXTURE_NAMES);
 }
@@ -458,7 +458,7 @@ function knownFixtureNamesFor(graph: FixtureGraph | undefined): ReadonlySet<stri
  * are the two callers that build and pass one.
  *
  * `stepNeeds` throws for a `run()` it can't read fixture names from at all
- * (src/step/step-needs.ts, via src/step/fixture-names.ts) — that used to
+ * (src/fixture/step-needs.ts, via src/step/fixture-names.ts) — that used to
  * propagate straight out of `summarize` and take every other step's own
  * entry down with it: one unparseable `run()` should not empty the whole
  * vocabulary a reader is trying to see. Caught here instead, so a caller

@@ -24,7 +24,7 @@ import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { StepContext } from "../context.js";
+import type { StepContext } from "../step/context.js";
 import { createStepContext } from "../context/create-context.js";
 import { mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
@@ -38,12 +38,11 @@ import {
   type CachedFixture,
   type FixtureCache,
   type FixtureInstance,
-  type FixtureUsageEntry,
 } from "../fixture/resolver.js";
 
 export type { CachedFixture, FixtureInstance };
 import { generateStepRecordId } from "../record/record-id.js";
-import type { ErrorKind, StepRecord } from "../record/types.js";
+import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";

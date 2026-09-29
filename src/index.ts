@@ -6,7 +6,7 @@
 export type { NukadokoConfig, NukadokoConfigInput } from "./config/schema.js";
 export { defineConfig } from "./config/define-config.js";
 export { ConfigError } from "./config/errors.js";
-export type { StepFixtures } from "./context.js";
+export type { StepFixtures } from "./step/context.js";
 export { MissingEnvError } from "./context/errors.js";
 export { defineFixtures } from "./fixture/define-fixtures.js";
 export type {
@@ -15,26 +15,27 @@ export type {
   FixtureFn,
   FixtureOptions,
   FixtureOutcome,
-  FixtureScope,
   UseFn,
-} from "./fixture/types.js";
+} from "./step/fixture-types.js";
 // `poll` itself is not exported: it moved onto `ctx.poll` — see
-// src/context.ts's own header for why a runnable `poll`
+// src/step/context.ts's own header for why a runnable `poll`
 // stayed importable for exactly as long as it recorded nothing.
 export { PollTimeoutError } from "./context/poll.js";
-export type { PollOptions } from "./context/poll.js";
-export type { ObservedCounts } from "./context/observed.js";
-export type { HttpOmittedCounts } from "./context/http-omitted.js";
+export type { PollOptions } from "./step/context.js";
 export type {
+  ActionEntry,
   ConsoleErrorEntry,
   FailedRequestEntry,
+  FixtureScope,
+  FixtureUsageEntry,
+  HttpOmittedCounts,
+  ObservedCounts,
   PageErrorEntry,
   PageEventsSnapshot,
   PageEventsTruncated,
-} from "./context/page-events.js";
-export type { ActionEntry } from "./context/trace-actions.js";
-export type { UsedEntry, UsedEntryWithResult } from "./context/used.js";
-export type { FixtureUsageEntry } from "./fixture/resolver.js";
+  UsedEntry,
+  UsedEntryWithResult,
+} from "./record/types.js";
 export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
 export type {
   CallEntry,

@@ -1,7 +1,7 @@
 import type { APIRequest, BrowserContextOptions, LaunchOptions } from "playwright";
 import { z } from "zod";
 import type { ParameterTypeConfig as BindingParameterTypeConfig } from "../binding/parameter-type-config.js";
-import type { FixtureDefinition } from "../fixture/types.js";
+import type { FixtureDefinition } from "../step/fixture-types.js";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
 // export, per docs/spec.md's config section (featuresDir, baseURL, envFiles,
@@ -159,7 +159,7 @@ function isFixtureFunction(value: unknown): value is (...args: never[]) => unkno
  * for their own Playwright-deferred types); a fixture's own *dependency
  * names* (unknown name, default value, `...rest`, not destructured at all)
  * are not zod's concern — those are read from the function's own source
- * text and validated by src/step/validate-fixtures.ts, run over the
+ * text and validated by src/fixture/validate-fixtures.ts, run over the
  * *resolved* config (loadConfig's own caller), the same split defineConfig/
  * loadConfig already keep for the rest of this file.
  *
@@ -249,7 +249,7 @@ export const configSchema = z
     parameterTypes: z.array(parameterTypeConfigSchema).default([]),
     /** User-defined fixtures (docs/spec.md "Fixtures") — layered
      * *after* the builtin set (`page`/`context`/`request`/... —
-     * src/context.ts's `BUILTIN_FIXTURE_NAMES`), so a key here with the
+     * src/step/context.ts's `BUILTIN_FIXTURE_NAMES`), so a key here with the
      * same name as a builtin overrides it (src/fixture/graph.ts's own
      * layering rule). Default `{}`: no user fixtures unless named, the
      * same "nothing extra unless named" convention `parameterTypes` above

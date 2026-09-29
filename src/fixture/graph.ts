@@ -1,7 +1,8 @@
 import type { NukadokoConfig } from "../config/schema.js";
-import { BUILTIN_FIXTURE_NAMES } from "../context.js";
+import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
-import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from "./types.js";
+import type { FixtureScope } from "../record/types.js";
+import { fixtureFnOf, fixtureOptionsOf, type FixtureFn } from "../step/fixture-types.js";
 
 // Responsibility: the fixture *dependency graph* — layering builtin and
 // `config.fixtures` names into one structure,
@@ -11,7 +12,7 @@ import { fixtureFnOf, fixtureOptionsOf, type FixtureFn, type FixtureScope } from
 // cycle, a `process`-scope fixture depending on a `scenario`-scope one,
 // `page` overridden by a fixture that owns neither `page` nor `context`,
 // and the reachable subgraph + build order a step's own requested names
-// close over. src/step/
+// close over. src/fixture/
 // validate-fixtures.ts turns this module's findings into the `FixtureIssue`/
 // `FixtureDefinitionIssue` shape `nuka check`/`nuka run`/`nuka do` already
 // share; src/fixture/resolver.ts is the only caller that actually builds
@@ -94,7 +95,7 @@ function builtinScope(name: string): FixtureScope {
  * fixture whose own destructuring can't be read at all (not destructured, a
  * default value, a rest property) gets `dependencies: []` here rather than
  * throwing — that shape mistake is `validateFixtureDefinitions`'s own
- * finding (src/step/validate-fixtures.ts), reported once, in one place;
+ * finding (src/fixture/validate-fixtures.ts), reported once, in one place;
  * this function has to build *some* graph for every other fixture's own
  * checks to run against regardless of one broken entry. */
 export function buildFixtureGraph(config: Pick<NukadokoConfig, "fixtures">): FixtureGraph {
@@ -165,7 +166,7 @@ export function resolveDependencyEdge(
 }
 
 /** One finding about a `config.fixtures` *definition* itself (as opposed
- * to `FixtureIssue` in src/step/validate-fixtures.ts, about a *step's own
+ * to `FixtureIssue` in src/fixture/validate-fixtures.ts, about a *step's own
  * usage* of one) — `nuka check`'s fixture-* codes. All three "guess zero":
  * each one is a fact about the graph's own
  * shape, decided without ever running a fixture. */
@@ -356,14 +357,14 @@ export function closeFixtureNames(
     if (inProgress.has(name)) {
       throw new Error(
         `internal: fixture cycle involving "${name}" reached the resolver; ` +
-          "src/step/validate-fixtures.ts's fixture-cycle check should have refused this before execution began",
+          "src/fixture/validate-fixtures.ts's fixture-cycle check should have refused this before execution began",
       );
     }
     const node = graph.nodes.get(name);
     if (node === undefined) {
       throw new Error(
         `internal: unknown fixture "${name}" reached the resolver; ` +
-          "src/step/validate-fixtures.ts should have refused this before execution began",
+          "src/fixture/validate-fixtures.ts should have refused this before execution began",
       );
     }
     if (node.isBuiltin) {

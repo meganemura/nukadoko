@@ -1,6 +1,6 @@
 import type { WritableSink } from "../sink/writable-sink.js";
 
-// Responsibility: `nuka run`'s own progress output — what src/context.ts
+// Responsibility: `nuka run`'s own progress output — what src/step/context.ts
 // and src/compat/allure-runtime.ts used to call "a future progress-log
 // feature" before this file existed. Every function
 // here writes to stderr only; stdout's one-JSON-record-per-scenario contract

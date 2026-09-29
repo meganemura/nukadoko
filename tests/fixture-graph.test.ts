@@ -9,7 +9,7 @@ import {
   fixtureReachesBrowser,
   resolveDependencyEdge,
 } from "../src/fixture/graph.js";
-import type { FixtureDefinition } from "../src/fixture/types.js";
+import type { FixtureDefinition } from "../src/step/fixture-types.js";
 
 // Responsibility: unit tests for src/fixture/graph.ts — the purely
 // structural half of P5 (layering, the same-name-override rule, cycle/

@@ -245,14 +245,196 @@
 // already uses.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
-import type { HttpOmittedCounts } from "../context/http-omitted.js";
-import type { ObservedCounts } from "../context/observed.js";
-import type { PageEventsSnapshot } from "../context/page-events.js";
-import type { ActionEntry } from "../context/trace-actions.js";
-import type { UsedEntry, UsedEntryWithResult } from "../context/used.js";
-import type { FixtureUsageEntry } from "../fixture/resolver.js";
 
-export type { FixtureUsageEntry } from "../fixture/resolver.js";
+/** Dropped-request counts by Playwright's own `request.resourceType()`
+ * (`"image"`, `"stylesheet"`, `"script"`, ...) — the step record's own
+ * `http_omitted` shape, e.g. `{ "image": 34, "stylesheet": 5 }`. */
+export interface HttpOmittedCounts {
+  [resourceType: string]: number;
+}
+
+/** Read/write tally for one step boundary — `nuka do`'s whole execution, or
+ * one `nuka run` pickle step. Mirrors the
+ * step record's own `observed` shape (docs/spec.md "Records"). */
+export interface ObservedCounts {
+  http_reads: number;
+  http_writes: number;
+}
+
+/** One `console.error` call, error type only (warning is excluded as
+ * noise). */
+export interface ConsoleErrorEntry {
+  readonly text: string;
+  readonly location: {
+    readonly url: string;
+    readonly lineNumber: number;
+    readonly columnNumber: number;
+  };
+  readonly at: string;
+}
+
+/** One uncaught error the page itself threw (`BrowserContext`'s own
+ * `weberror`, the context-level counterpart to `Page`'s `pageerror`). Never
+ * carries `Error#stack` — see src/context/page-events.ts's own header for why. */
+export interface PageErrorEntry {
+  readonly message: string;
+  readonly at: string;
+}
+
+/** One request the page issued that failed at the network level (DNS,
+ * connection refused, aborted, ...) — never a completed response with a
+ * non-2xx status, which Playwright's own `requestfailed` event does not fire
+ * for either. */
+export interface FailedRequestEntry {
+  readonly method: string;
+  readonly url: string;
+  /** `request.failure()?.errorText` — omitted on the rare occasion
+   * `failure()` itself returns `null` for a `requestfailed` event (nothing
+   * else to report in that case). */
+  readonly failure?: string;
+  readonly at: string;
+}
+
+/** Which of `page_events`'s three categories were truncated, each mapped to
+ * its *true* total (how many were actually recorded), never to the number
+ * of entries the step record shows (always <= src/context/page-events.ts's `MAX_ENTRIES_PER_CATEGORY`).
+ * Present on the snapshot only when at least one category was truncated —
+ * a category that was not is simply absent here,
+ * never present with its own entry count or `false`. */
+export interface PageEventsTruncated {
+  console_errors?: number;
+  page_errors?: number;
+  failed_requests?: number;
+}
+
+/** The step record's own `page_events` shape (docs/spec.md "Records") —
+ * each category is always a bare array (never the truncated entry count, and
+ * never conditionally shaped some other way; see src/context/page-events.ts's own header),
+ * present only when at least one entry of that kind was recorded. `truncated`
+ * is the one place a cap being hit is reported.
+ * The whole field is omitted from the step record when all three categories
+ * are empty (same convention as `declared`/`sections`/`used`). */
+export interface PageEventsSnapshot {
+  console_errors?: readonly ConsoleErrorEntry[];
+  page_errors?: readonly PageErrorEntry[];
+  failed_requests?: readonly FailedRequestEntry[];
+  truncated?: PageEventsTruncated;
+}
+
+/** One Playwright call this step made, read out of its own trace chunk
+ * (docs/spec.md "Records"). `params` beyond the five below are never
+ * carried onto the step record (src/context/trace-actions.ts's own header, allowlist reasoning) —
+ * `setContent`'s own HTML body is the case that motivated it: a value that
+ * can run to kilobytes, next to nothing a reader needs that trace.zip
+ * doesn't already have in full. */
+export interface ActionEntry {
+  /** The Playwright call's own method name (`"expect"`, `"goto"`, `"click"`,
+   * `"setContent"`, ...) — trace's own `before.method`, unmodified. */
+  readonly method: string;
+  /** `before.params.expression` (an `expect` call's own matcher name, e.g.
+   * `"to.be.visible"`) when the call carried one. */
+  readonly expression?: string;
+  /** `before.params.selector` when the call carried one. */
+  readonly selector?: string;
+  /** `before.params.url` when the call carried one (a `goto`, for one). */
+  readonly url?: string;
+  /** `before.params.isNot` (an `expect` call's own `.not`) when the call
+   * carried one. */
+  readonly is_not?: boolean;
+  /** `before.params.timeout` (the call's own declared timeout, in ms) when
+   * the call carried one. */
+  readonly timeout_ms?: number;
+  /** `after.endTime - before.startTime`, rounded to the nearest
+   * millisecond — the call's own duration, on the trace's own clock. */
+  readonly ms: number;
+  /** `"failed"` when the trace's own `after` entry carried an `error`,
+   * `"passed"` otherwise. */
+  readonly outcome: "passed" | "failed";
+  /** ISO 8601, converted from the trace's own monotonic clock via the
+   * header's `wallTime`/`monotonicTime` pair (src/context/trace-actions.ts's own header) — the
+   * same absolute timeline `sections`/`polls`/`evidence.screenshots[].at`
+   * already share. */
+  readonly at: string;
+}
+
+export interface UsedEntry {
+  readonly step_record_id: string;
+  readonly step: string;
+  /** Exclusion marker, not a real field (see src/context/used.ts's header) — always
+   * absent on an actual `UsedEntry`. Its only job is to make a
+   * result-bearing `UsedEntryWithResult` fail to structurally satisfy
+   * `UsedEntry` wherever an array of it is expected, so a step-record-
+   * construction site that forgets to call `omitUsedResults` before handing
+   * an "ok" step record its `used` array gets a compile error instead of a
+   * silent leak. */
+  readonly result?: never;
+}
+
+/** `UsedEntry` with its exclusion marker replaced by a real, required
+ * `result` — the upstream step record's full validated result. `Omit` first
+ * (rather than intersecting `UsedEntry` directly with `{ result: unknown }`)
+ * because `result?: never` intersected with `result: unknown` collapses to
+ * `result: never`, an uninhabitable field; `Omit` removes the marker before
+ * `unknown` replaces it, so this type is actually constructible. */
+export type UsedEntryWithResult = Omit<UsedEntry, "result"> & {
+  readonly result: unknown;
+};
+
+/** Every fixture actually resolved while assembling one step's bag —
+ * step-record-facing (docs/spec.md "Records").
+ * Includes every `config.fixtures` entry touched, not only the names the
+ * step itself destructured: a fixture built as a side effect of resolving
+ * another one is real, measured setup cost, and hiding it would make
+ * `setup_ms`'s own absence unreadable: normally its absence already has to
+ * mean either "this call reused an existing instance" or "this fixture is
+ * simply fast", and a hidden, transitively-built dependency would add a
+ * third, indistinguishable reading ("a dependency nobody told you about")
+ * to those same two. Builtins
+ * never appear here — they are not `config.fixtures` entries, and their own
+ * resolution is unchanged, already unmeasured the same way it always was. */
+export interface FixtureUsageEntry {
+  readonly name: string;
+  readonly scope: FixtureScope;
+  /** Present only when this call actually built the fixture (`reused:
+   * false`) — omitted, not `0`, for a reused instance, so a reader can
+   * tell "this call built it in Nms" from "this call didn't build it at
+   * all" without a sentinel value. */
+  readonly setup_ms?: number;
+  /** ISO 8601, the moment this call's own build started — same presence
+   * rule as `setup_ms`. */
+  readonly at?: string;
+  /** `true` when this fixture was already built (by an earlier step in
+   * this scenario, or — for `scope: "process"` — by an earlier scenario in
+   * this same `nuka run` invocation) and this call simply received the
+   * cached value. */
+  readonly reused: boolean;
+}
+
+/** `"scenario"` (default) rebuilds per scenario (or per `nuka do`
+ * execution) and tears down at that scenario's own end; `"process"` builds
+ * once per process — the first time any step that process runs names it (or
+ * its own dependents do) — and tears down once, after every scenario that
+ * process ran has finished. Under `nuka do` the two collapse to the same
+ * single-execution lifetime.
+ *
+ * `"worker"` is deliberately not a member: `nuka run --concurrency <n>`
+ * runs scenarios in `n` worker processes, and a worker *is* a process, so
+ * `"process"` already names one worker. A separate `"worker"` scope would
+ * be a synonym with nothing left for it to mean on its own.
+ *
+ * `"process"` names one address space, not one `nuka run` invocation: a
+ * fixture's own value is a plain JS object and cannot cross into another
+ * process, so this scope can only ever mean "once per process" no matter
+ * how many times anything is invoked against it. At `--concurrency 1` one
+ * invocation is one process, so the two happen to coincide; at
+ * `--concurrency <n>` the same invocation is `n` processes, and this scope
+ * builds the fixture `n` times, once per worker, never once for the whole
+ * invocation. Something that has to happen exactly once in the world, no
+ * matter how many processes ever run against it — seeding a database,
+ * running a migration, starting a mock server that owns a port — does not
+ * belong in a `"process"`-scope fixture: run more than one process and it
+ * happens again. */
+export type FixtureScope = "scenario" | "process";
 
 /** The closed set of machine-readable failure causes a step record's `error`
  * can carry — see this file's own

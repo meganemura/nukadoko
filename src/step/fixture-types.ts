@@ -1,4 +1,5 @@
-import type { StepFixtures } from "../context.js";
+import type { FixtureScope } from "../record/types.js";
+import type { StepFixtures } from "./context.js";
 
 // Responsibility: the *types* a user-defined fixture is shaped by — no
 // execution logic here (src/fixture/lifecycle.ts
@@ -36,7 +37,7 @@ import type { StepFixtures } from "../context.js";
 // The trade this makes: a fixture that depends on *another user-defined*
 // fixture destructures a real name (validated at check/run/do time against
 // `config.fixtures`, exactly the way a step's own destructuring already is
-// — src/step/validate-fixtures.ts), but its value types as `unknown` rather
+// — src/fixture/validate-fixtures.ts), but its value types as `unknown` rather
 // than that other fixture's own declared value type. Losing that one
 // cross-reference is what buys "every legitimate `defineFixtures({...})`
 // compiles under `strict`, with no implicit `any`" — the actual, narrower
@@ -87,32 +88,6 @@ export type FixtureDeps = StepFixtures & Record<string, unknown>;
  * function apart from one that simply forgot to return a promise; src/
  * fixture/lifecycle.ts always `await`s whatever comes back either way. */
 export type FixtureFn = (deps: FixtureDeps, use: UseFn) => Promise<void> | void;
-
-/** `"scenario"` (default) rebuilds per scenario (or per `nuka do`
- * execution) and tears down at that scenario's own end; `"process"` builds
- * once per process — the first time any step that process runs names it (or
- * its own dependents do) — and tears down once, after every scenario that
- * process ran has finished. Under `nuka do` the two collapse to the same
- * single-execution lifetime.
- *
- * `"worker"` is deliberately not a member: `nuka run --concurrency <n>`
- * runs scenarios in `n` worker processes, and a worker *is* a process, so
- * `"process"` already names one worker. A separate `"worker"` scope would
- * be a synonym with nothing left for it to mean on its own.
- *
- * `"process"` names one address space, not one `nuka run` invocation: a
- * fixture's own value is a plain JS object and cannot cross into another
- * process, so this scope can only ever mean "once per process" no matter
- * how many times anything is invoked against it. At `--concurrency 1` one
- * invocation is one process, so the two happen to coincide; at
- * `--concurrency <n>` the same invocation is `n` processes, and this scope
- * builds the fixture `n` times, once per worker, never once for the whole
- * invocation. Something that has to happen exactly once in the world, no
- * matter how many processes ever run against it — seeding a database,
- * running a migration, starting a mock server that owns a port — does not
- * belong in a `"process"`-scope fixture: run more than one process and it
- * happens again. */
-export type FixtureScope = "scenario" | "process";
 
 export interface FixtureOptions {
   readonly scope?: FixtureScope;

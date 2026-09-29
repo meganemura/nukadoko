@@ -6,7 +6,7 @@ import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { loadConfig } from "../config/load-config.js";
-import { BUILTIN_FIXTURE_NAMES } from "../context.js";
+import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import { buildStepFixtures, createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
 import { mergeTruncated } from "../context/evidence.js";
@@ -118,7 +118,7 @@ import { strictArgsSchema } from "../step/strict-args.js";
 
 /** Every `StepFixtures` name this module can always build, regardless of
  * whether a call passes `options.page`
- * (`BUILTIN_FIXTURE_NAMES`, src/context.ts, minus `page`/`context`) — `page`/
+ * (`BUILTIN_FIXTURE_NAMES`, src/step/context.ts, minus `page`/`context`) — `page`/
  * `context` are supported too, but only on a call that actually supplies
  * `options.page` (this file's own header), so they are checked separately,
  * in `recordStep` itself, rather than folded into this set. */

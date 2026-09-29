@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { inflateRawSync } from "node:zlib";
+import type { ActionEntry } from "../record/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: turn one step's own trace.zip (browser-evidence.ts's
@@ -76,42 +77,6 @@ const INTERNAL_WAIT_METHOD = "__waitInfo__";
  * reader can open. The full, uncapped list always still exists in
  * trace.zip. */
 const MAX_ACTIONS = 100;
-
-/** One Playwright call this step made, read out of its own trace chunk
- * (docs/spec.md "Records"). `params` beyond the five below are never
- * carried onto the step record (this file's own header, allowlist reasoning) —
- * `setContent`'s own HTML body is the case that motivated it: a value that
- * can run to kilobytes, next to nothing a reader needs that trace.zip
- * doesn't already have in full. */
-export interface ActionEntry {
-  /** The Playwright call's own method name (`"expect"`, `"goto"`, `"click"`,
-   * `"setContent"`, ...) — trace's own `before.method`, unmodified. */
-  readonly method: string;
-  /** `before.params.expression` (an `expect` call's own matcher name, e.g.
-   * `"to.be.visible"`) when the call carried one. */
-  readonly expression?: string;
-  /** `before.params.selector` when the call carried one. */
-  readonly selector?: string;
-  /** `before.params.url` when the call carried one (a `goto`, for one). */
-  readonly url?: string;
-  /** `before.params.isNot` (an `expect` call's own `.not`) when the call
-   * carried one. */
-  readonly is_not?: boolean;
-  /** `before.params.timeout` (the call's own declared timeout, in ms) when
-   * the call carried one. */
-  readonly timeout_ms?: number;
-  /** `after.endTime - before.startTime`, rounded to the nearest
-   * millisecond — the call's own duration, on the trace's own clock. */
-  readonly ms: number;
-  /** `"failed"` when the trace's own `after` entry carried an `error`,
-   * `"passed"` otherwise. */
-  readonly outcome: "passed" | "failed";
-  /** ISO 8601, converted from the trace's own monotonic clock via the
-   * header's `wallTime`/`monotonicTime` pair (this file's own header) — the
-   * same absolute timeline `sections`/`polls`/`evidence.screenshots[].at`
-   * already share. */
-  readonly at: string;
-}
 
 export type TraceActionsParseResult =
   | { readonly kind: "ok"; readonly actions: readonly ActionEntry[]; readonly truncatedCount?: number }

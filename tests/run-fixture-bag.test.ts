@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // `from`, tests/run-from-order.test.ts's own "refuses the whole run, before
 // any scenario record is written" test) rather than letting the step run
 // and fail. Exercised through both `nuka run` and `nuka do` — the two
-// executors src/step/validate-fixtures.ts's shared judgment protects.
+// executors src/fixture/validate-fixtures.ts's shared judgment protects.
 
 describe("nuka run: fixture bag's structural refusal", () => {
   let rootDir: string;

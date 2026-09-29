@@ -5,7 +5,7 @@ import type { WebmcpModelContext } from "./list-tools.js";
 // Responsibility: the "B" half of this experimental pair, a plain function
 // a hand-written typed step imports to call one tool a page has already
 // declared through `navigator.modelContext.registerTool`. Kept as a plain
-// import rather than a member of `StepFixtures` (src/context.ts): the
+// import rather than a member of `StepFixtures` (src/step/context.ts): the
 // boundary rule that file's own header states is that a fixture carries
 // only what the executor must inject, and everything this function needs
 // from the executor is `page`, which already reaches a step as a fixture

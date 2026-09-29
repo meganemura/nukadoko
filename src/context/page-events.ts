@@ -1,3 +1,5 @@
+import type { ConsoleErrorEntry, FailedRequestEntry, PageErrorEntry, PageEventsSnapshot, PageEventsTruncated } from "../record/types.js";
+
 // Responsibility: the page-origin evidence docs/spec.md's "Records"
 // (`page_events`) describes — console errors, uncaught page errors, and
 // failed requests a browser context saw during a step, none of which
@@ -63,66 +65,6 @@
 // exists to rule out.
 
 const MAX_ENTRIES_PER_CATEGORY = 100;
-
-/** One `console.error` call, error type only (warning is excluded as
- * noise). */
-export interface ConsoleErrorEntry {
-  readonly text: string;
-  readonly location: {
-    readonly url: string;
-    readonly lineNumber: number;
-    readonly columnNumber: number;
-  };
-  readonly at: string;
-}
-
-/** One uncaught error the page itself threw (`BrowserContext`'s own
- * `weberror`, the context-level counterpart to `Page`'s `pageerror`). Never
- * carries `Error#stack` — see this file's own header for why. */
-export interface PageErrorEntry {
-  readonly message: string;
-  readonly at: string;
-}
-
-/** One request the page issued that failed at the network level (DNS,
- * connection refused, aborted, ...) — never a completed response with a
- * non-2xx status, which Playwright's own `requestfailed` event does not fire
- * for either. */
-export interface FailedRequestEntry {
-  readonly method: string;
-  readonly url: string;
-  /** `request.failure()?.errorText` — omitted on the rare occasion
-   * `failure()` itself returns `null` for a `requestfailed` event (nothing
-   * else to report in that case). */
-  readonly failure?: string;
-  readonly at: string;
-}
-
-/** Which of `page_events`'s three categories were truncated, each mapped to
- * its *true* total (how many were actually recorded), never to the number
- * of entries the step record shows (always <= `MAX_ENTRIES_PER_CATEGORY`).
- * Present on the snapshot only when at least one category was truncated —
- * a category that was not is simply absent here,
- * never present with its own entry count or `false`. */
-export interface PageEventsTruncated {
-  console_errors?: number;
-  page_errors?: number;
-  failed_requests?: number;
-}
-
-/** The step record's own `page_events` shape (docs/spec.md "Records") —
- * each category is always a bare array (never the truncated entry count, and
- * never conditionally shaped some other way; see this file's own header),
- * present only when at least one entry of that kind was recorded. `truncated`
- * is the one place a cap being hit is reported.
- * The whole field is omitted from the step record when all three categories
- * are empty (same convention as `declared`/`sections`/`used`). */
-export interface PageEventsSnapshot {
-  console_errors?: readonly ConsoleErrorEntry[];
-  page_errors?: readonly PageErrorEntry[];
-  failed_requests?: readonly FailedRequestEntry[];
-  truncated?: PageEventsTruncated;
-}
 
 export interface PageEventsCollector {
   /** Records one `console.error` call. `at` is stamped here, not supplied by

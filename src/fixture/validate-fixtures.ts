@@ -1,21 +1,21 @@
 import type { NukadokoConfig } from "../config/schema.js";
-import { BUILTIN_FIXTURE_NAMES } from "../context.js";
+import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import {
   buildFixtureGraph,
   findFixtureCycles,
   findFixtureScopeViolations,
   findPageOverrideUnowned,
   type FixtureGraph,
-} from "../fixture/graph.js";
-import { fixtureFnOf } from "../fixture/types.js";
+} from "./graph.js";
+import { fixtureFnOf } from "../step/fixture-types.js";
 import {
   FixtureDefaultValueError,
   FixtureNotDestructuredError,
   FixtureRestParameterError,
   fixtureParameterNames,
   type FixtureConsumer,
-} from "./fixture-names.js";
-import type { Step } from "./define-step.js";
+} from "../step/fixture-names.js";
+import type { Step } from "../step/define-step.js";
 
 // Responsibility: the one judgment "does this step's run() ask for fixtures
 // nukadoko can actually build" — the fixture-bag counterpart to src/step/

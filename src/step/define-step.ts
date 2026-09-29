@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { StepFixtures } from "../context.js";
+import type { StepFixtures } from "./context.js";
 import { STEP_BRAND } from "./brand.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
@@ -317,7 +317,7 @@ export interface StepDefinitionInput<
    * causes a browser to launch. The destructuring pattern is read
    * statically (src/step/fixture-names.ts) before this function is ever
    * called, so it must be a plain object pattern — no default values, no
-   * `...rest` (src/step/validate-fixtures.ts refuses both, and an
+   * `...rest` (src/fixture/validate-fixtures.ts refuses both, and an
    * un-destructured positional parameter, before execution). A step that
    * needs no fixtures at all writes `run({}, args)`, or, needing neither
    * fixtures nor args, `run()`. */

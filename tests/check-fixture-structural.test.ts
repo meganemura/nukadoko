@@ -3,7 +3,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check`'s fixture-bag structural check
-// (src/step/validate-fixtures.ts's `validateStepFixtures`, wired into
+// (src/fixture/validate-fixtures.ts's `validateStepFixtures`, wired into
 // src/check/analyze.ts, so `nuka check` and `nuka run` share the same
 // validation) — the same shape
 // tests/check-structural-from.test.ts already proves for `from`'s own

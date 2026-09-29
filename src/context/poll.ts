@@ -1,3 +1,5 @@
+import type { PollOptions } from "../step/context.js";
+
 // Responsibility: `ctx.poll`'s own retry loop (docs/spec.md "Context API") —
 // the submit-poll-fetch wait for a value that has been asked for but is not
 // there yet. This module no longer exports a runnable `poll`: that was a
@@ -12,19 +14,6 @@
 // so `pollWithRecording` below takes a plain callback instead, and
 // create-context.ts is the only caller, binding that callback to the
 // collector to produce the `ctx.poll` a step actually calls.
-
-export interface PollOptions {
-  /** Total time budget for polling, in milliseconds. */
-  timeout?: number;
-  /** Delay between poll attempts, in milliseconds. */
-  interval?: number;
-  /** Human-readable label. Included in `PollTimeoutError`'s message when
-   * this poll times out, and in the step record's own `polls` entry
-   * regardless of how the poll ended (docs/spec.md "Records") — the same label both
-   * names the failure and identifies the record of the wait that produced
-   * it. */
-  description?: string;
-}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_INTERVAL_MS = 500;

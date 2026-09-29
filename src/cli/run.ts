@@ -62,7 +62,7 @@ import {
   knownFixtureNames,
   validateFixtureDefinitions,
   validateStepFixtures,
-} from "../step/validate-fixtures.js";
+} from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";

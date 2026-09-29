@@ -16,7 +16,6 @@ import {
   createFixtureCache,
   resolveFixtures,
   teardownFixtureCache,
-  type FixtureUsageEntry,
 } from "../fixture/resolver.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
@@ -28,7 +27,7 @@ import { removeLiveSockDir } from "../session/live-sock.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
-import type { ErrorKind, StepRecord } from "../record/types.js";
+import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -46,7 +45,7 @@ import {
   knownFixtureNames,
   validateFixtureDefinitions,
   validateStepFixtures,
-} from "../step/validate-fixtures.js";
+} from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { formatVocabularyError } from "./vocabulary.js";

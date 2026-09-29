@@ -1,3 +1,5 @@
+import type { ObservedCounts } from "../record/types.js";
+
 // Responsibility: the network-write observation tally docs/spec.md's
 // "Keyword semantics" and "Records" (`observed`) describe — a single
 // mutable collector shared by http-log.ts (ctx.request() calls) and
@@ -12,14 +14,6 @@
 // step's own `run`, the same trust-model rule every other evidence-
 // collecting piece of `ctx` already follows (docs/spec.md: a step cannot
 // control its own step record or evidence collection).
-
-/** Read/write tally for one step boundary — `nuka do`'s whole execution, or
- * one `nuka run` pickle step. Mirrors the
- * step record's own `observed` shape (docs/spec.md "Records"). */
-export interface ObservedCounts {
-  http_reads: number;
-  http_writes: number;
-}
 
 export interface ObservedCollector {
   /** Tallies one network call by its HTTP method: GET/HEAD as a read,

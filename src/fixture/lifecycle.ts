@@ -1,4 +1,4 @@
-import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "./types.js";
+import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "../step/fixture-types.js";
 
 // Responsibility: runs *one* fixture function's own setup/teardown
 // coroutine — `await use(value)` inside it suspends until this module's own

@@ -2,10 +2,11 @@ import type { Config } from "./archstrict.types.js";
 
 // Module boundaries follow how this package grows.
 //
-// The step contract (config, the context file, the context directory,
-// fixtures, records, and step definitions) changes together, and one
-// ignored cycle names that component. Everything else is a directory
-// module with the files other modules already import as its surface.
+// The step contract is split into five layers with no cycle between
+// them: records, the step contract itself (step definitions, the ctx
+// types, fixture types), config, the context that builds ctx, and
+// fixtures. Every module is a directory module with the files other
+// modules already import as its surface.
 // A new file stays private until a caller outside the module needs it,
 // which is the moment the surface has to be updated on purpose.
 //
@@ -35,13 +36,6 @@ export default {
     "vscode/**",
     "*.ts",
   ],
-  // Naming one pair exempts the whole component those two modules belong
-  // to. Today that component is config, context, context-types, fixture,
-  // record, and step: record field types live next to the collectors that
-  // produce them, the config schema types fixtures, and context.ts and the
-  // context directory import each other. A cycle that pulls in a module
-  // outside that set is a new component and is not covered by this entry.
-  ignoredCycles: [["context", "step"]],
   mustBeEmpty: [
     {
       glob: "src/core/**",
@@ -71,12 +65,11 @@ export default {
     { glob: "src/secrets/**", tags: ["layer:base", "pkghost:library"] },
     { glob: "src/session/**", tags: ["layer:base", "pkghost:library"] },
     { glob: "src/sink/**", tags: ["layer:base", "pkghost:library"] },
-    { glob: "src/config/**", tags: ["layer:contract", "pkghost:library"] },
-    { glob: "src/context.ts", tags: ["layer:contract", "pkghost:library"] },
-    { glob: "src/context/**", tags: ["layer:contract", "pkghost:library"] },
-    { glob: "src/fixture/**", tags: ["layer:contract", "pkghost:library"] },
-    { glob: "src/record/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/record/**", tags: ["layer:record", "pkghost:library"] },
     { glob: "src/step/**", tags: ["layer:contract", "pkghost:library"] },
+    { glob: "src/config/**", tags: ["layer:config", "pkghost:library"] },
+    { glob: "src/context/**", tags: ["layer:context", "pkghost:library"] },
+    { glob: "src/fixture/**", tags: ["layer:fixture", "pkghost:library"] },
     { glob: "src/discover/**", tags: ["layer:read", "pkghost:library"] },
     { glob: "src/feature/**", tags: ["layer:read", "pkghost:feature"] },
     { glob: "src/version.ts", tags: ["layer:read", "pkghost:library"] },
@@ -101,11 +94,11 @@ export default {
       {
         tagNamespace: "layer",
         sequence: {
-          "": ["leaf", "base", "contract", "read", "service", "run", "workflow", "adapter", "entry"],
+          "": ["leaf", "base", "record", "contract", "config", "context", "fixture", "read", "service", "run", "workflow", "adapter", "entry"],
         },
         direction: "downward-only",
         because:
-          "foundation first. Checks, the runner, compat, matching, and mcp sit above the step contract, so a change in one of them does not reach back into a lower layer.",
+          "foundation first. Records sit under the step contract, then config, the context that builds ctx, and fixtures. Checks, the runner, matching, and mcp sit above all five, so a change in one of them does not reach back into a lower layer. compat sits below them in base, so the migration door never depends on the engine it is migrating into.",
       },
     ],
     allowDeny: [
@@ -191,7 +184,6 @@ export default {
       glob: "src/config/**",
       surface: ["define-config.ts", "errors.ts", "load-config.ts", "module-kind.ts", "schema.ts"],
     },
-    { name: "context-types", glob: "src/context.ts", surface: "context.ts" },
     {
       name: "context",
       glob: "src/context/**",
@@ -200,9 +192,6 @@ export default {
         "env.ts",
         "errors.ts",
         "evidence.ts",
-        "http-omitted.ts",
-        "observed.ts",
-        "page-events.ts",
         "poll.ts",
         "trace-actions.ts",
         "used.ts",
@@ -211,7 +200,7 @@ export default {
     {
       name: "fixture",
       glob: "src/fixture/**",
-      surface: ["define-fixtures.ts", "graph.ts", "resolver.ts", "types.ts"],
+      surface: ["define-fixtures.ts", "graph.ts", "resolver.ts", "step-needs.ts", "validate-fixtures.ts"],
     },
     {
       name: "record",
@@ -231,14 +220,14 @@ export default {
       name: "step",
       glob: "src/step/**",
       surface: [
+        "context.ts",
         "define-step.ts",
         "fixture-names.ts",
+        "fixture-types.ts",
         "infer-needs.ts",
         "resolve-use.ts",
         "step-fixture-names.ts",
-        "step-needs.ts",
         "strict-args.ts",
-        "validate-fixtures.ts",
         "validate-from.ts",
         "validate-parts.ts",
       ],
@@ -320,5 +309,5 @@ export default {
     { name: "matching", glob: "src/matching/**" },
   ],
   because:
-    "seams follow growth. The step contract is one component. Checks, compat, matching, mcp, and the CLI are separate modules with explicit surfaces, so a new file in one of them does not land in a single core.",
+    "seams follow growth. The step contract is one module, layered between records below and config, context, and fixtures above. Checks, compat, matching, mcp, and the CLI are separate modules with explicit surfaces, so a new file in one of them does not land in a single core.",
 } satisfies Config;

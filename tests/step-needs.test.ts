@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineStep } from "../src/step/define-step.js";
-import { stepNeeds } from "../src/step/step-needs.js";
+import { stepNeeds } from "../src/fixture/step-needs.js";
 
-// Responsibility: unit tests for src/step/step-needs.ts's `stepNeeds` —
+// Responsibility: unit tests for src/fixture/step-needs.ts's `stepNeeds` —
 // the pure function `nuka steps --json`'s `needs`/
 // `needs_browser` fields go through, exercised directly (no CLI, no
 // discovery) so the alphabetizing and the `page`/`context` membership check

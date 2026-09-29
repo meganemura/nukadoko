@@ -92,8 +92,7 @@
 // at all — see the field's own doc comment for why.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
-import type { ActionEntry } from "../context/trace-actions.js";
-import type { ErrorKind, ScreenshotEntry } from "./types.js";
+import type { ActionEntry, ErrorKind, ScreenshotEntry } from "./types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 

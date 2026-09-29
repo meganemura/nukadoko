@@ -1,17 +1,18 @@
-import type { StepContext, StepFixtures } from "../context.js";
+import type { StepContext, StepFixtures } from "../step/context.js";
 import { buildStepFixtures } from "../context/create-context.js";
 import { closeFixtureNames, resolveDependencyEdge, type FixtureGraph, type FixtureNode } from "./graph.js";
 import { startFixture, type FixtureInstance } from "./lifecycle.js";
 
 export type { FixtureInstance };
-import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
+import type { FixtureScope, FixtureUsageEntry } from "../record/types.js";
+import type { FixtureDeps, FixtureOutcome } from "../step/fixture-types.js";
 
 // Responsibility: the *runtime* counterpart to src/fixture/graph.ts's
 // structural judgments — actually building a step's own
 // requested fixture bag through the graph, and
 // tearing a scope's own built fixtures down again, LIFO, once that scope's
 // own lifetime ends. Everything here trusts its input is already validated
-// (src/step/validate-fixtures.ts, run before execution in `nuka run`/`nuka
+// (src/fixture/validate-fixtures.ts, run before execution in `nuka run`/`nuka
 // do`'s own setup phase, same trust boundary src/context/create-
 // context.ts's `buildStepFixtures` already documents for itself) — an
 // unknown name or a cycle reaching this module throws plainly rather than
@@ -35,36 +36,6 @@ import type { FixtureDeps, FixtureOutcome, FixtureScope } from "./types.js";
 // refused any `"process"`-scope fixture that depends on anything but `env`/
 // `requireEnv`/`baseURL` (scenario-independent values) before execution
 // ever began.
-
-/** Every fixture actually resolved while assembling one step's bag —
- * step-record-facing (docs/spec.md "Records").
- * Includes every `config.fixtures` entry touched, not only the names the
- * step itself destructured: a fixture built as a side effect of resolving
- * another one is real, measured setup cost, and hiding it would make
- * `setup_ms`'s own absence unreadable: normally its absence already has to
- * mean either "this call reused an existing instance" or "this fixture is
- * simply fast", and a hidden, transitively-built dependency would add a
- * third, indistinguishable reading ("a dependency nobody told you about")
- * to those same two. Builtins
- * never appear here — they are not `config.fixtures` entries, and their own
- * resolution is unchanged, already unmeasured the same way it always was. */
-export interface FixtureUsageEntry {
-  readonly name: string;
-  readonly scope: FixtureScope;
-  /** Present only when this call actually built the fixture (`reused:
-   * false`) — omitted, not `0`, for a reused instance, so a reader can
-   * tell "this call built it in Nms" from "this call didn't build it at
-   * all" without a sentinel value. */
-  readonly setup_ms?: number;
-  /** ISO 8601, the moment this call's own build started — same presence
-   * rule as `setup_ms`. */
-  readonly at?: string;
-  /** `true` when this fixture was already built (by an earlier step in
-   * this scenario, or — for `scope: "process"` — by an earlier scenario in
-   * this same `nuka run` invocation) and this call simply received the
-   * cached value. */
-  readonly reused: boolean;
-}
 
 export interface FixtureTeardownError {
   readonly fixture: string;

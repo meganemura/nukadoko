@@ -10,8 +10,7 @@ import type {
   TableRow,
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
-import type { ActionEntry } from "../../context/trace-actions.js";
-import type { CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
+import type { ActionEntry, CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
 

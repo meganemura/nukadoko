@@ -6,7 +6,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // wouldn't compile (`Property 'bogus' does not exist on type
 // 'StepFixtures'`) — TypeScript already refuses this shape for any step
 // author who lets it infer the parameter's type. `any` is this fixture's
-// way of reaching the *runtime* backstop (src/step/validate-fixtures.ts)
+// way of reaching the *runtime* backstop (src/fixture/validate-fixtures.ts)
 // on purpose, the same way tests/validate-from.test.ts reaches its own
 // runtime check via `as unknown as Step` — proving the check still catches
 // what the type layer would have, for a step that somehow bypassed it (a

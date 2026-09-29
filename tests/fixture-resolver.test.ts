@@ -6,7 +6,7 @@ import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { buildFixtureGraph } from "../src/fixture/graph.js";
 import { createFixtureCache, resolveFixtures, teardownFixtureCache } from "../src/fixture/resolver.js";
-import type { FixtureDefinition } from "../src/fixture/types.js";
+import type { FixtureDefinition } from "../src/step/fixture-types.js";
 
 // Responsibility: unit tests for src/fixture/resolver.ts's `resolveFixtures`/
 // `teardownFixtureCache` — the runtime half of P5, exercised against a real

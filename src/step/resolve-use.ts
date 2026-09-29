@@ -1,5 +1,4 @@
-import type { UsedEntryWithResult } from "../context/used.js";
-import type { StepRecord } from "../record/types.js";
+import type { StepRecord, UsedEntryWithResult } from "../record/types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
 // Responsibility: `nuka do --use <record-id>`'s own lookup (docs/spec.md

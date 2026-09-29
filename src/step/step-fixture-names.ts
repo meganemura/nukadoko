@@ -17,7 +17,7 @@ import type { Step } from "./define-step.js";
 // already resolved — a browser launches before `run()` starts whenever a
 // part reaches for `page`, even on a branch that never calls it, matching
 // the declared-before-either-function-runs timing docs/spec.md "Parts"
-// describes. src/step/step-needs.ts's `stepNeeds` uses the same closure so
+// describes. src/fixture/step-needs.ts's `stepNeeds` uses the same closure so
 // `nuka steps --json`'s `needs`/`needs_browser` account for a part's own
 // needs too.
 //
