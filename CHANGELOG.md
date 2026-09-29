@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.14.0 — 2026-09-30
+
 ### Added
 
 - **Markdown oaths are a second front beside Gherkin.**
