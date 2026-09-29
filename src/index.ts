@@ -46,6 +46,7 @@ export type {
   ScreenshotEntry,
   SectionEntry,
   StepRecord,
+  StepRecordBase,
   StepRecordFailed,
   StepRecordOk,
 } from "./record/types.js";

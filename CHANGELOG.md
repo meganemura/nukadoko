@@ -17,6 +17,10 @@ just until 0.1.
   `.md` path is an oath even when it is not listed.
   `examples/todo/features/todo.md` is the worked example. What this slice
   reads, and what it leaves, is in docs/spec.md ("Markdown oaths").
+- **`StepRecordBase` is exported.** `StepRecordOk` and `StepRecordFailed`
+  both extend it, and it holds the fields every step record carries, but
+  the type itself had no public name. Code that handles either kind of
+  record can now name the shared part directly.
 
 ### Changed
 
