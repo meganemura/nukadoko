@@ -14,18 +14,18 @@
 // when empty (no compat hooks matched this pickle's tags, or none are
 // registered at all) — same convention as `steps`.
 //
-// `ScenarioHookRecord.declared` is added now: a hook has no step record to
+// `ScenarioHookRecord.declared` exists because a hook has no step record to
 // carry its own `declared` field on (see
 // src/record/types.ts's own header), so this record is where its own
 // attachments/labels/links/parameters/logs land instead — one collector
 // boundary per individual hook invocation, not per Before/After phase, so
 // one hook's own declared data never gets smeared across its sibling hooks.
 //
-// `ScenarioHookRecord.error.kind` is added now: a hook has no step record of
-// its own to carry `error.kind` on
+// `ScenarioHookRecord.error.kind` exists for the same reason: a hook has no
+// step record of its own to carry `error.kind` on
 // either (see src/record/types.ts's own header for the enum itself and why
 // it exists), so this is where a hook's own failure gets the same machine-
-// readable classification a step's own step record does — the M3 Allure
+// readable classification a step's own step record does — the Allure
 // emitter maps a hook to a fixture the same way it maps a step to a test
 // result. Only four of the seven `ErrorKind` values are reachable here: a
 // hook has no args/returns/binding concept of its own —
@@ -33,8 +33,8 @@
 // return), `world_invalid` (a declared World key's write, since a hook runs
 // against the same World a compat step does), and `step_error`.
 //
-// `ScenarioHookRecord.type` gains `"after_step"`, and `.step_index` is added
-// now: `AfterStep`
+// `ScenarioHookRecord.type` includes `"after_step"`, with `.step_index`
+// beside it: `AfterStep`
 // (src/compat/hooks.ts) runs once per *executed* pickle step, not once per
 // scenario the way Before/After do, so — unlike those two — its own record
 // entry needs to say which step it ran after, or a report reading
@@ -48,11 +48,12 @@
 // the same "a step nothing matched doesn't appear here" convention this
 // interface's own header already documents for a tag-mismatched hook.
 //
-// `ScenarioRecord.run_id` and `.git` are added now — recording-side
-// groundwork for `nuka accept` (docs/spec.md
-// "Sign-off"), which is not implemented yet and does not read either field
-// itself. `run_id` identifies "every scenario record one `nuka run`
-// invocation wrote" — a fact no existing field carries, since
+// `ScenarioRecord.run_id` and `.git` are what `nuka accept` (docs/spec.md
+// "Sign-off") reads: src/accept/select-run.ts groups records by `run_id`,
+// and src/cli/accept.ts refuses a sign-off unless `git` names the current
+// HEAD and a clean tree.
+// `run_id` identifies "every scenario record one `nuka run`
+// invocation wrote" — a fact no other field carries, since
 // `scenario_record_id` is unique per pickle. `git` is the commit and cleanliness of the working
 // tree "when the run started" (docs/spec.md "Sign-off" verbatim) — absent
 // outside a git repository, before the first commit, or when the git call
@@ -61,10 +62,10 @@
 // (src/environment/probe-version.ts): the run itself never fails over
 // either field.
 //
-// `ScenarioHookRecord.trace`/`.actions`/`.truncated` close a gap: once the
-// Playwright trace became one chunk per step, a Before/After/
-// AfterStep hook's own `ctx.page()` calls stopped landing in any chunk at
-// all, since a chunk only ever opened for a step's own boundary. A hook has
+// `ScenarioHookRecord.trace`/`.actions`/`.truncated` exist because the
+// Playwright trace is one chunk per step, and a chunk only opens at a
+// step's own boundary, so a Before/After/AfterStep hook's own `ctx.page()`
+// calls would otherwise land in no chunk at all. A hook has
 // no step record of its own (same "no args/returns/binding concept"
 // reasoning as `.error.kind` above), so, like `.declared`, its own trace
 // evidence lands here instead — one chunk per *individual* hook invocation
@@ -83,8 +84,8 @@
 // trace chunk itself rather than from anything the hook explicitly called,
 // is unaffected by that gap.
 //
-// `ScenarioRecord.browser` is added now — the
-// measured counterpart to the new `config.browserType` (src/config/
+// `ScenarioRecord.browser` is the
+// measured counterpart to `config.browserType` (src/config/
 // schema.ts), which lets a project launch firefox or webkit instead of
 // chromium. It carries what the run actually launched (`Browser#
 // browserType().name()`/`Browser#version()`), never the config value
