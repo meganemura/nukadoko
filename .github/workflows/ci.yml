@@ -39,6 +39,9 @@ jobs:
       # written here too because the line is where a reader looks.
       - run: npm ci --ignore-scripts
 
+      # Reads the TypeScript source. No build and no browser.
+      - run: npm run archstrict
+
       # Browsers are never installed by `npm ci`. They live in a cache
       # outside node_modules that only this command fills, and a fresh
       # runner has none. Chromium is the only one the suite launches.

@@ -5,8 +5,8 @@ whose name is `v` plus the `package.json` version. Pushing that tag runs
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml). The
 workflow checks the tag against `package.json`, installs the tagged
 commit, builds `dist/`, runs the same checks this repository's own CI
-runs, runs `npm run pack-check`, and runs `npm publish`. npm
-authenticates with GitHub Actions OIDC.
+runs (including `npm run archstrict`), runs `npm run pack-check`, and
+runs `npm publish`. npm authenticates with GitHub Actions OIDC.
 Provenance is attached automatically because the repository and the
 package are public. The GitHub Environment `publish` is the human
 gate: the publish job waits there until it is approved.
@@ -91,7 +91,7 @@ registers the trusted publisher.
    without the leading `v`, is that version. The workflow stops when
    they differ.
 
-2. Run `npm run typecheck && npm test && npm run selftest && npm run pack-check`.
+2. Run `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check`.
    `pack-check` installs the real tarball into a throwaway project
    outside this repository and drives the CLI there. That is what catches
    a `bin` that depends on a package this repository only lists as a
@@ -105,11 +105,13 @@ registers the trusted publisher.
    The pending approval is that run entering the Environment. The
    workflow uses Node 24 on `ubuntu-latest` with the npm registry URL
    set. It requires npm 11.5.1 or newer, the release that can exchange a
-   GitHub OIDC token for a publish. It runs `npm ci --ignore-scripts`,
-   installs Playwright's Chromium (the suite launches it, and `npm ci`
-   never does), `npm run build`, `npm run typecheck`, `npm test`,
-   `npm run selftest`, and `npm run pack-check`, then refuses the run
-   if any tracked file changed. `dist/` is gitignored, so the new build
+   GitHub OIDC token for a publish. It runs `npm ci --ignore-scripts`
+   and `npm run archstrict` (that check reads source, so it needs
+   neither the build nor a browser), installs Playwright's Chromium
+   (the suite launches it, and `npm ci` never does), `npm run build`,
+   `npm run typecheck`, `npm test`, `npm run selftest`, and
+   `npm run pack-check`, then refuses the run if any tracked file
+   changed. `dist/` is gitignored, so the new build
    output is expected and is what gets packed. Then it runs
    `npm publish`. Actions are pinned to a full-length commit SHA, written
    `uses: action@<40-hex> # vX.Y.Z`, the same way `ci.yml` is. This

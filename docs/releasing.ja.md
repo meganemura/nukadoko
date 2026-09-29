@@ -3,7 +3,7 @@
 nukadoko はすでに npm にあります。
 リリースは npm パッケージと、`package.json` の version に `v` を付けた git tag です。
 その tag を push すると [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) が走ります。
-workflow は tag と `package.json` を突き合わせ、その commit をインストールし、`dist/` をビルドし、このリポジトリ自身の CI と同じチェックを実行し、`npm run pack-check` を実行してから `npm publish` します。
+workflow は tag と `package.json` を突き合わせ、その commit をインストールし、`dist/` をビルドし、このリポジトリ自身の CI と同じチェック(`npm run archstrict` を含む)を実行し、`npm run pack-check` を実行してから `npm publish` します。
 npm は GitHub Actions の OIDC で認証します。
 リポジトリとパッケージがどちらも公開されているので、npm の provenance は自動で付きます。
 GitHub の Environment `publish` が人のゲートです。
@@ -73,7 +73,7 @@ workflow は `NPM_TOKEN` を読みません。
    先頭の `v` を除いた tag がその version です。
    両者が違えば workflow は止まります。
 
-2. `npm run typecheck && npm test && npm run selftest && npm run pack-check` を実行します。
+2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check` を実行します。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。
    これが捕まえるのは、このリポジトリが devDependency にしか挙げていないパッケージへ `bin` が依存していることと、`dist/` が `src/` と一致していないことです。
 
@@ -88,7 +88,8 @@ workflow は `NPM_TOKEN` を読みません。
    workflow は `ubuntu-latest` の Node 24 を使い、npm の registry URL を設定します。
    npm 11.5.1 以上を要求します。
    その版が、GitHub の OIDC トークンを publish 用の資格情報に交換できる版だからです。
-   `npm ci --ignore-scripts` を実行し、Playwright の Chromium をインストールし(`npm ci` はブラウザを入れず、スイートはそれを起動します)、`npm run build`、`npm run typecheck`、`npm test`、`npm run selftest`、`npm run pack-check` を実行し、追跡されているファイルが変わっていれば拒否します。
+   `npm ci --ignore-scripts` と `npm run archstrict` を実行します(そのチェックはソースを読むので、ビルドもブラウザも要りません)。
+   Playwright の Chromium をインストールし(`npm ci` はブラウザを入れず、スイートはそれを起動します)、`npm run build`、`npm run typecheck`、`npm test`、`npm run selftest`、`npm run pack-check` を実行し、追跡されているファイルが変わっていれば拒否します。
    `dist/` は `.gitignore` に入っているので、新しいビルド出力は想定どおりであり、pack されるのもそれです。
    そのあと `npm publish` を実行します。
    action は commit id にピンされ、`ci.yml` と同じです。

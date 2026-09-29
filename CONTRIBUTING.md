@@ -38,6 +38,7 @@ build and the tests were measured without it.
 | `npm test` | Builds, then runs the unit and CLI tests |
 | `npm run selftest` | Builds, then runs the suite against itself, with a browser |
 | `npm run typecheck` | Builds, then type-checks sources and tests together |
+| `npm run archstrict` | Checks module boundaries against the package exports |
 | `npm run coverage` | Builds, then runs the tests with coverage |
 | `npm run build` | Compiles `src/` to `dist/` |
 
