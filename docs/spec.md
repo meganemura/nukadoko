@@ -47,6 +47,13 @@ a first-class goal, not a convenience. After each failed run, the standing
 question is whether a check could have caught the failure first. Honesty sets
 the limit. `check` only makes a claim when there is only one possible outcome,
 because a check that guesses trains people to ignore reliable checks.
+A scenario outline with no Examples row is one of those outcomes.
+`compile()` either leaves the placeholder text in place or drops the
+scenario, and neither result is a boundary that ran. `nuka check` reports
+that as `outline-does-not-run`. The feature file keeps the rows. nukadoko
+does not generate them, and it does not run a property test. A property
+test of the decision stays in the project under test, on the function that
+decides. The feature's Examples rows are the boundaries nukadoko itself runs.
 
 A nukadoko is the fermented rice-bran bed that turns cucumbers into pickles.
 It is alive. Daily care makes it mature, while neglect makes it die. This tool

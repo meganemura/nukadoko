@@ -106,6 +106,11 @@ export const CHECK_CODES = {
       "featuresDir exists, but no .ts/.mts/.js/.mjs step file was found while scanning it, so no step can ever be registered.",
     severity: "error",
   },
+  "outline-does-not-run": {
+    description:
+      "A scenario outline has no Examples row that will run, so the boundary the feature names is absent from the run.",
+    severity: "error",
+  },
   "page-override-unowned": {
     description: "A config.fixtures definition overrides page, but owns neither page nor context.",
     severity: "error",

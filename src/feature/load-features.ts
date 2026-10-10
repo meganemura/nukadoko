@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile } from "@cucumber/gherkin";
+import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile, dialects } from "@cucumber/gherkin";
 import { OathParseError, parseOathSource } from "./parse-oath.js";
 import { resolveOathPaths } from "./resolve-oaths.js";
 import {
@@ -91,6 +91,7 @@ export interface LoadFeaturesResult {
   readonly features: readonly FeatureFile[];
   readonly parseErrors: readonly FeatureParseError[];
   readonly serialTagOnScenario: readonly SerialTagOnScenario[];
+  readonly outlinesThatDoNotRun: readonly OutlineDoesNotRun[];
 }
 
 /** Exported for src/run/select-pickles.ts's own directory-target walk —
@@ -277,6 +278,77 @@ export function findSerialTagOnScenario(
   return issues;
 }
 
+/** A scenario whose boundary rows will not run.
+ * `compile()` drops an Examples table that has no body row, and it leaves
+ * a scenario-outline keyword with no Examples table as one pickle whose
+ * placeholders stay literal. The pickle list cannot name either case, so
+ * this reads the document before that list is all a caller keeps. */
+export interface OutlineDoesNotRun {
+  readonly relativePath: string;
+  readonly line: number;
+  readonly name: string;
+  readonly reason: "no-examples" | "empty-examples";
+}
+
+interface GherkinDialect {
+  readonly scenarioOutline: readonly string[];
+}
+
+function scenarioOutlineKeywords(language: string): ReadonlySet<string> {
+  const table = dialects as Record<string, GherkinDialect>;
+  const dialect = table[language] ?? table.en;
+  return new Set(dialect?.scenarioOutline ?? []);
+}
+
+export function findOutlinesThatDoNotRun(
+  gherkinDocument: GherkinDocument,
+  relativePath: string,
+): readonly OutlineDoesNotRun[] {
+  const feature = gherkinDocument.feature;
+  if (feature === undefined) {
+    return [];
+  }
+  const outlineKeywords = scenarioOutlineKeywords(feature.language);
+  const issues: OutlineDoesNotRun[] = [];
+
+  const checkScenario = (scenario: Scenario): void => {
+    if (scenario.examples.length === 0) {
+      if (outlineKeywords.has(scenario.keyword)) {
+        issues.push({
+          relativePath,
+          line: scenario.location.line,
+          name: scenario.name,
+          reason: "no-examples",
+        });
+      }
+      return;
+    }
+    for (const block of scenario.examples) {
+      if (block.tableBody.length === 0) {
+        issues.push({
+          relativePath,
+          line: block.location.line,
+          name: scenario.name,
+          reason: "empty-examples",
+        });
+      }
+    }
+  };
+
+  for (const child of feature.children) {
+    if (child.scenario) {
+      checkScenario(child.scenario);
+    } else if (child.rule) {
+      for (const ruleChild of child.rule.children) {
+        if (ruleChild.scenario) {
+          checkScenario(ruleChild.scenario);
+        }
+      }
+    }
+  }
+  return issues;
+}
+
 export interface LoadFeaturesFromDirsResult extends LoadFeaturesResult {
   /** Which `additionalFeatureDirs` entries (never `featuresDir` — see this
    * file's own header) do not exist on disk, in the order they were given. */
@@ -298,6 +370,7 @@ export function loadFeaturesFromDirs(
   const parseErrors: FeatureParseError[] = [];
   const missingAdditionalDirs: string[] = [];
   const serialTagOnScenario: SerialTagOnScenario[] = [];
+  const outlinesThatDoNotRun: OutlineDoesNotRun[] = [];
   const seenAbsolutePaths = new Set<string>();
 
   const collect = (dir: string): void => {
@@ -321,6 +394,7 @@ export function loadFeaturesFromDirs(
         const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
         features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
         serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
+        outlinesThatDoNotRun.push(...findOutlinesThatDoNotRun(gherkinDocument, relativePath));
       } catch (error) {
         parseErrors.push({
           relativePath,
@@ -362,6 +436,7 @@ export function loadFeaturesFromDirs(
       const { gherkinDocument, pickles } = parseOathSource(source, relativePath);
       features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
       serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
+      outlinesThatDoNotRun.push(...findOutlinesThatDoNotRun(gherkinDocument, relativePath));
     } catch (error) {
       parseErrors.push({
         relativePath,
@@ -371,5 +446,5 @@ export function loadFeaturesFromDirs(
     }
   }
 
-  return { features, parseErrors, serialTagOnScenario, missingAdditionalDirs };
+  return { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, missingAdditionalDirs };
 }

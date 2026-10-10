@@ -7,10 +7,12 @@ import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-ki
 import { discoverSteps } from "../discover/discover-steps.js";
 import {
   attachStepLines,
+  findOutlinesThatDoNotRun,
   findSerialTagOnScenario,
   loadFeaturesFromDirs,
   parseFeatureSource,
   type LoadFeaturesResult,
+  type OutlineDoesNotRun,
 } from "../feature/load-features.js";
 import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
 import { isOathPath } from "../feature/resolve-oaths.js";
@@ -22,6 +24,19 @@ import { checkConfig } from "./config-check.js";
 import { checkFeatures } from "./feature-check.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import type { CheckIssue, CheckReport } from "./types.js";
+
+function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
+  if (issue.reason === "no-examples") {
+    return (
+      `Scenario outline "${issue.name}" has no Examples table, so the placeholder text runs as written. ` +
+      "Add one Examples row for each boundary that must run."
+    );
+  }
+  return (
+    `Scenario "${issue.name}" has an Examples table with no rows, so the scenario is left out of the run. ` +
+    "Add a row, or remove the table."
+  );
+}
 
 // Responsibility: the one function `nuka check` runs — load the project the
 // same way `nuka steps`/`nuka do` already do (loadConfig, discoverSteps),
@@ -149,6 +164,7 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
       features: [{ relativePath, pickles: attachStepLines(pickles, gherkinDocument) }],
       parseErrors: [],
       serialTagOnScenario: findSerialTagOnScenario(gherkinDocument, relativePath),
+      outlinesThatDoNotRun: findOutlinesThatDoNotRun(gherkinDocument, relativePath),
     };
   } catch (error) {
     return {
@@ -161,6 +177,7 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
         },
       ],
       serialTagOnScenario: [],
+      outlinesThatDoNotRun: [],
     };
   }
 }
@@ -426,7 +443,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
-  const { features, parseErrors, serialTagOnScenario } =
+  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun } =
     featureArg === undefined
       ? // additionalFeatureDirs joins featuresDir here too: a no-argument
         // `nuka check` is one of the two commands whose default scan
@@ -458,6 +475,14 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
         `@nukadoko:serial on scenario "${issue.name}" has no effect: nuka run --concurrency reads ` +
         "@nukadoko:serial only from " +
         "the Feature line. Move the tag there.",
+      file: issue.relativePath,
+      line: issue.line,
+    });
+  }
+  for (const issue of outlinesThatDoNotRun) {
+    errors.push({
+      code: "outline-does-not-run",
+      message: outlineDoesNotRunMessage(issue),
       file: issue.relativePath,
       line: issue.line,
     });
