@@ -221,6 +221,7 @@ export default {
       glob: "src/step/**",
       surface: [
         "context.ts",
+        "define-explore.ts",
         "define-step.ts",
         "fixture-names.ts",
         "fixture-types.ts",

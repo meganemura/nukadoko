@@ -7,6 +7,15 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **Models and relations are declarations `nuka check` can read.**
+  `defineModel(initial).commands(...)` and `defineRelation` name steps by
+  basename. `explore-unknown-step` reports a name that is not in the
+  vocabulary. `explore-browser-step` reports a step that needs `page` or
+  `context`. A request-only step is allowed. Check does not run the steps.
+  `examples/todo/features/explore/` is the request-only case.
+
 ## 0.14.1 — 2026-10-10
 
 ### Fixed

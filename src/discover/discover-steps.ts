@@ -15,6 +15,7 @@ import type {
 import type { RunHookRegistration } from "../compat/run-hooks.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { StepContext } from "../step/context.js";
+import { isModel, isRelation, type Model, type Relation } from "../step/define-explore.js";
 import { isStep, type Step } from "../step/define-step.js";
 import {
   DuplicateCompatStepError,
@@ -197,6 +198,13 @@ export interface DiscoveryResult {
    * walked -- the same "so a reader can tell a finding isn't lying"
    * reasoning as `nuka tend`'s own `scanned:` line (src/cli/tend.ts). */
   readonly walkedFiles: readonly string[];
+  /** Default exports that are models, in walk order. A model file is not a
+   * step: its commands name steps that live in other files. Absolute
+   * `filePath`, same as `TypedVocabularyEntry.filePath`. */
+  readonly models: readonly { readonly filePath: string; readonly model: Model }[];
+  /** Default exports that are relations, in walk order. Absolute
+   * `filePath`, same as `models`. */
+  readonly relations: readonly { readonly filePath: string; readonly relation: Relation }[];
 }
 
 function compatPatternSource(pattern: string | RegExp): string {
@@ -352,6 +360,8 @@ export async function discoverSteps(
     )) as typeof import("../compat/define-world.js");
 
     const vocabulary = new Map<string, VocabularyEntry>();
+    const models: { filePath: string; model: Model }[] = [];
+    const relations: { filePath: string; relation: Relation }[] = [];
     const compatParameterTypes: CompatParameterTypeEntry[] = [];
     // At most one file's worth of `defineWorld` schemas ever wins — a second
     // registration, anywhere, is always an error, detected here rather than
@@ -434,6 +444,12 @@ export async function discoverSteps(
           throw new DuplicateStepError(name, existing.filePath, filePath);
         }
         vocabulary.set(name, { kind: "typed", name, filePath, step: candidate });
+      } else if (isModel(candidate)) {
+        // Not a step name. The basename of a model file is not a command
+        // key. Command keys name step files, and check is what compares them.
+        models.push({ filePath, model: candidate });
+      } else if (isRelation(candidate)) {
+        relations.push({ filePath, relation: candidate });
       }
 
       // Attribute this file's own compat registrations: drained immediately
@@ -505,6 +521,8 @@ export async function discoverSteps(
         path.relative(rootDir, filePath),
       ),
       walkedFiles: files.map((filePath) => path.relative(rootDir, filePath)),
+      models,
+      relations,
     };
   } finally {
     await scoped.unregister();

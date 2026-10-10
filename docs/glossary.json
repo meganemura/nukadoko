@@ -257,6 +257,16 @@
       "en": ["parent process", "the parent"],
       "ja": "親プロセス",
       "note": "M12 で入った語。worker プロセスに feature ファイルを配り、run の identity(run_id・summary・exit code など)をまとめて保持する側を指す。`the parent` という短い言い方で出てきても親プロセスと訳す(親だけでは何の親か伝わらない)"
+    },
+    {
+      "en": ["model"],
+      "ja": "モデル",
+      "note": "defineModel が宣言する探索用の状態。統計モデルや言語モデルではない。defineModel と modelCommand は英語のまま"
+    },
+    {
+      "en": ["relation"],
+      "ja": "関係",
+      "note": "defineRelation が宣言する、2 つの step 列の結果の間の関係。defineRelation と relationEntry は英語のまま"
     }
   ],
   "keep_english": [

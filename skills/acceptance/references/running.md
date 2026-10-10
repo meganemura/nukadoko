@@ -21,11 +21,13 @@ about itself.
 
 `nuka check <feature>` catches every static inconsistency it can, before
 anything executes. Among them: a step whose `from` key has no producing
-step earlier in that scenario, or has two of them competing. That one
+step earlier in that scenario, or has two of them competing. That case
 otherwise costs a whole browser session to discover, since the scenario
-looks correct until the consuming step actually runs. `nuka check --codes`
-names every finding code `check` can produce; read it there rather than
-from a list kept anywhere else.
+looks correct until the consuming step actually runs. A default-exported
+`defineModel` or `defineRelation` is checked too. An unknown step name,
+and a step that needs a browser, are errors. Check does not run those
+steps. `nuka check --codes` names every finding code `check` can produce.
+Read the catalog there rather than from a list kept anywhere else.
 
 If the feature's directory is in `additionalFeatureDirs` (see "What not to
 do" in `SKILL.md`), a bare `nuka check` already covers it, the same as any

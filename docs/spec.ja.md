@@ -2924,6 +2924,35 @@ sign-off の所見は非ゼロの exit code で終了し、定期実行される
 直すということは、description を書くこと、step を削除すること、feature を再び accept することを意味します。
 どれも背後に書き手がいる判断であり、これは `accept` が dirty な working tree を勝手に直さずに拒否するのと同じ理由です。
 
+## モデルと関係
+
+model と relation は、step の語彙の隣に置く宣言です。
+`nuka check` はそれらを読みます。
+`initial`、`args`、`pre`、`next`、`post`、`follow`、`relate` は呼びません。
+step も実行しません。
+
+`defineModel(initial).commands({ ... })` は、初期状態のあと、step の basename ごとに 1 つの command を取ります。
+command は `modelCommand(step)({ args, pre, next, post })` です。
+`args` と `post` は、その step の args と result に対して型が付きます。
+`next` は、状態と args から model を更新します。
+basename は、拡張子を除いた step ファイルの名前です。
+2 回に分かれているのは、callback を検査する前に状態の型が決まっている必要があるからです。
+1 つのオブジェクトリテラルにすると `step` が `Step` へ広がり、検査が `unknown` になります。
+
+`defineRelation` は、名前、`relationEntry(step, args)` の `source` 列、2 本目の列を返す `follow`、2 つの実行の result を比べる `relate` を取ります。
+`relationEntry` は、その step に対して `args` を検査します。
+`follow` と `relate` は保存されるだけです。
+check が読むのは `source` だけです。
+2 本目の列は `follow` を呼んだ結果だからです。
+
+discovery は、どちらかの宣言の default export を step ではなくその宣言として扱います。
+ファイルは `featuresDir` の下ならどこでも置けます。
+`examples/todo/features/explore/` は、request だけを使う model と relation です。
+
+`nuka check` は、command のキーがその step の basename でないとき、または列の step が登録されていないとき、`explore-unknown-step` を報告します。
+その step が `page` または `context` を必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
+`request` だけを必要とする step は許されます。
+
 ## CLI summary
 
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。

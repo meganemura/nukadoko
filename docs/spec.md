@@ -3472,6 +3472,36 @@ deleting a step, or re-accepting a feature: decisions with an author
 behind them, which is the same reason `accept` refuses rather than
 fixes up a dirty tree.
 
+## Models and relations
+
+A model and a relation sit next to the step vocabulary. They are declarations.
+`nuka check` reads them. It does not run them, and it does not call `initial`,
+`args`, `pre`, `next`, `post`, `follow`, or `relate`.
+
+`defineModel(initial).commands({ ... })` takes the initial state, then one
+command per step basename. A command is `modelCommand(step)({ args, pre, next,
+post })`. `args` and `post` are typed against that step's args and result.
+`next` updates the model from the state and the args. The basename is the
+step file's name, without its extension. The two calls exist so the state
+type is known before those callbacks are checked. One object literal widens
+`step` to `Step` and the check becomes `unknown`.
+
+`defineRelation` takes a name, a `source` sequence of `relationEntry(step,
+args)`, a `follow` function that returns the second sequence, and `relate`
+over the two runs' results. `relationEntry` checks `args` against that step.
+`follow` and `relate` are stored. Check reads `source` only, because the
+second sequence is the result of calling `follow`.
+
+Discovery treats a default export of either declaration as that declaration,
+not as a step. The file can live anywhere under `featuresDir`.
+`examples/todo/features/explore/` is a request-only model and relation.
+
+`nuka check` reports `explore-unknown-step` when a command key is not the
+basename of the step it holds, or when a sequence entry's step was never
+registered. It reports `explore-browser-step` when that step needs `page` or
+`context`, including through a fixture that reaches one. A step that needs
+only `request` is allowed.
+
 ## CLI summary
 
 The npm package is `nukadoko`. The one command it installs is `nuka`.

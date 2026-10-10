@@ -17,10 +17,13 @@ import {
 import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
 import { isOathPath } from "../feature/resolve-oaths.js";
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../fixture/validate-fixtures.js";
+import { buildFixtureGraph } from "../fixture/graph.js";
+import { stepNeeds } from "../fixture/step-needs.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { validateStepParts } from "../step/validate-parts.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
+import { checkExploreDeclarations } from "./explore-check.js";
 import { checkFeatures } from "./feature-check.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import type { CheckIssue, CheckReport } from "./types.js";
@@ -229,6 +232,8 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // their own plain `discoverSteps(rootDir, config.featuresDir)` calls.
   const {
     vocabulary,
+    models,
+    relations,
     compatParameterTypes,
     compatHooks,
     importFailures,
@@ -394,6 +399,24 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       message: issue.message,
       file: path.relative(rootDir, issue.filePath),
       step: issue.step,
+    });
+  }
+
+  // A model or a relation names steps by basename. That name is either a
+  // file discovery registered, or it is not, and the step either needs a
+  // browser or it does not. Both are known before any step runs, so they
+  // belong here rather than in the runner. `checkExploreDeclarations` does
+  // not call the model or the relation.
+  const fixtureGraph = buildFixtureGraph(config);
+  for (const issue of checkExploreDeclarations({
+    vocabulary,
+    models,
+    relations,
+    needsBrowser: (step) => stepNeeds(step, fixtureGraph).needsBrowser,
+  })) {
+    errors.push({
+      ...issue,
+      file: issue.file === undefined ? undefined : path.relative(rootDir, issue.file),
     });
   }
 

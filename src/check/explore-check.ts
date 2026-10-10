@@ -1,0 +1,124 @@
+import type { Vocabulary } from "../discover/discover-steps.js";
+import type { Model, Relation } from "../step/define-explore.js";
+import { isStep, type Step } from "../step/define-step.js";
+import type { CheckIssue } from "./types.js";
+
+// Responsibility: the static half of a model or a relation. A command key
+// or a sequence entry either names a step discovery registered, or it does
+// not, and that step either destructures `page` or `context` (directly or
+// through a fixture that reaches one), or it does not. Both are facts
+// about the declaration. This file does not call `initial`, `args`, `pre`,
+// `next`, `post`, `follow`, or `relate`, and it does not call `step.run`.
+// Calling any of those would turn a check into a run.
+
+export interface ExploreModelFile {
+  readonly filePath: string;
+  readonly model: Model;
+}
+
+export interface ExploreRelationFile {
+  readonly filePath: string;
+  readonly relation: Relation;
+}
+
+export interface CheckExploreInput {
+  readonly vocabulary: Vocabulary;
+  readonly models: readonly ExploreModelFile[];
+  readonly relations: readonly ExploreRelationFile[];
+  /** Whether opening this step's fixture bag opens a browser. The caller
+   * supplies the project's fixture graph. This module does not import that
+   * graph: the predicate is the only fact the findings need. */
+  readonly needsBrowser: (step: Step) => boolean;
+}
+
+function registeredName(vocabulary: Vocabulary, step: Step): string | undefined {
+  for (const entry of vocabulary.values()) {
+    if (entry.kind === "typed" && entry.step === step) {
+      return entry.name;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * One finding per command key and per source entry that fails. A
+ * request-only step produces nothing here. The second sequence is the
+ * return value of `follow`, which is only known once a run calls it, so
+ * check does not read it.
+ */
+export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+
+  for (const file of input.models) {
+    for (const [name, command] of Object.entries(file.model.commands)) {
+      const where = `command "${name}"`;
+      if (!isStep(command.step)) {
+        issues.push(unknown(file.filePath, name, where));
+        continue;
+      }
+      const registered = registeredName(input.vocabulary, command.step);
+      if (registered === undefined) {
+        issues.push(unknown(file.filePath, name, where));
+        continue;
+      }
+      if (registered !== name) {
+        issues.push({
+          code: "explore-unknown-step",
+          message: `${where} is not the step registered as "${registered}"`,
+          file: file.filePath,
+          step: name,
+        });
+        continue;
+      }
+      if (input.needsBrowser(command.step)) {
+        issues.push(browser(file.filePath, name, where));
+      }
+    }
+  }
+
+  for (const file of input.relations) {
+    file.relation.source.forEach((entry, index) => {
+      const where = `relation "${file.relation.name}" source[${index}]`;
+      if (!isStep(entry.step)) {
+        issues.push({
+          code: "explore-unknown-step",
+          message: `${where} names a step that is not in the vocabulary`,
+          file: file.filePath,
+        });
+        return;
+      }
+      const registered = registeredName(input.vocabulary, entry.step);
+      if (registered === undefined) {
+        issues.push({
+          code: "explore-unknown-step",
+          message: `${where} names a step that is not in the vocabulary`,
+          file: file.filePath,
+        });
+        return;
+      }
+      if (input.needsBrowser(entry.step)) {
+        issues.push(browser(file.filePath, registered, where));
+      }
+    });
+  }
+
+  return issues;
+}
+
+function unknown(filePath: string, stepName: string, where: string): CheckIssue {
+  return {
+    code: "explore-unknown-step",
+    message: `${where} names "${stepName}", which is not in the vocabulary`,
+    file: filePath,
+    step: stepName,
+  };
+}
+
+function browser(filePath: string, stepName: string, where: string): CheckIssue {
+  return {
+    code: "explore-browser-step",
+    message: `${where} names "${stepName}", which needs a browser (page or context). Explore does not run a step that needs a browser`,
+    file: filePath,
+    step: stepName,
+  };
+}

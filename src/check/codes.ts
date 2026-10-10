@@ -65,6 +65,16 @@ export const CHECK_CODES = {
     description: "An entry in one environment's own envFiles does not exist on disk.",
     severity: "warning",
   },
+  "explore-browser-step": {
+    description:
+      "A model command or a relation sequence entry names a step that needs a browser (page or context). Explore does not run that step.",
+    severity: "error",
+  },
+  "explore-unknown-step": {
+    description:
+      "A model command or a relation sequence entry names a step that is not in the vocabulary.",
+    severity: "error",
+  },
   "feature-parse-error": {
     description: "A .feature file or a Markdown oath could not be parsed, so nothing in it was checked.",
     severity: "error",
