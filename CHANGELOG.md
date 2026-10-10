@@ -7,6 +7,18 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.14.1 — 2026-10-10
+
+### Fixed
+
+- **`nuka check` reports an outline whose boundary rows will not run.**
+  A Scenario Outline or Scenario Template with no Examples table runs once
+  with the placeholder text left in. An Examples table with a header and no
+  body row produces no scenario at all. Both were silent.
+  `outline-does-not-run` names the scenario and the line. A table with at
+  least one row is unchanged. nukadoko does not generate the rows and does
+  not run a property test.
+
 ## 0.14.0 — 2026-09-30
 
 ### Added
