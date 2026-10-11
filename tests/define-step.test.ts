@@ -1,6 +1,41 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineStep, isStep } from "../src/step/define-step.js";
+
+// Node's setTimeout keeps a delay only inside 1..2^31-1. Above that, and for
+// a non-finite or non-positive delay, it waits 1ms, so the step is recorded
+// as timed out for a deadline that never ran. 2^31-1 is the last value that
+// still means what the author wrote.
+const MAX_STEP_TIMEOUT_MS = 2_147_483_647;
+
+function validDefinition() {
+  return {
+    description: "d",
+    args: z.object({}),
+    returns: z.object({}),
+    async run() {
+      return {};
+    },
+  };
+}
+
+function refusal(definition: object): Error {
+  try {
+    defineStep(definition as never);
+  } catch (error) {
+    if (error instanceof Error) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error("defineStep accepted a malformed definition");
+}
+
+function deadlineSetTimeoutHonors(timeout: number): boolean {
+  return Number.isFinite(timeout) && timeout > 0 && timeout <= MAX_STEP_TIMEOUT_MS;
+}
 
 describe("defineStep", () => {
   it("brands its return value so discovery can recognize it", () => {
@@ -111,4 +146,85 @@ describe("defineStep", () => {
     expect(isStep(null)).toBe(false);
     expect(isStep(() => undefined)).toBe(false);
   });
+
+  it("still runs a valid step, including a deadline at the timer's own limit", () => {
+    let ran = false;
+    const step = defineStep({
+      ...validDefinition(),
+      timeout: MAX_STEP_TIMEOUT_MS,
+      run() {
+        ran = true;
+        return {};
+      },
+    });
+    expect(step.timeout).toBe(MAX_STEP_TIMEOUT_MS);
+    expect(step.run({} as never, {})).toEqual({});
+    expect(ran).toBe(true);
+    expect(defineStep(validDefinition()).timeout).toBeUndefined();
+  });
+
+  it("refuses args that are not a zod schema", () => {
+    for (const args of [undefined, null, {}, "name"]) {
+      const error = refusal({ ...validDefinition(), args });
+      expect(error.name).toBe("InvalidStepDefinitionError");
+      expect(error.name).not.toBe("TypeError");
+      expect(error.message).toContain("args must be a zod schema");
+    }
+  });
+
+  it("refuses returns that are not a zod schema", () => {
+    const error = refusal({ ...validDefinition(), returns: undefined });
+    expect(error.name).toBe("InvalidStepDefinitionError");
+    expect(error.message).toContain("returns must be a zod schema");
+  });
+
+  it("refuses a run that is not a function", () => {
+    const error = refusal({ ...validDefinition(), run: undefined });
+    expect(error.name).toBe("InvalidStepDefinitionError");
+    expect(error.message).toContain("run must be a function");
+  });
+
+  it("refuses a pattern that is not a string", () => {
+    const error = refusal({ ...validDefinition(), pattern: ["a thing happens", "alias"] });
+    expect(error.name).toBe("InvalidStepDefinitionError");
+    expect(error.message).toContain("pattern must be a string");
+  });
+
+  it("refuses patterns that are not an array of strings", () => {
+    const error = refusal({ ...validDefinition(), patterns: ["ok", 1] });
+    expect(error.name).toBe("InvalidStepDefinitionError");
+    expect(error.message).toContain("patterns must be an array of strings");
+  });
+
+  it("refuses a parts entry that is not a step", () => {
+    const part = defineStep(validDefinition());
+    const error = refusal({ ...validDefinition(), parts: [part, undefined] });
+    expect(error.name).toBe("InvalidStepDefinitionError");
+    expect(error.message).toContain("parts must be an array of steps");
+  });
+
+  it("refuses a timeout setTimeout would not honor, and says so as a timeout", () => {
+    for (const timeout of [Number.POSITIVE_INFINITY, 0, -5, Number.NaN, 2 ** 31]) {
+      const error = refusal({ ...validDefinition(), timeout });
+      expect(error.name).toBe("InvalidStepDefinitionError");
+      expect(error.message).toContain(
+        "timeout must be a finite number of milliseconds greater than 0 and at most 2147483647",
+      );
+      expect(error.message).not.toContain("timed out after");
+    }
+  });
+
+  it("accepts a per-step timeout exactly when setTimeout would honor it", () =>
+    hegel.test((tc) => {
+      const timeout = tc.draw(gs.floats({ allowNan: true, allowInfinity: true }));
+      const definition = { ...validDefinition(), timeout };
+      if (deadlineSetTimeoutHonors(timeout)) {
+        expect(defineStep(definition).timeout).toBe(timeout);
+      } else {
+        const error = refusal(definition);
+        expect(error.name).toBe("InvalidStepDefinitionError");
+        expect(error.message).toContain("timeout must be a finite number");
+        expect(error.message).not.toContain("timed out after");
+      }
+    }));
 });
