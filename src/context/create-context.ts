@@ -917,7 +917,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // here is a real measurement, not a claim. Name only, never the
       // value — a value can be a secret.
       envReads.record(name);
-      const value = env[name];
+      // Bracket access walks Object.prototype, so "toString" and
+      // "constructor" read as functions on an env object that never set
+      // them. Those are not configured values. Only an own key is.
+      const value = Object.hasOwn(env, name) ? env[name] : undefined;
       // Empty string is "not set", same reasoning as MissingEnvError's own
       // doc comment: an envFile's `KEY=` line parses to `""`, not "omitted",
       // so treating `""` as present here would defeat the whole point of a

@@ -37,7 +37,14 @@ export function resolveEnvironment(
   name: string,
   explicit: boolean,
 ): ResolvedEnvironment {
-  const envConfig = config.environments?.[name];
+  // Bracket access walks Object.prototype, so "constructor" and "toString"
+  // read as present on every plain `environments` object even when the
+  // config never defined them. Only an own entry is a name that exists.
+  const environments = config.environments;
+  const envConfig =
+    environments !== undefined && Object.hasOwn(environments, name)
+      ? environments[name]
+      : undefined;
   if (envConfig === undefined && explicit) {
     throw new UnknownEnvironmentError(name);
   }
