@@ -1,11 +1,12 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { runCli } from "../src/cli/run-cli.js";
 import { ConfigError } from "../src/config/errors.js";
 import { loadConfig } from "../src/config/load-config.js";
 import { configSchema } from "../src/config/schema.js";
-import { createEmptyTempDir, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 describe("loadConfig", () => {
   it("applies defaults when nukadoko.config.ts is absent", async () => {
@@ -209,6 +210,182 @@ function median(samples: readonly number[]): number {
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 }
+
+const CJS_TS_HINT =
+  ' This project has no "type": "module" in package.json, so nukadoko reads .ts here as CommonJS; nukadoko is ESM-only, so rename this file to .mts.';
+
+// Responsibility: an import that throws, and a CommonJS `.ts` config whose
+// interop wrapper fails the schema instead of throwing, both have to name
+// the config file the reader wrote. tsx's own transform error names a
+// `.ts` path even when the file on disk is `.mts`, and a CommonJS project's
+// `.ts` config dies on this package's ESM-only exports with a message that
+// never mentions the config file. The CJS sentence is the same one step
+// files already get, and only when the project is CommonJS and the file
+// is `.ts`.
+describe("loadConfig: a failed import names the file and the cause", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  async function writeProject(files: Record<string, string>): Promise<void> {
+    for (const [rel, body] of Object.entries(files)) {
+      const full = path.join(rootDir, rel);
+      await mkdir(path.dirname(full), { recursive: true });
+      await writeFile(full, body);
+    }
+  }
+
+  async function catchLoad(): Promise<unknown> {
+    try {
+      await loadConfig(rootDir);
+      return undefined;
+    } catch (error) {
+      return error;
+    }
+  }
+
+  it("names the config file, keeps the cause, and adds the CommonJS hint when a .ts config imports nukadoko", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "cjs-project", private: true }),
+      "node_modules/nukadoko/package.json": JSON.stringify({
+        name: "nukadoko",
+        type: "module",
+        exports: { ".": { import: "./index.js" } },
+      }),
+      "nukadoko.config.ts":
+        'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n',
+    });
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+
+    const caught = await catchLoad();
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.configPath).toBe(configPath);
+    expect(configError.message).toBe(
+      `Could not import config at ${configPath}: No "exports" main defined in ${path.join(rootDir, "node_modules", "nukadoko", "package.json")}${CJS_TS_HINT}`,
+    );
+    expect(configError.cause).toBeInstanceOf(Error);
+    expect((configError.cause as Error).message).toBe(
+      `No "exports" main defined in ${path.join(rootDir, "node_modules", "nukadoko", "package.json")}`,
+    );
+  });
+
+  it("prints that same message from nuka steps", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "cjs-project", private: true }),
+      "node_modules/nukadoko/package.json": JSON.stringify({
+        name: "nukadoko",
+        type: "module",
+        exports: { ".": { import: "./index.js" } },
+      }),
+      "nukadoko.config.ts":
+        'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n',
+    });
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["steps"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      `Could not import config at ${configPath}: No "exports" main defined in ${path.join(rootDir, "node_modules", "nukadoko", "package.json")}${CJS_TS_HINT}\n`,
+    );
+  });
+
+  it("adds the CommonJS hint when export default is read as an unknown key named default", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "cjs-project", private: true }),
+      "nukadoko.config.ts": "export default {};\n",
+    });
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+
+    const caught = await catchLoad();
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.message).toBe(
+      `Invalid config at ${configPath}: unknown key(s): default${CJS_TS_HINT}`,
+    );
+    expect(configError.cause).toBeUndefined();
+  });
+
+  it("names the file and the cause, with no CommonJS hint, when an ESM config throws", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "esm-project", type: "module" }),
+      "nukadoko.config.ts": "const target = undefined;\nexport default target.url;\n",
+    });
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+
+    const caught = await catchLoad();
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.configPath).toBe(configPath);
+    expect(configError.message).toBe(
+      `Could not import config at ${configPath}: Cannot read properties of undefined (reading 'url')`,
+    );
+    expect(configError.message).not.toContain('"type": "module"');
+    expect(configError.cause).toBeInstanceOf(Error);
+    expect((configError.cause as Error).message).toBe(
+      "Cannot read properties of undefined (reading 'url')",
+    );
+  });
+
+  it("names the .mts file when a syntax error's own text names a .ts path", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "cjs-project", private: true }),
+      "nukadoko.config.mts": 'export default { featuresDir: "features" ;\n',
+    });
+    const configPath = path.join(rootDir, "nukadoko.config.mts");
+
+    const caught = await catchLoad();
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.configPath).toBe(configPath);
+    expect(configError.message.startsWith(`Could not import config at ${configPath}: Transform failed with 1 error:\n`)).toBe(true);
+    expect(configError.message).toContain(`${configPath.replace(/\.mts$/, ".ts")}:1:41: ERROR: Expected "}" but found ";"`);
+    expect(configError.message).not.toContain('"type": "module"');
+    expect(configError.cause).toBeInstanceOf(Error);
+    expect((configError.cause as Error).message).toContain("nukadoko.config.ts:1:41");
+    expect((configError.cause as Error).message).not.toContain("nukadoko.config.mts");
+  });
+
+  it("still loads a CommonJS module.exports config", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "cjs-project", private: true }),
+      "nukadoko.config.ts": 'module.exports = { featuresDir: "bdd" };\n',
+    });
+
+    const config = await loadConfig(rootDir);
+
+    expect(config.featuresDir).toBe("bdd");
+  });
+
+  it("names a real unknown key in an ESM config and does not add the CommonJS hint", async () => {
+    await writeProject({
+      "package.json": JSON.stringify({ name: "esm-project", type: "module" }),
+      "nukadoko.config.ts": "export default { typo: true };\n",
+    });
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+
+    const caught = await catchLoad();
+
+    expect(caught).toBeInstanceOf(ConfigError);
+    const configError = caught as ConfigError;
+    expect(configError.message).toBe(`Invalid config at ${configPath}: unknown key(s): typo`);
+    expect(configError.message).not.toContain('"type": "module"');
+  });
+});
 
 describe("configSchema", () => {
   it("rejects an invalid value type for a known key", () => {
