@@ -215,6 +215,10 @@ export default defineStep({
   代替案(宣言順にキャプチャをスキーマのキーに結び付ける方法)では、キーの順序が入れ替わったときに同じ型の値 2 つが黙って入れ替わってしまい、静的チェックではそれを検出できないからです。
   この結び付きは、pattern 自体の中で見えることによってレビューに耐えなければなりません。
   エイリアスはすべて同じキー集合に結び付かなければなりません。
+  1 つの pattern の中で同じキーが 2 回キャプチャされるのはエラーです。
+  args の 1 つのフィールドが持てる値は 1 つであり、最後のキャプチャだけを残すと、それより前の値が黙って落ちるからです。
+  `nuka check` はその pattern を報告し、`nuka run` は step 本体を呼ぶ前にその結び付きを拒否します。
+  どちらもそのキーを名指しします。
 - pattern のリテラル部分も自由な散文ではなく、それ自体が cucumber-expressions の構文です。
   裸の `(` `)` は optional text、裸の `/` は alternation を意味するため、リテラルとして書きたい場合はエスケープしなければなりません。
   `pattern` の文字列リテラルの中では `\\(` `\\)` `\\/` と書きます(パースされた式の中の 1 つのバックスラッシュは、TS のソースでは 2 つになります)。
@@ -3119,7 +3123,8 @@ nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
-                              both match), duplicate patterns, a required
+                              both match), duplicate patterns, a pattern
+                              that captures the same key twice, a required
                               args key nothing on that line could fill, a
                               required `from` key whose producer is absent,
                               bound later in the scenario, or ambiguous

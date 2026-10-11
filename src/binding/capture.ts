@@ -36,3 +36,21 @@ export function parseCaptureToken(token: string): Capture {
   }
   return { key, type };
 }
+
+/**
+ * Keys that appear more than once, in the order they were first captured.
+ * One args field holds one value. A later capture of the same key used to
+ * overwrite the earlier one, and the run still passed, so the dropped value
+ * left no trace. Callers refuse the pattern instead of choosing a value.
+ */
+export function duplicateCaptureKeys(captures: readonly Pick<Capture, "key">[]): readonly string[] {
+  const counts = new Map<string, number>();
+  for (const capture of captures) {
+    counts.set(capture.key, (counts.get(capture.key) ?? 0) + 1);
+  }
+  const duplicated: string[] = [];
+  for (const [key, count] of counts) {
+    if (count > 1) duplicated.push(key);
+  }
+  return duplicated;
+}

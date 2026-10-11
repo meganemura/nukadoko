@@ -1,5 +1,6 @@
 import { CucumberExpression, type ParameterTypeRegistry } from "@cucumber/cucumber-expressions";
 import { UndefinedParameterTypeError } from "@cucumber/cucumber-expressions/dist/Errors.js";
+import { duplicateCaptureKeys } from "../binding/capture.js";
 import { type Capture, stripCaptureNames } from "../binding/pattern.js";
 import { ParameterTypeCollisionError } from "../binding/parameter-type-errors.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
@@ -218,6 +219,18 @@ export function checkBindings(
         strippedPattern: stripped.strippedPattern,
         captures: stripped.captures,
       });
+
+      // After the names are stripped, two captures can still share a key.
+      // That is not a parse failure: each token is a valid `{key:type}`.
+      // It is a binding failure, reported here so `nuka run` can refuse the
+      // same pattern instead of keeping only the last value.
+      for (const key of duplicateCaptureKeys(stripped.captures)) {
+        issues.push({
+          code: "duplicate-capture-key",
+          message: `Step "${stepName}" pattern "${pattern}" binds key "${key}" more than once`,
+          step: stepName,
+        });
+      }
 
       const owners = strippedTextOwners.get(stripped.strippedPattern) ?? [];
       owners.push({ stepName, pattern });

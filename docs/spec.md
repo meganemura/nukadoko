@@ -233,7 +233,11 @@ export default defineStep({
   captures to schema keys by declaration order) swaps two same-typed
   values silently when keys are reordered, and no static check can catch
   that. The binding must survive review by being visible in the pattern
-  itself. Aliases must all bind the same key set.
+  itself. Aliases must all bind the same key set. The same key captured
+  twice in one pattern is an error. One args field holds one value, and
+  keeping the last capture would drop the earlier one with nothing to
+  show that it happened. `nuka check` reports that pattern and `nuka run`
+  refuses the binding before the step body runs. Both name the key.
 - A pattern's literal text is still cucumber-expressions syntax, not free
   prose: bare `(` `)` mean optional text and bare `/` means alternation, so
   literal occurrences must be escaped, as `\\(`, `\\)`, `\\/` in the
@@ -3678,7 +3682,8 @@ nuka scaffold <name>          typed step template that fails until implemented
 nuka check [feature]          static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
-                              both match), duplicate patterns, a required
+                              both match), duplicate patterns, a pattern
+                              that captures the same key twice, a required
                               args key nothing on that line could fill, a
                               required `from` key whose producer is absent,
                               bound later in the scenario, or ambiguous

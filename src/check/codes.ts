@@ -52,6 +52,11 @@ export const CHECK_CODES = {
       "A pattern captures a key as a number ({int} or {float}) or a string ({string} or {word}), but the args schema declares that key as the other type and does not coerce the captured value.",
     severity: "error",
   },
+  "duplicate-capture-key": {
+    description:
+      "A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value.",
+    severity: "error",
+  },
   "duplicate-pattern": {
     description:
       "Two or more patterns, once capture names are stripped, normalize to the same text, so one step text could match more than one step.",

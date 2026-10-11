@@ -300,6 +300,11 @@ field. It does not fire when the schema coerces the captured value
 coerce still is that finding. The one-line description is `nuka check
 --codes`.
 
+Capturing the same key twice in one pattern is refused too. One args
+field holds one value, and keeping the last capture would drop the
+earlier one. `nuka check` reports it and `nuka run` refuses the binding
+before the step body runs, and both name the key.
+
 ## Running a step alone before it touches a feature
 
 If the step body needs a local variable with the same name as a fixture,

@@ -1,6 +1,7 @@
 import { CucumberExpression, RegularExpression, type ParameterTypeRegistry } from "@cucumber/cucumber-expressions";
 import type { PickleStepArgument } from "@cucumber/messages";
 import type { z } from "zod";
+import { duplicateCaptureKeys } from "../binding/capture.js";
 import { buildExpression } from "../binding/expression.js";
 import { type Capture } from "../binding/pattern.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
@@ -229,6 +230,14 @@ export async function matchPickleStep(
   return { kind: "matched", stepName: binding.stepName, captures: binding.captures, values };
 }
 
+function duplicateCaptureRefusal(stepName: string, keys: readonly string[]): string {
+  if (keys.length === 1) {
+    return `Step "${stepName}" binds key "${keys[0]}" more than once, so no value is kept for it`;
+  }
+  const quoted = keys.map((key) => `"${key}"`).join(", ");
+  return `Step "${stepName}" binds keys ${quoted} more than once, so no value is kept for them`;
+}
+
 export type BindArgsResult =
   | { readonly ok: true; readonly value: Record<string, unknown> }
   | { readonly ok: false; readonly message: string; readonly partialValue: Record<string, unknown> };
@@ -241,7 +250,9 @@ export type BindArgsResult =
  * of, is a binding failure: counted as "the
  * step's execution began" (like an args-validation failure), not as "never
  * started" (like undefined/ambiguous), so callers still write a failed
- * step record for it.
+ * step record for it. A key captured more than once is the same kind of
+ * failure: one field holds one value, and keeping the last capture would
+ * drop the earlier one while the record still said the step passed.
  */
 export function bindStepArgs(
   stepName: string,
@@ -257,9 +268,19 @@ export function bindStepArgs(
   fromKeys: ReadonlySet<string> = new Set(),
 ): BindArgsResult {
   const value: Record<string, unknown> = {};
+  const duplicated = duplicateCaptureKeys(captures);
+  const duplicatedKeys = new Set(duplicated);
   captures.forEach((capture, index) => {
+    if (duplicatedKeys.has(capture.key)) return;
     value[capture.key] = values[index];
   });
+  if (duplicated.length > 0) {
+    return {
+      ok: false,
+      message: duplicateCaptureRefusal(stepName, duplicated),
+      partialValue: value,
+    };
+  }
 
   const hasAttachment = attachment?.dataTable !== undefined || attachment?.docString !== undefined;
   if (!hasAttachment) {

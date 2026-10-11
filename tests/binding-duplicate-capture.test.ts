@@ -97,6 +97,25 @@ describe("a pattern that captures the same key twice", () => {
       expect(bound).not.toEqual({ ok: true, value: { [key]: second } });
     }));
 
+  it("keeps a once-only key when another key in the same pattern is repeated", () => {
+    const bound = bindStepArgs(
+      "span",
+      [
+        { key: "label", type: "word" },
+        { key: "n", type: "int" },
+        { key: "n", type: "int" },
+      ],
+      ["wide", 1, 9],
+      undefined,
+      z.object({ label: z.string(), n: z.number() }),
+    );
+    expect(bound.ok).toBe(false);
+    if (!bound.ok) {
+      expect(bound.message).toContain('"n"');
+      expect(bound.partialValue).toEqual({ label: "wide" });
+    }
+  });
+
   it("keeps both values when the two captures use different keys", () => {
     const bound = bindStepArgs(
       "transfer",

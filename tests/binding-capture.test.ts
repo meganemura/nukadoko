@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { parseCaptureToken } from "../src/binding/capture.js";
+import { duplicateCaptureKeys, parseCaptureToken } from "../src/binding/capture.js";
 import { InvalidCaptureKeyError, UnnamedCaptureError, UnterminatedCaptureError } from "../src/binding/errors.js";
 import { stripCaptureNames } from "../src/binding/pattern.js";
 
@@ -36,6 +36,18 @@ describe("parseCaptureToken", () => {
     expect(parseCaptureToken("_private:int")).toEqual({ key: "_private", type: "int" });
     expect(parseCaptureToken("a_1:int")).toEqual({ key: "a_1", type: "int" });
   });
+});
+
+describe("duplicateCaptureKeys", () => {
+  it("returns only keys that occur more than once, in first-seen order", () =>
+    hegel.test((tc) => {
+      const keys = tc.draw(gs.arrays(gs.sampledFrom(["a", "b", "c"]), { minSize: 0, maxSize: 8 }));
+      const found = duplicateCaptureKeys(keys.map((key) => ({ key, type: "word" })));
+      const counts = new Map<string, number>();
+      for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
+      const expected = [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key);
+      expect([...found]).toEqual(expected);
+    }));
 });
 
 describe("stripCaptureNames", () => {

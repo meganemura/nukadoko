@@ -190,6 +190,9 @@ What changed:
   when that field does not coerce. `z.coerce.number()` on a `{string}`
   and `z.coerce.string()` on an `{int}` are not that finding: the run
   accepts the capture. `nuka check --codes` has the one-line description.
+  The same key captured twice in one pattern is refused: `nuka check`
+  reports it and `nuka run` refuses the binding before the step body
+  runs, and both name the key. Each capture needs its own args key.
 - `mutates: true` is now a declaration, not just a fact about what the code
   happens to do: `nuka check` warns if this step is ever bound to `Then`,
   and a read-only environment refuses to run it at all. The step record still
