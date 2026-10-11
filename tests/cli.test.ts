@@ -1,6 +1,6 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  createEmptyTempDir,
   fixture,
   removeTempDir,
   repoRoot,
@@ -410,6 +411,92 @@ describe("nuka (process)", () => {
         "record.json",
       );
       expect(existsSync(recordPath)).toBe(true);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("delivers piped stdout larger than 64 KiB and exits 0", async () => {
+    // A pipe accepts about 64 KiB and then the writer has to wait. Exiting
+    // in that same turn drops whatever is still queued, so the reader gets
+    // a cut-off document and exit code 0. A payload only a little past one
+    // buffer can still arrive whole: the parent reads the first buffer
+    // before the child exits, and the kernel accepts another. Several
+    // buffers is the size that gets cut. The pause between reads is what
+    // keeps the pipe full while that happens. A reader that keeps up can
+    // hide the cut.
+    const description = "x".repeat(256 * 1024);
+    const rootDir = await createEmptyTempDir();
+    try {
+      const stepsDir = path.join(rootDir, "features", "steps");
+      await mkdir(stepsDir, { recursive: true });
+      // Same stand-in the committed fixtures use. A bare "nukadoko" import
+      // from a file inside this repo resolves to the package exports, which
+      // point at dist/, and this test has to run before that build exists.
+      const shimTarget = path.join(repoRoot, "src", "index.js");
+      const shimRelative = path.relative(rootDir, shimTarget).split(path.sep).join("/");
+      await writeFile(
+        path.join(rootDir, "nukadoko-shim.ts"),
+        `export * from "${shimRelative.startsWith(".") ? shimRelative : `./${shimRelative}`}";\n`,
+      );
+      await writeFile(
+        path.join(stepsDir, "wide-output.ts"),
+        [
+          'import { z } from "zod";',
+          'import { defineStep } from "../../nukadoko-shim.js";',
+          "",
+          "export default defineStep({",
+          `  description: ${JSON.stringify(description)},`,
+          "  args: z.object({}),",
+          "  returns: z.object({ ok: z.boolean() }),",
+          "  mutates: false,",
+          "  async run() {",
+          "    return { ok: true };",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+      );
+
+      const cliPath = path.join(repoRoot, "src", "cli.ts");
+      const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
+      const child = spawn(tsxBin, [cliPath, "steps", "--json"], {
+        cwd: rootDir,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      child.stderr.on("data", (chunk: Buffer) => {
+        stderrChunks.push(chunk);
+      });
+      const stdoutDone = (async () => {
+        for await (const chunk of child.stdout) {
+          stdoutChunks.push(chunk as Buffer);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+      })();
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        child.on("error", reject);
+        child.on("close", (code) => resolve(code));
+      });
+      await stdoutDone;
+
+      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf8");
+      expect(exitCode).toBe(0);
+      expect(stderr).toBe("");
+      expect(Buffer.byteLength(stdout)).toBeGreaterThan(64 * 1024);
+      const report = JSON.parse(stdout) as {
+        steps: { name: string; description: string }[];
+        import_failures: unknown[];
+      };
+      expect(report.import_failures).toEqual([]);
+      expect(report.steps).toEqual([
+        expect.objectContaining({
+          name: "wide-output",
+          description,
+        }),
+      ]);
     } finally {
       await removeTempDir(rootDir);
     }
