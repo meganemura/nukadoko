@@ -99,7 +99,7 @@ export const CHECK_CODES = {
   },
   "fixture-structural-violation": {
     description:
-      "A step's run(), or a config.fixtures definition's own function, is not a plain object-destructuring parameter, or destructures a fixture name nukadoko does not know.",
+      "A step's run(), or a config.fixtures definition's own function, is not a plain object-destructuring parameter, or destructures a fixture name nukadoko does not know. A fixture that destructures call is the same finding: call is only available inside a step's run().",
     severity: "error",
   },
   "from-order-violation": {

@@ -40,7 +40,9 @@ import type { Step } from "../step/define-step.js";
 //   2. `validateFixtureDefinitions` is new: the *fixture graph's own*
 //      structural findings — a definition destructuring an unknown name
 //      (the same judgment as (1), applied to a fixture's own body instead
-//      of a step's), a dependency cycle, a `"process"`-scope fixture
+//      of a step's), a definition naming `call` (a step's `run` may, a
+//      fixture must not: the fixture runs before the step boundary `call`
+//      reads), a dependency cycle, a `"process"`-scope fixture
 //      depending on a `"scenario"`-scope one, and `page` overridden by a fixture that
 //      owns neither `page` nor `context` (src/fixture/graph.ts does the
 //      actual graph-shape work; this file only turns its findings into the
@@ -65,6 +67,18 @@ export interface FixtureIssue {
 }
 
 const KNOWN_BUILTIN_FIXTURE_NAMES = new Set(BUILTIN_FIXTURE_NAMES);
+
+/**
+ * Builtins a step's `run` may destructure and a fixture must not.
+ *
+ * `knownFixtureNames` includes every builtin, because a step may name any of
+ * them. A fixture is different: `resolveFixtures` calls the fixture while it
+ * is still building dependencies, and `beginStepRun` opens the step frame
+ * only after that returns. `call` reads that frame (`calls.currentStep()`),
+ * so a fixture that names it can only throw. `resultOf`, `section`, `poll`,
+ * and `evidence` record without that frame, so a fixture may name them.
+ */
+const STEP_ONLY_BUILTIN_NAMES = new Set<string>(["call"]);
 
 /** Every valid fixture name for `config` — builtins ∪ every `config.
  * fixtures` key — the one set both `validateStepFixtures` (a step's own
@@ -108,6 +122,37 @@ function validateFixtureConsumer(fn: FixtureConsumer, knownNames: ReadonlySet<st
   return messages;
 }
 
+/** A fixture that names a member of `STEP_ONLY_BUILTIN_NAMES`. Shape errors
+ * are left to `validateFixtureConsumer`: this only runs when the names can
+ * be read, and a name that cannot be read has nothing to classify. */
+function stepOnlyBuiltinMessages(fixtureName: string, fn: FixtureConsumer): string[] {
+  let names: readonly string[];
+  try {
+    names = fixtureParameterNames(fn);
+  } catch (error) {
+    if (
+      error instanceof FixtureNotDestructuredError ||
+      error instanceof FixtureDefaultValueError ||
+      error instanceof FixtureRestParameterError
+    ) {
+      return [];
+    }
+    throw error;
+  }
+
+  const messages: string[] = [];
+  for (const name of names) {
+    if (!STEP_ONLY_BUILTIN_NAMES.has(name)) {
+      continue;
+    }
+    messages.push(
+      `fixture "${fixtureName}" destructures "${name}", which only a step's run() can use: ` +
+        `a fixture is built before the step boundary opens, so ${name}() can only throw`,
+    );
+  }
+  return messages;
+}
+
 /**
  * Validates one step's own `run` in isolation — structural, scenario-
  * independent, the same "holds or fails the same way everywhere this step
@@ -144,7 +189,7 @@ export function formatFixtureIssues(issues: readonly FixtureIssue[]): string {
  * check`'s fixture-* codes: `fixture-cycle`,
  * `fixture-scope-violation`, `page-override-unowned` (src/fixture/graph.ts),
  * plus `fixture-structural-violation` for a fixture whose own destructuring
- * is unknown/malformed — the exact same code `validateStepFixtures`'s own
+ * is unknown/malformed, or names `call` — the exact same code `validateStepFixtures`'s own
  * callers (src/check/analyze.ts) already use for a step's own version of
  * that same mistake. */
 export interface FixtureDefinitionValidationIssue {
@@ -170,7 +215,11 @@ export function validateFixtureDefinitions(
   const known = knownFixtureNames(config);
   const issues: FixtureDefinitionValidationIssue[] = [];
   for (const [name, definition] of Object.entries(config.fixtures)) {
-    for (const message of validateFixtureConsumer(fixtureFnOf(definition), known)) {
+    const fn = fixtureFnOf(definition);
+    for (const message of validateFixtureConsumer(fn, known)) {
+      issues.push({ code: "fixture-structural-violation", fixture: name, message });
+    }
+    for (const message of stepOnlyBuiltinMessages(name, fn)) {
       issues.push({ code: "fixture-structural-violation", fixture: name, message });
     }
   }

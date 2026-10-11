@@ -404,6 +404,8 @@ After a failure, what should be knowable about it?
 - Its inputs and its result, under a contract worth stating: make it a
   **part**. Define it with `defineStep` and no `pattern`, list it in the
   calling step's `parts`, and run it with `await call(thePart, {...})`.
+  Destructure `call` in that step's `run`, not in a fixture: `nuka check`
+  reports a fixture that names it.
   Its args and its result are validated exactly as a step's are, and the
   call is recorded under `calls` on the calling step's own step record.
 - Nothing a schema would help with: write an ordinary function under

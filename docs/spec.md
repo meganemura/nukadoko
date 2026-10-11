@@ -741,6 +741,16 @@ calling the fixture.
 It reads step dependencies in the same way.
 A fixture can name a builtin dependency: `page`, `context`, `request`, `env`,
 `requireEnv`, or `baseURL`.
+A scenario fixture can also name `resultOf`, `section`, `poll`, or `evidence`.
+Those record on the step that caused the fixture to be built, and they do not
+need the step boundary to exist yet.
+`call` is not one of those names.
+A fixture runs while its dependencies are built, which is before the step
+boundary opens, and `call` reads that boundary.
+A fixture that names `call` can only throw.
+`check` reports it as `fixture-structural-violation`.
+`nuka run` and `nuka do` refuse it before any step starts, the same way they
+refuse an unknown fixture name.
 A fixture can also name another `config.fixtures` entry.
 Resolution follows Playwright's `extend()` model, so later layers can depend
 on earlier layers.
@@ -777,6 +787,8 @@ builtins: `env`, `requireEnv`, and `baseURL`.
 The values of these builtins do not depend on a scenario context.
 `fixture-scope-violation` refuses a dependency on `page`, `context`, `request`,
 `resultOf`, `call`, `section`, `poll`, `evidence`, or a `scenario` fixture.
+A dependency on `call` is refused for every fixture, not only a `process` one,
+because `call` needs the step boundary.
 A `process` fixture can outlive the scenario that would supply any of these values.
 
 `process` names one address space.

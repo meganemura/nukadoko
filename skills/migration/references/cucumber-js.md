@@ -241,6 +241,9 @@ is written to stderr. That cleanup still runs if `nuka run` or `nuka do`
 is stopped with SIGINT or SIGTERM. `defineFixtures` (from the
 `nukadoko` package) keeps the fixture fully typed; any typed step reaches
 it the same way it reaches `page` or `request`, by destructuring the name.
+A fixture names setup builtins such as `page` or `request`.
+It does not name `call`: that is destructured in a step's `run`, and `nuka
+check` reports a fixture that does.
 This is additive, not required: an `After` hook that cleans up something
 no typed step has claimed yet is still exactly as valid as it was in
 Stage 1. That hook receives cucumber's hook parameter, including

@@ -848,7 +848,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   async function call<S extends Step>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>> {
     const caller = calls.currentStep();
     if (caller === undefined) {
-      throw new Error("internal: ctx.call() reached with no active step boundary");
+      throw new Error(
+        "ctx.call() has no active step boundary: call is only available inside a step's run(), " +
+          "after that boundary has opened",
+      );
     }
     if (!caller.parts.includes(part)) {
       throw new PartNotDeclaredError(partName(caller), partName(part));

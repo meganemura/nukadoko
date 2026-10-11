@@ -44,8 +44,9 @@ by one (not for something that must happen exactly once in the world
 regardless of process count, like seeding a database: `process` is one
 address space, not one invocation). A fixture that forgets to call `use()`,
 or calls it twice, fails loudly by name rather than hanging the run; `nuka
-check` catches a dependency cycle among fixtures and a `process`-scope
-fixture depending on a `scenario`-scope one before anything runs.
+check` catches a dependency cycle among fixtures, a `process`-scope
+fixture depending on a `scenario`-scope one, and a fixture that destructures
+`call` (only a step's `run` can use that) before anything runs.
 
 An MCP server over stdio is the same pattern: `connectMcpServer`/
 `callMcpTool` (`"nukadoko/mcp"`) belong in a fixture. `nuka mcp-tools --

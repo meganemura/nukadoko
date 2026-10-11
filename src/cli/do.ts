@@ -429,10 +429,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return 1;
     }
 
-    // The `config.fixtures` *definitions* themselves — same three findings
-    // `nuka check` reports (cycles, a
-    // `"process"`-scope fixture depending on a `"scenario"`-scope one, an
-    // unowned `page` override), refused here before execution the same way
+    // The `config.fixtures` *definitions* themselves — the findings `nuka
+    // check` reports (cycles, a `"process"`-scope fixture depending on a
+    // `"scenario"`-scope one, an unowned `page` override, and a fixture
+    // that names `call`), refused here before execution the same way
     // `fixtureIssues` above already is.
     const fixtureDefinitionIssues = validateFixtureDefinitions(config);
     if (fixtureDefinitionIssues.length > 0) {

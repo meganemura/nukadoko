@@ -577,8 +577,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     // The `config.fixtures` *definitions* themselves — cycles,
-    // `"process"`-scope-depends-on-`"scenario"`-scope, and an
-    // unowned `page` override — the same three findings `nuka check`
+    // `"process"`-scope-depends-on-`"scenario"`-scope, an
+    // unowned `page` override, and a fixture that names `call` — the same findings `nuka check`
     // reports, refused here before execution the same way `fixtureIssues`
     // above already is. Unconditional, unlike `fixtureIssues`: these are
     // properties of `config.fixtures` itself, not of any one step's own

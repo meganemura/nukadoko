@@ -577,6 +577,13 @@ fixture は step と同じ方法で第一引数を分割代入します。
 `check` は fixture を呼ばずに、ソーステキストから fixture の依存名を読みます。
 step の依存も同じ方法で読みます。
 fixture は builtin の依存として `page`、`context`、`request`、`env`、`requireEnv`、`baseURL` を名指せます。
+scenario fixture は、加えて `resultOf`、`section`、`poll`、`evidence` を名指せます。
+これらは、その fixture を構築させた step の記録に載り、step の境界が開いている必要はありません。
+`call` はこれらに含まれません。
+fixture は依存の構築中に実行され、その時点では step の境界はまだ開いていません。
+`call` はその境界を読むため、fixture が `call` を名指すと例外を投げるしかありません。
+`check` はこれを `fixture-structural-violation` として報告します。
+`nuka run` と `nuka do` は、未知の fixture 名と同じく、どの step も始まる前にこれを拒否します。
 fixture は別の `config.fixtures` エントリも名指せます。
 解決は Playwright の `extend()` モデルに従うため、後の層は前の層に依存できます。
 したがって、fixture は別の fixture に依存でき、その fixture は builtin に依存できます。
@@ -606,6 +613,8 @@ worker はプロセスであるため、`worker` スコープは存在しませ�
 `process` fixture が依存できるのは、別の `process` fixture と、`env`、`requireEnv`、`baseURL` の 3 つの builtin だけです。
 これらの builtin の値は scenario context に依存しません。
 `fixture-scope-violation` は、`page`、`context`、`request`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scenario` fixture への依存を拒否します。
+`call` への依存は `process` fixture に限らず、すべての fixture で拒否されます。
+`call` は step の境界を必要とするためです。
 `process` fixture は、これらの値を供給する scenario より長く生きる場合があります。
 
 `process` は 1 つのアドレス空間を指します。
