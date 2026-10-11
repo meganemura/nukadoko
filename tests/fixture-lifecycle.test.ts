@@ -116,6 +116,26 @@ describe("startFixture: timeout", () => {
     await expect(startFixture("stuck", fn, deps(), 20)).rejects.toBeInstanceOf(FixtureTimeoutError);
   });
 
+  it("runs teardown with outcome failed when use() is called after setup timed out", async () => {
+    let seenOutcome: string | undefined;
+    let tornDown = false;
+    const fn: FixtureFn = async ({}, use) => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const outcome = await use({ id: "late" });
+      seenOutcome = outcome;
+      tornDown = true;
+    };
+
+    await expect(startFixture("late-tenant", fn, deps(), 20)).rejects.toMatchObject({
+      fixture: "late-tenant",
+      phase: "setup",
+      message: 'Fixture "late-tenant" timed out during setup after 20ms',
+    });
+
+    await expect.poll(() => tornDown).toBe(true);
+    expect(seenOutcome).toBe("failed");
+  });
+
   it("times out teardown, naming the phase, when the code after use() never finishes", async () => {
     const fn: FixtureFn = async ({}, use) => {
       await use(1);
