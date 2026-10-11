@@ -79,23 +79,180 @@ type Parsed =
   | { success: true; data: unknown }
   | { success: false; error: { issues: readonly z.core.$ZodIssue[] } };
 
-interface ReturnsSchema {
+interface SchemaDef {
+  type: string;
+  shape?: Record<string, WalkableSchema>;
+  element?: WalkableSchema;
+  innerType?: WalkableSchema;
+  options?: readonly WalkableSchema[];
+  valueType?: WalkableSchema;
+  items?: readonly WalkableSchema[];
+  rest?: WalkableSchema | null;
+  left?: WalkableSchema;
+  right?: WalkableSchema;
+  getter?: () => WalkableSchema;
+  out?: WalkableSchema;
+  catchall?: WalkableSchema;
+}
+
+interface WalkableSchema {
+  def: SchemaDef;
   safeParse(data: unknown): Parsed;
 }
 
-// (d) lives here so a test can hand it a frozen result and the current
-// returns schema without writing a record. The record stores the schema
-// output, and this is the comparison that decides whether that output
-// still matches.
+const UNWRAP = new Set(["optional", "nullable", "default", "prefault", "catch", "readonly", "nonoptional"]);
+
+function jsonForm(value: unknown): unknown {
+  try {
+    const text = JSON.stringify(value);
+    if (typeof text !== "string") return undefined;
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function jsonEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return a === b;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, index) => jsonEqual(item, (b as unknown[])[index]));
+  }
+  if (typeof a === "object" && typeof b === "object") {
+    const aObj = a as Record<string, unknown>;
+    const bObj = b as Record<string, unknown>;
+    const aKeys = Object.keys(aObj);
+    if (aKeys.length !== Object.keys(bObj).length) return false;
+    return aKeys.every((key) => Object.prototype.hasOwnProperty.call(bObj, key) && jsonEqual(aObj[key], bObj[key]));
+  }
+  return false;
+}
+
+function reviveDate(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  // JSON.stringify writes Date.toJSON(), which is not every string new Date
+  // can parse. Only that spelling is the JSON form of a Date.
+  return date.toJSON() === value ? date : value;
+}
+
+function reviveObject(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  const source = value as Record<string, unknown>;
+  const shape = def.shape ?? {};
+  const out: Record<string, unknown> = { ...source };
+  for (const key of Object.keys(shape)) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const child = shape[key];
+    if (child !== undefined) out[key] = revive(child, source[key], stack);
+  }
+  const catchall = def.catchall;
+  if (
+    catchall !== undefined &&
+    catchall.def.type !== "never" &&
+    catchall.def.type !== "unknown" &&
+    catchall.def.type !== "any"
+  ) {
+    for (const key of Object.keys(source)) {
+      if (!Object.prototype.hasOwnProperty.call(shape, key)) out[key] = revive(catchall, source[key], stack);
+    }
+  }
+  return out;
+}
+
+function reviveTuple(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+  if (!Array.isArray(value) || def.items === undefined) return value;
+  return value.map((item, index) => {
+    const itemSchema = def.items?.[index] ?? def.rest;
+    return itemSchema == null ? item : revive(itemSchema, item, stack);
+  });
+}
+
+function reviveRecord(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value) || def.valueType === undefined) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = revive(def.valueType, item, stack);
+  }
+  return out;
+}
+
+function reviveUnion(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+  for (const option of def.options ?? []) {
+    const candidate = revive(option, value, stack);
+    const outcome = option.safeParse(candidate);
+    if (!outcome.success) continue;
+    const form = jsonForm(outcome.data);
+    if (form !== undefined && jsonEqual(form, value)) return candidate;
+  }
+  return value;
+}
+
+function revive(schema: WalkableSchema, value: unknown, stack: Set<WalkableSchema>): unknown {
+  if (stack.has(schema)) return value;
+  stack.add(schema);
+  try {
+    const def = schema.def;
+    if (UNWRAP.has(def.type) && def.innerType !== undefined) {
+      if (value === null || value === undefined) return value;
+      return revive(def.innerType, value, stack);
+    }
+    switch (def.type) {
+      case "date":
+        return reviveDate(value);
+      case "object":
+        return reviveObject(def, value, stack);
+      case "array":
+        if (!Array.isArray(value) || def.element === undefined) return value;
+        return value.map((item) => revive(def.element as WalkableSchema, item, stack));
+      case "tuple":
+        return reviveTuple(def, value, stack);
+      case "record":
+        return reviveRecord(def, value, stack);
+      case "union":
+        return reviveUnion(def, value, stack);
+      case "intersection":
+        if (def.left === undefined || def.right === undefined) return value;
+        return revive(def.right, revive(def.left, value, stack), stack);
+      case "lazy":
+        return def.getter === undefined ? value : revive(def.getter(), value, stack);
+      case "pipe":
+        return def.out === undefined ? value : revive(def.out, value, stack);
+      default:
+        return value;
+    }
+  } finally {
+    stack.delete(schema);
+  }
+}
+
+// The record stores JSON.stringify of the schema output. A Date's JSON
+// form is the ISO string from toJSON, which z.date() does not accept as
+// input. Accept the frozen result when it is that JSON form of a value
+// the schema accepts. An empty object is not that form.
 export function assessFrozenResult(
-  schema: ReturnsSchema,
+  schema: { safeParse(data: unknown): Parsed },
   frozen: unknown,
 ): { ok: true } | { ok: false; detail: string } {
-  const outcome = schema.safeParse(frozen);
-  if (!outcome.success) {
-    return { ok: false, detail: formatValidationIssues(outcome.error.issues) };
+  const walkable = schema as WalkableSchema;
+  const candidates: unknown[] = [frozen];
+  const revived = revive(walkable, frozen, new Set());
+  if (!jsonEqual(revived, frozen)) candidates.push(revived);
+
+  let directFailure: string | undefined;
+  for (const [index, candidate] of candidates.entries()) {
+    const outcome = walkable.safeParse(candidate);
+    if (!outcome.success) {
+      if (index === 0) directFailure = formatValidationIssues(outcome.error.issues);
+      continue;
+    }
+    const form = jsonForm(outcome.data);
+    if (form !== undefined && jsonEqual(form, frozen)) return { ok: true };
   }
-  return { ok: true };
+  if (directFailure !== undefined) return { ok: false, detail: directFailure };
+  return { ok: false, detail: "it is not the JSON form of a value the schema accepts" };
 }
 
 // Two rewrites, and they answer different questions. `normalizeSignoffText`

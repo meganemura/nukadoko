@@ -151,6 +151,16 @@ describe("redact", () => {
     });
   });
 
+  it("does not replace a number equal to a numeric secret", () => {
+    const secrets: SecretEntry[] = [{ name: "N", value: "12345" }];
+    expect(redact({ n: 12345 }, secrets)).toEqual({ n: 12345 });
+    expect(redact({ n: "12345" }, secrets)).toEqual({ n: "{{secret.N}}" });
+  });
+
+  it("leaves a Map, which has no toJSON, as an empty object", () => {
+    expect(redact(new Map([["a", 1]]), [])).toEqual({});
+  });
+
   it("passes non-string leaves through unchanged: numbers, booleans, null", () => {
     const input = { count: 3, ok: true, missing: null, list: [1, false, null] };
     expect(redact(input, secrets)).toEqual(input);
@@ -266,6 +276,12 @@ describe("redact", () => {
     const href = `https://example.com/login?pw=${encodeURIComponent(secret)}`;
     expect(redact(new URL(href), [{ name: "PW", value: secret }])).toBe(
       "https://example.com/login?pw={{secret.PW}}",
+    );
+    const quoted = "000' @";
+    const quotedHref = `https://example.com/q?pw=${encodeURIComponent(quoted)}`;
+    expect(new URL(quotedHref).toJSON()).toContain("%27");
+    expect(redact(new URL(quotedHref), [{ name: "PW", value: quoted }])).toBe(
+      "https://example.com/q?pw={{secret.PW}}",
     );
   });
 
@@ -588,8 +604,12 @@ describe("redact property-based", () => {
           return blob;
         },
       };
+      const redacted = redact(box, [{ name: "PW", value: secret }]);
+      expect(redacted).toContain("{{secret.PW}}");
+      expect(redacted).not.toContain(secret);
+      expect(redacted).not.toContain(encoded);
       const interior = JSON.stringify(secret).slice(1, -1);
-      expect(redact(box, [{ name: "PW", value: secret }])).toBe(blob.split(interior).join("{{secret.PW}}"));
+      if (interior !== secret) expect(redacted).not.toContain(interior);
     });
   });
 

@@ -18,6 +18,16 @@ just until 0.1.
 
 ### Fixed
 
+- **A Date or URL in a step result is recorded as its JSON form.**
+  `redact` walked every object with `Object.entries`. A Date and a URL
+  have no enumerable properties, so the step record, the sign-off, and
+  the Allure attachment stored `{}`. `redact` now redacts whatever
+  `toJSON()` returns, and still replaces a loaded secret in that text,
+  including the percent-encoded spelling and the JSON-escaped spelling.
+  A JSON number equal to a numeric secret stays a number. `nuka tend`
+  accepts a frozen result when the stored JSON is what `JSON.stringify`
+  would write for a value the current returns schema accepts, so an ISO
+  string still passes `z.date()`.
 - **Repeated config loads in one process stay at the cost of one load.**
   `loadConfig` went through tsx's `tsImport` on every call, and each call
   left a loader on the chain. `recordStep` loads the config once per step,

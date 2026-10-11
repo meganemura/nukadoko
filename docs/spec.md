@@ -3509,7 +3509,11 @@ The following findings show what `tend` inspects and why each item is rot rather
   If a frozen `result` no longer passes its step's current `returns`
   schema, or the frozen feature source no longer matches the file it was
   taken from, or a step it cites is gone from the vocabulary, then the
-  record remains on disk with a claim it can no longer support. A cited
+  record remains on disk with a claim it can no longer support. The
+  record stores that result as JSON. `tend` accepts the stored JSON when
+  it is what `JSON.stringify` would write for a value the current
+  `returns` schema accepts, so a Date kept as its ISO string still
+  passes `z.date()`. A cited
   step is called gone only when every step file imported. While any file
   failed to import, that judgment is withheld, because the step may still
   be defined in the file that could not be read. This
