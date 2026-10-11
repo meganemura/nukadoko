@@ -196,6 +196,13 @@ just until 0.1.
   before its POST finished left the POST on the next step. `observed` had
   already counted the write on the step that sent it. The log path is now
   taken when the request starts.
+- **`nuka accept` and `nuka check` name a bad feature argument for what it is.**
+  A `:line` suffix, a directory, and an unreadable file all used to print
+  "feature file not found". `accept` now refuses `:line` the way `check`
+  already does. Both commands tell you to pass a `.feature` or `.md` file,
+  or to use `nuka run` for a directory, when the path is a directory. Any
+  other read error keeps its own text. A path that is not there still
+  reports a missing file.
 
 ### Breaking
 
@@ -208,6 +215,7 @@ just until 0.1.
   way two identical names already were: the second gets `-2` before the
   extension. A step that attached a harness file name has to pick a
   different one. See docs/upgrading.md.
+
 ## 0.14.1 — 2026-10-10
 
 ### Fixed

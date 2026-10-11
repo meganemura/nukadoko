@@ -36,7 +36,8 @@ do" in `SKILL.md`), a bare `nuka check` already covers it, the same as any
 feature under `featuresDir`. Otherwise pass the feature path directly:
 `nuka check <feature>` checks that one file, since without either the
 argument or the config entry the one file you care about is the one that
-goes unchecked.
+goes unchecked. `nuka check` and `nuka accept` each take that one file.
+`:line` and a directory belong to `nuka run`.
 
 ## Running
 

@@ -11,6 +11,7 @@ import {
 import { MissingStepRecordError, renderAcceptanceRecord, type AcceptedScenario } from "../accept/render-record.js";
 import { loadConfig } from "../config/load-config.js";
 import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment, type ResolvedEnvironment } from "../environment/resolve-environment.js";
+import { describeFailedFeatureRead } from "../feature/feature-arg-read.js";
 import { parseFeatureSource } from "../feature/load-features.js";
 import { findLiveSessions, formatLiveSessionNotice } from "../live/live-session-notice.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
@@ -287,8 +288,12 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   let source: string;
   try {
     source = readFileSync(absoluteFeaturePath, "utf8");
-  } catch {
-    stderr.write(`nuka accept: feature file not found: ${featurePath}\n`);
+  } catch (error) {
+    // ENOENT is a missing file. A `:line` suffix is also ENOENT, a
+    // directory is EISDIR, and any other read error keeps its own text.
+    // One "not found" line for all of them sends the reader looking for a
+    // file that is right there, or for a file that was a directory.
+    stderr.write(`${describeFailedFeatureRead("nuka accept", rootDir, featurePath, error).message}\n`);
     return 1;
   }
 

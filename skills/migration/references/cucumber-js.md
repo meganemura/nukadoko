@@ -42,9 +42,10 @@ that fails at the same import for the same ESM-only reason, and `nuka
 check` says so as `step-file-import-failed`.
 
 Then run `nuka check <feature>` and `nuka run <feature>` and read what they
-say. Fix whatever they point at, and run them again. Repeat until the
-existing suite is green: that is Stage 1's completion condition, nothing
-more. That condition is `nuka check` and `nuka run` going green, not `tsc`
+say. `nuka check` takes one file. A directory, and `<feature>:<line>`, are
+`nuka run` arguments. Fix whatever they point at, and run them again.
+Repeat until the existing suite is green: that is Stage 1's completion
+condition, nothing more. That condition is `nuka check` and `nuka run` going green, not `tsc`
 typechecking cleanly; the two can disagree in either direction. `nuka check
 --codes` lists every finding code `check` can produce, with a one-line
 description of what triggers it, so a code that shows up mid-migration and

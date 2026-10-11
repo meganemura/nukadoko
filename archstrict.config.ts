@@ -241,7 +241,7 @@ export default {
     {
       name: "feature",
       glob: "src/feature/**",
-      surface: ["load-features.ts", "parse-oath.ts", "resolve-oaths.ts"],
+      surface: ["feature-arg-read.ts", "load-features.ts", "parse-oath.ts", "resolve-oaths.ts"],
     },
     { name: "version", glob: "src/version.ts", surface: "version.ts" },
     {

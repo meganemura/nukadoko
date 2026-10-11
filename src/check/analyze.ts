@@ -5,6 +5,7 @@ import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import { discoverSteps } from "../discover/discover-steps.js";
+import { describeFailedFeatureRead, describeFeatureArgRead } from "../feature/feature-arg-read.js";
 import {
   attachStepLines,
   findOutlinesThatDoNotRun,
@@ -80,13 +81,12 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 // `discoverSteps` above is untouched by this parameter (config/binding
 // checks and the vocabulary they check features against always come from
 // `featuresDir`) — only the `loadFeaturesFromDirs` call
-// below is conditional. A `featureArg` that doesn't exist or can't be read
-// is a usage mistake, not a project finding: it
-// throws `CheckFeatureNotFoundError` (message pre-formatted "nuka check: …",
-// same tone as `nuka accept`'s own hand-written stderr messages) rather than
-// becoming a `feature-parse-error` report entry, and src/cli/check.ts's
-// existing catch-all (already used for ConfigError/DuplicateStepError)
-// turns it into stderr + exit 1 unchanged. A file that *does* exist but
+// below is conditional. A `featureArg` that doesn't exist, names a `:line`,
+// names a directory, or can't be read is a usage mistake, not a project
+// finding. The message names which of those it was: only a missing file is
+// `CheckFeatureNotFoundError`. src/cli/check.ts's existing catch-all
+// (already used for ConfigError/DuplicateStepError) turns that error into
+// stderr + exit 1 unchanged. A file that *does* exist but
 // fails to parse, by contrast, stays a `feature-parse-error` report entry —
 // the same category a broken file under `featuresDir` gets — since that is
 // a real property of the feature file itself, not a bad argument.
@@ -95,30 +95,32 @@ export class CheckFeatureNotFoundError extends Error {
   readonly relativePath: string;
 
   constructor(relativePath: string) {
-    super(`nuka check: feature file not found: ${relativePath}`);
+    super(
+      describeFeatureArgRead({
+        command: "nuka check",
+        relativePath,
+        code: "ENOENT",
+        errorMessage: "",
+        lineBaseExists: false,
+      }).message,
+    );
     this.name = "CheckFeatureNotFoundError";
     this.relativePath = relativePath;
   }
 }
-
-// A `:line` suffix that `nuka run`'s own `parseFeatureTarget`
-// (src/run/select-pickles.ts) would strip and act on is, to `readFileSync`
-// below, just more path text — so a target like `probe.feature:3` fails
-// the same ENOENT a genuinely missing file would, and used to be reported
-// with the identical "feature file not found" wording either way. That
-// wording is wrong for this case specifically: the file is right there.
-// Matches `parseFeatureTarget`'s own pattern (kept as a separate literal
-// here rather than an import — see this module's own file for why: no
-// legitimate `.feature` path ends in `:<digits>` on its own).
-const LINE_SUFFIX_PATTERN = /^(.+):(\d+)$/;
 
 export class CheckLineNotSupportedError extends Error {
   readonly relativePath: string;
 
   constructor(relativePath: string, line: string) {
     super(
-      `nuka check: ${relativePath}:${line}: :line is not supported; check analyzes the whole file, not one scenario. ` +
-        `Run: nuka check ${relativePath}`,
+      describeFeatureArgRead({
+        command: "nuka check",
+        relativePath: `${relativePath}:${line}`,
+        code: "ENOENT",
+        errorMessage: "",
+        lineBaseExists: true,
+      }).message,
     );
     this.name = "CheckLineNotSupportedError";
     this.relativePath = relativePath;
@@ -136,22 +138,19 @@ function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesRes
   let source: string;
   try {
     source = readFileSync(absolutePath, "utf8");
-  } catch {
-    // Genuinely missing and ":line" given but ignored (this module's own
-    // header) read identically here (both fail the same `readFileSync`),
-    // so they are told apart by asking one more question before deciding
-    // which error to throw: does the path with the trailing ":<digits>"
-    // stripped off exist? Only the ":line" case can answer yes, since
-    // stripping nothing off a genuinely missing path still names a
-    // genuinely missing path.
-    const lineMatch = LINE_SUFFIX_PATTERN.exec(relativePath);
-    if (lineMatch) {
-      const [, basePath, line] = lineMatch;
-      if (existsSync(path.join(rootDir, basePath!))) {
-        throw new CheckLineNotSupportedError(basePath!, line!);
-      }
+  } catch (error) {
+    // Missing, `:line`, a directory, and an unreadable file all fail this
+    // read. The code on the error is what separates them; `:line` needs
+    // one more question, asked inside describeFailedFeatureRead, because
+    // the suffixed path is ENOENT whether or not the file itself exists.
+    const described = describeFailedFeatureRead("nuka check", rootDir, relativePath, error);
+    if (described.kind === "line") {
+      throw new CheckLineNotSupportedError(described.basePath!, described.line!);
     }
-    throw new CheckFeatureNotFoundError(relativePath);
+    if (described.kind === "not-found") {
+      throw new CheckFeatureNotFoundError(relativePath);
+    }
+    throw new Error(described.message);
   }
 
   try {

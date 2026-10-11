@@ -133,4 +133,19 @@ describe("nuka check: a feature argument that is not a missing file", () => {
       await removeTempDir(rootDir);
     }
   });
+
+  it("treats :line on a directory as :line, because the suffixed path is not the directory", async () => {
+    const rootDir = await copyFixtureToTempDir("check-step-line-project");
+    try {
+      const { exitCode, stdout, stderr } = await invoke("check", "features:2", rootDir);
+      expect(exitCode).toBe(1);
+      expect(stdout).toBe("");
+      expect(stderr).toContain(":line is not supported");
+      expect(stderr).toContain("nuka check features");
+      expect(stderr).not.toContain(DIRECTORY_HINT);
+      expect(stderr).not.toContain("feature file not found");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
 });

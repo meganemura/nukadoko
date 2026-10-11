@@ -3284,7 +3284,10 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               tag expressions; with no argument, scans
                               featuresDir plus additionalFeatureDirs; a
                               feature argument checks that one file instead,
-                              for a feature living outside both
+                              for a feature living outside both. :line and a
+                              directory are refused; a directory is a nuka
+                              run argument. Any other failed read keeps the
+                              error's own text
 nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               delete accumulated records/cache/export under
                               the state directory; no category flag cleans
@@ -3300,7 +3303,8 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               export/allure-history.jsonl is never
                               removed
 nuka accept <feature>         freeze that feature's last green run as a
-                              committed acceptance record beside it
+                              committed acceptance record beside it. :line
+                              and a directory are refused, same as nuka check
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
