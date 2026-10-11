@@ -17,7 +17,8 @@ This one only says which file, and what must stay true on every path.
   Playwright. `references/cucumber-js.md` (switch the import, then add
   typing, including the one worked example and a global `After` hook).
   A World subclass can assign `this.page` and `this.request`. That
-  assignment stays unmeasured.
+  assignment stays unmeasured. A promoted schema that coerces its
+  capture is not `capture-type-mismatch`.
 - **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
   about it moves onto nukadoko; nukadoko grows beside it.
   `references/playwright-test.md`.

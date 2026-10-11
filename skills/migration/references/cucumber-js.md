@@ -185,7 +185,11 @@ What changed:
   express).
 - The argument is a named capture bound to a schema key
   (`{name:string}` → `args.name`), so the pattern alone shows which text
-  becomes which field.
+  becomes which field. `capture-type-mismatch` is a number capture against
+  a string field, or a string capture against a number field, and only
+  when that field does not coerce. `z.coerce.number()` on a `{string}`
+  and `z.coerce.string()` on an `{int}` are not that finding: the run
+  accepts the capture. `nuka check --codes` has the one-line description.
 - `mutates: true` is now a declaration, not just a fact about what the code
   happens to do: `nuka check` warns if this step is ever bound to `Then`,
   and a read-only environment refuses to run it at all. The step record still

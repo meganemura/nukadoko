@@ -277,7 +277,11 @@ export default defineStep({
   result is stored. Captures are coerced by the parameter type (`{int}` →
   number, custom types by their transformer), then the schema is the
   contract; the mapping is statically checkable (`nuka check`) in both
-  directions. A capture with no schema key is an error. So is a **required**
+  directions. A number or string disagreement is reported only when the
+  schema does not coerce the captured value. `z.coerce.number()` accepts
+  a `{string}` and `z.coerce.string()` accepts an `{int}`, and whether
+  that particular value parses is settled by the run, so the static check
+  stays silent there. A capture with no schema key is an error. So is a **required**
   schema key that nothing on a given line could fill (no capture, no
   table/docstring, no `from`), because that line can only ever fail args
   validation. The second direction went unchecked for a while, on the

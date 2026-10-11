@@ -98,7 +98,9 @@ proves the wrong thing.
    scenario borrows, a wait for an effect that lands elsewhere, or a
    required environment variable: `references/fixtures.md`.
    Application-specific evidence: `references/evidence.md`.
-4. `nuka check <feature>`. `references/running.md`.
+4. `nuka check <feature>`. `references/running.md`. A schema that
+   coerces the capture is not `capture-type-mismatch`
+   (`references/writing-steps.md`).
 5. Commit. A run can only be frozen on a clean tree at the commit still
    checked out. Debugging against a dirty tree is fine; it cannot be
    accepted.

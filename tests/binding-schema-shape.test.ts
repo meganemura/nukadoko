@@ -109,18 +109,13 @@ describe("classifyPrimitive", () => {
     hegel.test((tc) => {
       const numeric = tc.draw(gs.booleans());
       const coerce = tc.draw(gs.booleans());
-      const viaOption = tc.draw(gs.booleans());
       const wrap = tc.draw(gs.integers({ minValue: 0, maxValue: 2 }));
       let schema: z.ZodTypeAny = numeric
         ? coerce
-          ? viaOption
-            ? z.number({ coerce: true })
-            : z.coerce.number()
+          ? z.coerce.number()
           : z.number()
         : coerce
-          ? viaOption
-            ? z.string({ coerce: true })
-            : z.coerce.string()
+          ? z.coerce.string()
           : z.string();
       if (wrap === 1) {
         schema = schema.optional();

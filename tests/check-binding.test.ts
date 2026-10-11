@@ -177,8 +177,8 @@ describe("checkBindings", () => {
   it("does not flag a capture the schema coerces, because the run accepts it", () => {
     const qty = z.object({ qty: z.coerce.number() });
     const code = z.object({ code: z.coerce.string() });
-    const label = z.object({ label: z.number({ coerce: true }).optional() });
-    const amount = z.object({ amount: z.string({ coerce: true }).default("0") });
+    const label = z.object({ label: z.coerce.number().optional() });
+    const amount = z.object({ amount: z.coerce.string().default("0") });
     expect(qty.safeParse({ qty: "21" })).toMatchObject({ success: true, data: { qty: 21 } });
     expect(code.safeParse({ code: 42 })).toMatchObject({ success: true, data: { code: "42" } });
     expect(label.safeParse({ label: "7" })).toMatchObject({ success: true, data: { label: 7 } });

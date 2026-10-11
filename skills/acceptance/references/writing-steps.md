@@ -292,6 +292,14 @@ Neither side can drift away from the other quietly, so adding an `args`
 field and forgetting the capture costs you one `nuka check`, never a
 browser session.
 
+`capture-type-mismatch` is the type half of that comparison: `{int}` or
+`{float}` against a string field, `{string}` or `{word}` against a number
+field. It does not fire when the schema coerces the captured value
+(`z.coerce.number()` for a `{string}`, `z.coerce.string()` for an
+`{int}`), because the run accepts that capture. A field that does not
+coerce still is that finding. The one-line description is `nuka check
+--codes`.
+
 ## Running a step alone before it touches a feature
 
 If the step body needs a local variable with the same name as a fixture,

@@ -76,6 +76,10 @@ just until 0.1.
   The rejection used to return while the child was still running, because
   the caller never received a client to close. The error names the command.
   A successful handshake still returns a live client for the caller to close.
+- **`nuka check` does not report `capture-type-mismatch` for a schema that coerces.**
+  A `{string}` bound to `z.coerce.number()`, and an `{int}` bound to
+  `z.coerce.string()`, parse when the scenario runs. check used to exit 1
+  on that project. A field that does not coerce is still a mismatch.
 
 ## 0.14.1 — 2026-10-10
 

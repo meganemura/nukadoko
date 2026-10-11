@@ -4,8 +4,8 @@ import type { z } from "zod";
 // step's `args` zod schema — unwrap the
 // optional/default wrappers a schema author commonly puts around a key,
 // then answer three narrow questions: is this schema even a `z.object`
-// (pattern-bound steps must be), what does a given key's declared type
-// definitely coerce to (number, string, or "can't tell"), and is a given
+// (pattern-bound steps must be), what primitive a given key definitely is
+// (number, string, or "can't tell"), and is a given
 // key required (an object that declares it rejects a missing key). Deliberately does *not* attempt
 // a full structural comparison — a union, a custom refinement, or any other
 // schema this module can't classify with certainty is left alone; check's
@@ -44,15 +44,31 @@ export function asObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny
 
 export type PrimitiveClass = "number" | "string" | "other";
 
+/**
+ * True when the schema converts its input before checking the declared
+ * type. `z.coerce.number()` and `z.coerce.string()` set `def.coerce`
+ * while leaving `type` as `"number"` or `"string"`. Reading only `type`
+ * treats a schema the run accepts as a definite mismatch. `coerce` is
+ * optional and is not on zod's base def type.
+ */
+function schemaCoerces(schema: z.ZodTypeAny): boolean {
+  return (schema.def as { coerce?: unknown }).coerce === true;
+}
+
 /** Classifies what a schema field (after unwrapping optional/default)
  * definitely accepts, for the two coercions cucumber-expressions performs
  * (`{int}`/`{float}` -> number,
- * `{string}`/`{word}` -> string). Anything else — boolean, bigint, object,
- * array, union, any, unknown, a transform, ... — is "other": not
- * necessarily wrong, just not something this narrow check can be certain
- * about either way. */
+ * `{string}`/`{word}` -> string). Anything else (boolean, bigint, object,
+ * array, union, any, unknown, a transform, or a schema that itself coerces
+ * the captured value) is "other": not necessarily wrong, just not
+ * something this narrow check can be certain about either way. Coercion is
+ * read after optional/default unwrapping, because those wrappers do not
+ * carry the flag. */
 export function classifyPrimitive(schema: z.ZodTypeAny): PrimitiveClass {
   const unwrapped = unwrapOptionalDefault(schema);
+  if (schemaCoerces(unwrapped)) {
+    return "other";
+  }
   if (unwrapped.type === "number") {
     return "number";
   }

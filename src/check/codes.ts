@@ -49,7 +49,7 @@ export const CHECK_CODES = {
   },
   "capture-type-mismatch": {
     description:
-      "A pattern captures a key as a number ({int} or {float}) or a string ({string} or {word}), but the args schema declares that key as the other type.",
+      "A pattern captures a key as a number ({int} or {float}) or a string ({string} or {word}), but the args schema declares that key as the other type and does not coerce the captured value.",
     severity: "error",
   },
   "duplicate-pattern": {
