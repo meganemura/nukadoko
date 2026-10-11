@@ -286,6 +286,120 @@ describe("nuka run: compat step/hook execution honesty", () => {
     });
   });
 
+  // cucumber-js hands AfterStep `pickleStep` and `testStepId`, and hands
+  // both After and AfterStep `result.duration`, `result.message`, and
+  // `error` once a step has a result. These read the same logs the hooks
+  // above already write, and compare them to the step record the executor
+  // already stored, so a field that is still missing fails here.
+  describe("HookParameter carries the fields cucumber-js passes", () => {
+    function logValue(logs: readonly string[] | undefined, prefix: string): string | undefined {
+      const line = logs?.find((entry) => entry.startsWith(prefix));
+      return line === undefined ? undefined : line.slice(prefix.length);
+    }
+
+    async function stepDurationMs(stepRecordId: string): Promise<number> {
+      const stepRecord = await readStepRecord(rootDir, stepRecordId);
+      return Date.parse(String(stepRecord.finished_at)) - Date.parse(String(stepRecord.started_at));
+    }
+
+    it("AfterStep receives pickleStep, testStepId, and result.duration for each step that ran", async () => {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "features/hook-parameter.feature:9"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(0);
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      const afterSteps = record.hooks.filter((h: { type: string }) => h.type === "after_step");
+      expect(afterSteps).toHaveLength(2);
+      expect(record.steps).toHaveLength(2);
+
+      for (const [index, hook] of afterSteps.entries()) {
+        const logs = hook.declared?.logs as readonly string[];
+        expect(logValue(logs, "afterstep:text=")).toBe(record.steps[index].text);
+        expect(logValue(logs, "afterstep:testStepId=")).toBe(record.steps[index].step_record_id);
+        expect(logValue(logs, "afterstep:message=")).toBe("missing");
+        expect(logValue(logs, "afterstep:error=")).toBe("missing");
+        expect(logValue(logs, "afterstep:hasError=")).toBe("true");
+        expect(Number(logValue(logs, "afterstep:durationMs="))).toBe(
+          await stepDurationMs(record.steps[index].step_record_id),
+        );
+      }
+      expect(logValue(afterSteps[0].declared.logs, "afterstep:testStepId=")).not.toBe(
+        logValue(afterSteps[1].declared.logs, "afterstep:testStepId="),
+      );
+    });
+
+    it("After and AfterStep receive result.message and error when the step throws", async () => {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "features/hook-parameter.feature:6"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(1);
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      const held = record.steps[0].error.message as string;
+      const afterStep = record.hooks.find((h: { type: string }) => h.type === "after_step");
+      const after = record.hooks.find((h: { type: string }) => h.type === "after");
+
+      expect(logValue(afterStep.declared.logs, "afterstep:text=")).toBe(record.steps[0].text);
+      expect(logValue(afterStep.declared.logs, "afterstep:testStepId=")).toBe(record.steps[0].step_record_id);
+      expect(logValue(afterStep.declared.logs, "afterstep:message=")).toBe(held);
+      expect(logValue(afterStep.declared.logs, "afterstep:error=")).toBe(held);
+      expect(logValue(afterStep.declared.logs, "afterstep:hasError=")).toBe("true");
+      expect(Number(logValue(afterStep.declared.logs, "afterstep:durationMs="))).toBe(
+        await stepDurationMs(record.steps[0].step_record_id),
+      );
+
+      expect(logValue(after.declared.logs, "after:hasError=")).toBe("true");
+      expect(logValue(after.declared.logs, "after:message=")).toBe(held);
+      expect(logValue(after.declared.logs, "after:error=")).toBe(held);
+      expect(Number(logValue(after.declared.logs, "after:durationMs="))).toBe(
+        await stepDurationMs(record.steps[0].step_record_id),
+      );
+    });
+
+    it("a passing After receives result.duration and no message", async () => {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(0);
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      const after = record.hooks.find((h: { type: string }) => h.type === "after");
+      expect(logValue(after.declared.logs, "after:message=")).toBe("missing");
+      expect(logValue(after.declared.logs, "after:error=")).toBe("missing");
+      expect(logValue(after.declared.logs, "after:hasError=")).toBe("true");
+      expect(Number(logValue(after.declared.logs, "after:durationMs="))).toBe(
+        await stepDurationMs(record.steps[0].step_record_id),
+      );
+    });
+
+    it("Before does not receive pickleStep, testStepId, result, or error", async () => {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+
+      expect(exitCode).toBe(0);
+      const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+      const before = record.hooks.find((h: { type: string }) => h.type === "before");
+      expect(before.declared.logs).toContain("before:hasPickleStep=false");
+      expect(before.declared.logs).toContain("before:hasTestStepId=false");
+      expect(before.declared.logs).toContain("before:hasResult=false");
+      expect(before.declared.logs).toContain("before:hasError=false");
+    });
+  });
+
   // `nukadoko/compat`'s own
   // `Status` re-export actually works in a real After hook's own
   // `result.status === Status.FAILED` branch — not just that `Status`
