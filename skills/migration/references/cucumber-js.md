@@ -182,8 +182,11 @@ export default defineStep({
 
 What changed:
 
-- `this.projectId` is gone; the id comes back through `returns` instead. A
-  later step declares `from: { projectId: [createProjectStep, "id"] }` to
+- `this.projectId` is gone; the id comes back through `returns` instead. Do
+  not keep that value on `env` either. `env` is a frozen copy of the
+  configured env files, so an assignment throws and a later step does not
+  see it. A later step declares
+  `from: { projectId: [createProjectStep, "id"] }` to
   read it by key: `nuka check` verifies the binding order before anything
   runs, and the read shows up in that later step's own step record (the
   `resultOf` fixture stays available for the rarer read a key name can't

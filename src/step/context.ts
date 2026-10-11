@@ -150,7 +150,10 @@ export interface StepFixtures {
   /** Playwright APIRequestContext with the configured baseURL and the
    * session's cookies; built when this name is destructured. */
   readonly request: APIRequestContext;
-  /** Environment variables from the configured envFiles (read-only). */
+  /** Environment variables from the configured envFiles. A frozen copy of
+   * the merged map: assigning a property throws in a step module, so a
+   * write in one step is not visible to a later step or a later scenario.
+   * A configured key still reads back as the loaded value. */
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Reads a required env var: same source as `env[name]`, minus the
    * presence check every step calling `env[name]` ended up writing for
@@ -257,7 +260,10 @@ export interface StepContext {
   page(): Promise<Page>;
   /** Playwright APIRequestContext with the configured baseURL and the session's cookies. */
   request(): Promise<APIRequestContext>;
-  /** Environment variables from the configured envFiles (read-only). */
+  /** Environment variables from the configured envFiles. A frozen copy of
+   * the merged map: assigning a property throws in a step module, so a
+   * write in one step is not visible to a later step or a later scenario.
+   * A configured key still reads back as the loaded value. */
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Reads a required env var: same source as `ctx.env[name]`, minus the
    * presence check every step calling `ctx.env[name]` ended up writing for

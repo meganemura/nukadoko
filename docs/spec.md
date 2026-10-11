@@ -450,7 +450,10 @@ The fixture names:
 - `env`: read-only environment variables from the configured envFiles. This
   fixture enforces determinism: the process environment is never merged. It
   also enforces secrets redaction: only values that nukadoko loaded are
-  redactable. It is not a convenience.
+  redactable. It is not a convenience. The object a step receives is a
+  frozen copy of that merged map. Assigning a property throws, so a write
+  in one step is not visible to a later step or a later scenario. Reading
+  a configured key still returns the loaded value.
 - `requireEnv(name)`: returns the same value as `env[name]`. It provides the
   presence check that each step reading a required variable would otherwise
   write. It returns `string`, never `undefined`, because it throws when the

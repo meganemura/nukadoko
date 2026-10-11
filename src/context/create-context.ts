@@ -519,10 +519,11 @@ export interface CreateStepContextOptions {
    * screenshots) and, until `beginStep` first moves it, http.jsonl too; must
    * already exist. */
   evidenceDir: string;
-  /** `ctx.env`'s value, already loaded and merged by the executor from every
-   * configured envFile — this module never
-   * reads an envFile itself, so a run's env files are parsed exactly once no
-   * matter how many contexts get created from them. */
+  /** The merged env map the executor loaded from every configured envFile.
+   * This module never reads an envFile itself, so a run's env files are
+   * parsed exactly once no matter how many contexts get created from them.
+   * `ctx.env` is a frozen copy of this object, not this object: a write on
+   * the copy cannot reach another step, another scenario, or this map. */
   env: Readonly<Record<string, string>>;
   /** Values this run's HTTP log (http.jsonl) must redact; defaults to empty
    * when there is nothing secret to log. Never exposed on `ctx` — only
@@ -633,7 +634,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const {
     config,
     evidenceDir,
-    env,
+    env: sourceEnv,
     secrets = [],
     storageState,
     resultOf: readResultOf = () => undefined,
@@ -641,6 +642,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     stepNameOf = () => undefined,
     refuseMutatingPart = () => undefined,
   } = options;
+  // `Readonly` on `sourceEnv` is only a type. The executor passes one object
+  // into every scenario, so an assignment on `ctx.env` would otherwise still
+  // be there for a later step in this scenario and for a later scenario, and
+  // would change the map the executor still holds. The copy is what `ctx`
+  // exposes. Freezing it makes the assignment throw in a step module
+  // (strict) instead of sticking. It is not a Proxy: a direct read has to
+  // stay invisible to `requireEnv`'s log.
+  const env = Object.freeze({ ...sourceEnv });
   // Mutable, unlike browser evidence's fixed `evidenceDir`: `beginStep`
   // (below) is the only way this ever changes, and `do` never calls it, so
   // `do`'s http.jsonl stays exactly where it always has.

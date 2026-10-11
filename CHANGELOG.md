@@ -99,6 +99,10 @@ just until 0.1.
   `mutates: false` could not be checked against what ran. Those calls are
   now logged the same way as the `request` fixture (`via: "request"`). GET
   and HEAD stay reads. In-page `fetch` and navigation stay `via: "page"`.
+- **`ctx.env` is a frozen copy, not the shared map.** A write in one step
+  stayed visible to a later step and a later scenario, because every
+  scenario received the same object. Assigning a property now throws, and
+  a configured key still reads back as the loaded value.
 
 ## 0.14.1 — 2026-10-10
 

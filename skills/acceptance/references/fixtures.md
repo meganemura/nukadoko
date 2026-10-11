@@ -82,7 +82,10 @@ step needs a value it cannot run without: `requireEnv` throws the moment
 the key is missing or empty, rather than letting an `undefined` fail later
 doing something the missing key had nothing to do with. Read `env` itself
 only when a step wants several keys at once, or treats absence as a case
-to branch on rather than a config mistake worth refusing over.
+to branch on rather than a config mistake worth refusing over. `env` is a
+frozen copy of that merged map. Assigning a property throws, so a write in
+one step is not there for a later step or a later scenario. A configured
+key still reads back as the loaded value.
 
 The two also differ in what a step record shows afterward. Every name
 `requireEnv` is called with, found or not, lands on that step's own
