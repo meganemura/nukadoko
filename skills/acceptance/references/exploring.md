@@ -169,7 +169,7 @@ re-run can reproduce.
 
 ## What a harvested draft names rather than decides
 
-Three of them, each also reported on stderr.
+Four of them, each also reported on stderr.
 
 - **A comment where a step has no pattern.** It could not be a line.
   Decide which it was: give that step a `pattern` if the scenario should
@@ -181,6 +181,12 @@ Three of them, each also reported on stderr.
   wording has to be fixed or it will not bind. This happens where a
   pattern carries optional text or alternation, neither of which reverses
   into one answer.
+- **A comment naming a measured optional or defaulted arg the line
+  cannot bind.** The value is in the comment. `nuka check` stays silent,
+  because the schema allows the key to be absent, so the comment is the
+  record of what the exploration measured. A value the schema would
+  produce on its own is not named. Keywords stay `*` and both names stay
+  placeholders.
 
 Nothing needs stripping before the file is committed: which records the
 draft came from went to stderr, never into it.

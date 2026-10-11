@@ -11,7 +11,7 @@ import { renderAttachmentBlock, renderPatternLine, type Attachment } from "./ren
 // draft `nuka harvest` prints and the notices it writes to stderr
 // (docs/spec.md "Harvesting"). Three things happen per record, in this
 // order: render its pattern's first entry into text (render-line.ts), sort
-// its remaining args keys into chain/attachment/unfillable
+// its remaining args keys into chain/attachment/unfillable/omitted-measured
 // (categorize-args.ts), then read the *rendered* text back through the
 // exact matching `nuka run` uses (src/run/match-step.ts) to confirm it
 // lands on the same step with the same non-chain args — never a second
@@ -185,6 +185,15 @@ function buildEntry(
     comments.push(
       `args key "${key}" (value: ${formatValue(value)}) has no capture, no confirmed chain, and no docstring/table ` +
         `slot on this line; \`nuka check\` will report it as unfillable-required-key`,
+    );
+  }
+  for (const { key, value } of categorized.omittedMeasured) {
+    // Not the unfillable-required-key sentence above: that finding is only
+    // true for a required key. An optional key's absence is a valid
+    // contract, so check stays silent, and this comment is the only place
+    // the measured value is written down.
+    comments.push(
+      `args key "${key}" (value: ${formatValue(value)}) was measured and fits no capture, chain, or docstring/table on this line`,
     );
   }
 

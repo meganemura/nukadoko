@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
 import { categorizeArgs, deepEqual } from "../src/harvest/categorize-args.js";
 import { defineStep, type Step } from "../src/step/define-step.js";
@@ -64,7 +66,7 @@ describe("categorizeArgs: a step whose args schema is not an object", () => {
 
     const result = categorizeArgs(step, record, new Set(), new Set(), new Map(), new Map());
 
-    expect(result).toEqual({ chainKeys: new Set(), chainOutsideList: new Map(), unfillable: [] });
+    expect(result).toEqual({ chainKeys: new Set(), chainOutsideList: new Map(), unfillable: [], omittedMeasured: [] });
   });
 });
 
@@ -225,5 +227,74 @@ describe("categorizeArgs: more than one required key left with nothing to fill i
       ]),
     );
     expect(result.unfillable).toHaveLength(2);
+  });
+});
+
+describe("categorizeArgs: a measured optional key", () => {
+  it("keeps a measured optional value exactly when the schema would not reproduce it", () =>
+    hegel.test((tc) => {
+      const limit = tc.draw(gs.integers({ minValue: -1000, maxValue: 1000 }));
+      const sort = tc.draw(gs.text({ maxSize: 40 }));
+      const includeLimit = tc.draw(gs.booleans());
+      const step = defineStep({
+        description: "search",
+        args: z.object({
+          query: z.string(),
+          limit: z.number().optional(),
+          sort: z.string().default("relevance"),
+        }),
+        returns: z.object({}),
+        run: () => ({}),
+      });
+      const args: Record<string, unknown> = { query: "cat", sort };
+      if (includeLimit) {
+        args.limit = limit;
+      }
+      const result = categorizeArgs(step, makeRecord("r-1", "search", args), new Set(["query"]), new Set(), new Map(), new Map());
+
+      if (includeLimit) {
+        expect(result.omittedMeasured).toContainEqual({ key: "limit", value: limit });
+      } else {
+        expect(result.omittedMeasured.find((entry) => entry.key === "limit")).toBeUndefined();
+      }
+      if (sort === "relevance") {
+        expect(result.omittedMeasured.find((entry) => entry.key === "sort")).toBeUndefined();
+      } else {
+        expect(result.omittedMeasured).toContainEqual({ key: "sort", value: sort });
+      }
+      expect(result.unfillable).toEqual([]);
+      expect(result.attachment).toBeUndefined();
+    }));
+
+  it("does not inline an optional key a confirmed chain already supplied", () => {
+    const upstream = defineStep({
+      description: "producer",
+      args: z.object({}),
+      returns: z.object({ limit: z.number() }),
+      run: () => ({ limit: 3 }),
+    });
+    const consumer = defineStep({
+      description: "consumer",
+      pattern: "I search for {query:string}",
+      args: z.object({ query: z.string(), limit: z.number().optional() }),
+      returns: z.object({}),
+      from: { limit: [upstream, "limit"] },
+      run: () => ({}),
+    });
+    const producerRecord = makeRecord("prod-1", "producer", {}, { result: { limit: 3 } });
+    const record = makeRecord("r-1", "consumer", { query: "cat", limit: 3 }, {
+      used: [{ step_record_id: "prod-1", step: "producer" }],
+    });
+    const result = categorizeArgs(
+      consumer,
+      record,
+      new Set(["query"]),
+      new Set(["prod-1"]),
+      new Map([["prod-1", producerRecord]]),
+      new Map([[upstream, "producer"]]),
+    );
+
+    expect(result.chainKeys.has("limit")).toBe(true);
+    expect(result.omittedMeasured).toEqual([]);
   });
 });

@@ -44,3 +44,9 @@ value, a cart id, for example, straight into the draft, with no record of
 where it came from. `nuka check` stays clean, and `nuka run` goes green,
 but that pass proves only that the server remembers one value, not that
 the steps chain.
+
+A measured optional or defaulted arg that no capture, chain, or
+docstring/table carries is a different comment: the draft names the key
+and the value, and `nuka check` stays silent because the schema allows
+the key to be absent. A value the schema would produce on its own is
+left unnamed. The draft's keywords and names stay blank.

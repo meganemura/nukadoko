@@ -2917,7 +2917,12 @@ before execution. For a key from `--args`, harvest writes the value into a
 matching capture. It can also write the value into a docstring or table
 when that input can consume the one remaining required key (see "Typed
 steps"). If the key fits none of these locations, harvest omits it and
-adds a comment. `check` then refuses the line for its usual reason.
+adds a comment. `check` then refuses the line for its usual reason
+when the key is required. A measured optional or defaulted key gets
+the same comment, because `check` stays silent for a key the schema
+already allows to be absent, and a later run would otherwise follow
+the schema instead of the value the exploration measured. A value the
+schema would produce on its own stays unnamed.
 
 Harvest records three unresolved cases in both the draft and stderr.
 
