@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { isFeatureWithinDir } from "./feature-within-dir.js";
@@ -73,6 +74,29 @@ import type { TendIssue } from "./types.js";
 // current.
 
 const FIX_HINT = "re-run `nuka run` and `nuka accept` to refreeze it, or revert whatever changed since it was accepted";
+
+type Parsed =
+  | { success: true; data: unknown }
+  | { success: false; error: { issues: readonly z.core.$ZodIssue[] } };
+
+interface ReturnsSchema {
+  safeParse(data: unknown): Parsed;
+}
+
+// (d) lives here so a test can hand it a frozen result and the current
+// returns schema without writing a record. The record stores the schema
+// output, and this is the comparison that decides whether that output
+// still matches.
+export function assessFrozenResult(
+  schema: ReturnsSchema,
+  frozen: unknown,
+): { ok: true } | { ok: false; detail: string } {
+  const outcome = schema.safeParse(frozen);
+  if (!outcome.success) {
+    return { ok: false, detail: formatValidationIssues(outcome.error.issues) };
+  }
+  return { ok: true };
+}
 
 // Two rewrites, and they answer different questions. `normalizeSignoffText`
 // drops a leading BOM and turns CRLF into LF: a checkout or an editor
@@ -185,11 +209,11 @@ export function findSignoffRot(
       if (stepRecord.status !== "ok") {
         continue; // Defensive: `nuka accept` only ever freezes a passed scenario.
       }
-      const outcome = entry.step.returns.safeParse(stepRecord.result);
-      if (!outcome.success) {
+      const assessed = assessFrozenResult(entry.step.returns, stepRecord.result);
+      if (!assessed.ok) {
         issues.push({
           code: "signoff-result-invalid",
-          message: `${relativePath} froze step "${stepRecord.step}"'s result, which no longer passes its current returns schema (${formatValidationIssues(outcome.error.issues)}). The step's contract changed since this record was accepted. ${FIX_HINT}.`,
+          message: `${relativePath} froze step "${stepRecord.step}"'s result, which no longer passes its current returns schema (${assessed.detail}). The step's contract changed since this record was accepted. ${FIX_HINT}.`,
           file: relativePath,
           step: stepRecord.step,
         });

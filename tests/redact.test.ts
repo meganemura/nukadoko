@@ -246,6 +246,43 @@ describe("redact", () => {
       'redact: keys "p@ss" and "p%40ss" both redact to "{{secret.PW}}"',
     );
   });
+
+  it("stores a Date as the ISO string JSON.stringify would write", () => {
+    const date = new Date("2026-01-02T03:04:05.000Z");
+    expect(redact(date, [])).toBe("2026-01-02T03:04:05.000Z");
+    expect(redact({ createdAt: date }, [])).toEqual({ createdAt: "2026-01-02T03:04:05.000Z" });
+  });
+
+  it("stores an invalid Date as null, the JSON form of Date.toJSON", () => {
+    expect(redact(new Date(Number.NaN), [])).toBe(null);
+  });
+
+  it("stores a URL as its href and redacts a secret there, including the percent-encoded spelling", () => {
+    const raw = [{ name: "TOKEN", value: "sekrit-value" }];
+    expect(redact(new URL("https://example.com/login?token=sekrit-value"), raw)).toBe(
+      "https://example.com/login?token={{secret.TOKEN}}",
+    );
+    const secret = "p@ss w0rd/+=&";
+    const href = `https://example.com/login?pw=${encodeURIComponent(secret)}`;
+    expect(redact(new URL(href), [{ name: "PW", value: secret }])).toBe(
+      "https://example.com/login?pw={{secret.PW}}",
+    );
+  });
+
+  it("stores a Buffer as its toJSON object, not as index keys", () => {
+    expect(redact(Buffer.from("hi"), [])).toEqual({ type: "Buffer", data: [104, 105] });
+  });
+
+  it("redacts a secret inside the value toJSON returns, including the JSON-escaped spelling", () => {
+    const secret = 'say "hi"';
+    const blob = JSON.stringify({ pw: secret });
+    const box = {
+      toJSON() {
+        return blob;
+      },
+    };
+    expect(redact(box, [{ name: "PW", value: secret }])).toBe('{"pw":"{{secret.PW}}"}');
+  });
 });
 
 // Property-based tests below. `redact`'s own contract (see redact.ts) never
@@ -521,7 +558,41 @@ function redactOrSkip(
   }
 }
 
+const DATE_MS_LIMIT = 8_640_000_000_000_000;
+
 describe("redact property-based", () => {
+  it("stores a Date as the ISO string JSON.stringify would write, at any instant", () => {
+    hegel.test((tc) => {
+      const ms = tc.draw(gs.integers({ minValue: -DATE_MS_LIMIT, maxValue: DATE_MS_LIMIT }));
+      const date = new Date(ms);
+      const iso = date.toJSON();
+      expect(iso).not.toBe(null);
+      expect(redact(date, [])).toBe(iso);
+      expect(redact({ at: date }, [])).toEqual(JSON.parse(JSON.stringify({ at: date })));
+    });
+  });
+
+  it("redacts the percent-encoded and JSON-escaped spelling of any eligible secret inside toJSON text", () => {
+    hegel.test((tc) => {
+      const body = tc.draw(gs.text({ minSize: MIN_REDACTABLE_LENGTH, maxSize: 40 }));
+      const secret = `${body} @`;
+      const encoded = encodeURIComponent(secret);
+      expect(encoded).not.toBe(secret);
+      const href = `https://example.com/q?pw=${encoded}`;
+      expect(redact(new URL(href), [{ name: "PW", value: secret }])).toBe(
+        "https://example.com/q?pw={{secret.PW}}",
+      );
+      const blob = JSON.stringify({ pw: secret });
+      const box = {
+        toJSON() {
+          return blob;
+        },
+      };
+      const interior = JSON.stringify(secret).slice(1, -1);
+      expect(redact(box, [{ name: "PW", value: secret }])).toBe(blob.split(interior).join("{{secret.PW}}"));
+    });
+  });
+
   it("leaves no eligible secret anywhere in the redacted result, at any depth", () => {
     hegel.test((tc) => {
       const { structure, secrets, eligible } = tc.draw(nestedFixtureGen);
