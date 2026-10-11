@@ -199,4 +199,7 @@ alone, which scenarios actually need it. `defineFixtures` (from the
 it the same way it reaches `page` or `request`, by destructuring the name.
 This is additive, not required: an `After` hook that cleans up something
 no typed step has claimed yet is still exactly as valid as it was in
-Stage 1.
+Stage 1. That hook receives cucumber's hook parameter, including
+`result.duration`, and `result.message` and `error` when the scenario
+failed. An `AfterStep` hook receives those too, plus `pickleStep` and
+`testStepId` for the step that just ran.

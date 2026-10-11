@@ -64,7 +64,9 @@ Everything below that import keeps working, unchanged:
   bare-string `Before("@tag", fn)`), filtered by a single `@tag` or
   `not @tag`; custom `setWorldConstructor` subclasses. A hook receives
   cucumber's hook parameter, so `Before(function ({ pickle }) {...})` works
-  as written.
+  as written. `After` receives `result.duration`, and `result.message` and
+  `error` when the scenario failed. `AfterStep` receives those too, plus
+  `pickleStep` and `testStepId` for the step that just ran.
 - `AfterStep`, registered the same three ways as `Before`/`After`. It runs
   once per step that actually executed in the scenario, not once for the
   whole scenario the way `Before`/`After` do: a step this scenario skipped

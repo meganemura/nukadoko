@@ -25,7 +25,7 @@
 // same `registerHook`): `AfterStep` invents no new registration vocabulary
 // of its own.
 
-import type { GherkinDocument, Pickle } from "@cucumber/messages";
+import type { Duration, GherkinDocument, Pickle, PickleStep } from "@cucumber/messages";
 
 /** `"after_step"` — for `AfterStep`, alongside the pre-existing `Before`/
  * `After`. Registration is identical for all three (`registerHook`, this
@@ -67,8 +67,36 @@ export interface HookParameter {
    * counted that exact `result.status === Status.FAILED` shape 3 times,
    * across 3 real-world repos). The equally common
    * `result.status === "FAILED"` string comparison still means what it
-   * always meant, unaffected by the enum's own re-export. */
-  readonly result?: { readonly status: "PASSED" | "FAILED" };
+   * always meant, unaffected by the enum's own re-export.
+   * `duration` is cucumber's own `Duration` (seconds and nanos) for the
+   * step this result describes, taken from the start and finish the
+   * executor already recorded for that step. `message` is that same
+   * failure's text, and only when the outcome is a failure: a passing
+   * result has no message, matching cucumber-js, which adds one only
+   * from the thrown value. */
+  readonly result?: {
+    readonly status: "PASSED" | "FAILED";
+    readonly duration: Duration;
+    readonly message?: string;
+  };
+  /** After and AfterStep only. cucumber-js assigns this key whenever it
+   * assigns `result`, including when the value is `undefined` (a pass, or
+   * a failure that was not a throw). Before omits the key: nothing has
+   * failed yet. The value, when there is one, is the thrown value the
+   * executor already caught, not a second error built for the hook. */
+  readonly error?: unknown;
+  /** AfterStep only. The pickle step that just ran. Absent on Before and
+   * After, which cucumber-js does not give a `pickleStep`. */
+  readonly pickleStep?: PickleStep;
+  /** AfterStep only. The step record id of the step that just ran.
+   * cucumber-js's `testStepId` names a `TestStep` assigned when the test
+   * case is built. This executor does not assign cucumber-messages ids
+   * until the emitter runs, after the hook has already been called, so
+   * the field uses the id the executor already holds for that step. Same
+   * reason `testCaseStartedId` above is the scenario id: a read of the
+   * name real glue already uses has to resolve to a real, stable, per-step
+   * string instead of `undefined`. */
+  readonly testStepId?: string;
   /** nukadoko has no retry mechanism, so this is always `false` — present
    * because real glue destructures it as a sibling of the fields above, and
    * an omitted field there is `undefined`, not `false`. */
@@ -79,9 +107,12 @@ export interface HookParameter {
  * `ITestCaseHookParameter` appears in 2/2 real-world repos as a bare type
  * import) — the same `tsc`-only gap `IWorldOptions` closed for world.ts,
  * for the same reason (see that alias's
- * own doc comment). `HookParameter` above already documents that it was
- * built to match this exact shape, so this alias adds a name, not a new
- * definition. */
+ * own doc comment). Before and After use the fields cucumber-js puts on
+ * `ITestCaseHookParameter`. AfterStep also sets `pickleStep` and
+ * `testStepId`, which cucumber-js puts on `ITestStepHookParameter` and
+ * leaves off the scenario hook. One type covers both calls because one
+ * `HookFn` has to, and the step-only fields are optional so a Before or
+ * After that never reads them is unchanged. */
 export type ITestCaseHookParameter = HookParameter;
 
 /** `this: any`, not `this: World` (same reasoning as src/compat/registry.ts's

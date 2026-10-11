@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
+  TimeConversion,
   type GherkinDocument,
   type Pickle,
   type PickleStep,
@@ -839,22 +840,45 @@ export function classifyCaughtError(error: unknown): ErrorKind {
   return "step_error";
 }
 
-/** Builds this hook invocation's own `HookParameter` — `result` is
- * included only for an After hook (`resultStatus !==
- * undefined`), matching cucumber-js's own convention of never setting it for
- * Before. */
+/** Builds this hook invocation's own `HookParameter`. `result` is included
+ * only when `resultStatus` is set: cucumber-js never sets it for Before,
+ * and sets it for After (the scenario so far) and AfterStep (that one
+ * step). `details.includeError` matches that same split, and still sets
+ * the `error` key when the value is `undefined`, because cucumber-js
+ * assigns the key rather than omitting it. `pickleStep` and `testStepId`
+ * are set only for AfterStep. `duration` comes from the milliseconds the
+ * executor already measured for the step this result describes. */
 function buildHookParameter(
   gherkinDocument: GherkinDocument,
   pickle: Pickle,
   testCaseStartedId: string,
   resultStatus: "PASSED" | "FAILED" | undefined,
+  details: {
+    readonly durationMs?: number;
+    readonly message?: string;
+    readonly error?: unknown;
+    readonly includeError?: boolean;
+    readonly pickleStep?: PickleStep;
+    readonly testStepId?: string;
+  } = {},
 ): HookParameter {
   return {
     gherkinDocument,
     pickle,
     testCaseStartedId,
     willBeRetried: false,
-    ...(resultStatus !== undefined ? { result: { status: resultStatus } } : {}),
+    ...(resultStatus !== undefined
+      ? {
+          result: {
+            status: resultStatus,
+            duration: TimeConversion.millisecondsToDuration(Math.max(0, details.durationMs ?? 0)),
+            ...(details.message !== undefined ? { message: details.message } : {}),
+          },
+        }
+      : {}),
+    ...(details.includeError ? { error: details.error } : {}),
+    ...(details.pickleStep !== undefined ? { pickleStep: details.pickleStep } : {}),
+    ...(details.testStepId !== undefined ? { testStepId: details.testStepId } : {}),
   };
 }
 
@@ -1033,6 +1057,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const stepRecords: ScenarioStepRecord[] = [];
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
+  // The outcome After reads. A passing scenario contributes the last
+  // executed step's duration (cucumber-js's After `result` is a real step
+  // result, and a pass still has a duration). The first failure wins,
+  // message, duration, and thrown value, because later steps are skipped
+  // and a later hook must not replace the failure that already failed the
+  // scenario. `error` stays `undefined` when the failure was not a throw
+  // (validation, an undefined step): the executor holds a message then,
+  // not a thrown value.
+  let passedDurationMs = 0;
+  let heldFailure: { message: string; durationMs: number; error: unknown } | undefined;
+  function noteFailure(message: string, durationMs: number, error: unknown): void {
+    if (heldFailure === undefined) {
+      heldFailure = { message, durationMs, error };
+    }
+  }
 
   /**
    * The one place this pickle's own `stepRecords` array is ever appended to
@@ -1184,7 +1223,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `[]` for a compat step, which has no
     // fixture bag at all.
     fixtureUsage: FixtureUsageEntry[],
-  ): Promise<void> {
+  ): Promise<number> {
     const status = initialStatus;
     const errorMessage = initialErrorMessage;
     const errorKind = initialErrorKind;
@@ -1383,6 +1422,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     if (status === "failed") {
       scenarioFailed = true;
     }
+    const durationMs = stepFinishedAt.getTime() - stepStartedAt.getTime();
     pushStepRecord(
       {
         text: pickleStep.text,
@@ -1390,9 +1430,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         step_record_id: begun.recordId,
         ...(status === "failed" ? { error: { message: errorMessage } } : {}),
       },
-      stepFinishedAt.getTime() - stepStartedAt.getTime(),
+      durationMs,
       redactedStepRecord,
     );
+    // Returned so After and AfterStep report this same duration. Measuring
+    // again after this function returns would include the time spent
+    // writing the step record, which the hook did not run inside.
+    return durationMs;
   }
 
   // --- Hooks + World ---
@@ -1481,6 +1525,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let hookStatus: "ok" | "failed" = "ok";
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
+    let thrown: unknown;
     if (hook.fn.length >= 2) {
       // This arity check, before the call itself (see runWithTimeout's
       // own header for why calling it at all would already be the failure).
@@ -1504,6 +1549,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         hookStatus = "failed";
         hookErrorMessage = error instanceof Error ? error.message : String(error);
         hookErrorKind = classifyCaughtError(error);
+        thrown = error;
       }
     }
     // Closes this hook's own trace chunk, if one is open, *before* its own
@@ -1534,6 +1580,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;
+      // The failure After will report. A Before failure skips every step,
+      // so this is the only failure the scenario holds.
+      noteFailure(hookErrorMessage, 0, thrown);
       // Stop at the first Before failure — a Before
       // failure skips every step: this scenario's setup already didn't
       // complete, so there is nothing left for a later Before hook to
@@ -1570,7 +1619,25 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * pickle.steps loop below reads, skipping every remaining step exactly as
    * if that step itself had failed.
    */
-  async function runAfterStepHooks(stepIndex: number, stepStatus: "ok" | "failed"): Promise<void> {
+  async function runAfterStepHooks(
+    stepIndex: number,
+    step: {
+      readonly pickleStep: PickleStep;
+      readonly testStepId: string;
+      readonly status: "ok" | "failed";
+      readonly durationMs: number;
+      readonly errorMessage: string;
+      readonly thrown: unknown;
+    },
+  ): Promise<void> {
+    // Noted even when no AfterStep hook is registered: After still has to
+    // see this step's duration, and its message and thrown value if it
+    // failed. The early return below used to skip the whole function.
+    if (step.status === "ok") {
+      passedDurationMs = step.durationMs;
+    } else {
+      noteFailure(step.errorMessage, step.durationMs, step.thrown);
+    }
     if (afterStepHooks.length === 0) {
       return;
     }
@@ -1578,7 +1645,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       gherkinDocument,
       pickle,
       scenarioId,
-      stepStatus === "ok" ? "PASSED" : "FAILED",
+      step.status === "ok" ? "PASSED" : "FAILED",
+      {
+        includeError: true,
+        durationMs: step.durationMs,
+        message: step.status === "failed" ? step.errorMessage : undefined,
+        error: step.status === "failed" ? step.thrown : undefined,
+        pickleStep: step.pickleStep,
+        testStepId: step.testStepId,
+      },
     );
     for (const hook of afterStepHooks) {
       // Same boundary redirect as the Before/After loops (this file's own
@@ -1604,6 +1679,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       let hookStatus: "ok" | "failed" = "ok";
       let hookErrorMessage = "";
       let hookErrorKind: ErrorKind = "step_error";
+      let thrown: unknown;
       if (hook.fn.length >= 2) {
         hookStatus = "failed";
         hookErrorMessage = doneCallbackMessage("Hook", "AfterStep");
@@ -1625,6 +1701,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           hookStatus = "failed";
           hookErrorMessage = error instanceof Error ? error.message : String(error);
           hookErrorKind = classifyCaughtError(error);
+          thrown = error;
         }
       }
       // Same "close, then read" order as the Before loop above.
@@ -1655,6 +1732,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // No `break` — see this function's own header (same
         // non-breaking failure handling as the After loop above).
         scenarioFailed = true;
+        // A step that already failed keeps its own message. A passing
+        // step whose AfterStep hook fails is the failure After reports.
+        noteFailure(hookErrorMessage, 0, thrown);
       }
     }
   }
@@ -1729,12 +1809,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
       if (outcome.kind === "undefined") {
         scenarioFailed = true;
+        const message = undefinedStepMessage(pickleStep.text);
+        noteFailure(message, 0, undefined);
         pushStepRecord(
           {
             text: pickleStep.text,
             status: "undefined",
             step_record_id: null,
-            error: { message: undefinedStepMessage(pickleStep.text) },
+            error: { message },
           },
           0,
         );
@@ -1743,12 +1825,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
       if (outcome.kind === "ambiguous") {
         scenarioFailed = true;
+        const message = ambiguousStepMessage(pickleStep.text, outcome.stepNames);
+        noteFailure(message, 0, undefined);
         pushStepRecord(
           {
             text: pickleStep.text,
             status: "ambiguous",
             step_record_id: null,
-            error: { message: ambiguousStepMessage(pickleStep.text, outcome.stepNames) },
+            error: { message },
           },
           0,
         );
@@ -1778,12 +1862,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // in this file checks a compat step's read-only behavior either.
         if (policy === "read-only" && entry.step.mutates) {
           scenarioFailed = true;
+          const message = readOnlyDeclaredMutatesMessage(outcome.stepName, environment);
+          noteFailure(message, 0, undefined);
           pushStepRecord(
             {
               text: pickleStep.text,
               status: "failed",
               step_record_id: null,
-              error: { message: readOnlyDeclaredMutatesMessage(outcome.stepName, environment) },
+              error: { message },
             },
             0,
           );
@@ -1827,6 +1913,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let result: unknown;
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
+        let thrown: unknown;
         const rawArgs: unknown = bindResult.ok ? bindResult.value : bindResult.partialValue;
         began.rawArgs = rawArgs;
         // Defaults to the same raw/merged value as `began.rawArgs`;
@@ -1945,11 +2032,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               status = "failed";
               errorMessage = error instanceof Error ? error.message : String(error);
               errorKind = classifyCaughtError(error);
+              thrown = error;
             }
           }
         }
 
-        await finishExecutedStep(
+        const durationMs = await finishExecutedStep(
           pickleStep,
           { recordId, recordDir, relativeRecordDir },
           stepStartedAt,
@@ -1963,7 +2051,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           entry.step.mutates,
           fixtureUsage,
         );
-        await runAfterStepHooks(stepIndex, status);
+        await runAfterStepHooks(stepIndex, {
+          pickleStep,
+          testStepId: recordId,
+          status,
+          durationMs,
+          errorMessage,
+          thrown,
+        });
       } else {
         // entry.kind === "compat": fn is called with `this = World` and
         // positional arguments —
@@ -2018,6 +2113,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let status: "ok" | "failed" = "ok";
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
+        let thrown: unknown;
         // This arity check, before the call itself: a compat step's
         // glue function declaring more parameters than `positionalArgs`
         // actually supplies is cucumber-js's own signal for a `done`
@@ -2064,6 +2160,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             status = "failed";
             errorMessage = error instanceof Error ? error.message : String(error);
             errorKind = classifyCaughtError(error);
+            thrown = error;
           }
         }
 
@@ -2072,7 +2169,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // whatever `fn` itself happened to return, and no `chain` entry
         // (compat has no validated result to make citable via
         // `ctx.resultOf`, and no Step object to key one on).
-        await finishExecutedStep(
+        const durationMs = await finishExecutedStep(
           pickleStep,
           { recordId, recordDir, relativeRecordDir },
           stepStartedAt,
@@ -2086,7 +2183,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           null,
           [],
         );
-        await runAfterStepHooks(stepIndex, status);
+        await runAfterStepHooks(stepIndex, {
+          pickleStep,
+          testStepId: recordId,
+          status,
+          durationMs,
+          errorMessage,
+          thrown,
+        });
       }
     } catch (error) {
       // The backstop itself (see the comment above `began`): anything that
@@ -2098,6 +2202,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       scenarioFailed = true;
       const message = error instanceof Error ? error.message : String(error);
       if (began === null) {
+        const durationMs = Date.now() - stepLoopStartedAt.getTime();
+        noteFailure(message, durationMs, error);
         pushStepRecord(
           {
             text: pickleStep.text,
@@ -2105,7 +2211,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step_record_id: null,
             error: { message },
           },
-          Date.now() - stepLoopStartedAt.getTime(),
+          durationMs,
         );
       } else {
         // Same "close this step's own chunk before reading anything from
@@ -2201,6 +2307,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         };
         const redactedStepRecord = redact(stepRecord, secrets) as StepRecord;
         await writeStepRecord(began.recordDir, redactedStepRecord);
+        const durationMs = stepFinishedAt.getTime() - began.startedAt.getTime();
         pushStepRecord(
           {
             text: pickleStep.text,
@@ -2208,7 +2315,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step_record_id: began.recordId,
             error: { message },
           },
-          stepFinishedAt.getTime() - began.startedAt.getTime(),
+          durationMs,
           redactedStepRecord,
         );
         // `began !== null`: this step's own execution had already begun (a
@@ -2216,7 +2323,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // backstop exists for — so, unlike the `began === null` arm just above (never
         // began at all), this step did execute, and AfterStep runs after it
         // exactly like the typed/compat branches' own calls further up.
-        await runAfterStepHooks(stepIndex, "failed");
+        await runAfterStepHooks(stepIndex, {
+          pickleStep,
+          testStepId: began.recordId,
+          status: "failed",
+          durationMs,
+          errorMessage: message,
+          thrown: error,
+        });
       }
     }
   }
@@ -2248,6 +2362,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       pickle,
       scenarioId,
       scenarioFailed ? "FAILED" : "PASSED",
+      {
+        includeError: true,
+        durationMs: scenarioFailed ? (heldFailure?.durationMs ?? 0) : passedDurationMs,
+        message: scenarioFailed ? heldFailure?.message : undefined,
+        error: scenarioFailed ? heldFailure?.error : undefined,
+      },
     );
     // Same non-throwing arity/pending-skipped classification as the Before
     // loop above — see that loop's own
@@ -2255,6 +2375,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let hookStatus: "ok" | "failed" = "ok";
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
+    let thrown: unknown;
     if (hook.fn.length >= 2) {
       hookStatus = "failed";
       hookErrorMessage = doneCallbackMessage("Hook", "After");
@@ -2276,6 +2397,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         hookStatus = "failed";
         hookErrorMessage = error instanceof Error ? error.message : String(error);
         hookErrorKind = classifyCaughtError(error);
+        thrown = error;
       }
     }
     // Same "close, then read" order as the Before loop above — this hook's
@@ -2305,6 +2427,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         ...(declared ? { declared } : {}),
       });
       scenarioFailed = true;
+      // The next After hook sees this failure when nothing earlier already
+      // failed the scenario. A step failure already held stays the one
+      // reported: noteFailure keeps the first.
+      noteFailure(hookErrorMessage, 0, thrown);
     }
   }
 

@@ -48,6 +48,8 @@ import { Given, When, Then } from "nukadoko/compat";
 - `Given(pattern, fn)` と `Given(pattern, { timeout }, fn)` のどちらの登録形も受け付け、その `timeout` は尊重されます。
 - `World`(`this`)、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、裸の文字列の `Before("@tag", fn)`)で書ける、単一の `@tag` または `not @tag` でフィルタされる `Before`/`After` フック、カスタムの `setWorldConstructor` サブクラス。
   フックは cucumber 自身のフック引数を受け取るので、`Before(function ({ pickle }) {...})` は書いたとおりに動きます。
+  `After` は `result.duration` を受け取り、scenario が失敗したときは `result.message` と `error` も受け取ります。
+  `AfterStep` もそれらを受け取り、加えて直前の step の `pickleStep` と `testStepId` を受け取ります。
 - `AfterStep` は `Before`/`After` と同じ 3 通りの書き方で登録します。
   scenario 全体につき 1 回の `Before`/`After` と違い、scenario 内で実際に実行された step ごとに 1 回走ります。
   この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` もその step については走りません。

@@ -1401,7 +1401,20 @@ import { Given, When, Then } from "nukadoko/compat";
   `result.status` uses the `TestStepResultStatus` strings from
   `@cucumber/messages`. `nukadoko/compat` re-exports the same enum as
   `Status`, so `result.status === Status.FAILED` imports and compares
-  correctly. The other members, `PENDING`, `SKIPPED`, `UNDEFINED`, and
+  correctly. `After` and `AfterStep` also receive `result.duration`,
+  cucumber's `Duration` (seconds and nanos) for the step whose outcome
+  `result` describes, measured from that step's own start and finish.
+  When that outcome is a failure, `result.message` is the failure text
+  the executor already recorded, and `error` is the thrown value when
+  the failure was a throw. `Before` receives neither `result` nor
+  `error`. `error` is present on `After` and `AfterStep` even when the
+  step passed, and the value is `undefined` then, because cucumber-js
+  assigns the key whenever it assigns `result`. `AfterStep` also
+  receives `pickleStep`, the pickle step that just ran, and
+  `testStepId`, that step's step record id. The id is the same kind of
+  stand-in `testCaseStartedId` already is: a real stable id the
+  executor holds, not the id the cucumber-messages emitter assigns
+  later. The other members, `PENDING`, `SKIPPED`, `UNDEFINED`, and
   `AMBIGUOUS`, cannot match. Nukadoko has no corresponding concept for a
   hook result. Migrated glue never takes a branch that compares these
   values, and this behavior is not a compat gap. `BeforeAll` and `AfterAll`

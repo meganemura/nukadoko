@@ -1201,6 +1201,15 @@ import { Given, When, Then } from "nukadoko/compat";
   hook 引数の `result.status` は、`@cucumber/messages` の `TestStepResultStatus` 文字列値を使います。
   `nukadoko/compat` は、同じ enum を `Status` として re-export します。
   したがって、`result.status === Status.FAILED` と書かれた glue は正しく import され、比較できます。
+  `After` と `AfterStep` は `result.duration` も受け取ります。
+  これは cucumber の `Duration`(seconds と nanos)で、`result` が表す step 自身の開始から終了までを測ったものです。
+  その結果が失敗のとき、`result.message` は executor がすでに記録している失敗の文言で、`error` は失敗が throw だったときの投げられた値です。
+  `Before` は `result` も `error` も受け取りません。
+  `error` は `After` と `AfterStep` では step が成功したときもキーとして存在し、その値は `undefined` です。
+  cucumber-js が `result` を渡すときにはそのキーも代入するからです。
+  `AfterStep` は加えて `pickleStep`(直前に走った pickle step)と `testStepId`(その step の step record id)を受け取ります。
+  この id は `testCaseStartedId` と同じ種類の身代わりです。
+  executor がすでに持っている安定した id であり、cucumber-messages の emitter が後から割り当てる id ではありません。
   この enum の他のメンバー(`PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS`)は決して一致しません。
   nukadoko には、hook 自身の result が運びうる pending、skipped、undefined-step、ambiguous-match のいずれの概念もないからです。
   移行した glue は、これらの値を比較する分岐を通らず、この挙動は compat gap ではありません。

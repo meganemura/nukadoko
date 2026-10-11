@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A compat hook receives the fields cucumber-js passes.**
+  `AfterStep` now gets `pickleStep` and `testStepId`. `After` and
+  `AfterStep` get `result.duration`, and, when the step or scenario
+  failed, `result.message` and `error`. A hook that logs
+  `pickleStep.text` or `result.message` reads the step text and the
+  failure text.
 - **A step that writes to stdout no longer breaks `nuka do` or `nuka run`.**
   `console.log` and `process.stdout.write` from a typed step or a compat
   step are delivered on stderr while the step runs. `nuka do` stdout stays
