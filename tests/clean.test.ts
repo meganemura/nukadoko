@@ -34,6 +34,26 @@ function stateDir(rootDir: string): string {
   return path.join(rootDir, ".nukadoko");
 }
 
+/** Overwrites the fixture config. The shim import is what lets this temp
+ * copy load `defineConfig` without a published package. */
+async function writeExportConfig(
+  rootDir: string,
+  options: { allureResultsDir?: string; messagesOutput?: string; stateDir?: string },
+): Promise<void> {
+  const fields: string[] = [];
+  if (options.stateDir !== undefined) fields.push(`stateDir: ${JSON.stringify(options.stateDir)}`);
+  if (options.allureResultsDir !== undefined) {
+    fields.push(`allure: { resultsDir: ${JSON.stringify(options.allureResultsDir)} }`);
+  }
+  if (options.messagesOutput !== undefined) {
+    fields.push(`messages: { output: ${JSON.stringify(options.messagesOutput)} }`);
+  }
+  await writeFile(
+    path.join(rootDir, "nukadoko.config.ts"),
+    `import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ ${fields.join(", ")} });\n`,
+  );
+}
+
 async function seedRecords(rootDir: string): Promise<void> {
   await mkdir(path.join(stateDir(rootDir), "records", "steps", "step-aaa"), { recursive: true });
   await writeFile(path.join(stateDir(rootDir), "records", "steps", "step-aaa", "record.json"), "{}");
@@ -246,6 +266,141 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(0);
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
     expect(existsSync(path.join(dir, "stale.lock"))).toBe(false);
+  });
+
+  it("still removes a results directory that stays inside the project and is not a parent of the state directory", async () => {
+    await writeExportConfig(rootDir, { allureResultsDir: "reports/allure" });
+    const resultsDir = path.join(rootDir, "reports", "allure");
+    await mkdir(resultsDir, { recursive: true });
+    await writeFile(path.join(resultsDir, "some-result.json"), "{}");
+    await writeFile(path.join(rootDir, "reports", "keep.txt"), "keep");
+
+    const exitCode = await runCli(["clean", "--export"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+    expect(existsSync(resultsDir)).toBe(true);
+    expect(await readdir(resultsDir)).toEqual([]);
+    expect(existsSync(path.join(rootDir, "reports", "keep.txt"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
+  });
+
+  it("refuses an allure resultsDir that is the project root and deletes nothing", async () => {
+    await writeExportConfig(rootDir, { allureResultsDir: "." });
+    await seedRecords(rootDir);
+    await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr });
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("refusing");
+    expect(stderr.text()).toContain("project root");
+    expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+  });
+
+  it("refuses a dry-run whose resultsDir is the project root, and deletes nothing", async () => {
+    await writeExportConfig(rootDir, { allureResultsDir: "." });
+    await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["clean", "--dry-run", "--export"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("refusing");
+    expect(stderr.text()).toContain("project root");
+    expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+  });
+
+  it("refuses a messages output that is the project root and deletes nothing", async () => {
+    await writeExportConfig(rootDir, { messagesOutput: "." });
+    await seedRecords(rootDir);
+    await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["clean", "--export"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("refusing");
+    expect(stderr.text()).toContain("project root");
+    expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+  });
+
+  it("refuses a resultsDir that resolves outside the project and leaves that path in place", async () => {
+    const outside = path.join(path.dirname(rootDir), `outside-results-${path.basename(rootDir)}`);
+    await mkdir(outside, { recursive: true });
+    await writeFile(path.join(outside, "keep.txt"), "keep");
+    try {
+      await writeExportConfig(rootDir, { allureResultsDir: path.relative(rootDir, outside) });
+      await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["clean", "--export"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr,
+      });
+      expect(exitCode).toBe(1);
+      expect(stderr.text()).toContain("refusing");
+      expect(stderr.text()).toContain("outside the project");
+      expect(existsSync(path.join(outside, "keep.txt"))).toBe(true);
+      expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+    } finally {
+      await removeTempDir(outside);
+    }
+  });
+
+  it("refuses a messages output that resolves outside the project and leaves that file in place", async () => {
+    const outside = path.join(path.dirname(rootDir), `outside-messages-${path.basename(rootDir)}`);
+    await mkdir(outside, { recursive: true });
+    const output = path.join(outside, "messages.ndjson");
+    await writeFile(output, "line1\n");
+    try {
+      await writeExportConfig(rootDir, { messagesOutput: path.relative(rootDir, output) });
+      await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["clean", "--export"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr,
+      });
+      expect(exitCode).toBe(1);
+      expect(stderr.text()).toContain("refusing");
+      expect(stderr.text()).toContain("outside the project");
+      expect(existsSync(output)).toBe(true);
+      expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+    } finally {
+      await removeTempDir(outside);
+    }
+  });
+
+  it("refuses a resultsDir that is a parent of the state directory and deletes nothing under it", async () => {
+    await writeExportConfig(rootDir, { stateDir: "bed/state", allureResultsDir: "bed" });
+    await mkdir(path.join(rootDir, "bed", "state"), { recursive: true });
+    await writeFile(path.join(rootDir, "bed", "keep.txt"), "keep");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["clean", "--export"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("refusing");
+    expect(stderr.text()).toContain("state directory");
+    expect(existsSync(path.join(rootDir, "bed", "keep.txt"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
   });
 
   it("an unknown flag fails setup: exit 1, nothing deleted (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
