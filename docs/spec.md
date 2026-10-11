@@ -2547,8 +2547,24 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   give opposite instructions. Nukadoko reports this conflict as a config error.
   The executor redacts secret values from either origin when it writes a step
   record surface: `record.json`, the stdout copy from `do`, or http.jsonl.
-  A step's `run` cannot control this process. Values shorter than four
-  characters are never redacted, including values named in `redact`. Nukadoko
+  A step's `run` cannot control this process. Each loaded value is removed
+  in three forms, all replaced by the same `{{secret.NAME}}` token: the
+  value itself, the percent-encoded form `encodeURIComponent` produces, and
+  the JSON-escaped form `JSON.stringify` writes inside a string. The quotes
+  `JSON.stringify` adds are not part of that form. A query string therefore
+  loses a secret that was encoded before it was logged, and text that
+  already holds JSON loses a secret whose quotes or backslashes were
+  escaped. A form that is itself some key's loaded value uses that key's
+  name, the alphabetically first name when several keys share the value.
+  A percent-encoded or JSON-escaped form that no key loaded as its raw
+  value uses the alphabetically first key that produces it. Longer forms
+  are replaced first, so a shorter secret cannot take a bite out of a
+  longer one. A JSON number that equals a numeric secret is left as a
+  number. Matching it would rewrite ordinary counts and timings whenever
+  they happened to equal a loaded value, and it would change that field's
+  type. The decimal digits are still removed wherever they appear as text.
+  Values shorter than four characters are never redacted, in any form,
+  including values named in `redact`. Nukadoko
   can redact only values that it loaded. It cannot detect a new token in a
   step result. A tracked value remains plain on all record surfaces unless
   `secrets.redact` names it. Those surfaces include an agent transcript, which

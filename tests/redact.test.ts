@@ -76,6 +76,27 @@ describe("redactString", () => {
     expect(redactString(`note=${jsonEscaped};`, quoted)).toBe("note={{secret.PHRASE}};");
   });
 
+  it("replaces a longer secret's percent-encoded form whole, ahead of a shorter secret inside it", () => {
+    const secrets: SecretEntry[] = [
+      { name: "LONG", value: "a b c" },
+      { name: "PART", value: "%20b%20" },
+    ];
+    expect(encodeURIComponent("a b c")).toBe("a%20b%20c");
+    expect(redactString("a%20b%20c", secrets)).toBe("{{secret.LONG}}");
+  });
+
+  it("lets a raw value claim a spelling ahead of another secret's encoded form", () => {
+    // "a%40bc" is BETA's loaded value and also the percent-encoded form of
+    // ALPHA's. The raw load wins, whichever order the two entries arrive in.
+    const secrets: SecretEntry[] = [
+      { name: "BETA", value: "a%40bc" },
+      { name: "ALPHA", value: "a@bc" },
+    ];
+    expect(encodeURIComponent("a@bc")).toBe("a%40bc");
+    expect(redactString("a%40bc", secrets)).toBe("{{secret.BETA}}");
+    expect(redactString("a@bc", secrets)).toBe("{{secret.ALPHA}}");
+  });
+
   it("does not redact a too-short secret through a longer encoded spelling", () => {
     // The four-character floor is about the loaded value, not about how
     // long a spelling of it becomes. "a b" encodes to "a%20b".

@@ -108,6 +108,14 @@ just until 0.1.
   phase. When the fixture then calls `use()`, that call resolves as
   `"failed"` and the teardown after it runs. A failure in that teardown is
   written to stderr.
+- **A percent-encoded or JSON-escaped secret stayed in the record.**
+  Redaction matched only the loaded text, so a query string that had
+  already been percent-encoded, or a string that already held JSON,
+  kept the secret. Both forms are now replaced with the same
+  `{{secret.NAME}}` token. A JSON number equal to a numeric secret is
+  left as a number, because matching it would rewrite ordinary counts
+  and change the field's type. The digits are still removed where they
+  appear as text.
 
 ## 0.14.1 — 2026-10-10
 

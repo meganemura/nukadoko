@@ -272,6 +272,16 @@
       "en": ["relation"],
       "ja": "関係",
       "note": "defineRelation が宣言する、2 つの step 列の結果の間の関係。defineRelation と relationEntry は英語のまま"
+    },
+    {
+      "en": ["percent-encoded form", "percent-encoded"],
+      "ja": "パーセントエンコードされた形",
+      "note": "encodeURIComponent が返す綴り。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。コード上の encodeURIComponent は識別子なので原文のまま"
+    },
+    {
+      "en": ["JSON-escaped form", "JSON-escaped"],
+      "ja": "JSON エスケープされた形",
+      "note": "JSON.stringify が文字列の中に書く綴り。前後の引用符は含まない。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。コード上の JSON.stringify は識別子なので原文のまま"
     }
   ],
   "keep_english": [

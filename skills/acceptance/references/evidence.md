@@ -32,7 +32,10 @@ Compat glue uses `this.attach` instead, in cucumber-js's forms (a
 awaits), and `this.link` takes URLs rather than a display name. Those land
 on the step record's `declared` field, not on `evidence.attachments`.
 
-Keep secrets out of whatever you hand `attach`. The step record's own
-`name`/`file` strings are redacted like every other field, but a file's own
-contents are not, since redacting arbitrary bytes would corrupt them about
-as often as it would protect them.
+Keep secrets out of whatever you hand `attach`. Record text loses a
+loaded secret in the raw form, the percent-encoded form, and the
+JSON-escaped form. A JSON number equal to a numeric secret stays a
+number. The step record's own `name`/`file` strings are redacted like
+every other field, but a file's own contents are not, since redacting
+arbitrary bytes would corrupt them about as often as it would protect
+them.

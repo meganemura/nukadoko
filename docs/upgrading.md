@@ -35,7 +35,7 @@ This part does not change release to release.
 
 ## 0.14.1 to the next release
 
-Compat behaviour a project can notice.
+Compat behaviour a project can notice, and one redaction change.
 
 - **`this.link`'s second argument is another URL, not a display name.**
   `this.link(a, b)` used to record one link whose name was `b`. It now
@@ -56,6 +56,14 @@ Compat behaviour a project can notice.
   `await this.openPage()` and `await this.openRequest()` are unchanged.
   `nuka check` reports a leftover declaration as `step-file-import-failed`,
   and `nuka run` stops with the same message, which names the field.
+- **Encoded forms of a loaded secret disappear from records, and two keys can newly collide.**
+  The percent-encoded form and the JSON-escaped form are replaced with
+  `{{secret.NAME}}`, same as the raw value. A script that searched a
+  record for the encoded secret was reading a leak. It now finds the
+  token. Two object keys that are the raw value and one of those forms
+  redact to one string, and `redact` throws and names both keys instead
+  of dropping one. A JSON number equal to a numeric secret is unchanged.
+  Nothing in config has to move.
 
 ## 0.12.0 to the next release
 

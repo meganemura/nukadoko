@@ -14,8 +14,9 @@ export interface SecretEntry {
 }
 
 /** Everything `redact` (redact.ts) treats as sensitive for one run. Order
- * carries no meaning — `redact` derives its own deterministic replacement
- * order (longest value first, ties on shared values broken by name). */
+ * carries no meaning. `redact` derives its own deterministic replacement
+ * order: longest spelling first, a raw value ahead of another secret's
+ * percent-encoded or JSON-escaped form, and ties broken by name. */
 export type SecretSet = readonly SecretEntry[];
 
 /** docs/spec.md "Secrets" Honest limits: values shorter than this are never

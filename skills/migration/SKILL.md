@@ -85,3 +85,7 @@ the same rule.
   for criteria written here, matched by the same steps as a `.feature`
   file. The cucumber-js door is unchanged: an existing suite still comes
   in through `nukadoko/compat`.
+- **Don't expect a loaded secret to remain visible in a record once it
+  has been percent-encoded or JSON-escaped.** Those forms are removed
+  with the same `{{secret.NAME}}` token as the raw value. A JSON number
+  equal to a numeric secret stays a number.
