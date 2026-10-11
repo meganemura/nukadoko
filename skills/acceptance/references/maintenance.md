@@ -12,6 +12,13 @@ this run can proceed, so it never gates the acceptance loop. The fix is
 to run and accept the feature again, or to undo what invalidated the
 record, never to edit the record.
 
+A step file that failed to import is a different report. `nuka tend` adds
+the note `import-failures-unseen` and does not call a cited step missing
+while any step file failed to import, because the definition may still be
+in the file that could not be read. `nuka check` names the cause as
+`step-file-import-failed`. Fix that import. Re-accepting the record does
+not repair an unreadable file.
+
 Run `nuka tend` once after `nuka accept` succeeds, when you report the
 sign-off. That is the moment where nothing depends on the answer: the
 work is done, the record is written, and the user is reading a result

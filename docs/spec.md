@@ -3411,7 +3411,10 @@ The following findings show what `tend` inspects and why each item is rot rather
   If a frozen `result` no longer passes its step's current `returns`
   schema, or the frozen feature source no longer matches the file it was
   taken from, or a step it cites is gone from the vocabulary, then the
-  record remains on disk with a claim it can no longer support. This
+  record remains on disk with a claim it can no longer support. A cited
+  step is called gone only when every step file imported. While any file
+  failed to import, that judgment is withheld, because the step may still
+  be defined in the file that could not be read. This
   is the one finding here that is an error rather than a note: a sign-off
   that has quietly stopped meaning what it says is worse than no sign-off,
   because it is still being counted. None of this is checked once the
@@ -3442,7 +3445,9 @@ The following findings show what `tend` inspects and why each item is rot rather
   the whole run, not one per file: a broken file's own cause is `nuka
   check`'s own finding (`step-file-import-failed`), so this one only says
   how many steps went unseen and names the files, and does not touch the
-  exit code.
+  exit code. That includes withholding `signoff-step-missing` for the
+  whole run: a step absent from the vocabulary that loaded is not called
+  missing while any file failed to import, so the note stays a note.
 - **A `from` declaration that nothing exercises.** Every occurrence of the step
   across every feature captures that key from the line, so the declared
   producer never supplies anything. Reported as the fact it is (the

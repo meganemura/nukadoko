@@ -98,7 +98,10 @@ import type { TendIssue, TendReport } from "./types.js";
 // is passed through so it can stay silent about a record whose own feature
 // now lives there (that file's own header) — `additionalFeatureDirs` is
 // deliberately not part of that check, since a feature there never runs
-// unattended either.
+// unattended either. `importFailures` is passed through so a cited step
+// absent from the vocabulary that loaded is not reported missing while
+// any step file failed to import: the definition may sit in the unread
+// file, and reporting it gone would turn the import failure into an error.
 //
 // `summary` is built
 // from the same `vocabulary` plus `rationaleIssues`/`fieldDescriptions`,
@@ -152,7 +155,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   );
   const occurrences = resolveStepOccurrences(features, patterns);
 
-  const errors: TendIssue[] = [...findSignoffRot(rootDir, vocabulary, config.featuresDir)];
+  const errors: TendIssue[] = [...findSignoffRot(rootDir, vocabulary, config.featuresDir, importFailures)];
 
   // Called once each, their results reused for both `notes` below and the
   // summary's declaration-coverage numbers — never re-walked a second time

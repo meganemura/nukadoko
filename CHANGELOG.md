@@ -87,6 +87,12 @@ just until 0.1.
   clamped it to 1ms, so the step failed as a timeout. `defineStep` now
   throws `InvalidStepDefinitionError` for those shapes. `nuka check`
   reports the throw as `step-file-import-failed`. A valid step is unchanged.
+- **`nuka tend` does not call a cited step missing when its file failed to import.**
+  A step file that fails to import used to come out as `signoff-step-missing`
+  and exit 1, beside the `import-failures-unseen` note. The definition may
+  still be in that file. `signoff-step-missing` is withheld for the whole
+  run while any step file failed to import, the same way `nuka check`
+  withholds `undefined-step`. The note still does not change the exit code.
 
 ## 0.14.1 — 2026-10-10
 

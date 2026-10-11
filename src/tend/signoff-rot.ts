@@ -19,7 +19,13 @@ import type { TendIssue } from "./types.js";
 //   (b) the feature source it froze no longer matches the file (exact
 //       string comparison — see `normalizeFeatureSource`'s own comment for
 //       the one normalization allowed).
-//   (c) a step it cites is gone from the current vocabulary.
+//   (c) a step it cites is gone from the current vocabulary. Withheld for
+//       the whole run while any step file failed to import: a missing
+//       vocabulary entry is not evidence the step was deleted, because
+//       the definition may sit in the file that could not be read.
+//       Reporting it gone would turn that import failure into an error.
+//       The failure itself is the import-failures-unseen note, which does
+//       not change the exit code.
 //   (d) a step's frozen `result` no longer passes that step's current
 //       `returns` schema.
 // Checked independently per record, not short-circuited on the first
@@ -81,7 +87,12 @@ function normalizeFeatureSource(source: string): string {
   return source.replace(/\n$/, "");
 }
 
-export function findSignoffRot(rootDir: string, vocabulary: Vocabulary, featuresDir: string): TendIssue[] {
+export function findSignoffRot(
+  rootDir: string,
+  vocabulary: Vocabulary,
+  featuresDir: string,
+  importFailures: readonly { readonly filePath: string; readonly message: string }[],
+): TendIssue[] {
   const issues: TendIssue[] = [];
 
   for (const absolutePath of discoverMarkdownFiles(rootDir)) {
@@ -150,6 +161,12 @@ export function findSignoffRot(rootDir: string, vocabulary: Vocabulary, features
     for (const stepRecord of record.stepRecords) {
       const entry = vocabulary.get(stepRecord.step);
       if (entry === undefined) {
+        if (importFailures.length > 0) {
+          // Case (c) above: the step may still be defined in a file this
+          // run could not read. Calling it gone would make that import
+          // failure an error and change the exit code.
+          continue;
+        }
         issues.push({
           code: "signoff-step-missing",
           message: `${relativePath} cites step "${stepRecord.step}", which is no longer in the vocabulary. The record is still proving a claim about a step that no longer exists. ${FIX_HINT}.`,
