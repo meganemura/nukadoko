@@ -676,8 +676,20 @@ export interface TypedStepContract {
   /** Same field, same computation, and same presence rule as
    * `StepSummary.needs_inferred`. */
   readonly needs_inferred?: readonly string[];
-  readonly args: JsonSchema;
-  readonly returns: JsonSchema;
+  /** JSON Schema for this step's `args`. Null when that schema cannot be
+   * represented (`args_error` carries why). A representable schema is the
+   * object `z.toJSONSchema` returns, unchanged. */
+  readonly args: JsonSchema | null;
+  /** Why `args` is null. Names the step, then the converter's own reason.
+   * Present only in that case: a representable schema omits it, the same
+   * way `needs_error` is omitted when `needs` could be read. */
+  readonly args_error?: string;
+  /** JSON Schema for this step's `returns`. Null when that schema cannot
+   * be represented (`returns_error` carries why). Independent of `args`:
+   * one side failing does not blank the other. */
+  readonly returns: JsonSchema | null;
+  /** Why `returns` is null. Same shape and presence rule as `args_error`. */
+  readonly returns_error?: string;
 }
 
 /**
@@ -696,6 +708,34 @@ export interface CompatStepContract {
 
 export type StepContract = TypedStepContract | CompatStepContract;
 
+/** One side of a typed contract, as JSON Schema, or null plus a reason.
+ *
+ * `z.toJSONSchema` throws for a date, a bigint, a custom type, and for a
+ * transform when the side being rendered is the output schema. Thrown from
+ * `describeContract`, that used to skip the stdout write entirely: the
+ * command catch printed only the zod message, which names neither the
+ * step nor which side failed, and the rest of the contract was lost.
+ * Caught per side so the other side, and every field that does not depend
+ * on this conversion, still print. Same reason `needsFields` catches one
+ * unreadable `run()` instead of emptying the vocabulary.
+ */
+function schemaSide(
+  stepName: string,
+  side: "args" | "returns",
+  schema: z.ZodType,
+  params?: { readonly io: "input" | "output" },
+): { readonly schema: JsonSchema | null; readonly error?: string } {
+  try {
+    return { schema: z.toJSONSchema(schema, params) };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      schema: null,
+      error: `${stepName}: ${side} cannot be represented as JSON Schema: ${reason}`,
+    };
+  }
+}
+
 /** `graph` is optional for the same reason `summarize`'s own parameter is
  * (that function's own doc comment) — `nuka describe`'s own handler
  * (run-cli.ts) is the caller that builds and passes one, the same
@@ -712,6 +752,8 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
     };
   }
   const fromResult = fromHumanReadable(entry.step.from, stepNames);
+  const argsSide = schemaSide(entry.name, "args", strictArgsSchema(entry.step.args), { io: "input" });
+  const returnsSide = schemaSide(entry.name, "returns", entry.step.returns);
   return {
     kind: "typed",
     name: entry.name,
@@ -734,7 +776,11 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
     // schema here is the strict one every execution path parses: input
     // mode on the plain object drops `additionalProperties: false`, and
     // describe would then publish a shape those paths already refuse.
-    args: z.toJSONSchema(strictArgsSchema(entry.step.args), { io: "input" }),
-    returns: z.toJSONSchema(entry.step.returns),
+    // Either conversion can still throw. `schemaSide` keeps that from
+    // dropping the rest of the contract.
+    args: argsSide.schema,
+    ...(argsSide.error !== undefined ? { args_error: argsSide.error } : {}),
+    returns: returnsSide.schema,
+    ...(returnsSide.error !== undefined ? { returns_error: returnsSide.error } : {}),
   };
 }

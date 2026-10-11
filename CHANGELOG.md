@@ -34,6 +34,11 @@ just until 0.1.
   message was already written and the exit code already set to 1, and the
   same rejection then left the process entry, so Node appended its
   uncaught-exception dump. That rejection is now caught after the report.
+- **`nuka describe` reports a schema JSON Schema cannot represent.**
+  When `args` or `returns` cannot be turned into JSON Schema, the command
+  still prints the rest of the contract. That side is null, and
+  `args_error` or `returns_error` names the step and why. The command
+  exits 1. A schema that can be represented is unchanged.
 
 ## 0.14.1 — 2026-10-10
 

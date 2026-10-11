@@ -13,4 +13,6 @@ Gherkin `pattern` later, whenever a feature file makes it worth doing.
 
 If the source DSL already carries something like a `description`, `args`,
 `returns`, `mutates`, and a `run` function, the translation to `defineStep`
-is direct: each has a `defineStep` counterpart to receive it.
+is direct: each has a `defineStep` counterpart to receive it. A translated
+schema that JSON Schema cannot represent does not stop `nuka describe`:
+the command still prints that step's contract, names the step, and exits 1.

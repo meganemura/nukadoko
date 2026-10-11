@@ -355,12 +355,18 @@ export async function runCli(
         stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         // Same rule as `steps` above, scoped to this one contract: an
         // import failure elsewhere in the project, this step's own
-        // unreadable `from` entry (`from_errors`), or this step's own
-        // unreadable `needs` (`needs_error`) — same reasoning in every
-        // case, the output went ahead and printed, but it is not complete.
+        // unreadable `from` entry (`from_errors`), this step's own
+        // unreadable `needs` (`needs_error`), or an args/returns schema
+        // JSON Schema cannot represent (`args_error` / `returns_error`).
+        // Same reasoning in every case: the output went ahead and printed,
+        // but it is not complete.
         if (
           importFailures.length > 0 ||
-          (contract.kind === "typed" && (contract.from_errors !== undefined || contract.needs_error !== undefined))
+          (contract.kind === "typed" &&
+            (contract.from_errors !== undefined ||
+              contract.needs_error !== undefined ||
+              contract.args_error !== undefined ||
+              contract.returns_error !== undefined))
         ) {
           exitCode = 1;
         }

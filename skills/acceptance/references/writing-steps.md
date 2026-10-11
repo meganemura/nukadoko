@@ -8,7 +8,9 @@ shapes rather than a description of them here, since a shape written
 down twice is the one that goes stale. Both name any step file that
 failed to import beside everything else they could still read, so a
 broken file elsewhere never hides the rest of the vocabulary; `nuka check`
-is where to fix the import itself.
+is where to fix the import itself. When a step's args or returns schema
+cannot be represented as JSON Schema, `nuka describe` still prints that
+step's contract, names the step on the failure, and exits 1.
 
 Two fields carry less than they look like they do. A `needs` of `null`
 means this tool could not read that step's `run()`, so its fixture
