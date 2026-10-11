@@ -1,9 +1,10 @@
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ConfigError } from "../src/config/errors.js";
 import { loadConfig } from "../src/config/load-config.js";
 import { configSchema } from "../src/config/schema.js";
-import { fixture } from "./helpers/fixtures.js";
+import { createEmptyTempDir, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 describe("loadConfig", () => {
   it("applies defaults when nukadoko.config.ts is absent", async () => {
@@ -98,6 +99,74 @@ describe("loadConfig", () => {
     // only the key, never a "(did you mean ...)" aside.
     expect(configError.message).toContain("unknown key(s): typo");
     expect(configError.message).not.toContain("did you mean");
+  });
+
+  // A named export, or a Promise as the default, used to fall through to
+  // `{}`: every key the file stated (featuresDir, secrets.redact, and the
+  // rest) was ignored and the schema defaults were used. A Promise passes
+  // an object schema because it has no own enumerable keys. Both have to
+  // fail and name the file. An object default still loads.
+  it("throws ConfigError naming the file when the config has no default export", async () => {
+    const rootDir = await createEmptyTempDir();
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+    try {
+      await writeFile(
+        configPath,
+        'export const config = { featuresDir: "specs", secrets: { redact: ["TOKEN"] } };\n',
+      );
+      let caught: unknown;
+      try {
+        await loadConfig(rootDir);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(ConfigError);
+      const configError = caught as ConfigError;
+      expect(configError.configPath).toBe(configPath);
+      expect(configError.message).toContain(configPath);
+      expect(configError.message).toContain("default export");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("throws ConfigError naming the file when the default export is a Promise", async () => {
+    const rootDir = await createEmptyTempDir();
+    const configPath = path.join(rootDir, "nukadoko.config.ts");
+    try {
+      await writeFile(
+        configPath,
+        'export default (async () => ({ featuresDir: "specs", secrets: { redact: ["TOKEN"] } }))();\n',
+      );
+      let caught: unknown;
+      try {
+        await loadConfig(rootDir);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(ConfigError);
+      const configError = caught as ConfigError;
+      expect(configError.configPath).toBe(configPath);
+      expect(configError.message).toContain(configPath);
+      expect(configError.message).toContain("Promise");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("loads a real default export, including secrets.redact", async () => {
+    const rootDir = await createEmptyTempDir();
+    try {
+      await writeFile(
+        path.join(rootDir, "nukadoko.config.ts"),
+        'export default { featuresDir: "specs", secrets: { redact: ["TOKEN"] } };\n',
+      );
+      const config = await loadConfig(rootDir);
+      expect(config.featuresDir).toBe("specs");
+      expect(config.secrets).toEqual({ public: [], redact: ["TOKEN"] });
+    } finally {
+      await removeTempDir(rootDir);
+    }
   });
 });
 
