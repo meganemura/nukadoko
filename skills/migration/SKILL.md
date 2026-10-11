@@ -37,7 +37,8 @@ If the project is not initialized yet (no `nukadoko.config.ts` or
 `nukadoko.config.mts`), run `nuka init` first. An existing suite can be
 CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there instead, and step files need the same `.mts`
-extension.
+extension. A hand-written `nukadoko.config.ts` there fails to import, and
+the error names the file.
 
 A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`

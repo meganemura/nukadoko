@@ -48,8 +48,8 @@ Writing the minimum by hand is more reliable:
 `"type": "module"` keeps every generated file as `.ts`, which is the simpler
 of the two paths above. Leaving it out is still supported (see the CommonJS
 paragraph above). However, manually writing `nukadoko.config.ts` in such a
-project fails with `No "exports" main defined in
-.../node_modules/nukadoko/package.json`. `nuka init` writes
+project fails to import. The error names that file and the cause, and says
+to rename it to `nukadoko.config.mts`. `nuka init` writes
 `nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
 `.gitignore` yourself because `nuka init` does that. Traces and screenshots
 inside it are not redacted, so the state directory contains sensitive data.

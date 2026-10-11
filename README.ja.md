@@ -48,7 +48,8 @@ nukadoko は devDependency です。
 
 `"type": "module"` を付けると、生成されるファイルはすべて `.ts` のままになり、上の 2 つの経路のうち簡単な方を使えます。
 省略してもサポートされます(上の CommonJS の段落を参照)。
-ただし、このようなプロジェクトで `nukadoko.config.ts` を手で書くと、`No "exports" main defined in .../node_modules/nukadoko/package.json` で失敗します。
+ただし、このようなプロジェクトで `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
+そのエラーはそのファイルと原因を名指しし、`nukadoko.config.mts` へのリネームを案内します。
 代わりに `nuka init` は `nukadoko.config.mts` を書きます。
 `.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
 `nuka init` が追加します。

@@ -4020,7 +4020,8 @@ would be running against glue it never actually read.
   an existing suite: glue already written as `.ts` there has to be renamed
   before it can be discovered. That is more than the one import specifier
   the compat door otherwise asks for, and `nuka check` names each file that
-  needs it.
+  needs it. A config file that fails to import names that file and the
+  cause. A CommonJS `.ts` config gets the same rename sentence.
 
 - **Promoting a step to `defineStep` is one-way.** The migration door's
   promise covers compat assets: switching the import back leaves a plain

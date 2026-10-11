@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 import { ZodArray, ZodDefault, ZodObject, ZodOptional, ZodRecord, type z } from "zod";
 import { ConfigError } from "./errors.js";
+import { cjsTsMismatchExplanation, isCommonJsProject } from "./module-kind.js";
 import { configSchema, type NukadokoConfig } from "./schema.js";
 
 // The two names loadConfig ever reads, in preference order. Exported so
@@ -208,11 +209,30 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const configPath = resolved?.path ?? path.join(rootDir, CONFIG_FILE_NAME);
 
   let raw: unknown = {};
+  // Empty unless a config file is present, the project is CommonJS, and
+  // that file is `.ts`. Appended on both failures below. An `export
+  // default {}` in a CommonJS project does not throw on import: tsx hands
+  // back an object whose only key is `default`, so the schema failure is
+  // where the sentence has to travel. A file that is not `.ts`, or a
+  // project that is not CommonJS, gets nothing appended.
+  const explanation =
+    resolved === null ? "" : cjsTsMismatchExplanation(isCommonJsProject(rootDir), configPath);
   if (resolved !== null) {
-    const mod: { default?: unknown } = await tsImport(
-      pathToFileURL(configPath).href,
-      import.meta.url,
-    );
+    let mod: { default?: unknown };
+    try {
+      mod = await tsImport(pathToFileURL(configPath).href, import.meta.url);
+    } catch (error) {
+      // The CLI prints this error's message and nothing else. The raw
+      // rejection does not name the config file: a missing export names
+      // nukadoko's package.json, and a transform error names a `.ts` path
+      // even when the file on disk is `.mts`.
+      const causeText = error instanceof Error ? error.message : String(error);
+      throw new ConfigError(
+        `Could not import config at ${configPath}: ${causeText}${explanation}`,
+        configPath,
+        { cause: error },
+      );
+    }
     if (mod.default === undefined) {
       throw new ConfigError(
         `${configPath} has no default export. nukadoko reads the default export as the config.`,
@@ -231,7 +251,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const result = configSchema.safeParse(raw);
   if (!result.success) {
     throw new ConfigError(
-      `Invalid config at ${configPath}: ${formatIssues(result.error.issues)}`,
+      `Invalid config at ${configPath}: ${formatIssues(result.error.issues)}${explanation}`,
       configPath,
     );
   }

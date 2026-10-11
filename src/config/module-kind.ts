@@ -63,6 +63,12 @@ export function isCommonJsProject(rootDir: string): boolean {
 // project that isn't CommonJS, or a failure on a file that isn't .ts, gets
 // nothing appended. Saying more would guess at a failure this function did
 // not recognize, and a guess is worse than no check.
+//
+// `loadConfig` appends this same sentence when the failed file is the
+// config. That failure is not the "Cannot find module" above. The config's
+// own import error, or a schema failure on the CommonJS interop wrapper,
+// is what the caller already has, and this sentence is only the module-kind
+// half.
 export function cjsTsMismatchExplanation(isCjsProject: boolean, filePath: string): string {
   if (!isCjsProject || path.extname(filePath) !== ".ts") {
     return "";

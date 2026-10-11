@@ -3424,6 +3424,8 @@ nuka experimental webmcp-tools <url> [--json]
   代償は実在し、それを払うのは既存のスイートです。
   そこで既に `.ts` として書かれている glue は、発見される前にリネームが要ります。
   これは compat の扉が本来求める「import 指定子 1 つ」より重く、リネームが要るファイルは `nuka check` が 1 つずつ名指しします。
+  読み込みに失敗した設定は、そのファイルと原因を名指しします。
+  CommonJS の `.ts` 設定は、同じリネームの文を受けます。
 - **step を `defineStep` に昇格させることは一方通行です。** compat の扉が約束するのは compat の資産についてだけです: import を元に戻せば、ただの cucumber-js スイートが残ります。
   `defineStep` には、切り替えて戻す import がありません。
   昇格させた step の body は移ります(`run` は Playwright 自身のオブジェクトに対して書かれており、それは下で述べているのと同じ選択によるものです)。

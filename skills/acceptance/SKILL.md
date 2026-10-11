@@ -59,7 +59,8 @@ before every command is its own way of being hard to follow.
 
 If the project is not initialized, run `nuka init` first. A CommonJS
 project (no `"type": "module"` in `package.json`) gets
-`nukadoko.config.mts`, and step files need `.mts` too.
+`nukadoko.config.mts`, and step files need `.mts` too. A hand-written
+`nukadoko.config.ts` there fails to import, and the error names the file.
 
 A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`

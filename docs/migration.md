@@ -33,7 +33,9 @@ export default defineConfig({
 In a CommonJS suite, `nuka init` writes `nukadoko.config.mts` instead
 (same content, and it says so on stderr); step files need the same `.mts`
 extension there, since a plain `.ts` file is read as CommonJS in that
-project and nukadoko is ESM-only.
+project and nukadoko is ESM-only. A hand-written `nukadoko.config.ts` in
+that project fails to import. The error names that file and the cause,
+and, because the file is `.ts`, says to rename it to `.mts`.
 
 `nuka init` refuses to run if `nukadoko.config.ts` or `nukadoko.config.mts`
 already exists, creates `<featuresDir>/steps/`, adds `.nukadoko/` to

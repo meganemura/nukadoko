@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **A config that fails to import names the file and the cause.**
+  The raw loader error did not say which config file failed. A syntax
+  error in `nukadoko.config.mts` was reported against a `.ts` path. A
+  CommonJS project's `nukadoko.config.ts` now also gets the same rename
+  hint a `.ts` step file already gets.
 - **`nuka check` reports done-callback compat glue.**
   A hook whose function declares more parameters than nukadoko passes, and
   a matched compat step whose function declares more parameters than the
