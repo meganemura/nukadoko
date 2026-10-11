@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -517,6 +517,33 @@ describe("nuka (process)", () => {
           description,
         }),
       ]);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("prints one stderr line and exits 1 when a command handler throws", async () => {
+    // Node prints the uncaught-exception dump after cli.ts's top-level
+    // await rejects. A runCli() call in this process can catch that
+    // rejection, so the dump never appears. The child is the real entry.
+    const rootDir = await createEmptyTempDir();
+    try {
+      await mkdir(path.join(rootDir, "features"));
+      // A file where the steps directory belongs makes scaffold's mkdir
+      // throw. The handler assigns that promise and does not catch it.
+      await writeFile(path.join(rootDir, "features", "steps"), "not a directory\n");
+
+      const cliPath = path.join(repoRoot, "src", "cli.ts");
+      const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
+      const child = spawnSync(tsxBin, [cliPath, "scaffold", "fresh-step"], {
+        cwd: rootDir,
+        encoding: "utf8",
+      });
+
+      expect(child.status).toBe(1);
+      expect(child.stdout).toBe("");
+      const lines = (child.stderr ?? "").split("\n").filter((line) => line.length > 0);
+      expect(lines).toEqual([expect.stringMatching(/^EEXIST: file already exists, mkdir /)]);
     } finally {
       await removeTempDir(rootDir);
     }
