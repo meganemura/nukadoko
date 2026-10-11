@@ -100,7 +100,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toEqual({
       attachments: ["attachment.txt"],
-      links: [{ url: "https://example.com/world-link", name: "world link" }],
+      links: [{ url: "https://example.com/world-link" }],
       logs: ["a logged world line"],
     });
 

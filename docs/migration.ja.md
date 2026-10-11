@@ -50,6 +50,11 @@ import { Given, When, Then } from "nukadoko/compat";
   フックは cucumber 自身のフック引数を受け取るので、`Before(function ({ pickle }) {...})` は書いたとおりに動きます。
   `After` は `result.duration` を受け取り、scenario が失敗したときは `result.message` と `error` も受け取ります。
   `AfterStep` もそれらを受け取り、加えて直前の step の `pickleStep` と `testStepId` を受け取ります。
+- `this.attach` は cucumber-js の形を受けます。
+  文字列(`base64:<media type>` を含む。ファイルには復号したバイトが書かれます)、buffer、`{ mediaType, fileName }`、readable stream です。
+  stream は promise を返すので、step はそれを await します。
+  `this.link` は URL を 1 つ以上受け取り、それぞれが `declared` の link 1 件になります。
+  第 2 引数は名前ではなく、もう 1 つの URL です。
 - `AfterStep` は `Before`/`After` と同じ 3 通りの書き方で登録します。
   scenario 全体につき 1 回の `Before`/`After` と違い、scenario 内で実際に実行された step ごとに 1 回走ります。
   この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` もその step については走りません。

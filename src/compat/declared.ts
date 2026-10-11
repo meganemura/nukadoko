@@ -203,12 +203,13 @@ export function normalizeFileExtension(ext: string | undefined): string {
   return ext.startsWith(".") ? ext : `.${ext}`;
 }
 
-/** Coerces World's own `attach(data, ...)` payload (cucumber-js accepts a
- * string, Buffer, or Uint8Array; a Readable stream is not supported by this
- * compat shim's synchronous callback shape — world.ts's own header) into the
- * bytes actually written to disk. Anything else is stringified defensively
- * rather than thrown: measurement must never crash a step (docs/spec.md,
- * migration-door rule). */
+/** Bytes for a synchronous `attach` payload. A Buffer or Uint8Array is
+ * copied through. A string is UTF-8. A `base64:` media type is decoded by
+ * the caller before this runs, because the media type is not an argument
+ * here. Anything else is JSON, or `String` when JSON throws: measuring
+ * what glue handed over must not crash the step. A readable stream does
+ * not come through here. The caller reads it and writes the chunks,
+ * because that read is a promise and this function is not. */
 export function toAttachmentBuffer(data: unknown): Buffer {
   if (Buffer.isBuffer(data)) {
     return data;

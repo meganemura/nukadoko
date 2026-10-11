@@ -1433,6 +1433,16 @@ import { Given, When, Then } from "nukadoko/compat";
   write. `class MyWorld extends defineWorld({...})` adds a type to `this`.
   Cucumber reserves `attach`, `log`, `link`, and `parameters`. These keys
   cannot be measured or declared, and an overwrite causes an error.
+- `this.attach` and `this.link` follow cucumber-js. `attach` takes a
+  string, a `Buffer` or `Uint8Array`, or a readable stream. A media type
+  that starts with `base64:` means the string is base64, and the file is
+  the decoded bytes. The second argument is that media type, or
+  `{ mediaType, fileName }`. `fileName`, when present, is the file written
+  under the step record. A missing media type is `text/plain` for a string
+  or a buffer. A stream returns a promise the step has to await, and a
+  stream with no media type throws, because the bytes are not known until
+  the stream ends and the type was never given. `link` takes one URL or
+  several. Each argument is its own declared link, with no display name.
 - The harness owns the browser and request objects. Therefore, compat steps
   get measured step records without code changes. These records contain the
   status, timing, trace, screenshots, and HTTP log.

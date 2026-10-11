@@ -33,6 +33,23 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.14.1 to the next release
+
+One compat fix a project can notice.
+
+- **`this.link`'s second argument is another URL, not a display name.**
+  `this.link(a, b)` used to record one link whose name was `b`. It now
+  records one declared link per argument, and none of them has a name,
+  which is what cucumber-js does with a URL list. A call that passed a
+  display name should drop that argument. An allure `link(url, name)` call
+  is unchanged: that name still lands on the declared link.
+- **`this.attach` now follows the cucumber-js payload forms.** A `base64:`
+  media type is decoded before the file is written. `{ mediaType, fileName }`
+  uses that file name. A readable stream is read, and the call returns a
+  promise the step must await. A project that read the old base64 text, or
+  the JSON of a stream object, out of the attachment file will now read the
+  decoded bytes or the stream's contents.
+
 ## 0.12.0 to the next release
 
 One behaviour change worth knowing before upgrading.

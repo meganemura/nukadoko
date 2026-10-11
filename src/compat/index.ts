@@ -26,6 +26,7 @@ export { Given, When, Then, defineParameterType, setDefaultTimeout } from "./reg
 export {
   World,
   setWorldConstructor,
+  type AttachOptions,
   type WorldConstructor,
   type WorldConstructorParams,
   type IWorldOptions,

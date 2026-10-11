@@ -27,6 +27,23 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.14.1 から次のリリースへ
+
+compat の修正で、上げる前に知っておくものが 1 つあります。
+
+- **`this.link` の第 2 引数は表示名ではなく、もう 1 つの URL です。**
+  `this.link(a, b)` は以前、名前が `b` である link を 1 件記録していました。
+  今は引数ごとに `declared` の link を 1 件記録し、どれにも名前は付きません。
+  これは cucumber-js が URL のリストを扱うのと同じです。
+  表示名を渡していた呼び出しは、その引数を削ってください。
+  allure の `link(url, name)` は変わりません。
+  その名前はこれまでどおり `declared` の link に残ります。
+- **`this.attach` は cucumber-js の payload の形に従うようになりました。**
+  `base64:` の media type は、ファイルに書く前に復号されます。
+  `{ mediaType, fileName }` はそのファイル名を使います。
+  readable stream は読まれ、呼び出しは step が await しなければならない promise を返します。
+  以前の base64 のテキストや、stream オブジェクトの JSON を attachment ファイルから読んでいたプロジェクトは、これからは復号したバイトか stream の中身を読みます。
+
 ## 0.12.0 から次のリリースへ
 
 上げる前に知っておく挙動の変化が 1 つあります。

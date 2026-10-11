@@ -22,6 +22,11 @@ without following through leaves nothing behind, on purpose. Calling
 either twice with the same `name` keeps both files: it never overwrites
 the first.
 
+Compat glue uses `this.attach` instead, in cucumber-js's forms (a
+`base64:` media type, `{ mediaType, fileName }`, a stream the step
+awaits), and `this.link` takes URLs rather than a display name. Those land
+on the step record's `declared` field, not on `evidence.attachments`.
+
 Keep secrets out of whatever you hand `attach`. The step record's own
 `name`/`file` strings are redacted like every other field, but a file's own
 contents are not, since redacting arbitrary bytes would corrupt them about

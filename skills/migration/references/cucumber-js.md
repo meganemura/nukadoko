@@ -19,6 +19,11 @@ returns is awaited before the step. `docs/spec.md` states that contract.
 `nuka tend` notes a registration that still lives in support code
 (`parameter-type-support-origin`) and points at `config.parameterTypes`.
 
+`this.attach` and `this.link` follow cucumber-js: a `base64:` media type is
+decoded, `{ mediaType, fileName }` names the file, a readable stream returns
+a promise the step must await, and every `link` argument is a URL. The
+contract is in `docs/spec.md` and `docs/migration.md`.
+
 Extension decides what discovery reads, not the suite's own history: `.ts`,
 `.mts`, `.js`, and `.mjs` glue are all read the same way, so a suite that
 was always plain JavaScript needs no rewrite to TypeScript just to start

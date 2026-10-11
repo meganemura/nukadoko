@@ -1,4 +1,5 @@
 import type { APIRequestContext, Page } from "playwright";
+import { isReadable, type Readable } from "node:stream";
 import type { z } from "zod";
 import { extensionForMediaType, toAttachmentBuffer, type DeclaredCollector } from "./declared.js";
 import { WorldNotOpenedError } from "./errors.js";
@@ -68,10 +69,20 @@ interface MeasuredPageContext {
 // directly-passed-parameter way `declaredCollector` now is, for the same
 // module-identity reason.
 
+/** cucumber-js's second `attach` argument when it is not a media-type string. */
+export interface AttachOptions {
+  readonly mediaType?: string;
+  readonly fileName?: string;
+}
+
 export interface WorldConstructorParams {
-  readonly attach: (data: unknown, mediaType?: string) => void;
+  readonly attach: (
+    data: string | Buffer | Uint8Array | Readable,
+    mediaTypeOrOptions?: string | AttachOptions,
+  ) => void | Promise<void>;
   readonly log: (text: string) => void;
-  readonly link: (url: string, text?: string) => void;
+  /** Each argument is a URL. cucumber-js takes a list, not a display name. */
+  readonly link: (...urls: string[]) => void;
   readonly parameters: Readonly<Record<string, unknown>>;
 }
 
@@ -222,18 +233,40 @@ export function instantiateWorldForPickle(
 ): InstantiatedWorld {
   const Ctor = registeredConstructor ?? World;
   const params: WorldConstructorParams = {
-    attach(data, mediaType) {
-      declaredCollector.recordAttachment(
-        "attachment",
-        toAttachmentBuffer(data),
-        extensionForMediaType(mediaType ?? "text/plain"),
-      );
+    // A string, a buffer, or a readable stream, matching cucumber-js.
+    // `base64:` on the media type means the string is already encoded, so
+    // the file is the decoded bytes, not the text of the encoding. The
+    // second argument is that media type or `{ mediaType, fileName }`.
+    // A stream returns a promise because the bytes arrive when the stream
+    // ends: a step that does not await it snapshots the record first.
+    attach(data, mediaTypeOrOptions) {
+      const options = normalizeAttachOptions(mediaTypeOrOptions);
+      if (isAttachmentStream(data)) {
+        const declaredType = options.mediaType;
+        if (declaredType === undefined || declaredType.length === 0) {
+          throw new Error("Stream attachments must specify a media type");
+        }
+        const { mediaType } = splitBase64MediaType(declaredType);
+        return readAttachmentStream(data).then((content) => {
+          recordAttachmentFile(declaredCollector, content, mediaType, options.fileName);
+        });
+      }
+      const declaredType = options.mediaType ?? "text/plain";
+      const { mediaType, base64 } = splitBase64MediaType(declaredType);
+      const content =
+        base64 && typeof data === "string" ? Buffer.from(data, "base64") : toAttachmentBuffer(data);
+      recordAttachmentFile(declaredCollector, content, mediaType, options.fileName);
     },
     log(text) {
       declaredCollector.recordLog(text);
     },
-    link(url, text) {
-      declaredCollector.recordLinks([{ url, name: text }]);
+    // Every argument is a URL. A second one is another link, not the name
+    // of the first: cucumber-js collects them as a URL list.
+    link(...urls) {
+      if (urls.length === 0) {
+        return;
+      }
+      declaredCollector.recordLinks(urls.map((url) => ({ url })));
     },
     parameters: {},
   };
@@ -241,4 +274,81 @@ export function instantiateWorldForPickle(
   runtimeByWorld.set(instance, ctx);
   const instrumentation = instrumentWorld(instance, declaredWorldSchemas);
   return { world: instance, instrumentation };
+}
+
+const BASE64_MEDIA_PREFIX = "base64:";
+
+/** `stream.isReadable` does not narrow: its parameter is already a stream,
+ * and it returns `null` for anything else. A true result is the cucumber-js
+ * check (a Node readable, including one from another realm). */
+function isAttachmentStream(data: unknown): data is Readable {
+  return isReadable(data as Readable) === true;
+}
+
+function normalizeAttachOptions(mediaTypeOrOptions: string | AttachOptions | undefined): {
+  readonly mediaType: string | undefined;
+  readonly fileName: string | undefined;
+} {
+  if (typeof mediaTypeOrOptions === "string") {
+    return { mediaType: mediaTypeOrOptions, fileName: undefined };
+  }
+  if (mediaTypeOrOptions === undefined) {
+    return { mediaType: undefined, fileName: undefined };
+  }
+  const mediaType =
+    typeof mediaTypeOrOptions.mediaType === "string" ? mediaTypeOrOptions.mediaType : undefined;
+  const fileName =
+    typeof mediaTypeOrOptions.fileName === "string" && mediaTypeOrOptions.fileName.length > 0
+      ? mediaTypeOrOptions.fileName
+      : undefined;
+  return { mediaType, fileName };
+}
+
+function splitBase64MediaType(mediaType: string): {
+  readonly mediaType: string;
+  readonly base64: boolean;
+} {
+  if (mediaType.startsWith(BASE64_MEDIA_PREFIX)) {
+    return { mediaType: mediaType.slice(BASE64_MEDIA_PREFIX.length), base64: true };
+  }
+  return { mediaType, base64: false };
+}
+
+function recordAttachmentFile(
+  collector: DeclaredCollector,
+  content: Buffer,
+  mediaType: string,
+  fileName: string | undefined,
+): void {
+  const extension = extensionForMediaType(mediaType);
+  if (fileName === undefined) {
+    collector.recordAttachment("attachment", content, extension);
+    return;
+  }
+  const dot = fileName.lastIndexOf(".");
+  if (dot > 0) {
+    collector.recordAttachment(fileName.slice(0, dot), content, fileName.slice(dot));
+    return;
+  }
+  collector.recordAttachment(fileName, content, extension);
+}
+
+function chunkToBuffer(chunk: unknown): Buffer {
+  if (typeof chunk === "string") {
+    return Buffer.from(chunk);
+  }
+  if (Buffer.isBuffer(chunk) || chunk instanceof Uint8Array) {
+    return Buffer.from(chunk);
+  }
+  throw new Error(`Stream attachments must be binary or text chunks, got ${typeof chunk}`);
+}
+
+function readAttachmentStream(stream: Readable): Promise<Buffer> {
+  return (async () => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunkToBuffer(chunk));
+    }
+    return Buffer.concat(chunks);
+  })();
 }

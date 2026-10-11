@@ -4,6 +4,8 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { createDeclaredCollector } from "../src/compat/declared.js";
 import { defineWorld, drainWorldSchemaRegistrations } from "../src/compat/define-world.js";
 import {
@@ -107,9 +109,9 @@ describe("instantiateWorldForPickle (src/compat/world.ts): default World, attach
       // Before beginStep(): recordAttachment is a documented no-op (no
       // directory to write into yet); log/link still record.
       world.log("early log");
-      world.link("https://example.com", "example");
+      world.link("https://example.com");
       expect(collector.snapshot()).toEqual({
-        links: [{ url: "https://example.com", name: "example" }],
+        links: [{ url: "https://example.com" }],
         logs: ["early log"],
       });
 
@@ -152,12 +154,10 @@ describe("instantiateWorldForPickle: cucumber-js attach and link forms", () => {
 
   it("writes { mediaType, fileName } under the given file name", () =>
     withStep((dir, world, collector) => {
-      // The parameter is still typed as a media-type string. The object is
-      // what cucumber-js documents; the cast only lets this call reach it.
       world.attach(Buffer.from("hello"), {
         mediaType: "text/plain",
         fileName: "greeting.txt",
-      } as unknown as string);
+      });
       const fileName = collector.snapshot()?.attachments?.[0];
       expect({
         fileName,
@@ -190,6 +190,46 @@ describe("instantiateWorldForPickle: cucumber-js attach and link forms", () => {
         { url: "http://a.example" },
         { url: "http://b.example" },
       ]);
+    }));
+
+  it("refuses a stream that has no media type", () =>
+    withStep((_dir, world) => {
+      expect(() => world.attach(Readable.from(["hello"]))).toThrow(
+        "Stream attachments must specify a media type",
+      );
+    }));
+
+  it("decodes every base64: payload back to the original bytes", () =>
+    hegel.testAsync(async (tc) => {
+      const bytes = Buffer.from(tc.draw(gs.binary({ maxSize: 64 })));
+      await withStep((dir, world, collector) => {
+        world.attach(bytes.toString("base64"), "base64:image/png");
+        const fileName = collector.snapshot()?.attachments?.[0];
+        expect(fileName).toBe("attachment.png");
+        expect(readFileSync(path.join(dir, fileName!))).toEqual(bytes);
+      });
+    }));
+
+  it("writes the same stream text for every chunking", () =>
+    hegel.testAsync(async (tc) => {
+      const chunks = tc.draw(gs.arrays(gs.text({ maxSize: 24 }), { maxSize: 8 }));
+      await withStep(async (dir, world, collector) => {
+        const pending = world.attach(Readable.from(chunks), "text/plain");
+        expect(pending).toBeInstanceOf(Promise);
+        await pending;
+        const fileName = collector.snapshot()?.attachments?.[0];
+        expect(fileName).toBe("attachment.txt");
+        expect(readFileSync(path.join(dir, fileName!), "utf8")).toBe(chunks.join(""));
+      });
+    }));
+
+  it("records a list of link arguments with no names", () =>
+    hegel.testAsync(async (tc) => {
+      const urls = tc.draw(gs.arrays(gs.urls(), { minSize: 1, maxSize: 4 }));
+      await withStep((_dir, world, collector) => {
+        world.link(...urls);
+        expect(collector.snapshot()?.links).toEqual(urls.map((url) => ({ url })));
+      });
     }));
 });
 

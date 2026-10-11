@@ -1228,6 +1228,17 @@ import { Given, When, Then } from "nukadoko/compat";
   `class MyWorld extends defineWorld({...})` は `this` に型を付けます。
   cucumber 自身の `attach` / `log` / `link` / `parameters` は予約キーです。
   計測されず、宣言もできず、上書きは黙った破壊の代わりにエラーになります。
+- `this.attach` と `this.link` は cucumber-js に従います。
+  `attach` は文字列、`Buffer` または `Uint8Array`、readable stream のいずれかを受け取ります。
+  media type が `base64:` で始まるとき、その文字列は base64 であり、ファイルには復号したバイトが書かれます。
+  第 2 引数はその media type か、`{ mediaType, fileName }` です。
+  `fileName` があるときは、それが step record の下に書かれるファイルの名前です。
+  media type を省いた文字列または buffer は `text/plain` として書かれます。
+  stream は promise を返すので、step はそれを await する必要があります。
+  media type のない stream は例外を投げます。
+  バイトは stream が終わるまで分からず、型も渡されていないからです。
+  `link` は URL を 1 つ、または複数受け取ります。
+  各引数は `declared` の link として 1 件ずつ記録され、表示名は付きません。
 - harness はブラウザと request のオブジェクトを所有します。
   したがって、compat step はコードを変更せずに計測済みの step record を得ます。
   この record は status、timing、trace、screenshots、HTTP log を含みます。
