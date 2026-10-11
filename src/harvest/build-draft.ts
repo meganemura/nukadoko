@@ -236,8 +236,14 @@ function assembleFeatureText(entries: readonly Entry[]): string {
   return `Feature: (name me)\n\n  Scenario: (name me)\n${body.map((line) => `${line}\n`).join("")}`;
 }
 
-function describeMatchFailure(text: string, expectedStepName: string, bindings: readonly StepBinding[]): string {
-  const outcome = matchPickleStep(text, bindings);
+async function describeMatchFailure(
+  text: string,
+  expectedStepName: string,
+  bindings: readonly StepBinding[],
+): Promise<string> {
+  // No scenario World exists while a draft is being read back. `null` is
+  // the same "nothing to bind" this function can offer a transformer.
+  const outcome = await matchPickleStep(text, bindings, null);
   if (outcome.kind === "undefined") {
     return `wrote "${text}"; read back as an undefined step`;
   }
@@ -255,7 +261,11 @@ function describeMatchFailure(text: string, expectedStepName: string, bindings: 
  * `LineEntry`'s `roundTripFailure` in place when it disagrees with what
  * `buildEntry` set out to write.
  */
-function runRoundTrip(entries: readonly Entry[], bindings: readonly StepBinding[], vocabulary: Vocabulary): void {
+async function runRoundTrip(
+  entries: readonly Entry[],
+  bindings: readonly StepBinding[],
+  vocabulary: Vocabulary,
+): Promise<void> {
   const lineEntries = entries.filter((entry): entry is LineEntry => entry.kind === "line");
   if (lineEntries.length === 0) {
     return;
@@ -285,17 +295,17 @@ function runRoundTrip(entries: readonly Entry[], bindings: readonly StepBinding[
     return;
   }
 
-  lineEntries.forEach((entry, index) => {
+  for (const [index, entry] of lineEntries.entries()) {
     const pickleStep = pickleSteps[index]!;
-    const outcome = matchPickleStep(pickleStep.text, bindings);
+    const outcome = await matchPickleStep(pickleStep.text, bindings, null);
     if (outcome.kind !== "matched" || outcome.stepName !== entry.stepName) {
-      entry.roundTripFailure = `this line does not read back to the same step: ${describeMatchFailure(pickleStep.text, entry.stepName, bindings)}`;
-      return;
+      entry.roundTripFailure = `this line does not read back to the same step: ${await describeMatchFailure(pickleStep.text, entry.stepName, bindings)}`;
+      continue;
     }
     const vocabularyEntry = vocabulary.get(entry.stepName);
     if (vocabularyEntry === undefined || vocabularyEntry.kind !== "typed") {
       entry.roundTripFailure = `this line's step "${entry.stepName}" is no longer a typed step in the current vocabulary`;
-      return;
+      continue;
     }
     const bound = bindStepArgs(
       entry.stepName,
@@ -307,17 +317,17 @@ function runRoundTrip(entries: readonly Entry[], bindings: readonly StepBinding[
     );
     if (!bound.ok) {
       entry.roundTripFailure = `this line does not read back to the same args: ${flatten(bound.message)}`;
-      return;
+      continue;
     }
     if (!deepEqual(bound.value, entry.expectedInlineArgs)) {
       entry.roundTripFailure =
         `this line does not read back to the same args: wrote ${formatValue(entry.expectedInlineArgs)}; ` +
         `read back as ${formatValue(bound.value)}`;
     }
-  });
+  }
 }
 
-export function buildDraft(input: DraftInput): DraftResult {
+export async function buildDraft(input: DraftInput): Promise<DraftResult> {
   const { orderedIds, recordsById, vocabulary, bindings } = input;
   const harvestedIds = new Set(orderedIds);
   const stepNameOf = buildStepNameOf(vocabulary);
@@ -327,7 +337,7 @@ export function buildDraft(input: DraftInput): DraftResult {
     return buildEntry(recordId, record, vocabulary, harvestedIds, recordsById, stepNameOf);
   });
 
-  runRoundTrip(entries, bindings, vocabulary);
+  await runRoundTrip(entries, bindings, vocabulary);
 
   const featureText = assembleFeatureText(entries);
 

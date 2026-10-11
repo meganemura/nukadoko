@@ -273,7 +273,9 @@ needing the same shape spelled out by hand. `parameterTypes` in
 type: a `negation` type matching an optional `" not"` and turning it into
 a `z.boolean()` lets a pattern write `will{negated:negation} return`
 straight into an `args` key of that type. `transformer` only coerces the
-matched text; the `args` schema is still what actually validates it. The
+matched text. It runs with the scenario's World as `this`, and a Promise
+it returns is awaited before the step. The `args` schema is still what
+actually validates it. The
 one thing a project cannot do is redefine a built-in name (`int`,
 `string`, and the rest): that would quietly change what every pattern
 already using it means.

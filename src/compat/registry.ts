@@ -83,9 +83,13 @@ export interface CompatStepOptions {
   readonly timeout?: number;
 }
 
-/** Same shape a `config.parameterTypes` entry takes — `regexp`/`transformer`
+/** Same shape a `config.parameterTypes` entry takes. `regexp`/`transformer`
  * are handed to `@cucumber/cucumber-expressions`' own `ParameterType` almost
- * verbatim, same as the config-origin path (src/binding/registry.ts). */
+ * verbatim, same as the config-origin path (src/binding/registry.ts). This
+ * registration only stores the transformer. When a step is matched,
+ * src/run/match-step.ts calls `Argument.getValue` with the scenario World,
+ * so the transformer's `this` is that World, and awaits a Promise the
+ * transformer returns before the step runs. */
 export interface CompatParameterTypeOptions {
   readonly name: string;
   readonly regexp: RegExp | string;

@@ -1722,7 +1722,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let fixtureUsage: FixtureUsageEntry[] = [];
 
     try {
-      const outcome = matchPickleStep(pickleStep.text, bindings);
+      const outcome = await matchPickleStep(pickleStep.text, bindings, world);
 
       if (outcome.kind === "undefined") {
         scenarioFailed = true;

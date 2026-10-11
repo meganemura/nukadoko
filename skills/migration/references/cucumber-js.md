@@ -13,6 +13,12 @@ Change the one import each glue file uses:
 import { Given, When, Then } from "nukadoko/compat";
 ```
 
+A `defineParameterType` transformer keeps cucumber-js's `this`: the
+scenario World, the same object the step runs against. A Promise it
+returns is awaited before the step. `docs/spec.md` states that contract.
+`nuka tend` notes a registration that still lives in support code
+(`parameter-type-support-origin`) and points at `config.parameterTypes`.
+
 Extension decides what discovery reads, not the suite's own history: `.ts`,
 `.mts`, `.js`, and `.mjs` glue are all read the same way, so a suite that
 was always plain JavaScript needs no rewrite to TypeScript just to start

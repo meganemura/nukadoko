@@ -101,7 +101,7 @@ export async function runHarvest(options: RunHarvestOptions): Promise<number> {
     recordsById.get(a)!.started_at.localeCompare(recordsById.get(b)!.started_at),
   );
 
-  const { featureText, notices } = buildDraft({ orderedIds, recordsById, vocabulary, bindings });
+  const { featureText, notices } = await buildDraft({ orderedIds, recordsById, vocabulary, bindings });
 
   stdout.write(featureText);
   for (const notice of notices) {

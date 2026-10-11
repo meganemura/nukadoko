@@ -135,6 +135,7 @@ glue はテキストとして読むだけで、実行はしていません。
   そのキーへの書き込みはこれでバリデーションされるようになり(スキーマに失敗した書き込みは step を失敗させ、記録されません)、それ以外のすべてのキーは計測されるがバリデーションされないまま動き続けます。
   `MyWorld` の `this` も、宣言されたキーについては型が付きます。
 - **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
+  transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
 
 ## Stage 2: step を昇格させる
 

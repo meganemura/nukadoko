@@ -63,16 +63,16 @@ function makeFailedRecord(id: string, step: string, errorMessage: string): StepR
   };
 }
 
-function draftFor(input: Omit<DraftInput, "bindings"> & { bindings?: DraftInput["bindings"] }) {
+async function draftFor(input: Omit<DraftInput, "bindings"> & { bindings?: DraftInput["bindings"] }) {
   return buildDraft({ bindings: input.bindings ?? [], ...input });
 }
 
 describe("buildDraft: a step record that no longer has a line to render", () => {
-  it("names a step record whose step is not in the current vocabulary at all", () => {
+  it("names a step record whose step is not in the current vocabulary at all", async () => {
     const vocabulary: Vocabulary = new Map();
     const record = makeRecord("r-1", "ghost-step", {});
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -83,11 +83,11 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     expect(result.notices.some((notice) => notice.includes("ghost-step"))).toBe(true);
   });
 
-  it("points at the `name` option on an external record whose step is not in the vocabulary", () => {
+  it("points at the `name` option on an external record whose step is not in the vocabulary", async () => {
     const vocabulary: Vocabulary = new Map();
     const record = makeRecord("r-1", "ghost-step", {}, { kind: "external" });
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -96,11 +96,11 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     expect(result.featureText).toContain("recordStep");
   });
 
-  it("does not add the `name` option hint for a `do`-originated record", () => {
+  it("does not add the `name` option hint for a `do`-originated record", async () => {
     const vocabulary: Vocabulary = new Map();
     const record = makeRecord("r-1", "ghost-step", {}, { kind: "do" });
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -109,7 +109,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     expect(result.featureText).not.toContain("recordStep");
   });
 
-  it("names a step record whose step is now a compat step, with no pattern to render", () => {
+  it("names a step record whose step is now a compat step, with no pattern to render", async () => {
     const compatEntry: VocabularyEntry = {
       kind: "compat",
       name: "now-compat",
@@ -125,7 +125,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     const vocabulary: Vocabulary = new Map([["now-compat", compatEntry]]);
     const record = makeRecord("r-1", "now-compat", {});
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -135,7 +135,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     expect(result.featureText).toContain("is a compat step now");
   });
 
-  it("names a step whose own pattern cannot become a line at all (an unnamed capture)", () => {
+  it("names a step whose own pattern cannot become a line at all (an unnamed capture)", async () => {
     const step = defineStep({
       pattern: "a {string} thing",
       description: "d",
@@ -146,7 +146,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
     const vocabulary: Vocabulary = new Map([["bad-pattern", typedEntry("bad-pattern", step)]]);
     const record = makeRecord("r-1", "bad-pattern", {});
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -158,7 +158,7 @@ describe("buildDraft: a step record that no longer has a line to render", () => 
 });
 
 describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
-  it("names a line that round-trips ambiguously, between the two steps that share its rendered text", () => {
+  it("names a line that round-trips ambiguously, between the two steps that share its rendered text", async () => {
     const stepA = defineStep({
       pattern: "a project exists",
       description: "a",
@@ -180,7 +180,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     const bindings = buildStepBindings(vocabulary);
     const record = makeRecord("r-1", "project-exists-a", {});
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -192,7 +192,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     expect(result.featureText).toMatch(/ambiguous between/);
   });
 
-  it("names a line whose own captured value breaks the whole draft's own Gherkin parse", () => {
+  it("names a line whose own captured value breaks the whole draft's own Gherkin parse", async () => {
     // `n`'s declared type is `int`, so render-line.ts writes its value with
     // a bare `String(value)`, never JSON-escaped the way a `{string}`
     // capture would be — args is documented as unvalidated/uncoerced
@@ -211,7 +211,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     const bindings = buildStepBindings(vocabulary);
     const record = makeRecord("r-1", "broken-thing", { n: '0\n"""\nunterminated docstring' });
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -221,7 +221,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     expect(result.featureText).toMatch(/this draft failed to parse as Gherkin/);
   });
 
-  it("names a line whose own captured value parses into more steps than were rendered", () => {
+  it("names a line whose own captured value parses into more steps than were rendered", async () => {
     const step = defineStep({
       pattern: "a {n:int} thing",
       description: "d",
@@ -233,7 +233,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     const bindings = buildStepBindings(vocabulary);
     const record = makeRecord("r-1", "extra-thing", { n: "0\n    * an extra thing happens" });
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -243,7 +243,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     expect(result.featureText).toMatch(/this draft parsed into 2 step\(s\), not the 1 rendered/);
   });
 
-  it("names a line whose captured value reads back as a different value than it wrote (type coercion)", () => {
+  it("names a line whose captured value reads back as a different value than it wrote (type coercion)", async () => {
     // `args.n` is the string `"5"` on the record, which `String()` renders
     // identically to the number `5` — but the round trip re-reads the line
     // through the real `{int}` parameter type, whose transformer returns a
@@ -262,7 +262,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
     const bindings = buildStepBindings(vocabulary);
     const record = makeRecord("r-1", "coerced-thing", { n: "5" });
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,
@@ -277,7 +277,7 @@ describe("buildDraft: round-trip disagreements beyond 'undefined'", () => {
 describe("buildDraft: a message with ANSI escapes embedded", () => {
   const ESC = "\u001b";
 
-  it("drops the escapes from a failed record's error message before it reaches the draft or the notices", () => {
+  it("drops the escapes from a failed record's error message before it reaches the draft or the notices", async () => {
     // Shaped like Playwright's own dim/reset "Call log:" output: ESC "["
     // "2m" dims, ESC "[" "22m" resets. The words around them are what a
     // reader needs; the escapes are display formatting a terminal would
@@ -294,7 +294,7 @@ describe("buildDraft: a message with ANSI escapes embedded", () => {
     const bindings = buildStepBindings(vocabulary);
     const record = makeFailedRecord("r-1", "risky-thing", errorMessage);
 
-    const result = draftFor({
+    const result = await draftFor({
       orderedIds: ["r-1"],
       recordsById: new Map([["r-1", record]]),
       vocabulary,

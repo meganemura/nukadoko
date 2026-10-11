@@ -41,7 +41,7 @@ describe("config.parameterTypes: negation reaches a step's args as a real boolea
     expect(entry?.kind).toBe("typed");
     if (entry?.kind !== "typed") return;
 
-    const negated = matchPickleStep("the job will not return", bindings);
+    const negated = await matchPickleStep("the job will not return", bindings, null);
     expect(negated.kind).toBe("matched");
     if (negated.kind !== "matched") return;
     const negatedBind = bindStepArgs(
@@ -59,7 +59,7 @@ describe("config.parameterTypes: negation reaches a step's args as a real boolea
       expect(negatedParsed.data).toEqual({ negated: true });
     }
 
-    const plain = matchPickleStep("the job will return", bindings);
+    const plain = await matchPickleStep("the job will return", bindings, null);
     expect(plain.kind).toBe("matched");
     if (plain.kind !== "matched") return;
     const plainBind = bindStepArgs(

@@ -1166,6 +1166,9 @@ import { Given, When, Then } from "nukadoko/compat";
   登録を config へ移しても pattern のマッチは変わらないため、チームはこの移動を早く行えます。
   `nuka check` は support 由来の登録を警告として列挙します。
   config が、それらの引退先です。
+  transformer の `this` は、その scenario の World です。
+  step と hook が動くのと同じオブジェクトです。
+  transformer が返した Promise は、step が走る前に await されます。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
   `await this.openPage()` と `await this.openRequest()` は、harness の計測対象である page と request を返します。
@@ -2105,7 +2108,9 @@ Playwright のオプションを zod で列挙し直すと、Playwright が 1 �
 nukadoko には登録を置くための support ファイルという形式がありません。
 名前は組み込み型と衝突してはなりません。
 `{int}` の意味をプロジェクトごとに再定義できてしまうと、それを使うすべての pattern の意味が静かに変わってしまうからです。
-transformer は型強制であり、契約であり続けるのは args のスキーマです。
+transformer は型強制です。
+その `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
+契約であり続けるのは args のスキーマです。
 
 environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", version?: () => string | Promise<string> }` です。
 その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。

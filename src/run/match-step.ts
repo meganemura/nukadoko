@@ -151,22 +151,25 @@ export type MatchOutcome =
  * src/check/feature-check.ts applies statically).
  * Coercion happens here via `Argument.getValue` (the parameter type's
  * transformer, e.g. `{int}` -> number, or a `config.parameterTypes`/compat
- * `defineParameterType` entry's own transformer). Neither `getValue` nor this
- * function ever `await`s the result, so a custom transformer must be
- * synchronous — an async one would hand back an unresolved Promise as the
- * captured value instead of the value it resolves to, which then fails a
- * typed step's own args schema (a compat step has none to fail, but the same
- * unresolved-Promise value would still reach its glue function as-is). If a
- * transformer throws, that throw propagates unchanged, straight out of this
- * function (cucumber-expressions itself does no try/catch around a
- * transformer call, and this module deliberately adds none of its own) —
- * src/run/run-scenario.ts calls this function outside any
- * try/catch of its own too, so today that surfaces as an uncaught exception
- * failing the whole `nuka run` invocation, not a per-step failed step record.
- * `nuka check` never reaches this code path at all: src/check/feature-
- * check.ts's own matching only calls `expression.match()`/`RegExp.test()`,
- * never `Argument.getValue()`, so a transformer is only ever invoked at
- * `nuka run` time.
+ * `defineParameterType` entry's own transformer). cucumber-expressions
+ * applies that transformer with `getValue`'s argument as `this`
+ * (`Function.prototype.apply`). cucumber-js passes the scenario World
+ * (`arg.getValue(world)`) and awaits every value before the step runs
+ * (`Promise.all` over `getValue`). This function does the same: `world` is
+ * that object, and a Promise a transformer returns is awaited here, so the
+ * step receives the resolved value. `world` is `null` only for a caller
+ * that has no World (the harvest round trip). If a transformer throws, or
+ * an async transformer rejects, that failure propagates unchanged, straight
+ * out of this function (cucumber-expressions itself does no try/catch
+ * around a transformer call, and this module deliberately adds none of its
+ * own). src/run/run-scenario.ts calls this function inside its per-step
+ * try, so the failure becomes that step's own failed record and skips the
+ * rest of that scenario. It does not fail the rest of the `nuka run`
+ * invocation. `nuka check` never reaches this code path at all:
+ * src/check/feature-check.ts's own matching only calls
+ * `expression.match()`/`RegExp.test()`, never `Argument.getValue()`, so a
+ * transformer is only ever invoked at `nuka run` time (and by the harvest
+ * round trip, which calls this same function).
  *
  * A compat RegExp binding is matched by a *fresh* `RegularExpression` whose
  * `RegExp` is built from the binding's `source`/`flags`. `RegularExpression`
@@ -178,7 +181,13 @@ export type MatchOutcome =
  * `Argument.getValue`, the same call the expression branch makes, so a
  * group is converted by the parameter type registered for its source.
  */
-export function matchPickleStep(text: string, bindings: readonly StepBinding[]): MatchOutcome {
+export async function matchPickleStep(
+  text: string,
+  bindings: readonly StepBinding[],
+  /** The scenario World cucumber-expressions binds as `this` inside a
+   * parameter-type transformer. `null` where no World exists. */
+  world: unknown,
+): Promise<MatchOutcome> {
   const byStep = new Map<string, { binding: StepBinding; values: readonly unknown[] }>();
   for (const binding of bindings) {
     if (byStep.has(binding.stepName)) {
@@ -202,7 +211,9 @@ export function matchPickleStep(text: string, bindings: readonly StepBinding[]):
     if (args !== null) {
       byStep.set(binding.stepName, {
         binding,
-        values: args.map((argument) => argument.getValue(null)),
+        // `Promise.all` awaits an async transformer and passes a sync one
+        // through. cucumber-js does the same before it calls the step.
+        values: await Promise.all(args.map((argument) => argument.getValue(world))),
       });
     }
   }

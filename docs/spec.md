@@ -1366,7 +1366,9 @@ import { Given, When, Then } from "nukadoko/compat";
   registry. Moving a registration to the config does not change pattern
   matching, so a team can make this move early. `nuka check` warns about
   registrations that still come from support code. The config is their
-  final location.
+  final location. A transformer's `this` is that scenario's World, the
+  same object the step and its hooks run against. A Promise the
+  transformer returns is awaited before the step runs.
 - Execution supports two forms. Glue that starts its own Playwright
   continues to work without measurement. `await this.openPage()` and
   `await this.openRequest()` return the measured page and request from the
@@ -2555,8 +2557,9 @@ args key. Registration belongs in config because config is executable
 TypeScript. The version probe is a function for the same reason. Nukadoko has
 no support-file format for this registration. Names must not conflict with
 built-in types. A project-specific definition of `{int}` would silently change
-each pattern that uses it. The transformer performs coercion, while the args
-schema remains the contract.
+each pattern that uses it. The transformer performs coercion. It runs
+with that scenario's World as `this`, and a Promise it returns is awaited
+before the step runs. The args schema remains the contract.
 
 An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
 version?: () => string | Promise<string> }`. Its `baseURL` overrides the

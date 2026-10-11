@@ -6,5 +6,8 @@
 export interface ParameterTypeConfig {
   readonly name: string;
   readonly regexp: RegExp | string;
+  /** Coercion only. At run time its `this` is the scenario World, and a
+   * returned Promise is awaited before the step (src/run/match-step.ts).
+   * The args schema remains the contract. */
   readonly transformer?: (...match: string[]) => unknown;
 }
