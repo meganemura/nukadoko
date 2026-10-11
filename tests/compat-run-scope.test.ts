@@ -185,6 +185,82 @@ describe("nuka run: BeforeAll/AfterAll run once per run, in LIFO order for After
   });
 });
 
+describe("nuka run: a negative compat timeout means no timeout", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("compat-negative-timeout-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("setDefaultTimeout(-1) does not fail a step with no own timeout", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/negative-default-timeout.feature"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    expect(record.status).toBe("passed");
+    expect(record.steps[0].status).toBe("passed");
+  });
+
+  it("a step's own { timeout: -1 } does not fail the step", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/negative-step-timeout.feature"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    expect(record.status).toBe("passed");
+    expect(record.steps[0].status).toBe("passed");
+  });
+
+  it("setDefaultTimeout(-1) does not fail a Before hook with no own timeout", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/negative-default-hook.feature"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    expect(record.status).toBe("passed");
+    const beforeHooks = record.hooks.filter((h: { type: string }) => h.type === "before");
+    expect(beforeHooks.some((h: { status: string }) => h.status === "failed")).toBe(false);
+  });
+
+  it("a positive step timeout still applies when the default is negative", async () => {
+    const stdout = createCaptureSink();
+    const startedAt = Date.now();
+    const exitCode = await runCli(["run", "features/positive-step-timeout.feature"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(exitCode).toBe(1);
+    // The glue's own sleep is 400ms. A run that ignored the positive option
+    // and treated every timeout as off would wait that out.
+    expect(elapsedMs).toBeLessThan(1200);
+
+    const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    expect(record.status).toBe("failed");
+    expect(record.steps[0].status).toBe("failed");
+    expect(record.steps[0].error.message).toContain("timed out after 30ms");
+  });
+});
+
 describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
   let rootDir: string;
 
