@@ -1,10 +1,13 @@
 import path from "node:path";
 import { request as playwrightRequest, type APIRequestContext } from "playwright";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { recordStep } from "../src/external/record-step.js";
 import { readStepRecord } from "../src/record/read-step-record.js";
 import { defineStep } from "../src/step/define-step.js";
+import { strictArgsSchema } from "../src/step/strict-args.js";
 import { z } from "zod";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
@@ -31,6 +34,81 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // record actually carries. The extra tests below use a step whose args
 // schema fills a default the caller never supplies, which is the one case
 // where the two values provably differ.
+//
+// The other half of the same contract is a schema that already says what
+// an extra key is. `z.toJSONSchema` (what `nuka describe` publishes)
+// renders `z.looseObject` and `.passthrough()` as `additionalProperties:
+// {}`, and `.catchall(z.number())` as `additionalProperties: { type:
+// "number" }`. `strictArgsSchema` is what `nuka do`, `nuka run`, and
+// `recordStep` parse against, so those three have to accept exactly what
+// that published shape accepts. A plain `z.object` and a `z.strictObject`
+// stay `additionalProperties: false`. The extra key and its value are
+// drawn: one hand-picked pair would only pin the key its author typed.
+
+const extraKey = gs.text({ minSize: 1, maxSize: 12, alphabet: "xyz012" });
+const extraValue = gs.oneOf(
+  gs.integers({ minValue: -1000, maxValue: 1000 }).map((value) => value as unknown),
+  gs.text({ maxSize: 8, alphabet: "abc" }).map((value) => value as unknown),
+  gs.booleans().map((value) => value as unknown),
+  gs.just(null as unknown),
+);
+
+function publishedAdditional(schema: z.ZodType): unknown {
+  return (z.toJSONSchema(schema) as { readonly additionalProperties?: unknown }).additionalProperties;
+}
+
+describe("strictArgsSchema matches the contract nuka describe publishes", () => {
+  it("keeps a loose object's extra keys, the shape describe publishes as additionalProperties: {}", () =>
+    hegel.test((tc) => {
+      const key = tc.draw(extraKey);
+      const value = tc.draw(extraValue);
+      const input = { name: "a", [key]: value };
+      for (const schema of [z.looseObject({ name: z.string() }), z.object({ name: z.string() }).passthrough()]) {
+        expect(publishedAdditional(schema)).toEqual({});
+        const parsed = strictArgsSchema(schema).safeParse(input);
+        expect(parsed.success).toBe(true);
+        if (parsed.success) expect(parsed.data).toEqual(input);
+      }
+    }));
+
+  it("keeps a numeric catchall and refuses a non-number, matching the published additionalProperties schema", () =>
+    hegel.test((tc) => {
+      const key = tc.draw(extraKey);
+      const schema = z.object({ name: z.string() }).catchall(z.number());
+      expect(publishedAdditional(schema)).toEqual({ type: "number" });
+
+      const n = tc.draw(gs.integers({ minValue: -1000, maxValue: 1000 }));
+      const accepted = strictArgsSchema(schema).safeParse({ name: "a", [key]: n });
+      expect(accepted.success).toBe(true);
+      if (accepted.success) expect(accepted.data).toEqual({ name: "a", [key]: n });
+
+      const text = tc.draw(gs.text({ minSize: 1, maxSize: 8, alphabet: "abc" }));
+      const rejected = strictArgsSchema(schema).safeParse({ name: "a", [key]: text });
+      expect(rejected.success).toBe(false);
+      if (!rejected.success) {
+        const message = rejected.error.issues.map((issue) => issue.message).join("\n");
+        expect(message).not.toContain("Unrecognized key");
+      }
+    }));
+
+  it("keeps a plain object and a strict object closed, matching additionalProperties: false", () =>
+    hegel.test((tc) => {
+      const key = tc.draw(extraKey);
+      const value = tc.draw(extraValue);
+      for (const schema of [
+        z.object({ name: z.string() }),
+        z.strictObject({ name: z.string() }),
+        z.object({ name: z.string() }).strict(),
+      ]) {
+        expect(publishedAdditional(schema)).toEqual(false);
+        const parsed = strictArgsSchema(schema).safeParse({ name: "a", [key]: value });
+        expect(parsed.success).toBe(false);
+        if (!parsed.success) {
+          expect(parsed.error.issues.map((issue) => issue.message).join("\n")).toContain(key);
+        }
+      }
+    }));
+});
 
 describe("nuka do: strict args validation", () => {
   it("rejects an extra key echo's args schema does not declare, naming it in the failed step record", async () => {
