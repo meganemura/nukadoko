@@ -98,9 +98,12 @@ export class FeaturesDirMissingError extends Error {
 
 /** Throws {@link FeaturesDirMissingError} when `config.featuresDir` does not
  * exist on disk, the same condition `nuka check`'s `features-dir-missing`
- * checks (src/check/config-check.ts) — kept here, not called from
- * `loadVocabulary` itself, so `nuka describe` (this check's own scope was
- * `nuka steps` alone) keeps its own existing behavior unchanged. */
+ * checks (src/check/config-check.ts). Called by the commands that must
+ * tell a missing directory apart from an empty one (`nuka steps`,
+ * `nuka describe`, `nuka do`), not from `loadVocabulary`: discovery
+ * itself treats a missing directory as an empty vocabulary, which is the
+ * right result only when the directory exists and has no steps, and
+ * `nuka do` never calls `loadVocabulary`. */
 export function assertFeaturesDirExists(rootDir: string, config: NukadokoConfig): void {
   const featuresRoot = path.join(rootDir, config.featuresDir);
   if (!existsSync(featuresRoot)) {

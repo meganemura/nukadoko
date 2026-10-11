@@ -366,6 +366,11 @@ export async function runCli(
         const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
         });
+        // Discovery treats a missing featuresDir as an empty vocabulary, so
+        // the lookup below would report "Unknown step" for a directory that
+        // is not there. Same refusal `steps` makes above, and it has to
+        // happen before any stdout write.
+        assertFeaturesDirExists(rootDir, config);
         const importFailureSummaries = toImportFailureSummaries(importFailures);
         const entry = vocabulary.get(args.name);
         if (!entry) {

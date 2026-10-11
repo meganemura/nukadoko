@@ -54,7 +54,7 @@ import {
 } from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka do`'s actual work, kept out of run-cli.ts so it's
@@ -364,6 +364,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // irrelevant to `nuka do`, which only ever names one step by its
       // vocabulary key.
       ({ vocabulary } = await discoverSteps(rootDir, config.featuresDir));
+      // Discovery treats a missing featuresDir as an empty vocabulary, so
+      // the lookup below would report "Unknown step" for a directory that
+      // is not there. Same refusal `nuka steps` and `nuka describe` make.
+      assertFeaturesDirExists(rootDir, config);
     } catch (error) {
       stderr.write(`${formatVocabularyError(error)}\n`);
       return 1;

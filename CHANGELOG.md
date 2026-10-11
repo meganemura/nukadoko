@@ -203,6 +203,12 @@ just until 0.1.
   or to use `nuka run` for a directory, when the path is a directory. Any
   other read error keeps its own text. A path that is not there still
   reports a missing file.
+- **`nuka describe` and `nuka do` name a missing features directory.**
+  A project whose `featuresDir` is not on disk used to get `Unknown step`
+  from both, the same misdiagnosis `nuka steps` already refuses. They now
+  name the configured directory and the path they resolved, and still
+  exit 1. A directory that exists and simply has no such step is
+  unchanged.
 
 ### Breaking
 
