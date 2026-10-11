@@ -245,13 +245,13 @@ describe("findSignoffRot: line endings and a BOM", () => {
 
       await writeFile(recordPath, withCrlf(lfRecord));
       await writeFile(featurePath, feature.replace("checks out", "checks out twice"));
-      const changed = findSignoffRot(root, new Map(), "features").filter((issue) => issue.code === "signoff-feature-changed");
+      const changed = findSignoffRot(root, new Map(), "features", []).filter((issue) => issue.code === "signoff-feature-changed");
       expect(changed).toHaveLength(1);
       expect(changed[0]!.file).toBe(path.relative(root, recordPath));
 
       await writeFile(recordPath, `${UTF8_BOM}${withCrlf(lfRecord)}`);
       await writeFile(featurePath, `${UTF8_BOM}${withCrlf(feature)}`);
-      const lineEndingsOnly = findSignoffRot(root, new Map(), "features").filter(
+      const lineEndingsOnly = findSignoffRot(root, new Map(), "features", []).filter(
         (issue) => issue.code === "signoff-feature-changed",
       );
       expect(lineEndingsOnly).toEqual([]);

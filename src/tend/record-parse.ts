@@ -83,6 +83,21 @@ export function discoverMarkdownFiles(rootDir: string): string[] {
   return walkMarkdownFiles(rootDir);
 }
 
+// A checkout (`core.autocrlf`) and some editors rewrite the bytes around a
+// record without rewriting the record: every LF becomes CRLF, or a UTF-8
+// BOM is prefixed. The patterns below require a leading `---` and LF, so
+// either rewrite misses, and a miss is ordinary Markdown, which every
+// caller skips. The record is then counted as healthy. Those bytes are
+// transport, so they are removed before any pattern runs. A BOM is only
+// meaningful as the first character; one later in the file is text and
+// stays. A caller comparing a freshly read feature file against a source
+// this function already normalized must apply the same rewrite, or a
+// Windows checkout reads as a changed feature.
+export function normalizeSignoffText(content: string): string {
+  const withoutBom = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+  return withoutBom.replace(/\r\n/g, "\n");
+}
+
 const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n?/;
 const REQUIRED_FRONTMATTER_KEYS = ["run_id", "commit", "feature", "scenarios"] as const;
 
@@ -192,10 +207,12 @@ export interface ParsedAcceptanceRecord {
   /** rootDir-relative path to the feature this record froze — exactly the
    * frontmatter's own `feature:` value, decoded. */
   readonly featurePath: string;
-  /** The frozen feature source, already trailing-newline-normalized the same
-   * way `render-record.ts` normalizes it before embedding — a caller
-   * comparing this against a freshly-read feature file must apply the same
-   * `.replace(/\n$/, "")` to that file's text before comparing. */
+  /** The frozen feature source. A leading BOM and CRLF have already been
+   * removed (`normalizeSignoffText`), and the newline before the closing
+   * fence is not part of the capture, which is the same one trailing
+   * newline `render-record.ts` strips before embedding. A caller comparing
+   * this against a freshly-read feature file applies `normalizeSignoffText`
+   * and then `.replace(/\n$/, "")`. */
   readonly featureSource: string;
   /** Every step-shaped record this record embeds, in document order. */
   readonly stepRecords: readonly EmbeddedStepRecordLike[];
@@ -227,8 +244,11 @@ export type RecordParseResult =
 
 /**
  * Parses one already-read `.md` file's text. `relativePath` is carried
- * through only for the returned record's own identity — this function does
- * no filesystem access itself.
+ * through only for the returned record's own identity. This function does
+ * no filesystem access itself. A leading UTF-8 BOM is stripped and CRLF is
+ * turned into LF first (`normalizeSignoffText`): both are how a checkout
+ * or an editor rewrites a file, and a pattern miss would classify it as
+ * ordinary Markdown.
  *
  * Three outcomes, not two, on purpose: a record that
  * fails to parse must be reported, not silently skipped, or a broken record
@@ -244,7 +264,8 @@ export type RecordParseResult =
  * "readable and current".
  */
 export function parseAcceptanceRecord(content: string, relativePath: string): RecordParseResult {
-  const frontmatterMatch = FRONTMATTER_PATTERN.exec(content);
+  const text = normalizeSignoffText(content);
+  const frontmatterMatch = FRONTMATTER_PATTERN.exec(text);
   if (!frontmatterMatch) {
     return { kind: "not-a-record" };
   }
@@ -262,7 +283,7 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
     return { kind: "malformed", reason: "frontmatter's feature: value could not be decoded" };
   }
 
-  const body = content.slice(frontmatterMatch[0].length);
+  const body = text.slice(frontmatterMatch[0].length);
   const featureSource = extractGherkinFence(body);
   if (featureSource === undefined) {
     return { kind: "malformed", reason: 'missing the "## The scenario as it ran" fenced feature source' };

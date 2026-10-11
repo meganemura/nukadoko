@@ -3,7 +3,7 @@ import path from "node:path";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { isFeatureWithinDir } from "./feature-within-dir.js";
-import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";
+import { discoverMarkdownFiles, normalizeSignoffText, parseAcceptanceRecord } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: docs/spec.md "Tending"'s first, error-level finding — a
@@ -17,8 +17,7 @@ import type { TendIssue } from "./types.js";
 // Four ways a record can go stale, all checked here, all `error`:
 //   (a) the feature it names no longer exists.
 //   (b) the feature source it froze no longer matches the file (exact
-//       string comparison — see `normalizeFeatureSource`'s own comment for
-//       the one normalization allowed).
+//       string comparison after the rewrites `normalizeFeatureSource` names).
 //   (c) a step it cites is gone from the current vocabulary. Withheld for
 //       the whole run while any step file failed to import: a missing
 //       vocabulary entry is not evidence the step was deleted, because
@@ -75,16 +74,21 @@ import type { TendIssue } from "./types.js";
 
 const FIX_HINT = "re-run `nuka run` and `nuka accept` to refreeze it, or revert whatever changed since it was accepted";
 
-// The one normalization allowed: a feature
-// file always ends in its own trailing newline, and `render-record.ts`
-// strips exactly one before embedding it (its own comment: "the fence's own
-// closing ``` already supplies that break"). Applying the identical
-// `.replace` to the freshly-read file, rather than e.g. `.trim()`ing both
-// sides, is what keeps this comparison from forgiving a real difference
-// (leading whitespace, a second blank line) that "the fence already
-// supplies a break" was never meant to cover.
+// Two rewrites, and they answer different questions. `normalizeSignoffText`
+// drops a leading BOM and turns CRLF into LF: a checkout or an editor
+// rewrites those bytes, and the frozen source inside the record has
+// already been through the same function, so leaving them on the file
+// would report a feature change nobody made. The trailing-newline strip is
+// the one content normalization. A feature file always ends in its own
+// trailing newline, and `render-record.ts` strips exactly one before
+// embedding it (its own comment: "the fence's own closing ``` already
+// supplies that break"). Applying that same `.replace` to the freshly-read
+// file, rather than e.g. `.trim()`ing both sides, is what keeps this
+// comparison from forgiving a real difference (leading whitespace, a
+// second blank line) that "the fence already supplies a break" was never
+// meant to cover.
 function normalizeFeatureSource(source: string): string {
-  return source.replace(/\n$/, "");
+  return normalizeSignoffText(source).replace(/\n$/, "");
 }
 
 export function findSignoffRot(
