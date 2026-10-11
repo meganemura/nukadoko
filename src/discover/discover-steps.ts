@@ -399,18 +399,19 @@ export async function discoverSteps(
         mod = await scoped.import(pathToFileURL(filePath).href, import.meta.url);
       } catch (error) {
         if (!tolerateImportFailures) {
-          // The tolerant path (nuka check, nuka tend) reports this failure
-          // through `importFailures`, where the same explanation is added on
-          // the way out. This path throws instead, so the explanation has to
-          // travel with the error: `nuka run` and `nuka do` are the commands
-          // most likely to be typed first, and Node's own message for this
-          // case names a path the file plainly occupies, which reads as a
-          // missing file rather than a module kind the project decides.
+          // The tolerant path reports this failure through `importFailures`,
+          // which names the file and leaves Node's message unmodified. The
+          // CommonJS/.ts sentence is added later, by the caller. This path
+          // throws, and `nuka run`, `nuka do`, and `nuka harvest` print only
+          // `error.message`. A top-level throw's own message does not name
+          // the file, so the path relative to the project root has to be
+          // part of the message, and that sentence has to travel with it:
+          // those commands never see `importFailures`. The sentence is empty
+          // unless the project is CommonJS and the file is `.ts`.
+          const message = error instanceof Error ? error.message : String(error);
+          const relativePath = path.relative(rootDir, filePath);
           const explanation = cjsTsMismatchExplanation(isCommonJsProject(rootDir), filePath);
-          if (explanation === "" || !(error instanceof Error)) {
-            throw error;
-          }
-          throw new Error(`${error.message}${explanation}`, { cause: error });
+          throw new Error(`${relativePath}: ${message}${explanation}`, { cause: error });
         }
         // A file that dies partway through its own evaluation (CommonJS
         // `require()` inside an ESM file throws mid-evaluation, not at ESM's

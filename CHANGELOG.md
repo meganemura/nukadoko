@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka run`, `nuka do`, and `nuka harvest` name the step file that threw while being imported.**
+  The message was Node's own text alone, so a project with many step files
+  gave no way to tell which one threw. The file's path, relative to the
+  project root, is now the start of that same message. `nuka check` and
+  `nuka steps` already named the file.
 - **A config that fails to import names the file and the cause.**
   The raw loader error did not say which config file failed. A syntax
   error in `nukadoko.config.mts` was reported against a `.ts` path. A
@@ -243,7 +248,6 @@ just until 0.1.
   way two identical names already were: the second gets `-2` before the
   extension. A step that attached a harness file name has to pick a
   different one. See docs/upgrading.md.
-
 ## 0.14.1 — 2026-10-10
 
 ### Fixed

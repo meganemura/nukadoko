@@ -3987,7 +3987,10 @@ file it never read (see "Tending"). `nuka run`, `nuka do`, and `nuka init`
 are about to execute a step, or set up a project that is about to, so they
 stay fail-fast: the same broken file rejects the whole call outright,
 because continuing past it is dangerous for anything about to run, not
-merely report on. A migrating suite's normal state is some glue still
+merely report on. The rejection names the file, a path relative to the
+project root, ahead of the thrown error's own text. `nuka harvest` loads
+the vocabulary the same way before it reads any step record, so its refusal
+names the file too. A migrating suite's normal state is some glue still
 broken. A reporting tool that refused to run at all in that state would not
 be a useful migration dashboard. An execution tool that pressed on anyway
 would be running against glue it never actually read.

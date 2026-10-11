@@ -10,7 +10,9 @@ failed to import beside everything else they could still read, so a
 broken file elsewhere never hides the rest of the vocabulary; `nuka check`
 is where to fix the import itself. When a step's args or returns schema
 cannot be represented as JSON Schema, `nuka describe` still prints that
-step's contract, names the step on the failure, and exits 1.
+step's contract, names the step on the failure, and exits 1. `nuka run`,
+`nuka do`, and `nuka harvest` refuse the whole call instead, and that
+refusal names the file.
 
 Two fields carry less than they look like they do. A `needs` of `null`
 means this tool could not read that step's `run()`, so its fixture

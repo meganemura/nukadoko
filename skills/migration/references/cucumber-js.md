@@ -92,7 +92,8 @@ so a file still failing to import is named (`import_failures` on `--json`,
 stderr otherwise) instead of emptying the whole vocabulary. Read the
 vocabulary as you go rather than waiting for every file to import cleanly
 first; `nuka run <feature>` and `nuka do <step>` still refuse outright on
-an unreadable glue file, on purpose, since they are about to execute.
+an unreadable glue file, and the refusal names that file, on purpose,
+since they are about to execute. `nuka harvest` names the file the same way.
 `nuka tend` names the same unread files once, as the note
 `import-failures-unseen`, and does not report a cited step as missing
 from the vocabulary while any step file failed to import. That note does
