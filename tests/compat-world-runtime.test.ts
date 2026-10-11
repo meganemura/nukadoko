@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { createDeclaredCollector } from "../src/compat/declared.js";
@@ -123,6 +124,73 @@ describe("instantiateWorldForPickle (src/compat/world.ts): default World, attach
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+describe("instantiateWorldForPickle: cucumber-js attach and link forms", () => {
+  function withStep(
+    run: (dir: string, world: World, collector: ReturnType<typeof createDeclaredCollector>) => void | Promise<void>,
+  ): Promise<void> {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-world-forms-"));
+    const collector = createDeclaredCollector();
+    const { world } = instantiateWorldForPickle(stubCtx(), {}, collector);
+    collector.beginStep(dir);
+    return Promise.resolve(run(dir, world, collector)).finally(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+  }
+
+  it("decodes a base64: media type into that type's bytes", () =>
+    withStep((dir, world, collector) => {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      world.attach(png.toString("base64"), "base64:image/png");
+      const fileName = collector.snapshot()?.attachments?.[0];
+      expect({
+        fileName,
+        bytes: fileName === undefined ? null : readFileSync(path.join(dir, fileName)),
+      }).toEqual({ fileName: "attachment.png", bytes: png });
+    }));
+
+  it("writes { mediaType, fileName } under the given file name", () =>
+    withStep((dir, world, collector) => {
+      // The parameter is still typed as a media-type string. The object is
+      // what cucumber-js documents; the cast only lets this call reach it.
+      world.attach(Buffer.from("hello"), {
+        mediaType: "text/plain",
+        fileName: "greeting.txt",
+      } as unknown as string);
+      const fileName = collector.snapshot()?.attachments?.[0];
+      expect({
+        fileName,
+        text: fileName === undefined ? null : readFileSync(path.join(dir, fileName), "utf8"),
+      }).toEqual({ fileName: "greeting.txt", text: "hello" });
+    }));
+
+  it("reads a readable stream and returns a promise", () =>
+    withStep(async (dir, world, collector) => {
+      const pending = world.attach(Readable.from(["hello", " world"]), "text/plain") as unknown;
+      if (pending instanceof Promise) {
+        await pending;
+      }
+      const fileName = collector.snapshot()?.attachments?.[0];
+      expect({
+        returnedPromise: pending instanceof Promise,
+        fileName,
+        text: fileName === undefined ? null : readFileSync(path.join(dir, fileName), "utf8"),
+      }).toEqual({
+        returnedPromise: true,
+        fileName: "attachment.txt",
+        text: "hello world",
+      });
+    }));
+
+  it("records each link argument as its own URL", () =>
+    withStep((_dir, world, collector) => {
+      world.link("http://a.example", "http://b.example");
+      expect(collector.snapshot()?.links).toEqual([
+        { url: "http://a.example" },
+        { url: "http://b.example" },
+      ]);
+    }));
 });
 
 describe("instantiateWorldForPickle: setWorldConstructor selects the registered World subclass", () => {
