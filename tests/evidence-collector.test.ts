@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -124,6 +124,59 @@ describe("EvidenceCollector", () => {
 
     const entriesOutside = await readFile(path.join(dir, "..", "escape"), "utf8").catch(() => null);
     expect(entriesOutside).toBeNull();
+  });
+
+  // The evidence directory also holds files the harness writes itself
+  // (record.json, final.png, trace.zip, http.jsonl). A step name that
+  // matches one of those, or differs only by case, would replace that file
+  // on a case-insensitive volume. Linux keeps the two cases apart, so the
+  // assertion compares the case-folded names rather than the raw paths.
+  const harnessFiles = ["record.json", "final.png", "trace.zip", "http.jsonl"] as const;
+
+  it.each(harnessFiles)(
+    "refuses to attach or allocate a harness file name, including a different case: %s",
+    async (reserved) => {
+      const collector = createEvidenceCollector(() => dir);
+
+      for (const name of [reserved, reserved.toUpperCase()]) {
+        await expect(collector.attach(name, "nope")).rejects.toMatchObject({
+          name: "ReservedEvidenceNameError",
+          message: expect.stringContaining(name),
+        });
+        expect(() => collector.path(name)).toThrowError(
+          expect.objectContaining({
+            name: "ReservedEvidenceNameError",
+            message: expect.stringContaining(name),
+          }),
+        );
+      }
+
+      const written = (await readdir(dir)).map((entry) => entry.toLowerCase());
+      expect(written).not.toContain(reserved.toLowerCase());
+    },
+  );
+
+  it("keeps two names that differ only by case on different paths, and still attaches a normal name", async () => {
+    const collector = createEvidenceCollector(() => dir);
+
+    await collector.attach("notes.txt", "kept");
+    expect(await readFile(path.join(dir, "notes.txt"), "utf8")).toBe("kept");
+
+    await collector.attach("Report.txt", "first");
+    await collector.attach("report.txt", "second");
+    const upper = collector.path("Dump.CSV");
+    const lower = collector.path("dump.csv");
+
+    expect(path.basename(upper).toLowerCase()).not.toBe(path.basename(lower).toLowerCase());
+
+    const snapshot = await collector.snapshot();
+    const reports = snapshot.attachments.filter((entry) => entry.name.toLowerCase() === "report.txt");
+    expect(reports).toHaveLength(2);
+    const foldedFiles = reports.map((entry) => entry.file.toLowerCase());
+    expect(new Set(foldedFiles).size).toBe(foldedFiles.length);
+
+    const bodies = await Promise.all(reports.map((entry) => readFile(path.join(dir, entry.file), "utf8")));
+    expect(bodies.sort()).toEqual(["first", "second"]);
   });
 
   it("caps the reported attachments at 100 and reports the true total once the cap is exceeded", async () => {
