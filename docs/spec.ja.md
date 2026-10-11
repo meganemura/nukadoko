@@ -644,7 +644,11 @@ typed step 自身の `run` には締め切りがあります。
 実際の step の所要時間からは遠く離れています。実物のブラウザのスイートから 800 件の step record を無作為抽出したところ、中央値 66 ms、最大 14 秒で、30 秒を超えたものはありませんでした。
 
 compat step は意図して対象外です。
-glue 自身が `{ timeout }` を宣言するか `setDefaultTimeout` を呼ばない限り、無制限で走ります。
+glue 自身が 0 以上の `{ timeout }` を宣言するか、`setDefaultTimeout` を 0 以上の値で呼ばない限り、無制限で走ります。
+負の値は無制限を意味し、cucumber-js と同じです。
+cucumber-js は数値が 0 以上のときだけタイマーを仕掛けます。
+`setDefaultTimeout(-1)` と、step や hook の `{ timeout: -1 }` は、制限を切るための書き方です。
+0 は制限時間として効きます。
 cucumber-js 自身の 5 秒の既定を持ち込むと、切り替えただけで既存のスイートの遅い step が落ち始めるからです(「Compat steps」を参照)。
 typed step は移行してくる資産ではないので、その理由は届きません。
 
@@ -1217,7 +1221,10 @@ import { Given, When, Then } from "nukadoko/compat";
   tags を受け取らず、World を持たず、scenario が 1 つも選ばれなければ実行されません。
   これらの hook は scenario record に属さないため、exit code を通じて報告します。
   `setDefaultTimeout` は、自分の timeout を宣言していないものすべてに既定値を与えます。
-  呼ばずにおけば、step は cucumber の 5 秒という上限を持ち込む代わりに無制限のままになります。
+  負の値は無制限を意味し、cucumber-js と同じです。
+  `setDefaultTimeout(-1)` と、step や hook の `{ timeout: -1 }` は制限を切ります。
+  0 は制限時間として効きます。
+  呼ばないか、負の値で呼べば、step は cucumber の 5 秒という上限を持ち込む代わりに無制限のままになります。
   移行しただけの理由で、遅いスイートを失敗させてしまわないためです。
 - nukadoko は常に World を計測します。
   すべての compat step の step record は、その step が World のどのキーを読み書きしたかをアクセス順で記録します(`this.foo` が隠していたデータフローです)。

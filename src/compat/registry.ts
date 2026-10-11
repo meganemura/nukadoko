@@ -238,6 +238,10 @@ export function drainCompatParameterTypes(): CompatParameterTypeRegistration[] {
  * `timeoutMs` fields). Last call wins when called more than once,
  * cucumber-js's own documented behavior, so no detection or warning is
  * added for a repeated call.
+ * A negative value is stored as given. cucumber-js treats it as no
+ * timeout, and that reading happens in runWithTimeout, not here: a step
+ * or hook `{ timeout: -1 }` never comes through this function. Zero is a
+ * real limit.
  * Deliberately *not* seeded with cucumber-js's own 5000ms default when never
  * called at all: nukadoko's compat steps/hooks have always run unbounded
  * absent their own `{ timeout }`, and introducing a 5-second ceiling here

@@ -50,6 +50,12 @@ just until 0.1.
   still prints the rest of the contract. That side is null, and
   `args_error` or `returns_error` names the step and why. The command
   exits 1. A schema that can be represented is unchanged.
+- **A negative compat timeout means no timeout.** `setDefaultTimeout(-1)`
+  and a step or hook `{ timeout: -1 }` failed every compat step at once,
+  with "timed out after -1ms". cucumber-js arms a timer only when the value
+  is zero or greater, and a negative value is how a suite turns the limit
+  off. A positive timeout still applies. Zero still times out. A typed
+  step's own timeout is unchanged.
 
 ## 0.14.1 — 2026-10-10
 

@@ -186,9 +186,13 @@ export { withStepStdoutOnStderr };
 // `setDefaultTimeout` value, or `undefined`) is threaded in from cli/run.ts
 // and falls back only where a compat step's/hook's *own* `{ timeout }` is
 // `undefined` (`?? defaultTimeoutMs` at each `runWithTimeout` call site
-// below) — an own declaration always wins, matching cucumber-js. `undefined
+// below): an own declaration always wins, matching cucumber-js. `undefined
 // ?? undefined` stays `undefined`, so never calling `setDefaultTimeout`
 // leaves every compat step/hook exactly as unbounded as it always was.
+// A negative number is the same absence of a limit: cucumber-js arms a
+// timer only for zero or greater, and `setDefaultTimeout(-1)` is how a
+// suite turns the limit off. `runWithTimeout` applies that only for the
+// compat source. Zero still arms a timer.
 // `runWithTimeout`/`pendingOrSkippedMessage`/`doneCallbackMessage` are
 // exported (unchanged otherwise) so cli/run.ts's own BeforeAll/AfterAll
 // execution (a run-scope hook, not a per-pickle
@@ -738,6 +742,14 @@ export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string
  * hook with a `{ timeout }`" as far as this function is concerned, it is
  * only *where* it runs (once per `nuka run`, not once per pickle) that
  * differs, and that difference lives entirely in the caller.
+ *
+ * A negative `timeoutMs` on the compat source (`"registered"`, the default
+ * every compat step and hook passes) means no timeout. cucumber-js arms a
+ * timer only when the value is zero or greater, and `setDefaultTimeout(-1)`
+ * plus a step or hook `{ timeout: -1 }` are how a suite turns the limit
+ * off. Typed steps pass `"step"` or `"config"` and have no such idiom, so
+ * a negative number there is still a limit. Zero still arms a timer on
+ * every source: cucumber-js times out at zero too.
  */
 export async function runWithTimeout<T>(
   run: () => Promise<T>,
@@ -746,7 +758,9 @@ export async function runWithTimeout<T>(
   name: string,
   source: TimeoutSource = "registered",
 ): Promise<T> {
-  if (timeoutMs === undefined) {
+  const limit =
+    source === "registered" && timeoutMs !== undefined && timeoutMs < 0 ? undefined : timeoutMs;
+  if (limit === undefined) {
     return run();
   }
   const inFlight = run();
@@ -754,8 +768,8 @@ export async function runWithTimeout<T>(
   let timer: ReturnType<typeof setTimeout>;
   const timedOut = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(
-      () => reject(new CompatTimeoutError(timeoutMessage(kind, name, timeoutMs, source))),
-      timeoutMs,
+      () => reject(new CompatTimeoutError(timeoutMessage(kind, name, limit, source))),
+      limit,
     );
   });
   try {

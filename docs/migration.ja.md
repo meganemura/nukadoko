@@ -65,6 +65,9 @@ import { Given, When, Then } from "nukadoko/compat";
   `table.hashes()` を呼ぶ step は書いたとおりにそのまま動き続けます(摩擦ゼロで、examples/migration 自身のスイートを移行する形で計測済みです)。
 - glue 内の `allure.*` 呼び出し(`attach`/`log`/`link`、ラベル、パラメータ)は、消えるのではなく step record の `declared` フィールドに入ります。
 - `setDefaultTimeout(ms)` は、自分の timeout を宣言していない step や hook すべてにその既定値を埋め、cucumber-js と同じく最後に呼んだものが勝ちます。
+  負の値は無制限を意味します。
+  `setDefaultTimeout(-1)` と、step や hook の `{ timeout: -1 }` がそれです。
+  0 は制限時間として効きます。
   一度も呼ばなければ、step は cucumber の 5 秒という既定値を採用する代わりに無制限のままになります。
   スイートが移行しただけで、遅い step のせいで失敗し始めるべきではないからです。
 - `BeforeAll` / `AfterAll` は、run 全体を挟み込み、`{ timeout }` を渡せばそれも効きます。

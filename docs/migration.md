@@ -86,10 +86,11 @@ Everything below that import keeps working, unchanged:
 - `allure.*` calls (`attach`/`log`/`link`, labels, parameters) inside
   glue: they land in the step record's `declared` field, not vanishing.
 - `setDefaultTimeout(ms)`, filling in for any step or hook that didn't
-  declare its own timeout, last call winning as in cucumber-js. Never
-  calling it leaves steps unbounded rather than adopting cucumber's
-  5-second default: a suite shouldn't start failing for slow steps because
-  it migrated.
+  declare its own timeout, last call winning as in cucumber-js. A negative
+  value means no timeout, including `setDefaultTimeout(-1)` and a step or
+  hook `{ timeout: -1 }`. Zero still times out. Never calling it leaves
+  steps unbounded rather than adopting cucumber's 5-second default: a suite
+  shouldn't start failing for slow steps because it migrated.
 - `BeforeAll` / `AfterAll`, bracketing the whole run, with `{ timeout }` if
   you pass one. They run only when at least one scenario was selected, take
   no `tags`, and get no World (`this`): none exists yet when `BeforeAll`

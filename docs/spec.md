@@ -825,10 +825,14 @@ above what steps actually take: 800 step records sampled from a real
 browser suite ran a median of 66ms and a maximum of 14s, none over 30s.
 
 A compat step is deliberately not covered. It runs unbounded unless its own
-glue declares `{ timeout }` or calls `setDefaultTimeout`, because adopting
-cucumber-js's own five-second default would fail an existing suite's slow
-step purely from switching (see "Compat steps"). A typed step is not a
-migrating asset, so that reasoning does not reach it.
+glue declares a zero or positive `{ timeout }`, or calls `setDefaultTimeout`
+with a zero or positive value, because adopting cucumber-js's own
+five-second default would fail an existing suite's slow step purely from
+switching (see "Compat steps"). A negative value means no timeout, matching
+cucumber-js, which arms a timer only when the number is zero or greater.
+`setDefaultTimeout(-1)` and a step or hook `{ timeout: -1 }` are how a suite
+turns the limit off. Zero still times out. A typed step is not a migrating
+asset, so that reasoning does not reach it.
 
 A fixture can override it through `options.timeout`.
 A timeout report names both the fixture and the phase.
@@ -1421,9 +1425,12 @@ import { Given, When, Then } from "nukadoko/compat";
   bracket the full run. They accept no tags, have no World, and do not run
   when no scenario is selected. They report through the exit code because
   they do not belong to a scenario record. `setDefaultTimeout` sets the
-  default for items without a specific timeout. If the glue does not call
-  it, steps have no time limit. This avoids applying Cucumber's five-second
-  limit to a slow suite only because the suite migrated.
+  default for items without a specific timeout. A negative value means no
+  timeout, matching cucumber-js: `setDefaultTimeout(-1)` and a step or hook
+  `{ timeout: -1 }` turn the limit off, and zero still times out. If the
+  glue does not call it, or calls it with a negative value, steps have no
+  time limit. This avoids applying Cucumber's five-second limit to a slow
+  suite only because the suite migrated.
 - Nukadoko always measures the World. Each compat step record lists the
   World keys that the step read and wrote, in access order. This exposes
   data flow through `this.foo`. Measurement covers the bag's own data
