@@ -1,3 +1,5 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { formatClientMissingMessage } from "../src/cli/mcp-tools.js";
@@ -17,7 +19,11 @@ import { createCaptureSink, fixture, repoRoot, testsDir } from "./helpers/fixtur
 // `versionNegotiation` mode rejects against this server, which never
 // implements `server/discover`; the same connect without that argument
 // succeeds, which is what makes the rejection proof the argument
-// arrived). A second describe block confirms `nuka steps --json` never
+// arrived). A failed handshake must stop the process it spawned: the
+// caller never receives a client to close, and a server that stays up
+// after refusing `initialize` is still running when connect rejects.
+// A successful handshake still leaves that process running until the
+// caller closes the client. A second describe block confirms `nuka steps --json` never
 // lists an MCP tool as vocabulary and reports `needs_browser: false` for
 // the one step here that reaches the server exclusively through a
 // fixture. A third checks the CLI wiring's own client-package-missing
@@ -28,6 +34,16 @@ import { createCaptureSink, fixture, repoRoot, testsDir } from "./helpers/fixtur
 
 const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
 const serverScript = path.join(testsDir, "helpers", "mcp-test-server.ts");
+const refusedScript = path.join(testsDir, "helpers", "mcp-handshake-refused.js");
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 describe("MCP client surface", () => {
   it(
@@ -88,6 +104,72 @@ describe("MCP client surface", () => {
     },
     30_000,
   );
+
+  it("stops the spawned server when the handshake fails, and names the command", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "nukadoko-mcp-handshake-"));
+    const pidFile = path.join(dir, "pid");
+    let pid = 0;
+    try {
+      let caught: unknown;
+      try {
+        await connectMcpServer({
+          command: process.execPath,
+          args: [refusedScript],
+          env: { NUKA_PID_FILE: pidFile },
+        });
+      } catch (error) {
+        caught = error;
+      }
+      pid = Number(readFileSync(pidFile, "utf8"));
+      expect(caught).toBeInstanceOf(Error);
+      // Checked before the message: on a build that does not stop the
+      // child, this is the failure, and it is immediate. Waiting would
+      // let the client package's own unref'd close timer kill the
+      // process and hide the leak.
+      expect(isAlive(pid)).toBe(false);
+      expect((caught as Error).message).toContain(process.execPath);
+    } finally {
+      if (pid !== 0 && isAlive(pid)) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // Already gone.
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves the server running after a successful handshake until the caller closes it", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "nukadoko-mcp-handshake-"));
+    const pidFile = path.join(dir, "pid");
+    let pid = 0;
+    let client: Awaited<ReturnType<typeof connectMcpServer>> | undefined;
+    try {
+      client = await connectMcpServer({
+        command: tsxBin,
+        args: [serverScript],
+        env: { NUKA_PID_FILE: pidFile },
+      });
+      pid = Number(readFileSync(pidFile, "utf8"));
+      expect(isAlive(pid)).toBe(true);
+      await client.close();
+      client = undefined;
+      expect(isAlive(pid)).toBe(false);
+    } finally {
+      if (client !== undefined) {
+        await client.close().catch(() => {});
+      }
+      if (pid !== 0 && isAlive(pid)) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // Already gone.
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
 
   it("refuses when no command follows --", async () => {
     const stdout = createCaptureSink();

@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
@@ -11,6 +12,14 @@ import { z } from "zod";
 // successful call, and `always_fails`, which returns MCP's own in-band
 // tool-failure shape (`{ isError: true, content: [...] }`) so
 // src/mcp/call-tool.ts's own `isError` check has something real to catch.
+
+// Optional, and only for tests that need the spawned pid. Absent, this
+// server behaves as before. Written before connect so a caller that
+// returns from a successful handshake can read it.
+const pidFile = process.env.NUKA_PID_FILE;
+if (pidFile !== undefined && pidFile !== "") {
+  writeFileSync(pidFile, String(process.pid));
+}
 
 const server = new McpServer({ name: "nukadoko-test-mcp-server", version: "0.0.0" });
 
