@@ -253,16 +253,21 @@ export default defineStep({
   その行は args のバリデーションに失敗する以外にありえないからです。
   この逆方向は、キーが何かツールに見えない方法で埋まっているかもしれないという理屈のもと、しばらく未チェックのままでした。
   `from` が残る方法を可視化することでその隙間を埋めたため、残っているのは単に説明されていないだけでなく、正真正銘埋まりようのないものです。
-- pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、黙って捨てられるのではなく拒否されます。
-  `nuka describe` はすでに各オブジェクトの `args` スキーマ自身の `additionalProperties: false` を公開しています。
-  step の `args` をバリデーション済みの値に変える経路はすべて、同じ閉じた形に対してパースします。
+- pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、`nuka describe` がそのスキーマについて公開する契約に従います。
+  `nuka describe` は各オブジェクトの `args` スキーマを `z.toJSONSchema` で公開します。
+  素の `z.object(...)` は `additionalProperties: false` になり、step の `args` をバリデーション済みの値に変える経路はすべて、同じ閉じた形に対してパースします。
   対象は `nuka do`、`nuka do --session <live>`、`nuka run`、`recordStep`、part が呼ばれる `call` fixture です(「Parts」を参照)。
+  宣言していないキーは、黙って捨てられるのではなく拒否されます。
   `nuka describe` はその閉じた args スキーマを、呼び出し側が渡さなければならない入力として描きます。
   そのため `required` に載るのは、呼び出し側が省略できないキーだけです。
   `.default(...)` を持つキーは `required` に入りません。
   `returns` は出力のスキーマのままです。
   default 付きのキーは `returns` では required のままです。
   step が返した値には、そのキーが必ず含まれるからです。
+  余分なキーをどう扱うかをすでに述べているスキーマ(`z.looseObject`、`.passthrough()`、`.catchall(...)`)は、その catchall つきで公開されます。
+  `additionalProperties` は `{}` か、catchall 自身のスキーマです。
+  同じ経路はその catchall をそのまま残します。
+  閉じた形に強制すると、公開済みの契約が許しているキーを拒否することになります。
   `from`/`--use` が埋めるキーは決して指摘されません。
   どちらも、その step 自身が宣言したキーしか名指せないからです。
   成功した record の `args` は検証済みの値そのものなので、スキーマ自身の `.default(...)` が埋めたキーは、その行で誰も書いていなくても現れます。

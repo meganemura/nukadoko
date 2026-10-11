@@ -292,18 +292,24 @@ export default defineStep({
   reasoning that a key might be filled some way the tool could not see;
   `from` closed that gap by making the remaining way visible, so what is
   left is genuinely unfillable rather than merely unexplained.
-- An args key the pattern, a table/docstring, or `from` did not fill and
-  the schema does not declare is refused, not silently dropped: `nuka
-  describe` already publishes each object `args` schema's own
+- An args key that the pattern, a table/docstring, or `from` did not fill,
+  and that the schema does not declare, follows the contract `nuka
+  describe` publishes for that schema. `nuka describe` publishes each object `args`
+  schema through `z.toJSONSchema`. A plain `z.object(...)` comes out as
   `additionalProperties: false`, and every path that turns a step's `args`
-  into a validated value now parses against that same closed shape (`nuka
-  do`, `nuka do --session <live>`, `nuka run`, `recordStep`,
-  and the `call` fixture a part is invoked through, see "Parts").
-  `nuka describe` renders that strict args schema as the input a caller
-  must supply, so `required` names only keys the caller cannot omit: a
-  key with `.default(...)` is absent from it. `returns` stays the output
-  schema, where a defaulted key remains required, because the value the
-  step produced always includes it. A key
+  into a validated value parses against that same closed shape (`nuka do`,
+  `nuka do --session <live>`, `nuka run`, `recordStep`, and the `call`
+  fixture a part is invoked through, see "Parts"): an undeclared key is
+  refused, not silently dropped. `nuka describe` renders that strict args
+  schema as the input a caller must supply, so `required` names only keys
+  the caller cannot omit: a key with `.default(...)` is absent from it.
+  `returns` stays the output schema, where a defaulted key remains
+  required, because the value the step produced always includes it. A
+  schema that already says what an extra key is (`z.looseObject`,
+  `.passthrough()`, or `.catchall(...)`) is published with that catchall,
+  `additionalProperties` of `{}` or of the catchall's own schema, and
+  those same paths leave the catchall in place. Forcing it closed would
+  refuse a key the published contract allows. A key
   `from`/`--use` fills is never flagged, since either can only ever name a
   key the step itself declared. A successful record's own `args` is the
   validated value, so a key a schema's own `.default(...)` filled in shows
