@@ -15,6 +15,7 @@ import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
+import { strictArgsSchema } from "../step/strict-args.js";
 import { stepNeeds } from "../fixture/step-needs.js";
 
 export { formatVocabularyError };
@@ -725,7 +726,15 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
     from_errors: fromResult.errors,
     parts: partsHumanReadable(entry.step, stepNames),
     ...needsFields(entry.step, graph),
-    args: z.toJSONSchema(entry.step.args),
+    // Zod's default JSON Schema is the output shape. A key with
+    // `.default(...)` is required there, because the parsed value always
+    // has it. That is what `returns` is: the value `run` produced. `args`
+    // answers the other question, what a caller must supply, and a key the
+    // schema fills is not one of those. Input mode is that question. The
+    // schema here is the strict one every execution path parses: input
+    // mode on the plain object drops `additionalProperties: false`, and
+    // describe would then publish a shape those paths already refuse.
+    args: z.toJSONSchema(strictArgsSchema(entry.step.args), { io: "input" }),
     returns: z.toJSONSchema(entry.step.returns),
   };
 }

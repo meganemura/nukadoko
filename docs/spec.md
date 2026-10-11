@@ -290,7 +290,12 @@ export default defineStep({
   `additionalProperties: false`, and every path that turns a step's `args`
   into a validated value now parses against that same closed shape (`nuka
   do`, `nuka do --session <live>`, `nuka run`, `recordStep`,
-  and the `call` fixture a part is invoked through, see "Parts"). A key
+  and the `call` fixture a part is invoked through, see "Parts").
+  `nuka describe` renders that strict args schema as the input a caller
+  must supply, so `required` names only keys the caller cannot omit: a
+  key with `.default(...)` is absent from it. `returns` stays the output
+  schema, where a defaulted key remains required, because the value the
+  step produced always includes it. A key
   `from`/`--use` fills is never flagged, since either can only ever name a
   key the step itself declared. A successful record's own `args` is the
   validated value, so a key a schema's own `.default(...)` filled in shows

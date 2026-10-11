@@ -24,6 +24,12 @@ just until 0.1.
   the command exit 1 and remove nothing, including on `--dry-run`. A
   results directory inside the project is still removed, unless that
   directory is a parent of the state directory.
+- **`nuka describe` does not list a defaulted args key as required.**
+  Args JSON Schema is the input a caller must supply, rendered from the
+  same strict schema execution parses. A key with `.default(...)` is
+  absent from `required`. A key without a default stays required.
+  `returns` stays the output schema, where a defaulted key remains
+  required because the value the step produced always includes it.
 
 ## 0.14.1 — 2026-10-10
 
