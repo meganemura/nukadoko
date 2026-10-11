@@ -269,134 +269,150 @@ export async function launchBrowserWithTracing(
   // before, since `undefined` and `"chromium"` land on the same namespace.
   const engine = BROWSER_ENGINES[options.browserType ?? "chromium"];
   const browser: Browser = await engine.launch(options.browser);
-  // Measured, not declared (this file's own header) — read once, right
-  // after `launch` resolved, from the `Browser` object itself.
-  const browserInfo = { type: browser.browserType().name(), version: browser.version() };
-  const context: BrowserContext = await browser.newContext({
-    ...(options.browserContext ?? {}),
-    ...(options.storageState ? { storageState: options.storageState } : {}),
-    ...(options.baseURL ? { baseURL: options.baseURL } : {}),
-  });
-  context.on("request", (request) => {
-    options.observed.record(request.method());
-  });
-  // Not the listener above: `page.request` / `context.request` do not emit
-  // `request` (this file's own header). One call covers every page, because
-  // they share this object.
-  instrumentApiRequestContext(
-    context.request,
-    options.logPath,
-    options.secrets,
-    options.observed,
-  );
-  context.on("console", (msg) => {
-    if (msg.type() !== "error") {
-      return;
-    }
-    const location = msg.location();
-    options.pageEvents.recordConsoleError({
-      text: msg.text(),
-      location: {
-        url: location.url,
-        lineNumber: location.lineNumber,
-        columnNumber: location.columnNumber,
-      },
+  // The handle `dispose()` closes is assigned only after this function
+  // returns. `newContext`, `tracing.start`, and `newPage` can all throw after
+  // launch has already started the process (an invalid viewport is rejected
+  // by `newPage`, not by launch). Close that process before the error
+  // propagates, or it stays alive for the rest of the run.
+  try {
+    // Measured, not declared (this file's own header) — read once, right
+    // after `launch` resolved, from the `Browser` object itself.
+    const browserInfo = { type: browser.browserType().name(), version: browser.version() };
+    const context: BrowserContext = await browser.newContext({
+      ...(options.browserContext ?? {}),
+      ...(options.storageState ? { storageState: options.storageState } : {}),
+      ...(options.baseURL ? { baseURL: options.baseURL } : {}),
     });
-  });
-  context.on("weberror", (webError) => {
-    options.pageEvents.recordPageError(webError.error().message);
-  });
-  context.on("requestfailed", (request) => {
-    const failure = request.failure();
-    options.pageEvents.recordFailedRequest({
-      method: request.method(),
-      url: request.url(),
-      ...(failure ? { failure: failure.errorText } : {}),
+    context.on("request", (request) => {
+      options.observed.record(request.method());
     });
-  });
-  // A second, separate subscription (this file's own header) — appends
-  // page-issued document/xhr/fetch traffic to http.jsonl itself, and tallies
-  // everything else into `httpOmitted` instead.
-  const pageHttpLog = subscribePageHttpLogging(
-    context,
-    options.logPath,
-    options.secrets,
-    options.httpOmitted,
-  );
-  await context.tracing.start({ screenshots: true, snapshots: true });
-  const page = await context.newPage();
+    // Not the listener above: `page.request` / `context.request` do not emit
+    // `request` (this file's own header). One call covers every page, because
+    // they share this object.
+    instrumentApiRequestContext(
+      context.request,
+      options.logPath,
+      options.secrets,
+      options.observed,
+    );
+    context.on("console", (msg) => {
+      if (msg.type() !== "error") {
+        return;
+      }
+      const location = msg.location();
+      options.pageEvents.recordConsoleError({
+        text: msg.text(),
+        location: {
+          url: location.url,
+          lineNumber: location.lineNumber,
+          columnNumber: location.columnNumber,
+        },
+      });
+    });
+    context.on("weberror", (webError) => {
+      options.pageEvents.recordPageError(webError.error().message);
+    });
+    context.on("requestfailed", (request) => {
+      const failure = request.failure();
+      options.pageEvents.recordFailedRequest({
+        method: request.method(),
+        url: request.url(),
+        ...(failure ? { failure: failure.errorText } : {}),
+      });
+    });
+    // A second, separate subscription (this file's own header) — appends
+    // page-issued document/xhr/fetch traffic to http.jsonl itself, and tallies
+    // everything else into `httpOmitted` instead.
+    const pageHttpLog = subscribePageHttpLogging(
+      context,
+      options.logPath,
+      options.secrets,
+      options.httpOmitted,
+    );
+    await context.tracing.start({ screenshots: true, snapshots: true });
+    const page = await context.newPage();
 
-  async function collectStorageState(): Promise<StorageState | undefined> {
-    try {
-      return await context.storageState();
-    } catch {
-      // See doc comment above.
-      return undefined;
+    async function collectStorageState(): Promise<StorageState | undefined> {
+      try {
+        return await context.storageState();
+      } catch {
+        // See doc comment above.
+        return undefined;
+      }
     }
-  }
 
-  async function beginStepChunk(title: string): Promise<void> {
-    // Not swallowed — see the interface's own doc comment above for why.
-    await context.tracing.startChunk({ title });
-  }
-
-  async function endStepChunk(filePath: string): Promise<void> {
-    try {
-      await context.tracing.stopChunk({ path: filePath });
-    } catch {
-      // See the interface's own doc comment above.
+    async function beginStepChunk(title: string): Promise<void> {
+      // Not swallowed — see the interface's own doc comment above for why.
+      await context.tracing.startChunk({ title });
     }
-  }
 
-  async function flushPageHttpLog(): Promise<void> {
-    await pageHttpLog.flush();
-  }
+    async function endStepChunk(filePath: string): Promise<void> {
+      try {
+        await context.tracing.stopChunk({ path: filePath });
+      } catch {
+        // See the interface's own doc comment above.
+      }
+    }
 
-  async function finalize(): Promise<ScreenshotEntry[]> {
-    const screenshots: ScreenshotEntry[] = [];
-    try {
-      const buffer = await page.screenshot();
-      // Taken right when the screenshot itself resolved (this file's own
-      // header) — not after the write below, which measures disk I/O rather
-      // than the moment the page was actually captured.
-      const at = new Date().toISOString();
-      await writeFile(path.join(options.evidenceDir, "final.png"), buffer);
-      screenshots.push({ file: "final.png", at });
-    } catch {
-      // The page may already be closed or otherwise unusable after a failed
-      // run; losing a screenshot is not a reason to also lose the step record.
+    async function flushPageHttpLog(): Promise<void> {
+      await pageHttpLog.flush();
     }
-    // Same reasoning for the two teardown calls below: a step can reach the
-    // browser via ctx.page() and close (or crash) it before throwing, so
-    // context.close/browser.close can each fail on an already-gone context/
-    // browser. A browser left half-torn-down is not a reason to also lose
-    // the step record, so each is swallowed independently and best-effort
-    // teardown continues. `tracing.stop()` is deliberately not called here
-    // any more (this file's own header) — the caller (create-context.ts's
-    // `dispose`) already closed whatever chunk was open via `endStepChunk`
-    // before calling this.
-    try {
-      await context.close();
-    } catch {
-      // See comment above.
+
+    async function finalize(): Promise<ScreenshotEntry[]> {
+      const screenshots: ScreenshotEntry[] = [];
+      try {
+        const buffer = await page.screenshot();
+        // Taken right when the screenshot itself resolved (this file's own
+        // header) — not after the write below, which measures disk I/O rather
+        // than the moment the page was actually captured.
+        const at = new Date().toISOString();
+        await writeFile(path.join(options.evidenceDir, "final.png"), buffer);
+        screenshots.push({ file: "final.png", at });
+      } catch {
+        // The page may already be closed or otherwise unusable after a failed
+        // run; losing a screenshot is not a reason to also lose the step record.
+      }
+      // Same reasoning for the two teardown calls below: a step can reach the
+      // browser via ctx.page() and close (or crash) it before throwing, so
+      // context.close/browser.close can each fail on an already-gone context/
+      // browser. A browser left half-torn-down is not a reason to also lose
+      // the step record, so each is swallowed independently and best-effort
+      // teardown continues. `tracing.stop()` is deliberately not called here
+      // any more (this file's own header) — the caller (create-context.ts's
+      // `dispose`) already closed whatever chunk was open via `endStepChunk`
+      // before calling this.
+      try {
+        await context.close();
+      } catch {
+        // See comment above.
+      }
+      try {
+        await browser.close();
+      } catch {
+        // See comment above.
+      }
+      return screenshots;
     }
+
+    return {
+      page,
+      browserInfo,
+      collectStorageState,
+      beginStepChunk,
+      endStepChunk,
+      flushPageHttpLog,
+      finalize,
+    };
+  } catch (error) {
     try {
       await browser.close();
     } catch {
-      // See comment above.
+      // A close that itself fails must not replace the error that aborted
+      // the launch. The caller needs the reason `newContext`, `tracing.start`,
+      // or `newPage` failed.
     }
-    return screenshots;
+    throw error;
   }
-
-  return {
-    page,
-    browserInfo,
-    collectStorageState,
-    beginStepChunk,
-    endStepChunk,
-    flushPageHttpLog,
-    finalize,
-  };
 }
 
 export interface ExternalPageEvidenceHandle {
