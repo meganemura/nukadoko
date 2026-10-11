@@ -6,7 +6,7 @@ import type { z } from "zod";
 // then answer three narrow questions: is this schema even a `z.object`
 // (pattern-bound steps must be), what does a given key's declared type
 // definitely coerce to (number, string, or "can't tell"), and is a given
-// key required (not optional, no default). Deliberately does *not* attempt
+// key required (an object that declares it rejects a missing key). Deliberately does *not* attempt
 // a full structural comparison — a union, a custom refinement, or any other
 // schema this module can't classify with certainty is left alone; check's
 // own job is to not be overzealous (docs/spec.md "Typed steps": the runtime
@@ -62,11 +62,38 @@ export function classifyPrimitive(schema: z.ZodTypeAny): PrimitiveClass {
   return "other";
 }
 
-/** A field is "required" — must be supplied by *something* (a named
- * capture, or the one table/docstring attachment a pickle step may carry) —
- * when it isn't wrapped in `.optional()`/`.default()` at its own
- * declaration; those are the two zod wrappers that let a key be omitted
- * from the parsed input entirely. */
+/** A field is required when an object that declares it rejects `{}`.
+ *
+ * Zod records "this key may be absent from the input" as
+ * `_zod.optin === "optional"`. `.optional()`, `.default()`, `.prefault()`,
+ * and `.catch()` set that flag, and so does a wrapper (readonly, lazy, pipe,
+ * preprocess) whose input side does. `schema.type` only names the outer
+ * constructor, so a catch or a readonly optional used to look required.
+ *
+ * The flag is not sufficient. A pipe whose input is optional and whose
+ * output is not (`z.preprocess((value) => value, z.string())`,
+ * `z.pipe(z.string().optional(), z.string())`) still rejects a missing key.
+ * The object parser ignores a failed read of an absent key only when the
+ * output is optional too (`_zod.optout === "optional"`). Otherwise the key
+ * is required exactly when parsing `undefined` fails.
+ *
+ * `isOptional()` answers neither question. It is `safeParse(undefined).success`,
+ * which is true for `z.any()`, `z.unknown()`, and `z.undefined()`, and an
+ * object still rejects a missing key for each of those.
+ *
+ * A sync parse that throws (an async transform, a catch or default that
+ * throws) is not a validation failure. This only claims a key is required
+ * when omission fails validation, so a throw is not that claim. */
 export function isRequiredField(schema: z.ZodTypeAny): boolean {
-  return schema.type !== "optional" && schema.type !== "default";
+  if (schema._zod.optin !== "optional") {
+    return true;
+  }
+  if (schema._zod.optout === "optional") {
+    return false;
+  }
+  try {
+    return !schema.safeParse(undefined).success;
+  } catch {
+    return false;
+  }
 }

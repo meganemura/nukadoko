@@ -127,6 +127,13 @@ describe("isRequiredField", () => {
     expect(isRequiredField(z.string().exactOptional())).toBe(false);
   });
 
+  it("does not throw when parsing a missing key throws", () => {
+    const throwing = z.string().catch(() => {
+      throw new Error("boom");
+    });
+    expect(isRequiredField(throwing)).toBe(false);
+  });
+
   it("is true when omitting the key fails validation", () => {
     expect(isRequiredField(z.string())).toBe(true);
     expect(isRequiredField(z.any())).toBe(true);
