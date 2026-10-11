@@ -174,6 +174,63 @@ describe("checkBindings", () => {
     ]);
   });
 
+  it("does not flag a capture the schema coerces, because the run accepts it", () => {
+    const qty = z.object({ qty: z.coerce.number() });
+    const code = z.object({ code: z.coerce.string() });
+    const label = z.object({ label: z.number({ coerce: true }).optional() });
+    const amount = z.object({ amount: z.string({ coerce: true }).default("0") });
+    expect(qty.safeParse({ qty: "21" })).toMatchObject({ success: true, data: { qty: 21 } });
+    expect(code.safeParse({ code: 42 })).toMatchObject({ success: true, data: { code: "42" } });
+    expect(label.safeParse({ label: "7" })).toMatchObject({ success: true, data: { label: 7 } });
+    expect(amount.safeParse({ amount: 1.5 })).toMatchObject({ success: true, data: { amount: "1.5" } });
+
+    const qtyStep = defineStep({
+      pattern: "a quantity of {qty:string}",
+      description: "d",
+      args: qty,
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const codeStep = defineStep({
+      pattern: "a code of {code:int}",
+      description: "d",
+      args: code,
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const labelStep = defineStep({
+      pattern: "a label of {label:word}",
+      description: "d",
+      args: label,
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const amountStep = defineStep({
+      pattern: "an amount of {amount:float}",
+      description: "d",
+      args: amount,
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    });
+    const result = checkBindings(
+      vocab({
+        "qty-step": qtyStep,
+        "code-step": codeStep,
+        "label-step": labelStep,
+        "amount-step": amountStep,
+      }),
+    );
+    expect(result.issues).toEqual([]);
+  });
+
   it("does not flag a capture type it can't be certain about (e.g. bound to a union)", () => {
     const step = defineStep({
       pattern: "a flexible {value:string}",

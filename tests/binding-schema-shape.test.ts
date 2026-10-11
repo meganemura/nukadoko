@@ -104,6 +104,31 @@ describe("classifyPrimitive", () => {
     expect(classifyPrimitive(z.unknown())).toBe("other");
     expect(classifyPrimitive(z.object({}))).toBe("other");
   });
+
+  it("classifies a coercing number or string as other, with or without optional or default", () =>
+    hegel.test((tc) => {
+      const numeric = tc.draw(gs.booleans());
+      const coerce = tc.draw(gs.booleans());
+      const viaOption = tc.draw(gs.booleans());
+      const wrap = tc.draw(gs.integers({ minValue: 0, maxValue: 2 }));
+      let schema: z.ZodTypeAny = numeric
+        ? coerce
+          ? viaOption
+            ? z.number({ coerce: true })
+            : z.coerce.number()
+          : z.number()
+        : coerce
+          ? viaOption
+            ? z.string({ coerce: true })
+            : z.coerce.string()
+          : z.string();
+      if (wrap === 1) {
+        schema = schema.optional();
+      } else if (wrap === 2) {
+        schema = numeric ? schema.default(0) : schema.default("x");
+      }
+      expect(classifyPrimitive(schema)).toBe(coerce ? "other" : numeric ? "number" : "string");
+    }));
 });
 
 describe("isRequiredField", () => {
