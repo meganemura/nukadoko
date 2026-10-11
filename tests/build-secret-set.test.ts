@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -58,6 +58,25 @@ describe("buildSecretSet", () => {
     expect(
       buildSecretSet(dir, { secretSourceFiles: ["does-not-exist.env"], publicKeys: [] }),
     ).toEqual([]);
+  });
+
+  it("reports an unreadable secret-source file, naming the path and EACCES", async () => {
+    const relativePath = "locked.env";
+    await writeFile(path.join(dir, relativePath), "API_TOKEN=sekrit-value\n");
+    await chmod(path.join(dir, relativePath), 0o000);
+
+    expect(() =>
+      buildSecretSet(dir, { secretSourceFiles: ["does-not-exist.env", relativePath], publicKeys: [] }),
+    ).toThrow('env file "locked.env" could not be read: EACCES');
+  });
+
+  it("reports a directory named like a secret-source file, naming the path and EISDIR", async () => {
+    const relativePath = "dirasfile.env";
+    await mkdir(path.join(dir, relativePath));
+
+    expect(() => buildSecretSet(dir, { secretSourceFiles: [relativePath], publicKeys: [] })).toThrow(
+      'env file "dirasfile.env" could not be read: EISDIR',
+    );
   });
 
   it("returns an empty SecretSet when there are no secret-source files", () => {
