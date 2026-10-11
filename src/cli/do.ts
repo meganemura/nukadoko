@@ -31,7 +31,7 @@ import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.j
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { redact } from "../secrets/redact.js";
+import { redact, redactString } from "../secrets/redact.js";
 import { acquireLock, liveLockOwner, readLockInfo, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
@@ -91,10 +91,13 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // config loads and before anything session-related, because session paths
 // are now per-environment — the resolved
 // environment's name, not the raw `--env` string, is what every later
-// cache/sessions/<env>/ path uses. The version probe runs once, at the very top of
-// the execution phase: metadata about the target, never
-// reachable from a step's own `run`, and its failure/timeout never fails the
-// run — only `target_version` is omitted, with one stderr warning line.
+// cache/sessions/<env>/ path uses. The secret set is built once before the
+// version probe, still at the top of the execution phase: the probe's
+// failure reason is its own text and can carry a loaded secret, and the
+// warning is a stderr line rather than the step record. The probe itself
+// is metadata about the target, never reachable from a step's own `run`,
+// and its failure or timeout never fails the run. Only `target_version`
+// is omitted, with one stderr warning line.
 //
 // The evidence-collecting side of ctx (browser/http/trace) is created and
 // disposed here, never handed to the step itself — see
@@ -503,23 +506,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const evidenceDir = path.join(rootDir, relativeDir);
     await mkdir(evidenceDir, { recursive: true });
 
-    // The version probe runs first in the execution phase: it is metadata
-    // about the target the tool records
-    // for itself, never something a step's own `run` can see or trigger. A
-    // probe that throws or times out only costs `target_version`, never the
-    // run — the step still executes normally below.
-    const probeResult = await probeVersion(resolvedEnv.version);
-    let targetVersion: string | undefined;
-    if (probeResult !== undefined) {
-      if (probeResult.ok) {
-        targetVersion = probeResult.version;
-      } else {
-        stderr.write(
-          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${probeResult.reason}\n`,
-        );
-      }
-    }
-
     // env is loaded once here (ctx.env's full, merged value) and classified
     // once here (which of those same envFiles are secret sources, per git);
     // a classification failure (no git,
@@ -528,7 +514,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // so it never surfaces here as a reason to fail this run. `envFiles`
     // here is the *effective* list — top-level plus the resolved
     // environment's own, later-wins
-    // — not just the top-level config's.
+    // — not just the top-level config's. Built before the version probe
+    // below: the probe's failure reason is redacted with this set, and the
+    // set does not exist until classification has run.
     const envFiles = resolvedEnv.envFiles;
     const envVars = loadEnvFiles(rootDir, envFiles);
     const classification = await classifyEnvFiles(rootDir, envFiles);
@@ -538,6 +526,24 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       publicKeys: config.secrets.public,
       redactKeys: config.secrets.redact,
     });
+
+    // The version probe is metadata about the target the tool records
+    // for itself, never something a step's own `run` can see or trigger. A
+    // probe that throws or times out only costs `target_version`. The step
+    // still executes normally below. The reason is the probe's own text
+    // (a request error can include a header the suite loaded), and this
+    // warning is not the step record, so it is redacted on the write.
+    const probeResult = await probeVersion(resolvedEnv.version);
+    let targetVersion: string | undefined;
+    if (probeResult !== undefined) {
+      if (probeResult.ok) {
+        targetVersion = probeResult.version;
+      } else {
+        stderr.write(
+          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${redactString(probeResult.reason, secrets)}\n`,
+        );
+      }
+    }
 
     const contextHandle = createStepContext({
       // Only `baseURL` is overridden from the resolved environment: every
@@ -770,14 +776,18 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // either order could get wrong. Never changes `status` — see src/
     // fixture/resolver.ts's own `teardownFixtureCache`; a failure is
     // announced on stderr below instead (`nuka do` writes no
-    // `ScenarioRecord` to carry a `teardown_errors` field on).
+    // `ScenarioRecord` to carry a `teardown_errors` field on). The message
+    // is the fixture's own text, so a value `ctx.env` handed it is in
+    // there, and this line is not a step record.
     const fixtureOutcome = status === "ok" ? "passed" : "failed";
     const fixtureTeardownErrors = [
       ...(await teardownFixtureCache(fixtureScenarioCache, fixtureOutcome)),
       ...(await teardownFixtureCache(fixtureProcessCache, fixtureOutcome)),
     ];
     for (const teardownError of fixtureTeardownErrors) {
-      stderr.write(`Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`);
+      stderr.write(
+        `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+      );
     }
 
     let disposeResult: DisposeResult;

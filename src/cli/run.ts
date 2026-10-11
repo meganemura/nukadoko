@@ -51,6 +51,7 @@ import {
 import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
+import { redactString } from "../secrets/redact.js";
 import { acquireLock, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
@@ -93,7 +94,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // The version probe, `ctx.env`, and the run's SecretSet are each computed
 // exactly once, at the top of the execution phase — every scenario record
 // and every step record in this run shares the same `target_version`,
-// `env`, and redaction rules. The session's lock, when `--session` is
+// `env`, and redaction rules. The set is built before the probe's warning
+// is written: that reason is the probe function's own text and can carry
+// a value loaded from an untracked env file, and the warning is stderr,
+// not a scenario record. The session's lock, when `--session` is
 // given, is acquired once for the whole run and always released in
 // `finally`, covering every scenario rather than one lock per scenario.
 //
@@ -580,6 +584,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       return 1;
     }
 
+    const envFiles = resolvedEnv.envFiles;
+    const envVars = loadEnvFiles(rootDir, envFiles);
+    const classification = await classifyEnvFiles(rootDir, envFiles);
+    const secrets = buildSecretSet(rootDir, {
+      secretSourceFiles: classification.secretSource,
+      trackedFiles: classification.tracked,
+      publicKeys: config.secrets.public,
+      redactKeys: config.secrets.redact,
+    });
+
     const probeResult = await probeVersion(resolvedEnv.version);
     let targetVersion: string | undefined;
     if (probeResult !== undefined) {
@@ -587,7 +601,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         targetVersion = probeResult.version;
       } else {
         stderr.write(
-          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${probeResult.reason}\n`,
+          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${redactString(probeResult.reason, secrets)}\n`,
         );
       }
     }
@@ -629,16 +643,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // — `undefined` under `--quiet` so `runScenario` never has to know that
     // flag exists at all; it only ever sees "is there a callback to call".
     const onStepEnd = quiet ? undefined : createStepProgressLogger(stderr);
-
-    const envFiles = resolvedEnv.envFiles;
-    const envVars = loadEnvFiles(rootDir, envFiles);
-    const classification = await classifyEnvFiles(rootDir, envFiles);
-    const secrets = buildSecretSet(rootDir, {
-      secretSourceFiles: classification.secretSource,
-      trackedFiles: classification.tracked,
-      publicKeys: config.secrets.public,
-      redactKeys: config.secrets.redact,
-    });
 
     // Only `baseURL` is overridden from the resolved environment, same as
     // cli/do.ts: every other config field has no per-environment counterpart.
@@ -1058,10 +1062,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // recorded on `record.teardown_
           // errors` (src/run/run-scenario.ts); announced here too, on
           // stderr, so it is never silent even though it never changes
-          // `record.status` or this run's own exit code.
+          // `record.status` or this run's own exit code. Redacted on this
+          // write as well: the record's copy is already redacted, and this
+          // stderr line has to stay that way on its own.
           for (const teardownError of record.teardown_errors ?? []) {
             stderr.write(
-              `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`,
+              `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
             );
           }
           // After the stdout line, always — see this file's own header.
@@ -1113,14 +1119,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // rule scenario-scope teardown follows — and, unlike a scenario-scope
       // failure, has no single `ScenarioRecord` of its own to land on (this
       // process-scope cache spans every scenario in the invocation, not
-      // one), so it is announced on stderr only.
+      // one), so it is announced on stderr only. That line is the fixture's
+      // own text, with no scenario record to redact it first.
       const processFixtureTeardownErrors = await teardownFixtureCache(
         fixtureProcessCache,
         allPassed ? "passed" : "failed",
       );
       for (const teardownError of processFixtureTeardownErrors) {
         stderr.write(
-          `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`,
+          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
         );
       }
 

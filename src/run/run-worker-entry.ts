@@ -30,6 +30,7 @@ import {
 import { selectPickles } from "./select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
+import { redactString } from "../secrets/redact.js";
 import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 
 // Responsibility: one `nuka run --concurrency <n>` worker's own process
@@ -74,7 +75,10 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // is the one `WritableSink` this file threads into every helper that would
 // otherwise write straight to stderr at `--concurrency 1` (a version-probe
 // warning, an Allure emitter setup failure, a BeforeAll/AfterAll failure, a
-// fixture teardown failure) — each becomes a `"note"` envelope instead.
+// fixture teardown failure). Each becomes a `"note"` envelope instead. A
+// probe failure and a teardown failure are the caller's own text and can
+// carry a loaded secret, so those two notes are redacted before they are
+// written. The parent relays the text as its own stderr line.
 
 const [rootDirArg, runIdArg, envArg0, quietRawArg, featureListPathArg, repeatRawArg] = process.argv.slice(2);
 
@@ -148,19 +152,6 @@ async function main(): Promise<void> {
   // emitter — there is nothing here for either to prepare or tear down.
   const hasPickles = flatPickles.length > 0;
 
-  const probeResult = await probeVersion(resolvedEnv.version);
-  let targetVersion: string | undefined;
-  if (probeResult !== undefined) {
-    if (probeResult.ok) {
-      targetVersion = probeResult.version;
-    } else {
-      noteSink.write(`Warning: version probe for environment "${resolvedEnv.name}" failed: ${probeResult.reason}\n`);
-    }
-  }
-
-  const git = await probeGitState(rootDir);
-  const onUnknownTraceVersion = createTraceVersionWarner(noteSink);
-
   const envFiles = resolvedEnv.envFiles;
   const envVars = loadEnvFiles(rootDir, envFiles);
   const classification = await classifyEnvFiles(rootDir, envFiles);
@@ -170,6 +161,21 @@ async function main(): Promise<void> {
     publicKeys: config.secrets.public,
     redactKeys: config.secrets.redact,
   });
+
+  const probeResult = await probeVersion(resolvedEnv.version);
+  let targetVersion: string | undefined;
+  if (probeResult !== undefined) {
+    if (probeResult.ok) {
+      targetVersion = probeResult.version;
+    } else {
+      noteSink.write(
+        `Warning: version probe for environment "${resolvedEnv.name}" failed: ${redactString(probeResult.reason, secrets)}\n`,
+      );
+    }
+  }
+
+  const git = await probeGitState(rootDir);
+  const onUnknownTraceVersion = createTraceVersionWarner(noteSink);
 
   const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
 
@@ -327,7 +333,8 @@ async function main(): Promise<void> {
         });
 
         const notes = (record.teardown_errors ?? []).map(
-          (teardownError) => `Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}`,
+          (teardownError) =>
+            `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}`,
         );
         emit({ kind: "scenario", record, stepLines, notes });
 
@@ -356,7 +363,9 @@ async function main(): Promise<void> {
 
     const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, allPassed ? "passed" : "failed");
     for (const teardownError of processFixtureTeardownErrors) {
-      noteSink.write(`Warning: fixture "${teardownError.fixture}" teardown failed: ${teardownError.message}\n`);
+      noteSink.write(
+        `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+      );
     }
   } finally {
     restoreAllureRuntime();

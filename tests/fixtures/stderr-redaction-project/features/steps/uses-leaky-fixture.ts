@@ -7,7 +7,9 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({ id: z.string() }),
   mutates: false,
-  async run({ leakyTeardown }: { leakyTeardown: { id: string } }) {
+  // `leakyTeardown` is a user fixture, not a member of `StepFixtures`. The
+  // same loosely typed destructuring the other teardown fixtures use.
+  async run({ leakyTeardown }: any) {
     return { id: leakyTeardown.id };
   },
 });
