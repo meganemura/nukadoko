@@ -1,19 +1,26 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { runCli } from "../src/cli/run-cli.js";
-import { defineWorld, drainWorldSchemaRegistrations } from "../src/compat/define-world.js";
+import {
+  defineWorld,
+  defineWorldDeclarationRefusal,
+  drainWorldSchemaRegistrations,
+} from "../src/compat/define-world.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `defineWorld({ page })` and `defineWorld({ request })`
-// name harness getters. Reading either getter before openPage()/openRequest()
-// throws WorldNotOpenedError. Instrumentation seeds a declared key by
-// reading it, so a registration that is accepted makes `nuka check` report
-// nothing and then crashes `nuka run` with that opener error. Both commands
-// have to refuse the declaration, and the message has to name the field.
+// Responsibility: `page` and `request` are harness getters. Reading either
+// before openPage()/openRequest() throws WorldNotOpenedError, and
+// instrumentation seeds a declared key by reading it. defineWorld has to
+// refuse those names so nuka check and nuka run fail at import with a
+// message that names the field.
 
 const HARNESS_GETTERS = ["page", "request"] as const;
+const CUCUMBER_RESERVED = ["attach", "log", "link", "parameters"] as const;
+const UNDECLARABLE = new Set<string>([...HARNESS_GETTERS, ...CUCUMBER_RESERVED]);
 
 function refusal(field: (typeof HARNESS_GETTERS)[number]): string {
   return `defineWorld cannot declare "${field}"`;
@@ -89,9 +96,40 @@ describe("defineWorld: page and request", () => {
           runExit: 1,
           runText: expect.stringContaining(refusal(field)),
         });
+        expect(importFailure?.message).toContain("harness getter");
+        expect(runText).toContain("harness getter");
       } finally {
         await removeTempDir(rootDir);
       }
     }
+  });
+
+  it("still accepts a method name such as openPage", () => {
+    drainWorldSchemaRegistrations();
+    try {
+      expect(defineWorldDeclarationRefusal("openPage")).toBeUndefined();
+      defineWorld({ openPage: z.string().optional() });
+      expect(Object.keys(drainWorldSchemaRegistrations()[0]!.schemas)).toEqual(["openPage"]);
+    } finally {
+      drainWorldSchemaRegistrations();
+    }
+  });
+
+  it("refuses exactly the harness getters and the cucumber reserved names, for any other string", () => {
+    hegel.test((tc) => {
+      const key = tc.draw(gs.oneOf(gs.sampledFrom([...UNDECLARABLE]), gs.text()));
+      const reason = defineWorldDeclarationRefusal(key);
+      if (UNDECLARABLE.has(key)) {
+        expect(reason).toEqual(expect.any(String));
+        expect(`defineWorld cannot declare "${key}": ${reason}`).toContain(key);
+        if (key === "page" || key === "request") {
+          expect(reason).toContain("harness getter");
+        } else {
+          expect(reason).toBe("it is a reserved cucumber-js World field");
+        }
+      } else {
+        expect(reason).toBeUndefined();
+      }
+    });
   });
 });

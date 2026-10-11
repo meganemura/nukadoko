@@ -200,7 +200,12 @@ Two independent, incremental moves, safe to take alone, in either order:
   seededCount: z.number() })`. That key's writes are now validated (a write
   that fails its schema fails the step and is never recorded); every other
   key keeps working, measured but unvalidated. `this` on `MyWorld` is typed
-  for the declared keys too.
+  for the declared keys too. Do not declare `page` or `request`. They are
+  harness getters. A subclass can still assign them. Reach the harness
+  objects with `await this.openPage()` and `await this.openRequest()`.
+  `defineWorld` refuses either name at import.
+  `nuka check` reports `step-file-import-failed`, and `nuka run` stops with
+  the same message, which names the field.
 - **Parameter types**: a support-side `defineParameterType` call still
   works, but `nuka tend` notes it (`parameter-type-support-origin`) and
   points at `config.parameterTypes` as the typed-era home: moving the

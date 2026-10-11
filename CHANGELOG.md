@@ -66,6 +66,12 @@ just until 0.1.
   every other key in the file were ignored. The error names the file. An
   object default, including `export default defineConfig({ ... })`, still
   loads.
+- **`defineWorld` refuses `page` and `request`.** Declaring either used to
+  pass `nuka check` and crash `nuka run` with `WorldNotOpenedError`, which
+  blamed a missing `openPage()` or `openRequest()`. The import now fails.
+  `nuka check` reports `step-file-import-failed`, and `nuka run` stops with
+  the same message, which names the field. Assigning `this.page` or
+  `this.request` on a World subclass is unchanged.
 
 ## 0.14.1 — 2026-10-10
 

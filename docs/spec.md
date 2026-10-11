@@ -1445,6 +1445,12 @@ import { Given, When, Then } from "nukadoko/compat";
   write. `class MyWorld extends defineWorld({...})` adds a type to `this`.
   Cucumber reserves `attach`, `log`, `link`, and `parameters`. These keys
   cannot be measured or declared, and an overwrite causes an error.
+  `page` and `request` are harness getters, not bag fields. `defineWorld`
+  refuses either name when the step file is imported. `nuka check` reports
+  that refusal as `step-file-import-failed`, and `nuka run` stops with the
+  same message. The message names the field. A subclass can still assign
+  them. `await this.openPage()` and `await this.openRequest()` still return
+  the harness objects.
 - `this.attach` and `this.link` follow cucumber-js. `attach` takes a
   string, a `Buffer` or `Uint8Array`, or a readable stream. A media type
   that starts with `base64:` means the string is base64, and the file is

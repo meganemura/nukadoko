@@ -29,7 +29,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.14.1 から次のリリースへ
 
-compat の修正で、上げる前に知っておくものが 1 つあります。
+compat の修正で、上げる前に知っておくものがあります。
 
 - **`this.link` の第 2 引数は表示名ではなく、もう 1 つの URL です。**
   `this.link(a, b)` は以前、名前が `b` である link を 1 件記録していました。
@@ -43,6 +43,14 @@ compat の修正で、上げる前に知っておくものが 1 つあります�
   `{ mediaType, fileName }` はそのファイル名を使います。
   readable stream は読まれ、呼び出しは step が await しなければならない promise を返します。
   以前の base64 のテキストや、stream オブジェクトの JSON を attachment ファイルから読んでいたプロジェクトは、これからは復号したバイトか stream の中身を読みます。
+- **`defineWorld` は `page` と `request` を拒みます。**
+  これらの名前は harness の getter です。
+  どちらかを宣言していると、以前は `nuka check` を通過したあと `nuka run` が `WorldNotOpenedError` で落ちていました。
+  `defineWorld` からそのキーを取り除いてください。
+  サブクラスは `this.page` と `this.request` を、これまでどおり代入できます。
+  `await this.openPage()` と `await this.openRequest()` は変わりません。
+  残った宣言は、`nuka check` が `step-file-import-failed` として報告し、`nuka run` が同じメッセージで止まります。
+  そのメッセージはフィールド名を含みます。
 
 ## 0.12.0 から次のリリースへ
 

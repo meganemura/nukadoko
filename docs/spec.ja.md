@@ -1239,6 +1239,12 @@ import { Given, When, Then } from "nukadoko/compat";
   `class MyWorld extends defineWorld({...})` は `this` に型を付けます。
   cucumber 自身の `attach` / `log` / `link` / `parameters` は予約キーです。
   計測されず、宣言もできず、上書きは黙った破壊の代わりにエラーになります。
+  `page` と `request` はバッグのフィールドではなく、harness の getter です。
+  `defineWorld` は step ファイルの import 時に、どちらの名前も拒みます。
+  `nuka check` はその拒否を `step-file-import-failed` として報告し、`nuka run` は同じメッセージで止まります。
+  メッセージはフィールド名を含みます。
+  サブクラスは、これまでどおりそれらを代入できます。
+  `await this.openPage()` と `await this.openRequest()` は、これまでどおり harness のオブジェクトを返します。
 - `this.attach` と `this.link` は cucumber-js に従います。
   `attach` は文字列、`Buffer` または `Uint8Array`、readable stream のいずれかを受け取ります。
   media type が `base64:` で始まるとき、その文字列は base64 であり、ファイルには復号したバイトが書かれます。

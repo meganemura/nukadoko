@@ -105,6 +105,11 @@ fixtures at all writes `run({}, args)`, and one needing neither writes
 `run()`. Any other parameter, `_ctx` included, is refused. `page`,
 `context` and `request` are Playwright's own objects, so reach for
 Playwright's documentation for what to call on them rather than guessing.
+On the compat door those same `page` and `request` names are harness
+getters, not bag fields: `defineWorld` refuses them. `nuka check` reports
+`step-file-import-failed`, and `nuka run` stops with the same message,
+which names the field. Reach them with `await this.openPage()` and
+`await this.openRequest()`.
 
 ## `page.goto` and baseURL
 

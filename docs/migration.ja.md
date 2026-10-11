@@ -145,6 +145,13 @@ World のサブクラスは、その page と request を `this.page = ...` と 
 - **World keys**: 依存しているキーを `defineWorld({ key: someZodSchema })` でラップして拡張します(`class MyWorld extends defineWorld({ seededCount: z.number() })`)。
   そのキーへの書き込みはこれでバリデーションされるようになり(スキーマに失敗した書き込みは step を失敗させ、記録されません)、それ以外のすべてのキーは計測されるがバリデーションされないまま動き続けます。
   `MyWorld` の `this` も、宣言されたキーについては型が付きます。
+  `page` と `request` は宣言しません。
+  それらは harness の getter です。
+  サブクラスは、これまでどおりそれらを代入できます。
+  harness のオブジェクトには `await this.openPage()` と `await this.openRequest()` で到達します。
+  `defineWorld` は import 時にどちらの名前も拒みます。
+  `nuka check` は `step-file-import-failed` を報告し、`nuka run` は同じメッセージで止まります。
+  そのメッセージはフィールド名を含みます。
 - **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
   transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
 

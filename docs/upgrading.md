@@ -35,7 +35,7 @@ This part does not change release to release.
 
 ## 0.14.1 to the next release
 
-One compat fix a project can notice.
+Compat behaviour a project can notice.
 
 - **`this.link`'s second argument is another URL, not a display name.**
   `this.link(a, b)` used to record one link whose name was `b`. It now
@@ -49,6 +49,13 @@ One compat fix a project can notice.
   promise the step must await. A project that read the old base64 text, or
   the JSON of a stream object, out of the attachment file will now read the
   decoded bytes or the stream's contents.
+- **`defineWorld` refuses `page` and `request`.** Those names are harness
+  getters. A declaration of either used to pass `nuka check` and then crash
+  `nuka run` with `WorldNotOpenedError`. Remove the key from `defineWorld`.
+  A subclass can still assign `this.page` and `this.request`.
+  `await this.openPage()` and `await this.openRequest()` are unchanged.
+  `nuka check` reports a leftover declaration as `step-file-import-failed`,
+  and `nuka run` stops with the same message, which names the field.
 
 ## 0.12.0 to the next release
 

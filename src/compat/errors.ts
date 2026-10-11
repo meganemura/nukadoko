@@ -72,15 +72,19 @@ export class ReservedWorldKeyWriteError extends Error {
   }
 }
 
-/** A `defineWorld` schema named one of the reserved keys — registration-time,
- * not run-time: this must be caught before the schema is ever installed,
- * the same way it would make no sense
- * to let a schema silently govern a field the harness itself already owns. */
+/** A `defineWorld` schema named a key the harness already owns.
+ * Registration-time, not run-time: this must be caught before the schema
+ * is ever installed, the same way it would make no sense to let a schema
+ * silently govern a field the harness itself already owns. The default
+ * reason is the cucumber-js reserved set (`attach`/`log`/`link`/
+ * `parameters`). Callers pass a different reason for a harness getter
+ * (`page`/`request`), which is refused for a different cause: reading it
+ * throws until the matching opener has resolved. */
 export class ReservedWorldKeyDeclaredError extends Error {
   readonly key: string;
 
-  constructor(key: string) {
-    super(`defineWorld cannot declare "${key}": it is a reserved cucumber-js World field`);
+  constructor(key: string, reason = "it is a reserved cucumber-js World field") {
+    super(`defineWorld cannot declare "${key}": ${reason}`);
     this.name = "ReservedWorldKeyDeclaredError";
     this.key = key;
   }

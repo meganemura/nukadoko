@@ -89,7 +89,11 @@ Do not go looking for a list of what compat doesn't support before you
 start. Whatever will not work fails loudly, either at the import or on the
 first `nuka run`: the failure names what broke, and that is what to act
 on. A list written here would go stale the moment compat's coverage grows;
-the CLI's own output never does.
+the CLI's own output never does. One declaration is refused up front:
+`defineWorld` cannot name `page` or `request`. Those are harness getters,
+reached with `await this.openPage()` and `await this.openRequest()`.
+`nuka check` reports `step-file-import-failed`, and `nuka run` stops with
+the same message, which names the field.
 
 ## Stage 2: give it contracts
 

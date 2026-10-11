@@ -49,6 +49,30 @@ export interface WorldSchemaRegistration {
 let registrationBuffer: WorldSchemaRegistration[] = [];
 let registrationCounter = 0;
 
+const HARNESS_GETTER_KEYS: ReadonlySet<string> = new Set(["page", "request"]);
+
+/**
+ * Why `defineWorld` refuses `key`, or `undefined` when the key may be
+ * declared. `page` and `request` stay out of `RESERVED_WORLD_KEYS`: that
+ * set also decides which own data properties instrumentation refuses to
+ * reassign, and these two names are prototype getters, not cucumber-js
+ * data fields.
+ * They are refused here because instrumentation seeds a declared key by
+ * reading it, and each getter throws `WorldNotOpenedError` until
+ * `openPage()` or `openRequest()` has resolved. A declaration that got
+ * past this check would leave `nuka check` green and crash `nuka run` on
+ * that read.
+ */
+export function defineWorldDeclarationRefusal(key: string): string | undefined {
+  if (RESERVED_WORLD_KEYS.has(key)) {
+    return "it is a reserved cucumber-js World field";
+  }
+  if (HARNESS_GETTER_KEYS.has(key)) {
+    return `World.${key} is a harness getter, not a declarable field`;
+  }
+  return undefined;
+}
+
 /**
  * Registers this run's World field schemas once. `S`'s keys become both a
  * run-time zod-validated write path (src/compat/world-instrumentation.ts)
@@ -63,15 +87,15 @@ let registrationCounter = 0;
  * here, is what makes that attribution possible).
  *
  * @throws {ReservedWorldKeyDeclaredError} `schemas` names `attach`/`log`/
- * `link`/`parameters` — the harness's own reserved World fields, never
- * user-declarable.
+ * `link`/`parameters`, or the harness getters `page`/`request`.
  */
 export function defineWorld<S extends Record<string, z.ZodTypeAny>>(
   schemas: S,
 ): new (params: WorldConstructorParams) => World & InferWorldFields<S> {
   for (const key of Object.keys(schemas)) {
-    if (RESERVED_WORLD_KEYS.has(key)) {
-      throw new ReservedWorldKeyDeclaredError(key);
+    const reason = defineWorldDeclarationRefusal(key);
+    if (reason !== undefined) {
+      throw new ReservedWorldKeyDeclaredError(key, reason);
     }
   }
   registrationBuffer.push({ schemas, registrationOrder: registrationCounter++ });

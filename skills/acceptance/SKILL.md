@@ -42,6 +42,11 @@ people:
 - **`nuka accept`** writes a sign-off file meant to be committed. It is
   the only artifact here that claims anything.
 
+Compat glue that declares a World reaches `page` and `request` through
+`await this.openPage()` and `await this.openRequest()`. `defineWorld`
+refuses those two names. `nuka check` reports `step-file-import-failed`,
+and `nuka run` stops with the same message, which names the field.
+
 nukadoko itself makes no outbound network calls. What leaves the machine
 is what your own steps send to the application you pointed them at.
 Everything written at run time lands under `.nukadoko/`, gitignored by
