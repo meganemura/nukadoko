@@ -72,11 +72,16 @@ export async function runMcpTools(options: RunMcpToolsOptions): Promise<number> 
     if (json) {
       stdout.write(`${JSON.stringify(tools, null, 2)}\n`);
     } else {
-      // Name and description only, per this surface's own decision to
-      // leave `inputSchema` (verbose, meant to be read as JSON text) to
-      // `--json` — the same split `nuka steps`/cli/webmcp.ts already make.
+      // Name and description only. `inputSchema` is verbose and meant to
+      // be read as JSON text, so it stays on `--json`, the same split
+      // `nuka steps` and cli/webmcp.ts already make. A description can
+      // contain newlines. Collapsed to single spaces here so the listing
+      // stays one line per tool: a later `cut -f1` then reads names, not
+      // fragments of the description. `--json` above keeps the description
+      // the server declared.
       for (const tool of tools) {
-        stdout.write(`${tool.name}\t${tool.description ?? ""}\n`);
+        const description = (tool.description ?? "").replace(/\s*\n\s*/g, " ");
+        stdout.write(`${tool.name}\t${description}\n`);
       }
     }
     return 0;

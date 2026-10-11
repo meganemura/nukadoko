@@ -41,10 +41,15 @@ export async function runWebmcpTools(options: RunWebmcpToolsOptions): Promise<nu
   if (json) {
     stdout.write(`${JSON.stringify(tools, null, 2)}\n`);
   } else {
-    // Name and description only, per this surface's own decision to leave
-    // `inputSchema` (verbose, and meant to be read as JSON text) to `--json`.
+    // Name and description only. `inputSchema` is verbose and meant to be
+    // read as JSON text, so it stays on `--json`. A description can contain
+    // newlines. Collapsed to single spaces here so the listing stays one
+    // line per tool: a later `cut -f1` then reads names, not fragments of
+    // the description. `--json` above keeps the description the page
+    // declared.
     for (const tool of tools) {
-      stdout.write(`${tool.name}\t${tool.description}\n`);
+      const description = tool.description.replace(/\s*\n\s*/g, " ");
+      stdout.write(`${tool.name}\t${description}\n`);
     }
   }
   return 0;
