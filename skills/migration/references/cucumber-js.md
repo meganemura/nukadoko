@@ -228,7 +228,10 @@ worth revisiting once the step that created it is promoted: declare the
 resource as a fixture under `nukadoko.config.ts`'s own `fixtures` instead,
 with the cleanup written right after `await use(...)` in the same function
 that built it, rather than left in a hook that has to guess, from tags
-alone, which scenarios actually need it. `defineFixtures` (from the
+alone, which scenarios actually need it. If that setup exceeds the fixture
+timeout, the scenario still fails, and a later `use()` resolves as
+`"failed"` so the cleanup after it still runs. A failure in that cleanup
+is written to stderr. `defineFixtures` (from the
 `nukadoko` package) keeps the fixture fully typed; any typed step reaches
 it the same way it reaches `page` or `request`, by destructuring the name.
 This is additive, not required: an `After` hook that cleans up something

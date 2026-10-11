@@ -136,6 +136,57 @@ describe("startFixture: timeout", () => {
     expect(seenOutcome).toBe("failed");
   });
 
+  it("reports a teardown failure when use() is called after setup timed out", async () => {
+    const fn: FixtureFn = async ({}, use) => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await use({ id: "late" });
+      throw new Error("late cleanup failed");
+    };
+    const chunks: string[] = [];
+    const original = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      chunks.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await expect(startFixture("late-tenant", fn, deps(), 20)).rejects.toMatchObject({
+        fixture: "late-tenant",
+        phase: "setup",
+      });
+      await expect
+        .poll(() => chunks.join(""))
+        .toContain('Warning: fixture "late-tenant" teardown failed: late cleanup failed');
+    } finally {
+      process.stderr.write = original;
+    }
+  });
+
+  it("reports a teardown timeout when cleanup after a late use() never finishes", async () => {
+    const fn: FixtureFn = async ({}, use) => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await use(1);
+      await new Promise(() => {
+        // teardown never finishes
+      });
+    };
+    const chunks: string[] = [];
+    const original = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      chunks.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await expect(startFixture("late-tenant", fn, deps(), 20)).rejects.toMatchObject({
+        phase: "setup",
+      });
+      await expect.poll(() => chunks.join("")).toContain(
+        'Warning: fixture "late-tenant" teardown failed: Fixture "late-tenant" timed out during teardown after 20ms',
+      );
+    } finally {
+      process.stderr.write = original;
+    }
+  });
+
   it("times out teardown, naming the phase, when the code after use() never finishes", async () => {
     const fn: FixtureFn = async ({}, use) => {
       await use(1);

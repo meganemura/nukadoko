@@ -864,6 +864,18 @@ asset, so that reasoning does not reach it.
 A fixture can override it through `options.timeout`.
 A timeout report names both the fixture and the phase.
 
+A setup timeout still fails the scenario.
+The fixture function keeps running after that.
+If it calls `use()` later, the call resolves as `"failed"`, and the teardown
+written after `use()` still runs, on the teardown budget.
+That late teardown runs when `use()` is reached.
+The timed-out setup produced no instance, so the reverse-order pass has
+nothing to include for it.
+A failure in that late teardown is written to stderr.
+The scenario record may already be sealed, and stderr is the announcement
+that still reaches the operator.
+A teardown that finishes cleanly writes nothing.
+
 `check` reports three fixture findings without running a fixture.
 `fixture-cycle` identifies a dependency cycle among `config.fixtures` entries.
 `fixture-scope-violation` identifies a `process` fixture that depends on a

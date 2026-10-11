@@ -108,6 +108,24 @@ async function withTimeout<T>(
   }
 }
 
+/** A setup timeout rejects `startFixture` before it can return an instance,
+ * so the caller has nothing to resume the fixture with. If the fixture
+ * reaches `use()` later, the value is too late for the step and the
+ * cleanup written after `use()` is the part that still has to run. This
+ * watches that remainder under the teardown budget. A failure is written
+ * to stderr: the scenario record may already be sealed by the setup
+ * timeout, so this is the announcement that still reaches the operator. A
+ * clean finish writes nothing. */
+function watchLateTeardown(name: string, runPromise: Promise<void>, timeoutMs: number): void {
+  void withTimeout(runPromise, timeoutMs, () => new FixtureTimeoutError(name, "teardown", timeoutMs)).then(
+    () => undefined,
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`Warning: fixture "${name}" teardown failed: ${message}\n`);
+    },
+  );
+}
+
 export interface FixtureInstance {
   readonly value: unknown;
   /** Resumes the fixture past its own `await use(...)`, passing `outcome`,
@@ -128,7 +146,9 @@ export interface FixtureInstance {
  * @throws {FixtureUseNotCalledError} `fn` settled (returned or threw)
  * without ever calling `use`.
  * @throws {FixtureTimeoutError} `fn` neither called `use` nor settled
- * within `timeoutMs` (phase `"setup"`).
+ * within `timeoutMs` (phase `"setup"`). `fn` keeps running after that
+ * rejection. A later `use()` resolves as `"failed"` so the teardown after
+ * it still runs, and a failure there is written to stderr.
  * @throws whatever `fn` itself threw before calling `use` — a genuine
  * setup failure, not a misuse of the `use()` contract.
  */
@@ -141,11 +161,23 @@ export async function startFixture(
   const value = deferred<unknown>();
   const outcome = deferred<FixtureOutcome>();
   let useCallCount = 0;
+  // Set only on the setup-timeout path, before that rejection is observed,
+  // so a `use()` arriving with the timeout sees that nobody will call
+  // `teardown()` on an instance this function never returned.
+  let abandoned = false;
 
   const use: UseFn = async (v) => {
     useCallCount += 1;
     if (useCallCount > 1) {
       throw new FixtureUseCalledTwiceError(name);
+    }
+    if (abandoned) {
+      // The timeout already failed the step. Resolving as failed is what
+      // lets the fixture's own cleanup after `use()` run and decide what
+      // to keep. `runPromise` is this call's own caller, so the watch is
+      // not awaited here.
+      watchLateTeardown(name, runPromise, timeoutMs);
+      return "failed";
     }
     value.resolve(v);
     return outcome.promise;
@@ -169,7 +201,10 @@ export async function startFixture(
       settledWithoutUse.then((how): { kind: "no-use"; how: "returned" | "threw" } => ({ kind: "no-use", how })),
     ]),
     timeoutMs,
-    () => new FixtureTimeoutError(name, "setup", timeoutMs),
+    () => {
+      abandoned = true;
+      return new FixtureTimeoutError(name, "setup", timeoutMs);
+    },
   );
 
   if (raced.kind === "no-use") {

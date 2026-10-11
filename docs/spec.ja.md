@@ -679,6 +679,15 @@ typed step は移行してくる資産ではないので、その理由は届き
 fixture は `options.timeout` で上書きできます。
 タイムアウトの報告は fixture と局面の両方を名指します。
 
+setup のタイムアウトは、scenario を失敗させます。
+fixture 関数はそのあとにも走り続けます。
+そのあとで `use()` を呼ぶと、呼び出しは `"failed"` で解決し、`use()` のあとに書いた teardown は teardown の予算のもとで走ります。
+その遅い teardown は、`use()` に到達したときに走ります。
+タイムアウトした setup はインスタンスを作っていないので、逆順の teardown に含める対象がありません。
+その遅い teardown の失敗は stderr に書きます。
+scenario record はすでに閉じている場合があり、stderr がその失敗を届ける報告です。
+きれいに終わった teardown は何も書きません。
+
 `check` は fixture を実行せずに、fixture に関する 3 つの所見を報告します。
 `fixture-cycle` は、`config.fixtures` エントリ間の依存循環を特定します。
 `fixture-scope-violation` は、`scenario` fixture に依存する `process` fixture を特定します。

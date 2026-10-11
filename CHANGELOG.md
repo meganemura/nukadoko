@@ -103,6 +103,11 @@ just until 0.1.
   stayed visible to a later step and a later scenario, because every
   scenario received the same object. Assigning a property now throws, and
   a configured key still reads back as the loaded value.
+- **A fixture whose setup times out still tears down if setup finishes late.**
+  The scenario still fails, and the report still names the fixture and the
+  phase. When the fixture then calls `use()`, that call resolves as
+  `"failed"` and the teardown after it runs. A failure in that teardown is
+  written to stderr.
 
 ## 0.14.1 — 2026-10-10
 

@@ -25,6 +25,15 @@ A step reaches it the same way it reaches `page` or `request`, by
 destructuring the name: `async ({ tenant }, args) => {...}`. Setup runs the
 first time a step names it; teardown runs after that step's scenario
 finishes, in reverse build order, whether the scenario passed or failed.
+A setup that exceeds its timeout still fails the scenario, and the report
+names the fixture and the phase. The fixture keeps running. If it calls
+`use()` after that, the call resolves as `"failed"` and the teardown
+written after `use()` still runs, on the teardown budget. That late
+teardown runs when `use()` is reached. The timed-out setup produced no
+instance, so the reverse-order pass has nothing to include for it. A
+failure there is written to stderr. The scenario record may already be
+sealed, and stderr is the announcement that still reaches the operator.
+A teardown that finishes cleanly writes nothing.
 `use()`'s own return value tells the fixture which, so it can decide for
 itself whether to keep what it built (for inspection) or tear it down;
 `{ scope: "process" }` in a second, options element of the tuple form

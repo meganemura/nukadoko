@@ -76,6 +76,12 @@ async function getOrBuild(
   // `node.run` is always set here: `cache`/`getOrBuild` are only ever
   // reached for a name in `closure.userOrder` (src/fixture/graph.ts's
   // `closeFixtureNames`), which only ever contains non-builtin nodes.
+  // A setup timeout rejects before an instance exists. `startFixture`
+  // keeps that fixture running and, if it calls `use()` later, resolves
+  // the call as failed so its teardown still runs. Leaving it out of the
+  // cache is what keeps that path in charge: an entry here would be torn
+  // down while setup was still unfinished, and that wait would burn the
+  // teardown budget before the fixture had reached `use()`.
   const instance = await startFixture(name, node.run!, deps, timeoutMs);
   const setupMs = Math.round(performance.now() - startedPerf);
   cache.entries.set(name, { node, instance, builtOrder: cache.nextOrder });
