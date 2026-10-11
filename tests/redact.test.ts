@@ -56,6 +56,34 @@ describe("redactString", () => {
   it("is a no-op with an empty SecretSet", () => {
     expect(redactString("nothing to see here", [])).toBe("nothing to see here");
   });
+
+  it("redacts the percent-encoded and JSON-escaped forms of a loaded secret", () => {
+    // A query string stores encodeURIComponent(secret), and a string that
+    // already holds JSON text stores JSON.stringify(secret) without the
+    // surrounding quotes. Both are the loaded value in another spelling.
+    const password: SecretEntry[] = [{ name: "PW", value: "p@ss w0rd/+=&" }];
+    const encoded = `/login?pw=${encodeURIComponent("p@ss w0rd/+=&")}`;
+    expect(encoded).toBe("/login?pw=p%40ss%20w0rd%2F%2B%3D%26");
+    expect(redactString("pw=p@ss w0rd/+=&", password)).toBe("pw={{secret.PW}}");
+    expect(redactString(encoded, password)).toBe("/login?pw={{secret.PW}}");
+
+    const phrase = 'say "hi"\\';
+    const quoted: SecretEntry[] = [{ name: "PHRASE", value: phrase }];
+    const jsonEscaped = JSON.stringify(phrase).slice(1, -1);
+    expect(jsonEscaped).not.toBe(phrase);
+    expect(redactString(phrase, quoted)).toBe("{{secret.PHRASE}}");
+    expect(redactString(jsonEscaped, quoted)).toBe("{{secret.PHRASE}}");
+    expect(redactString(`note=${jsonEscaped};`, quoted)).toBe("note={{secret.PHRASE}};");
+  });
+
+  it("does not redact a too-short secret through a longer encoded spelling", () => {
+    // The four-character floor is about the loaded value, not about how
+    // long a spelling of it becomes. "a b" encodes to "a%20b".
+    const secrets: SecretEntry[] = [{ name: "SHORT", value: "a b" }];
+    expect(secrets[0]!.value.length).toBeLessThan(MIN_REDACTABLE_LENGTH);
+    expect(redactString("a%20b", secrets)).toBe("a%20b");
+    expect(redactString("a b", secrets)).toBe("a b");
+  });
 });
 
 describe("redact", () => {
@@ -79,6 +107,29 @@ describe("redact", () => {
   it("passes non-string leaves through unchanged: numbers, booleans, null", () => {
     const input = { count: 3, ok: true, missing: null, list: [1, false, null] };
     expect(redact(input, secrets)).toEqual(input);
+  });
+
+  it("redacts a percent-encoded secret inside a logged url", () => {
+    const password: SecretEntry[] = [{ name: "PW", value: "p@ss w0rd/+=&" }];
+    const input = {
+      method: "GET",
+      url: `/login?pw=${encodeURIComponent("p@ss w0rd/+=&")}`,
+    };
+    expect(redact(input, password)).toEqual({
+      method: "GET",
+      url: "/login?pw={{secret.PW}}",
+    });
+  });
+
+  it("redacts the decimal text of a numeric secret and leaves an equal JSON number as a number", () => {
+    // 482913 as a number is a count or a pin field, not the loaded string
+    // "482913". Replacing the number would change the leaf's type. The
+    // digits are still removed wherever they appear as text.
+    const pin: SecretEntry[] = [{ name: "PIN", value: "482913" }];
+    expect(redact({ pin: 482913, label: "pin=482913" }, pin)).toEqual({
+      pin: 482913,
+      label: "pin={{secret.PIN}}",
+    });
   });
 
   it("does not mutate the input value", () => {
@@ -138,6 +189,14 @@ describe("redact", () => {
     const input = { "{{secret.TOKEN}}": "already a token", "sekrit-value": "raw" };
     expect(() => redact(input, secrets)).toThrow(
       'redact: keys "{{secret.TOKEN}}" and "sekrit-value" both redact to "{{secret.TOKEN}}"',
+    );
+  });
+
+  it("throws when a raw secret and its percent-encoded form are sibling keys", () => {
+    const secrets: SecretEntry[] = [{ name: "PW", value: "p@ss" }];
+    const input = { "p@ss": 1, "p%40ss": 2 };
+    expect(() => redact(input, secrets)).toThrow(
+      'redact: keys "p@ss" and "p%40ss" both redact to "{{secret.PW}}"',
     );
   });
 });
@@ -407,6 +466,27 @@ describe("redact property-based", () => {
       const outcome = redactOrSkip(structure, secrets);
       if (outcome.skipped) return;
       assertSameShape(structure, outcome.value, secrets);
+    });
+  });
+
+  it("replaces the percent-encoded and JSON-escaped form of any eligible secret with the same token", () => {
+    hegel.test((tc) => {
+      const body = tc.draw(gs.text({ maxSize: 24 }));
+      // Space, "@", a quote, and a backslash each force one spelling to
+      // differ from the raw value, and the leading "a" keeps every draw
+      // at or above the four-character minimum.
+      const value = `a${body} @"` + "\\";
+      const secrets: SecretEntry[] = [{ name: "S", value }];
+      const token = "{{secret.S}}";
+      const percentEncoded = encodeURIComponent(value);
+      const jsonEscaped = JSON.stringify(value).slice(1, -1);
+      expect(percentEncoded).not.toBe(value);
+      expect(jsonEscaped).not.toBe(value);
+      expect(redactString(value, secrets)).toBe(token);
+      expect(redactString(percentEncoded, secrets)).toBe(token);
+      expect(redactString(jsonEscaped, secrets)).toBe(token);
+      expect(redactString(`pre ${percentEncoded} post`, secrets)).toBe(`pre ${token} post`);
+      expect(redactString(`pre ${jsonEscaped} post`, secrets)).toBe(`pre ${token} post`);
     });
   });
 });
