@@ -108,7 +108,101 @@ describe("ctx.poll", () => {
       }),
     ).rejects.toBe(boom);
   });
+
+  // The timeout is a budget for the whole call. A deadline checked only
+  // after an attempt has already finished lets that attempt, and the sleep
+  // before the next one, run past it. A non-finite timeout never satisfies
+  // the comparison, so the loop does not end.
+  it("does not return a value from an attempt that outlasts the timeout", async () => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    const started = Date.now();
+    const outcome = await outcomeWithin(
+      ctx.poll(
+        async () => {
+          await delay(600);
+          return "late";
+        },
+        { timeout: 100, interval: 10 },
+      ),
+      400,
+    );
+    expect(outcome).toBeInstanceOf(PollTimeoutError);
+    expect(Date.now() - started).toBeLessThan(400);
+  });
+
+  it("does not take another attempt once waiting the interval would pass the timeout", async () => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    let calls = 0;
+    const started = Date.now();
+    const outcome = await outcomeWithin(
+      ctx.poll(
+        async () => {
+          calls += 1;
+          return calls >= 2 ? "late" : undefined;
+        },
+        { timeout: 80, interval: 500 },
+      ),
+      400,
+    );
+    expect(outcome).toBeInstanceOf(PollTimeoutError);
+    expect(calls).toBe(1);
+    expect(Date.now() - started).toBeLessThan(400);
+  });
+
+  it("times out a fn that never settles", async () => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    const started = Date.now();
+    const outcome = await outcomeWithin(
+      ctx.poll(() => new Promise(() => {}), { timeout: 120, interval: 20 }),
+      400,
+    );
+    expect(outcome).toBeInstanceOf(PollTimeoutError);
+    expect(Date.now() - started).toBeLessThan(400);
+  });
+
+  it("ends when timeout is NaN", async () => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    const started = Date.now();
+    const outcome = await outcomeWithin(
+      ctx.poll(async () => undefined, { timeout: Number.NaN, interval: 20 }),
+      300,
+    );
+    expect(outcome).toBeInstanceOf(Error);
+    expect(outcome).not.toBe("pending");
+    expect(Date.now() - started).toBeLessThan(300);
+  });
+
+  it("ends when interval is NaN", async () => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    const started = Date.now();
+    const outcome = await outcomeWithin(
+      ctx.poll(async () => undefined, { timeout: 5_000, interval: Number.NaN }),
+      300,
+    );
+    expect(outcome).toBeInstanceOf(Error);
+    expect(outcome).not.toBe("pending");
+    expect(Date.now() - started).toBeLessThan(300);
+  });
 });
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+// Resolves with the poll's value, the error it rejected with, or "pending"
+// once `limitMs` has passed. The limit is what makes a poll that never
+// settles fail the test instead of holding the run.
+async function outcomeWithin(work: Promise<unknown>, limitMs: number): Promise<unknown> {
+  return Promise.race([
+    work.then(
+      (value) => value,
+      (error: unknown) => error,
+    ),
+    delay(limitMs).then(() => "pending"),
+  ]);
+}
 
 // Responsibility: `pollWithRecording`'s own per-iteration `onProgress`
 // callback, the seam a step's own heartbeat (src/run/run-scenario.ts) needs
