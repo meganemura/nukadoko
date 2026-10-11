@@ -2160,6 +2160,17 @@ Stopping a session writes its storageState to the same
 session has two lifetimes rather than two meanings: it is a process while
 it lives, and the state it saved once it does not.
 
+`nuka session stop <name>` exits 0 when no live process holds that name.
+When the name also has no session file and no lock, stderr names both,
+`no session "<name>" in environment "<environment>"`. A typo must not look
+like the session stopped, because the real process keeps its browser until
+the idle timeout. A stale lock is still removed, and that cleanup stays
+quiet. `nuka session clear --env <name>` refuses an environment the config
+does not define when no session file or lock is left under it, with the
+same message the other commands already use for an unknown environment.
+Session files left under an environment that has been removed from the
+config are still cleared, and stderr names that environment.
+
 **A record from a live session must not read like a record from a clean
 one.** A step that passed as the thirtieth execution against a world
 nobody else can rebuild has proved something different from the same step

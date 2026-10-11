@@ -35,6 +35,8 @@ evidence の名前の変化も 1 つあります。
 env file のパーサは、コメント、引用符、エスケープ、複数行にまたがる値について、dotenv に従うようになりました。
 古い読み方に依存していた env file があるプロジェクトは、次の実行の前に、その値を確認してください。
 
+`nuka session clear --env` と `nuka session stop` も、以前は終了コード 0 で何も出さなかった打ち間違いを名指すようになりました。
+
 - **`this.link` の第 2 引数は表示名ではなく、もう 1 つの URL です。**
   `this.link(a, b)` は以前、名前が `b` である link を 1 件記録していました。
   今は引数ごとに `declared` の link を 1 件記録し、どれにも名前は付きません。
@@ -95,6 +97,18 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
   warning は、それを見えるようにするものです。
   区切りは `=` です。
   `:` を使う行は、この warning になります。
+- **`nuka session clear --env <name>` は、config が定義していない environment を、その下に session ファイルが残っていないときに拒否します。**
+  以前は終了コード 0 で何も出さなかったので、打ち間違いは session が消えたように見えました。
+  メッセージは `nuka do --env` がすでに使っているものと同じです。
+  config から外した environment の下に残っている session ファイルは、今までどおり削除され、コマンドは終了コード 0 のままです。
+  stderr はその environment を名指します。
+  `--env` を省いた場合は変わりません。
+  暗黙の `default` environment を削除し、それは config に載っている必要はありません。
+- **存在したことのない名前に対する `nuka session stop <name>` は、終了コード 0 のまま、stderr に 1 行出すようになりました。**
+  その行は session と environment を名指します。
+  stderr に何か出ただけで失敗とみなすスクリプトは、その行を見ます。
+  生きている session を止める場合と、古びた lock file を片付ける場合は変わりません。
+  成功時は今までどおり静かです。
 
 ## 0.12.0 から次のリリースへ
 

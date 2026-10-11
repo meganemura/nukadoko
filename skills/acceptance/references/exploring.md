@@ -139,7 +139,11 @@ belongs to, which the plain listing leaves out. `nuka session clear
 [name]` deletes one by name, or, with no name, every session in `--env`'s
 environment (`default` when omitted); a live one refuses to clear until
 it is stopped first, since clearing only ever touches files, never a
-running process.
+running process. An `--env` the config does not define is refused when
+nothing is left under it, and stderr names it. Files left under an
+environment removed from the config are still cleared, and stderr names
+that environment. `nuka session stop` of a name that was never a session
+exits 0 and names that session and its environment on stderr.
 
 A step record has a lifetime without anyone cleaning: `nuka run` keeps the
 newest `retention.runs` runs (default 20) and a record no run owns, which

@@ -36,6 +36,7 @@ This part does not change release to release.
 ## 0.14.1 to the next release
 
 Compat behaviour a project can notice, one redaction change, and one evidence-name change.
+`nuka session clear --env` and `nuka session stop` also name a typo that used to exit 0 with no output.
 
 The env file parser now follows dotenv for comments, quotes, escapes, and
 values that span lines. A project whose env files relied on the old reading
@@ -96,6 +97,19 @@ has to look at those values before the next run.
   it could read, and the warning does not by itself fail `nuka check`. A
   line that was never a binding was already not loaded. The warning is how
   you see it. The separator is `=`. A line that uses `:` is this warning.
+- **`nuka session clear --env <name>` refuses an environment the config
+  does not define, when that environment has no session files left.** It
+  used to exit 0 and print nothing, so a typo looked like the sessions
+  were gone. The message is the same one `nuka do --env` already uses.
+  Session files left under an environment removed from the config are
+  still cleared, and the command still exits 0. stderr names that
+  environment. Omitting `--env` is unchanged: it clears the implicit
+  `default` environment, which does not have to be listed.
+- **`nuka session stop <name>` of a name that was never a session still
+  exits 0, and now writes one stderr line** naming the session and the
+  environment. A script that treats any stderr as failure will see that
+  line. Stopping a live session, or cleaning up a stale lock, is
+  unchanged and still quiet on success.
 
 ## 0.12.0 to the next release
 

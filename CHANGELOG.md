@@ -18,6 +18,10 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka session clear --env <typo>` and `nuka session stop <typo>` no longer succeed silently.**
+  `session clear --env` of an environment the config does not define exits 1 and names it, unless session files are still left under that name.
+  Those files are still cleared, the command exits 0, and stderr names the environment.
+  `session stop` of a name that was never a session still exits 0, and stderr names the session and the environment.
 - **A repeated singular flag is refused by name.**
   yargs collects a repeated string or number flag into an array.
   `nuka init --base-url http://a --base-url http://b` wrote that array
@@ -204,7 +208,6 @@ just until 0.1.
   way two identical names already were: the second gets `-2` before the
   extension. A step that attached a harness file name has to pick a
   different one. See docs/upgrading.md.
-
 ## 0.14.1 — 2026-10-10
 
 ### Fixed

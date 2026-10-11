@@ -1826,6 +1826,16 @@ session を止めると、その storageState は session が昔から残して�
 つまり session が持つのは 2 つの意味ではなく 2 つの寿命です。
 生きている間は 1 つの process であり、生きなくなったあとはそれが保存した state です。
 
+`nuka session stop <name>` は、その名前を生きたプロセスが保持していないとき、exit 0 です。
+その名前に session ファイルも lock file もないとき、stderr は session と environment を `no session "<name>" in environment "<environment>"` と名指します。
+打ち間違えた名前が、session が止まったように見えてはいけません。
+本当のプロセスは、アイドルタイムアウトまでブラウザを持ち続けるからです。
+古びた lock file は今までどおり削除され、その片付けは静かです。
+`nuka session clear --env <name>` は、config が定義していない environment の下に session ファイルも lock file も残っていないとき、その environment を拒否します。
+拒否の文は、ほかのコマンドが未知の environment にすでに使っているものと同じです。
+config から外された environment の下に残っている session ファイルは、今までどおり削除されます。
+そのとき stderr はその environment を名指します。
+
 **live session から出た record は、まっさらな record と同じようには読めてはいけません。**
 誰も組み立て直せない世界に対する 30 番目の実行として通った step は、その step が単独で通ったのとは別のことを証明しています。
 この 2 種類を見分けられない green な record こそ、この機能が周囲のあらゆる record を静かに損ないかねない唯一の経路です。

@@ -151,7 +151,7 @@ interface SessionListArgs {
 
 interface SessionClearArgs {
   name?: string;
-  env: string;
+  env?: string;
 }
 
 interface SessionStartArgs {
@@ -600,8 +600,7 @@ export async function runCli(
         })
         .option("env", {
           type: "string",
-          default: "default",
-          describe: "environment to clear sessions from",
+          describe: 'target a named environment (omit for the "default" environment)',
         })
         .check(rejectRepeatedFlags(["env"])) as Argv<SessionClearArgs>,
     handler: async (args: Arguments<SessionClearArgs>) => {
@@ -609,7 +608,7 @@ export async function runCli(
       exitCode = await runSessionClear({
         rootDir,
         name: args.name ?? null,
-        environment: args.env,
+        env: args.env ?? null,
         stdout,
         stderr,
       });

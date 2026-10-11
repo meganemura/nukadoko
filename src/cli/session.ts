@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
@@ -15,7 +15,7 @@ import { checkSockPathLength, spawnDaemon, waitForDaemonStartup } from "../live/
 import { clearAllSessions, clearSession, listSessions } from "../session/manage.js";
 import { liveLockOwner, readLockInfo } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
-import { sessionCrashLogPath, sessionLockPath } from "../session/paths.js";
+import { sessionCrashLogPath, sessionFilePath, sessionLockPath, sessionsDir } from "../session/paths.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -38,9 +38,11 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // session's ending storageState to the same cache/sessions/<env>/<name>.json
 // a session has always left behind (docs/spec.md "Live sessions"), so
 // stopping has to ask it to, not merely tear its files down. A session with
-// no live owner has nothing to ask — `stop` cleans up any debris and
-// succeeds quietly, the same "clear is silent on success" convention
-// `runSessionClear` below already follows.
+// no live owner has nothing to ask: `stop` cleans up any debris and exits
+// 0. When that name also left no session file and no lock, stderr names
+// the session and the environment. A typo must not look like the real
+// session stopped, because that process keeps its browser until the idle
+// timeout.
 
 export interface RunSessionListOptions {
   rootDir: string;
@@ -76,17 +78,35 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
 
 export interface RunSessionClearOptions {
   rootDir: string;
-  /** `null` clears every session for `environment`. */
+  /** `null` clears every session for the environment. */
   name: string | null;
-  /** `--env`'s value; "default" when omitted (there is no all-environments
-   * clear). */
-  environment: string;
+  /** `--env`'s raw value, or `null` when omitted. Omitted resolves to the
+   * implicit "default" environment, which does not have to be listed in
+   * the config. There is no all-environments clear. */
+  env: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
+/** A session file or a lock is something `clear` can still delete. A crash
+ * log is not: it is a start failure's note, not a session. */
+async function environmentHasSessionFiles(
+  rootDir: string,
+  stateDir: string,
+  environment: string,
+): Promise<boolean> {
+  let entries: string[];
+  try {
+    entries = await readdir(sessionsDir(rootDir, stateDir, environment));
+  } catch {
+    return false;
+  }
+  return entries.some((entry) => entry.endsWith(".json") || entry.endsWith(".lock"));
+}
+
 export async function runSessionClear(options: RunSessionClearOptions): Promise<number> {
-  const { rootDir, name, environment, stderr } = options;
+  const { rootDir, name, env, stderr } = options;
+  const environment = env ?? DEFAULT_ENVIRONMENT_NAME;
 
   let config;
   try {
@@ -98,6 +118,28 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
 
   try {
     validateEnvironmentName(environment);
+    // An explicit `--env` the config does not define is the same mistake
+    // `session stop --env` already refuses. The exception is files still
+    // sitting under that name: the environment may have been removed from
+    // the config, and clear is how those files go. Nothing left to delete
+    // has no such reason, so that one is the refusal.
+    if (env !== null) {
+      let unknown: unknown;
+      try {
+        resolveEnvironment(config, environment, true);
+      } catch (error) {
+        unknown = error;
+      }
+      if (unknown !== undefined) {
+        if (await environmentHasSessionFiles(rootDir, config.stateDir, environment)) {
+          stderr.write(
+            `Environment "${environment}" is not defined in nukadoko.config.ts's "environments"; clearing the sessions left under it\n`,
+          );
+        } else {
+          throw unknown;
+        }
+      }
+    }
     if (name === null) {
       await clearAllSessions(rootDir, config.stateDir, environment);
     } else {
@@ -109,9 +151,9 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
     return 1;
   }
 
-  // Silent on success, like `rm`: stdout is reserved for `do`'s step record
-  // and `list`'s listing; a successful `clear` has nothing structured to
-  // report.
+  // Silent on success for a known environment, like `rm`: stdout is
+  // reserved for `do`'s step record and `list`'s listing. The one stderr
+  // line above is the unknown-environment case, written before this return.
   return 0;
 }
 
@@ -308,15 +350,22 @@ export async function runSessionStop(options: RunSessionStopOptions): Promise<nu
 
   const owner = await liveLockOwner(lockPath);
   if (owner === null) {
-    // Nothing alive to ask — clean up whatever debris (a dead lock, and its
+    // Nothing alive to ask. Clean up whatever debris (a dead lock, and its
     // socket's own mkdtemp'd directory if the lock still names one) is left
-    // and succeed quietly, the same convention `runSessionClear` above
-    // already follows.
+    // and exit 0: stopping a session that is already gone is idempotent.
+    // A name that left neither a session file nor a lock was never a
+    // session. Say so. Otherwise a typo looks like the real session
+    // stopped, and that process keeps its browser until the idle timeout.
+    const sessionPath = sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, name);
+    const existed = existsSync(lockPath) || existsSync(sessionPath);
     const staleInfo = await readLockInfo(lockPath);
     if (staleInfo?.sock !== undefined) {
       await removeLiveSockDir(staleInfo.sock);
     }
     await rm(lockPath, { force: true }).catch(() => {});
+    if (!existed) {
+      stderr.write(`no session "${name}" in environment "${resolvedEnv.name}"\n`);
+    }
     return 0;
   }
 
