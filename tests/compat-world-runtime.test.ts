@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import type { APIRequestContext, Page } from "playwright";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
@@ -84,6 +85,19 @@ describe("World (src/compat/world.ts): construction and unopened getters", () =>
       expect((error as Error).message).toContain("openRequest()");
       expect((error as Error).message).toContain("await this.openRequest()");
     }
+  });
+
+  it("a World subclass can assign this.page and this.request", () => {
+    class CustomWorld extends World {}
+    const world = new CustomWorld(stubParams());
+    const page = { kind: "caller-page" } as unknown as Page;
+    const request = { kind: "caller-request" } as unknown as APIRequestContext;
+
+    world.page = page;
+    world.request = request;
+
+    expect(world.page).toBe(page);
+    expect(world.request).toBe(request);
   });
 });
 
