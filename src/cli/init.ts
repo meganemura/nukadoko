@@ -330,15 +330,15 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   await mkdir(path.join(rootDir, stepsDirRelative), { recursive: true });
   stdout.write(`${stepsDirRelative}\n`);
 
-  // .env/.env.* are ignored because a tracked env file is treated as plain
-  // configuration, not a secret source (src/secrets/classify-env-files.ts):
-  // its values are read into ctx.env like any other config and are never
-  // redacted from a run's own records. Committing .env by mistake is the
-  // one path that turns "read into ctx" into "written in plaintext
-  // somewhere this tool keeps". `!.env.example` re-includes the one
-  // filename teams commit on purpose (a template with no real values). It
-  // has to come after .env.* below: a negated pattern only re-includes a
-  // path an earlier pattern already excluded.
+  // .env/.env.* are ignored because a tracked env file that matches HEAD is
+  // plain configuration, not a secret source (src/secrets/classify-env-files.ts):
+  // those committed values are read into ctx.env like any other config and
+  // are not redacted from a run's own records. An uncommitted edit is a
+  // secret source. Committing .env by mistake is still the path that writes
+  // the values in plaintext somewhere this tool keeps. `!.env.example`
+  // re-includes the one filename teams commit on purpose (a template with
+  // no real values). It has to come after .env.* below: a negated pattern
+  // only re-includes a path an earlier pattern already excluded.
   const gitignoreWritten = await ensureGitignoreEntries(rootDir, [
     `${defaults.stateDir}/`,
     ".env",

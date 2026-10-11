@@ -43,8 +43,10 @@ import type { CheckIssue } from "./types.js";
 // is a guess about a key's *name*, not a property this module can verify.
 // That guess is used for exactly one purpose: deciding whether to emit this
 // warning. It never feeds back into whether anything is actually redacted —
-// that decision stays entirely with git's tracked/untracked classification
-// plus `secrets.redact`, in build-secret-set.ts, unchanged by this file.
+// that decision stays entirely with git's classification (untracked,
+// ignored, or a tracked file that differs from HEAD, versus one that
+// matches HEAD) plus `secrets.redact`, in build-secret-set.ts, unchanged
+// by this file.
 // Requires classifying envFiles (classifyEnvFiles, async) — the reason this
 // function itself is now async.
 

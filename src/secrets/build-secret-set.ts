@@ -32,8 +32,9 @@ import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types
 // site name what it's passing.
 
 export interface BuildSecretSetOptions {
-  /** envFiles git does not track (classify-env-files.ts's own output):
-   * every key they define is a secret unless demoted via `publicKeys`. */
+  /** envFiles classify-env-files.ts reported as secret sources: untracked,
+   * ignored, or tracked but different from HEAD. Every key they define is
+   * a secret unless demoted via `publicKeys`. */
   readonly secretSourceFiles: readonly string[];
   /** envFiles git does track. Normally contribute nothing to the
    * SecretSet — a tracked file's value is plain configuration by origin —

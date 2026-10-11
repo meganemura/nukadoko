@@ -2544,8 +2544,11 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 - **Secrets** use git to classify their *origin*. An ignored or untracked env
   file is a secret source. Nukadoko does not distinguish between those two git
   states. Every value in a secret source is a secret without a declaration.
-  A tracked env file is plain configuration because its values are committed.
-  Outside a git repository, nukadoko treats every envFile as a secret source.
+  A tracked env file is plain configuration only when its working tree matches
+  HEAD, because that is when its values are the committed ones. Uncommitted
+  edits, staged or unstaged, make that file a secret source: the values on
+  disk are not the committed values. Outside a git repository, nukadoko
+  treats every envFile as a secret source.
   Origin and *handling* are separate questions. `secrets.public` makes one key
   from a secret source plain and prevents its redaction. `secrets.redact` tells
   nukadoko to redact one key from a tracked file. This instruction preserves
@@ -2576,20 +2579,23 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   Values shorter than four characters are never redacted, in any form,
   including values named in `redact`. Nukadoko
   can redact only values that it loaded. It cannot detect a new token in a
-  step result. A tracked value remains plain on all record surfaces unless
-  `secrets.redact` names it. Those surfaces include an agent transcript, which
-  did not exist when `.gitignore` classified tracked and untracked files.
+  step result. A value from a tracked env file that matches HEAD remains plain
+  on all record surfaces unless `secrets.redact` names it. Those surfaces
+  include an agent transcript, which did not exist when `.gitignore`
+  classified tracked and untracked files.
   Therefore, repository membership does not classify that new surface. Traces
   and screenshots are not redacted, so the state directory is sensitive.
   `nuka check` reports each env file classification and its secret key names,
   but never their values. It also reports three warnings. The first warns when
   `secrets.public` or `secrets.redact` names a key that no configured envFile
   defines. The second warns when `secrets.redact` names a value that is too
-  short for redaction. For tracked env files, the third warns when a key name
-  suggests a secret but `secrets.redact` does not name it. The patterns are
+  short for redaction. For a tracked env file that matches HEAD, the third
+  warns when a key name suggests a secret but `secrets.redact` does not name
+  it. The patterns are
   `SECRET`, `PASSWORD`, `TOKEN`, `CREDENTIAL`, and a `KEY` suffix. This name
   heuristic controls only the warning. Redaction depends only on git's
-  tracked or untracked classification and `secrets.redact`.
+  classification (untracked, ignored, or a tracked file that differs from
+  HEAD, versus a tracked file that matches HEAD) and `secrets.redact`.
 
 Configuration lives in `nukadoko.config.ts` and uses `defineConfig`. The table
 lists each accepted key. A key with more details points to a later paragraph

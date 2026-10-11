@@ -272,8 +272,10 @@ For what to actually fix after a breaking change, see
 
 Point `envFiles` at the existing env files, and git classifies them. An
 untracked file is a secret source, so every value it defines is redacted
-from logs and step records. A tracked file is plain configuration and stays
-unchanged. No manifest or manual copy into a second file is required.
+from logs and step records. A tracked file whose working tree matches HEAD
+is plain configuration and stays unchanged. Uncommitted edits in a tracked
+file are redacted the same way. No manifest or manual copy into a second
+file is required.
 
 ## Before / after
 

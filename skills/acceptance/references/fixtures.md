@@ -108,4 +108,6 @@ leaves no trace there. Neither ever records the value itself, only the
 name it was read by: both draw from the project's configured `envFiles`
 (the top-level list, then whatever the running environment's own
 `envFiles` appends after it), which is exactly where a secret is most
-likely to live.
+likely to live. Git classifies those files. A tracked env file stays plain
+only while its working tree matches HEAD. Uncommitted edits are redacted.
+`nuka check` reports the classification.
