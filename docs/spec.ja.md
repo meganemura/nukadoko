@@ -1218,6 +1218,9 @@ import { Given, When, Then } from "nukadoko/compat";
 - Compat step は既存の pattern 構文と World(`this`)を維持します。
   nukadoko の harness が `page` と `request` を提供し、管理します。
   カスタム World クラスは、`setWorldConstructor` を使って nukadoko の基底クラスを拡張します。
+  その World の構築中に throw すると、その scenario だけが失敗します。
+  stderr には setup の 1 行が出て、scenario record は failed になり、step record は引用されません。
+  同じ run の後続 scenario は実行され、messages の export は完了します。
   API は、よく使われる Given、When、Then、World、Before、After、AfterStep をサポートします。
   新しい需要が生じたときに、このサブセットを拡張します。
 - `Given`、`When`、`Then` は、1 つの登録操作を示す 3 つの名前です。

@@ -337,6 +337,9 @@ async function main(): Promise<void> {
           storageState: null,
           sessionFilePath: null,
           instantiateCompatWorld,
+          onWorldSetupFailure: (message) => {
+            noteSink.write(`${message}\n`);
+          },
           compatHooks,
           defaultTimeoutMs,
           onUnknownTraceVersion,

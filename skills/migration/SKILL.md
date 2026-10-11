@@ -22,6 +22,9 @@ This one only says which file, and what must stay true on every path.
   capture is not `capture-type-mismatch`.
   A config fixture whose destructuring `nuka check` cannot read is
   `fixture-structural-violation`, and the finding names the fixture.
+  A custom World constructor that throws fails that scenario on `nuka run`:
+  one setup line, later scenarios still run, and the messages export is
+  finalized.
 - **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
   about it moves onto nukadoko; nukadoko grows beside it.
   `references/playwright-test.md`.

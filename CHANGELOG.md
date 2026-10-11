@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **A throwing compat World constructor fails that scenario.**
+  The throw used to escape `nuka run` as a stack, so later scenarios never
+  ran and the messages export was left unfinished. The scenario is now
+  failed, stderr gets one setup line, the rest of the run continues, and
+  the export is finalized.
 - **`nuka check` names a broken config fixture, in fixture wording.**
   A `config.fixtures` function with a default value, a rest property, a
   bare parameter, or an unknown dependency was reported as a step's

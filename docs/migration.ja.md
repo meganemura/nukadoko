@@ -55,6 +55,9 @@ import { Given, When, Then } from "nukadoko/compat";
   stream は promise を返すので、step はそれを await します。
   `this.link` は URL を 1 つ以上受け取り、それぞれが `declared` の link 1 件になります。
   第 2 引数は名前ではなく、もう 1 つの URL です。
+- カスタム World のコンストラクタが throw した場合、その scenario は失敗します。
+  stderr には setup の 1 行が出て、scenario record は failed になり、step record は引用されません。
+  同じ run の後続 scenario は実行され、messages の export は完了します。
 - `AfterStep` は `Before`/`After` と同じ 3 通りの書き方で登録します。
   scenario 全体につき 1 回の `Before`/`After` と違い、scenario 内で実際に実行された step ごとに 1 回走ります。
   この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` もその step については走りません。

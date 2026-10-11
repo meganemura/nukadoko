@@ -1069,6 +1069,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             storageState,
             sessionFilePath: thisSessionFilePath,
             instantiateCompatWorld,
+            onWorldSetupFailure: (message) => {
+              stderr.write(`${message}\n`);
+            },
             compatHooks,
             defaultTimeoutMs,
             onUnknownTraceVersion,

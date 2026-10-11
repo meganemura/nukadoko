@@ -1429,7 +1429,11 @@ import { Given, When, Then } from "nukadoko/compat";
 
 - Compat steps keep their existing pattern syntax and World (`this`). The
   nukadoko harness provides and manages `page` and `request`. Custom World
-  classes use `setWorldConstructor` to extend the nukadoko base. The API
+  classes use `setWorldConstructor` to extend the nukadoko base. A throw
+  while that World is constructed fails that one scenario: stderr gets one
+  setup line, the scenario record is failed and cites no step record, later
+  scenarios in the run still execute, and the messages export is finalized.
+  The API
   supports the commonly used subset: Given, When, Then, World, Before,
   After, and AfterStep. New demand determines when this subset grows.
 - `Given`, `When`, and `Then` are three names for one registration

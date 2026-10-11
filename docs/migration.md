@@ -72,6 +72,10 @@ Everything below that import keeps working, unchanged:
   `{ mediaType, fileName }`, and a readable stream. A stream returns a
   promise, so the step awaits it. `this.link` takes one or more URLs, one
   declared link each. A second argument is another URL, not a name.
+- A custom World constructor that throws fails that scenario. stderr gets
+  one setup line, the scenario record is failed and cites no step record,
+  later scenarios in the same run still execute, and the messages export
+  is finalized.
 - `AfterStep`, registered the same three ways as `Before`/`After`. It runs
   once per step that actually executed in the scenario, not once for the
   whole scenario the way `Before`/`After` do: a step this scenario skipped

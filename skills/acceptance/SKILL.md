@@ -109,8 +109,11 @@ proves the wrong thing.
    accepted.
 6. `nuka run <feature>` until green. `references/running.md`. When it
    fails, diagnose from the failed step's own step record before
-   repeating the run: `references/diagnosing.md`. `run` needs a target;
-   `check` walks the project when given none.
+   repeating the run: `references/diagnosing.md`. A compat World that
+   throws while it is constructed fails that scenario only: stderr gets
+   one setup line, later scenarios still run, and the messages export is
+   finalized. There is no step record for that failure. `run` needs a
+   target; `check` walks the project when given none.
 7. `nuka accept <feature>`, then commit the record it wrote.
    `references/running.md`. A refusal names the condition and the next
    command: `references/diagnosing.md` ("When accept refuses").

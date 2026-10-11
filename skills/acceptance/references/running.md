@@ -48,8 +48,10 @@ goes unchecked.
    line; `--quiet` drops the progress lines when the terminal gets noisy.
    stdout stays NDJSON, one scenario record per line, unaffected either
    way. Text a step writes to the process stdout is delivered on stderr,
-   so a `console.log` in a step does not break that stream. When a
-   scenario fails, diagnose it before repeating the whole run
+   so a `console.log` in a step does not break that stream. A compat World
+   constructor that throws fails that scenario only: stderr gets one setup
+   line, later scenarios still run, and the messages export is finalized.
+   When a scenario fails, diagnose it before repeating the whole run
    (see `references/diagnosing.md`) rather than treating a full re-run as
    the default first move. `<feature>:<line>` is fine for narrowing this
    while iterating, but the run this step ends on must cover the whole

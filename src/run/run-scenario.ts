@@ -374,6 +374,12 @@ export interface RunScenarioOptions {
     ctx: StepContext,
     declaredCollector: DeclaredCollector,
   ) => InstantiatedWorld;
+  /** One line when this pickle's World cannot be constructed. The caller
+   * owns stderr (a worker turns the same line into a note). Optional so a
+   * caller that only wants the failed record can omit it. A throw from
+   * construction must not escape this function: the caller's loop is what
+   * runs the remaining scenarios and finalizes exports. */
+  readonly onWorldSetupFailure?: (message: string) => void;
   /** Every registered Before/After hook (src/discover/discover-steps.ts's
    * `DiscoveryResult.compatHooks`) — already validated for tag-expression
    * support by the caller (cli/run.ts's setup phase); this file only
@@ -926,6 +932,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     storageState,
     sessionFilePath,
     instantiateCompatWorld,
+    onWorldSetupFailure,
     compatHooks,
     defaultTimeoutMs,
     onUnknownTraceVersion,
@@ -1519,10 +1526,63 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // `contextHandle`/`worldInstrumentation`'s own boundary calls.
   const declaredCollector = createDeclaredCollector();
   setActiveDeclaredCollector(declaredCollector);
-  const { world, instrumentation: worldInstrumentation } = instantiateCompatWorld(
-    contextHandle.ctx,
-    declaredCollector,
-  );
+  // Construction sits outside every hook and step, and used to sit outside
+  // every catch too. A throw then left this function, so the caller's loop
+  // never reached the next scenario or the export finalization that follows
+  // the loop. Fail this scenario instead, with one line, and return a record.
+  let created: InstantiatedWorld;
+  try {
+    created = instantiateCompatWorld(contextHandle.ctx, declaredCollector);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    const setupMessage = `World setup failed: ${detail}`;
+    const fixtureTeardownErrors = await teardownFixtureCache(fixtureScenarioCache, "failed");
+    try {
+      // Nothing in this pickle opened a browser, but the context was still
+      // created above. Dispose it here: returning without that leaks it,
+      // and a dispose failure must not replace the record this catch writes.
+      await contextHandle.dispose();
+    } catch {
+      // Same backstop as this function's normal end: teardown must not take
+      // the scenario record down with it.
+    }
+    const failedSteps: ScenarioStepRecord[] = pickle.steps.map((pickleStep, index) => {
+      if (index === 0) {
+        return {
+          text: pickleStep.text,
+          status: "failed",
+          step_record_id: null,
+          error: { message: setupMessage },
+        };
+      }
+      return { text: pickleStep.text, status: "skipped", step_record_id: null };
+    });
+    const setupFinishedAt = new Date();
+    const setupRecord: ScenarioRecord = {
+      scenario_record_id: scenarioId,
+      run_id: runId,
+      feature: relativeFeaturePath,
+      scenario: pickle.name,
+      line: pickle.location?.line ?? 0,
+      status: "failed",
+      environment,
+      ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
+      session,
+      started_at: startedAt.toISOString(),
+      finished_at: setupFinishedAt.toISOString(),
+      steps: failedSteps,
+      hooks: [],
+      ...(git !== undefined ? { git } : {}),
+      evidence: { dir: relativeScenarioDir, screenshots: [] },
+      ...(fixtureTeardownErrors.length > 0 ? { teardown_errors: fixtureTeardownErrors } : {}),
+    };
+    const redactedSetupRecord = redact(setupRecord, secrets) as ScenarioRecord;
+    await writeScenarioRecord(scenarioDir, redactedSetupRecord);
+    setActiveDeclaredCollector(undefined);
+    onWorldSetupFailure?.(setupMessage);
+    return redactedSetupRecord;
+  }
+  const { world, instrumentation: worldInstrumentation } = created;
   const pickleTags = pickle.tags.map((tag) => tag.name);
   const beforeHooks = compatHooks.filter(
     (hook) => hook.type === "before" && hookApplies(hook.tags, pickleTags),
