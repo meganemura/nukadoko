@@ -17,8 +17,14 @@ import type { ObservedCollector } from "./observed.js";
 //
 // `via` is added now: a page's own document/xhr/fetch traffic now lands on
 // the same http.jsonl, appended by page-http-log.ts rather than this
-// module, and `via` is what tells the two apart — `"request"` for every
-// entry this module builds, `"page"` for page-http-log.ts's own.
+// module, and `via` is what tells the two apart. `"request"` is every
+// entry this module builds, whether the step called `ctx.request()` or
+// the APIRequestContext on `page.request` / `context.request`
+// (`instrumentApiRequestContext` below). `"page"` is page-http-log.ts's
+// own. Those two APIRequestContext objects are the same one Playwright
+// hangs on the browser context, and they do not emit the context
+// `request` event page-http-log.ts and `observed`'s page listener read,
+// so leaving them to that listener records nothing.
 // `appendHttpLogEntry` below is exported for that module to call: one
 // redact-and-append call site for both paths, so neither can drift into
 // redacting differently than the other.
@@ -46,9 +52,10 @@ import type { ObservedCollector } from "./observed.js";
 // this module just reads it at call time.
 
 /** One http.jsonl line (docs/spec.md "Records"). `via` names which path
- * produced it — `"request"` for a call made through `ctx.request()`,
- * `"page"` for one the page itself
- * made (page-http-log.ts). Always present, on every entry either path
+ * produced it. `"request"` is a call made through `ctx.request()`, or
+ * through `page.request` / `context.request` (the same logging, via
+ * `instrumentApiRequestContext`). `"page"` is one the page itself made
+ * (page-http-log.ts). Always present, on every entry either path
  * builds: a field only one of the two ever set would leave a reader
  * guessing "absent means page" instead of reading it. */
 export interface HttpLogEntry {
@@ -150,5 +157,50 @@ export function wrapRequestContextWithLogging(
     // `[Symbol.asyncDispose]` is `dispose()`'s `using`-syntax alias.
     tracing: target.tracing,
     [Symbol.asyncDispose]: () => target[Symbol.asyncDispose](),
+  };
+}
+
+// `page.request` and `context.request` are one APIRequestContext, and
+// Playwright copies that reference onto each Page. Replacing the object
+// with `wrapRequestContextWithLogging`'s stand-in would drop
+// `_innerFetch`, which `route.fetch()` calls on `context.request`. The
+// public verbs (`get`/`post`/`put`/`patch`/`delete`/`head`) all delegate
+// to `this.fetch`, and `fetch` does not call itself, so replacing `fetch`
+// once logs every verb once and leaves the real object in place.
+const instrumentedApiRequests = new WeakSet<APIRequestContext>();
+
+/** Logs `target`'s HTTP verbs into http.jsonl and `observed`, in place.
+ * Returns a function that puts `fetch` back. The launched browser path
+ * ignores it (the context is closed with the browser). An adopted page
+ * calls it from `dispose()`, because that page keeps living in the
+ * caller's own runner and later `page.request` calls must not keep
+ * appending to a step that has already finished.
+ * Idempotent: a second call on the same object returns a no-op undo, so
+ * one POST cannot be counted twice when both `page.request` and
+ * `context.request` are passed, or when a later page copies the same
+ * reference. */
+export function instrumentApiRequestContext(
+  target: APIRequestContext,
+  logPath: () => string,
+  secrets: SecretSet,
+  observed: ObservedCollector,
+): () => void {
+  if (instrumentedApiRequests.has(target)) {
+    return () => {};
+  }
+  instrumentedApiRequests.add(target);
+  const originalFetch = target.fetch.bind(target);
+  target.fetch = (urlOrRequest, options) =>
+    logCall(
+      logPath,
+      methodOf(urlOrRequest, options),
+      urlOf(urlOrRequest),
+      secrets,
+      observed,
+      () => originalFetch(urlOrRequest, options),
+    );
+  return () => {
+    target.fetch = originalFetch;
+    instrumentedApiRequests.delete(target);
   };
 }

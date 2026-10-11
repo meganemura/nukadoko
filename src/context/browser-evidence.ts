@@ -17,6 +17,7 @@ import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { StorageState } from "../session/storage-state.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
+import { instrumentApiRequestContext } from "./http-log.js";
 import type { ObservedCollector } from "./observed.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
@@ -55,6 +56,16 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // context creation, and lives for the context's whole lifetime — it is
 // `observed`'s own `reset()` (create-context.ts's `beginStep`) that advances
 // the step boundary, not resubscribing.
+//
+// That listener does not see `page.request` or `context.request`. Those
+// are one APIRequestContext Playwright hangs on the browser context, and
+// its calls never emit `request`. `instrumentApiRequestContext`
+// (http-log.ts) logs that object in place, once, at the same moment the
+// listener is attached, so a step that destructures `page` or `context`
+// and calls `.request.post` / `.request.delete` still lands on `observed`
+// and http.jsonl. A later page copies the same reference, so it is
+// already covered. GET and HEAD stay reads, the same classification
+// `ctx.request()` already uses.
 //
 // A second, separate subscription — `subscribePageHttpLogging`
 // (page-http-log.ts), wired in below — is what now also appends page-issued
@@ -269,6 +280,15 @@ export async function launchBrowserWithTracing(
   context.on("request", (request) => {
     options.observed.record(request.method());
   });
+  // Not the listener above: `page.request` / `context.request` do not emit
+  // `request` (this file's own header). One call covers every page, because
+  // they share this object.
+  instrumentApiRequestContext(
+    context.request,
+    options.logPath,
+    options.secrets,
+    options.observed,
+  );
   context.on("console", (msg) => {
     if (msg.type() !== "error") {
       return;
@@ -409,9 +429,24 @@ export interface ExternalPageEvidenceHandle {
  */
 export function attachExternalPageEvidence(
   page: Page,
-  options: { observed: ObservedCollector; pageEvents: PageEventsCollector },
+  options: {
+    observed: ObservedCollector;
+    pageEvents: PageEventsCollector;
+    /** Same getter/secrets pair the launched path passes to
+     * `instrumentApiRequestContext`. An adopted page's `page.request` is
+     * otherwise invisible to `observed` and http.jsonl, for the same reason
+     * the launched path's own is (this file's own header). */
+    logPath: () => string;
+    secrets: SecretSet;
+  },
 ): ExternalPageEvidenceHandle {
   const context = page.context();
+  const uninstrumentApiRequest = instrumentApiRequestContext(
+    context.request,
+    options.logPath,
+    options.secrets,
+    options.observed,
+  );
 
   const onRequest = (request: PlaywrightRequest): void => {
     options.observed.record(request.method());
@@ -458,6 +493,10 @@ export function attachExternalPageEvidence(
     context.off("console", onConsole);
     context.off("weberror", onWebError);
     context.off("requestfailed", onRequestFailed);
+    // The page outlives this handle (this function's own doc comment).
+    // Leaving `fetch` wrapped would keep appending to http.jsonl after the
+    // step that adopted the page had finished.
+    uninstrumentApiRequest();
   }
 
   return { page, dispose };

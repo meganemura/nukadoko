@@ -389,7 +389,8 @@ export interface StepContextHandle {
   /** Executor-only: the network calls tallied since the current step
    * boundary began (this execution's whole lifetime for `nuka do`, since
    * `nuka run` since the last `beginStep`) — GET/HEAD as reads, anything
-   * else as writes, through `ctx.request()` and the page alike. Never exposed on `ctx`. */
+   * else as writes, through `ctx.request()`, `page.request`,
+   * `context.request`, and the page alike. Never exposed on `ctx`. */
   observedCounts(): ObservedCounts;
   /** Executor-only: every step record this execution actually read a value
    * from since the current step boundary began — through `ctx.resultOf` or a
@@ -925,7 +926,15 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // machinery's own state) stays `undefined` for this ctx's whole
         // lifetime even though a page was used.
         if (!externalPageHandle) {
-          externalPageHandle = attachExternalPageEvidence(options.page, { observed, pageEvents });
+          externalPageHandle = attachExternalPageEvidence(options.page, {
+            observed,
+            pageEvents,
+            // Same getter/secrets pair the launched path already passes into
+            // `instrumentApiRequestContext`, so an adopted page's
+            // `page.request` / `context.request` is logged too.
+            logPath: () => path.join(httpLogDir, "http.jsonl"),
+            secrets,
+          });
         }
         return externalPageHandle.page;
       }

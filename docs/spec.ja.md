@@ -1127,7 +1127,7 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
   この規則には、`call` を経由して到達した part も含まれます(「Parts」を参照)。
   宣言が実行をゲートする場所は、ここだけです。
 - **実行時には**、step record が実行内容を保存します。
-  ツールが `request` fixture または page を通じて観測した、すべてのネットワーク呼び出しを保存します。
+  ツールが `request` fixture、`page.request`、`context.request`、または page を通じて観測した、すべてのネットワーク呼び出しを保存します。
   GET/HEAD 以外の呼び出しを観測された書き込みとして数え、宣言された `mutates` 値の隣に置きます。
   この回数は、Then の位置も、読み取り専用 environment のポリシーも決めません。
   nukadoko は、`observed` の値にかかわらず `mutates: false` を信頼します。
@@ -1686,7 +1686,9 @@ trace はかつて、共有された context 全体にまたがる 1 本のフ�
 各 step 自身の trace にはその step 自身の通信は変わらず入っているので、1 つの step 単体の通信について失われるものは無く、失われるのは scenario 全体の通信を 1 つのファイルだけ開いて眺められるという点だけです。
 `request` fixture の通信と page 自身の通信は、いまや同じ step ごとの view を共有します。
 どちらも同じ http.jsonl に載り、各エントリには `via: "request"` か `via: "page"` の印が付くため、読み手はどちらの経路が通ったかを推測せずに済みます。
-http.jsonl に載る page 由来のリクエストは `document`/XHR/`fetch` の 3 種類だけです(1 回のページ読み込みは画像やスタイルシート、スクリプトの束を何十件も引き込みうるため、それを全部保持しようとするファイルは読み手が開けるものではなくなってしまいます)。
+`page.request` と `context.request` の呼び出しも `via: "request"` です。
+それらは page とその browser context に Playwright がぶら下げる APIRequestContext であり、`request` fixture と同じ種類の呼び出しで、page の `request` イベントは発火しません。
+`via: "page"` として載る page 由来のリクエストは `document`/XHR/`fetch` の 3 種類だけです(1 回のページ読み込みは画像やスタイルシート、スクリプトの束を何十件も引き込みうるため、それを全部保持しようとするファイルは読み手が開けるものではなくなってしまいます)。
 ただし落とされたことが黙って消えるわけではありません。
 落とされた分は step record 自身に、リソースタイプ別に `http_omitted` として載ります(「Records」を参照)。
 `observed` はこれによって一切狭められません。
@@ -1870,7 +1872,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
   `observed` のカウントと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
-  ブラウザが使われるときは Playwright の trace とスクリーンショット、`request` fixture の呼び出しと page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、step record 自体が一次記録になります。
+  ブラウザが使われるときは Playwright の trace とスクリーンショット、`request` fixture の呼び出し、`page.request` と `context.request` の呼び出し、page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、step record 自体が一次記録になります。
 - `evidence.screenshots` はエントリ 1 つまでで、`{ "file": "final.png", "at": "..." }` という形を取ります。
   ブラウザを使う実行の evidence は以前は 2 つのファイルで、step が失敗するたびに同じバッファを別名でもう 1 つ保存していました。
   それを書くこと自体にコストは無かったものの、ツールが一度も計測していないことを暗に主張していました。
@@ -1879,7 +1881,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   スクリーンショットは `run` がすでに返るか投げたあとに一度しか撮られないため、その 2 つ目のコピーは、それが名指す失敗に対してすでに古びている可能性がありました。
   `at`(ISO 8601。`started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
-- `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture と page の両方を通じたもの)。
+- `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture、`page.request`、`context.request`、page のすべてを通じたもの)。
   GET/HEAD 以外はすべて書き込みとして数えられます。
   これは書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります(キーワードの意味論を参照してください)。
   この回数はそれ単独では何も決めません。
@@ -1887,7 +1889,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
 - `evidence.http`(少なくとも 1 回の呼び出しが記録されたときだけ現れます)は http.jsonl を指します。
   1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via" }` です。
-  `via` は `request` fixture を通した呼び出しなら `"request"`、page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
+  `via` は `request` fixture、または `page.request` か `context.request` を通した呼び出しなら `"request"`、page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
   どちらの経路のエントリにも必ず付くため、読み手はその行がどちらの経路から来たかを形だけから推測せずに済みます。
   page の通信のうち http.jsonl に届くのは `document`、`xhr`、`fetch`(Playwright 自身の `request.resourceType()`)のリクエストだけです。
   実際のページ読み込みは画像やスタイルシート、スクリプトを何十件も引き込みますが、それを受け入れ確認の目的で読み手が 1 つずつ追うことはなく、そのすべてを保持しようとするファイルはそもそも読み手が開けるものではなくなってしまいます。

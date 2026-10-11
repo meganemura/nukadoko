@@ -673,7 +673,12 @@ describe("attachExternalPageEvidence", () => {
       try {
         const observed = createObservedCollector();
         const pageEvents = createPageEventsCollector();
-        const handle = attachExternalPageEvidence(page, { observed, pageEvents });
+        const handle = attachExternalPageEvidence(page, {
+          observed,
+          pageEvents,
+          logPath: () => path.join(os.tmpdir(), "nukadoko-external-page-http.jsonl"),
+          secrets: [],
+        });
 
         const firstConsoleSeen = context.waitForEvent("console", {
           predicate: (msg) => msg.type() === "error",
@@ -719,7 +724,12 @@ describe("attachExternalPageEvidence", () => {
       try {
         const observed = createObservedCollector();
         const pageEvents = createPageEventsCollector();
-        const handle = attachExternalPageEvidence(page, { observed, pageEvents });
+        const handle = attachExternalPageEvidence(page, {
+          observed,
+          pageEvents,
+          logPath: () => path.join(os.tmpdir(), "nukadoko-external-page-http.jsonl"),
+          secrets: [],
+        });
 
         handle.dispose();
         expect(() => handle.dispose()).not.toThrow();

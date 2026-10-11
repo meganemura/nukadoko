@@ -207,6 +207,10 @@ What changed:
   first argument: only what the executor actually injects can be named
   there, nothing implicit, and only the names actually named get built.
   A step naming neither `page` nor `context` never launches a browser.
+  A write made with `page.request` or `context.request` (the
+  APIRequestContext on the page, not the `request` fixture) is recorded on
+  `observed` and http.jsonl the same way, with `via: "request"`. A GET or
+  HEAD stays a read.
 
 This is the only worked example here. It's not a catalog of every gap
 between compat and typed. If another pattern comes up often enough to

@@ -1327,8 +1327,9 @@ per-occurrence fact:
   runs.** This rule includes a part reached through `call` (see "Parts").
   This is the only place where the declaration gates execution.
 - **At run time**, the step record stores what the execution did. It stores
-  every network call that the tool observed through the `request` fixture
-  or the page. It counts non-GET/HEAD calls as observed writes beside the
+  every network call that the tool observed through the `request` fixture,
+  through `page.request` or `context.request`, or through the page. It
+  counts non-GET/HEAD calls as observed writes beside the
   declared `mutates` value. This count does not decide Then position or a
   read-only environment's policy. Nukadoko trusts `mutates: false`
   regardless of the `observed` value.
@@ -1980,8 +1981,12 @@ more than one file. `request` fixture traffic and the page's own traffic
 now share that same step-scoped view
 instead: both land on the same http.jsonl, each entry marked `via:
 "request"` or `via: "page"` so a reader never has to guess which path a
-call took. Only a page's `document`/XHR/`fetch` requests are recorded that
-way (a single page load can pull in dozens of images, a stylesheet, and a
+call took. A call through `page.request` or `context.request` is `via:
+"request"` as well: that object is Playwright's APIRequestContext on the
+page and its browser context, the same kind of call as the `request`
+fixture, and it does not emit the page's `request` event. Only a page's
+`document`/XHR/`fetch` requests are recorded as `via: "page"` (a single
+page load can pull in dozens of images, a stylesheet, and a
 script bundle, and a file trying to hold all of that would stop being
 something a reader opens), but nothing about the drop is silent: what got
 left out lands on the step record itself, by resource type, as `http_omitted`
@@ -2214,7 +2219,8 @@ array identifies each step record by id, so either record leads to the other.
   so declared and measured can be compared without a second artifact.
 - The harness collects evidence; the step never reports it: Playwright
   tracing and screenshots when the browser is used, every `request` fixture
-  call and the page's own document/XHR/fetch traffic alike logged to
+  call, every `page.request` or `context.request` call, and the page's own
+  document/XHR/fetch traffic alike logged to
   http.jsonl, the step record itself as the primary one.
 - `evidence.screenshots` contains at most one entry, `{ "file": "final.png", "at":
   "..." }`: a browser-using execution's evidence used to be two files, the
@@ -2228,7 +2234,8 @@ array identifies each step record by id, so either record leads to the other.
   for without ever stating it, and it says the real thing: how long after
   this execution's own timeline the screenshot was actually taken.
 - `observed` counts the network calls that the tool saw during the execution,
-  through the `request` fixture and the page; non-GET/HEAD counts as
+  through the `request` fixture, through `page.request` or `context.request`,
+  and through the page; non-GET/HEAD counts as
   a write (HTTP method as a proxy for write semantics, not semantics
   itself), so a POST-based read counts against a step that never wrote
   anything (see Keyword semantics). It settles nothing on its own: Then
@@ -2238,7 +2245,8 @@ array identifies each step record by id, so either record leads to the other.
 - `evidence.http` (included only after at least one call was logged) points to
   http.jsonl, one JSON object per line: `{ "method", "url", "status",
   "duration_ms", "via" }`. `via` is `"request"` for a call made through the
-  `request` fixture, and `"page"` for one the page itself made (a `page`
+  `request` fixture, or through `page.request` or `context.request`, and
+  `"page"` for one the page itself made (a `page`
   navigation, or an in-page `fetch`/XHR), present on every entry either path
   produces, so a reader never has to guess which one wrote a line from its
   shape alone. Only `document`, `xhr`, and `fetch` requests (Playwright's own

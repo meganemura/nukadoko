@@ -13,6 +13,11 @@ async run({ evidence, request }, args) {
 }
 ```
 
+A call through `page.request` or `context.request` is already part of the
+automatic evidence above. It lands on `observed` and on `http.jsonl` with
+`via: "request"`, the same way the `request` fixture does, and a GET or
+HEAD stays a read. In-page `fetch` and navigation stay `via: "page"`.
+
 `evidence.attach(name, body)` writes and lists the attachment on the step
 record's `evidence.attachments` in one call. `evidence.path(name)` only
 allocates a path, Playwright's own `outputPath()`, for a step that writes

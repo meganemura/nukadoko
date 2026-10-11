@@ -93,6 +93,12 @@ just until 0.1.
   still be in that file. `signoff-step-missing` is withheld for the whole
   run while any step file failed to import, the same way `nuka check`
   withholds `undefined-step`. The note still does not change the exit code.
+- **Writes through `page.request` and `context.request` are measured.**
+  A step that calls `page.request.delete` or `context.request.post` used to
+  leave `observed.http_writes` at 0 and write no http.jsonl line, so a wrong
+  `mutates: false` could not be checked against what ran. Those calls are
+  now logged the same way as the `request` fixture (`via: "request"`). GET
+  and HEAD stay reads. In-page `fetch` and navigation stay `via: "page"`.
 
 ## 0.14.1 — 2026-10-10
 
