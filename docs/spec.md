@@ -2509,7 +2509,12 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 
 Configuration lives in `nukadoko.config.ts` and uses `defineConfig`. The table
 lists each accepted key. A key with more details points to a later paragraph
-or to the section for its feature.
+or to the section for its feature. nukadoko reads the file's default export.
+A file with no default export, or a Promise as that export, is a
+`ConfigError` that names the file. A named export is not the config. The
+object itself is what loads, including `export default defineConfig({ ... })`.
+`export default {}` is the empty config and receives the same defaults as a
+missing file.
 
 | Key | What it holds |
 | --- | --- |

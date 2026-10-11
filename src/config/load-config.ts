@@ -26,7 +26,10 @@ export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
 // export into a fully-defaulted, validated NukadokoConfig. Applying
 // defaults through the same schema used for validation (rather than a
 // second hard-coded literal) keeps "file absent" and "file present but
-// empty" behave identically.
+// empty" behave identically. Empty means `export default {}`. A file that
+// does not default-export the object is not empty: a missing default, or
+// a Promise, is a ConfigError naming the file. Reading either as `{}`
+// would ignore every key the file stated, including secrets.redact.
 //
 // .mts exists for one reason: a project whose package.json has no
 // "type": "module" (CommonJS) cannot load nukadoko.config.ts at all — tsx
@@ -99,6 +102,17 @@ function suggestFor(key: string, known: readonly string[] | undefined): string {
   return match === undefined ? "" : ` (did you mean "${match}"?)`;
 }
 
+// A Promise has no own enumerable keys, so an object schema parses it as
+// `{}` and fills every default. That is the same silent drop as a missing
+// default export. Any thenable has that shape, so the check is `then`,
+// not only `instanceof Promise`.
+function isThenable(value: unknown): boolean {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+    return false;
+  }
+  return typeof (value as { then?: unknown }).then === "function";
+}
+
 function formatIssues(issues: readonly z.core.$ZodIssue[]): string {
   return issues
     .map((issue) => {
@@ -166,7 +180,19 @@ export async function loadConfig(rootDir: string): Promise<NukadokoConfig> {
       pathToFileURL(configPath).href,
       import.meta.url,
     );
-    raw = mod.default ?? {};
+    if (mod.default === undefined) {
+      throw new ConfigError(
+        `${configPath} has no default export. nukadoko reads the default export as the config.`,
+        configPath,
+      );
+    }
+    if (isThenable(mod.default)) {
+      throw new ConfigError(
+        `${configPath} has a Promise as its default export. Export the config object, not a Promise of it.`,
+        configPath,
+      );
+    }
+    raw = mod.default;
   }
 
   const result = configSchema.safeParse(raw);

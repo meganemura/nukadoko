@@ -2067,7 +2067,12 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
 
 Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使います。
 次の表は、受け付ける各キーを示します。
-詳細があるキーは、後の段落か、その機能を説明する節を指します:
+詳細があるキーは、後の段落か、その機能を説明する節を指します。
+nukadoko が読むのは、そのファイルの default export です。
+default export が無いファイル、または default export が Promise であるファイルは、そのファイルを名指す `ConfigError` で拒否されます。
+名前付き export は config ではありません。
+読み込まれるのはオブジェクトそのもので、`export default defineConfig({ ... })` もその形です。
+`export default {}` は空の config で、ファイルが無いときと同じ既定値が入ります:
 
 | キー | 内容 |
 | --- | --- |

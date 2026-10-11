@@ -61,6 +61,11 @@ just until 0.1.
   strict mode. The setter stores that value, and the getter returns it
   ahead of the page `openPage()` or `openRequest()` stored. The
   assignment stays unmeasured.
+- **A config file with no default export, or a Promise as its default, is refused.**
+  Both used to be read as `{}`, so `featuresDir`, `secrets.redact`, and
+  every other key in the file were ignored. The error names the file. An
+  object default, including `export default defineConfig({ ... })`, still
+  loads.
 
 ## 0.14.1 — 2026-10-10
 

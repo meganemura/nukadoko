@@ -52,7 +52,7 @@ One compat fix a project can notice.
 
 ## 0.12.0 to the next release
 
-One behaviour change worth knowing before upgrading.
+Behaviour changes worth knowing before upgrading.
 
 - **A typed step that runs longer than twenty minutes now fails.** It used
   to run forever, taking the run with it. The limit is `stepTimeout` in
@@ -66,6 +66,9 @@ One behaviour change worth knowing before upgrading.
   the worker and the scenario as it starts. A script parsing stderr for the
   existing `scenario <n>/<total>` line is unaffected; one matching every
   line starting with `scenario ` now sees both. `--quiet` suppresses both.
+- **A config file with no default export, or a Promise as its default, now fails and names the file.**
+  It used to be read as `{}`, so the keys in the file were ignored.
+  Export the object: `export default defineConfig({ ... })`.
 
 ## 0.11.0 to 0.12.0
 
