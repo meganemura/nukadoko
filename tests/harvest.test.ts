@@ -317,4 +317,42 @@ describe("nuka harvest", () => {
     expect(stdoutText).toMatch(/\|\s*a\s*\|\s*b\s*\|/);
     expect(stdoutText).not.toMatch(/does not read back/);
   });
+
+  it("keeps a measured optional arg in the draft and leaves unmeasured claims blank", async () => {
+    const searched = await doStep(rootDir, "search", '{"query":"cat","limit":3,"sort":"newest"}');
+    expect(searched.exitCode).toBe(0);
+    expect(searched.record.args).toEqual({ query: "cat", limit: 3, sort: "newest" });
+
+    const { exitCode, stdoutText, stderrText } = await harvest(rootDir, [searched.record.step_record_id as string]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutText).toContain('* I search for "cat"');
+    // The values this execution measured have to survive into the draft.
+    // A capture took `query`; `limit` and `sort` fit no capture, chain, or
+    // docstring/table, and dropping them is how a later run of the draft
+    // follows the schema instead of the path that was explored.
+    expect(stdoutText).toContain("limit");
+    expect(stdoutText).toContain("3");
+    expect(stdoutText).toContain("newest");
+    expect(stderrText).toContain("limit");
+    expect(stderrText).toContain("newest");
+    // Claims stay blank: records say what ran, not what it was for.
+    expect(stdoutText).toContain("Feature: (name me)");
+    expect(stdoutText).toContain("  Scenario: (name me)");
+    expect(stdoutText).not.toMatch(/^\s*(Given|When|Then|And|But)\s/m);
+
+    const unmeasured = await doStep(rootDir, "search", '{"query":"cat"}');
+    expect(unmeasured.exitCode).toBe(0);
+    const omitted = await harvest(rootDir, [unmeasured.record.step_record_id as string]);
+    expect(omitted.exitCode).toBe(0);
+    expect(omitted.stdoutText).toContain('* I search for "cat"');
+    // Nothing measured a limit, and sort ran at its own default, so the
+    // draft does not invent either value. Names and keywords stay blank.
+    expect(omitted.stdoutText).not.toContain("limit");
+    expect(omitted.stdoutText).not.toContain("newest");
+    expect(omitted.stdoutText).not.toContain("relevance");
+    expect(omitted.stdoutText).toContain("Feature: (name me)");
+    expect(omitted.stdoutText).toContain("  Scenario: (name me)");
+    expect(omitted.stdoutText).not.toMatch(/^\s*(Given|When|Then|And|But)\s/m);
+  });
 });
