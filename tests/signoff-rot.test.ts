@@ -27,7 +27,7 @@ import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } f
 
 interface Report {
   errors: { code: string; message: string; file?: string; step?: string }[];
-  notes: { code: string }[];
+  notes: { code: string; message: string }[];
 }
 
 async function runTend(rootDir: string): Promise<{ report: Report; exitCode: number }> {
@@ -118,6 +118,28 @@ describe("nuka tend: sign-off rot", () => {
     expect(missing).toHaveLength(1);
     expect(missing[0]!.file).toBe(recordPath);
     expect(missing[0]!.step).toBe("cart-total");
+  });
+
+  it("reports an import failure as that failure, and does not call a cited step missing while its file failed to import", async () => {
+    // The step text stays in the file. A syntax error stops the import, so
+    // the loaded vocabulary no longer contains the step, while the
+    // definition is still on disk. tend should name that import failure
+    // and leave the exit code alone.
+    const stepPath = path.join(featuresDir, "steps", "cart-total.ts");
+    const original = await readFile(stepPath, "utf8");
+    expect(original).toContain('pattern: "the cart total is {total:string} dollars"');
+    await writeFile(stepPath, `${original}\nconst =\n`);
+
+    const { report, exitCode } = await runTend(rootDir);
+
+    const missing = report.errors.filter((e) => e.code === "signoff-step-missing");
+    expect(missing).toEqual([]);
+    expect(report.errors).toEqual([]);
+    expect(exitCode).toBe(0);
+
+    const unseen = report.notes.filter((note) => note.code === "import-failures-unseen");
+    expect(unseen).toHaveLength(1);
+    expect(unseen[0]!.message).toContain("features/steps/cart-total.ts");
   });
 
   it("(d) reports a frozen result as invalid once the step's returns schema tightens", async () => {
