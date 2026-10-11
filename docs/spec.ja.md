@@ -650,6 +650,13 @@ typed step 自身の `run` には締め切りがあります。
 これがあることで、返らない step は `error.kind: "timeout"` の失敗した step になり、run は次の scenario へ進んで summary に到達します。
 「制限なし」を意味する値はありません。返らない step は run 全体を道連れにし、終わらない run は何も報告しないからです。それを止めるためにあります。
 
+`defineStep` は、有限でない、0 以下、または 2147483647 より大きい `timeout` を拒否します。
+Node のタイマーは、その範囲の外にある遅延を 1ms に切り詰めるため、書いた締め切りとは別の事実として step がタイムアウトしたことになってしまうからです。
+同じ呼び出しは、この節が述べる形になっていない定義も拒否します。
+`args` と `returns` は zod のスキーマ、`run` は関数、`pattern` は文字列、`patterns` は文字列の配列、`parts` の各要素は step でなければなりません。
+`.js` の step ファイルは型チェックされません。
+例外は discovery がファイルを import するときに投げられ、`nuka check` はそれを `step-file-import-failed` として報告します。
+
 既定値は「step はこれくらいで終わるはずだ」という見積もりではありません。
 この道具が既に持っていた地平です。Allure emitter は走っている step を 10 秒の heartbeat 120 回ぶんまで描き(「Allure emitter」を参照)、そこが step を見続ける価値の切れる場所です。
 1 つの run に地平は 1 つです。

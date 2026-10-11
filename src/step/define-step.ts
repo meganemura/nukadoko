@@ -4,12 +4,21 @@ import { STEP_BRAND } from "./brand.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
-// stored, never called here) and does not validate `args`/`returns` at the
-// run boundary — that is the execution slice's job. `from`'s own runtime
-// validation lives in
-// src/step/validate-from.ts, not here, for the same reason this file never
-// validates `args`/`returns` itself: this module only shapes a declaration,
-// it never checks one against a live vocabulary.
+// stored, never called here) and does not validate the contents of
+// `args`/`returns` at the run boundary. That parse is the execution slice's
+// job. What this function does check is the definition's own shape, before
+// the Step is stored. A .js step file is not type-checked, and those fields
+// are only read later: `args.type` during check, `run.toString()` for
+// fixture names, `returns.safeParse` after the body has already run, and
+// `timeout` as a setTimeout delay. A missing schema aborts `nuka check`
+// with a TypeError that names no file. A delay setTimeout cannot honor
+// (non-finite, non-positive, or above 2^31-1) is clamped to 1ms, so the
+// step is recorded as having timed out for a deadline that never ran.
+// Refusing the definition here throws while discovery imports the file,
+// which `nuka check` already reports as `step-file-import-failed`.
+// `from`'s own runtime validation lives in src/step/validate-from.ts, not
+// here: that check needs the live vocabulary, and this module only shapes
+// a declaration against the step it is given.
 //
 // `from` (docs/spec.md "Typed steps"/"Chaining
 // steps") declares where an args key's value comes from when a pickle line
@@ -301,7 +310,11 @@ export interface StepDefinitionInput<
    * project default; there is no value meaning "no limit", because a step
    * that never returns takes the whole run with it, which is what this
    * exists to stop. The limit is on the `run` call itself, so a `ctx.poll`
-   * inside it still enforces its own, shorter deadline first. */
+   * inside it still enforces its own, shorter deadline first. It must be a
+   * finite number of milliseconds greater than 0 and at most 2147483647
+   * (the largest delay `setTimeout` keeps). Anything else is refused here,
+   * because Node clamps it to 1ms and the step would be recorded as timed
+   * out immediately. */
   timeout?: number;
   /** Other steps this step's own `run` may call through the `call` fixture
    * (docs/spec.md "Parts") — a step that calls a part it did not list here
@@ -379,11 +392,100 @@ function resolvePatterns(definition: Pick<StepDefinitionInput, "pattern" | "patt
   return [...fromPattern, ...fromPatterns];
 }
 
+/** Largest delay `setTimeout` actually waits. A larger number, or a
+ * non-finite or non-positive one, is clamped to 1ms, so a step would be
+ * recorded as timed out for a deadline that never ran. */
+const MAX_STEP_TIMEOUT_MS = 2_147_483_647;
+
+/** Thrown when `defineStep` is given a definition that is not the shape
+ * docs/spec.md "Typed steps" describes. Named so a caller can tell it from
+ * the TypeError that used to surface later, once check or the run had
+ * already lost the definition. Discovery reports the throw as
+ * `step-file-import-failed`, which is what names the file. */
+export class InvalidStepDefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidStepDefinitionError";
+  }
+}
+
+/** A zod 4 schema, the same install this package re-exports as `z`.
+ * `safeParse` is what execution calls; `_zod.version.major` is what keeps
+ * a plain object that happens to have a method of that name from passing. */
+function isZodSchema(value: unknown): value is z.ZodTypeAny {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const schema = value as { safeParse?: unknown; _zod?: { version?: { major?: unknown } } };
+  return typeof schema.safeParse === "function" && schema._zod?.version?.major === 4;
+}
+
+// Typed against the fields this function reads, not `StepDefinitionInput`.
+// `from`'s type parameter makes the full interface's variance depend on it
+// (the same reason `resolvePatterns` takes a `Pick`), so a real `defineStep`
+// call whose `from` is not the default would fail to type-check here even
+// though this function never looks at `from`.
+function validateStepDefinition(definition: {
+  pattern?: unknown;
+  patterns?: unknown;
+  args: unknown;
+  returns: unknown;
+  run: unknown;
+  timeout?: unknown;
+  parts?: unknown;
+}): void {
+  if (definition.pattern !== undefined && typeof definition.pattern !== "string") {
+    throw new InvalidStepDefinitionError(
+      "defineStep pattern must be a string. Pass several wordings as patterns, an array of strings.",
+    );
+  }
+  if (definition.patterns !== undefined) {
+    const patterns = definition.patterns;
+    if (!Array.isArray(patterns) || patterns.some((pattern) => typeof pattern !== "string")) {
+      throw new InvalidStepDefinitionError("defineStep patterns must be an array of strings.");
+    }
+  }
+  if (!isZodSchema(definition.args)) {
+    throw new InvalidStepDefinitionError(
+      "defineStep args must be a zod schema. A missing or plain value is read later as if it were one, which aborts nuka check with a TypeError.",
+    );
+  }
+  if (!isZodSchema(definition.returns)) {
+    throw new InvalidStepDefinitionError(
+      "defineStep returns must be a zod schema. A missing schema is only noticed after the step body has already run.",
+    );
+  }
+  if (typeof definition.run !== "function") {
+    throw new InvalidStepDefinitionError(
+      "defineStep run must be a function. nukadoko reads fixture names from that function's source text and then calls it.",
+    );
+  }
+  if (definition.timeout !== undefined && !isHonoredStepTimeout(definition.timeout)) {
+    throw new InvalidStepDefinitionError(
+      `defineStep timeout must be a finite number of milliseconds greater than 0 and at most ${MAX_STEP_TIMEOUT_MS}. ` +
+        `${String(definition.timeout)} is not a deadline Node's timer will keep: a non-finite, non-positive, or larger delay is clamped to 1ms.`,
+    );
+  }
+  if (definition.parts !== undefined) {
+    const parts = definition.parts;
+    if (!Array.isArray(parts) || parts.some((part) => !isStep(part))) {
+      throw new InvalidStepDefinitionError(
+        "defineStep parts must be an array of steps, each produced by defineStep.",
+      );
+    }
+  }
+}
+
+function isHonoredStepTimeout(timeout: unknown): timeout is number {
+  return typeof timeout === "number" && Number.isFinite(timeout) && timeout > 0 && timeout <= MAX_STEP_TIMEOUT_MS;
+}
+
 export function defineStep<
   TArgs extends z.ZodTypeAny,
   TReturns extends z.ZodTypeAny,
   const TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
 >(definition: StepDefinitionInput<TArgs, TReturns, TFrom>): Step<TArgs, TReturns> {
+  validateStepDefinition(definition);
   return {
     patterns: resolvePatterns(definition),
     description: definition.description,

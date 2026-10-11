@@ -51,7 +51,7 @@ export type {
   StepRecordOk,
 } from "./record/types.js";
 export type { FromCandidate, FromMap, Step, StepDefinitionInput } from "./step/define-step.js";
-export { defineStep } from "./step/define-step.js";
+export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";
 export { defineModel, defineRelation, modelCommand, relationEntry } from "./step/define-explore.js";
 export type { Model, ModelCommand, Relation, RelationStep } from "./step/define-explore.js";
 // EXPERIMENTAL: see call-tool.ts's own header for why the name carries the

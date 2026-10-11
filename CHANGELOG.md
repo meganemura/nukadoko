@@ -80,6 +80,13 @@ just until 0.1.
   A `{string}` bound to `z.coerce.number()`, and an `{int}` bound to
   `z.coerce.string()`, parse when the scenario runs. check used to exit 1
   on that project. A field that does not coerce is still a mismatch.
+- **`defineStep` refuses a malformed definition when it is declared.**
+  A step file that omitted `args` or `run` aborted `nuka check` with a
+  TypeError that named no file. A `timeout` of `Infinity`, `0`, a negative
+  number, `NaN`, or anything above 2147483647 was stored, and Node's timer
+  clamped it to 1ms, so the step failed as a timeout. `defineStep` now
+  throws `InvalidStepDefinitionError` for those shapes. `nuka check`
+  reports the throw as `step-file-import-failed`. A valid step is unchanged.
 
 ## 0.14.1 — 2026-10-10
 

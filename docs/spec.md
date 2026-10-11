@@ -831,6 +831,16 @@ reaches its summary. There is no value meaning "no limit": a step that
 never returns takes the whole run with it, which is what this exists to
 stop, and a run that never ends reports nothing at all.
 
+`defineStep` refuses a `timeout` that is not a finite number of milliseconds
+greater than 0 and at most 2147483647. Node's timer clamps a delay outside
+that range to 1ms, so the step would be recorded as timed out for a deadline
+it did not have. The same call refuses a definition that is not the shape
+this section describes: `args` and `returns` must be zod schemas, `run` must
+be a function, `pattern` must be a string, `patterns` must be an array of
+strings, and every `parts` entry must be a step. A `.js` step file is not
+type-checked. The throw happens while discovery imports the file, and
+`nuka check` reports it as `step-file-import-failed`.
+
 The default is not a guess about how long a step should take. It is the
 horizon this tool already had: the Allure emitter draws a running step for
 at most 120 heartbeat ticks of ten seconds (see "Allure emitter"), which is

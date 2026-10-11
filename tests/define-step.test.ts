@@ -161,6 +161,18 @@ describe("defineStep", () => {
     expect(step.run({} as never, {})).toEqual({});
     expect(ran).toBe(true);
     expect(defineStep(validDefinition()).timeout).toBeUndefined();
+
+    const part = defineStep({
+      description: "part",
+      args: z.string(),
+      returns: z.number(),
+      run(_fixtures, text: string) {
+        return text.length;
+      },
+    });
+    const composite = defineStep({ ...validDefinition(), parts: [part] });
+    expect(composite.parts).toEqual([part]);
+    expect(part.run({} as never, "ab")).toBe(2);
   });
 
   it("refuses args that are not a zod schema", () => {
