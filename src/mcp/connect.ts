@@ -12,11 +12,21 @@ import { readOwnVersion } from "../version.js";
 // that would need to be kept in sync with every field the client package
 // adds or renames later.
 //
-// A server's process lifetime is not this module's concern. The caller (a
-// `nukadoko.config.ts` fixture, `defineFixtures`) owns that already: setup
-// calls this, teardown calls `client.close()`, and a scope of "scenario" or
-// "process" picks how often. No config key, no registry, and no lifetime
-// tracking live here, see docs/spec.md "MCP servers".
+// A successful connection's lifetime belongs to the caller (a
+// `nukadoko.config.ts` fixture, `defineFixtures`): setup calls this,
+// teardown calls `client.close()`, and a scope of "scenario" or "process"
+// picks how often. No config key and no registry live here, see
+// docs/spec.md "MCP servers".
+//
+// A failed handshake is this function's to clean up. It spawned the
+// process and then rejected before returning a client, so the caller has
+// nothing to close. The client package's handshake catch calls `close()`
+// without awaiting it, and that call clears the transport's process slot
+// before it signals. A second `close()` therefore returns immediately, and
+// the first call waits on timers that do not keep the process alive, so a
+// caller that exits on the rejection leaves the child running. The pid is
+// recorded when the child starts, and the child is signaled before the
+// rejection leaves this function.
 //
 // `Client` negotiates the MCP protocol era (which handshake it runs, and
 // whether it carries version and capabilities per request) through its own
@@ -58,8 +68,9 @@ import { readOwnVersion } from "../version.js";
  * fixture already starts and stops anything else it owns).
  *
  * The caller closes what this opens, from its own fixture's teardown
- * (`client.close()`). This function has no matching lifetime of its own to
- * manage.
+ * (`client.close()`), when the handshake succeeds. When the handshake
+ * fails, this function stops the process it spawned before rejecting, and
+ * the error names the command. There is no client to return in that case.
  */
 export async function connectMcpServer(
   params: StdioServerParameters,
@@ -67,6 +78,77 @@ export async function connectMcpServer(
 ): Promise<Client> {
   const transport = new StdioClientTransport(params);
   const client = new Client({ name: "nukadoko", version: readOwnVersion() }, clientOptions);
-  await client.connect(transport);
+  const spawnedPid = rememberSpawnedPid(transport);
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    try {
+      await client.close();
+    } catch {
+      // Closing can fail because the handshake never finished. The spawned
+      // process is what still has to stop. The original error is the one
+      // the caller needs.
+    }
+    const pid = spawnedPid();
+    if (pid !== null) {
+      await stopSpawnedProcess(pid);
+    }
+    throw handshakeFailed(params.command, error);
+  }
   return client;
+}
+
+// `start` is the moment the child exists and `pid` is readable. The
+// handshake runs after that, and a failure drops the transport's only
+// handle (see this module's header), so the pid has to be copied out
+// before `connect` can reject.
+function rememberSpawnedPid(transport: StdioClientTransport): () => number | null {
+  let pid: number | null = null;
+  const start = transport.start.bind(transport);
+  transport.start = async () => {
+    await start();
+    pid = transport.pid ?? null;
+  };
+  return () => pid;
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+// `close()` above can return while the child is still running (this
+// module's header). SIGKILL is the signal that does not depend on the
+// child handling it, and the rejection waits until the pid is gone so a
+// caller that exits immediately does not outrun the kill.
+async function stopSpawnedProcess(pid: number): Promise<void> {
+  if (!isAlive(pid)) {
+    return;
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+      return;
+    }
+    throw error;
+  }
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    if (!isAlive(pid)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`MCP server process ${pid} was still running after a failed handshake`);
+}
+
+function handshakeFailed(command: string, error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error);
+  const message = `MCP handshake failed for command ${JSON.stringify(command)}: ${detail}`;
+  return error instanceof Error ? new Error(message, { cause: error }) : new Error(message);
 }

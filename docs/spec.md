@@ -892,6 +892,11 @@ A fixture calls `connectMcpServer` during setup and `client.close()` during tear
 Its scope selects one connection per scenario or one connection per run.
 Two simultaneous servers use two fixtures, with no change to the mechanism.
 
+If the handshake fails, `connectMcpServer` does not return a client.
+It stops the process it spawned before rejecting, and the error names the command.
+The caller has no client to close.
+A successful handshake still returns a live client for teardown to close.
+
 `connectMcpServer` accepts the client package's stdio parameters without changes.
 It can also accept the package's `ClientOptions` as its second argument.
 It returns the connected `Client` from that package.

@@ -704,6 +704,12 @@ fixture は setup 中に `connectMcpServer` を呼び、teardown 中に `client.
 fixture のスコープによって、scenario ごとの接続か run ごとの接続を選びます。
 2 つのサーバを同時に使う場合は 2 つの fixture を使い、機構は変わりません。
 
+ハンドシェイクが失敗した場合、`connectMcpServer` は client を返しません。
+この関数は、reject する前に、起動したプロセスを止めます。
+エラーには、起動した `command` の名前が含まれます。
+呼び出し側には、閉じる client がありません。
+ハンドシェイクが成功した場合は、これまでどおり生きた client を返し、teardown がそれを閉じます。
+
 `connectMcpServer` は、client パッケージの stdio パラメータを変更せずに受け取ります。
 第二引数には、そのパッケージの `ClientOptions` も渡せます。
 この関数は、そのパッケージの接続済み `Client` を返します。

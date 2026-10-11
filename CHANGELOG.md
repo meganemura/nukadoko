@@ -72,6 +72,10 @@ just until 0.1.
   `nuka check` reports `step-file-import-failed`, and `nuka run` stops with
   the same message, which names the field. Assigning `this.page` or
   `this.request` on a World subclass is unchanged.
+- **`connectMcpServer` stops the server it spawned when the handshake fails.**
+  The rejection used to return while the child was still running, because
+  the caller never received a client to close. The error names the command.
+  A successful handshake still returns a live client for the caller to close.
 
 ## 0.14.1 — 2026-10-10
 

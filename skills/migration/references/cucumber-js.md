@@ -218,3 +218,9 @@ Stage 1. That hook receives cucumber's hook parameter, including
 `result.duration`, and `result.message` and `error` when the scenario
 failed. An `AfterStep` hook receives those too, plus `pickleStep` and
 `testStepId` for the step that just ran.
+
+An MCP server over stdio is the same kind of resource: `connectMcpServer`
+(`"nukadoko/mcp"`) during setup, `client.close()` during teardown. If the
+handshake fails, `connectMcpServer` stops the process it spawned before
+rejecting, and the error names the command. A successful handshake still
+returns a live client for that teardown to close.

@@ -40,6 +40,9 @@ fixture depending on a `scenario`-scope one before anything runs.
 An MCP server over stdio is the same pattern: `connectMcpServer`/
 `callMcpTool` (`"nukadoko/mcp"`) belong in a fixture. `nuka mcp-tools --
 <command> [args...]` reads its tools separately, never as vocabulary.
+If the handshake fails, `connectMcpServer` stops the process it spawned
+before rejecting, and the error names the command. A successful handshake
+still returns a live client for teardown to close.
 
 ## Waiting for an external effect
 
