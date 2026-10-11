@@ -160,10 +160,17 @@ describe("resolveEnvironment inherited names", () => {
         },
       });
 
-      expect(resolveEnvironment(config, ownName, true).baseURL).toBe(ownBase);
+      // Copying a record assigns each key. Assigning "__proto__" runs the
+      // prototype setter, so that name is not an own entry after parse.
+      // Only a key the parsed object still owns is an environment.
+      const environments = config.environments ?? {};
+      if (Object.hasOwn(environments, ownName)) {
+        expect(resolveEnvironment(config, ownName, true).baseURL).toBe(ownBase);
+      } else {
+        expect(() => resolveEnvironment(config, ownName, true)).toThrow(UnknownEnvironmentError);
+      }
       expect(resolveEnvironment(config, "staging", true).baseURL).toBe("http://staging.example");
 
-      const environments = config.environments ?? {};
       if (Object.hasOwn(environments, inherited)) {
         expect(resolveEnvironment(config, inherited, true).baseURL).toBe(
           `http://${inherited}.example`,
