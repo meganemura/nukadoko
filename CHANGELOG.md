@@ -56,6 +56,11 @@ just until 0.1.
   is zero or greater, and a negative value is how a suite turns the limit
   off. A positive timeout still applies. Zero still times out. A typed
   step's own timeout is unchanged.
+- **A World subclass can assign `this.page` and `this.request`.**
+  Both were getter-only, so the usual cucumber-js assignment threw in
+  strict mode. The setter stores that value, and the getter returns it
+  ahead of the page `openPage()` or `openRequest()` stored. The
+  assignment stays unmeasured.
 
 ## 0.14.1 — 2026-10-10
 

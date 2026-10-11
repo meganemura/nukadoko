@@ -182,7 +182,10 @@ step record; nothing else has to change for that to start happening.
 ## The measured upgrade (optional)
 
 Glue that launches its own Playwright browser or request client keeps
-working, unmeasured: nukadoko never touches it. Replace that bootstrapping
+working, unmeasured: nukadoko never touches it. A World subclass assigns
+that page and request with `this.page = ...` and `this.request = ...`,
+and a later read returns that assignment, ahead of the page `openPage()`
+or `openRequest()` stored. Replace that bootstrapping
 with `await this.openPage()` / `await this.openRequest()` (delegating to
 the same context a mixed scenario's typed steps share, one browser and one
 session per scenario), and that step's step record gains a trace, an

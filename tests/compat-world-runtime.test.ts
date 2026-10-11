@@ -99,6 +99,36 @@ describe("World (src/compat/world.ts): construction and unopened getters", () =>
     expect(world.page).toBe(page);
     expect(world.request).toBe(request);
   });
+
+  it("an assignment wins over the page openPage() stored, and it is not a measured world key", async () => {
+    const opened = { kind: "opened-page" } as unknown as Page;
+    const assigned = { kind: "assigned-page" } as unknown as Page;
+    const openedRequest = { kind: "opened-request" } as unknown as APIRequestContext;
+    const assignedRequest = { kind: "assigned-request" } as unknown as APIRequestContext;
+    const { world, instrumentation } = instantiateWorldForPickle(
+      {
+        page: async () => opened,
+        request: async () => openedRequest,
+      } as StepContext,
+      {},
+      createDeclaredCollector(),
+    );
+    instrumentation.beginStep();
+
+    expect(await world.openPage()).toBe(opened);
+    expect(await world.openRequest()).toBe(openedRequest);
+    expect(world.page).toBe(opened);
+    expect(world.request).toBe(openedRequest);
+
+    world.page = assigned;
+    world.request = assignedRequest;
+
+    expect(world.page).toBe(assigned);
+    expect(world.request).toBe(assignedRequest);
+    expect(Object.getOwnPropertyDescriptor(world, "page")).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(world, "request")).toBeUndefined();
+    expect(instrumentation.snapshot()).toEqual({ reads: [], writes: [] });
+  });
 });
 
 describe("instantiateWorldForPickle (src/compat/world.ts): default World, attach/log/link wiring", () => {

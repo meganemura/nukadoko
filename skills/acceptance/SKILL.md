@@ -12,7 +12,10 @@ license: MIT
 A sign-off records that a scenario ran green at one commit. Signing off
 and running the scenario in CI answer different questions: sign-off for
 that one commit, CI for whether the criteria still hold today. nukadoko
-never re-runs a signed scenario on its own.
+never re-runs a signed scenario on its own. Typed steps take `page` and
+`request` from the fixture bag. A cucumber-js World subclass assigns
+`this.page` and `this.request`, and that assignment stays unmeasured
+(the migration skill).
 
 This skill is the path from whatever you start with (raw prose, general
 acceptance criteria, a scenario ready to write, or a path already

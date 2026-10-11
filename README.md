@@ -516,7 +516,8 @@ where there is one.
 To migrate an existing Cucumber + Playwright suite, switch one import from
 `@cucumber/cucumber` to `nukadoko/compat`. The same pattern syntax, hooks,
 and World continue to work while nukadoko's harness starts measuring step
-records. Each step can then move to `defineStep` independently, so a
+records. A World subclass can assign `this.page` and `this.request`. That
+assignment stays unmeasured. Each step can then move to `defineStep` independently, so a
 partially promoted suite continues to pass.
 
 The door is an entry point, not a destination. A compat step gains a step

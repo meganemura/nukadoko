@@ -22,19 +22,27 @@ interface MeasuredPageContext {
 // own writable data properties at run time despite being typed readonly
 // upstream) plus the harness's own two-tier page/request access:
 //
-//   - Glue that launches its own Playwright is left alone entirely — it
-//     isn't reachable through this class at all, and nukadoko never
-//     measures it (docs/spec.md, migration-door rule: don't break a working
-//     asset).
+//   - Glue that launches its own Playwright assigns `this.page` /
+//     `this.request` on a World subclass (the usual cucumber-js Before
+//     hook). A getter-only property throws in strict mode on that
+//     assignment, so each has a setter. The setter stores an override the
+//     getter returns ahead of the page `openPage()` measured. The override
+//     is not an own data property: world measurement only sees own data
+//     keys, and an own `page` would both get recorded as bag data and
+//     shadow this getter (docs/spec.md, migration-door rule: don't break a
+//     working asset). A TypeScript class field still installs its own data
+//     property under the default define-field semantics and shadows this
+//     accessor, which is how an existing field named `page` keeps working.
 //   - The *measured* door is `await this.openPage()` / `await
 //     this.openRequest()`, delegating to the same `ctx.page()`/
 //     `ctx.request()` a typed step's `ctx` exposes (context/create-
-//     context.ts) — same lazy launch, same memoization, so a compat step
+//     context.ts): same lazy launch, same memoization, so a compat step
 //     and a typed step sharing one pickle share one browser/request context
-//     automatically. Once opened, `this.page`/`this.request` return
-//     synchronously; accessing either before its `open*()` counterpart
-//     resolves is a mistake this class refuses to paper over with
-//     `undefined` (WorldNotOpenedError names the fix instead).
+//     automatically. Once opened, and when no assignment is stored,
+//     `this.page`/`this.request` return synchronously; accessing either
+//     before its `open*()` counterpart resolves is a mistake this class
+//     refuses to paper over with `undefined` (WorldNotOpenedError names
+//     the call to make).
 //
 // `attach`/`log`/`link` route into this pickle's own declared collector —
 // the same object src/run/run-scenario.ts creates and passes into
@@ -61,8 +69,8 @@ interface MeasuredPageContext {
 // a WeakMap private to *this* module — so whichever module instance a
 // user's `class MyWorld extends World` resolved "nukadoko/compat" to (src/
 // discover/discover-steps.ts's scoped tsx import during discovery) is the
-// exact instance whose `openPage()`/`get page()` methods close over the
-// matching WeakMap. src/discover/discover-steps.ts captures
+// exact instance whose `openPage()`, `get page()`, and `set page()` close
+// over the matching WeakMaps. src/discover/discover-steps.ts captures
 // `instantiateWorldForPickle` itself through that same scoped import, rather
 // than a plain top-level one, for exactly this reason — see that file's own
 // header for the mechanism this mirrors; `ctx` itself is threaded the same
@@ -112,6 +120,14 @@ export type WorldConstructor = new (params: WorldConstructorParams) => World;
 const runtimeByWorld = new WeakMap<World, MeasuredPageContext>();
 const pageByWorld = new WeakMap<World, Page>();
 const requestByWorld = new WeakMap<World, APIRequestContext>();
+// Separate from `pageByWorld` / `requestByWorld` so an assignment and a
+// later `openPage()`/`openRequest()` do not overwrite each other. The
+// getter returns the assignment when `has` is true. `get` cannot say that
+// on its own: it returns undefined both for a missing key and for a stored
+// undefined, and glue compiled with `useDefineForClassFields: false`
+// assigns undefined or null through this setter.
+const pageOverrideByWorld = new WeakMap<World, Page | null | undefined>();
+const requestOverrideByWorld = new WeakMap<World, APIRequestContext | null | undefined>();
 
 export class World {
   readonly attach: WorldConstructorParams["attach"];
@@ -126,9 +142,16 @@ export class World {
     this.parameters = params.parameters;
   }
 
-  /** The Page this pickle's own `await this.openPage()` opened.
-   * @throws {WorldNotOpenedError} `openPage()` hasn't resolved yet. */
+  /** The page a subclass assigned, or the Page this pickle's own
+   * `await this.openPage()` opened. The assignment wins when both exist,
+   * so glue that stashes its own browser does not silently start reading
+   * the harness page.
+   * @throws {WorldNotOpenedError} neither an assignment nor a resolved
+   * `openPage()` is stored yet. */
   get page(): Page {
+    if (pageOverrideByWorld.has(this)) {
+      return pageOverrideByWorld.get(this) as Page;
+    }
     const page = pageByWorld.get(this);
     if (!page) {
       throw new WorldNotOpenedError("page");
@@ -136,15 +159,28 @@ export class World {
     return page;
   }
 
-  /** The APIRequestContext this pickle's own `await this.openRequest()`
-   * opened.
-   * @throws {WorldNotOpenedError} `openRequest()` hasn't resolved yet. */
+  set page(value: Page) {
+    pageOverrideByWorld.set(this, value);
+  }
+
+  /** The request a subclass assigned, or the APIRequestContext this
+   * pickle's own `await this.openRequest()` opened. Same precedence as
+   * `page`.
+   * @throws {WorldNotOpenedError} neither an assignment nor a resolved
+   * `openRequest()` is stored yet. */
   get request(): APIRequestContext {
+    if (requestOverrideByWorld.has(this)) {
+      return requestOverrideByWorld.get(this) as APIRequestContext;
+    }
     const request = requestByWorld.get(this);
     if (!request) {
       throw new WorldNotOpenedError("request");
     }
     return request;
+  }
+
+  set request(value: APIRequestContext) {
+    requestOverrideByWorld.set(this, value);
   }
 
   /** Opens (or, called again this pickle, reuses) the shared ctx's

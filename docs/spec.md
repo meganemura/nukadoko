@@ -1374,9 +1374,14 @@ import { Given, When, Then } from "nukadoko/compat";
   same object the step and its hooks run against. A Promise the
   transformer returns is awaited before the step runs.
 - Execution supports two forms. Glue that starts its own Playwright
-  continues to work without measurement. `await this.openPage()` and
-  `await this.openRequest()` return the measured page and request from the
-  harness. Typed steps in a mixed scenario share the same context and
+  continues to work without measurement. A World subclass assigns that
+  page and request with `this.page = ...` and `this.request = ...`, and
+  the getter returns the assigned value ahead of anything `openPage()` or
+  `openRequest()` stored. That assignment is not measured. `await
+  this.openPage()` and `await this.openRequest()` return the measured
+  page and request from the harness. With no assignment, reading
+  `this.page` or `this.request` before the matching opener has resolved
+  throws. Typed steps in a mixed scenario share the same context and
   cookies. Tables use a small, dependency-free `DataTable` with
   raw/rows/hashes/rowsHash/transpose. This preserves glue that calls
   `table.hashes()` after the import change. Docstrings remain plain strings.

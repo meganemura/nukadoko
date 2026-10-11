@@ -24,6 +24,12 @@ decoded, `{ mediaType, fileName }` names the file, a readable stream returns
 a promise the step must await, and every `link` argument is a URL. The
 contract is in `docs/spec.md` and `docs/migration.md`.
 
+A World subclass can assign `this.page` and `this.request`. Glue that
+launches its own Playwright and stashes the result there keeps working,
+and that value stays unmeasured. `await this.openPage()` and `await
+this.openRequest()` are the measured door, for when the step record
+should carry the trace.
+
 Extension decides what discovery reads, not the suite's own history: `.ts`,
 `.mts`, `.js`, and `.mjs` glue are all read the same way, so a suite that
 was always plain JavaScript needs no rewrite to TypeScript just to start

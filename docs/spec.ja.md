@@ -1175,7 +1175,11 @@ import { Given, When, Then } from "nukadoko/compat";
   transformer が返した Promise は、step が走る前に await されます。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
+  World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。
+  `this.page` と `this.request` は、`openPage()` や `openRequest()` が保存した値より先に、その代入した値を返します。
+  その代入は計測されません。
   `await this.openPage()` と `await this.openRequest()` は、harness の計測対象である page と request を返します。
+  代入がないとき、対応する `openPage()` または `openRequest()` が解決する前に `this.page` または `this.request` を読むと、例外を投げます。
   混在 scenario の typed step は、同じ context と cookie を共有します。
   table は依存ゼロの薄い `DataTable`(raw / rows / hashes / rowsHash / transpose)として届きます。
   `table.hashes()` を呼ぶ glue が import の差し替えで壊れてはならないからです。

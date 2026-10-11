@@ -135,6 +135,7 @@ glue はテキストとして読むだけで、実行はしていません。
 ## 計測されるアップグレード(任意)
 
 自前で Playwright のブラウザや request クライアントを起動する glue は、計測されないまま動き続けます(nukadoko は一切手を触れません)。
+World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入し、後から読むと、`openPage()` や `openRequest()` が保存した値より先にその代入した値が返ります。
 その bootstrapping を `await this.openPage()` / `await this.openRequest()` に置き換えると(混在 scenario の typed step と同じ context に委譲し、scenario ごとに 1 つのブラウザと 1 つのセッションです)、その step の step record は他のコード変更なしに trace、`http.jsonl` log、`observed` の読み書き件数を得ます。
 
 ## Stage 1.5: 依存しているものを宣言する

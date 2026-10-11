@@ -464,6 +464,8 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 
 既存の Cucumber + Playwright スイートを移行するには、import を `@cucumber/cucumber` から `nukadoko/compat` に切り替えます。
 同じ pattern の構文、hooks、World はそのまま動き、その間に nukadoko の harness が step record の計測を始めます。
+World のサブクラスは `this.page` と `this.request` に代入できます。
+その代入は計測されないままです。
 その後は各 step を個別に `defineStep` へ昇格できるため、一部だけを昇格したスイートも通り続けます。
 
 扉は入口であり、行き先ではありません。
