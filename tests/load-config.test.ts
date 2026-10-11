@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
 import { ConfigError } from "../src/config/errors.js";
 import { loadConfig } from "../src/config/load-config.js";
@@ -168,7 +169,46 @@ describe("loadConfig", () => {
       await removeTempDir(rootDir);
     }
   });
+
+  // tsx's tsImport registers a loader on every call and does not take it
+  // off the chain, so a later call walks every loader the earlier calls
+  // left behind. recordStep loads config once per step in one process.
+  // The bound is the measured shape of that growth (the last window several
+  // times the first), with a few milliseconds of slack so a flat run's
+  // sub-millisecond samples still pass.
+  it("stays about as fast across repeated loads of one config", async () => {
+    const rootDir = await createEmptyTempDir();
+    try {
+      await writeFile(
+        path.join(rootDir, "nukadoko.config.ts"),
+        "export default { featuresDir: 'bdd', stateDir: '.state' };\n",
+      );
+      const calls = 400;
+      const window = 100;
+      const samples: number[] = [];
+      for (let i = 0; i < calls; i++) {
+        const started = performance.now();
+        const config = await loadConfig(rootDir);
+        samples.push(performance.now() - started);
+        expect(config.featuresDir).toBe("bdd");
+        expect(config.stateDir).toBe(".state");
+      }
+      const first = median(samples.slice(0, window));
+      const last = median(samples.slice(-window));
+      expect(last, `median ${first.toFixed(2)}ms then ${last.toFixed(2)}ms`).toBeLessThan(
+        first * 2 + 3,
+      );
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
 });
+
+function median(samples: readonly number[]): number {
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+}
 
 describe("configSchema", () => {
   it("rejects an invalid value type for a known key", () => {
