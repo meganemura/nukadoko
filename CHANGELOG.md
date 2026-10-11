@@ -156,6 +156,11 @@ just until 0.1.
   negative number throw `InvalidPollOptionsError` before the first attempt,
   instead of polling without end. Omitting either option still uses its
   default (30 seconds, 500 milliseconds).
+- **A page request's http.jsonl line stays on the step that sent it.**
+  The line was written when the response arrived, so a click that returned
+  before its POST finished left the POST on the next step. `observed` had
+  already counted the write on the step that sent it. The log path is now
+  taken when the request starts.
 
 ### Breaking
 

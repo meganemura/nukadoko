@@ -178,12 +178,13 @@ export interface LaunchBrowserOptions {
   /** Records console errors, uncaught page errors, and failed requests this
    * browser context's page(s) produce — see this module's header comment. */
   pageEvents: PageEventsCollector;
-  /** Where this ctx's http.jsonl currently lives — a getter, not a fixed
+  /** Where this ctx's http.jsonl currently lives. A getter, not a fixed
    * path, for the same reason http-log.ts's own `logPath` is one: create-
-   * context.ts's `beginStep` redirects it at each step boundary, and
-   * page-http-log.ts's subscription (below) must always read whichever
-   * directory is *current* when a response actually arrives, not the one
-   * that was current when the browser was first launched. */
+   * context.ts's `beginStep` redirects it at each step boundary.
+   * page-http-log.ts reads it when a page request starts, not when the
+   * browser was launched and not when the response arrives, so a response
+   * that lands after the next boundary still appends to the step that
+   * sent the request. */
   logPath: () => string;
   /** Values page-issued http.jsonl entries must redact — the same
    * `SecretSet` http-log.ts's own `ctx.request()` wrapper already

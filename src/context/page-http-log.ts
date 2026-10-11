@@ -41,10 +41,19 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 //
 // Duration is measured the same way http-log.ts's own `logCall` measures
 // its: wall time between this module's own `request` listener (the
-// start-time map below) and the matching `response` — not Playwright's own
+// map below) and the matching `response` — not Playwright's own
 // `request.timing()`, whose `responseEnd` only populates once the whole
 // body has downloaded (`requestfinished`, not `response`), and reads -1 for
 // a response event fired before that.
+//
+// That same map stores the log path resolved on the request event. `logPath`
+// stays a getter, so a request that starts after `beginStep` moves the
+// directory lands in the new step. Reading the getter again when the
+// response arrives would write the line into whichever step is current
+// then. A click that returns before its POST finishes would leave the POST
+// on the next step, whose `observed` says it wrote nothing, while the step
+// that sent it already counted the write (browser-evidence.ts records
+// `observed` on `request`, not on `response`).
 //
 // A write failure here (`appendHttpLogEntry` rejecting) is swallowed: an
 // event handler has no caller to propagate a throw to, and losing one
@@ -76,24 +85,28 @@ export interface PageHttpLogHandle {
 }
 
 /** Subscribes `context` so every `document`/`xhr`/`fetch` response its
- * page(s) receive is appended to http.jsonl (`logPath()`, redacted through
- * `secrets`, the same single call site `ctx.request()`'s own entries go
- * through), and every other response is tallied into `httpOmitted` instead.
- * Called once, at browser-context creation (browser-evidence.ts) — never
- * re-subscribed at a step boundary; `logPath` is a getter for the same
- * reason http-log.ts's own is, so it always reads whichever directory is
- * *current* when a response actually arrives. */
+ * page(s) receive is appended to http.jsonl (redacted through `secrets`,
+ * the same single call site `ctx.request()`'s own entries go through), and
+ * every other response is tallied into `httpOmitted` instead. Called once,
+ * at browser-context creation (browser-evidence.ts), never re-subscribed
+ * at a step boundary. `logPath` stays a getter so a request that starts
+ * after the directory moves lands in the new step. The path is read when
+ * the request starts (see this file's own header): the response is
+ * appended to that path, not to wherever the getter points when the
+ * response arrives. */
 export function subscribePageHttpLogging(
   context: BrowserContext,
   logPath: () => string,
   secrets: SecretSet,
   httpOmitted: HttpOmittedCollector,
 ): PageHttpLogHandle {
-  const startedAt = new Map<PlaywrightRequest, number>();
+  // `at` is the duration origin. `logPath` is that step's http.jsonl,
+  // resolved now so a later step boundary cannot move the line.
+  const started = new Map<PlaywrightRequest, { at: number; logPath: string }>();
   const pending = new Set<Promise<void>>();
 
   context.on("request", (request) => {
-    startedAt.set(request, performance.now());
+    started.set(request, { at: performance.now(), logPath: logPath() });
   });
 
   context.on("requestfailed", (request) => {
@@ -101,13 +114,13 @@ export function subscribePageHttpLogging(
     // Playwright fires exactly one of the two per attempt) — deleted here
     // only so a page that issues many failing requests does not grow this
     // map without bound.
-    startedAt.delete(request);
+    started.delete(request);
   });
 
   context.on("response", (response) => {
     const request = response.request();
-    const start = startedAt.get(request);
-    startedAt.delete(request);
+    const start = started.get(request);
+    started.delete(request);
     const resourceType = request.resourceType();
 
     if (resourceType !== "document" && resourceType !== "xhr" && resourceType !== "fetch") {
@@ -115,9 +128,13 @@ export function subscribePageHttpLogging(
       return;
     }
 
-    const durationMs = start === undefined ? 0 : Math.round(performance.now() - start);
+    // A response with no matching `request` event has no stored path.
+    // Fall back to the getter as it stands now, the same duration-0
+    // fallback this branch already uses when the start time is missing.
+    const entryPath = start === undefined ? logPath() : start.logPath;
+    const durationMs = start === undefined ? 0 : Math.round(performance.now() - start.at);
     const write: Promise<void> = appendHttpLogEntry(
-      logPath,
+      () => entryPath,
       {
         method: request.method(),
         url: request.url(),

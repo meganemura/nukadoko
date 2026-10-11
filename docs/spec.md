@@ -2302,7 +2302,10 @@ array identifies each step record by id, so either record leads to the other.
   `"page"` for one the page itself made (a `page`
   navigation, or an in-page `fetch`/XHR), present on every entry either path
   produces, so a reader never has to guess which one wrote a line from its
-  shape alone. Only `document`, `xhr`, and `fetch` requests (Playwright's own
+  shape alone. A page request's line belongs to the step that sent it. The
+  path is taken when the request starts, and the response is appended there
+  even when it arrives after that step has returned. That is the same step
+  `observed` already counted. Only `document`, `xhr`, and `fetch` requests (Playwright's own
   `request.resourceType()`) ever reach http.jsonl for page traffic; a real
   page load can pull in dozens of images, stylesheets, and scripts that
   nobody reading a step record for acceptance purposes traces one by one,
