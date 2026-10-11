@@ -1,5 +1,11 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { discoverMarkdownFiles, parseAcceptanceRecord } from "../src/tend/record-parse.js";
+import { findSignoffRot } from "../src/tend/signoff-rot.js";
 
 // Responsibility: unit tests for src/tend/record-parse.ts's own read-side
 // branches that a real accepted project (tend.test.ts, tend-moved-
@@ -127,6 +133,130 @@ describe("parseAcceptanceRecord: body shape", () => {
     expect(result.kind).toBe("malformed");
     if (result.kind === "malformed") {
       expect(result.reason).toContain("a fenced JSON block is not valid JSON");
+    }
+  });
+});
+
+// A checkout with `core.autocrlf` and an editor that writes a UTF-8 BOM
+// rewrite bytes around a record without rewriting the record. The patterns
+// in this module require a leading `---` and LF, so either rewrite misses,
+// and a miss is ordinary Markdown, which every caller skips. The record is
+// then counted as healthy. These cases are the transport, not a second
+// document shape.
+const UTF8_BOM = "\uFEFF";
+const featureLine = gs.text({ alphabet: "abc ", minSize: 1, maxSize: 40 });
+
+function withCrlf(lf: string): string {
+  return lf.replace(/\n/g, "\r\n");
+}
+
+function transportVariants(lf: string): string[] {
+  const crlf = withCrlf(lf);
+  return [crlf, `${UTF8_BOM}${lf}`, `${UTF8_BOM}${crlf}`];
+}
+
+function validRecord(featureSource: string): string {
+  return [
+    "---",
+    "run_id: r1",
+    "commit: abc",
+    "feature: elsewhere/checkout.feature",
+    "scenarios:",
+    "---",
+    "",
+    "## The scenario as it ran",
+    "",
+    "```gherkin",
+    featureSource.replace(/\n$/, ""),
+    "```",
+    "",
+    minimalStepBlock(),
+    "",
+  ].join("\n");
+}
+
+describe("parseAcceptanceRecord: line endings and a BOM", () => {
+  it("reads ordinary markdown with CRLF or a leading BOM as not-a-record", () => {
+    const heading = "# Just a heading\n\nSome prose.\n";
+    const otherFrontmatter = ["---", "title: notes", "---", "", "body"].join("\n");
+    for (const lf of [heading, otherFrontmatter]) {
+      for (const content of transportVariants(lf)) {
+        expect(parseAcceptanceRecord(content, "README.md")).toEqual({ kind: "not-a-record" });
+      }
+    }
+  });
+
+  it("reads a sign-off the same way when the file uses CRLF or starts with a UTF-8 BOM", () => {
+    const lf = validRecord(MINIMAL_FEATURE_SOURCE);
+    const expected = parseAcceptanceRecord(lf, "record.md");
+    expect(expected.kind).toBe("ok");
+    for (const content of transportVariants(lf)) {
+      expect(parseAcceptanceRecord(content, "record.md")).toEqual(expected);
+    }
+  });
+
+  it("parses a sign-off the same way for any feature line, after CRLF conversion or a leading BOM", () =>
+    hegel.test((tc) => {
+      const line = tc.draw(featureLine);
+      const lf = validRecord(`Feature: Checkout\n  Scenario: ${line}\n`);
+      const expected = parseAcceptanceRecord(lf, "record.md");
+      expect(expected.kind).toBe("ok");
+      for (const content of transportVariants(lf)) {
+        expect(parseAcceptanceRecord(content, "record.md")).toEqual(expected);
+      }
+    }));
+
+  it("reports a broken record as malformed when CRLF or a BOM would otherwise hide it", () => {
+    const lf = [
+      "---",
+      "run_id: r1",
+      "commit: abc",
+      "feature: elsewhere/checkout.feature",
+      "scenarios:",
+      "---",
+      "",
+      "no scenario section here at all",
+    ].join("\n");
+    for (const content of transportVariants(lf)) {
+      expect(parseAcceptanceRecord(content, "broken.md")).toEqual({
+        kind: "malformed",
+        reason: 'missing the "## The scenario as it ran" fenced feature source',
+      });
+    }
+  });
+});
+
+describe("findSignoffRot: line endings and a BOM", () => {
+  // The frozen feature and the file on disk can both be rewritten by the
+  // same checkout. Recognition alone is not enough: once the record parses,
+  // a comparison that still sees the carriage returns reports a feature
+  // change that nobody made.
+  it("reports a real feature edit, and ignores a checkout that only rewrote line endings", async () => {
+    const feature = "Feature: Checkout\n  Scenario: a customer checks out\n";
+    const lfRecord = validRecord(feature);
+    expect(parseAcceptanceRecord(`${UTF8_BOM}${withCrlf(lfRecord)}`, "record.md").kind).toBe("ok");
+
+    const root = await mkdtemp(path.join(os.tmpdir(), "nukadoko-signoff-"));
+    try {
+      const recordPath = path.join(root, "acceptance", "record.md");
+      const featurePath = path.join(root, "elsewhere", "checkout.feature");
+      await mkdir(path.dirname(recordPath), { recursive: true });
+      await mkdir(path.dirname(featurePath), { recursive: true });
+
+      await writeFile(recordPath, withCrlf(lfRecord));
+      await writeFile(featurePath, feature.replace("checks out", "checks out twice"));
+      const changed = findSignoffRot(root, new Map(), "features").filter((issue) => issue.code === "signoff-feature-changed");
+      expect(changed).toHaveLength(1);
+      expect(changed[0]!.file).toBe(path.relative(root, recordPath));
+
+      await writeFile(recordPath, `${UTF8_BOM}${withCrlf(lfRecord)}`);
+      await writeFile(featurePath, `${UTF8_BOM}${withCrlf(feature)}`);
+      const lineEndingsOnly = findSignoffRot(root, new Map(), "features").filter(
+        (issue) => issue.code === "signoff-feature-changed",
+      );
+      expect(lineEndingsOnly).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });
