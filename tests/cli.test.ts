@@ -111,6 +111,26 @@ describe("nuka describe", () => {
     });
   });
 
+  it("omits a defaulted args key from required and keeps a key with no default", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["describe", "greet-with-default"], {
+      rootDir: fixture("do-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
+    const contract = JSON.parse(stdout.text());
+    // greet-with-default's args are { name: string, tag: string default
+    // "guest" }. `name` is what a caller must supply. `tag` is not: the
+    // schema fills it, and `nuka do` already accepts the call without it.
+    expect(contract.args.required).toContain("name");
+    expect(contract.args.required).not.toContain("tag");
+    expect(contract.args.additionalProperties).toBe(false);
+  });
+
   it("includes rationale for a step that declares one", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
