@@ -9,10 +9,20 @@ import { createCaptureSink, repoRoot, testsDir } from "./helpers/fixtures.js";
 // This file covers the other two: the default (non-`--json`) text output,
 // and a connect failure that is *not* the client package missing (a
 // nonexistent server command), which must fall through to the underlying
-// error's own message rather than the install hint.
+// error's own message rather than the install hint. A third server
+// (mcp-newline-server.ts) carries descriptions with newlines, so the text
+// listing can be held to one line per tool while `--json` keeps the
+// description the server declared.
 
 const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
 const serverScript = path.join(testsDir, "helpers", "mcp-test-server.ts");
+const newlineServerScript = path.join(testsDir, "helpers", "mcp-newline-server.ts");
+
+// The same strings mcp-newline-server.ts registers. Text mode collapses
+// each newline and the whitespace around it to one space. `--json` returns
+// these raw values.
+const SEARCH_DESCRIPTION = "Finds records\n\n  across files\nby name";
+const WRAPPED_DESCRIPTION = "Keeps\r\na line";
 
 describe("nuka mcp-tools: CLI wiring", () => {
   it(
@@ -35,6 +45,50 @@ describe("nuka mcp-tools: CLI wiring", () => {
     },
     // Same 30s allowance tests/mcp-client.test.ts already gives this same
     // tsx-spawned server, rather than vitest's own 5s default.
+    30_000,
+  );
+
+  it(
+    "without --json: one line per tool when a description contains newlines",
+    async () => {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["mcp-tools", "--", tsxBin, newlineServerScript], {
+        stdout,
+        stderr,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stderr.text()).toBe("");
+      expect(stdout.text().trim().split("\n").sort()).toEqual(
+        [
+          "search\tFinds records across files by name",
+          "wrapped\tKeeps a line",
+          "tabbed\tKeeps a tab",
+        ].sort(),
+      );
+      expect(stdout.text()).not.toContain("{");
+    },
+    30_000,
+  );
+
+  it(
+    "with --json: keeps newlines in a tool description",
+    async () => {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["mcp-tools", "--json", "--", tsxBin, newlineServerScript], {
+        stdout,
+        stderr,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stderr.text()).toBe("");
+      const tools = JSON.parse(stdout.text()) as Array<{ name: string; description?: string }>;
+      expect(tools.find((tool) => tool.name === "search")?.description).toBe(SEARCH_DESCRIPTION);
+      expect(tools.find((tool) => tool.name === "wrapped")?.description).toBe(WRAPPED_DESCRIPTION);
+      expect(tools.find((tool) => tool.name === "tabbed")?.description).toBe("Keeps a tab");
+    },
     30_000,
   );
 

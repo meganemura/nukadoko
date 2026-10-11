@@ -57,11 +57,45 @@ const TOOL_PAGE_HTML = `<!doctype html>
 </body>
 </html>`;
 
-function startToolServer(): Promise<{ server: Server; url: string }> {
+// Same descriptions tests/mcp-tools-cli.test.ts lists over stdio. Text mode
+// collapses each newline and the whitespace around it to one space. `--json`
+// returns the string the page registered.
+const SEARCH_DESCRIPTION = "Finds records\n\n  across files\nby name";
+const WRAPPED_DESCRIPTION = "Keeps\r\na line";
+
+const MULTILINE_TOOL_PAGE_HTML = `<!doctype html>
+<html>
+<body>
+<script>
+  if (navigator.modelContext) {
+    navigator.modelContext.registerTool({
+      name: "search",
+      description: ${JSON.stringify(SEARCH_DESCRIPTION)},
+      inputSchema: { type: "object", properties: {} },
+      async execute() { return { content: [{ type: "text", text: "ok" }] }; }
+    });
+    navigator.modelContext.registerTool({
+      name: "wrapped",
+      description: ${JSON.stringify(WRAPPED_DESCRIPTION)},
+      inputSchema: { type: "object", properties: {} },
+      async execute() { return { content: [{ type: "text", text: "ok" }] }; }
+    });
+    navigator.modelContext.registerTool({
+      name: "tabbed",
+      description: "Keeps a tab",
+      inputSchema: { type: "object", properties: {} },
+      async execute() { return { content: [{ type: "text", text: "ok" }] }; }
+    });
+  }
+</script>
+</body>
+</html>`;
+
+function startToolServer(html: string = TOOL_PAGE_HTML): Promise<{ server: Server; url: string }> {
   return new Promise((resolve) => {
     const server = createServer((_req, res) => {
       res.writeHead(200, { "content-type": "text/html" });
-      res.end(TOOL_PAGE_HTML);
+      res.end(html);
     });
     server.listen(0, "127.0.0.1", () => {
       const address = server.address() as AddressInfo;
@@ -157,6 +191,61 @@ describe("WebMCP experimental surface", () => {
     expect(stderr.text()).toContain("/tools");
     expect(stderr.text()).toContain("baseURL");
   });
+
+  it.skipIf(!chromiumAvailable)(
+    "without --json: one line per tool when a description contains newlines",
+    async () => {
+      const { server: multilineServer, url: multilineUrl } = await startToolServer(MULTILINE_TOOL_PAGE_HTML);
+      try {
+        const rootDir = fixture("webmcp-tools-project");
+        const stdout = createCaptureSink();
+        const stderr = createCaptureSink();
+        const exitCode = await runCli(["experimental", "webmcp-tools", multilineUrl], {
+          rootDir,
+          stdout,
+          stderr,
+        });
+
+        expect(exitCode).toBe(0);
+        expect(stderr.text()).toBe("");
+        expect(stdout.text().trim().split("\n").sort()).toEqual(
+          [
+            "search\tFinds records across files by name",
+            "wrapped\tKeeps a line",
+            "tabbed\tKeeps a tab",
+          ].sort(),
+        );
+      } finally {
+        await new Promise<void>((resolve) => multilineServer.close(() => resolve()));
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "with --json: keeps newlines in a tool description",
+    async () => {
+      const { server: multilineServer, url: multilineUrl } = await startToolServer(MULTILINE_TOOL_PAGE_HTML);
+      try {
+        const rootDir = fixture("webmcp-tools-project");
+        const stdout = createCaptureSink();
+        const stderr = createCaptureSink();
+        const exitCode = await runCli(["experimental", "webmcp-tools", multilineUrl, "--json"], {
+          rootDir,
+          stdout,
+          stderr,
+        });
+
+        expect(exitCode).toBe(0);
+        expect(stderr.text()).toBe("");
+        const tools = JSON.parse(stdout.text()) as Array<{ name: string; description: string }>;
+        expect(tools.find((tool) => tool.name === "search")?.description).toBe(SEARCH_DESCRIPTION);
+        expect(tools.find((tool) => tool.name === "wrapped")?.description).toBe(WRAPPED_DESCRIPTION);
+        expect(tools.find((tool) => tool.name === "tabbed")?.description).toBe("Keeps a tab");
+      } finally {
+        await new Promise<void>((resolve) => multilineServer.close(() => resolve()));
+      }
+    },
+  );
 
   it.skipIf(!chromiumAvailable)(
     "B throws a dedicated error, naming the missing launch flag, when navigator.modelContext is absent",
