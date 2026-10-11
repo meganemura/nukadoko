@@ -28,6 +28,7 @@ import {
   type ExternalPageEvidenceHandle,
 } from "./browser-evidence.js";
 import { createCallsCollector } from "./calls.js";
+import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
 import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
@@ -904,7 +905,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       finished_at: new Date().toISOString(),
       ...(nested.length > 0 ? { calls: [...nested] } : {}),
     });
-    return returnsResult.data as z.infer<S["returns"]>;
+    // The record keeps the validated result. The caller gets a copy.
+    return cloneForCaller(returnsResult.data) as z.infer<S["returns"]>;
   }
 
   const ctx: StepContext = {
@@ -1061,7 +1063,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // trace). `entry.result` is carried alongside the same way a `from`
       // injection's own `recordUsed` call does.
       used.record(entry.recordId, entry.stepName, entry.result);
-      return entry.result as z.infer<S["returns"]>;
+      // The chain and this `used` entry keep `entry.result`. The caller gets
+      // a copy, so a later read still sees the validated value.
+      return cloneForCaller(entry.result) as z.infer<S["returns"]>;
     },
     section(label: string): void {
       sections.record(label);
