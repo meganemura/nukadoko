@@ -1847,7 +1847,12 @@ machine can run at once is a fact about that machine, and a committed
 config file is the wrong place to keep it.
 
 Each run uses two output channels for two readers. stdout contains only NDJSON,
-with one scenario record per line for scripts to parse. stderr contains the
+with one scenario record per line for scripts to parse. Text a step writes
+to the process stdout, with `console.log` or `process.stdout.write`, is
+delivered on stderr while that step runs. The same split holds for `nuka do`,
+whose stdout is the one step record, and for a worker process under
+`--concurrency`, whose own stdout is the envelope stream the parent parses.
+stderr contains the
 output for a person who watches the run: a boundary before each pickle, one
 line after each step, the paths written by the run, and a one-line summary.
 `--quiet` suppresses the per-step and per-scenario progress lines. The paths
@@ -1935,8 +1940,9 @@ nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
 Executes one typed step and prints its step record to stdout (exit 0 on ok, 1 on
-failed). This is the adaptive loop: the agent reads the validated result and
-decides the next call. The agent can only choose which step to call with
+failed). Text the step writes to the process stdout is delivered on stderr,
+so that record stays one JSON value. This is the adaptive loop: the agent
+reads the validated result and decides the next call. The agent can only choose which step to call with
 which args; it cannot choose what gets recorded. There is deliberately no
 grouping label on `do`: ad-hoc sequences are working records, not evidence.
 Anything worth attesting to is expressed as a scenario and proven by
@@ -3557,7 +3563,8 @@ nuka run <feature[:line]|dir>...
                               --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always.
+                              always. Text a step writes to the process stdout
+                              is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
                               files to n worker processes while the parent
                               keeps one run_id, one summary, one exit code, one
@@ -3573,6 +3580,8 @@ nuka run <feature[:line]|dir>...
                               repeat line after the failed list
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
+                              Text the step writes to the process stdout is
+                              delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result

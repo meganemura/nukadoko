@@ -39,6 +39,11 @@ typechecking cleanly; the two can disagree in either direction. `nuka check
 description of what triggers it, so a code that shows up mid-migration and
 isn't self-explanatory can be looked up without leaving the CLI.
 
+A compat step that writes to the process stdout (`console.log`,
+`process.stdout.write`) has that text delivered on stderr while `nuka run`
+executes it. A typed step does the same under `nuka do` and `nuka run`.
+stdout stays the record stream.
+
 A migration repeats that loop far more than a finished suite ever runs
 `nuka run` again. `nuka run` keeps only the newest `retention.runs` runs
 (default 20) and removes older records and export files itself, so

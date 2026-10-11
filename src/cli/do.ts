@@ -1,5 +1,9 @@
 import { existsSync } from "node:fs";
-import { runWithTimeout, classifyCaughtError } from "../run/run-scenario.js";
+import {
+  runWithTimeout,
+  classifyCaughtError,
+  withStepStdoutOnStderr,
+} from "../run/run-scenario.js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { formatValidationIssues } from "../issues/format-issues.js";
@@ -687,12 +691,14 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // `ctx.call` is ready the moment the step's own body could reach
         // for it.
         contextHandle.beginStepRun(entry.step, fixtures);
-        const runResult = await runWithTimeout(
-          () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
-          entry.step.timeout ?? config.stepTimeout,
-          "Step",
-          name,
-          entry.step.timeout === undefined ? "config" : "step",
+        const runResult = await withStepStdoutOnStderr(() =>
+          runWithTimeout(
+            () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+            entry.step.timeout ?? config.stepTimeout,
+            "Step",
+            name,
+            entry.step.timeout === undefined ? "config" : "step",
+          ),
         );
         const returnsResult = entry.step.returns.safeParse(runResult);
         if (!returnsResult.success) {

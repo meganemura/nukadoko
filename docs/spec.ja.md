@@ -1583,6 +1583,10 @@ session は、ログイン状態を 1 つの scenario から次の scenario へ�
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
+step がプロセスの stdout に書いたテキスト (`console.log` や `process.stdout.write`) は、その step の実行中 stderr に渡されます。
+`nuka do` でも同じであり、その stdout は 1 件の step record です。
+`--concurrency` の worker プロセスでも同じです。
+worker の stdout は、親プロセスが読む envelope の列です。
 run を見守る人向けの出力は stderr に置きます: 各 pickle の前の境界、各 step の後の 1 行、run が書いたパス、1 行のサマリです。
 `--quiet` は step ごとと scenario ごとの進捗行を抑止します。
 このフラグは端末を静かにしますが、無音にはしないため、パスとサマリは表示されます。
@@ -1645,6 +1649,7 @@ nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
 1 つの型付き step を実行し、その step record を stdout に出力します(ok なら exit 0、failed なら 1)。
+step がプロセスの stdout に書いたテキストは stderr に渡されるので、その record は 1 つの JSON 値のままです。
 これが適応的なループです。
 agent はバリデーション済みの result を読み、次の呼び出しを決めます。
 agent が選べるのはどの step をどの args で呼ぶかだけで、何が記録されるかを選ぶことはできません。
@@ -3003,7 +3008,8 @@ nuka run <feature[:line]|dir>...
                               --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always.
+                              always. Text a step writes to the process stdout
+                              is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
                               files to n worker processes while the parent
                               keeps one run_id, one summary, one exit code, one
@@ -3019,6 +3025,8 @@ nuka run <feature[:line]|dir>...
                               repeat line after the failed list
 nuka do <step> [--args '<json>'] [--use <step-record-id>]
                               execute one typed step; step record to stdout.
+                              Text the step writes to the process stdout is
+                              delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result

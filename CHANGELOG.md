@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **A step that writes to stdout no longer breaks `nuka do` or `nuka run`.**
+  `console.log` and `process.stdout.write` from a typed step or a compat
+  step are delivered on stderr while the step runs. `nuka do` stdout stays
+  one JSON step record. `nuka run` stdout stays NDJSON, including the
+  envelope stream a worker writes under `--concurrency`.
 - **`nuka clean` refuses an export path that would delete the project or leave it.**
   `allure.resultsDir` or `messages.output` set to the project root, to a
   path outside the project, or to a parent of the state directory makes
