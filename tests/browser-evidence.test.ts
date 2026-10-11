@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { chromium } from "playwright";
+import { chromium, type Browser } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { attachExternalPageEvidence, launchBrowserWithTracing } from "../src/context/browser-evidence.js";
@@ -655,6 +655,76 @@ describe("launchBrowserWithTracing: browserType defaults to chromium when omitte
       await handle.finalize();
     },
   );
+});
+
+// Responsibility: a browser `launch` already started is closed when a later
+// step of `launchBrowserWithTracing` throws. The handle `dispose()` can
+// close is assigned only after this function returns, so a throw here used
+// to leave the process running. An invalid viewport is what produces that
+// throw: `newContext` accepts `{ width: -1, height: -1 }`, and `newPage`
+// then rejects it (screen width and height must be positive), after
+// `launch` has already succeeded. A launch that does not throw still
+// returns the handle, with a page that can be used.
+describe("launchBrowserWithTracing: a throw after launch closes the browser", () => {
+  let evidenceDir: string;
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-launch-throw-"));
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+  });
+
+  function launchOptions(browserContext?: { viewport: { width: number; height: number } }) {
+    return {
+      evidenceDir,
+      ...(browserContext ? { browserContext } : {}),
+      observed: createObservedCollector(),
+      pageEvents: createPageEventsCollector(),
+      logPath: () => path.join(evidenceDir, "http.jsonl"),
+      secrets: [],
+      httpOmitted: createHttpOmittedCollector(),
+    };
+  }
+
+  it.skipIf(!chromiumAvailable)(
+    "closes the browser when newPage rejects an invalid viewport",
+    async () => {
+      const launched: Browser[] = [];
+      const realLaunch = chromium.launch.bind(chromium);
+      const spy = vi.spyOn(chromium, "launch").mockImplementation(async (options) => {
+        const browser = await realLaunch(options);
+        launched.push(browser);
+        return browser;
+      });
+      try {
+        await expect(
+          launchBrowserWithTracing(launchOptions({ viewport: { width: -1, height: -1 } })),
+        ).rejects.toThrow(/must be positive/);
+        expect(launched).toHaveLength(1);
+        const browser = launched[0];
+        if (browser === undefined) {
+          throw new Error("launch did not return a browser");
+        }
+        expect(browser.isConnected()).toBe(false);
+      } finally {
+        spy.mockRestore();
+        for (const browser of launched) {
+          if (browser.isConnected()) {
+            await browser.close();
+          }
+        }
+      }
+    },
+  );
+
+  it.skipIf(!chromiumAvailable)("returns the browser when launch succeeds", async () => {
+    const handle = await launchBrowserWithTracing(launchOptions());
+    expect(handle.browserInfo.type).toBe("chromium");
+    await expect(handle.page.evaluate(() => 1 + 1)).resolves.toBe(2);
+    await handle.finalize();
+  });
 });
 
 // Responsibility: `attachExternalPageEvidence`'s own contract, tested
