@@ -9,8 +9,9 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 // SecretSet down to here happens only through executor-owned code paths.
 //
 // Redaction rules:
-//   - a secret value found anywhere inside a string is replaced by
-//     `{{secret.NAME}}`;
+//   - a secret value found inside a string is replaced by `{{secret.NAME}}`.
+//     An occurrence that is already part of such a token is left alone: the
+//     token is the replacement, and searching it again rewrites the record;
 //   - the same token also replaces two other spellings of that loaded
 //     value. A query string holds encodeURIComponent(value) by the time
 //     http.jsonl is built, and text that already contains JSON holds the
@@ -31,6 +32,14 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //     would change the leaf's type;
 //   - longer spellings are substituted first, so a shorter secret can't
 //     eat part of a longer one that happens to contain it as a substring;
+//   - every spelling is matched in one pass. The token written for one
+//     secret is not searched for the next, and a token already in the text
+//     is matched as itself. A loaded value that occurs inside
+//     `{{secret.NAME}}` (the word "secret", or a piece of the name) therefore
+//     cannot nest a second token there, and a second redact of the same
+//     text changes nothing. Percent-encoded and JSON-escaped spellings are
+//     entries in that same list: one pass replaces them and does not drop
+//     them;
 //   - a raw loaded value claims its spelling before any other secret's
 //     percent-encoded or JSON-escaped form does. Among raw values that
 //     are equal, and among derived forms that no raw value claimed, the
@@ -81,17 +90,34 @@ function buildReplacements(secrets: SecretSet): Replacement[] {
     .sort((a, b) => b.value.length - a.value.length);
 }
 
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
 function applyReplacements(input: string, replacements: readonly Replacement[]): string {
-  let result = input;
-  for (const { value, token } of replacements) {
-    result = result.split(value).join(token);
-  }
-  return result;
+  if (replacements.length === 0) return input;
+  const tokenBySpelling = new Map(replacements.map((entry) => [entry.value, entry.token]));
+  // Tokens go in the alternation beside the spellings. Sequential
+  // split/join wrote `{{secret.NAME}}` and then searched that text for the
+  // next value, so a secret that occurs inside the token rewrote it, and
+  // the next call did it again. Matching the token as itself consumes the
+  // span in the same pass. Longest first: the list is already ordered that
+  // way, and a token can be longer or shorter than a spelling, so the
+  // combined set is ordered here too. Equal lengths keep their relative
+  // order (the alphabetically-first name was inserted first).
+  const literals = new Set<string>([
+    ...tokenBySpelling.keys(),
+    ...replacements.map((entry) => entry.token),
+  ]);
+  const ordered = [...literals].sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(ordered.map(escapeRegExp).join("|"), "g");
+  return input.replace(pattern, (match) => tokenBySpelling.get(match) ?? match);
 }
 
 /** Replaces every occurrence of a secret value inside `input` with its
  * `{{secret.NAME}}` token, including the percent-encoded and JSON-escaped
- * spellings of that value. */
+ * spellings of that value. An occurrence already inside such a token is
+ * left in place, so a second call returns the same text. */
 export function redactString(input: string, secrets: SecretSet): string {
   return applyReplacements(input, buildReplacements(secrets));
 }

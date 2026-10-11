@@ -122,6 +122,11 @@ just until 0.1.
   context, tears down process scope, and exits with 128 plus the signal
   number. `use()` receives `"failed"`. A second signal exits at once.
   A normal finish is unchanged.
+- **Redaction leaves a token intact when a secret occurs inside it.**
+  Replacing one secret wrote `{{secret.NAME}}`, and a later secret whose
+  value was a piece of that token (`secret`, `TOKEN`, `API_`) rewrote it.
+  A second redact nested the token again. Spellings are replaced in one
+  pass, longest first, and an existing token is kept as itself.
 
 ## 0.14.1 — 2026-10-10
 

@@ -275,10 +275,9 @@ interface NestedFixture {
 
 function embed(tc: TestCase, value: string): string {
   // Half the time, wrap the secret inside a larger string (`"token=" +
-  // secret + trailer`) instead of using it bare — redact.ts's own
-  // replacement is a plain split/join over the whole string, and a secret
-  // glued to unrelated surrounding text is the shape a real step record
-  // (an HTTP header, a URL) actually produces.
+  // secret + trailer`) instead of using it bare. A secret glued to
+  // unrelated surrounding text is the shape a real step record (an HTTP
+  // header, a URL) actually produces.
   if (!tc.draw(gs.booleans())) return value;
   const prefix = tc.draw(gs.text());
   const suffix = tc.draw(gs.text());
@@ -341,10 +340,10 @@ function secretKey(tc: TestCase, index: number, secretValues: readonly string[])
 
 const nestedFixtureGen = gs.composite<NestedFixture>((tc) => {
   const broad = tc.draw(gs.text({ minSize: 1 }));
-  // Guarantees at least one secret containing every metacharacter the task
-  // calls out; redact.ts replaces values with String.prototype.split/join
-  // rather than a RegExp, but an unconstrained text generator would almost
-  // never land on a metacharacter-heavy string at any case count.
+  // Guarantees at least one secret containing every metacharacter that
+  // would change a regular expression if it were left unescaped. The
+  // matcher is an alternation of escaped literals, and an unconstrained
+  // text generator would almost never land on a metacharacter-heavy string.
   const meta = tc.draw(gs.text({ alphabet: ".*+()[]\\$^", minSize: 1, maxSize: 20 }));
   // `base` may end up shorter than MIN_REDACTABLE_LENGTH (an "abc"), and
   // `suffix` is drawn wide enough that `combined` = base + suffix always
