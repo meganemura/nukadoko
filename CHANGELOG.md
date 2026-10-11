@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A compat World can receive `this.parameters`.**
+  The constructor always received `{}`, so glue that read
+  `this.parameters` (a cucumber.js profile's `worldParameters`, or
+  `--world-parameters`) saw `undefined` until the value was used.
+  Set the object on `worldParameters` in `nukadoko.config.ts`.
+  The default is still `{}`. There is no command line flag for it.
 - **`nuka session clear --env <typo>` and `nuka session stop <typo>` no longer succeed silently.**
   `session clear --env` of an environment the config does not define exits 1 and names it, unless session files are still left under that name.
   Those files are still cleared, the command exits 0, and stderr names the environment.

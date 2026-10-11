@@ -1529,6 +1529,7 @@ import { Given, When, Then } from "nukadoko/compat";
   write. `class MyWorld extends defineWorld({...})` adds a type to `this`.
   Cucumber reserves `attach`, `log`, `link`, and `parameters`. These keys
   cannot be measured or declared, and an overwrite causes an error.
+  `parameters` is `worldParameters` from config, and the default is `{}`.
   `page` and `request` are harness getters, not bag fields. `defineWorld`
   refuses either name when the step file is imported. `nuka check` reports
   that refusal as `step-file-import-failed`, and `nuka run` stops with the
@@ -2679,6 +2680,7 @@ missing file.
 | `requestContext` | the matching `newContext` options for `ctx.request()` (below) |
 | `secrets` | `public`/`redact` lists that adjust a key's redaction handling (above) |
 | `parameterTypes` | custom cucumber-expressions parameter types (below) |
+| `worldParameters` | object a compat World receives as `parameters` (default `{}`, below) |
 | `fixtures` | user-defined fixtures (see "Fixtures") |
 | `fixtureTimeout` | default setup/teardown timeout per fixture instance, in ms (see "Fixtures") |
 | `stepTimeout` | how long a typed step's own `run` may take, in ms (default 1,200,000; `defineStep({ timeout })` overrides it, compat steps are not covered) |
@@ -2753,6 +2755,14 @@ built-in types. A project-specific definition of `{int}` would silently change
 each pattern that uses it. The transformer performs coercion. It runs
 with that scenario's World as `this`, and a Promise it returns is awaited
 before the step runs. The args schema remains the contract.
+
+`worldParameters` is the object a compat World's constructor receives as
+`parameters`, which glue reads as `this.parameters`. cucumber-js takes the
+same object from its configuration or from `--world-parameters`. The
+default is `{}`. Config is the only place it is set. A command line flag
+beside the key would be a second source for one object, and the two could
+disagree. The value must be a plain object. An array, a string, or `null`
+fails config load, so a step never sees an empty object in its place.
 
 An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
 version?: () => string | Promise<string> }`. Its `baseURL` overrides the

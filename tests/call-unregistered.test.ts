@@ -38,6 +38,7 @@ function baseConfig(): NukadokoConfig {
     retention: { runs: 20, adHocDays: 7 },
     stepTimeout: 1_200_000,
     browserType: "chromium",
+    worldParameters: {},
   };
 }
 

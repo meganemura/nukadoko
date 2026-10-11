@@ -33,6 +33,19 @@ CommonJS のスイートでは、`nuka init` は代わりに `nukadoko.config.mt
 `nuka init` は `nukadoko.config.ts` か `nukadoko.config.mts` のどちらかが既に存在する場合は実行を拒否し、`<featuresDir>/steps/` を作成し、`.nukadoko/` を `.gitignore` に追加し、(まだ空の)語彙を発見する self-check で終わります。
 `featuresDir` はデフォルトで `features`(cucumber-js 自身の規約)なので、ほとんどのスイートは上書き不要であり、discovery はディレクトリ全体をたどるため、その配下の別の場所にある step ファイル(`features/step_definitions/`、`features/support/`)も並べ替えは不要です。
 
+`this.parameters` を読む cucumber-js スイートは、そのオブジェクトを cucumber.js プロファイルの `worldParameters` か、コマンドラインの `--world-parameters` から受け取っていました。
+同じオブジェクトを `nukadoko.config.ts` の `worldParameters` に置いてください。
+World のコンストラクタはそれを `parameters` として受け取ります。
+デフォルトは `{}` です。
+それを渡すコマンドラインのフラグはありません。
+オブジェクトを設定する場所はこのキーだけです。
+
+```ts
+export default defineConfig({
+  worldParameters: { baseUrl: "http://localhost:..." },
+});
+```
+
 ## Stage 1: import を差し替える
 
 step ファイルが使っている import を 1 つ差し替えます:

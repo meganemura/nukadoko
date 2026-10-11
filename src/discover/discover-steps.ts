@@ -135,7 +135,10 @@ export interface DiscoveryResult {
    * schemas, and its `attach`/`log`/`link` wired to the given
    * `declaredCollector` (src/run/run-scenario.ts passes its own per-pickle
    * collector here, directly, for the module-identity reason
-   * src/compat/world.ts's own header explains). Bound
+   * src/compat/world.ts's own header explains). `parameters` is likewise
+   * only forwarded: this closure has no object of its own, and the caller
+   * passes `config.worldParameters`, the only place that object is
+   * declared. Bound
    * to the *exact* module instance this discovery run's own scoped tsx
    * import loaded src/compat/world.ts through (see that file's header for
    * why identity matters here) — callers (src/run/run-scenario.ts) never
@@ -143,6 +146,7 @@ export interface DiscoveryResult {
   readonly instantiateCompatWorld: (
     ctx: StepContext,
     declaredCollector: DeclaredCollector,
+    parameters: Readonly<Record<string, unknown>>,
   ) => InstantiatedWorld;
   /** Every Before/After hook any step file registered during this run — not
    * attributed to a file (see src/compat/hooks.ts's header), read once here
@@ -508,8 +512,11 @@ export async function discoverSteps(
       // `declaredWorldSchemas` is curried in here so
       // `instantiateWorldForPickle` never needs to reach
       // back into src/compat/define-world.ts's own buffer itself.
-      instantiateCompatWorld: (ctx: StepContext, declaredCollector: DeclaredCollector) =>
-        compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector),
+      instantiateCompatWorld: (
+        ctx: StepContext,
+        declaredCollector: DeclaredCollector,
+        parameters: Readonly<Record<string, unknown>>,
+      ) => compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector, parameters),
       compatHooks: compatHooksModule.getRegisteredHooks(),
       compatRunHooks: compatRunHooksModule.getRegisteredRunHooks(),
       // Read through `compatRegistry` — already loaded above for the step

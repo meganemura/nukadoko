@@ -1310,6 +1310,7 @@ import { Given, When, Then } from "nukadoko/compat";
   `class MyWorld extends defineWorld({...})` は `this` に型を付けます。
   cucumber 自身の `attach` / `log` / `link` / `parameters` は予約キーです。
   計測されず、宣言もできず、上書きは黙った破壊の代わりにエラーになります。
+  `parameters` は config の `worldParameters` で、デフォルトは `{}` です。
   `page` と `request` はバッグのフィールドではなく、harness の getter です。
   `defineWorld` は step ファイルの import 時に、どちらの名前も拒みます。
   `nuka check` はその拒否を `step-file-import-failed` として報告し、`nuka run` は同じメッセージで止まります。
@@ -2206,6 +2207,7 @@ default export が無いファイル、または default export が Promise で�
 | `requestContext` | `ctx.request()` に対応する `newContext` のオプション(下記) |
 | `secrets` | `public`/`redact` のリスト。キーごとの redact の扱いを調整する(上記) |
 | `parameterTypes` | カスタムの cucumber-expressions parameter type(下記) |
+| `worldParameters` | compat の World が `parameters` として受け取るオブジェクト(デフォルトは `{}`。下記) |
 | `fixtures` | ユーザー定義の fixture(「Fixtures」を参照) |
 | `fixtureTimeout` | fixture インスタンスごとの setup/teardown の既定タイムアウト(ms)(「Fixtures」を参照) |
 | `stepTimeout` | typed step 自身の `run` に許す時間(ms、既定 1,200,000。`defineStep({ timeout })` が上書きし、compat step は対象外) |
@@ -2268,6 +2270,14 @@ nukadoko には登録を置くための support ファイルという形式が�
 transformer は型強制です。
 その `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
 契約であり続けるのは args のスキーマです。
+
+`worldParameters` は、compat の World のコンストラクタが `parameters` として受け取るオブジェクトであり、glue はそれを `this.parameters` として読みます。
+cucumber-js は同じオブジェクトを自分の設定か `--world-parameters` から取っていました。
+デフォルトは `{}` です。
+設定する場所は config だけです。
+キーの横にコマンドラインのフラグを置くと、1 つのオブジェクトに出所が 2 つでき、両者が食い違うことがあります。
+値はプレーンなオブジェクトでなければなりません。
+配列、文字列、`null` は config のエラーであり、step が欠落として読んでしまう空のオブジェクトにはなりません。
 
 environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", version?: () => string | Promise<string> }` です。
 その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。

@@ -23,8 +23,16 @@ function parsedWorldParameters(input: unknown): unknown {
   if (!result.success) {
     throw new Error(result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "));
   }
-  return (result.data as { worldParameters?: unknown }).worldParameters;
+  return result.data.worldParameters;
 }
+
+const notAnObject = gs.oneOf<unknown>(
+  gs.text({ maxSize: 24 }),
+  gs.integers(),
+  gs.booleans(),
+  gs.just(null),
+  gs.arrays(gs.text({ maxSize: 8 }), { maxSize: 3 }),
+);
 
 it("keeps a plain worldParameters object and defaults a missing one to {}", () =>
   hegel.test((tc) => {
@@ -32,4 +40,10 @@ it("keeps a plain worldParameters object and defaults a missing one to {}", () =
     const include = tc.draw(gs.booleans());
     const parsed = parsedWorldParameters(include ? { worldParameters: parameters } : {});
     expect(parsed).toEqual(include ? parameters : {});
+  }));
+
+it("rejects a worldParameters value that is not a plain object", () =>
+  hegel.test((tc) => {
+    const bad = tc.draw(notAnObject);
+    expect(configSchema.safeParse({ worldParameters: bad }).success).toBe(false);
   }));

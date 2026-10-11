@@ -6,7 +6,7 @@ import type { FixtureDefinition } from "../step/fixture-types.js";
 // Responsibility: the validated shape of nukadoko.config.ts's default
 // export, per docs/spec.md's config section (featuresDir, baseURL, envFiles,
 // environments, stateDir, browser, browserContext, requestContext, secrets,
-// parameterTypes). `.strict()` is
+// parameterTypes, worldParameters). `.strict()` is
 // what makes an unknown key an error instead of a silent no-op. `environments`
 // is now typed exactly: baseURL/
 // envFiles per environment layer on top of the top-level values (resolution
@@ -247,6 +247,18 @@ export const configSchema = z
     // types" as its own no-op default, so this mirrors that rather than
     // making every call site handle `undefined` separately.
     parameterTypes: z.array(parameterTypeConfigSchema).default([]),
+    /** The object a compat World's constructor receives as `parameters`,
+     * which glue reads as `this.parameters`. cucumber-js takes the same
+     * object from its configuration (`worldParameters`) or from
+     * `--world-parameters`. This key is that object. There is no CLI flag
+     * beside it: two ways to supply one object can disagree, and a migrated
+     * suite's parameters are a fixed input of the project, which is what
+     * config already is. Default `{}`: a suite that never set them keeps
+     * seeing an empty object, the value the constructor passed before this
+     * key existed. `z.record` rejects an array, a string, `null`, and a
+     * class instance, so a value that is not a plain object fails at load
+     * instead of arriving as a shape `this.parameters.baseUrl` cannot read. */
+    worldParameters: z.record(z.string(), z.unknown()).default({}),
     /** User-defined fixtures (docs/spec.md "Fixtures") — layered
      * *after* the builtin set (`page`/`context`/`request`/... —
      * src/step/context.ts's `BUILTIN_FIXTURE_NAMES`), so a key here with the

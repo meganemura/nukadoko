@@ -261,11 +261,17 @@ export interface InstantiatedWorld {
  * also points the allure-js runtime shim's "active
  * collector" pointer at; passed directly here (not read back through that
  * pointer) for the module-identity reason this file's own header explains.
+ * @param parameters `nukadoko.config.ts`'s `worldParameters`, the only
+ * place that object is declared. Passed through, not copied: every World
+ * in one run shares that one object, which is what cucumber-js does with
+ * its configuration, so a write one scenario makes is visible to the next.
+ * A copy would be a second object the suite did not declare.
  */
 export function instantiateWorldForPickle(
   ctx: MeasuredPageContext,
   declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>>,
   declaredCollector: DeclaredCollector,
+  parameters: Readonly<Record<string, unknown>>,
 ): InstantiatedWorld {
   const Ctor = registeredConstructor ?? World;
   const params: WorldConstructorParams = {
@@ -304,7 +310,7 @@ export function instantiateWorldForPickle(
       }
       declaredCollector.recordLinks(urls.map((url) => ({ url })));
     },
-    parameters: {},
+    parameters,
   };
   const instance = new Ctor(params);
   runtimeByWorld.set(instance, ctx);

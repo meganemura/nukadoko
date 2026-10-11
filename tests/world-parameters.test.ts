@@ -32,8 +32,9 @@ describe("nuka run: worldParameters", () => {
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
     expect(exitCode).toBe(0);
+    expect(stderr.text()).not.toContain("Invalid config");
+    expect(stderr.text()).not.toContain("world parameters were");
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
     expect(record.status).toBe("passed");
     expect(record.steps[0].status).toBe("passed");

@@ -369,10 +369,12 @@ export interface RunScenarioOptions {
    * schemas, with its `attach`/`log`/
    * `link` wired to the given declared collector. Called exactly once per
    * pickle, with this function's own
-   * freshly created `declaredCollector`. */
+   * freshly created `declaredCollector` and with `config.worldParameters`
+   * as `parameters` (the only declaration of that object). */
   readonly instantiateCompatWorld: (
     ctx: StepContext,
     declaredCollector: DeclaredCollector,
+    parameters: Readonly<Record<string, unknown>>,
   ) => InstantiatedWorld;
   /** One line when this pickle's World cannot be constructed. The caller
    * owns stderr (a worker turns the same line into a note). Optional so a
@@ -1532,7 +1534,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // the loop. Fail this scenario instead, with one line, and return a record.
   let created: InstantiatedWorld;
   try {
-    created = instantiateCompatWorld(contextHandle.ctx, declaredCollector);
+    created = instantiateCompatWorld(contextHandle.ctx, declaredCollector, config.worldParameters);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     const setupMessage = `World setup failed: ${detail}`;

@@ -44,6 +44,19 @@ directory, so step files living elsewhere under it
 (`features/step_definitions/`, `features/support/`) need no reshuffling
 either.
 
+A cucumber-js suite that reads `this.parameters` was given that object by
+`worldParameters` in its cucumber.js profile, or by `--world-parameters`
+on the command line. Put the same object on `worldParameters` in
+`nukadoko.config.ts`. The World constructor receives it as `parameters`.
+The default is `{}`. There is no command line flag for it: the config key
+is the only place the object is set.
+
+```ts
+export default defineConfig({
+  worldParameters: { baseUrl: "http://localhost:..." },
+});
+```
+
 ## Stage 1: switch the import
 
 Change the one import your step files use:

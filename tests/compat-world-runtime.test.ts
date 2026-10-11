@@ -137,18 +137,24 @@ describe("instantiateWorldForPickle (src/compat/world.ts): default World, attach
     // so registeredConstructor is still unset — the `?? World` fallback
     // branch this asserts on would otherwise never run.
     const collector = createDeclaredCollector();
-    const { world, instrumentation } = instantiateWorldForPickle(stubCtx(), {}, collector);
+    const { world, instrumentation } = instantiateWorldForPickle(stubCtx(), {}, collector, {});
     expect(world).toBeInstanceOf(World);
     expect(world.constructor).toBe(World);
     instrumentation.beginStep();
     expect(instrumentation.snapshot()).toEqual({ reads: [], writes: [] });
   });
 
+  it("passes the supplied parameters object through by identity", () => {
+    const parameters = { baseUrl: "http://example.test", retries: 2 };
+    const { world } = instantiateWorldForPickle(stubCtx(), {}, createDeclaredCollector(), parameters);
+    expect(world.parameters).toBe(parameters);
+  });
+
   it("attach() writes a file and records it once the collector has a directory; log()/link() record regardless", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-world-unit-"));
     try {
       const collector = createDeclaredCollector();
-      const { world } = instantiateWorldForPickle(stubCtx(), {}, collector);
+      const { world } = instantiateWorldForPickle(stubCtx(), {}, collector, {});
 
       // Before beginStep(): recordAttachment is a documented no-op (no
       // directory to write into yet); log/link still record.
@@ -289,6 +295,7 @@ describe("instantiateWorldForPickle: setWorldConstructor selects the registered 
         stubCtx(),
         {},
         createDeclaredCollector(),
+        {},
       );
       expect(world).toBeInstanceOf(CustomWorld);
       instrumentation.beginStep();
