@@ -105,6 +105,32 @@ describe("redactString", () => {
     expect(redactString("a%20b", secrets)).toBe("a%20b");
     expect(redactString("a b", secrets)).toBe("a b");
   });
+
+  it("does not rewrite a token that contains another secret", () => {
+    // `{{secret.API_TOKEN}}` contains the loaded values "secret", "TOKEN",
+    // and "API_". Applying those values to the token just written nests a
+    // new token inside it.
+    const secrets: SecretEntry[] = [
+      { name: "API_TOKEN", value: "tok_live_example" },
+      { name: "DB_PASSWORD", value: "secret" },
+      { name: "WORD", value: "TOKEN" },
+      { name: "PREFIX", value: "API_" },
+    ];
+    const input = "Authorization: Bearer tok_live_example";
+    const expected = "Authorization: Bearer {{secret.API_TOKEN}}";
+    expect(redactString(input, secrets)).toBe(expected);
+    expect(redactString(expected, secrets)).toBe(expected);
+    expect(redactString(`${expected} secret`, secrets)).toBe(`${expected} {{secret.DB_PASSWORD}}`);
+    expect(redact(input, secrets)).toBe(expected);
+    expect(redact(redact(input, secrets), secrets)).toEqual(redact(input, secrets));
+  });
+
+  it("is idempotent when the secret is a substring of its own token", () => {
+    const secrets: SecretEntry[] = [{ name: "DB_PASSWORD", value: "secret" }];
+    const once = redact("secret", secrets);
+    expect(once).toBe("{{secret.DB_PASSWORD}}");
+    expect(redact(once, secrets)).toEqual(once);
+  });
 });
 
 describe("redact", () => {
@@ -333,12 +359,18 @@ const nestedFixtureGen = gs.composite<NestedFixture>((tc) => {
   // meta/base/combined all land under the threshold.
   const guaranteed = tc.draw(gs.text({ minSize: MIN_REDACTABLE_LENGTH }));
 
+  // "secret", "TOKEN", and "API_" are pieces of the token text
+  // `{{secret.NAME}}`. A generator that never draws them never asks what a
+  // second redact does to a token an earlier replacement just wrote.
   const secrets: SecretEntry[] = [
     { name: "S_BROAD", value: broad },
     { name: "S_META", value: meta },
     { name: "S_BASE", value: base },
     { name: "S_COMBINED", value: combined },
     { name: "S_GUARANTEED", value: guaranteed },
+    { name: "DB_PASSWORD", value: "secret" },
+    { name: "WORD", value: "TOKEN" },
+    { name: "PREFIX", value: "API_" },
   ];
   const secretValues = secrets.map((entry) => entry.value);
   const depth = tc.draw(gs.integers({ minValue: 0, maxValue: 30 }));
@@ -350,6 +382,46 @@ const nestedFixtureGen = gs.composite<NestedFixture>((tc) => {
 // Walks both keys and values: a key is redacted exactly like a value is
 // (redact.ts), so "no secret survives anywhere" has to check the key
 // strings too, not just what Object.values sees.
+function tokenLiterals(secrets: readonly SecretEntry[]): string[] {
+  const tokens = new Set<string>();
+  for (const entry of secrets) {
+    if (entry.value.length >= MIN_REDACTABLE_LENGTH) tokens.add(`{{secret.${entry.name}}}`);
+  }
+  return [...tokens].sort((a, b) => b.length - a.length);
+}
+
+// A loaded value that is also a piece of `{{secret.NAME}}` still occurs
+// inside the token that replaced some other occurrence. That interior is
+// the marker, not a value left in the clear. What must not survive is an
+// occurrence outside those tokens.
+function secretOccursOutsideTokens(text: string, value: string, tokens: readonly string[]): boolean {
+  const covered = new Array<boolean>(text.length).fill(false);
+  for (const token of tokens) {
+    let from = 0;
+    while (from <= text.length - token.length) {
+      const at = text.indexOf(token, from);
+      if (at < 0) break;
+      for (let i = at; i < at + token.length; i += 1) covered[i] = true;
+      from = at + token.length;
+    }
+  }
+  let from = 0;
+  while (from <= text.length - value.length) {
+    const at = text.indexOf(value, from);
+    if (at < 0) return false;
+    let inside = true;
+    for (let i = at; i < at + value.length; i += 1) {
+      if (!covered[i]) {
+        inside = false;
+        break;
+      }
+    }
+    if (!inside) return true;
+    from = at + 1;
+  }
+  return false;
+}
+
 function collectStrings(node: unknown): string[] {
   if (typeof node === "string") return [node];
   if (Array.isArray(node)) return node.flatMap(collectStrings);
@@ -457,8 +529,9 @@ describe("redact property-based", () => {
       const outcome = redactOrSkip(structure, secrets);
       if (outcome.skipped) return;
       const strings = collectStrings(outcome.value);
+      const tokens = tokenLiterals(secrets);
       for (const { name, value } of eligible) {
-        if (strings.some((candidate) => candidate.includes(value))) {
+        if (strings.some((candidate) => secretOccursOutsideTokens(candidate, value, tokens))) {
           throw new Error(`secret ${name} (${JSON.stringify(value)}) survived redaction`);
         }
       }
@@ -467,17 +540,20 @@ describe("redact property-based", () => {
 
   it("is idempotent: redacting an already-redacted value changes nothing further", () => {
     hegel.test((tc) => {
-      const { structure, secrets } = tc.draw(nestedFixtureGen);
+      const { structure, secrets, eligible } = tc.draw(nestedFixtureGen);
       const once = redactOrSkip(structure, secrets);
       if (!once.skipped) {
         const twice = redact(once.value, secrets);
         expect(twice).toEqual(once.value);
       }
 
-      const s = tc.draw(gs.text());
-      const onceStr = redactString(s, secrets);
-      const twiceStr = redactString(onceStr, secrets);
-      expect(twiceStr).toBe(onceStr);
+      const plain = tc.draw(gs.text());
+      expect(redactString(redactString(plain, secrets), secrets)).toBe(redactString(plain, secrets));
+
+      const value = tc.draw(gs.sampledFrom(eligible.map((entry) => entry.value)));
+      const planted = `${tc.draw(gs.text())}${value}${tc.draw(gs.text())}`;
+      const onceStr = redactString(planted, secrets);
+      expect(redactString(onceStr, secrets)).toBe(onceStr);
     });
   });
 
