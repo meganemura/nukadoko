@@ -102,6 +102,42 @@ describe("Before/After hook registration", () => {
     expect(() => After({ retries: 3 } as never, () => {})).toThrow(/retries/);
   });
 
+  // cucumber-js stores `name` as the hook's title. It does not decide which
+  // scenarios run, so registration keeps the tags and the timeout beside it.
+  it("Before({ name, tags }, fn) stores the name and still records the tags", () => {
+    const fn = () => {};
+    Before({ name: "seed the database", tags: "not @wip" } as { tags: string }, fn);
+    const hook = lastHook() as { name?: string; tags?: string; type: string; fn: unknown };
+    expect(hook).toMatchObject({ type: "before", tags: "not @wip", name: "seed the database", fn });
+  });
+
+  it("After({ name }, fn) stores the name", () => {
+    const fn = () => {};
+    After({ name: "close the database" } as { tags?: string }, fn);
+    expect((lastHook() as { name?: string; type: string }).name).toBe("close the database");
+    expect(lastHook().type).toBe("after");
+  });
+
+  it("Before({ name, tags, timeout }, fn) keeps the timeout beside the name", () => {
+    const fn = () => {};
+    Before({ name: "seed the database", tags: "@smoke", timeout: 1000 } as { tags: string; timeout: number }, fn);
+    expect(lastHook()).toMatchObject({ type: "before", tags: "@smoke", timeoutMs: 1000, fn });
+    expect((lastHook() as { name?: string }).name).toBe("seed the database");
+  });
+
+  it("Before(fn) does not invent a name", () => {
+    Before(() => {});
+    expect(lastHook()).not.toHaveProperty("name");
+  });
+
+  it('a non-string "name" is rejected', () => {
+    expect(() => Before({ name: 1 } as never, () => {})).toThrow(/"name" must be a string/);
+  });
+
+  it('Before rejects "on", which would change where the hook runs', () => {
+    expect(() => Before({ on: "WORKER" } as never, () => {})).toThrow(/unsupported option key "on"/);
+  });
+
   it("a non-object options argument (array) throws", () => {
     expect(() => Before([] as never, () => {})).toThrow();
   });
@@ -147,5 +183,13 @@ describe("AfterStep hook registration", () => {
 
   it("an unknown options key throws for AfterStep too", () => {
     expect(() => AfterStep({ retries: 3 } as never, () => {})).toThrow(/retries/);
+  });
+
+  // cucumber-js step hooks have no `name`. Accepting it here would store a
+  // title cucumber-js itself never shows for AfterStep.
+  it("AfterStep rejects name", () => {
+    expect(() => AfterStep({ name: "after each" } as never, () => {})).toThrow(
+      'AfterStep(options, fn): unsupported option key "name" (only "tags"/"timeout" are supported)',
+    );
   });
 });

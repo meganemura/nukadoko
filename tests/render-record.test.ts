@@ -86,6 +86,22 @@ describe("renderAcceptanceRecord: hook labels", () => {
     expect(found.filter((h) => h === "#### After hook")).toHaveLength(1);
   });
 
+  it("uses a stored name as the heading and keeps the keyword heading otherwise", () => {
+    const hooks: ScenarioHookRecord[] = [
+      { type: "before", status: "ok", name: "seed the database" } as ScenarioHookRecord,
+      { type: "after", status: "ok" },
+      { type: "after_step", status: "ok", step_index: 2 },
+    ];
+    const markdown = renderAcceptanceRecord(baseOptions(hooks));
+
+    expect(headings(markdown)).toEqual([
+      "#### seed the database",
+      "#### After hook",
+      "#### AfterStep hook (step 2)",
+    ]);
+    expect(markdown).toContain('"name": "seed the database"');
+  });
+
   it("gives two after_step hooks with different step_index two distinguishable headings", () => {
     const hooks: ScenarioHookRecord[] = [
       { type: "after_step", status: "ok", step_index: 0 },

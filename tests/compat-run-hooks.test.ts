@@ -75,4 +75,34 @@ describe("BeforeAll/AfterAll registration", () => {
   it("BeforeAll({ timeout }, fn) requires a function as its second argument", () => {
     expect(() => BeforeAll({ timeout: 100 } as never, undefined as never)).toThrow();
   });
+
+  // `name` is the hook's title. `on` chooses which process runs the hook,
+  // so it stays rejected.
+  it("BeforeAll({ name }, fn) stores the name", () => {
+    const fn = () => {};
+    BeforeAll({ name: "seed the database" } as { timeout?: number }, fn);
+    expect(lastRunHook()).toMatchObject({ type: "beforeAll", fn });
+    expect((lastRunHook() as { name?: string }).name).toBe("seed the database");
+    expect(lastRunHook().timeoutMs).toBeUndefined();
+  });
+
+  it("AfterAll({ name, timeout }, fn) stores the name and the timeout", () => {
+    const fn = () => {};
+    AfterAll({ name: "close the database", timeout: 2000 } as { timeout: number }, fn);
+    expect(lastRunHook()).toMatchObject({ type: "afterAll", timeoutMs: 2000, fn });
+    expect((lastRunHook() as { name?: string }).name).toBe("close the database");
+  });
+
+  it("BeforeAll(fn) does not invent a name", () => {
+    BeforeAll(() => {});
+    expect(lastRunHook()).not.toHaveProperty("name");
+  });
+
+  it('a non-string "name" is rejected on BeforeAll', () => {
+    expect(() => BeforeAll({ name: 1 } as never, () => {})).toThrow(/"name" must be a string/);
+  });
+
+  it('BeforeAll rejects "on", which would change which process runs the hook', () => {
+    expect(() => BeforeAll({ on: "COORDINATOR" } as never, () => {})).toThrow(/unsupported option key "on"/);
+  });
 });

@@ -571,6 +571,26 @@ describe("mapHooks: status/message mapping", () => {
     expect(mapped[0]!.hook.status).toBe(statusForKind("step_error"));
     expect(mapped[0]!.hook.message).toBe("[nukadoko.failure=step_error] hook blew up");
   });
+
+  it("uses a stored name as the fixture title and keeps the keyword when the name is absent or empty", () => {
+    const record = baseRecord({
+      hooks: [
+        { type: "before", status: "ok", name: "seed the database" } as ScenarioHookRecord,
+        { type: "before", status: "ok" },
+        { type: "before", status: "ok", name: "" } as ScenarioHookRecord,
+        { type: "after", status: "ok", name: "close the database" } as ScenarioHookRecord,
+        { type: "after_step", status: "ok", step_index: 0 },
+      ],
+    });
+
+    expect(callMapHooks(record).map((entry) => entry.hook.name)).toEqual([
+      "seed the database",
+      "Before",
+      "Before",
+      "close the database",
+      "AfterStep[0]",
+    ]);
+  });
 });
 
 describe("mapScenario: scenario-wide browser evidence attaches directly to the result", () => {

@@ -128,6 +128,30 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
     expect(mapped.steps[2]!.testStep.hookId).toBe(mapped.newHooks.find((h) => h.type === "after")!.hook.id);
   });
 
+  it("keeps one generic Before hook name when registrations stored their own names", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const record = baseRecord({
+      steps: [],
+      hooks: [
+        { type: "before", status: "ok", name: "seed the database" } as ScenarioHookRecord,
+        { type: "before", status: "ok", name: "open the browser" } as ScenarioHookRecord,
+      ],
+    });
+
+    const mapped = mapScenario({
+      record,
+      stepRecords: new Map(),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: {},
+    });
+
+    expect(mapped.newHooks).toHaveLength(1);
+    expect(mapped.newHooks[0]!.hook.name).toBe("Before");
+    expect(mapped.steps[0]!.testStep.hookId).toBe(mapped.steps[1]!.testStep.hookId);
+  });
+
   it("reuses an already-assigned hookId and emits no new Hook envelope for it", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
