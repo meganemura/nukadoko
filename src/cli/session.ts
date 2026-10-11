@@ -306,7 +306,9 @@ export async function runSessionStop(options: RunSessionStopOptions): Promise<nu
 
   const outcome = await sendLiveRequest(owner.sock, { kind: "stop" });
   if (!outcome.ok) {
-    stderr.write(`Failed to stop session "${name}" (pid ${owner.pid}): ${outcome.message}\n`);
+    const message =
+      outcome.kind === "reply" ? `unrecognized reply: ${outcome.message}` : outcome.message;
+    stderr.write(`Failed to stop session "${name}" (pid ${owner.pid}): ${message}\n`);
     return 1;
   }
   if (outcome.response.status === "rejected") {

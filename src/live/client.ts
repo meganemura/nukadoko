@@ -1,5 +1,5 @@
 import { createConnection } from "node:net";
-import { encodeLine, type LiveRequest, type LiveResponse } from "./protocol.js";
+import { encodeLine, parseLiveResponse, type LiveRequest, type LiveResponse } from "./protocol.js";
 
 export type { LiveRecordResponse, LiveRejectedResponse, LiveResponse, LiveStoppedResponse } from "./protocol.js";
 
@@ -25,6 +25,12 @@ export interface LiveClientOk {
 
 export interface LiveClientError {
   readonly ok: false;
+  /** `"reply"`: a JSON value arrived and it is not a known live-session
+   * reply. `"transport"`: no such value arrived (connect, timeout, a line
+   * that is not JSON, the socket closing first). Callers word these
+   * differently, because "connecting failed" is false once a reply has
+   * arrived. */
+  readonly kind: "transport" | "reply";
   readonly message: string;
 }
 
@@ -32,12 +38,10 @@ export type LiveClientResult = LiveClientOk | LiveClientError;
 
 /**
  * Sends one request to the live session listening at `sockPath` and returns
- * its one response line. `ok: false` covers every way this can fail short
- * of the daemon itself answering — connect refused, the socket vanishing
- * mid-call, a malformed response line, or `timeoutMs` elapsing — never
- * thrown, since every caller here already has its own "how do I report a
- * failure" convention (stderr + exit 1) it applies identically whether the
- * cause was a rejection *or* a transport failure.
+ * its one response line. `ok: false` is a failure to obtain a known reply:
+ * connect refused, the socket vanishing mid-call, a line that is not JSON,
+ * a JSON value outside the reply union, or `timeoutMs` elapsing. Nothing
+ * here is thrown. Callers already report that failure as stderr and exit 1.
  */
 export function sendLiveRequest(
   sockPath: string,
@@ -50,7 +54,11 @@ export function sendLiveRequest(
     let settled = false;
 
     const timer = setTimeout(() => {
-      finish({ ok: false, message: `timed out waiting for a response after ${timeoutMs}ms` });
+      finish({
+        ok: false,
+        kind: "transport",
+        message: `timed out waiting for a response after ${timeoutMs}ms`,
+      });
     }, timeoutMs);
 
     function finish(result: LiveClientResult): void {
@@ -74,11 +82,16 @@ export function sendLiveRequest(
       }
       const line = buffer.slice(0, newlineIndex);
       try {
-        const response = JSON.parse(line) as LiveResponse;
-        finish({ ok: true, response });
+        const parsed = parseLiveResponse(JSON.parse(line));
+        if (!parsed.ok) {
+          finish({ ok: false, kind: "reply", message: parsed.message });
+          return;
+        }
+        finish({ ok: true, response: parsed.response });
       } catch (error) {
         finish({
           ok: false,
+          kind: "transport",
           message: `malformed response from the live session: ${
             error instanceof Error ? error.message : String(error)
           }`,
@@ -86,10 +99,14 @@ export function sendLiveRequest(
       }
     });
     socket.on("error", (error: Error) => {
-      finish({ ok: false, message: error.message });
+      finish({ ok: false, kind: "transport", message: error.message });
     });
     socket.on("close", () => {
-      finish({ ok: false, message: "the live session closed the connection before responding" });
+      finish({
+        ok: false,
+        kind: "transport",
+        message: "the live session closed the connection before responding",
+      });
     });
   });
 }

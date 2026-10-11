@@ -167,9 +167,11 @@ async function delegateToLiveSession(
   });
 
   if (!outcome.ok) {
-    stderr.write(
-      `Session "${sessionName}" is live (pid ${sessionPid}) but connecting to it failed: ${outcome.message}\n`,
-    );
+    const reason =
+      outcome.kind === "reply"
+        ? `sent an unrecognized reply: ${outcome.message}`
+        : `connecting to it failed: ${outcome.message}`;
+    stderr.write(`Session "${sessionName}" is live (pid ${sessionPid}) but ${reason}\n`);
     return 1;
   }
 
