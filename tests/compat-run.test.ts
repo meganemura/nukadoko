@@ -99,10 +99,10 @@ describe("nuka run: compat step execution", () => {
     // `false`.
     expect(firstStepRecord.mutates).toBeNull();
 
-    // RegExp capture arrives as a plain string, unlike a typed step's
-    // coerced `{int}`.
+    // `(\d+)` is the built-in int parameter type, so the capture arrives as
+    // a number, the same conversion cucumber-js applies to that group.
     const secondStepRecord = await readStepRecord(rootDir, patterns.steps[1].step_record_id);
-    expect(secondStepRecord.args).toEqual(["3"]);
+    expect(secondStepRecord.args).toEqual([3]);
 
     // Proves asymmetry #2 closed: the compat-registered `legacyBoolean`
     // parameter type transformed "yes" -> true before matching/args ever

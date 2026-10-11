@@ -19,9 +19,9 @@ Given("a legacy project {string} exists", function (name: string) {
 });
 
 // RegExp pattern (string and RegExp patterns
-// alike) — its capture group arrives as a plain string (RegExp semantics),
-// unlike a typed step's coerced `{int}`.
-When(/^a legacy request is made with (\d+) items$/, function (count: string) {
+// alike). `(\d+)` is the built-in int parameter type, so the capture
+// arrives as a number, the same conversion cucumber-js applies.
+When(/^a legacy request is made with (\d+) items$/, function (count: number) {
   if (Number(count) < 0) {
     throw new Error("negative item count");
   }

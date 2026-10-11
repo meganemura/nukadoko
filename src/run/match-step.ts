@@ -1,4 +1,4 @@
-import { CucumberExpression } from "@cucumber/cucumber-expressions";
+import { CucumberExpression, RegularExpression, type ParameterTypeRegistry } from "@cucumber/cucumber-expressions";
 import type { PickleStepArgument } from "@cucumber/messages";
 import type { z } from "zod";
 import { buildExpression } from "../binding/expression.js";
@@ -9,14 +9,16 @@ import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 
 // Responsibility: the run-time half of the shared seam — build the matching
-// CucumberExpression (or, for a compat RegExp pattern, nothing to build at
-// all) for every pattern in the vocabulary directly from src/binding/* (not
-// src/check/binding-check.ts, which mixes in check-only issue reporting —
-// this module runs matches and binds at the same layer check does, without
-// mixing in check-only knowledge), match one pickle step's text against
-// them, and zip the matched values onto the step's named capture keys plus
-// the one table/docstring key they left unconsumed ("final argument" rule,
-// enforced here at run time exactly as `nuka check` enforces it statically).
+// CucumberExpression for every string pattern in the vocabulary directly
+// from src/binding/* (not src/check/binding-check.ts, which mixes in
+// check-only issue reporting — this module runs matches and binds at the
+// same layer check does, without mixing in check-only knowledge), match one
+// pickle step's text against them, and zip the matched values onto the
+// step's named capture keys plus the one table/docstring key they left
+// unconsumed ("final argument" rule, enforced here at run time exactly as
+// `nuka check` enforces it statically). A compat RegExp pattern keeps its
+// regexp and this vocabulary's registry; each match builds a fresh
+// RegularExpression, see `matchPickleStep`.
 // A pattern that fails to build (bad capture name, unknown parameter type)
 // can never match anything at run time either — reporting *why* it failed to
 // build is `nuka check`'s job, not this module's; here it is simply skipped,
@@ -30,9 +32,13 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 // `CucumberExpression` with no named-capture requirement (identical
 // treatment to src/check/binding-check.ts's own compat handling: the
 // migration door's promise is unmodified cucumber-expressions syntax), and a
-// compat *RegExp* pattern needs no building at all, matched via `.exec()`
-// with its captured group strings as positional values (cucumber-js's own
-// semantics). `buildStepBindings`'s registry is built from
+// compat *RegExp* pattern is matched through `RegularExpression` on that
+// same registry. cucumber-js looks each capture group's source up there, so
+// a group whose source is a built-in type (`\d+`, `-?\d+`) arrives as a
+// number, an unmatched optional group arrives as `null`, and a group that
+// matches no registered type stays a string. A raw `.exec()` array would
+// hand the glue the capture text instead, and `n + 1` would concatenate.
+// `buildStepBindings`'s registry is built from
 // `[...customTypes, ...compatParameterTypes]` — the exact same composition
 // order src/check/binding-check.ts already uses — so a pattern using a
 // compat-registered `defineParameterType` matches here exactly as `nuka
@@ -55,6 +61,11 @@ export type StepBinding =
        * to zip a table/docstring key against. */
       readonly captures: readonly Capture[];
       readonly regexp: RegExp;
+      /** The registry composed for this vocabulary. Each match builds a
+       * fresh `RegularExpression` against it: the capture is converted by
+       * the parameter type cucumber-js would use, and a `/g` or `/y`
+       * pattern cannot carry `lastIndex` into the next text. */
+      readonly parameterTypeRegistry: ParameterTypeRegistry;
     };
 
 /**
@@ -114,6 +125,7 @@ export function buildStepBindings(
         pattern,
         captures: [],
         regexp: entry.compat.pattern,
+        parameterTypeRegistry: registry,
       });
     }
   }
@@ -156,12 +168,15 @@ export type MatchOutcome =
  * never `Argument.getValue()`, so a transformer is only ever invoked at
  * `nuka run` time.
  *
- * A compat RegExp binding is matched with a *fresh* `RegExp` built from its
- * `source`/`flags`, for the exact reason src/check/feature-check.ts's own
- * `checkedPatternMatches` already documents: a `/g`/`/y`-flagged pattern's
- * `lastIndex` must not carry state
- * across the many pickle-step texts this function is called with, one at a
- * time, over a `nuka run` invocation's lifetime.
+ * A compat RegExp binding is matched by a *fresh* `RegularExpression` whose
+ * `RegExp` is built from the binding's `source`/`flags`. `RegularExpression`
+ * reads captures through `exec`, so a `/g`/`/y`-flagged pattern's
+ * `lastIndex` must not carry state across the many pickle-step texts this
+ * function is called with, one at a time, over a `nuka run` invocation's
+ * lifetime (the same state src/check/feature-check.ts's own
+ * `checkedPatternMatches` already guards against). Values come from
+ * `Argument.getValue`, the same call the expression branch makes, so a
+ * group is converted by the parameter type registered for its source.
  */
 export function matchPickleStep(text: string, bindings: readonly StepBinding[]): MatchOutcome {
   const byStep = new Map<string, { binding: StepBinding; values: readonly unknown[] }>();
@@ -170,9 +185,16 @@ export function matchPickleStep(text: string, bindings: readonly StepBinding[]):
       continue;
     }
     if (binding.matcherKind === "regexp") {
-      const match = new RegExp(binding.regexp.source, binding.regexp.flags).exec(text);
-      if (match !== null) {
-        byStep.set(binding.stepName, { binding, values: match.slice(1) });
+      const expression = new RegularExpression(
+        new RegExp(binding.regexp.source, binding.regexp.flags),
+        binding.parameterTypeRegistry,
+      );
+      const args = expression.match(text);
+      if (args !== null) {
+        byStep.set(binding.stepName, {
+          binding,
+          values: args.map((argument) => argument.getValue(null)),
+        });
       }
       continue;
     }
