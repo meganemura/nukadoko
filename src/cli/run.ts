@@ -948,7 +948,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // boundary lines across every pass (1..total), not per pass.
       const repeatTally = createRepeatTally();
       if (hasPickles && !beforeAllFailed) {
-        for (let iteration = 0; iteration < repeat; iteration += 1) {
+        iterations: for (let iteration = 0; iteration < repeat; iteration += 1) {
         for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
           const executionIndex = iteration * flatPickles.length + pickleIndex;
           let storageState: StorageState | null = null;
@@ -963,15 +963,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               storageState = await readSessionFile(thisSessionFilePath!, session);
             } catch (error) {
               stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-              // Deliberately not `return 1` (which is what this path did
-              // before run-scope hooks existed): BeforeAll has already run by
-              // now, and AfterAll's whole contract is that teardown is
-              // attempted whenever setup was — returning straight out would
-              // leak whatever BeforeAll started. Break instead, let the
-              // AfterAll block below run, and let `allPassed` carry the same
-              // non-zero exit code out.
+              // Leave the iteration loop, not only this pass's pickle loop.
+              // BeforeAll has already run, so this is `break` rather than
+              // `return 1`: AfterAll still has to run. A later pass must not
+              // start after this read has failed, or it could run scenarios
+              // once `allPassed` is already false.
               allPassed = false;
-              break;
+              break iterations;
             }
           }
 
