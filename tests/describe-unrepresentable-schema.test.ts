@@ -3,14 +3,16 @@ import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka describe` on a step whose args or returns schema
-// JSON Schema cannot represent. Zod throws ("Transforms cannot be
-// represented in JSON Schema", "Date cannot be represented in JSON
-// Schema"), and the command's catch used to print only that message and
-// write no contract. The step name, and every other field, disappeared.
-// The contract has to come out anyway, with the failed side null and an
-// error that names the step, and the command exits 1 the way an unreadable
-// `from` already does. A sibling whose schema can be represented still
-// describes, including while those other steps sit in the same vocabulary.
+// JSON Schema cannot represent. Zod throws ("Date cannot be represented
+// in JSON Schema", and the same for a transform on the output schema),
+// and the command's catch used to print only that message and write no
+// contract. The step name, and every other field, disappeared. The
+// contract has to come out anyway, with the failed side null and an error
+// that names the step, and the command exits 1 the way an unreadable
+// `from` already does. Args are the input schema, so a transform there is
+// representable and still describes. A sibling whose schema can be
+// represented still describes, including while those other steps sit in
+// the same vocabulary.
 
 const PROJECT = fixture("unrepresentable-schema-project");
 
@@ -43,19 +45,43 @@ async function describeStep(name: string): Promise<Described> {
 
 describe("nuka describe: a schema JSON Schema cannot represent", () => {
   it("names the step when args cannot be represented, and still prints the rest of the contract", async () => {
-    const described = await describeStep("trim");
+    const described = await describeStep("note-moment");
 
     expect(described.exitCode).toBe(1);
     expect(described.stderr).toBe("");
+    expect(described.contract.name).toBe("note-moment");
+    expect(described.contract.description).toBe("Note a moment");
+    expect(described.contract.args).toBeNull();
+    expect(described.contract.args_error).toContain("note-moment");
+    expect(described.contract.args_error).toContain("Date cannot be represented in JSON Schema");
+    expect(described.contract.returns).toMatchObject({
+      type: "object",
+      properties: { noted: { type: "boolean" } },
+      required: ["noted"],
+      additionalProperties: false,
+    });
+    expect(described.contract.returns_error).toBeUndefined();
+  });
+
+  it("still describes a transform on args, because args are the input schema", async () => {
+    const described = await describeStep("trim");
+
+    expect(described.exitCode).toBe(0);
+    expect(described.stderr).toBe("");
     expect(described.contract.name).toBe("trim");
     expect(described.contract.description).toBe("Trim a name");
-    expect(described.contract.args).toBeNull();
-    expect(described.contract.args_error).toContain("trim");
-    expect(described.contract.args_error).toContain("Transforms cannot be represented in JSON Schema");
+    expect(described.contract.args).toMatchObject({
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+      additionalProperties: false,
+    });
+    expect(described.contract.args_error).toBeUndefined();
     expect(described.contract.returns).toMatchObject({
       type: "object",
       properties: { name: { type: "string" } },
       required: ["name"],
+      additionalProperties: false,
     });
     expect(described.contract.returns_error).toBeUndefined();
   });
