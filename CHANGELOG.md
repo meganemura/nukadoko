@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **A hook's `name` is metadata.** `Before({ name })`, `After({ name })`,
+  `BeforeAll({ name })`, and `AfterAll({ name })` used to throw at
+  registration, so the step file failed to import. The string is stored
+  and used as the hook's title. `on` is still rejected. `AfterStep` still
+  rejects `name`.
 - **A compat World can receive `this.parameters`.**
   The constructor always received `{}`, so glue that read
   `this.parameters` (a cucumber.js profile's `worldParameters`, or

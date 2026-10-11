@@ -59,7 +59,7 @@ import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js
 import { withStepStdoutOnStderr } from "./step-stdout.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../record/scenario-record.js";
+import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepRecord } from "../record/scenario-record.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
 
@@ -523,21 +523,33 @@ function stepChunkTitle(stepKeywords: ReadonlyMap<string, string>, pickleStep: P
 // invocation reads the same way in a trace viewer and in an accepted
 // record. ---
 
-function hookChunkTitle(type: "before" | "after" | "after_step", stepIndex?: number): string {
+function hookChunkTitle(
+  type: "before" | "after" | "after_step",
+  name: string | undefined,
+  stepIndex?: number,
+): string {
   switch (type) {
     case "before":
-      return "Before hook";
+      return hookDisplayTitle("Before hook", name);
     case "after":
-      return "After hook";
+      return hookDisplayTitle("After hook", name);
     case "after_step":
-      return `AfterStep hook (step ${stepIndex})`;
+      return hookDisplayTitle(`AfterStep hook (step ${stepIndex})`, name);
   }
+}
+
+/** A non-empty `{ name }` is copied onto the hook record so a later reader
+ * can title that one invocation. An empty string is not a title. */
+function recordedHookName(name: string | undefined): { name: string } | Record<string, never> {
+  if (name === undefined || name.length === 0) return {};
+  return { name };
 }
 
 /** Unique within one scenario's own evidence dir — built from
  * `HookRegistration.registrationOrder` (src/compat/hooks.ts), which discovery
  * assigns once, globally, in registration order, so two hooks of the same
- * `type` can never collide even though neither carries a name of its own.
+ * `type` can never collide. A `{ name }` is a title, not an identity: two
+ * hooks may share one.
  * `stepIndex` is folded in for `"after_step"` only (mirroring
  * `ScenarioHookRecord.step_index`'s own "present only when `type` is
  * `after_step`" rule) — without it, the *same* AfterStep hook running after
@@ -1618,8 +1630,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // too, so a Before hook that touches `ctx.page()` gets a chunk isolated
   // from its sibling Before hooks and from every step's own chunk.
   for (const hook of beforeHooks) {
+    const title = hookDisplayTitle("Before", hook.name);
     const chunkFileName = hookChunkFileName("before", hook.registrationOrder);
-    await contextHandle.beginStep(scenarioDir, hookChunkTitle("before"), chunkFileName);
+    await contextHandle.beginStep(scenarioDir, hookChunkTitle("before", hook.name), chunkFileName);
     // Same per-boundary point for the World's own instrumentation — a
     // Before hook's own World reads/writes get tallied here but are
     // discarded by the next `beginStep()` call (the next Before hook, or
@@ -1651,7 +1664,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // This arity check, before the call itself (see runWithTimeout's
       // own header for why calling it at all would already be the failure).
       hookStatus = "failed";
-      hookErrorMessage = doneCallbackMessage("Hook", "Before");
+      hookErrorMessage = doneCallbackMessage("Hook", title);
       hookErrorKind = "unsupported";
     } else {
       try {
@@ -1659,11 +1672,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           () => Promise.resolve(hook.fn.call(world, hookParameter)),
           hook.timeoutMs ?? defaultTimeoutMs,
           "Hook",
-          "Before",
+          title,
         );
         if (returnValue === "pending" || returnValue === "skipped") {
           hookStatus = "failed";
-          hookErrorMessage = pendingOrSkippedMessage("Hook", "Before", returnValue);
+          hookErrorMessage = pendingOrSkippedMessage("Hook", title, returnValue);
           hookErrorKind = "unsupported";
         }
       } catch (error) {
@@ -1685,6 +1698,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       hookRecords.push({
         type: "before",
         status: "ok",
+        ...recordedHookName(hook.name),
         ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
@@ -1695,6 +1709,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         type: "before",
         status: "failed",
         error: { message: hookErrorMessage, kind: hookErrorKind },
+        ...recordedHookName(hook.name),
         ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
@@ -1777,6 +1792,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       },
     );
     for (const hook of afterStepHooks) {
+      const title = hookDisplayTitle("AfterStep", hook.name);
       // Same boundary redirect as the Before/After loops (this file's own
       // header): a hook's own
       // network activity stays outside any step's own step record boundary.
@@ -1790,7 +1806,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // invocations needs its own chunk, never overwriting the previous
       // one's.
       const chunkFileName = hookChunkFileName("after_step", hook.registrationOrder, stepIndex);
-      await contextHandle.beginStep(scenarioDir, hookChunkTitle("after_step", stepIndex), chunkFileName);
+      await contextHandle.beginStep(scenarioDir, hookChunkTitle("after_step", hook.name, stepIndex), chunkFileName);
       worldInstrumentation.beginStep();
       // Same per-hook declared boundary as the Before/After loops —
       // reset right before, read right
@@ -1803,7 +1819,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       let thrown: unknown;
       if (hook.fn.length >= 2) {
         hookStatus = "failed";
-        hookErrorMessage = doneCallbackMessage("Hook", "AfterStep");
+        hookErrorMessage = doneCallbackMessage("Hook", title);
         hookErrorKind = "unsupported";
       } else {
         try {
@@ -1811,11 +1827,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             () => Promise.resolve(hook.fn.call(world, hookParameter)),
             hook.timeoutMs ?? defaultTimeoutMs,
             "Hook",
-            "AfterStep",
+            title,
           );
           if (returnValue === "pending" || returnValue === "skipped") {
             hookStatus = "failed";
-            hookErrorMessage = pendingOrSkippedMessage("Hook", "AfterStep", returnValue);
+            hookErrorMessage = pendingOrSkippedMessage("Hook", title, returnValue);
             hookErrorKind = "unsupported";
           }
         } catch (error) {
@@ -1834,6 +1850,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           type: "after_step",
           step_index: stepIndex,
           status: "ok",
+          ...recordedHookName(hook.name),
           ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
           ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
           ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
@@ -1845,6 +1862,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           step_index: stepIndex,
           status: "failed",
           error: { message: hookErrorMessage, kind: hookErrorKind },
+          ...recordedHookName(hook.name),
           ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
           ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
           ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
@@ -2465,8 +2483,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // own boundary (title + chunk file), inside the loop below, the same
   // per-invocation shape the Before loop above now has.
   for (const hook of afterHooks) {
+    const title = hookDisplayTitle("After", hook.name);
     const chunkFileName = hookChunkFileName("after", hook.registrationOrder);
-    await contextHandle.beginStep(scenarioDir, hookChunkTitle("after"), chunkFileName);
+    await contextHandle.beginStep(scenarioDir, hookChunkTitle("after", hook.name), chunkFileName);
     worldInstrumentation.beginStep();
     // Same per-hook declared boundary as the Before loop above — reset
     // right before, read right after, so one After
@@ -2499,7 +2518,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let thrown: unknown;
     if (hook.fn.length >= 2) {
       hookStatus = "failed";
-      hookErrorMessage = doneCallbackMessage("Hook", "After");
+      hookErrorMessage = doneCallbackMessage("Hook", title);
       hookErrorKind = "unsupported";
     } else {
       try {
@@ -2507,11 +2526,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           () => Promise.resolve(hook.fn.call(world, hookParameter)),
           hook.timeoutMs ?? defaultTimeoutMs,
           "Hook",
-          "After",
+          title,
         );
         if (returnValue === "pending" || returnValue === "skipped") {
           hookStatus = "failed";
-          hookErrorMessage = pendingOrSkippedMessage("Hook", "After", returnValue);
+          hookErrorMessage = pendingOrSkippedMessage("Hook", title, returnValue);
           hookErrorKind = "unsupported";
         }
       } catch (error) {
@@ -2532,6 +2551,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       hookRecords.push({
         type: "after",
         status: "ok",
+        ...recordedHookName(hook.name),
         ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
@@ -2542,6 +2562,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         type: "after",
         status: "failed",
         error: { message: hookErrorMessage, kind: hookErrorKind },
+        ...recordedHookName(hook.name),
         ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),

@@ -16,6 +16,7 @@ import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
+import { hookDisplayTitle } from "../record/scenario-record.js";
 import { buildStepBindings, type StepBinding } from "./match-step.js";
 import { probeGitState } from "./probe-git.js";
 import { createStepProgressLogger } from "./progress-log.js";
@@ -207,18 +208,19 @@ async function main(): Promise<void> {
     hook: (typeof compatRunHooks)[number],
     label: "BeforeAll" | "AfterAll",
   ): Promise<boolean> => {
+    const title = hookDisplayTitle(label, hook.name);
     try {
       if (hook.fn.length >= 1) {
-        throw new Error(doneCallbackMessage("Hook", label));
+        throw new Error(doneCallbackMessage("Hook", title));
       }
       const returnValue = await runWithTimeout(
         () => Promise.resolve(hook.fn.call(undefined)),
         hook.timeoutMs ?? defaultTimeoutMs,
         "Hook",
-        label,
+        title,
       );
       if (returnValue === "pending" || returnValue === "skipped") {
-        throw new Error(pendingOrSkippedMessage("Hook", label, returnValue));
+        throw new Error(pendingOrSkippedMessage("Hook", title, returnValue));
       }
       return true;
     } catch (error) {

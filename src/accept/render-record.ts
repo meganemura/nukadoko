@@ -1,5 +1,5 @@
 import type { StepRecord } from "../record/types.js";
-import type { ScenarioRecord } from "../record/scenario-record.js";
+import { hookDisplayTitle, type ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: render the acceptance record's markdown text (docs/spec.md
 // "Sign-off"). Pure string building only: every value this module needs
@@ -220,7 +220,7 @@ const STEP_RECORD_ALLOWLIST: ReadonlySet<string> = new Set([
 // question decides it: `declared`/`trace`/`actions`/`truncated` all answer
 // to what a page did during that one hook invocation, not to anything the
 // hook itself was contracted to do.
-const HOOK_RECORD_ALLOWLIST: ReadonlySet<string> = new Set(["type", "status", "error", "step_index"]);
+const HOOK_RECORD_ALLOWLIST: ReadonlySet<string> = new Set(["type", "status", "error", "step_index", "name"]);
 
 /** Keeps only the keys `allowlist` names, in the record's own key order
  * (`Object.entries` walks a plain object in insertion order, so the filtered
@@ -255,11 +255,11 @@ function pickAllowed(
 function hookLabel(hook: ScenarioRecord["hooks"][number]): string {
   switch (hook.type) {
     case "before":
-      return "Before hook";
+      return hookDisplayTitle("Before hook", hook.name);
     case "after":
-      return "After hook";
+      return hookDisplayTitle("After hook", hook.name);
     case "after_step":
-      return `AfterStep hook (step ${hook.step_index})`;
+      return hookDisplayTitle(`AfterStep hook (step ${hook.step_index})`, hook.name);
     default: {
       const exhaustive: never = hook.type;
       throw new Error(`nuka accept: unhandled hook type ${String(exhaustive)}`);

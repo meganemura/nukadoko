@@ -23,6 +23,7 @@ import {
   type MessagesEmitter,
 } from "../report/messages/emitter.js";
 import { messagesRunOutputPath } from "../record/messages-output.js";
+import { hookDisplayTitle } from "../record/scenario-record.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { probeGitState } from "../run/probe-git.js";
 import { runConcurrentPickles } from "../run/run-concurrent.js";
@@ -603,22 +604,23 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       hook: (typeof compatRunHooks)[number],
       label: "BeforeAll" | "AfterAll",
     ): Promise<boolean> => {
+      const title = hookDisplayTitle(label, hook.name);
       try {
         // Same arity-based done-callback signal as src/run/run-scenario.ts's
         // own hooks, adjusted for a run-scope hook's own zero-argument call
         // convention (src/compat/run-hooks.ts's `RunHookFn` header): *any*
         // declared parameter, not just a second one, is the signal here.
         if (hook.fn.length >= 1) {
-          throw new Error(doneCallbackMessage("Hook", label));
+          throw new Error(doneCallbackMessage("Hook", title));
         }
         const returnValue = await runWithTimeout(
           () => Promise.resolve(hook.fn.call(undefined)),
           hook.timeoutMs ?? defaultTimeoutMs,
           "Hook",
-          label,
+          title,
         );
         if (returnValue === "pending" || returnValue === "skipped") {
-          throw new Error(pendingOrSkippedMessage("Hook", label, returnValue));
+          throw new Error(pendingOrSkippedMessage("Hook", title, returnValue));
         }
         return true;
       } catch (error) {

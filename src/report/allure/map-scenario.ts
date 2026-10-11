@@ -11,7 +11,7 @@ import type {
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { ActionEntry, CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../../record/scenario-record.js";
+import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepRecord } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module, kept in
@@ -1288,8 +1288,9 @@ export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenar
     // `hook.type === "after_step"` (src/record/scenario-record.ts: present
     // only for that type).
     const fixtureType: "before" | "after" = hook.type === "before" ? "before" : "after";
-    const name =
+    const fallback =
       hook.type === "before" ? "Before" : hook.type === "after" ? "After" : `AfterStep[${hook.step_index}]`;
+    const name = hookDisplayTitle(fallback, hook.name);
     // A hook invocation's own trace attachment and `actions` timeline,
     // mapped exactly the way a step's own step record `evidence.trace`/
     // `actions` already are (`mapGwtStep`, above) — same contentType, same

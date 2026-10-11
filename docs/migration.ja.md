@@ -71,6 +71,11 @@ import { Given, When, Then } from "nukadoko/compat";
 - カスタム World のコンストラクタが throw した場合、その scenario は失敗します。
   stderr には setup の 1 行が出て、scenario record は failed になり、step record は引用されません。
   同じ run の後続 scenario は実行され、messages の export は完了します。
+- `Before`、`After`、`BeforeAll`、`AfterAll` の `{ name }` は、フックのタイトルとして保存され、表示に使われます。
+  どの scenario で走るか、timeout、登録順は変わりません。
+  `AfterStep` は `name` を受け付けません。
+  `BeforeAll` と `AfterAll` は `on` を拒み続けます。
+  `on` はフックを動かすプロセスを選ぶオプションだからです。
 - `AfterStep` は `Before`/`After` と同じ 3 通りの書き方で登録します。
   scenario 全体につき 1 回の `Before`/`After` と違い、scenario 内で実際に実行された step ごとに 1 回走ります。
   この scenario がそれより前の step の失敗によってスキップした step は始まってすらいないため、`AfterStep` もその step については走りません。

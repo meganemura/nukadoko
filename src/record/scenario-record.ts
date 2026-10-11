@@ -131,6 +131,9 @@ export interface ScenarioHookRecord {
    * the 0-based index into this
    * record's own `steps` array that this AfterStep hook ran after. */
   readonly step_index?: number;
+  /** From the registration's `{ name }`, when that string is non-empty.
+   * A title for this invocation. It does not say which scenarios ran. */
+  readonly name?: string;
   /** This hook invocation's own trace chunk, relative to the *scenario's*
    * evidence dir (this file's own header) —
    * unlike `ScenarioStepRecord`, a hook has no step record dir of its own,
@@ -150,6 +153,15 @@ export interface ScenarioHookRecord {
    * `{ actions: <true total> }` shape as a step's own step record
    * `truncated` (src/record/types.ts). */
   readonly truncated?: { readonly actions: number };
+}
+
+/** A hook's displayed title. `name` is cucumber-js metadata. A missing or
+ * empty name keeps `fallback`, the keyword that surface already used, so a
+ * blank string never erases "Before" or "Before hook". The result is one of
+ * the two inputs: a title is not a blend of the keyword and the name. */
+export function hookDisplayTitle(fallback: string, name: string | undefined): string {
+  if (name === undefined || name.length === 0) return fallback;
+  return name;
 }
 
 export interface ScenarioEvidence {

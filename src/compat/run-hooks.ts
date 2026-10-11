@@ -38,6 +38,10 @@ export interface RunHookOptions {
    * meaning as src/compat/hooks.ts's `HookOptions.timeout`. Enforced by
    * src/cli/run.ts; this module only records it. */
   readonly timeout?: number;
+  /** cucumber-js metadata: the hook's title in its failure message.
+   * It does not change when the hook runs. `on` is not accepted: that
+   * option chooses which process runs the hook. */
+  readonly name?: string;
 }
 
 export interface RunHookRegistration {
@@ -45,6 +49,8 @@ export interface RunHookRegistration {
   readonly fn: RunHookFn;
   /** From `{ timeout }` — see `RunHookOptions.timeout`'s own comment. */
   readonly timeoutMs?: number;
+  /** From `{ name }`. Absent when the caller did not pass one. */
+  readonly name?: string;
   readonly registrationOrder: number;
 }
 
@@ -75,16 +81,21 @@ function registerRunHook(
     );
   }
 
-  // Only "timeout" is recognized — in particular, *not* "tags": run-scope
-  // hooks don't accept one at all, unlike Before/After.
+  // "timeout" and "name" are recognized. "name" is a title. "tags" is not:
+  // a run-scope hook has no pickle to match. "on" is not: it would choose
+  // which process runs the hook.
   // Same "a door that stays quiet is worse than one that's briefly noisy"
   // reasoning as src/compat/hooks.ts's own unknown-key check: an
   // unrecognized key throws immediately rather than vanishing silently.
-  const unknownKeys = Object.keys(optionsOrFn).filter((key) => key !== "timeout");
+  const unknownKeys = Object.keys(optionsOrFn).filter((key) => key !== "timeout" && key !== "name");
   if (unknownKeys.length > 0) {
     throw new Error(
-      `${label}(options, fn): unsupported option key "${unknownKeys[0]}" (only "timeout" is supported)`,
+      `${label}(options, fn): unsupported option key "${unknownKeys[0]}" (only "timeout"/"name" are supported)`,
     );
+  }
+
+  if (optionsOrFn.name !== undefined && typeof optionsOrFn.name !== "string") {
+    throw new Error(`${label}(options, fn): "name" must be a string`);
   }
 
   if (maybeFn === undefined) {
@@ -94,6 +105,7 @@ function registerRunHook(
   runHookBuffer.push({
     type,
     timeoutMs: optionsOrFn.timeout,
+    ...(typeof optionsOrFn.name === "string" ? { name: optionsOrFn.name } : {}),
     fn: maybeFn,
     registrationOrder: runHookCounter++,
   });

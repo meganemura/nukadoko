@@ -1471,7 +1471,13 @@ import { Given, When, Then } from "nukadoko/compat";
   `table.hashes()` after the import change. Docstrings remain plain strings.
   Before and After hooks support all three cucumber-js forms:
   `Before(fn)`, `Before({ tags }, fn)`, and `Before("@tag", fn)`. They
-  receive Cucumber's hook parameter. A hook can filter only on `@tag` or
+  also accept `{ name }` beside `tags` and `timeout`. The string is stored
+  on the registration and, when it is non-empty, on that invocation's
+  `hooks` entry. Allure fixture names, acceptance headings, trace chunk
+  titles, and hook failure messages use it as the title. It does not change
+  which scenarios the hook runs for, its timeout, or its order. `AfterStep`
+  does not accept `name`: cucumber-js step-hook options have no such field.
+  They receive Cucumber's hook parameter. A hook can filter only on `@tag` or
   `not @tag`. More complex expressions fail explicitly to prevent a silent
   mismatch. Hooks appear in the scenario record's `hooks` array and do not
   create step records. Their network traffic remains outside all step
@@ -1511,7 +1517,10 @@ import { Given, When, Then } from "nukadoko/compat";
   `AMBIGUOUS`, cannot match. Nukadoko has no corresponding concept for a
   hook result. Migrated glue never takes a branch that compares these
   values, and this behavior is not a compat gap. `BeforeAll` and `AfterAll`
-  bracket the full run. They accept no tags, have no World, and do not run
+  bracket the full run. They accept `{ timeout }` and `{ name }`. They
+  reject `tags` and `on`. `on` would choose which process runs the hook,
+  and nukadoko does not offer that choice. A non-empty `name` is the title
+  in their failure messages. They have no World, and do not run
   when no scenario is selected. They report through the exit code because
   they do not belong to a scenario record. `setDefaultTimeout` sets the
   default for items without a specific timeout. A negative value means no
@@ -3020,8 +3029,8 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   `declared`, `sections`, and `polls`: a live step record under
   `.nukadoko/` still carries every one of them (see "Records"), but none
   is something the step's own contract named. A hook entry in the
-  scenario record (see "Records") keeps `type`, `status`, `error`, and
-  `step_index`, and drops `declared`, `trace`, `actions`, and `truncated`
+  scenario record (see "Records") keeps `type`, `status`, `error`,
+  `step_index`, and `name`, and drops `declared`, `trace`, `actions`, and `truncated`
   for the same reason.
 - An allowlist controls the embedded step record. Only a field named above
   survives. A field the live
@@ -3486,8 +3495,10 @@ zero pickles.
   formatter renders it.
 
 Honest limits, named rather than hidden: hooks collapse to one generic
-Before and one generic After, since a scenario record has no record of
-which individual registration ran; a hook's own duration is always zero,
+Before and one generic After, because one Hook envelope is shared by every
+hook of that type (a stored `name` titles the Allure fixture, the
+acceptance heading, the trace chunk, and the failure message, and is not
+that envelope's name); a hook's own duration is always zero,
 the same limit the Allure emitter carries; `declared` labels, links, and
 parameters have no slot in the protocol's closed schema and are dropped;
 no `stepDefinition` envelope is emitted, because the record keeps no

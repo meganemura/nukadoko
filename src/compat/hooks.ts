@@ -152,6 +152,11 @@ export interface HookOptions {
    * Enforced by src/run/run-scenario.ts; this module only records it (see
    * this file's own header). */
   readonly timeout?: number;
+  /** cucumber-js metadata: the hook's title where a title is shown.
+   * It does not select scenarios, change the timeout, or change order.
+   * `AfterStep` does not accept this field. cucumber-js step-hook options
+   * have no name, so a title there would be one cucumber-js never shows. */
+  readonly name?: string;
 }
 
 export interface HookRegistration {
@@ -160,6 +165,8 @@ export interface HookRegistration {
   readonly fn: HookFn;
   /** From `{ timeout }` — see `HookOptions.timeout`'s own comment. */
   readonly timeoutMs?: number;
+  /** From `{ name }`. Absent when the caller did not pass one. */
+  readonly name?: string;
   readonly registrationOrder: number;
 }
 
@@ -202,7 +209,11 @@ function registerHook(
     throw new Error(`${label}(options, fn): options must be an object, got ${JSON.stringify(optionsOrFn)}`);
   }
 
-  const unknownKeys = Object.keys(optionsOrFn).filter((key) => key !== "tags" && key !== "timeout");
+  // `name` is a title. `AfterStep` has no such field in cucumber-js, so it
+  // stays an unknown key there. `on` stays unknown for every type: it would
+  // choose which process runs the hook.
+  const recognized = type === "after_step" ? ["tags", "timeout"] : ["tags", "timeout", "name"];
+  const unknownKeys = Object.keys(optionsOrFn).filter((key) => !recognized.includes(key));
   if (unknownKeys.length > 0) {
     // Same "a door that stays quiet is worse than one that's briefly noisy"
     // reasoning as src/compat/registry.ts's own unknown-key check: before
@@ -210,9 +221,14 @@ function registerHook(
     // `{ timeout }` key passed alongside it vanished silently; any *other*
     // unrecognized key gets the same up-front treatment rather than
     // becoming a future silent gap of its own.
+    const supported = recognized.map((key) => `"${key}"`).join("/");
     throw new Error(
-      `${label}(options, fn): unsupported option key "${unknownKeys[0]}" (only "tags"/"timeout" are supported)`,
+      `${label}(options, fn): unsupported option key "${unknownKeys[0]}" (only ${supported} are supported)`,
     );
+  }
+
+  if (type !== "after_step" && optionsOrFn.name !== undefined && typeof optionsOrFn.name !== "string") {
+    throw new Error(`${label}(options, fn): "name" must be a string`);
   }
 
   if (maybeFn === undefined) {
@@ -223,6 +239,7 @@ function registerHook(
     type,
     tags: optionsOrFn.tags,
     timeoutMs: optionsOrFn.timeout,
+    ...(typeof optionsOrFn.name === "string" ? { name: optionsOrFn.name } : {}),
     fn: maybeFn,
     registrationOrder: hookCounter++,
   });
@@ -261,8 +278,12 @@ export function After(optionsOrFn: HookOptions | HookFn | string, fn?: HookFn): 
 export function AfterStep(fn: HookFn): void;
 /** `AfterStep({ tags }, fn)`: attempted only for a scenario matching
  * `tags` — same single-`@tag`/`not @tag` support as `Before`/`After`
- * (src/compat/tag-expression.ts), no new tag-filter mechanism of its own. */
-export function AfterStep(options: HookOptions, fn: HookFn): void;
+ * (src/compat/tag-expression.ts), no new tag-filter mechanism of its own.
+ * No `name`: cucumber-js step-hook options do not have one. */
+export function AfterStep(
+  options: { readonly tags?: string; readonly timeout?: number },
+  fn: HookFn,
+): void;
 /** `AfterStep("@tag", fn)` / `AfterStep("not @tag", fn)`: same bare-string
  * shorthand as `Before`/`After`. */
 export function AfterStep(tags: string, fn: HookFn): void;

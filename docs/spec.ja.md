@@ -1257,6 +1257,12 @@ import { Given, When, Then } from "nukadoko/compat";
   docstring は素の string のままです。
   Before / After hook は、cucumber-js が受け付ける 3 つの書き方をサポートします。
   その書き方は、`Before(fn)`、`Before({ tags }, fn)`、`Before("@tag", fn)` です。
+  `Before` と `After` は、`tags` と `timeout` に加えて `{ name }` を受け付けます。
+  その文字列は登録に保存され、空でなければその呼び出しの `hooks` エントリにも載ります。
+  Allure の fixture 名、acceptance record の見出し、trace chunk のタイトル、hook 失敗時のメッセージは、その文字列をタイトルに使います。
+  どの scenario で走るか、timeout、登録順は変わりません。
+  `AfterStep` は `name` を受け付けません。
+  cucumber-js の step hook の options にそのフィールドは無いからです。
   hook は cucumber 自身の hook 引数を受け取ります。
   hook は `@tag` または `not @tag` だけで絞り込めます。
   より複雑な式は、静かな誤マッチを防ぐために明示的に失敗します。
@@ -1293,7 +1299,10 @@ import { Given, When, Then } from "nukadoko/compat";
   nukadoko には、hook 自身の result が運びうる pending、skipped、undefined-step、ambiguous-match のいずれの概念もないからです。
   移行した glue は、これらの値を比較する分岐を通らず、この挙動は compat gap ではありません。
   `BeforeAll`/`AfterAll` は、scenario ではなく run 全体を挟みます。
-  tags を受け取らず、World を持たず、scenario が 1 つも選ばれなければ実行されません。
+  `{ timeout }` と `{ name }` を受け付け、`tags` と `on` は拒みます。
+  `on` は hook を動かすプロセスを選ぶオプションで、nukadoko にはその選択が無いからです。
+  World を持たず、scenario が 1 つも選ばれなければ実行されません。
+  空でない `name` は、失敗メッセージのタイトルになります。
   これらの hook は scenario record に属さないため、exit code を通じて報告します。
   `setDefaultTimeout` は、自分の timeout を宣言していないものすべてに既定値を与えます。
   負の値は無制限を意味し、cucumber-js と同じです。
@@ -2473,7 +2482,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 - ここで保持される step record は `step_record_id`、`step`、`kind`、`status`、`args`、`result`、`error`、`used`、`mutates`、`observed`、`calls`、`fixtures`、`required_env`、`world`、`started_at`、`finished_at`、`environment`、`session`、`session_execution`、`scenario_record_id`、`run_id`、`target_version` を運びます。
   `evidence`、`actions`、`truncated`、`page_events`、`http_omitted`、`declared`、`sections`、`polls` は外れます。
   `.nukadoko/` の下にある live な step record にはこれら全部がこれまでどおり残りますが(「Records」を参照)、そのどれも step 自身の契約が名指したものではありません。
-  scenario record の中の hook のエントリ(「Records」を参照)は `type`、`status`、`error`、`step_index` を保持し、同じ理由で `declared`、`trace`、`actions`、`truncated` を外します。
+  scenario record の中の hook のエントリ(「Records」を参照)は `type`、`status`、`error`、`step_index`、`name` を保持し、同じ理由で `declared`、`trace`、`actions`、`truncated` を外します。
 - ここに埋め込まれる step record は、外すものの一覧によってではなく allowlist によって絞り込まれます。
   上に名指しされた field だけが残ります。
   live な step record に後から増える field は、上に名指しされるまで既定で外れます。
@@ -2944,7 +2953,9 @@ Allure と同様に、この emitter には `enabled` フラグも CLI フラグ
 
 正直な限界も、隠さずに書いておきます。
 フックは 1 つの汎用 Before と 1 つの汎用 After に潰れます。
-scenario record にはどの個別の登録が実行されたかの記録が無いからです。
+同じ種類の hook が 1 つの Hook envelope を共有するからです。
+保存された `name` は、Allure の fixture、acceptance record の見出し、trace chunk、失敗メッセージのタイトルになります。
+その共有 envelope の名前にはなりません。
 フック自身の duration は常にゼロです。
 これは Allure emitter が抱えるのと同じ限界です。
 `declared` の label、link、parameter はプロトコルの closed schema に入れる場所が無く、落とされます。

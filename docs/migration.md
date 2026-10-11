@@ -89,6 +89,11 @@ Everything below that import keeps working, unchanged:
   one setup line, the scenario record is failed and cites no step record,
   later scenarios in the same run still execute, and the messages export
   is finalized.
+- `{ name }` on `Before`, `After`, `BeforeAll`, and `AfterAll`. The string
+  is stored and used as the hook's title. It does not change which
+  scenarios run, the timeout, or the order. `AfterStep` does not accept
+  `name`. `BeforeAll` and `AfterAll` still reject `on`, because that option
+  chooses which process runs the hook.
 - `AfterStep`, registered the same three ways as `Before`/`After`. It runs
   once per step that actually executed in the scenario, not once for the
   whole scenario the way `Before`/`After` do: a step this scenario skipped

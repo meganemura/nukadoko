@@ -332,6 +332,8 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
     beforeHookId = newId();
     newHooks.push({
       type: "before",
+      // One Hook envelope is shared by every Before hook in the run, so a
+      // stored `name` cannot be this field: it would mislabel the others.
       hook: { id: beforeHookId, name: "Before", type: HookType.BEFORE_TEST_CASE, sourceReference: {} },
     });
   }
