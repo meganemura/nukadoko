@@ -13,7 +13,9 @@ import {
 } from "@cucumber/messages";
 
 // Responsibility: walk `featuresDir` plus each `additionalFeatureDirs` entry
-// for `**/*.feature` files and turn each into pickles via @cucumber/gherkin
+// for `**/*.feature` files, skipping `node_modules` and any directory whose
+// name starts with `.` at every depth, and turn each into pickles via
+// @cucumber/gherkin
 // — the official parser owns Background merging, Scenario Outline
 // expansion, and table/docstring attachment (docs/spec.md "nukadoko
 // deliberately owns as little as possible"). This module does not interpret
@@ -96,8 +98,11 @@ export interface LoadFeaturesResult {
 
 /** Exported for src/run/select-pickles.ts's own directory-target walk —
  * reused rather than re-implemented so
- * there is exactly one function that knows how to find every `.feature`
- * file under a directory. That caller re-sorts what this returns by
+ * there is exactly one function that knows which `.feature` files under a
+ * directory belong to the project. It skips `node_modules` and any
+ * directory whose name starts with `.` at every depth, and the return
+ * value is the whole result: a skipped directory adds no path. That
+ * caller re-sorts what this returns by
  * rootDir-relative path in plain byte order of its own (see that file's own
  * header for why): the tree-order sort this function applies below is
  * `nuka check`/`nuka tend`'s own convention, not what a run's own
@@ -117,6 +122,16 @@ export function walkFeatureFiles(dir: string): string[] {
   for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      // `featuresDir: "."` is a real configuration. Entering `node_modules`
+      // or a dot-directory (`.git`, `.nukadoko`, `.vscode`, ...) would make
+      // `nuka check` and `nuka run` treat a dependency's features and the
+      // state directory as the project's own scenarios. Step discovery
+      // skips these same directories, at every depth, and reports nothing
+      // about the skip. A directory this walk does not enter was never a
+      // scenario, so there is nothing to name.
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) {
+        continue;
+      }
       files.push(...walkFeatureFiles(fullPath));
     } else if (entry.isFile() && entry.name.endsWith(".feature")) {
       files.push(fullPath);

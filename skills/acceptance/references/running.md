@@ -44,6 +44,11 @@ argument or the config entry the one file you care about is the one that
 goes unchecked. `nuka check` and `nuka accept` each take that one file.
 `:line` and a directory belong to `nuka run`.
 
+The walk that finds those feature files skips `node_modules` and any
+directory whose name starts with `.`, at every depth. A `.feature` file
+in one of those directories is not checked and not run. The skip reports
+nothing.
+
 ## Running
 
 1. Commit. Anything the run reads has to be in a commit first, including

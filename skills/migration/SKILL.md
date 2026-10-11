@@ -121,3 +121,6 @@ the same rule.
   case. Two other names that differ only by case do not share a path.
   Application-specific evidence is
   `skills/acceptance/references/evidence.md`.
+- A `.feature` file inside `node_modules`, or inside a directory whose
+  name starts with `.`, is outside the walk `nuka check` and `nuka run`
+  use. The skip reports nothing (`references/cucumber-js.md`).

@@ -1624,7 +1624,12 @@ scenario record は feature のパス、scenario 名、順序付けられた ste
 
 `nuka run` は 1 つ以上の対象を受け取ります。
 各対象には feature ファイル、Markdown oath(`.md` で終わるパス。「Markdown oaths」を参照)、`ファイル:行`、ディレクトリのいずれかを指定できます。
-ディレクトリは再帰的に走査され、その下のすべての `.feature` ファイルと、その配下にある設定済みの oath が選ばれます。
+ディレクトリは再帰的に走査され、その下の `.feature` ファイルが選ばれます。
+どの深さでも、走査は `node_modules` と `.` で始まるディレクトリ(`.git`、`.nukadoko`、`.vscode` など)をスキップします。
+これは step discovery がスキップするディレクトリと同じです。
+このスキップは何も報告しません。
+それらのディレクトリの中の `.feature` ファイルは、チェックされず、実行もされません。
+ディレクトリ対象は、その配下にある設定済みの oath も含みます。
 選ばれたファイルは重複を除いた 1 つの集合になり、ファイル全体の指定は、そのファイルに対する行指定を含みます。
 選ばれたすべての pickle は 1 つの invocation に属します: 1 つの run_id、1 つのサマリ、1 つの exit code、1 つの messages ストリーム、1 つの Allure results ツリーです。
 ファイルはリポジトリ相対パスをロケールではなくバイトごとに比較した、決まった順序で処理されます。
@@ -1633,7 +1638,7 @@ scenario record は feature のパス、scenario 名、順序付けられた ste
 ファイルは同じ順序で配られますが、record は worker が終えた順に並びます。
 ディレクトリに `:line` を付けると拒否されます。
 `:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
-配下のどこにも `.feature` ファイルも設定済みの oath も持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
+走査が見つけられる `.feature` ファイルも、設定済みの oath も持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
 何もしなかった run は、exit 0 で何もしなかったことにするのではなく、それを大声で言わなければならないからです。
 
 `--concurrency <n>` は、複数の feature ファイルを同時に実行します。
@@ -2241,6 +2246,10 @@ default export が無いファイル、または default export が Promise で�
 プロダクト自身の中核の経路を述べる feature は、accept された後 `featuresDir` へ移り、ここへのエントリは要りません。
 ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
 `nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` は同じ事実を注記として報告します。
+
+この feature の走査は、`featuresDir` でも、各 `additionalFeatureDirs` エントリでも、`nuka run` に渡したディレクトリでも、どの深さでも `node_modules` と `.` で始まるディレクトリをスキップします。
+step discovery も同じディレクトリをスキップします。
+その中にある `.feature` ファイルは `nuka check` にも `nuka tend` にも `nuka run` にも含まれず、このスキップは何も報告しません。
 
 `oaths` のデフォルトは `[]` です。
 各エントリは Markdown ファイル、または `*.md` のディレクトリであり、`.feature` ファイルと同じ pickle にコンパイルされます(「Markdown oaths」を参照)。
@@ -3223,8 +3232,10 @@ nuka run <feature[:line]|dir>...
                               summary, one exit code, one messages stream, and
                               one Allure results tree. :line on a directory is
                               refused, and a
-                              directory with no .feature file anywhere under
-                              it fails setup, naming what it walked. stderr
+                              directory with no .feature file outside
+                              node_modules and dot-directories fails setup,
+                              naming what it walked. That skip reports
+                              nothing. stderr
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. Each failed scenario follows with its

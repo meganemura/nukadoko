@@ -63,6 +63,12 @@ A compat step that writes to the process stdout (`console.log`,
 executes it. A typed step does the same under `nuka do` and `nuka run`.
 stdout stays the record stream.
 
+The directory walk for `.feature` files skips `node_modules` and any
+directory whose name starts with `.`, at every depth, and reports nothing
+about the skip. A feature a dependency ships, or a draft under
+`.nukadoko`, is not part of the suite, even when `featuresDir` is the
+repository root.
+
 A migration repeats that loop far more than a finished suite ever runs
 `nuka run` again. `nuka run` keeps only the newest `retention.runs` runs
 (default 20) and removes older records and export files itself, so

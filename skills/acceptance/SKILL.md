@@ -141,6 +141,10 @@ proves the wrong thing.
   path moves into `featuresDir` instead, so `nuka run` picks it up on
   every future commit; `references/maintenance.md` says what changes on
   `nuka tend` once it does.
+- A `.feature` file inside `node_modules`, or inside a directory whose
+  name starts with `.`, is outside the walk. `nuka check`, `nuka tend`,
+  and `nuka run` do not see it, and the skip reports nothing
+  (`references/running.md`).
 - Don't fill in a requirement the source never stated. A missing slot is
   a question for a person, never a guessed value
   (`references/from-prose.md`).

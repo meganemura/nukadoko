@@ -27,10 +27,11 @@ import {
 // at all falls straight through to the same `readFileSync`-then-catch that
 // already raises `FeatureFileNotFoundError` for a file target, so that
 // error's own wording and behavior for "nothing at this path" is
-// unchanged. A directory is walked recursively for every `.feature` file
+// unchanged. A directory is walked recursively for `.feature` files
 // via src/feature/load-features.ts's own `walkFeatureFiles` (reused, not
-// duplicated). Configured oath files that live under that directory are
-// added to the same set. The result is re-sorted by rootDir-relative path in plain byte
+// duplicated), which skips `node_modules` and dot-directories and reports
+// nothing about that skip. Configured oath files that live under that
+// directory are added to the same set. The result is re-sorted by rootDir-relative path in plain byte
 // order — never `localeCompare`, whose collation can legally differ
 // between machines/ICU builds, exactly the run-to-run instability this
 // sort exists to rule out. `:line` on a directory is refused outright: it

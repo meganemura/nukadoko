@@ -1874,8 +1874,12 @@ name, ordered step record ids, and per-step status.
 `nuka run` takes one or more targets. Each target can be a feature file, a
 Markdown oath (a path ending in `.md`; see "Markdown oaths"), a
 `file:line` selection, or a directory. A directory target is walked
-recursively for every `.feature` file, and also includes a configured oath
-that lives under that directory. The selected files form one
+recursively for `.feature` files. At every depth the walk skips
+`node_modules` and any directory whose name starts with `.` (`.git`,
+`.nukadoko`, `.vscode`, and the rest), the same directories step discovery
+skips. The skip reports nothing: a `.feature` file inside one of those
+directories is not checked and is not run. The directory target also
+includes a configured oath that lives under that directory. The selected files form one
 deduplicated set, and a full-file selection includes any line selections for
 that file. All selected pickles belong to one invocation: one run_id, one
 summary, one exit code, one messages stream, and one Allure results tree.
@@ -1887,7 +1891,7 @@ gives up the position: the files are still handed out in it, and the
 records land in the order the workers finish. `:line` on a directory is
 refused: it selects one scenario inside a single file, and a directory
 names no single file for it to select inside. A directory holding no
-`.feature` file anywhere under it, and no configured oath under it either,
+`.feature` file the walk can see, and no configured oath under it either,
 is refused too, the same tone
 `nuka check`'s own `no-step-files-found`
 uses: it names exactly what it scanned, because a run that did nothing must
@@ -2716,6 +2720,12 @@ does not run unattended. An accepted feature that describes a core product
 path moves into `featuresDir` and needs no additional entry. A missing entry
 is a config error. `nuka check` reports `additional-feature-dir-missing`, and
 `nuka tend` reports the same condition as a note.
+
+That feature walk skips `node_modules` and any directory whose name starts
+with `.` at every depth, for `featuresDir`, for each `additionalFeatureDirs`
+entry, and for a directory passed to `nuka run`. Step discovery skips those
+same directories. A `.feature` file inside one is not part of `nuka check`,
+`nuka tend`, or `nuka run`, and the skip reports nothing.
 
 `oaths` defaults to `[]`. Each entry is a Markdown file, or a directory
 of `*.md` files, compiled into the same pickles as a `.feature` file
@@ -3812,8 +3822,10 @@ nuka run <feature[:line]|dir>...
                               summary, one exit code, one messages stream, and
                               one Allure results tree. :line on a directory is
                               refused, and a
-                              directory with no .feature file anywhere under
-                              it fails setup, naming what it walked. stderr
+                              directory with no .feature file outside
+                              node_modules and dot-directories fails setup,
+                              naming what it walked. That skip reports
+                              nothing. stderr
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. Each failed scenario follows with its

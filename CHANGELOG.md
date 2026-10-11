@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **Feature walks skip `node_modules` and dot-directories.**
+  `walkFeatureFiles` entered both, so `featuresDir: "."` and `nuka run .`
+  checked and ran `.feature` files from dependencies and from `.nukadoko`.
+  The walk now skips `node_modules` and any directory whose name starts
+  with `.` at every depth, the same directories step discovery skips. The
+  skip reports nothing.
 - **`nuka run`, `nuka do`, and `nuka harvest` name the step file that threw while being imported.**
   The message was Node's own text alone, so a project with many step files
   gave no way to tell which one threw. The file's path, relative to the
@@ -248,6 +254,7 @@ just until 0.1.
   way two identical names already were: the second gets `-2` before the
   extension. A step that attached a harness file name has to pick a
   different one. See docs/upgrading.md.
+
 ## 0.14.1 — 2026-10-10
 
 ### Fixed
