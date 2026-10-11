@@ -254,4 +254,43 @@ describe("createStepContext / ctx.requireEnv()", () => {
     expect(ctx.env.API_TOKEN).toBe("secret-value");
     expect(ctx.env.MISSING_KEY).toBeUndefined();
   });
+
+  it("does not let a write on ctx.env reach a later step or a later scenario", () => {
+    const env: { API_TOKEN: string; CARRIED?: string } = { API_TOKEN: "secret-value" };
+    const { ctx } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env,
+    });
+    const laterScenario = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env,
+    });
+
+    // One context is one scenario, and every step in it reads the same
+    // `ctx.env`. A later scenario is a second context built from the same
+    // configured map. A write has to miss both, while a configured key
+    // still reads back.
+    expect(ctx.env).not.toBe(env);
+    expect(laterScenario.ctx.env).not.toBe(env);
+    expect(laterScenario.ctx.env).not.toBe(ctx.env);
+
+    expect(() => {
+      (ctx.env as { CARRIED?: string }).CARRIED = "x";
+    }).toThrow(TypeError);
+    expect(() => {
+      (ctx.env as { API_TOKEN: string }).API_TOKEN = "replaced";
+    }).toThrow(TypeError);
+
+    expect(ctx.env.CARRIED).toBeUndefined();
+    expect(ctx.env.API_TOKEN).toBe("secret-value");
+    expect(ctx.requireEnv("API_TOKEN")).toBe("secret-value");
+
+    expect(laterScenario.ctx.env.CARRIED).toBeUndefined();
+    expect(laterScenario.ctx.env.API_TOKEN).toBe("secret-value");
+    expect(laterScenario.ctx.requireEnv("API_TOKEN")).toBe("secret-value");
+    expect(env.CARRIED).toBeUndefined();
+    expect(env.API_TOKEN).toBe("secret-value");
+  });
 });
