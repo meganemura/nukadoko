@@ -26,9 +26,9 @@ const rangeStep = defineStep({
 });
 
 describe("a pattern that captures the same key twice", () => {
-  it("does not keep only the last value for a range from 1 to 9", () => {
+  it("does not keep only the last value for a range from 1 to 9", async () => {
     const vocabulary = vocab({ "set-range": rangeStep });
-    const matched = matchPickleStep("a range from 1 to 9 is set", buildStepBindings(vocabulary));
+    const matched = await matchPickleStep("a range from 1 to 9 is set", buildStepBindings(vocabulary), null);
     expect(matched.kind).toBe("matched");
     if (matched.kind !== "matched") return;
 
