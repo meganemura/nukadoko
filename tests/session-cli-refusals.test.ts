@@ -116,6 +116,73 @@ describe("nuka session clear: setup failures", () => {
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("typo");
   });
+
+  it("refuses an unknown --env when that environment has no session files", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "clear", "--env", "stagign"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toBe(
+      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n',
+    );
+    expect(stdout.text()).toBe("");
+  });
+
+  it("refuses an unknown --env before reporting a missing session name", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "clear", "alice", "--env", "stagign"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toBe(
+      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n',
+    );
+    expect(stdout.text()).toBe("");
+  });
+
+  it("clears session files left under an environment the config no longer defines, and names it", async () => {
+    const dir = sessionsDir(rootDir, "retired");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "left.json"), JSON.stringify({ cookies: [], origins: [] }));
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "clear", "--env", "retired"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe(
+      'Environment "retired" is not defined in nukadoko.config.ts\'s "environments"; clearing the sessions left under it\n',
+    );
+    expect(stdout.text()).toBe("");
+    expect(existsSync(path.join(dir, "left.json"))).toBe(false);
+  });
+
+  it("stays silent when --env is omitted, even if environments.default is undefined", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "clear"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
+    expect(stdout.text()).toBe("");
+  });
 });
 
 describe("nuka session start: setup failures and the fast lock refusal", () => {
@@ -239,7 +306,7 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
     expect(stderr.text()).not.toBe("");
   });
 
-  it("succeeds quietly when the name was never live and left no debris", async () => {
+  it("exits 0 and names the session when the name was never live and left no debris", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "stop", "never-started"], {
@@ -249,8 +316,27 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
     });
 
     expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe('no session "never-started" in environment "default"\n');
+    expect(stdout.text()).toBe("");
+  });
+
+  it("stays quiet when the session file exists and no live process holds it", async () => {
+    const dir = sessionsDir(rootDir, "default");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "alice.json"), JSON.stringify({ cookies: [], origins: [] }));
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "stop", "alice"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     expect(stdout.text()).toBe("");
+    expect(existsSync(path.join(dir, "alice.json"))).toBe(true);
   });
 
   it("cleans up a stale (dead-pid) lock and its socket's own tmp directory, and still succeeds quietly", async () => {
