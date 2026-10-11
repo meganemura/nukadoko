@@ -1,5 +1,6 @@
 import path from "node:path";
 import { checkBindings } from "../check/binding-check.js";
+import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback.js";
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
@@ -610,7 +611,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // own hooks, adjusted for a run-scope hook's own zero-argument call
         // convention (src/compat/run-hooks.ts's `RunHookFn` header): *any*
         // declared parameter, not just a second one, is the signal here.
-        if (hook.fn.length >= 1) {
+        if (declaresDoneCallback(hook.fn.length, RUN_HOOK_ARG_COUNT)) {
           throw new Error(doneCallbackMessage("Hook", title));
         }
         const returnValue = await runWithTimeout(

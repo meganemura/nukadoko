@@ -252,6 +252,7 @@ export default {
         "binding-check.ts",
         "codes.ts",
         "config-check.ts",
+        "done-callback.ts",
         "feature-check.ts",
         "from-order.ts",
         "types.ts",

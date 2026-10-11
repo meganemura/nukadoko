@@ -27,7 +27,12 @@ looks correct until the consuming step actually runs. A default-exported
 `defineModel` or `defineRelation` is checked too. An unknown step name,
 and a step that needs a browser, are errors. Check does not run those
 steps. A line in a configured env file that is not a blank, a comment, or
-a binding is `env-file-skipped-line`. `nuka check --codes` names every
+a binding is `env-file-skipped-line`. Compat glue that
+declares a done() callback is `done-callback-arity`. The finding covers a
+hook whose parameter count is past what the executor passes, and a matched
+compat step whose function takes more arguments than the line's captures
+plus a table or docstring. A `"pending"` or `"skipped"` return is still
+only visible to `nuka run`. `nuka check --codes` names every
 finding code `check` can produce. Read the catalog there rather than from
 a list kept anywhere else.
 

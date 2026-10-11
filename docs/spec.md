@@ -1591,10 +1591,17 @@ import { Given, When, Then } from "nukadoko/compat";
   pattern and gives the rewritten Gherkin line. It stays silent when two or
   more patterns can explain the line, because that choice belongs to the
   author.
+  **`nuka check` can also report a done callback**, as
+  `done-callback-arity`. A compat hook is over the limit when Before, After,
+  or AfterStep declares two or more parameters, or when BeforeAll or AfterAll
+  declares one or more. A matched compat step is over the limit when its
+  function declares more parameters than the line's captures plus a table or
+  docstring. That count is known from the function and the matched line, so
+  the finding can only end one way. An unmatched step stays silent, because
+  the capture count comes from the line that selected it.
   **Only `nuka run` can report these failures**: a step or hook returns
-  `"pending"` or `"skipped"`, or glue uses a done callback. These failures
-  depend on what the step does during execution. Import analysis cannot
-  identify them. **The following case is not a gap**: esbuild removes a
+  `"pending"` or `"skipped"`. Those values depend on what the function does
+  during execution. Import analysis cannot identify them. **The following case is not a gap**: esbuild removes a
   name that appears only in a type annotation or an unused import before
   nukadoko imports the file. The import does not occur at run time, and the
   glue runs as compiled. `tsc` still resolves the name against compat

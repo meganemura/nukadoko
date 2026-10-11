@@ -1364,8 +1364,15 @@ import { Given, When, Then } from "nukadoko/compat";
   `undefined-step` の所見は、引用符の付け忘れも示せます。
   同じ位置に合う登録済み pattern が 1 つあり、その capture がすべて `{...:string}` parameter である場合、所見は step と pattern を名指しし、書き直した Gherkin の行を示します。
   その行を説明できる pattern が 2 つ以上ある場合、どれを選ぶかは書き手が決めるため、このヒントは表示されません。
-  **`nuka run` だけが報告できる失敗**: step や hook が `"pending"` / `"skipped"` を返す場合と、glue が done callback を使う場合です。
-  これらの失敗は、step が実行中に行うことに依存します。
+  **`nuka check` が報告できる失敗には done callback も入ります**。
+  コードは `done-callback-arity` です。
+  compat の hook が上限を超えるのは、Before、After、AfterStep が引数を 2 つ以上宣言したときと、BeforeAll、AfterAll が引数を 1 つ以上宣言したときです。
+  マッチした compat step が上限を超えるのは、関数の引数の数が、その行の capture に table または docstring を足した数を超えるときです。
+  その数は関数とマッチした行から決まるので、この所見の結果は 1 通りにしかなりません。
+  マッチしていない step については黙ります。
+  capture の数は、その step を選んだ行から決まるからです。
+  **`nuka run` だけが報告できる失敗**: step や hook が `"pending"` / `"skipped"` を返す場合です。
+  その値は、関数が実行中に返すものに依存します。
   import の解析では識別できません。
   **どちらでもない(gap ではない)こと**: 型注釈にしか使われていない、あるいは import はされたが一度も参照されない名前は、nukadoko がそのファイルを import するより前に esbuild によってコンパイル済み出力から取り除かれるため、その import は実行時には実際には一度も起きません。
   glue は書かれたとおりに実行されます。

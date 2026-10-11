@@ -8,6 +8,7 @@ import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FeatureFile } from "../feature/load-features.js";
 import type { CheckedPattern } from "./binding-check.js";
+import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from "./done-callback.js";
 import { checkFromOrder } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
@@ -77,6 +78,15 @@ export type StepTextMatcher = (text: string) => MatchResult;
  * state across the many pickle-step texts this module tests it against in
  * its loops, which `.test()` on the stored instance would silently corrupt.
  */
+function matchedCaptureCount(candidate: CheckedPattern, text: string): number {
+  if (candidate.matcherKind === "regexp") {
+    const match = new RegExp(candidate.regexp.source, candidate.regexp.flags).exec(text);
+    return match === null ? 0 : match.length - 1;
+  }
+  const args = candidate.expression.match(text);
+  return args === null ? 0 : args.length;
+}
+
 function checkedPatternMatches(candidate: CheckedPattern, text: string): boolean {
   if (candidate.matcherKind === "regexp") {
     return new RegExp(candidate.regexp.source, candidate.regexp.flags).test(text);
@@ -195,6 +205,9 @@ export function checkFeatures(
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
   const match = createStepTextMatcher(patterns);
+  // A Background or an outline repeats one source line across pickles. The
+  // arity result is a property of that line, so one finding is enough.
+  const reportedDoneCallback = new Set<string>();
 
   for (const feature of features) {
     const reportedUndefinedText = new Set<string>();
@@ -267,6 +280,30 @@ export function checkFeatures(
               line,
               step: stepName,
             });
+          }
+        }
+
+        // Compat only. A typed step's `run(fixtures, args)` has a fixed
+        // arity, so this signal does not apply to it. An ambiguous line
+        // already continued above: neither candidate runs, and the capture
+        // count that would make this certain belongs to the one step that
+        // would have been called.
+        if (entry.kind === "compat" && matched) {
+          const hasAttachment =
+            step.argument?.dataTable !== undefined || step.argument?.docString !== undefined;
+          const passed = passedArgCountForStep(matchedCaptureCount(matched, step.text), hasAttachment);
+          if (declaresDoneCallback(entry.compat.fn.length, passed)) {
+            const key = `${feature.relativePath}\0${String(line)}\0${stepName}`;
+            if (!reportedDoneCallback.has(key)) {
+              reportedDoneCallback.add(key);
+              errors.push({
+                code: "done-callback-arity",
+                message: doneCallbackMessage("Step", stepName),
+                file: feature.relativePath,
+                line,
+                step: stepName,
+              });
+            }
           }
         }
 

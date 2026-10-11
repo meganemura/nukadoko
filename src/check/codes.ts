@@ -57,6 +57,11 @@ export const CHECK_CODES = {
       "A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value.",
     severity: "error",
   },
+  "done-callback-arity": {
+    description:
+      "A compat hook or a matched compat step declares more parameters than nukadoko passes, which cucumber-js reads as a done() callback.",
+    severity: "error",
+  },
   "duplicate-pattern": {
     description:
       "Two or more patterns, once capture names are stripped, normalize to the same text, so one step text could match more than one step.",

@@ -25,6 +25,8 @@ This one only says which file, and what must stay true on every path.
   A custom World constructor that throws fails that scenario on `nuka run`:
   one setup line, later scenarios still run, and the messages export is
   finalized.
+  `nuka check` reports `done-callback-arity` for done-callback glue before
+  `nuka run`.
 - **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
   about it moves onto nukadoko; nukadoko grows beside it.
   `references/playwright-test.md`.

@@ -145,10 +145,17 @@ glue はテキストとして読むだけで、実行はしていません。
   同じ経路で捕まります: `nuka check` の `step-file-import-failed`、または `check` を省略していた場合は最初の `nuka run` です。
 - **単一の `@tag` / `not @tag` を超える hook のタグ式**(`and`、`or`、括弧)。
   `nuka check` は違反しているすべての hook を前もって報告し(`unsupported-hook-tag-expression`)、`nuka run` も同じ規則を強制しますが、run は一覧ではなく終了するものなので、最初に当たった 1 つで止まります。
-- step や hook から **`"pending"` または `"skipped"` を返すこと**、および **done コールバックの glue**(`function (arg, done) {...}`)は、それぞれ代わりに何を書くべきかを示すメッセージ付きで失敗します。
-  どちらも `nuka check` からは見えません。
-  どちらもその step が実際に実行されたときに何をするかの性質であり、そのファイルの import のされ方の性質ではないため、その step 自身の実行より前には何もその不備を名指しできず、その step に達した最初の `nuka run` で初めて表に出ます。
-  cucumber-js はこの両方に意味を持たせていますが、nukadoko は持たせておらず、step を通過させる代わりにそう伝えます。
+- step や hook から **`"pending"` または `"skipped"` を返すこと**は、代わりに何を書くべきかを示すメッセージ付きで失敗します。
+  これは `nuka check` からは見えません。
+  関数が実際に実行されたときに返す値の性質であり、ファイルの import のされ方の性質ではないため、その実行より前には不備を名指しできません。
+  その step に達した最初の `nuka run` で表に出ます。
+- **done コールバックの glue**(`function (arg, done) {...}`)も、同じ種類のメッセージ付きで失敗します。
+  `nuka check` はそれを先に `done-callback-arity` として報告します。
+  hook が上限を超えるのは、Before、After、AfterStep が引数を 2 つ以上宣言したときと、BeforeAll、AfterAll が引数を 1 つ以上宣言したときです。
+  マッチした compat step が上限を超えるのは、関数の引数の数が、その行の capture に table または docstring を足した数を超えるときです。
+  マッチしていない step については黙ります。
+  capture の数は、その step を選んだ行から決まるからです。
+  cucumber-js は戻り値の文字列とコールバックの両方に意味を持たせていますが、nukadoko は持たせておらず、step を通過させる代わりにそう伝えます。
 
 `nuka run features/your.feature` でスイートを実行します。
 あらゆる step が step record を得るようになり、それ以外に何かを変える必要はありません。
@@ -204,6 +211,9 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
 - `no-step-files-found` は、`featuresDir` の下を歩いた結果として読み込めるものが 1 つも見つからなかったときにエラーを出し、実際にスキャンしたディレクトリを名指しします。
   これは、まるごと未サポートな形のスイート(glue がすべて `.cjs` である、あるいは `featuresDir` が glue の無い場所を指している)と、単にまだ報告することが何もないだけのスイートとを見分ける方法です。
 - `unsupported-hook-tag-expression` は、単一の `@tag` / `not @tag` を超えるタグ式を持つすべての hook にエラーを出し、`nuka run` が止まる最初の 1 つだけではありません。
+- `done-callback-arity` は、compat の hook が nukadoko の渡す数より多くの引数を宣言したとき、またはマッチした compat step の関数がその行の capture に table または docstring を足した数より多くの引数を宣言したときにエラーを出します。
+  `"pending"` または `"skipped"` を返すことは、今までどおり実行時の失敗です。
+  戻り値は関数が走るまで分からないからです。
 - `undefined-step-check-suppressed` は、上の import の失敗が本来引き起こすはずの `undefined-step` エラーを抑え込んでいるときに警告します。
   1 つの壊れたファイル自身の step が語彙から消えることは、それ以外の方法だと無関係な undefined step の山にしか見えません。
   まず import の失敗を直してください。

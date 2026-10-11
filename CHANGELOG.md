@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka check` reports done-callback compat glue.**
+  A hook whose function declares more parameters than nukadoko passes, and
+  a matched compat step whose function declares more parameters than the
+  line's captures plus a table or docstring, used to pass `nuka check` and
+  fail `nuka run`. The finding is `done-callback-arity`. A `"pending"` or
+  `"skipped"` return is still only visible when the function runs.
 - **A hook's `name` is metadata.** `Before({ name })`, `After({ name })`,
   `BeforeAll({ name })`, and `AfterAll({ name })` used to throw at
   registration, so the step file failed to import. The string is stored

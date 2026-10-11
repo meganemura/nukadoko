@@ -100,9 +100,14 @@ not change the exit code. Fix the import `nuka check` names
 (`step-file-import-failed`), then read tend again.
 
 Do not go looking for a list of what compat doesn't support before you
-start. Whatever will not work fails loudly, either at the import or on the
-first `nuka run`: the failure names what broke, and that is what to act
-on. A custom World constructor that throws is one of those run failures:
+start. Whatever will not work fails loudly, at the import, as a `nuka
+check` finding, or on the first `nuka run`: the failure names what broke,
+and that is what to act on. Done-callback glue is one of those findings
+(`done-callback-arity`). It covers a hook past the arity the executor
+passes, or a matched step whose function takes more arguments than the
+line's captures plus a table or docstring. A `"pending"` or `"skipped"`
+return is not in that set. It still surfaces only when the step runs.
+A custom World constructor that throws is one of those run failures:
 that scenario fails, stderr gets one setup line, later scenarios in the
 same `nuka run` still run, and the messages export is finalized. A list
 written here would go stale the moment compat's coverage grows; the CLI's

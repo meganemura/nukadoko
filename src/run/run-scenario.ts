@@ -11,6 +11,11 @@ import {
 import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { CheckedPattern } from "../check/binding-check.js";
+import {
+  declaresDoneCallback,
+  doneCallbackMessage,
+  SCENARIO_HOOK_ARG_COUNT,
+} from "../check/done-callback.js";
 import { createStepTextMatcher } from "../check/feature-check.js";
 import { checkFromOrder } from "../check/from-order.js";
 import { checkUnfillableKeys } from "../check/unfillable-key.js";
@@ -726,23 +731,10 @@ export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, val
   );
 }
 
-/** cucumber-js infers a `done` callback from a glue function
- * declaring one more parameter than it is actually called with, and passes
- * that extra argument a callback nukadoko never provides. Detected by arity
- * *before* calling the function at all — calling it would already be the
- * silent failure this closes (the callback never fires, the function
- * "succeeds" immediately having done none of its real work yet, and that
- * work keeps running unobserved after this step/hook is already recorded).
- * Exported for the same reason as `pendingOrSkippedMessage` above —
- * cli/run.ts's own BeforeAll/AfterAll
- * arity check reuses this exact wording. */
-export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string {
-  return (
-    `${kind} "${name}" appears to expect a done() callback (it declares more parameters ` +
-    `than nukadoko passes it). nukadoko has no callback form; rewrite it to return a ` +
-    `Promise (async/await). See docs/migration.md`
-  );
-}
+// Re-exported so cli/run.ts and the worker entry keep importing the run
+// failure's wording from this module. The sentence itself lives with the
+// arity rule, which `nuka check` reports under the same words.
+export { doneCallbackMessage };
 
 /**
  * Races `run()` against `timeoutMs` (when given) and returns whichever
@@ -1660,7 +1652,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
     let thrown: unknown;
-    if (hook.fn.length >= 2) {
+    if (declaresDoneCallback(hook.fn.length, SCENARIO_HOOK_ARG_COUNT)) {
       // This arity check, before the call itself (see runWithTimeout's
       // own header for why calling it at all would already be the failure).
       hookStatus = "failed";
@@ -1817,7 +1809,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       let hookErrorMessage = "";
       let hookErrorKind: ErrorKind = "step_error";
       let thrown: unknown;
-      if (hook.fn.length >= 2) {
+      if (declaresDoneCallback(hook.fn.length, SCENARIO_HOOK_ARG_COUNT)) {
         hookStatus = "failed";
         hookErrorMessage = doneCallbackMessage("Hook", title);
         hookErrorKind = "unsupported";
@@ -2259,7 +2251,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // callback — nukadoko never passes one (see `doneCallbackMessage`'s
         // own header for why calling it anyway would already be the
         // failure this closes).
-        if (entry.compat.fn.length > positionalArgs.length) {
+        if (declaresDoneCallback(entry.compat.fn.length, positionalArgs.length)) {
           status = "failed";
           errorMessage = doneCallbackMessage("Step", outcome.stepName);
           errorKind = "unsupported";
@@ -2516,7 +2508,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
     let thrown: unknown;
-    if (hook.fn.length >= 2) {
+    if (declaresDoneCallback(hook.fn.length, SCENARIO_HOOK_ARG_COUNT)) {
       hookStatus = "failed";
       hookErrorMessage = doneCallbackMessage("Hook", title);
       hookErrorKind = "unsupported";

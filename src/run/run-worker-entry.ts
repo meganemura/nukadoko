@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { checkBindings } from "../check/binding-check.js";
+import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -210,7 +211,7 @@ async function main(): Promise<void> {
   ): Promise<boolean> => {
     const title = hookDisplayTitle(label, hook.name);
     try {
-      if (hook.fn.length >= 1) {
+      if (declaresDoneCallback(hook.fn.length, RUN_HOOK_ARG_COUNT)) {
         throw new Error(doneCallbackMessage("Hook", title));
       }
       const returnValue = await runWithTimeout(

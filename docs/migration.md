@@ -189,14 +189,21 @@ is a list you can work through, not a hunt.
   `or`, parentheses). `nuka check` reports every violating hook up front
   (`unsupported-hook-tag-expression`); `nuka run` enforces the same rule but
   stops at the first one it hits, since a run exits rather than lists.
-- **Returning `"pending"` or `"skipped"`** from a step or hook, and
-  **done-callback glue** (`function (arg, done) {...}`), each fail with a
-  message naming what to write instead. Neither is visible to `nuka check`:
-  both are properties of what a step does when it actually runs, not of how
-  its file imports, so nothing before that step's own execution can name
-  the fault: they only surface on the first `nuka run` that reaches the
-  step. cucumber-js gives both of these meaning; nukadoko does not, and
-  says so rather than passing the step.
+- **Returning `"pending"` or `"skipped"`** from a step or hook fails with a
+  message naming what to write instead. This is not visible to `nuka check`:
+  it is a property of what the function does when it actually runs, not of
+  how its file imports, so nothing before that execution can name the fault.
+  It surfaces on the first `nuka run` that reaches it.
+- **Done-callback glue** (`function (arg, done) {...}`) fails with the same
+  kind of message, and `nuka check` reports it first as `done-callback-arity`.
+  A hook is over the limit when Before, After, or AfterStep declares two or
+  more parameters, or when BeforeAll or AfterAll declares one or more. A
+  matched compat step is over the limit when its function declares more
+  parameters than the line's captures plus a table or docstring. An
+  unmatched step stays silent, because the capture count comes from the
+  line that selected it. cucumber-js gives both the return strings and the
+  callback meaning; nukadoko does not, and says so rather than passing the
+  step.
 
 Run the suite with `nuka run features/your.feature`. Every step gets a
 step record; nothing else has to change for that to start happening.
@@ -282,6 +289,11 @@ step has.
 - `unsupported-hook-tag-expression` errors on every hook whose tag
   expression goes beyond a single `@tag` / `not @tag`, not just the first
   one `nuka run` would stop at.
+- `done-callback-arity` errors when a compat hook declares more parameters
+  than nukadoko passes, or when a matched compat step's function declares
+  more parameters than that line's captures plus a table or docstring.
+  Returning `"pending"` or `"skipped"` is still a run-time failure: the
+  return value is not known until the function runs.
 - `undefined-step-check-suppressed` warns when an import failure above is
   holding back the `undefined-step` errors it would otherwise cause: one
   broken file's own steps going missing from the vocabulary can otherwise

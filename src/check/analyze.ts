@@ -22,8 +22,15 @@ import { buildFixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { validateStepParts } from "../step/validate-parts.js";
+import { hookDisplayTitle } from "../record/scenario-record.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
+import {
+  declaresDoneCallback,
+  doneCallbackMessage,
+  RUN_HOOK_ARG_COUNT,
+  SCENARIO_HOOK_ARG_COUNT,
+} from "./done-callback.js";
 import { checkExploreDeclarations } from "./explore-check.js";
 import { checkFeatures } from "./feature-check.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
@@ -235,6 +242,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     relations,
     compatParameterTypes,
     compatHooks,
+    compatRunHooks,
     importFailures,
     unsupportedExtensionFiles,
     walkedFiles,
@@ -321,6 +329,34 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       }
       errors.push({ code: "unsupported-hook-tag-expression", message: error.message });
     }
+  }
+
+  // The same arity the executor refuses before calling the function
+  // (src/run/run-scenario.ts for a scenario hook, src/cli/run.ts for a
+  // run-scope hook). Discovery already holds every fn, so the limit does
+  // not depend on which scenario runs. The title is the same string the
+  // executor puts in the failure: a hook `name` replaces the keyword, and
+  // a missing name keeps it. No `file`: a hook is not attributed to the
+  // file that registered it, same as the tag-expression finding above.
+  for (const hook of compatHooks) {
+    if (!declaresDoneCallback(hook.fn.length, SCENARIO_HOOK_ARG_COUNT)) {
+      continue;
+    }
+    const keyword = hook.type === "before" ? "Before" : hook.type === "after" ? "After" : "AfterStep";
+    errors.push({
+      code: "done-callback-arity",
+      message: doneCallbackMessage("Hook", hookDisplayTitle(keyword, hook.name)),
+    });
+  }
+  for (const hook of compatRunHooks) {
+    if (!declaresDoneCallback(hook.fn.length, RUN_HOOK_ARG_COUNT)) {
+      continue;
+    }
+    const keyword = hook.type === "beforeAll" ? "BeforeAll" : "AfterAll";
+    errors.push({
+      code: "done-callback-arity",
+      message: doneCallbackMessage("Hook", hookDisplayTitle(keyword, hook.name)),
+    });
   }
 
   const configResult = await checkConfig(rootDir, config);

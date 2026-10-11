@@ -108,7 +108,8 @@ proves the wrong thing.
    Application-specific evidence: `references/evidence.md`.
 4. `nuka check <feature>`. `references/running.md`. A schema that
    coerces the capture is not `capture-type-mismatch`
-   (`references/writing-steps.md`).
+   (`references/writing-steps.md`). Compat glue that
+   declares a done() callback is `done-callback-arity`.
 5. Commit. A run can only be frozen on a clean tree at the commit still
    checked out. Debugging against a dirty tree is fine; it cannot be
    accepted.
