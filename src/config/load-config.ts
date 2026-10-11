@@ -29,7 +29,10 @@ export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
 // empty" behave identically. Empty means `export default {}`. A file that
 // does not default-export the object is not empty: a missing default, or
 // a Promise, is a ConfigError naming the file. Reading either as `{}`
-// would ignore every key the file stated, including secrets.redact.
+// would ignore every key the file stated, including secrets.redact. A
+// repeated load of the same root returns the already-parsed config
+// (`configByRoot`, below): a fresh tsImport per call cannot be the
+// implementation.
 //
 // .mts exists for one reason: a project whose package.json has no
 // "type": "module" (CommonJS) cannot load nukadoko.config.ts at all — tsx
@@ -170,7 +173,37 @@ export function resolveConfigFileName(rootDir: string): string {
   return findConfigFile(rootDir)?.fileName ?? CONFIG_FILE_NAME;
 }
 
+// tsImport registers a fresh namespace on every call: an ESM loader through
+// module.register, and a CJS resolver on Module._resolveFilename. It never
+// unregisters either. Calling unregister afterwards only deactivates that
+// loader where Node has module.register but not yet
+// module.registerHooks().deregister(). package.json allows Node 20 and up,
+// and that deregister is absent on Node 20 and on Node 22.14, so the chain
+// is still walked. Measured on Node 22.14: 800 loads of one small config
+// grew from about 5ms to about 45ms, and the same 800 built on register
+// plus unregister in a finally grew the same way. recordStep calls
+// loadConfig once per step inside one process, so that growth is the cost
+// of the run. The config file stays put for that process, so the parsed
+// result is kept per root and the registration happens once. A failed load
+// is dropped, so the next call can see a file that has since been corrected.
+const configByRoot = new Map<string, Promise<NukadokoConfig>>();
+
 export async function loadConfig(rootDir: string): Promise<NukadokoConfig> {
+  const key = path.resolve(rootDir);
+  const cached = configByRoot.get(key);
+  if (cached !== undefined) return cached;
+
+  const pending = readConfig(key);
+  configByRoot.set(key, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    if (configByRoot.get(key) === pending) configByRoot.delete(key);
+    throw error;
+  }
+}
+
+async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const resolved = findConfigFile(rootDir);
   const configPath = resolved?.path ?? path.join(rootDir, CONFIG_FILE_NAME);
 

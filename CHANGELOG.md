@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **Repeated config loads in one process stay at the cost of one load.**
+  `loadConfig` went through tsx's `tsImport` on every call, and each call
+  left a loader on the chain. `recordStep` loads the config once per step,
+  so a long run got slower as it went. The parsed config is reused for the
+  same project root.
 - **A throwing compat World constructor fails that scenario.**
   The throw used to escape `nuka run` as a stack, so later scenarios never
   ran and the messages export was left unfinished. The scenario is now
