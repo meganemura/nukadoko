@@ -716,7 +716,7 @@ export async function runCli(
   const cleanCommand: CommandModule<Record<string, never>, CleanArgs> = {
     command: "clean",
     describe:
-      "delete accumulated records/cache/export under the state directory; refuses while any session is live",
+      "delete accumulated records/cache/export under the state directory; refuses while any session is live; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
     builder: (y: Argv) =>
       y
         .option("dry-run", {

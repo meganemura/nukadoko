@@ -143,6 +143,9 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   カテゴリのフラグを 1 つ指定すると、操作をそのカテゴリだけに限定します。
   `--dry-run` は実際の run と同じ計画を出力しますが、何も消しません。
   どこかに live な session が 1 つでもある場合、このコマンドはすべてのカテゴリについて操作全体を拒否します。`nuka session clear` が live な lock を拒否するのと同じ理由です。
+  `allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合、何も消す前に拒否します。
+  `--dry-run` もそれらのパスを拒否します。
+  プロジェクトの中にある results ディレクトリは、そのディレクトリが state directory の親である場合を除き、これまでどおり消します。
   1 つの export ファイルだけは、retention と `clean` の両方の例外です。
   `export/allure-history.jsonl` は `allure-results/` の中ではなく、その隣にあります。
   ここにある成果物のうち、新しい run で再現できないものはこのファイルだけです。
@@ -2162,6 +2165,9 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。retention はそこに決して触れません。
 どこかで `nuka session` が 1 つでも live であれば、カテゴリを問わずコマンド全体を拒否します。
 その session 自身のプロセスが、いままさに `records/` と `export/` に書き込んでいるからです(理由の全体は「成果物」を参照)。
+`allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合も、何も消す前に拒否します。
+`--dry-run` もそれらのパスを拒否します。
+プロジェクトの中にある results ディレクトリは、そのディレクトリが state directory の親である場合を除き、消します。
 カテゴリを問わず決して触れないファイルが 1 つあります。
 `export/allure-history.jsonl` は `export/allure-results/` の隣にあり、その中にはなく、`.nukadoko/` の下にある成果物の中で唯一、再実行では作り直せないものです。
 
@@ -2410,6 +2416,8 @@ emitter は Allure 2 のファイル形式を使い、Allure 2 と Allure 3 の�
 nukadoko は HTML をレンダリングしません。
 
 `allure.resultsDir` は出力先を root からの別の相対パスへ移します。
+`nuka clean` は、そのディレクトリがプロジェクトの中にあり、state directory の親でないときに、そのディレクトリを消します。
+パスがプロジェクトの root、プロジェクトの外、または state directory の親に解決されるときは、コマンドを拒否します。
 emitter に有効化のフラグはなく、呼び出しが 1 件以上の pickle を選んだときに動きます。
 呼び出しが 0 件の pickle を選んだときはスキップされます。
 これは BeforeAll/AfterAll がスキップされるのと同じ理由で、その場合 `allure-results/` ディレクトリはまったく作られません。
@@ -2666,6 +2674,8 @@ Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日�
 `nuka run` は呼び出しごとに、`@cucumber/messages` を通して 1 つの cucumber messages ストリームを書きます。
 ストリームは 1 行 1 envelope の NDJSON を使い、既定の出力先は `.nukadoko/export/messages.ndjson` です。
 `nukadoko.config.ts` の `messages.output` で、root からの別の相対パスを設定できます。
+`nuka clean` は、そのパスがプロジェクトの中にあり、state directory の親でないときに、そのファイルと隣にある run-id 付きのファイルを消します。
+パスがプロジェクトの root、プロジェクトの外、または state directory の親に解決されるときは、コマンドを拒否します。
 Allure と同様に、この emitter には `enabled` フラグも CLI フラグもありません。
 呼び出しが 0 件の pickle を選んだ場合を除き、emitter は実行されます。
 
@@ -3057,7 +3067,12 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               prints the same plan the real run would act on
                               without removing anything; refuses outright,
                               every category, while any session anywhere is
-                              live; export/allure-history.jsonl is never
+                              live; refuses, before removing anything, an
+                              allure.resultsDir or messages.output that
+                              resolves to the project root, outside the
+                              project, or to a parent of the state
+                              directory, including on --dry-run;
+                              export/allure-history.jsonl is never
                               removed
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it

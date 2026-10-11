@@ -57,6 +57,19 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // enumerated or deleted here, the same guarantee cli/init.ts's own comment
 // describes ("kept beside the disposable allure-results/ directory ...
 // clearing results between runs never discards it").
+//
+// `allure.resultsDir` and `messages.output` are refused, before the plan is
+// built and before anything is removed, when the path resolves to the
+// project root, to somewhere outside the project, or to a parent of the
+// state directory. Removing the project root removes the project. Removing
+// a parent of the state directory removes that directory as a side effect
+// of cleaning export. A path outside the project is not this tool's to
+// delete: retention already skips a manifest line that leaves the project,
+// and clean follows that boundary instead of treating the two config keys
+// as permission to delete wherever they point. `--dry-run` refuses too. A
+// dry-run that printed `.` and exited 0 would be the command agreeing to
+// delete the project. The check uses `path.resolve`, so `..` and an
+// absolute path are judged by where they land.
 
 export interface RunCleanOptions {
   rootDir: string;
@@ -207,23 +220,78 @@ interface ExportPlan {
   paths: string[];
 }
 
+/** `null` when `configuredPath` may be removed: the resolved path is strictly
+ * inside the project and is not a parent of the state directory. The project
+ * root is refused because it is not inside itself, and removing it removes
+ * the project. A path outside the project is refused because this tool does
+ * not delete what it does not own. A parent of the state directory is refused
+ * because removing it removes the state directory with it.
+ *
+ * `path.resolve` decides, so `..` and an absolute path are judged by where
+ * they land. */
+export function refuseExportTarget(
+  rootDir: string,
+  stateDir: string,
+  configuredPath: string,
+  label: string,
+): string | null {
+  const root = path.resolve(rootDir);
+  const target = path.resolve(root, configuredPath);
+  const state = path.resolve(root, stateDir);
+  if (target === root) {
+    return `nuka clean: refusing, ${label} "${configuredPath}" resolves to the project root`;
+  }
+  if (!isStrictlyInside(root, target)) {
+    return `nuka clean: refusing, ${label} "${configuredPath}" resolves outside the project`;
+  }
+  if (isStrictlyInside(target, state)) {
+    return `nuka clean: refusing, ${label} "${configuredPath}" is a parent of the state directory`;
+  }
+  return null;
+}
+
+/** `child` sits strictly inside `parent`. The parent itself does not: a
+ * removal of the parent would remove the parent. A climb (`..`) or a path
+ * that is absolute against another root is not inside. */
+function isStrictlyInside(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  if (relative === "" || path.isAbsolute(relative)) return false;
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`);
+}
+
+type BuiltExportPlan = { refusal: string; plan: null } | { refusal: null; plan: ExportPlan };
+
 /** `export/allure-results/`, `export/messages.ndjson`, and every run-id-
  * suffixed file the messages emitter left beside it, or wherever
- * `config.allure.resultsDir`/`config.messages.output` point instead —
- * resolved exactly the way cli/run.ts resolves them before handing them to
+ * `config.allure.resultsDir`/`config.messages.output` point instead.
+ * Resolved exactly the way cli/run.ts resolves them before handing them to
  * the two emitters, config override included, so a clean targets the same
  * place a run actually wrote to. Only a path that exists is listed: an
  * unset `resultsDir` before the first `nuka run` (past `nuka init`'s own
  * directory creation, e.g. a fresh clone) is not an error, just nothing to
- * remove there yet. */
+ * remove there yet. A path `refuseExportTarget` rejects is returned as a
+ * refusal and is not listed or read: the messages sibling scan would
+ * otherwise readdir a directory outside the project. */
 async function buildExportPlan(
   rootDir: string,
   stateDir: string,
   allureResultsDirConfig: string | undefined,
   messagesOutputConfig: string | undefined,
-): Promise<ExportPlan> {
-  const resultsDirRelative = allureResultsDirConfig ?? path.join(stateDir, "export", "allure-results");
-  const messagesOutputRelative = messagesOutputConfig ?? path.join(stateDir, "export", "messages.ndjson");
+): Promise<BuiltExportPlan> {
+  const resultsConfigured = allureResultsDirConfig ?? path.join(stateDir, "export", "allure-results");
+  const messagesConfigured = messagesOutputConfig ?? path.join(stateDir, "export", "messages.ndjson");
+  const refusal =
+    refuseExportTarget(rootDir, stateDir, resultsConfigured, "allure.resultsDir") ??
+    refuseExportTarget(rootDir, stateDir, messagesConfigured, "messages.output");
+  if (refusal !== null) {
+    return { refusal, plan: null };
+  }
+  // Root-relative from here on. An absolute path that landed inside the
+  // project, and a `..` that stayed inside it, both join back onto rootDir
+  // at the place `path.resolve` already accepted.
+  const root = path.resolve(rootDir);
+  const resultsDirRelative = path.relative(root, path.resolve(root, resultsConfigured));
+  const messagesOutputRelative = path.relative(root, path.resolve(root, messagesConfigured));
 
   const paths: string[] = [];
   if (existsSync(path.join(rootDir, resultsDirRelative))) {
@@ -255,7 +323,7 @@ async function buildExportPlan(
   }
   paths.push(...messagesRunOutputsRelative);
 
-  return { resultsDirRelative, messagesOutputRelative, messagesRunOutputsRelative, paths };
+  return { refusal: null, plan: { resultsDirRelative, messagesOutputRelative, messagesRunOutputsRelative, paths } };
 }
 
 function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: WritableSink): void {
@@ -314,7 +382,14 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
     plan.cache = await buildCachePlan(rootDir, config.stateDir);
   }
   if (selection.export) {
-    exportPlan = await buildExportPlan(rootDir, config.stateDir, config.allure?.resultsDir, config.messages?.output);
+    const built = await buildExportPlan(rootDir, config.stateDir, config.allure?.resultsDir, config.messages?.output);
+    // Before writePlan and before any rm. A refusal here has not deleted
+    // records or cache either: those plans are still only in memory.
+    if (built.refusal !== null) {
+      stderr.write(`${built.refusal}\n`);
+      return 1;
+    }
+    exportPlan = built.plan;
     plan.export = exportPlan.paths;
   }
 

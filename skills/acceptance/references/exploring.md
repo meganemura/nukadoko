@@ -156,7 +156,12 @@ the Allure/messages export output at once, all disposable by design
 removing anything. It refuses the whole command, every category, while
 any session anywhere is still live, the same rule `session clear` already
 applies to one, widened here because a live session's own process is
-still writing records and export output, not sitting idle. Stop every
+still writing records and export output, not sitting idle. It also
+refuses, before removing anything, when `allure.resultsDir` or
+`messages.output` resolves to the project root, to a path outside the
+project, or to a parent of the state directory. `--dry-run` refuses those
+paths too. A results directory inside the project is still removed, unless
+that directory is a parent of the state directory. Stop every
 session first (`nuka session stop <name>`), then clean.
 `export/allure-history.jsonl` survives regardless: it sits beside
 `allure-results/`, not inside it, and is the one export artifact no

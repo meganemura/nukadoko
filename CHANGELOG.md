@@ -16,6 +16,15 @@ just until 0.1.
   `context`. A request-only step is allowed. Check does not run the steps.
   `examples/todo/features/explore/` is the request-only case.
 
+### Fixed
+
+- **`nuka clean` refuses an export path that would delete the project or leave it.**
+  `allure.resultsDir` or `messages.output` set to the project root, to a
+  path outside the project, or to a parent of the state directory makes
+  the command exit 1 and remove nothing, including on `--dry-run`. A
+  results directory inside the project is still removed, unless that
+  directory is a parent of the state directory.
+
 ## 0.14.1 — 2026-10-10
 
 ### Fixed

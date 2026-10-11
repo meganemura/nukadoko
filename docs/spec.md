@@ -153,7 +153,12 @@ questions: "what happens if this is deleted" and "who gets to change it":
   category. `--dry-run` prints the same plan that the real run would use,
   but removes nothing. If any session is live anywhere, the command
   refuses the complete operation for every category, for the same reason
-  that `nuka session clear` refuses a live lock. One export file is exempt
+  that `nuka session clear` refuses a live lock. An `allure.resultsDir` or
+  `messages.output` that resolves to the project root, to a path outside the
+  project, or to a parent of the state directory is refused before anything
+  is removed. `--dry-run` refuses those paths too. `clean` still removes a
+  results directory that stays inside the project, unless that directory is
+  a parent of the state directory. One export file is exempt
   from both retention and `clean`. `export/allure-history.jsonl` sits
   beside `allure-results/`, not inside it. It is the only artifact here
   that a new run cannot reproduce.
@@ -2630,6 +2635,11 @@ operation for an `allure-results/` directory written before runs kept a
 manifest of their files, which retention never touches. The command refuses
 all categories while any `nuka session` is live. That session process can
 still write to `records/` and `export/` (see "Artifacts" for the full reason).
+It also refuses, before removing anything, when `allure.resultsDir` or
+`messages.output` resolves to the project root, to a path outside the
+project, or to a parent of the state directory. `--dry-run` refuses those
+paths too. A results directory inside the project is still removed, unless
+that directory is a parent of the state directory.
 The command never touches `export/allure-history.jsonl`. This file is beside
 `export/allure-results/`, outside that directory. It is the only artifact under
 `.nukadoko/` that a new run cannot reproduce.
@@ -2952,6 +2962,8 @@ By default, nukadoko writes results to `.nukadoko/export/allure-results/`.
 nukadoko does not render HTML.
 
 `allure.resultsDir` moves the output to another root-relative path.
+`nuka clean` removes that directory when it stays inside the project, unless the directory is a parent of the state directory.
+It refuses the command when the path resolves to the project root, to a path outside the project, or to a parent of the state directory.
 The emitter has no enable flag and runs when an invocation selects at least one pickle.
 It is skipped, the same reason BeforeAll/AfterAll are, when an invocation selects zero pickles: no `allure-results/` directory is created at all in that case.
 `categories.json` and `environment.properties` are written once, at the very start of a run, before the first step runs.
@@ -3144,7 +3156,11 @@ The Allure emitter is where nukadoko's measurement surplus becomes visible, auto
 For each invocation, `nuka run` writes one cucumber messages stream through
 `@cucumber/messages`. The stream uses NDJSON with one envelope per line and
 defaults to `.nukadoko/export/messages.ndjson`. `messages.output` in
-`nukadoko.config.ts` can set another root-relative path. Like Allure, this
+`nukadoko.config.ts` can set another root-relative path. `nuka clean` removes
+that file, and the run-id-suffixed files beside it, when the path stays
+inside the project, unless the path is a parent of the state directory. It refuses
+the command when the path resolves to the project root, to a path outside
+the project, or to a parent of the state directory. Like Allure, this
 emitter has no `enabled` or CLI flag. It runs unless the invocation selects
 zero pickles.
 
@@ -3606,7 +3622,12 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               prints the same plan the real run would act on
                               without removing anything; refuses outright,
                               every category, while any session anywhere is
-                              live; export/allure-history.jsonl is never
+                              live; refuses, before removing anything, an
+                              allure.resultsDir or messages.output that
+                              resolves to the project root, outside the
+                              project, or to a parent of the state
+                              directory, including on --dry-run;
+                              export/allure-history.jsonl is never
                               removed
 nuka accept <feature>         freeze that feature's last green run as a
                               committed acceptance record beside it

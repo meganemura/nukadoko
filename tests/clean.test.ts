@@ -3,6 +3,9 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { refuseExportTarget } from "../src/cli/clean.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { messagesRunOutputPath } from "../src/record/messages-output.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
@@ -403,6 +406,44 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
   });
 
+  it("refuses an absolute resultsDir outside the project and leaves that path in place", async () => {
+    const outside = path.join(path.dirname(rootDir), `abs-outside-${path.basename(rootDir)}`);
+    await mkdir(outside, { recursive: true });
+    await writeFile(path.join(outside, "keep.txt"), "keep");
+    try {
+      await writeExportConfig(rootDir, { allureResultsDir: outside });
+      await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["clean", "--export"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr,
+      });
+      expect(exitCode).toBe(1);
+      expect(stderr.text()).toContain("outside the project");
+      expect(existsSync(path.join(outside, "keep.txt"))).toBe(true);
+      expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+    } finally {
+      await removeTempDir(outside);
+    }
+  });
+
+  it("still cleans records when resultsDir is the project root and export is not selected", async () => {
+    await writeExportConfig(rootDir, { allureResultsDir: "." });
+    await seedRecords(rootDir);
+    await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
+
+    const exitCode = await runCli(["clean", "--records"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
+    expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
+  });
+
   it("an unknown flag fails setup: exit 1, nothing deleted (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
     await seedRecords(rootDir);
 
@@ -417,4 +458,64 @@ describe("nuka clean", () => {
     expect(stderr.text()).toContain("unknown-flag");
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
   });
+});
+
+const pathSegment = gs.text({ alphabet: "abc", minSize: 1, maxSize: 6 });
+const pathSegments = gs.arrays(pathSegment, { minSize: 1, maxSize: 4 });
+
+function refused(rootDir: string, stateDir: string, configuredPath: string): boolean {
+  return refuseExportTarget(rootDir, stateDir, configuredPath, "allure.resultsDir") !== null;
+}
+
+describe("refuseExportTarget", () => {
+  it("allows every path that stays under reports/ when the state directory is .nukadoko", () =>
+    hegel.test((tc) => {
+      const relative = path.join("reports", ...tc.draw(pathSegments));
+      expect(refuseExportTarget("/proj/app", ".nukadoko", relative, "allure.resultsDir")).toBe(null);
+    }));
+
+  it("allows a path strictly inside the state directory", () =>
+    hegel.test((tc) => {
+      const state = path.join("bed", ...tc.draw(gs.arrays(pathSegment, { minSize: 0, maxSize: 2 })), "state");
+      const target = path.join(state, "export", ...tc.draw(gs.arrays(pathSegment, { minSize: 0, maxSize: 3 })));
+      expect(refuseExportTarget("/proj/app", state, target, "allure.resultsDir")).toBe(null);
+    }));
+
+  it("refuses every spelling that resolves to the project root", () =>
+    hegel.test((tc) => {
+      const parts = tc.draw(pathSegments);
+      const spelling = path.join(...parts, ...parts.map(() => ".."));
+      const root = "/proj/app";
+      expect(path.resolve(root, spelling)).toBe(root);
+      expect(refuseExportTarget(root, ".nukadoko", spelling, "messages.output")).toContain("project root");
+    }));
+
+  it("refuses a path that climbs out of the project", () =>
+    hegel.test((tc) => {
+      const ups = tc.draw(gs.integers({ minValue: 1, maxValue: 4 }));
+      const climbing = path.join(...Array.from({ length: ups }, () => ".."), ...tc.draw(pathSegments));
+      const refusal = refuseExportTarget("/proj/app", ".nukadoko", climbing, "allure.resultsDir");
+      expect(refusal).toContain("outside the project");
+    }));
+
+  it("refuses a path that is a parent of the state directory", () =>
+    hegel.test((tc) => {
+      const parts = tc.draw(pathSegments);
+      const state = path.join(...parts, "state");
+      const parentDepth = tc.draw(gs.integers({ minValue: 1, maxValue: parts.length }));
+      const parent = path.join(...parts.slice(0, parentDepth));
+      expect(refuseExportTarget("/proj/app", state, parent, "allure.resultsDir")).toContain("state directory");
+    }));
+
+  it("agrees for a relative spelling and the absolute path it resolves to", () =>
+    hegel.test((tc) => {
+      const root = path.join("/proj", tc.draw(pathSegment));
+      const state = ".nukadoko";
+      const inside = path.join("reports", ...tc.draw(pathSegments));
+      const outside = path.join("..", "out", ...tc.draw(pathSegments));
+      expect(refused(root, state, inside)).toBe(refused(root, state, path.resolve(root, inside)));
+      expect(refused(root, state, outside)).toBe(refused(root, state, path.resolve(root, outside)));
+      expect(refused(root, state, inside)).toBe(false);
+      expect(refused(root, state, outside)).toBe(true);
+    }));
 });

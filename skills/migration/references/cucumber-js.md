@@ -41,7 +41,12 @@ it never touches. `nuka clean [--records] [--cache] [--export] [--dry-run]`
 removes everything at once; giving no category flag cleans all three,
 `--dry-run` previews the same plan it would act on without removing
 anything, and it refuses the whole command, every category, while any
-`nuka session` is still live.
+`nuka session` is still live. It also refuses, before removing anything,
+when `allure.resultsDir` or `messages.output` resolves to the project
+root, to a path outside the project, or to a parent of the state
+directory, and `--dry-run` refuses those paths too. A results directory
+inside the project is still removed, unless that directory is a parent
+of the state directory.
 
 Once more than one feature file is green, `nuka run <feature> [<feature>
 ...] --concurrency <n>` or `nuka run <dir> --concurrency <n>` runs the
