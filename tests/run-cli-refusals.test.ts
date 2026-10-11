@@ -116,4 +116,27 @@ describe("nuka run --session: a malformed session file fails mid-run, not setup"
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("corrupt");
   });
+
+  it("reports a malformed session file once under --repeat and runs no later pass", async () => {
+    const sessionPath = sessionFilePath(rootDir, ".nukadoko", "default", "bad");
+    await mkdir(path.dirname(sessionPath), { recursive: true });
+    await writeFile(sessionPath, "{not json");
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/session-flow.feature", "--session", "bad", "--repeat", "3"],
+      { rootDir, stdout, stderr },
+    );
+
+    // A read failure stops the whole selection. A later pass must not start:
+    // the file may have been rewritten by then, and that pass would run
+    // scenarios after the run has already failed. The same error printed
+    // once per pass is that later pass starting.
+    const message = 'Session "bad" file is not valid JSON';
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text().split(message).length - 1).toBe(1);
+    expect(stderr.text()).toMatch(/^0 scenarios: 0 passed, 0 failed/m);
+  });
 });
