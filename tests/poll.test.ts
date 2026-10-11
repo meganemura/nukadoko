@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from "vites
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { pollWithRecording, type PollOutcome } from "../src/context/poll.js";
-import { PollTimeoutError } from "../src/index.js";
+import { InvalidPollOptionsError, PollTimeoutError } from "../src/index.js";
 
 // Responsibility: `ctx.poll`'s own retry-loop behavior, unchanged from the
 // pre-ctx-poll-step-record `poll` import this
@@ -167,8 +167,7 @@ describe("ctx.poll", () => {
       ctx.poll(async () => undefined, { timeout: Number.NaN, interval: 20 }),
       300,
     );
-    expect(outcome).toBeInstanceOf(Error);
-    expect(outcome).not.toBe("pending");
+    expect(outcome).toBeInstanceOf(InvalidPollOptionsError);
     expect(Date.now() - started).toBeLessThan(300);
   });
 
@@ -179,9 +178,55 @@ describe("ctx.poll", () => {
       ctx.poll(async () => undefined, { timeout: 5_000, interval: Number.NaN }),
       300,
     );
-    expect(outcome).toBeInstanceOf(Error);
-    expect(outcome).not.toBe("pending");
+    expect(outcome).toBeInstanceOf(InvalidPollOptionsError);
     expect(Date.now() - started).toBeLessThan(300);
+  });
+
+  it.each([
+    { timeout: 0, interval: 10 },
+    { timeout: -5, interval: 10 },
+    { timeout: Number.POSITIVE_INFINITY, interval: 10 },
+    { timeout: 100, interval: 0 },
+    { timeout: 100, interval: -1 },
+    { timeout: 100, interval: Number.POSITIVE_INFINITY },
+  ])("refuses a non-positive or non-finite timeout or interval (%j) before calling fn", async (options) => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    let calls = 0;
+    const outcome = await outcomeWithin(
+      ctx.poll(async () => {
+        calls += 1;
+        return "ready";
+      }, options),
+      300,
+    );
+    expect(outcome).toBeInstanceOf(InvalidPollOptionsError);
+    expect(calls).toBe(0);
+  });
+
+  it("records timed_out, not a late rejection, when fn never settles and then rejects", async () => {
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    let rejectLate: (error: Error) => void = () => {};
+    const outcome = await outcomeWithin(
+      ctx.poll(
+        () =>
+          new Promise<undefined>((_resolve, reject) => {
+            rejectLate = reject;
+          }),
+        { timeout: 40, interval: 10 },
+      ),
+      400,
+    );
+    expect(outcome).toBeInstanceOf(PollTimeoutError);
+    const unhandled = new Promise<unknown>((resolve) => {
+      const onUnhandled = (error: unknown) => resolve(error);
+      process.once("unhandledRejection", onUnhandled);
+      rejectLate(new Error("late"));
+      setTimeout(() => {
+        process.removeListener("unhandledRejection", onUnhandled);
+        resolve(undefined);
+      }, 30);
+    });
+    expect(await unhandled).toBeUndefined();
   });
 });
 
@@ -270,6 +315,25 @@ describe("pollWithRecording: onProgress", () => {
     expect(progressCalls.length).toBeGreaterThan(0);
     expect(finished?.attempts).toBe(progressCalls.length);
     expect(finished?.outcome).toBe("timed_out");
+  });
+
+  it("reports one timed_out attempt when fn has not settled by the budget", async () => {
+    const progressCalls: number[] = [];
+    let finished: PollOutcome | undefined;
+    await expect(
+      pollWithRecording(
+        () => new Promise(() => {}),
+        { timeout: 40, interval: 10 },
+        (outcome) => {
+          finished = outcome;
+        },
+        (attempts) => progressCalls.push(attempts),
+      ),
+    ).rejects.toBeInstanceOf(PollTimeoutError);
+    expect(progressCalls).toEqual([1]);
+    expect(finished?.attempts).toBe(1);
+    expect(finished?.outcome).toBe("timed_out");
+    expect(finished?.waitedMs).toBeLessThan(300);
   });
 
   it("is optional: omitting it changes nothing about a poll's own resolution", async () => {

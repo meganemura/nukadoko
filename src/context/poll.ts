@@ -31,8 +31,90 @@ export class PollTimeoutError extends Error {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Thrown before the first attempt when `timeout` or `interval` cannot be a
+ * budget. A missing option is not this case: it uses the default. `NaN` and
+ * `Infinity` are, because `elapsed >= timeout` is never true for either, so
+ * the loop would not end. Zero and a negative number are too: a budget that
+ * is already spent cannot contain an attempt, and a non-positive interval
+ * collapses into a tight timer loop. The value is named in the message
+ * because `Number(process.env.SOME_TIMEOUT)` is a common way to arrive here
+ * with `NaN`, and the message is the only place that says which option. */
+export class InvalidPollOptionsError extends Error {
+  readonly option: "timeout" | "interval";
+  readonly value: number;
+
+  constructor(option: "timeout" | "interval", value: number) {
+    super(`poll ${option} must be a finite number of milliseconds greater than 0 (got ${String(value)})`);
+    this.name = "InvalidPollOptionsError";
+    this.option = option;
+    this.value = value;
+  }
+}
+
+type BudgetResult<T> = { readonly status: "value"; readonly value: T } | { readonly status: "timeout" };
+
+function requirePositiveMs(value: number, option: "timeout" | "interval"): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new InvalidPollOptionsError(option, value);
+  }
+}
+
+interface CancellableDelay {
+  readonly done: Promise<void>;
+  cancel(): void;
+}
+
+function delay(ms: number): CancellableDelay {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const done = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      timer = undefined;
+      resolve();
+    }, ms);
+  });
+  return {
+    done,
+    cancel() {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+    },
+  };
+}
+
+/**
+ * Resolves with `work`'s value, or with `status: "timeout"` when `budgetMs`
+ * elapses first. The attempt is not cancelled: `fn` has no signal to observe.
+ * What this does stop is using that late settlement as the poll's result. A
+ * value that arrives after the budget is dropped, and a rejection that arrives
+ * after it is swallowed. Leaving that rejection unhandled would fail the
+ * process for an attempt the caller has already been told timed out.
+ */
+async function withinBudget<T>(work: Promise<T>, budgetMs: number): Promise<BudgetResult<T>> {
+  let abandon = false;
+  const guarded = work.then(
+    (value) => value,
+    (error: unknown) => {
+      if (abandon) return undefined as T;
+      throw error;
+    },
+  );
+  const timer = delay(budgetMs);
+  try {
+    const winner = await Promise.race([
+      guarded.then((value) => ({ settled: "value" as const, value })),
+      timer.done.then(() => ({ settled: "timeout" as const })),
+    ]);
+    if (winner.settled === "timeout") {
+      abandon = true;
+      void guarded.catch(() => {});
+      return { status: "timeout" };
+    }
+    return { status: "value", value: winner.value };
+  } finally {
+    timer.cancel();
+  }
 }
 
 /** What one finished poll measured — everything `PollsCollector.record`
@@ -75,6 +157,14 @@ export interface PollOutcome {
  * throwing `onProgress` would escape as if it were `fn`'s own failure. The
  * one caller today (create-context.ts) only ever assigns into a plain map,
  * which cannot throw.
+ *
+ * `timeout` is a budget for the whole call, not a check that runs once an
+ * attempt has already returned. Each attempt, and each sleep between
+ * attempts, is raced against the time still left. An attempt that does not
+ * settle inside that remainder is a timeout, and so is a sleep that would
+ * start the next attempt after the budget. A value produced after the
+ * budget has ended is not returned. Invalid `timeout` or `interval` throws
+ * before this loop, and is not recorded: there is no attempt to count.
  */
 export async function pollWithRecording<T>(
   fn: () => Promise<T | undefined>,
@@ -84,30 +174,55 @@ export async function pollWithRecording<T>(
 ): Promise<T> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const interval = options.interval ?? DEFAULT_INTERVAL_MS;
+  requirePositiveMs(timeout, "timeout");
+  requirePositiveMs(interval, "interval");
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
   let attempts = 0;
   let outcome: PollOutcome["outcome"] = "resolved";
+  const failTimedOut = (): never => {
+    outcome = "timed_out";
+    throw new PollTimeoutError(timeout, options.description);
+  };
 
   try {
     for (;;) {
+      const budget = timeout - (Date.now() - startedAt);
+      if (!(budget > 0)) failTimedOut();
       attempts += 1;
       onProgress?.(attempts);
       let value: T | undefined;
+      let attempt: BudgetResult<T | undefined>;
       try {
-        value = await fn();
+        attempt = await withinBudget(fn(), budget);
       } catch (error) {
         outcome = "failed";
         throw error;
       }
+      // Thrown out here, not inside the `catch` above: that `catch` is only
+      // `fn`'s own failure. Folding the timeout into it would record the
+      // attempt as `"failed"`. The `else` is what narrows `attempt` to the
+      // value arm: a `never`-returning call in the `if` does not.
+      if (attempt.status === "timeout") {
+        failTimedOut();
+      } else {
+        value = attempt.value;
+      }
       if (value !== undefined) {
         return value;
       }
-      if (Date.now() - startedAt >= timeout) {
-        outcome = "timed_out";
-        throw new PollTimeoutError(timeout, options.description);
+      const left = timeout - (Date.now() - startedAt);
+      // The next attempt cannot start until `interval` has passed. If that
+      // wait would itself cross the budget, waiting it out and then calling
+      // `fn` again is how a value from after the deadline used to be returned.
+      if (!(left > 0) || left < interval) failTimedOut();
+      const pause = delay(interval);
+      try {
+        const slept = await withinBudget(pause.done, left);
+        if (slept.status === "timeout") failTimedOut();
+      } finally {
+        pause.cancel();
       }
-      await sleep(interval);
     }
   } finally {
     onFinish({ attempts, waitedMs: Date.now() - startedAt, outcome, at: startedAtIso });

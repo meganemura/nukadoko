@@ -220,6 +220,12 @@ between compat and typed. If another pattern comes up often enough to
 deserve one, that's a separate addition, not something to improvise from
 this single case.
 
+A glue loop that slept and tried again until something appeared becomes
+`poll` on the fixture bag. Its `timeout` is a budget for the whole call,
+including the attempt in flight, and a non-finite or non-positive
+`timeout` or `interval` is refused before that attempt starts. The
+contract is in docs/spec.md ("Context API").
+
 ## When a global `After` hook was the cleanup
 
 A cucumber-js suite often leans on a global `After` hook to clean up

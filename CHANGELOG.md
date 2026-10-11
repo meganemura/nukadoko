@@ -127,6 +127,14 @@ just until 0.1.
   value was a piece of that token (`secret`, `TOKEN`, `API_`) rewrote it.
   A second redact nested the token again. Spellings are replaced in one
   pass, longest first, and an existing token is kept as itself.
+- **`ctx.poll`'s `timeout` is a budget for the whole call.** An attempt
+  that is still running when the budget ends times out, and a value that
+  arrives later is not returned. A `fn` that never settles times out with
+  the budget instead of holding the step open. `timeout` and `interval`
+  must be finite and greater than zero. `NaN`, `Infinity`, zero, and a
+  negative number throw `InvalidPollOptionsError` before the first attempt,
+  instead of polling without end. Omitting either option still uses its
+  default (30 seconds, 500 milliseconds).
 
 ## 0.14.1 — 2026-10-10
 

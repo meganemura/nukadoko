@@ -61,7 +61,11 @@ isn't finished when the write is accepted, it's finished once that effect
 is visible to whatever runs next. Wait for it there, with the `poll`
 fixture, `poll(fn, { description, timeout, interval })`; give `description`
 a value and the step record's `polls` carries `attempts`, `waited_ms`, and
-`outcome` beside it. That is what separates a wait that actually waited
+`outcome` beside it. `timeout` is a budget for that whole call, including
+the attempt in flight: the call ends when the budget ends, and a value
+that arrives later is not returned. `timeout` and `interval` must be finite
+and greater than zero. Anything else is refused before the first attempt.
+Omitting either one keeps its default. That is what separates a wait that actually waited
 from one that returned on its first attempt: the second means the
 condition was never the late one, and something else is, which is a
 different problem with a different fix.

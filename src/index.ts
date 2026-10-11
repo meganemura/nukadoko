@@ -20,7 +20,7 @@ export type {
 // `poll` itself is not exported: it moved onto `ctx.poll` — see
 // src/step/context.ts's own header for why a runnable `poll`
 // stayed importable for exactly as long as it recorded nothing.
-export { PollTimeoutError } from "./context/poll.js";
+export { InvalidPollOptionsError, PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./step/context.js";
 export type {
   ActionEntry,

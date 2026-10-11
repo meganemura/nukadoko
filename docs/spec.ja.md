@@ -438,6 +438,12 @@ fixture の名前:
   `fn` は、その状態が存在するまで `undefined` を返します。
   `poll` は、最初の定義済みの値を返します。
   `timeout` の予算が先に尽きると、`poll` は `PollTimeoutError` を投げます。
+  この予算は、実行中の試行を含みます。
+  予算が尽きた時点でまだ完了していない試行はそこで終わり、その後に届いた値は返り値になりません。
+  `timeout` と `interval` は、どちらも 0 より大きい有限のミリ秒でなければなりません。
+  省略したときは既定値を使います。
+  `timeout` の既定値は 30000、`interval` の既定値は 500 です。
+  `NaN`、`Infinity`、0、負の数は、最初の試行の前に `InvalidPollOptionsError` を投げます。
   完了したすべての呼び出しは、step record の `polls` に保存されます(「Records」を参照)。
   record は、試行回数、待機時間、結果を示します。
   `fn` が poll する値は、実装の詳細ではなく契約上の選択です。

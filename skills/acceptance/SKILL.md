@@ -95,7 +95,8 @@ proves the wrong thing.
    name it in `oaths`, or pass the `.md` path to `nuka check` and
    `nuka run`. A sentence no pattern matches is `undefined-step`.
    The grammar is in docs/spec.md ("Markdown oaths"). A resource the
-   scenario borrows, a wait for an effect that lands elsewhere, or a
+   scenario borrows, a wait for an effect that lands elsewhere (`poll`,
+   whose `timeout` is a budget for the whole call), or a
    required environment variable: `references/fixtures.md`.
    Application-specific evidence: `references/evidence.md`.
 4. `nuka check <feature>`. `references/running.md`. A schema that

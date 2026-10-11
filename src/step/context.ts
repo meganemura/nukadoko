@@ -122,9 +122,12 @@ import type { Step } from "./define-step.js";
 // attachment but can never learn, or control, where it actually lands.
 
 export interface PollOptions {
-  /** Total time budget for polling, in milliseconds. */
+  /** Total time budget for the whole poll, in milliseconds, including the
+   * attempt in flight. Must be a finite number greater than zero when
+   * given. Omit it for 30 seconds. */
   timeout?: number;
-  /** Delay between poll attempts, in milliseconds. */
+  /** Delay between poll attempts, in milliseconds. Must be a finite number
+   * greater than zero when given. Omit it for 500 milliseconds. */
   interval?: number;
   /** Human-readable label. Included in `PollTimeoutError`'s message when
    * this poll times out, and in the step record's own `polls` entry
@@ -191,8 +194,12 @@ export interface StepFixtures {
   readonly section: (label: string) => void;
   /** Waits for `fn` to return a defined value, retrying at
    * `options.interval` (default 500ms) until `options.timeout` (default
-   * 30_000ms) is reached; throws `PollTimeoutError` (src/context/poll.ts)
-   * if it is. `fn`'s own throw propagates unchanged. Every completed call —
+   * 30_000ms). That timeout is a budget for the whole call, including the
+   * attempt in flight: an attempt that has not settled when the budget ends
+   * throws `PollTimeoutError` (src/context/poll.ts), and a value that
+   * arrives later is not returned. A non-finite or non-positive `timeout`
+   * or `interval` throws `InvalidPollOptionsError` before the first attempt.
+   * `fn`'s own throw propagates unchanged. Every completed call —
    * resolved, timed out, or `fn` itself threw — is recorded on this
    * execution's step record under `polls` (docs/spec.md "Records"): how many
    * attempts it took, how long it waited, and how it ended. */
@@ -300,8 +307,12 @@ export interface StepContext {
   section(label: string): void;
   /** Waits for `fn` to return a defined value, retrying at
    * `options.interval` (default 500ms) until `options.timeout` (default
-   * 30_000ms) is reached; throws `PollTimeoutError` (src/context/poll.ts)
-   * if it is. `fn`'s own throw propagates unchanged. Every completed call —
+   * 30_000ms). That timeout is a budget for the whole call, including the
+   * attempt in flight: an attempt that has not settled when the budget ends
+   * throws `PollTimeoutError` (src/context/poll.ts), and a value that
+   * arrives later is not returned. A non-finite or non-positive `timeout`
+   * or `interval` throws `InvalidPollOptionsError` before the first attempt.
+   * `fn`'s own throw propagates unchanged. Every completed call —
    * resolved, timed out, or `fn` itself threw — is recorded on this
    * execution's step record under `polls` (docs/spec.md "Records"): how many
    * attempts it took, how long it waited, and how it ended. */

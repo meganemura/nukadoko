@@ -505,7 +505,13 @@ The fixture names:
 - `await poll(fn, { description, timeout, interval })`: the submit-poll-fetch
   loop for a requested state that does not exist yet. `fn` returns `undefined`
   until the state exists. `poll` returns the first defined value. If the
-  `timeout` budget ends first, `poll` throws `PollTimeoutError`. Every completed
+  `timeout` budget ends first, `poll` throws `PollTimeoutError`. The budget
+  includes the attempt in flight, so that attempt ends when the budget ends,
+  and a value that arrives later is not returned. `timeout` and `interval`
+  must each be a finite number of milliseconds greater than zero. Omitting
+  either one uses its default: 30000 for `timeout`, 500 for `interval`.
+  `NaN`, `Infinity`, zero, or a negative number throws `InvalidPollOptionsError`
+  before the first attempt. Every completed
   call is stored in the step record's `polls` (see "Records"). The record shows
   the attempt count, the wait duration, and the outcome. The value that `fn`
   polls for is a contract choice, not an implementation detail. It cannot be

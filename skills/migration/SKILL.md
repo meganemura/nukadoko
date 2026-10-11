@@ -15,7 +15,8 @@ This one only says which file, and what must stay true on every path.
 
 - **A cucumber-js suite**: feature files plus glue, usually driving
   Playwright. `references/cucumber-js.md` (switch the import, then add
-  typing, including the one worked example and a global `After` hook).
+  typing, including the one worked example, a global `After` hook, and
+  `poll` when the step waits on something that is not there yet).
   A World subclass can assign `this.page` and `this.request`. That
   assignment stays unmeasured. A promoted schema that coerces its
   capture is not `capture-type-mismatch`.
