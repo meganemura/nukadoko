@@ -133,7 +133,7 @@ export default {
     ],
   },
   declaredModules: [
-    { name: "env", glob: "src/env/**", surface: ["parse-env-file.ts"] },
+    { name: "env", glob: "src/env/**", surface: ["load-env-files.ts", "parse-env-file.ts"] },
     { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
     {
       name: "binding",

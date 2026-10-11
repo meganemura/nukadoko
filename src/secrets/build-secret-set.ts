@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { parseEnvFile } from "../env/parse-env-file.js";
+import { loadEnvFiles } from "../env/load-env-files.js";
 import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types.js";
 
 // Responsibility: turn secret-source envFiles (every value they define,
@@ -17,14 +15,13 @@ import { MIN_REDACTABLE_LENGTH, type SecretEntry, type SecretSet } from "./types
 // still can't be redacted without wrecking ordinary step record text, whether
 // it got into this set by being untracked or by being named explicitly.
 //
-// This reads and parses each file itself, sharing src/env/parse-env-file.ts
-// rather than calling `loadEnvFiles`: this module only ever
-// needs specific subsets of a run's configured envFiles (secret sources,
-// and now the `redact`-named slice of tracked files), a different scope
-// than the executor's own full-list merge for `ctx.env`
-// (context/create-context.ts no longer loads env itself — see that
-// module's header) — so the two merges are kept independent instead of
-// forcing them through one shared pass.
+// The read-parse-merge is src/env/load-env-files.ts's `loadEnvFiles`.
+// This module only ever needs subsets of a run's configured envFiles
+// (secret sources, and the `redact`-named slice of tracked files). A
+// subset is a shorter path list to that same function, not a second loop:
+// a missing file and an unreadable file have to mean the same thing here
+// and in `ctx.env`, or one of them can swallow a permission error the
+// other reports.
 //
 // Options object rather than positional args: four same-shaped
 // `readonly string[]` parameters are easy to
@@ -49,29 +46,13 @@ export interface BuildSecretSetOptions {
   readonly redactKeys?: readonly string[];
 }
 
-function readEnvFiles(rootDir: string, relativePaths: readonly string[]): Record<string, string> {
-  let merged: Record<string, string> = {};
-  for (const relativePath of relativePaths) {
-    let content: string;
-    try {
-      content = readFileSync(path.join(rootDir, relativePath), "utf8");
-    } catch {
-      // A configured file that doesn't exist on disk contributes no
-      // secrets, mirroring loadEnvFiles' own tolerance for a missing file.
-      continue;
-    }
-    merged = { ...merged, ...parseEnvFile(content) };
-  }
-  return merged;
-}
-
 export function buildSecretSet(rootDir: string, options: BuildSecretSetOptions): SecretSet {
   const { secretSourceFiles, trackedFiles = [], publicKeys, redactKeys = [] } = options;
 
-  const merged = readEnvFiles(rootDir, secretSourceFiles);
+  const merged = loadEnvFiles(rootDir, secretSourceFiles);
 
   const redactSet = new Set(redactKeys);
-  for (const [name, value] of Object.entries(readEnvFiles(rootDir, trackedFiles))) {
+  for (const [name, value] of Object.entries(loadEnvFiles(rootDir, trackedFiles))) {
     // Only a key `secrets.redact` explicitly names crosses over from a
     // tracked file — everything else a tracked file defines stays plain,
     // which is the whole point of git being the origin classifier.

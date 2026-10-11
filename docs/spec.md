@@ -2726,6 +2726,12 @@ An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
 version?: () => string | Promise<string> }`. Its `baseURL` overrides the
 top-level value. Its `envFiles` follow the top-level list, and later files win.
 This order provides the common and override layers familiar to dotenv users.
+A path that is not on disk contributes nothing. `nuka check` warns with
+`env-file-missing`, or with `environment-env-file-missing` when the path
+belongs to one environment. A path that is present but cannot be read, or
+a directory at that path, stops setup. The refusal names the configured
+path and the errno. The same read fills `ctx.env` and the secret set, so
+the two agree on whether the file was loaded.
 Only an environment can define `policy` and `version`. Without `--env`, the
 environment name is `default`, which needs no entry. An entry named `default`
 is still allowed, and `policy: "read-only"` on it is what keeps a `nuka do`

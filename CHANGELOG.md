@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **An unreadable env file, or a directory named like one, is refused.**
+  Both used to be treated as a missing file: `ctx.env` came back empty
+  and the first `requireEnv` blamed the key. A path that is not on disk
+  still contributes nothing. The refusal names the configured path and
+  the errno. `ctx.env` and the secret set share one read.
 - **A compat hook receives the fields cucumber-js passes.**
   `AfterStep` now gets `pickleStep` and `testStepId`. `After` and
   `AfterStep` get `result.duration`, and, when the step or scenario

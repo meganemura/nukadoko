@@ -50,6 +50,11 @@ typechecking cleanly; the two can disagree in either direction. `nuka check
 description of what triggers it, so a code that shows up mid-migration and
 isn't self-explanatory can be looked up without leaving the CLI.
 
+`envFiles` in `nukadoko.config.ts` is read at setup. A path that is not
+on disk contributes nothing, and `nuka check` warns. A path that is
+present but cannot be read, or a directory at that path, is refused
+before any step runs. The refusal names the configured path and the errno.
+
 A compat step that writes to the process stdout (`console.log`,
 `process.stdout.write`) has that text delivered on stderr while `nuka run`
 executes it. A typed step does the same under `nuka do` and `nuka run`.

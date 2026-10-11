@@ -94,6 +94,12 @@ Behaviour changes worth knowing before upgrading.
 - **A config file with no default export, or a Promise as its default, now fails and names the file.**
   It used to be read as `{}`, so the keys in the file were ignored.
   Export the object: `export default defineConfig({ ... })`.
+- **An env file that cannot be read, or a directory at that path, now
+  stops setup.** It used to be skipped, and the first `requireEnv` blamed
+  the key. The refusal names the configured path and the errno. A path
+  that is not on disk still contributes nothing, and `nuka check` still
+  warns about that absence. Fix the path or its permissions before
+  upgrading if a run was depending on the skip.
 
 ## 0.11.0 to 0.12.0
 

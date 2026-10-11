@@ -111,4 +111,10 @@ name it was read by: both draw from the project's configured `envFiles`
 `envFiles` appends after it), which is exactly where a secret is most
 likely to live. Git classifies those files. A tracked env file stays plain
 only while its working tree matches HEAD. Uncommitted edits are redacted.
-`nuka check` reports the classification.
+`nuka check` reports the classification. A path in that list that is not
+on disk contributes nothing, and `nuka check` warns (`env-file-missing`,
+or `environment-env-file-missing` for one environment's own list). A path
+that is present but cannot be read, or a directory at that path, is
+refused before the step runs. The refusal names the configured path and
+the errno. `requireEnv` runs only after those files have been read, and
+its message names the missing key.

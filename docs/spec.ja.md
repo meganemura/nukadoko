@@ -2245,6 +2245,11 @@ transformer は型強制です。
 
 environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", version?: () => string | Promise<string> }` です。
 その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。
+ディスク上にないパスは、何も寄与しません。
+`nuka check` は `env-file-missing` で警告し、environment 自身のリストにあるパスは `environment-env-file-missing` で警告します。
+存在しているが読めないパス、またはそのパスにあるディレクトリは、setup を止めます。
+拒否は、設定されたパスと errno を名指しします。
+同じ読み取りが `ctx.env` と secret の集合の両方を埋めるので、ファイルがロードされたかどうかは両者で一致します。
 `policy` と `version` は environment ごとにしか存在しません。
 `--env` を指定しないことは名前 `default` を意味し、これはエントリを必要としません。
 それでも `default` という名前のエントリは書けます。

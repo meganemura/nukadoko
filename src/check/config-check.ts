@@ -13,8 +13,8 @@ import type { CheckIssue } from "./types.js";
 // disk is a config mistake, not a leniency to extend); a configured envFile
 // (top-level or per-environment) not existing is a warning. The distinction
 // there matters: `do`/`run` are already tolerant of a missing envFile
-// (loadEnvFiles just contributes nothing) — check's job here is to surface
-// that leniency, not turn it into a reason to fail (docs/spec.md "Secrets":
+// (loadEnvFiles contributes nothing for ENOENT). check's job here is to
+// surface that leniency, not turn it into a reason to fail (docs/spec.md "Secrets":
 // redaction correctness at runtime is the real guarantee; this is
 // visibility only).
 //
@@ -57,12 +57,13 @@ export interface ConfigCheckResult {
 
 /** Every key any configured envFile defines, across the top-level list and
  * every environment's own list, plus the flattened list of envFile paths
- * itself — loadEnvFiles already tolerates a missing file (contributes
- * nothing), so this is the one place envFiles get parsed for their values.
- * Shared by this file's own `secrets-redact-key-too-short` check and
- * src/tend/secrets-unknown-key.ts's `secrets-public-key-unknown`/
- * `secrets-redact-key-unknown` findings, so "which keys exist" can never
- * quietly disagree between the two. */
+ * itself. loadEnvFiles tolerates a missing file (contributes nothing) and
+ * throws for any other read error, naming the path and the errno, so a
+ * directory or an unreadable file is reported here rather than looking like
+ * a file that defines no keys. Shared by this file's own
+ * `secrets-redact-key-too-short` check and src/tend/secrets-unknown-key.ts's
+ * `secrets-public-key-unknown`/`secrets-redact-key-unknown` findings, so
+ * "which keys exist" can never quietly disagree between the two. */
 export function collectDefinedEnvKeys(
   rootDir: string,
   config: NukadokoConfig,
