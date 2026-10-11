@@ -11,7 +11,10 @@ export default defineStep({
   args: z.object({}),
   returns: z.object({}),
   mutates: false,
-  async run({ tenant, ledger }: { tenant: { id: string }; ledger: { id: string } }) {
+  // `tenant` and `ledger` are user fixtures. `StepFixtures` does not list
+  // them, so the bag is loosely typed, the same escape hatch the other
+  // fixture projects use.
+  async run({ tenant, ledger }: any) {
     void tenant;
     void ledger;
     await new Promise((resolve) => setTimeout(resolve, 120_000));

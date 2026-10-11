@@ -116,6 +116,12 @@ just until 0.1.
   left as a number, because matching it would rewrite ordinary counts
   and change the field's type. The digits are still removed where they
   appear as text.
+- **SIGINT and SIGTERM during `nuka run` or `nuka do` still tear fixtures down.**
+  The process used to take the default action and exit before any fixture
+  teardown. The first signal tears down scenario scope, disposes the
+  context, tears down process scope, and exits with 128 plus the signal
+  number. `use()` receives `"failed"`. A second signal exits at once.
+  A normal finish is unchanged.
 
 ## 0.14.1 — 2026-10-10
 

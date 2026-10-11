@@ -26,7 +26,7 @@ import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../step/context.js";
-import { createStepContext } from "../context/create-context.js";
+import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
@@ -39,16 +39,19 @@ import {
   type CachedFixture,
   type FixtureCache,
   type FixtureInstance,
+  type FixtureTeardownError,
 } from "../fixture/resolver.js";
 
 export type { CachedFixture, FixtureInstance };
+import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
-import { redact } from "../secrets/redact.js";
+import { redact, redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
+import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -443,6 +446,12 @@ export interface RunScenarioOptions {
    * finished — never here, since this function has no way to know it is
    * looking at the invocation's *last* pickle. */
   readonly fixtureProcessCache: FixtureCache;
+  /** SIGINT/SIGTERM handler for this invocation, when the caller installed
+   * one. This scenario registers its own teardown there for as long as the
+   * scenario is in progress, so a signal during a step still tears the
+   * scenario cache down and disposes the context. Omitted by a caller that
+   * has no signal handler of its own. */
+  readonly processSignal?: ProcessSignal;
 }
 
 function undefinedStepMessage(text: string): string {
@@ -925,6 +934,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     onStepProgress,
     fixtureGraph,
     fixtureProcessCache,
+    processSignal,
   } = options;
 
   // This pickle's own `"scenario"`-scope fixture cache — fresh per pickle,
@@ -1086,6 +1096,41 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       heldFailure = { message, durationMs, error };
     }
   }
+  // `"failed"` until every step and hook has settled. A signal during a
+  // step reads this: the scenario did not finish, so `use()` gets `"failed"`.
+  let scenarioOutcome: FixtureOutcome = "failed";
+  const fixtureTeardownErrors: FixtureTeardownError[] = [];
+  let disposeResult: DisposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+  // Shared with the signal handler (`runOnce`). Scenario fixtures tear
+  // down before dispose: one built off `page`, `context`, or `request`
+  // needs those still open. A teardown failure never changes
+  // `scenarioFailed`. It lands on `ScenarioRecord.teardown_errors`, unless
+  // the signal path is exiting and will not write that record, in which
+  // case the warning goes to stderr here. This function has no stderr sink
+  // of its own, and the CLI's stderr is the process stderr. The message is
+  // the fixture's own text, so it is redacted here: the record that would
+  // otherwise redact it is not written when the process is exiting.
+  const tearDownScenario = runOnce(async () => {
+    fixtureTeardownErrors.push(...(await teardownFixtureCache(fixtureScenarioCache, scenarioOutcome)));
+    if (processSignal?.interrupted === true) {
+      for (const teardownError of fixtureTeardownErrors) {
+        process.stderr.write(
+          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+        );
+      }
+    }
+    try {
+      // No status argument: `dispose`'s own evidence no longer varies by
+      // outcome, so there is nothing for this scenario's pass or fail to
+      // select between.
+      disposeResult = await contextHandle.dispose();
+    } catch {
+      // Same backstop as cli/do.ts: teardown failures must never take the
+      // scenario record down with them.
+      disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+    }
+  });
+  processSignal?.setScenarioCleanup(tearDownScenario);
 
   /**
    * The one place this pickle's own `stepRecords` array is ever appended to
@@ -2450,32 +2495,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const finishedAt = new Date();
 
-  // `"scenario"`-scope fixture teardown —
-  // *before* `contextHandle.dispose()` just below: a fixture built off
-  // `page`/`context`/`request` needs those still open while its own
-  // teardown code runs. Reverse build order (src/fixture/resolver.ts's own
-  // `teardownFixtureCache`), passed this scenario's own final outcome —
-  // every step and hook has already had its chance to set `scenarioFailed`
-  // by this point, so "passed"/"failed" here is the scenario's real,
-  // settled outcome, never a provisional one. A teardown failure never
-  // changes `scenarioFailed` itself — it only ever lands on
-  // `ScenarioRecord.teardown_errors`, below.
-  const fixtureTeardownErrors = await teardownFixtureCache(
-    fixtureScenarioCache,
-    scenarioFailed ? "failed" : "passed",
-  );
-
-  let disposeResult;
-  try {
-    // No status argument — `dispose`'s
-    // own evidence no longer varies by outcome, so there is nothing left for
-    // this scenario's `scenarioFailed`/pass-fail status to select between.
-    disposeResult = await contextHandle.dispose();
-  } catch {
-    // Same backstop as cli/do.ts: teardown failures must never take the
-    // scenario record down with them.
-    disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
-  }
+  // Every step and hook has had its chance to set `scenarioFailed`.
+  // Set before the await so a signal delivered on the next turn sees the
+  // settled outcome rather than the provisional `"failed"`.
+  scenarioOutcome = scenarioFailed ? "failed" : "passed";
+  await tearDownScenario();
   const {
     evidence: browserEvidence,
     storageState: storageStateToPersist,
@@ -2531,5 +2555,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // let a boundary bleed into unrelated code" discipline) can't silently
   // land on an already-read collector instead of being dropped.
   setActiveDeclaredCollector(undefined);
+  // This scenario's context is already disposed. Leave the signal handler
+  // pointing at nothing so a later signal does not dispose it again.
+  processSignal?.setScenarioCleanup(null);
   return redactedRecord;
 }

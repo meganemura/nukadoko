@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import {
   runWithTimeout,
   classifyCaughtError,
@@ -41,6 +42,7 @@ import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
+import type { FixtureOutcome } from "../step/fixture-types.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import {
@@ -275,6 +277,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   // exactly when `session` is `null`, so the `finally` below knows whether
   // there is anything to release.
   let lockPath: string | null = null;
+  // Installed once this execution's fixture caches exist. `stop()` in the
+  // `finally` below removes it on a normal return.
+  let processSignal: ProcessSignal | undefined;
   if (session !== null) {
     try {
       validateSessionName(session);
@@ -600,6 +605,50 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `run()` returns.
     const fixtureScenarioCache = createFixtureCache();
     const fixtureProcessCache = createFixtureCache();
+    // `"failed"` until this step's own outcome is known. A signal during
+    // the step reads that, because the invocation did not finish.
+    let fixtureOutcome: FixtureOutcome = "failed";
+    let disposeResult: DisposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+    // Both caches tear down before dispose: a fixture built off `page`,
+    // `context`, or `request` needs those still open. Scenario scope first,
+    // matching `nuka run`. One function so the signal path and the normal
+    // path below share a single run (`runOnce`).
+    const tearDownFixtures = runOnce(async () => {
+      const fixtureTeardownErrors = [
+        ...(await teardownFixtureCache(fixtureScenarioCache, fixtureOutcome)),
+        ...(await teardownFixtureCache(fixtureProcessCache, fixtureOutcome)),
+      ];
+      for (const teardownError of fixtureTeardownErrors) {
+        // The message is the fixture's own text, so a value `ctx.env` handed
+        // it is in there, and this line is not a step record.
+        stderr.write(
+          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+        );
+      }
+      try {
+        // No status argument: create-context.ts's own `dispose` doc comment
+        // says why evidence no longer varies by outcome.
+        disposeResult = await contextHandle.dispose();
+      } catch {
+        // Last resort: browser-evidence.ts and create-context.ts's own dispose
+        // already swallow their teardown failures, but this catch is the final
+        // backstop so a failure neither of them anticipated still can't take
+        // the step record down with it (docs/spec.md "Records": a step record is
+        // written for every execution that started). No evidence file is known
+        // to exist in that case, so none is listed, and there is nothing to
+        // persist for the session either.
+        disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+      }
+    });
+    processSignal = installProcessSignalHandlers();
+    processSignal.setScenarioCleanup(tearDownFixtures);
+    // `process.exit` from the signal handler does not run the `finally`
+    // that releases this execution's session lock.
+    processSignal.setSignalFinalizer(async () => {
+      if (lockPath !== null) {
+        await releaseLock(lockPath);
+      }
+    });
     const startedAt = new Date();
 
     // `--use`'s actual effect — applied here, not in
@@ -774,45 +823,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     const finishedAt = new Date();
 
-    // Fixture teardown — *before*
-    // `contextHandle.dispose()` just below: a fixture built off `page`/
-    // `context`/`request` needs those still open while its own teardown
-    // code runs. `"scenario"` scope tears down before `"process"` scope
-    // only for symmetry with `nuka run`'s own ordering (src/run/
-    // run-scenario.ts, cli/run.ts) — under `nuka do` both caches hold this
-    // one execution's own fixtures, so there is no cross-cache dependency
-    // either order could get wrong. Never changes `status` — see src/
-    // fixture/resolver.ts's own `teardownFixtureCache`; a failure is
-    // announced on stderr below instead (`nuka do` writes no
-    // `ScenarioRecord` to carry a `teardown_errors` field on). The message
-    // is the fixture's own text, so a value `ctx.env` handed it is in
-    // there, and this line is not a step record.
-    const fixtureOutcome = status === "ok" ? "passed" : "failed";
-    const fixtureTeardownErrors = [
-      ...(await teardownFixtureCache(fixtureScenarioCache, fixtureOutcome)),
-      ...(await teardownFixtureCache(fixtureProcessCache, fixtureOutcome)),
-    ];
-    for (const teardownError of fixtureTeardownErrors) {
-      stderr.write(
-        `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
-      );
-    }
-
-    let disposeResult: DisposeResult;
-    try {
-      // No status argument — see
-      // create-context.ts's own `dispose` doc comment for why.
-      disposeResult = await contextHandle.dispose();
-    } catch {
-      // Last resort: browser-evidence.ts and create-context.ts's own dispose
-      // already swallow their teardown failures, but this catch is the final
-      // backstop so a failure neither of them anticipated still can't take
-      // the step record down with it (docs/spec.md "Records": a step record is
-      // written for every execution that started). No evidence file is known
-      // to exist in that case, so none is listed, and there is nothing to
-      // persist for the session either.
-      disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
-    }
+    // Same function the signal handler runs. `runOnce` makes a second call,
+    // from whichever path loses the race, share that run. A teardown
+    // failure never changes `status`.
+    fixtureOutcome = status === "ok" ? "passed" : "failed";
+    await tearDownFixtures();
     const { evidence, storageState: storageStateToPersist } = disposeResult;
     // `dispose()` above is what closes this execution's own (only) trace
     // chunk, if `ctx.page()` was ever called (create-context.ts's own
@@ -939,9 +954,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     stdout.write(`${JSON.stringify(redactedStepRecord, null, 2)}\n`);
     return status === "ok" ? 0 : 1;
   } finally {
-    // Released regardless of which path above returned — setup failure,
-    // execution failure, or success: always
-    // released when execution ends.
+    processSignal?.stop();
+    // Released regardless of which path above returned: setup failure,
+    // execution failure, or success. The signal path releases it too,
+    // before `process.exit`, because this `finally` does not run then.
     if (lockPath !== null) {
       await releaseLock(lockPath);
     }

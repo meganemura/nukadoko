@@ -34,6 +34,7 @@ instance, so the reverse-order pass has nothing to include for it. A
 failure there is written to stderr. The scenario record may already be
 sealed, and stderr is the announcement that still reaches the operator.
 A teardown that finishes cleanly writes nothing.
+Teardown still runs if `nuka run` or `nuka do` is stopped with SIGINT or SIGTERM.
 `use()`'s own return value tells the fixture which, so it can decide for
 itself whether to keep what it built (for inspection) or tear it down;
 `{ scope: "process" }` in a second, options element of the tuple form

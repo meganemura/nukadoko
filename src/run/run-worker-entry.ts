@@ -13,6 +13,7 @@ import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment } from "../environment/res
 import { probeVersion } from "../environment/probe-version.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
+import type { FixtureOutcome } from "../step/fixture-types.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
 import { buildStepBindings, type StepBinding } from "./match-step.js";
@@ -27,6 +28,7 @@ import {
   type StepFinishedInfo,
   type StepHeartbeatInfo,
 } from "./run-scenario.js";
+import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "./process-signal.js";
 import { selectPickles } from "./select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -227,8 +229,21 @@ async function main(): Promise<void> {
 
   const restoreAllureRuntime = registerAllureRuntime();
   let allPassed = true;
+  let processSignal: ProcessSignal | undefined;
   try {
     const fixtureProcessCache = createFixtureCache();
+    let processOutcome: FixtureOutcome = "failed";
+    processSignal = installProcessSignalHandlers();
+    const tearDownProcessFixtures = runOnce(async () => {
+      const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
+      const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
+      for (const teardownError of processFixtureTeardownErrors) {
+        noteSink.write(
+          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+        );
+      }
+    });
+    processSignal.setProcessCleanup(tearDownProcessFixtures);
 
     const beforeAllHooks = compatRunHooks.filter((hook) => hook.type === "beforeAll");
     const afterAllHooks = compatRunHooks
@@ -330,6 +345,7 @@ async function main(): Promise<void> {
           onStepProgress,
           fixtureGraph,
           fixtureProcessCache,
+          processSignal,
         });
 
         const notes = (record.teardown_errors ?? []).map(
@@ -361,13 +377,10 @@ async function main(): Promise<void> {
       }
     }
 
-    const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, allPassed ? "passed" : "failed");
-    for (const teardownError of processFixtureTeardownErrors) {
-      noteSink.write(
-        `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
-      );
-    }
+    processOutcome = allPassed ? "passed" : "failed";
+    await tearDownProcessFixtures();
   } finally {
+    processSignal?.stop();
     restoreAllureRuntime();
   }
 

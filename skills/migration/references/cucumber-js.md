@@ -231,7 +231,8 @@ that built it, rather than left in a hook that has to guess, from tags
 alone, which scenarios actually need it. If that setup exceeds the fixture
 timeout, the scenario still fails, and a later `use()` resolves as
 `"failed"` so the cleanup after it still runs. A failure in that cleanup
-is written to stderr. `defineFixtures` (from the
+is written to stderr. That cleanup still runs if `nuka run` or `nuka do`
+is stopped with SIGINT or SIGTERM. `defineFixtures` (from the
 `nukadoko` package) keeps the fixture fully typed; any typed step reaches
 it the same way it reaches `page` or `request`, by destructuring the name.
 This is additive, not required: an `After` hook that cleans up something

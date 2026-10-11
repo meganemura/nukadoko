@@ -274,6 +274,7 @@ export default {
       surface: [
         "match-step.ts",
         "probe-git.ts",
+        "process-signal.ts",
         "progress-log.ts",
         "run-concurrent.ts",
         "run-id.ts",

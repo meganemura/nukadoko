@@ -36,6 +36,7 @@ import {
   writeRepeatTallies,
   createRepeatTally,
 } from "../run/progress-log.js";
+import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
@@ -64,6 +65,7 @@ import {
   validateFixtureDefinitions,
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
+import type { FixtureOutcome } from "../step/fixture-types.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -387,6 +389,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
 
   let lockPath: string | null = null;
+  // Installed only for the serial execution path, once that path's process
+  // cache exists. A signal before that still takes the default action:
+  // nothing has been built. `stop()` in the `finally` below removes it
+  // on a normal return.
+  let processSignal: ProcessSignal | undefined;
   if (session !== null) {
     try {
       validateSessionName(session);
@@ -813,6 +820,30 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // (below, near AfterAll). Cheap to create even for a zero-pickle run
       // — an empty cache's own teardown is a no-op.
       const fixtureProcessCache = createFixtureCache();
+      // `"failed"` until the invocation's own outcome is known. A signal
+      // during a scenario reads this, or `interrupted`, and reports
+      // `"failed"` because that invocation did not finish.
+      let processOutcome: FixtureOutcome = "failed";
+      processSignal = installProcessSignalHandlers();
+      const tearDownProcessFixtures = runOnce(async () => {
+        const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
+        const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
+        for (const teardownError of processFixtureTeardownErrors) {
+          // The line is the fixture's own text, with no scenario record to
+          // redact it first.
+          stderr.write(
+            `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+          );
+        }
+      });
+      processSignal.setProcessCleanup(tearDownProcessFixtures);
+      // `process.exit` from the signal handler does not run the `finally`
+      // that releases this invocation's session lock.
+      processSignal.setSignalFinalizer(async () => {
+        if (lockPath !== null) {
+          await releaseLock(lockPath);
+        }
+      });
 
       // `allureResultsDirRel`/`messagesOutputRel` are computed once, above
       // the `--concurrency` branch this block sits after — the exact
@@ -1046,6 +1077,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             onStepProgress,
             fixtureGraph,
             fixtureProcessCache,
+            processSignal,
           });
 
           // One JSON line per completed scenario record, streamed as it
@@ -1121,15 +1153,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // process-scope cache spans every scenario in the invocation, not
       // one), so it is announced on stderr only. That line is the fixture's
       // own text, with no scenario record to redact it first.
-      const processFixtureTeardownErrors = await teardownFixtureCache(
-        fixtureProcessCache,
-        allPassed ? "passed" : "failed",
-      );
-      for (const teardownError of processFixtureTeardownErrors) {
-        stderr.write(
-          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
-        );
-      }
+      processOutcome = allPassed ? "passed" : "failed";
+      await tearDownProcessFixtures();
 
       // See this file's own header for why this must run here — after
       // BeforeAll/AfterAll have
@@ -1196,8 +1221,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       restoreAllureRuntime();
     }
   } finally {
+    processSignal?.stop();
     // Released regardless of which path above returned: acquired once for
-    // the whole run, released in `finally`.
+    // the whole run, released in `finally`. The signal path releases it
+    // too, before `process.exit`, because this `finally` does not run then.
     if (lockPath !== null) {
       await releaseLock(lockPath);
     }

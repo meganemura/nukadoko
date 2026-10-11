@@ -779,6 +779,10 @@ Each additional process performs the action again.
 
 Teardown uses the reverse build order, whether the step passes or fails.
 A step failure does not make fixture cleanup optional.
+SIGINT or SIGTERM during `nuka run` or `nuka do` does not make fixture cleanup optional either.
+The process that built the fixtures tears down the scenario-scope cache, disposes the context, tears down the process-scope cache, and exits with 128 plus the signal number.
+`use()` receives `"failed"`, because that invocation did not finish.
+A second SIGINT or SIGTERM exits at once.
 This reverse order is correct because nukadoko builds and tears down fixtures
 *serially* within one process.
 The reverse order makes each dependency outlive its dependents.
