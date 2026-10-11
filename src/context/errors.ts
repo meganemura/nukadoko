@@ -148,3 +148,27 @@ export class InvalidEvidenceNameError extends Error {
     this.evidenceName = name;
   }
 }
+
+/** Thrown by `ctx.evidence.attach(name, body)`/`ctx.evidence.path(name)`
+ * when `name` is a file the harness writes in the same directory
+ * (`record.json`, `final.png`, `trace.zip`, `http.jsonl`), including a
+ * spelling that differs only by case. Refused rather than given a `-2`
+ * suffix: a quietly renamed copy would not be the file the step asked
+ * for, and writing the name as given would replace the harness file a
+ * reader opens. Case is compared with locale-independent `toLowerCase`
+ * because a case-insensitive volume stores one file for both spellings,
+ * and the process locale must not decide that. */
+export class ReservedEvidenceNameError extends Error {
+  readonly evidenceName: string;
+
+  constructor(name: string) {
+    super(
+      `ctx.evidence name ${JSON.stringify(name)} is reserved for a file the harness writes ` +
+        "itself (record.json, final.png, trace.zip, or http.jsonl). A name that differs only " +
+        "by case is the same file on a case-insensitive volume, so it is reserved too. " +
+        "Choose a different name.",
+    );
+    this.name = "ReservedEvidenceNameError";
+    this.evidenceName = name;
+  }
+}

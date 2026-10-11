@@ -218,13 +218,18 @@ export interface StepFixtures {
    * to this execution's own evidence directory and records
    * `{ name, file, at }` on the step record's `evidence.attachments` (docs/
    * spec.md "Records"); calling it twice with the same `name` keeps both
-   * files, never overwriting the first. `path(name)` allocates a
+   * files, never overwriting the first. A `name` that differs only by case
+   * counts as the same name, so the second call is suffixed the same way
+   * and the two cannot share one path on a case-insensitive volume.
+   * `path(name)` allocates a
    * collision-free absolute path under that same directory without writing
    * anything — Playwright's own `testInfo.outputPath()` — and only a path
    * that actually has a file on it by the time this execution ends is
    * listed on the step record. Both throw `InvalidEvidenceNameError` (src/
    * context/errors.ts) for a `name` containing a path separator or equal to
-   * `"."`/`".."`/`""`: refused, never silently rewritten. Capped at 100
+   * `"."`/`".."`/`""`, and `ReservedEvidenceNameError` for a harness file
+   * name (`record.json`, `final.png`, `trace.zip`, `http.jsonl`, any case):
+   * refused, never silently rewritten. Capped at 100
    * attachments per execution, the true total reported on
    * `truncated.evidence` once that cap is hit, the same sibling-field
    * convention `truncated.actions` already uses. */

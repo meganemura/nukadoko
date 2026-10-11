@@ -465,6 +465,8 @@ fixture の名前:
   `attach` は `body`(`string | Uint8Array`)を、この実行自身の evidence directory に書き込みます。
   このファイルを step record の `evidence.attachments` に記録します(「Records」を参照)。
   同じ `name` で 2 回呼ぶと、最初のファイルを上書きせず、両方のファイルを残します。
+  大文字小文字だけが違う `name` も、この目的では同じ名前です。
+  2 回目の呼び出しには同じ接尾辞が付き、大文字小文字を区別しないボリューム上で 1 つのファイルに重なりません。
   `path` は Playwright 自身の `testInfo.outputPath()` です。
   何も書き込まずに、同じ directory の下へ衝突しない絶対パスを割り当てます。
   step record に載るのは、実行が終わる前に step が書き込んだパスだけです。
@@ -473,6 +475,10 @@ fixture の名前:
   step が一方のメソッドを必要とする頻度は、もう一方を必要とする頻度とほぼ同じです。
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name` も拒否されます。
+  大文字小文字だけが違う綴りも同じです。
+  それらは harness がその directory に自分で書くファイルであり、step の名前がそこに重なるとそのファイルを置き換えるからです。
+  拒否は `ReservedEvidenceNameError` です。
   nukadoko は、これらの名前を黙って書き換えません。
   step が要求していない名前を信頼するよりも、その呼び出しで明確なエラーを出す方が適切です。
 
@@ -1920,7 +1926,8 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 - `evidence.attachments`(空でないときだけ現れます)は、`evidence.attach`/`evidence.path` がこの実行で実際に書き込んだものを、`{ "name", "file", "at" }` の形でそれぞれ並べたものです(「Context API」を参照)。
   `name` は step が頼んだ名前、`file` は実際にディスクへ書かれたファイル名で、`evidence.dir` からの相対パスです。
   この 2 つが違うのは、同じ `name` がこの実行で 2 回以上使われたときだけです。
-  2 回目以降の使用には、拡張子の手前に `-2`、`-3`、... が挿入され、最初のファイルを上書きすることはありません(`dup.txt` の次は `dup-2.txt` になり、`dup.txt` が黙って置き換わることはありません)。
+  大文字小文字だけが違う `name` も、ここでは同じ名前です。
+  2 回目以降の使用には、拡張子の手前に `-2`、`-3`、... が挿入され、最初のファイルを上書きすることはありません(`dup.txt` の次は `dup-2.txt`、`Report.txt` の次は `report-2.txt` になり、1 つのファイルが黙って置き換わることはありません)。
   `at` は harness 自身が取得し、step が渡すことはありません。
   `attach` については書き込みが完了した時点、`path()` で払い出したファイルについては実行がその存在を確認した時点のそのファイル自身の mtime です。
   これは `sections`/`polls`/`evidence.screenshots[].at` がすでに従っている、計測であり宣言ではないという同じ規則であり、attachment を同じ絶対的なタイムラインに乗せます。
@@ -1928,6 +1935,9 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name` も同じように拒否されます(`ReservedEvidenceNameError`)。
+  大文字小文字だけが違う綴りも拒否されます。
+  それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。
   `page_events`/`actions` と同じ規約です。
   その上限に達したときの真の総数は、下記の `truncated.evidence` に載ります。

@@ -218,6 +218,13 @@ describe("EvidenceCollector", () => {
 
     const snapshot = await collector.snapshot();
     expect(snapshot.attachments).toHaveLength(1);
+
+    await expect(collector.attach("record.json", "nope")).rejects.toMatchObject({
+      name: "ReservedEvidenceNameError",
+    });
+    expect(() => collector.path("FINAL.PNG")).toThrowError(
+      expect.objectContaining({ name: "ReservedEvidenceNameError" }),
+    );
   });
 });
 

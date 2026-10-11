@@ -136,6 +136,18 @@ just until 0.1.
   instead of polling without end. Omitting either option still uses its
   default (30 seconds, 500 milliseconds).
 
+### Breaking
+
+- **`ctx.evidence.attach` and `ctx.evidence.path` no longer replace a harness file.**
+  A name of `record.json`, `final.png`, `trace.zip`, or `http.jsonl` is
+  refused with `ReservedEvidenceNameError`, including a spelling that
+  differs only by case. Those files are what the harness writes in the
+  same directory, and a step name that landed on one of them replaced it.
+  Two other names that differ only by case are kept as two files, the same
+  way two identical names already were: the second gets `-2` before the
+  extension. A step that attached a harness file name has to pick a
+  different one. See docs/upgrading.md.
+
 ## 0.14.1 — 2026-10-10
 
 ### Fixed

@@ -35,7 +35,7 @@ This part does not change release to release.
 
 ## 0.14.1 to the next release
 
-Compat behaviour a project can notice, and one redaction change.
+Compat behaviour a project can notice, one redaction change, and one evidence-name change.
 
 - **`this.link`'s second argument is another URL, not a display name.**
   `this.link(a, b)` used to record one link whose name was `b`. It now
@@ -64,6 +64,16 @@ Compat behaviour a project can notice, and one redaction change.
   redact to one string, and `redact` throws and names both keys instead
   of dropping one. A JSON number equal to a numeric secret is unchanged.
   Nothing in config has to move.
+- **`ctx.evidence.attach` and `ctx.evidence.path` refuse a harness file name.**
+  `record.json`, `final.png`, `trace.zip`, and `http.jsonl` now throw
+  `ReservedEvidenceNameError`, including a spelling that differs only by
+  case. A step that attached one of those and read that path back has to
+  pick a different name. Two other names that differ only by case are kept
+  as two files, the same way two identical names already were: the second
+  gets `-2` before the extension (`Report.txt`, then `report-2.txt`). On a
+  case-sensitive volume those two names used to be two files. On a
+  case-insensitive volume they used to be one file, and the first body was
+  lost.
 
 ## 0.12.0 to the next release
 

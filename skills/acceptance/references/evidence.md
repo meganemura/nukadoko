@@ -25,7 +25,11 @@ with its own tool instead of handing `attach` a buffer directly; only a
 path a step actually wrote to lands on the step record, so calling `path()`
 without following through leaves nothing behind, on purpose. Calling
 either twice with the same `name` keeps both files: it never overwrites
-the first.
+the first. A name that differs only by case counts as the same name, so
+the second call is suffixed the same way (`Report.txt`, then
+`report-2.txt`) and the two do not share one path. A harness file name is
+refused with `ReservedEvidenceNameError`: `record.json`, `final.png`,
+`trace.zip`, and `http.jsonl`, in any case. Pick another name.
 
 Compat glue uses `this.attach` instead, in cucumber-js's forms (a
 `base64:` media type, `{ mediaType, fileName }`, a stream the step

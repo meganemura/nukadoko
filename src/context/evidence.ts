@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { EvidenceAttachmentEntry } from "../record/types.js";
-import { InvalidEvidenceNameError } from "./errors.js";
+import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
 // step-facing counterpart to Playwright's `testInfo.attach()`/
@@ -29,10 +29,20 @@ import { InvalidEvidenceNameError } from "./errors.js";
 // both `attach` and `path`, so calling either twice with the same `name` —
 // in any order — never reuses a file name; the first use keeps `name`
 // as-is, every later use of the same base name gets `-2`, `-3`, ... inserted
-// before the extension. Reset at every `beginStep` (create-context.ts), the
-// same step-boundary lifetime every other collector already has: a name is
-// unique only within the one step (or `nuka do` execution) that used it,
-// never across a whole scenario.
+// before the extension. The registry key is `toLowerCase` (locale-independent
+// Unicode default case mapping, not the process locale): two names that
+// differ only by case are one file on a case-insensitive volume, so the
+// second use is suffixed the same way. Reset at every `beginStep`
+// (create-context.ts), the same step-boundary lifetime every other collector
+// already has: a name is unique only within the one step (or `nuka do`
+// execution) that used it, never across a whole scenario. The reset keeps
+// the harness file names seeded, so a later step still cannot replace them.
+//
+// Those harness files (`record.json`, `final.png`, `trace.zip`,
+// `http.jsonl`) are refused up front, including a spelling that differs
+// only by case (`ReservedEvidenceNameError`). A suffixed copy would not be
+// the name the step asked for, and writing the name as given would replace
+// the file the harness writes in this directory.
 //
 // A name is refused, never sanitized, when it contains a path separator or
 // is `.`/`..`/empty — see `InvalidEvidenceNameError`'s own doc comment
@@ -49,6 +59,23 @@ import { InvalidEvidenceNameError } from "./errors.js";
 // first 100 by call order.
 
 const MAX_ATTACHMENTS = 100;
+
+/** Files the harness writes into the same directory `attach`/`path` use.
+ * Seeded into the name registry, and refused when a step asks for one,
+ * including a spelling that differs only by case. */
+const HARNESS_EVIDENCE_FILE_NAMES = ["record.json", "final.png", "trace.zip", "http.jsonl"] as const;
+
+/** Registry key. `toLowerCase` is the locale-independent Unicode default
+ * mapping. A case-insensitive volume treats that result as one file. The
+ * process locale's `toLocaleLowerCase` would not: under Turkish it maps
+ * "I" to "ı", so "I" and "i" would miss a collision those volumes still have. */
+function evidenceNameKey(name: string): string {
+  return name.toLowerCase();
+}
+
+function createUsedFileNames(): Set<string> {
+  return new Set(HARNESS_EVIDENCE_FILE_NAMES.map((name) => evidenceNameKey(name)));
+}
 
 export interface EvidenceSnapshot {
   /** Every attachment this step boundary produced, sorted by `at` ascending
@@ -67,21 +94,22 @@ export interface EvidenceCollector {
    * directory under a collision-free file name derived from `name`, then
    * records `{ name, file, at }` for `snapshot()` to report. Throws
    * `InvalidEvidenceNameError` for a `name` this file's own header rules
-   * out. */
+   * out, and `ReservedEvidenceNameError` for a harness file name. */
   attach(name: string, body: string | Uint8Array): Promise<void>;
   /** `ctx.evidence.path`: allocates a collision-free absolute path under
    * this step's own evidence directory, without writing anything —
    * Playwright's own `testInfo.outputPath()`. Synchronous: nothing here
-   * touches the filesystem. Throws `InvalidEvidenceNameError` for the same
-   * names `attach` refuses. */
+   * touches the filesystem. Throws `InvalidEvidenceNameError` or
+   * `ReservedEvidenceNameError` for the same names `attach` refuses. */
   path(name: string): string;
   /** Executor-only: every attachment this step boundary produced, see
    * `EvidenceSnapshot`'s own doc comment. A `path()` call with no matching
    * write on disk by the time this runs contributes nothing (docs/spec.md
    * "Records": evidence lists only files that exist). */
   snapshot(): Promise<EvidenceSnapshot>;
-  /** Executor-only: clears the name registry and every pending record at a
-   * step boundary — same lifetime rule as `sections`/`polls`. */
+  /** Executor-only: drops step-allocated names and every pending record at a
+   * step boundary, same lifetime rule as `sections`/`polls`. The harness
+   * file names stay seeded (this file's own header). */
   reset(): void;
 }
 
@@ -97,27 +125,32 @@ function assertSafeEvidenceName(name: string): void {
   if (name === "" || name === "." || name === ".." || name.includes("/") || name.includes("\\")) {
     throw new InvalidEvidenceNameError(name);
   }
+  const key = evidenceNameKey(name);
+  if (HARNESS_EVIDENCE_FILE_NAMES.some((reserved) => evidenceNameKey(reserved) === key)) {
+    throw new ReservedEvidenceNameError(name);
+  }
 }
 
 export function createEvidenceCollector(dirOf: () => string): EvidenceCollector {
-  let usedFileNames = new Set<string>();
+  let usedFileNames = createUsedFileNames();
   let attachEntries: EvidenceAttachmentEntry[] = [];
   let pathAllocations: { readonly name: string; readonly file: string }[] = [];
 
   function allocateFileName(name: string): string {
     assertSafeEvidenceName(name);
-    if (!usedFileNames.has(name)) {
-      usedFileNames.add(name);
+    const key = evidenceNameKey(name);
+    if (!usedFileNames.has(key)) {
+      usedFileNames.add(key);
       return name;
     }
     const { stem, ext } = splitExtension(name);
     let counter = 2;
     let candidate = `${stem}-${counter}${ext}`;
-    while (usedFileNames.has(candidate)) {
+    while (usedFileNames.has(evidenceNameKey(candidate))) {
       counter += 1;
       candidate = `${stem}-${counter}${ext}`;
     }
-    usedFileNames.add(candidate);
+    usedFileNames.add(evidenceNameKey(candidate));
     return candidate;
   }
 
@@ -159,7 +192,7 @@ export function createEvidenceCollector(dirOf: () => string): EvidenceCollector 
       };
     },
     reset(): void {
-      usedFileNames = new Set();
+      usedFileNames = createUsedFileNames();
       attachEntries = [];
       pathAllocations = [];
     },

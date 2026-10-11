@@ -538,7 +538,10 @@ The fixture names:
   `attach` writes `body` (`string | Uint8Array`) into this execution's own
   evidence directory. It records the file in the step record's
   `evidence.attachments` (see "Records"). Two calls with the same `name` keep
-  both files and never overwrite the first file. `path` is Playwright's own
+  both files and never overwrite the first file. A `name` that differs only
+  by case is the same name for this purpose, so the second call is suffixed
+  the same way and the two cannot land on one file on a case-insensitive
+  volume. `path` is Playwright's own
   `testInfo.outputPath()`. It allocates a collision-free absolute path under
   the same directory without writing anything. The step record lists only a
   path that a step wrote to before execution ended. A call to `path()` without
@@ -546,7 +549,11 @@ The fixture names:
   the same information from the executor: the directory for this step's own
   evidence. A step needs one method about as often as it needs the other. A
   `name` that contains a path separator is refused. A `name` equal to `.`,
-  `..`, or the empty string is also refused. Nukadoko never silently rewrites
+  `..`, or the empty string is also refused. A `name` of `record.json`,
+  `final.png`, `trace.zip`, or `http.jsonl` is refused too, including a
+  spelling that differs only by case (`ReservedEvidenceNameError`). Those
+  are files the harness writes in that directory, and a step name that
+  landed on one of them would replace it. Nukadoko never silently rewrites
   these names. A loud error at the call is better than letting a step trust a
   name that it did not request.
 
@@ -2285,9 +2292,11 @@ array identifies each step record by id, so either record leads to the other.
   "Context API"), each `{ "name", "file", "at" }`: `name` is what the step
   asked for, `file` is what actually landed on disk under `evidence.dir`,
   and the two differ only when the same `name` was used more than once this
-  execution. The second use gets `-2`, `-3`, ... inserted before the
+  execution. A `name` that differs only by case is the same name here. The
+  second use gets `-2`, `-3`, ... inserted before the
   extension rather than overwriting the first (`dup.txt` then `dup-2.txt`,
-  never one `dup.txt` silently replaced by the other). `at` is taken by the
+  `Report.txt` then `report-2.txt`,
+  never one file silently replaced by the other). `at` is taken by the
   harness itself, never supplied by the step: for `attach`, the moment the
   write resolved; for a `path()`-allocated file, that file's own mtime once
   execution confirmed it exists, the same measured-not-declared rule
@@ -2300,7 +2309,11 @@ array identifies each step record by id, so either record leads to the other.
   decided by the harness checking, never by the fixture bookkeeping the
   call. A `name` containing a path separator, or equal to `.`/`..`/the
   empty string, is refused before anything is written, never silently
-  rewritten into something safe. Capped at 100 entries, sorted by `at`, the
+  rewritten into something safe. A `name` of `record.json`, `final.png`,
+  `trace.zip`, or `http.jsonl` is refused the same way
+  (`ReservedEvidenceNameError`), including a spelling that differs only by
+  case: those are files the harness writes in this directory. Capped at 100
+  entries, sorted by `at`, the
   same convention `page_events`/`actions` already use; the true total, once
   that cap is hit, lands on `truncated.evidence` (below), the same sibling
   field `truncated.actions` already uses. The step record's `name`/`file`

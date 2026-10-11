@@ -93,3 +93,9 @@ the same rule.
   has been percent-encoded or JSON-escaped.** Those forms are removed
   with the same `{{secret.NAME}}` token as the raw value. A JSON number
   equal to a numeric secret stays a number.
+- **Don't give `evidence.attach` or `evidence.path` a harness file name.**
+  `record.json`, `final.png`, `trace.zip`, and `http.jsonl` are refused
+  (`ReservedEvidenceNameError`), including a spelling that differs only by
+  case. Two other names that differ only by case do not share a path.
+  Application-specific evidence is
+  `skills/acceptance/references/evidence.md`.
