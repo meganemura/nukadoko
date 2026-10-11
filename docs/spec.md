@@ -2202,6 +2202,14 @@ timeout applies by default, because a forgotten session is the normal
 outcome of an interrupted exploration rather than an unusual one, and
 `nuka session list` reaps the ones whose pid is gone.
 
+`nuka session start --idle-timeout <seconds>` sets that window. The
+default is 900. The value has to be a finite number of seconds greater
+than 0 and at most 2147483. Anything else is refused before a session
+starts. 2147483 is the largest whole number of seconds Node's timer can
+wait. A non-finite value, zero, a negative, or a larger whole number of
+seconds is clamped to 1 millisecond, so the session would stop itself
+the moment it began listening.
+
 The honest limit is the point of the feature rather than a flaw in it: a
 world thirty executions deep is not reproducible, by anyone, including
 the process holding it. That is why what comes out of an exploration is a

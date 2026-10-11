@@ -16,7 +16,13 @@ import { runInit } from "./init.js";
 import { runMcpTools } from "./mcp-tools.js";
 import { runRun } from "./run.js";
 import { runScaffold } from "./scaffold.js";
-import { runSessionClear, runSessionList, runSessionStart, runSessionStop } from "./session.js";
+import {
+  MAX_IDLE_TIMEOUT_SECONDS,
+  runSessionClear,
+  runSessionList,
+  runSessionStart,
+  runSessionStop,
+} from "./session.js";
 import { runSkillPath } from "./skill.js";
 import { runTend } from "./tend.js";
 import { runWebmcpTools } from "./webmcp.js";
@@ -151,6 +157,9 @@ interface SessionClearArgs {
 interface SessionStartArgs {
   name: string;
   env?: string;
+  /** yargs' `type: "number"` accepts NaN, 0, a negative, and a value past
+   * Node's 32-bit timer limit. `idleTimeoutRefusal` (session.ts) refuses
+   * those before a session starts. */
   idleTimeout?: number;
 }
 
@@ -598,7 +607,9 @@ export async function runCli(
         .option("idle-timeout", {
           type: "number",
           default: 900,
-          describe: "seconds of no execution before the session stops itself",
+          describe:
+            "seconds of no execution before the session stops itself " +
+            `(default 900; a finite number greater than 0 and at most ${MAX_IDLE_TIMEOUT_SECONDS})`,
         }) as Argv<SessionStartArgs>,
     handler: async (args: Arguments<SessionStartArgs>) => {
       if (argsFailed) return;

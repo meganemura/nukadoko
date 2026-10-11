@@ -132,8 +132,39 @@ export interface RunSessionStartOptions {
  * itself hanging indefinitely. */
 const STARTUP_TIMEOUT_MS = 15_000;
 
+/** Largest whole number of seconds whose millisecond delay still fits in
+ * Node's 32-bit signed timer. `setTimeout` clamps a delay above 2^31-1 ms
+ * to 1 ms, so a value past this stops the session the moment it starts
+ * listening. 2147483 * 1000 is 2147483000, which is still within
+ * 2147483647; the next second is not. */
+export const MAX_IDLE_TIMEOUT_SECONDS = 2_147_483;
+
+/** Refusal for `--idle-timeout`, or null when `seconds` is finite, greater
+ * than 0, and at most `MAX_IDLE_TIMEOUT_SECONDS`. yargs' `type: "number"`
+ * turns an unparseable flag into NaN and accepts 0, a negative, and a
+ * value past that limit, so this is the check, not the flag parser. */
+export function idleTimeoutRefusal(seconds: number): string | null {
+  if (Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_IDLE_TIMEOUT_SECONDS) {
+    return null;
+  }
+  return (
+    "--idle-timeout must be a finite number of seconds greater than 0 and at most " +
+    `${MAX_IDLE_TIMEOUT_SECONDS} (got ${seconds}).\n`
+  );
+}
+
 export async function runSessionStart(options: RunSessionStartOptions): Promise<number> {
   const { rootDir, name, env, idleTimeoutSeconds, stdout, stderr } = options;
+
+  // Before config load and before spawn. A delay Node clamps to 1 ms would
+  // start a daemon that stops itself the moment it listens, and the only
+  // report left would be that the process exited before it was ready,
+  // naming neither this flag nor the limit.
+  const refusal = idleTimeoutRefusal(idleTimeoutSeconds);
+  if (refusal !== null) {
+    stderr.write(refusal);
+    return 1;
+  }
 
   try {
     validateSessionName(name);

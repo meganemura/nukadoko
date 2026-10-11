@@ -75,7 +75,8 @@ when `allure.resultsDir` or `messages.output` resolves to the project
 root, to a path outside the project, or to a parent of the state
 directory, and `--dry-run` refuses those paths too. A results directory
 inside the project is still removed, unless that directory is a parent
-of the state directory.
+of the state directory. `nuka session start --idle-timeout` refuses
+a value the process cannot keep before that session starts.
 
 Once more than one feature file is green, `nuka run <feature> [<feature>
 ...] --concurrency <n>` or `nuka run <dir> --concurrency <n>` runs the

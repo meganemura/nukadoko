@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka session start --idle-timeout` refuses a delay the session cannot keep.**
+  `abc`, `0`, a negative, and a value above 2147483 seconds used to start a
+  session that stopped itself at once. Node clamps each of those timer
+  delays to 1 ms. The command now refuses them before a process starts, and
+  names the flag and the range.
 - **An env file is read the way dotenv reads comments, quotes, escapes, and values that span lines.**
   A trailing `#` was part of the value. Quotes stayed in the value when a
   comment followed them. `\n` inside double quotes stayed as two characters.
