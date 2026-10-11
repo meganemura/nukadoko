@@ -962,6 +962,24 @@ export async function runCli(
     .strict()
     .help();
 
-  await parser.parseAsync();
+  // A thrown command handler is reported by `.fail()` above, which writes
+  // the message and sets `exitCode`. yargs still rejects `parseAsync` with
+  // the same error: the `.catch` on the handler promise calls `fail` and
+  // leaves that rejection in place. If the rejection leaves `runCli`, the
+  // process entry's top-level await fails and Node prints a second copy
+  // (a stack, the errno object, and the runtime version) after the line
+  // already written. Catching it here keeps one failure to one line and
+  // the exit code `.fail()` already chose.
+  // A rejection `.fail()` never saw still exits 1, with its message on
+  // stderr: that is the same promise this function makes for every other
+  // failure.
+  try {
+    await parser.parseAsync();
+  } catch (error) {
+    if (!argsFailed) {
+      exitCode = 1;
+      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    }
+  }
   return exitCode;
 }

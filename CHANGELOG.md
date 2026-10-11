@@ -30,6 +30,10 @@ just until 0.1.
   absent from `required`. A key without a default stays required.
   `returns` stays the output schema, where a defaulted key remains
   required because the value the step produced always includes it.
+- **A throw from a command handler prints one stderr line.** The handler's
+  message was already written and the exit code already set to 1, and the
+  same rejection then left the process entry, so Node appended its
+  uncaught-exception dump. That rejection is now caught after the report.
 
 ## 0.14.1 — 2026-10-10
 
