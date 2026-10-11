@@ -90,11 +90,11 @@ export function knownFixtureNames(config: Pick<NukadokoConfig, "fixtures">): Rea
   return new Set([...KNOWN_BUILTIN_FIXTURE_NAMES, ...Object.keys(config.fixtures)]);
 }
 
-/** The shared judgment both `validateStepFixtures` and
- * `validateFixtureDefinitions` apply — reads `fn`'s own destructured names
- * and checks each against `knownNames`, without ever calling `fn`. Returns
- * plain message strings; each caller attaches its own subject field (`step`
- * vs. `fixture`) and, for definitions, its own `code`. */
+/** Reads a step's `run()` destructured names and checks each against
+ * `knownNames`, without ever calling `fn`. Returns plain message strings
+ * worded for a step; the caller attaches the step name. A config fixture
+ * does not use these strings: `fixtureDefinitionStructuralMessages` names
+ * the fixture and does not reuse step wording. */
 function validateFixtureConsumer(fn: FixtureConsumer, knownNames: ReadonlySet<string>): string[] {
   let names: readonly string[];
   try {
@@ -123,8 +123,8 @@ function validateFixtureConsumer(fn: FixtureConsumer, knownNames: ReadonlySet<st
 }
 
 /** A fixture that names a member of `STEP_ONLY_BUILTIN_NAMES`. Shape errors
- * are left to `validateFixtureConsumer`: this only runs when the names can
- * be read, and a name that cannot be read has nothing to classify. */
+ * are left to `fixtureDefinitionStructuralMessages`: this only runs when the
+ * names can be read, and a name that cannot be read has nothing to classify. */
 function stepOnlyBuiltinMessages(fixtureName: string, fn: FixtureConsumer): string[] {
   let names: readonly string[];
   try {
@@ -149,6 +149,57 @@ function stepOnlyBuiltinMessages(fixtureName: string, fn: FixtureConsumer): stri
       `fixture "${fixtureName}" destructures "${name}", which only a step's run() can use: ` +
         `a fixture is built before the step boundary opens, so ${name}() can only throw`,
     );
+  }
+  return messages;
+}
+
+// A config fixture has no `run()`. Reusing the step messages above would
+// tell the reader a step is broken, and would quote a default value's prop
+// after tsx's transform has rewritten it (`undefined` becomes `void 0`),
+// which is not the text in the config. These messages name the fixture and
+// leave that rewritten prop out. `call` is a known builtin a fixture still
+// must not name; `stepOnlyBuiltinMessages` reports that on its own.
+function fixtureDefinitionStructuralMessages(
+  fixtureName: string,
+  fn: FixtureConsumer,
+  knownNames: ReadonlySet<string>,
+): string[] {
+  let names: readonly string[];
+  try {
+    names = fixtureParameterNames(fn);
+  } catch (error) {
+    if (error instanceof FixtureNotDestructuredError) {
+      return [
+        `fixture "${fixtureName}" must destructure its first argument (e.g. "{ page }"), ` +
+          `not "${error.firstArgumentText}": nukadoko reads which fixtures it needs from that ` +
+          `pattern, without ever calling the fixture (docs/spec.md "Context API")`,
+      ];
+    }
+    if (error instanceof FixtureDefaultValueError) {
+      return [
+        `fixture "${fixtureName}" cannot use a default value in its destructuring: nukadoko ` +
+          `reads fixture names by parsing the fixture function's own source text, and a default value breaks that ` +
+          `parsing. A fixture is always present once it is named, so remove the default`,
+      ];
+    }
+    if (error instanceof FixtureRestParameterError) {
+      return [
+        `fixture "${fixtureName}" cannot use a rest property ("${error.prop}") in its destructuring: every ` +
+          `fixture it needs must be named explicitly, so nukadoko can read the full list ` +
+          `statically, without running the fixture (docs/spec.md "Context API")`,
+      ];
+    }
+    throw error;
+  }
+
+  const messages: string[] = [];
+  for (const name of names) {
+    if (!knownNames.has(name)) {
+      messages.push(
+        `fixture "${fixtureName}" destructures unknown fixture "${name}": known fixtures are ${[...knownNames].sort().join(", ")} ` +
+          "(a project-defined name must be declared under nukadoko.config.ts's own `fixtures`)",
+      );
+    }
   }
   return messages;
 }
@@ -216,7 +267,7 @@ export function validateFixtureDefinitions(
   const issues: FixtureDefinitionValidationIssue[] = [];
   for (const [name, definition] of Object.entries(config.fixtures)) {
     const fn = fixtureFnOf(definition);
-    for (const message of validateFixtureConsumer(fn, known)) {
+    for (const message of fixtureDefinitionStructuralMessages(name, fn, known)) {
       issues.push({ code: "fixture-structural-violation", fixture: name, message });
     }
     for (const message of stepOnlyBuiltinMessages(name, fn)) {

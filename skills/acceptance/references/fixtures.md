@@ -47,6 +47,9 @@ or calls it twice, fails loudly by name rather than hanging the run; `nuka
 check` catches a dependency cycle among fixtures, a `process`-scope
 fixture depending on a `scenario`-scope one, and a fixture that destructures
 `call` (only a step's `run` can use that) before anything runs.
+`nuka check` also reports `fixture-structural-violation` when a config
+fixture's own destructuring cannot be read, or names a fixture nukadoko
+does not know. The finding names the fixture.
 
 An MCP server over stdio is the same pattern: `connectMcpServer`/
 `callMcpTool` (`"nukadoko/mcp"`) belong in a fixture. `nuka mcp-tools --

@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka check` names a broken config fixture, in fixture wording.**
+  A `config.fixtures` function with a default value, a rest property, a
+  bare parameter, or an unknown dependency was reported as a step's
+  `run()`, and a default value was quoted after the transform had rewritten
+  it (`undefined` became `void 0`). The finding now names the fixture and
+  does not quote that rewritten text. A valid config fixture is unchanged.
 - **An unreadable env file, or a directory named like one, is refused.**
   Both used to be treated as a missing file: `ctx.env` came back empty
   and the first `requireEnv` blamed the key. A path that is not on disk

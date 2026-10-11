@@ -713,10 +713,13 @@ fixture 関数はそのあとにも走り続けます。
 scenario record はすでに閉じている場合があり、stderr がその失敗を届ける報告です。
 きれいに終わった teardown は何も書きません。
 
-`check` は fixture を実行せずに、fixture に関する 3 つの所見を報告します。
+`check` は fixture を実行せずに、fixture に関する 4 つの所見を報告します。
 `fixture-cycle` は、`config.fixtures` エントリ間の依存循環を特定します。
 `fixture-scope-violation` は、`scenario` fixture に依存する `process` fixture を特定します。
 `page-override-unowned` は、上で説明した無効な `page` の上書きを特定します。
+`fixture-structural-violation` は、分割代入を読めない `config.fixtures` の関数、nukadoko が知らない fixture を名指す関数、または `call` を名指す関数を特定します。
+所見はその fixture を名指し、fixture についての文言で述べます。
+既定値の変換後のソースは引用しません。
 
 `tend` は 2 つの事実を追加で報告します。
 `fixture-unused` は、直接にも別の fixture 経由でも、どの typed step も要求しない `config.fixtures` エントリを特定します。

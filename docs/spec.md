@@ -905,11 +905,16 @@ The scenario record may already be sealed, and stderr is the announcement
 that still reaches the operator.
 A teardown that finishes cleanly writes nothing.
 
-`check` reports three fixture findings without running a fixture.
+`check` reports four fixture findings without running a fixture.
 `fixture-cycle` identifies a dependency cycle among `config.fixtures` entries.
 `fixture-scope-violation` identifies a `process` fixture that depends on a
 `scenario` fixture.
 `page-override-unowned` identifies the invalid `page` override described above.
+`fixture-structural-violation` identifies a `config.fixtures` function whose
+destructuring cannot be read, that names a fixture nukadoko does not know,
+or that names `call`.
+The finding names that fixture and uses fixture wording. It does not quote
+the transformed source of a default value.
 
 `tend` adds two factual reports.
 `fixture-unused` identifies a `config.fixtures` entry that no typed step requires,

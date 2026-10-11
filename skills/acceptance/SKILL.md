@@ -98,6 +98,8 @@ proves the wrong thing.
    scenario borrows, a wait for an effect that lands elsewhere (`poll`,
    whose `timeout` is a budget for the whole call), or a
    required environment variable: `references/fixtures.md`.
+   `nuka check` reports `fixture-structural-violation` for a config fixture
+   whose destructuring cannot be read, and that finding names the fixture.
    Application-specific evidence: `references/evidence.md`.
 4. `nuka check <feature>`. `references/running.md`. A schema that
    coerces the capture is not `capture-type-mismatch`

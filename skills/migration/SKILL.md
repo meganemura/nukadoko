@@ -20,6 +20,8 @@ This one only says which file, and what must stay true on every path.
   A World subclass can assign `this.page` and `this.request`. That
   assignment stays unmeasured. A promoted schema that coerces its
   capture is not `capture-type-mismatch`.
+  A config fixture whose destructuring `nuka check` cannot read is
+  `fixture-structural-violation`, and the finding names the fixture.
 - **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
   about it moves onto nukadoko; nukadoko grows beside it.
   `references/playwright-test.md`.
