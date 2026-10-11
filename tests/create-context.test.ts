@@ -293,4 +293,32 @@ describe("createStepContext / ctx.requireEnv()", () => {
     expect(env.CARRIED).toBeUndefined();
     expect(env.API_TOKEN).toBe("secret-value");
   });
+
+  // `env[name]` walks Object.prototype, so "toString" and "constructor"
+  // read as functions on an env object that never set them. Those are not
+  // env keys. An own key with one of those names still is.
+  it("does not treat an inherited name as an env key, and still returns an own one", () => {
+    const { ctx: owned } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: {
+        API_TOKEN: "secret-value",
+        toString: "own-to-string",
+        constructor: "own-constructor",
+      },
+    });
+    expect(owned.requireEnv("API_TOKEN")).toBe("secret-value");
+    expect(owned.requireEnv("toString")).toBe("own-to-string");
+    expect(owned.requireEnv("constructor")).toBe("own-constructor");
+
+    const { ctx } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: { API_TOKEN: "secret-value" },
+    });
+    expect(ctx.requireEnv("API_TOKEN")).toBe("secret-value");
+    expect(() => ctx.requireEnv("toString")).toThrow(MissingEnvError);
+    expect(() => ctx.requireEnv("constructor")).toThrow(MissingEnvError);
+    expect(() => ctx.requireEnv("__proto__")).toThrow(MissingEnvError);
+  });
 });

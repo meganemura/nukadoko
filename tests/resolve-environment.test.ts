@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { configSchema, type NukadokoConfig } from "../src/config/schema.js";
 import { UnknownEnvironmentError } from "../src/environment/errors.js";
 import { resolveEnvironment } from "../src/environment/resolve-environment.js";
@@ -97,4 +99,77 @@ describe("resolveEnvironment", () => {
     expect(open.policy).toBeUndefined();
     expect(open.version).toBeUndefined();
   });
+
+  // Object.prototype's own names match the environment-name pattern, and a
+  // bracket read finds them on every plain object. They are not entries the
+  // config defined. An own entry with one of those names still is.
+  it("rejects an inherited name such as toString or constructor, and still resolves an own name", () => {
+    const config = parseConfig({
+      baseURL: "http://top.example",
+      environments: {
+        staging: { baseURL: "http://staging.example" },
+        constructor: { baseURL: "http://ctor.example" },
+      },
+    });
+
+    expect(resolveEnvironment(config, "staging", true).baseURL).toBe("http://staging.example");
+    expect(resolveEnvironment(config, "constructor", true).baseURL).toBe("http://ctor.example");
+
+    const bare = parseConfig({
+      baseURL: "http://top.example",
+      environments: { staging: { baseURL: "http://staging.example" } },
+    });
+    expect(() => resolveEnvironment(bare, "constructor", true)).toThrow(UnknownEnvironmentError);
+    expect(() => resolveEnvironment(bare, "toString", true)).toThrow(UnknownEnvironmentError);
+    expect(() => resolveEnvironment(bare, "__proto__", true)).toThrow(UnknownEnvironmentError);
+    expect(resolveEnvironment(bare, "staging", true).baseURL).toBe("http://staging.example");
+  });
+});
+
+// Every name Object.prototype actually owns that the environment-name
+// pattern accepts. A generator of arbitrary strings almost never hits
+// these, which is how a bracket read of `environments` kept treating
+// them as configured entries.
+const inheritedEnvironmentNames = Object.getOwnPropertyNames(Object.prototype).filter((name) =>
+  /^[a-z0-9_-]+$/.test(name),
+);
+
+const ownEnvironmentName = gs.text({
+  alphabet: "abcdefghijklmnopqrstuvwxyz0123456789_-",
+  minSize: 1,
+  maxSize: 12,
+});
+
+describe("resolveEnvironment inherited names", () => {
+  it("treats only an own environments entry as that environment", () =>
+    hegel.test((tc) => {
+      const index = tc.draw(
+        gs.integers({ minValue: 0, maxValue: inheritedEnvironmentNames.length - 1 }),
+      );
+      const inherited = inheritedEnvironmentNames[index];
+      if (inherited === undefined) {
+        throw new Error("inherited environment name index was out of range");
+      }
+      const ownName = tc.draw(ownEnvironmentName);
+      const ownBase = `http://${ownName}.example`;
+      const config = parseConfig({
+        baseURL: "http://top.example",
+        environments: {
+          staging: { baseURL: "http://staging.example" },
+          [ownName]: { baseURL: ownBase },
+        },
+      });
+
+      expect(resolveEnvironment(config, ownName, true).baseURL).toBe(ownBase);
+      expect(resolveEnvironment(config, "staging", true).baseURL).toBe("http://staging.example");
+
+      const environments = config.environments ?? {};
+      if (Object.hasOwn(environments, inherited)) {
+        expect(resolveEnvironment(config, inherited, true).baseURL).toBe(
+          `http://${inherited}.example`,
+        );
+      } else {
+        expect(() => resolveEnvironment(config, inherited, true)).toThrow(UnknownEnvironmentError);
+      }
+    }));
 });
