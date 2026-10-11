@@ -440,6 +440,91 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
   );
 });
 
+// Responsibility: writes made through Playwright's APIRequestContext on
+// `page.request` and `context.request`. Those calls share the browser
+// context's cookie jar, but they do not emit the context `request` event
+// the page-traffic listener tallies, so a step can POST or DELETE and
+// leave `observed.http_writes` at 0 with no http.jsonl line. A GET on the
+// same objects must stay a read. The server receipt is asserted first so
+// a miss is "the call happened and was not recorded", not "the call never
+// left the step".
+describe("createStepContext / page.request and context.request", () => {
+  let evidenceDir: string;
+  let server: Server;
+  let baseURL: string;
+  let seen: string[];
+
+  beforeEach(async () => {
+    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-api-request-"));
+    seen = [];
+    server = createServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("ok");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address() as AddressInfo;
+    baseURL = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterEach(async () => {
+    await rm(evidenceDir, { recursive: true, force: true });
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it.skipIf(!chromiumAvailable)(
+    "counts a write through page.request or context.request in observed and http.jsonl, and a read stays a read",
+    async () => {
+      const { ctx, dispose, observedCounts } = createStepContext({
+        config: baseConfig(),
+        evidenceDir,
+        env: {},
+        stepTitle: "browser step",
+      });
+
+      const page = await ctx.page();
+      const context = page.context();
+      await context.request.post(`${baseURL}/via-context-request-POST`);
+      await page.request.delete(`${baseURL}/via-page-request-DELETE`);
+      await page.request.get(`${baseURL}/via-page-request-GET`);
+
+      expect(seen).toEqual([
+        "POST /via-context-request-POST",
+        "DELETE /via-page-request-DELETE",
+        "GET /via-page-request-GET",
+      ]);
+      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 2 });
+
+      const { evidence } = await dispose();
+      expect(evidence.http).toBe("http.jsonl");
+      const lines = (await readFile(path.join(evidenceDir, "http.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(lines).toEqual([
+        expect.objectContaining({
+          method: "POST",
+          url: `${baseURL}/via-context-request-POST`,
+          status: 200,
+          via: "request",
+        }),
+        expect.objectContaining({
+          method: "DELETE",
+          url: `${baseURL}/via-page-request-DELETE`,
+          status: 200,
+          via: "request",
+        }),
+        expect.objectContaining({
+          method: "GET",
+          url: `${baseURL}/via-page-request-GET`,
+          status: 200,
+          via: "request",
+        }),
+      ]);
+    },
+  );
+});
+
 // Responsibility: proves the browser-context half of docs/spec.md "Context
 // API"'s baseURL wiring —
 // `page.goto("/path")` must resolve against `config.baseURL` without the
