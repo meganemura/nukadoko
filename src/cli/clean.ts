@@ -24,9 +24,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // the state directory's own fixed segments (docs/spec.md "The state
 // directory" names all of them: `records/steps`, `records/scenarios`,
 // `records/runs`, `cache/sessions/<env>/`), not this module's own invention, but a helper
-// only this one new caller uses is a second source of truth, not a
-// reduction in duplication — it earns its existence once cli/do.ts and
-// cli/run.ts actually move onto it, which this change does not do.
+// only this one caller uses is a second source of truth, not a
+// reduction in duplication. It earns its existence once cli/do.ts and
+// cli/run.ts resolve those segments through it too. Until then the paths
+// stay inlined here.
 // `export`'s targets are resolved exactly the way cli/run.ts resolves
 // them, config override included (`config.allure?.resultsDir`,
 // `config.messages?.output`). `config.messages?.output` names only the

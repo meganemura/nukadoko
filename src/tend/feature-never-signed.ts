@@ -23,8 +23,8 @@ import type { TendIssue } from "./types.js";
 // claim is treated would turn every feature under active development into
 // a red exit code for as long as it takes to finish it. No time threshold
 // is applied either: "this feature is old enough that it should have been
-// signed by now" is a guess this tool has no measurement to back
-// (CLAUDE.md: a check that guesses is worse than no check), so this finding
+// signed by now" is a guess this tool has no measurement to back, and a
+// check that guesses is worse than no check, so this finding
 // only ever answers "has a record ever named this feature", never "how
 // long ago should it have".
 //

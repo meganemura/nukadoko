@@ -361,7 +361,8 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
   // `hookId`/`pickleStepId` (messages.d.ts's `TestStep`) — so the index has
   // nowhere to live except the Hook definition's own name. `step_index` is
   // guaranteed present on every `"after_step"` record entry
-  // (record-types.ts's own contract), hence the `!`.
+  // (src/record/scenario-record.ts: `step_index` is present only for that
+  // type), hence the `!`.
   const afterStepHookIds: Record<number, string> = { ...hookIds.afterStep };
   for (const hook of afterStepHooks) {
     const stepIndex = hook.step_index!;

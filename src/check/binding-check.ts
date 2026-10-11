@@ -191,7 +191,7 @@ export function checkBindings(
       continue;
     }
 
-    // Decision 2: a pattern-bearing step's args must be a z.object. When it
+    // A pattern-bearing step's args must be a z.object. When it
     // isn't, there is no shape to check keys/types against, so this step's
     // patterns still get parsed below (for duplicate-text detection and to
     // populate `patterns` for feature-check), just never key/type-checked.

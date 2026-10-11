@@ -45,7 +45,7 @@ import { STEP_BRAND } from "./brand.js";
 // "id"], [importProject, "projectId"]] }`. Discriminated from the single-
 // candidate form by the tuple's own first element — a `Step` means "this is
 // one candidate", an array means "this is the list" — never by a wrapper
-// type, so the single form written before this task keeps compiling and
+// type, so the single-candidate form keeps compiling and
 // keeps meaning exactly what it meant (backward compatible on purpose: no
 // existing `from: { key: [step, "key"] }` needs rewriting). The three checks
 // above apply per candidate; there is deliberately no fourth check that

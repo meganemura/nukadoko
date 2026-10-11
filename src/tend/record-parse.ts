@@ -216,12 +216,10 @@ export interface ParsedAcceptanceRecord {
   readonly featureSource: string;
   /** Every step-shaped record this record embeds, in document order. */
   readonly stepRecords: readonly EmbeddedStepRecordLike[];
-  /** This record's own condition — `undefined` when the frontmatter has no
-   * `browser:` line at all, which is
-   * every record accepted before this task shipped (this file's own
-   * header). Never guessed at: a caller that needs "is this record's
-   * condition known" checks this field, not `environment`'s own presence
-   * (which every record, old and new, already carries). */
+  /** This record's own condition. `undefined` when the frontmatter has no
+   * `browser:` line at all (this file's own header). Never guessed at: a
+   * caller that needs "is this record's condition known" checks this field,
+   * not `environment`'s own presence (which every record already carries). */
   readonly condition: RecordCondition | undefined;
   /** This record's own `accepted_at`, parsed as a `Date` — `undefined` when
    * the frontmatter's own line is missing or unparsable (defensive: every

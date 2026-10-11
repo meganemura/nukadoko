@@ -41,8 +41,8 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // and `observed` (measured), agree or disagree about — the reconciliation
 // used to be entirely on a human reading raw step records, with no note
 // anywhere of whether the two were ever even compared. It never changes
-// whether `nuka accept` refuses (that stays cli/accept.ts's seven
-// conditions, untouched) and never asserts the step is wrong — see
+// whether `nuka accept` refuses (that stays the refusals in cli/accept.ts)
+// and never asserts the step is wrong. See
 // renderDeclaredVsObserved's own comment for why.
 //
 // A "Condition" section, and a frontmatter `browser:` line beside the
@@ -129,12 +129,12 @@ export interface RenderAcceptanceRecordOptions {
 
 /** Thrown when a scenario this module was asked to render is missing a
  * step record its own record says it should have — every scenario passed
- * into this function is expected to be `status: "passed"` (src/run/
- * record-types.ts: "passed only when every step passed", so every one of
+ * into this function is expected to be `status: "passed"` (src/record/
+ * scenario-record.ts: `passed` only when every step passed, so every one of
  * its steps has a non-null step record id), so this can only mean the step
  * record was deleted or corrupted on disk after the run that wrote it. Not
- * one of the spec's seven named rejection conditions — those are all things
- * a user did (dirty tree, moved HEAD, ...); this is nukadoko's own state
+ * one of the refusals cli/accept.ts applies to something a user did (a dirty
+ * tree, a moved HEAD, and the rest listed there). This is nukadoko's own state
  * being unexpectedly incomplete, reported the same way any other internal
  * inconsistency here would be: thrown, caught once, by cli/accept.ts. */
 export class MissingStepRecordError extends Error {
@@ -214,8 +214,8 @@ const STEP_RECORD_ALLOWLIST: ReadonlySet<string> = new Set([
   "target_version",
 ]);
 
-// The same keep list for a hook record (`ScenarioHookRecord`, src/run/
-// record-types.ts) — a hook has no `args`/`result`/`observed` of its own (no
+// The same keep list for a hook record (`ScenarioHookRecord`,
+// src/record/scenario-record.ts). A hook has no `args`/`result`/`observed` of its own (no
 // step boundary to measure), so its own allowlist is shorter, but the same
 // question decides it: `declared`/`trace`/`actions`/`truncated` all answer
 // to what a page did during that one hook invocation, not to anything the
@@ -472,8 +472,9 @@ function renderCondition(options: RenderAcceptanceRecordOptions): string[] {
 
 /** The record's own disclosure of what it left out — every key `pickAllowed`
  * actually dropped from a step or hook record embedded below, named once
- * rather than left for a reader to notice was missing (CLAUDE.md "Nothing
- * breaks silently"). Alphabetical and comma-separated so the line reads the
+ * rather than left for a reader to notice was missing. A field dropped
+ * without being named would look as if the step record had never carried
+ * it. Alphabetical and comma-separated so the line reads the
  * same regardless of which scenario happened to be the one that carried a
  * given field first. Omitted outright when nothing was stripped — a
  * disclosure with nothing to disclose would end in a bare colon, which says

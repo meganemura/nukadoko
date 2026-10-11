@@ -385,8 +385,8 @@ export function buildExampleParameters(doc: GherkinDocument, pickle: Pickle): Ma
 /** The hidden `nukadoko.scenario.steps` identity parameter's own value —
  * every one of this pickle's own step texts, joined in order. Reads
  * `pickle.steps[].text`, never `record.steps[].text`: the two mirror each
- * other exactly (record-types.ts's own contract, "record.steps[i] mirrors
- * pickle.steps[i]"), and `pickle` is the one of the two already frozen
+ * other exactly (src/record/scenario-record.ts: `steps` mirrors the pickle's
+ * own step order), and `pickle` is the one of the two already frozen
  * before a single step of this scenario ever runs — `mapScenario`'s own
  * header explains why that is exactly what lets a progress snapshot
  * (written before a `ScenarioRecord` exists at all) land on the same
@@ -641,8 +641,8 @@ function resolveHookOutcome(hook: ScenarioHookRecord): Outcome {
     return { status: "passed" };
   }
   if (!hook.error) {
-    // Unreachable per record-types.ts's own contract (`error` is present
-    // whenever `status` is `"failed"`) — defensive fallback only.
+    // Unreachable per src/record/scenario-record.ts (`error` is present
+    // only when `status` is `"failed"`). Defensive fallback only.
     return { status: "broken" };
   }
   const kind = hook.error.kind;
@@ -1031,8 +1031,8 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
     callChildSteps = mapCalls(stepRecord.calls);
   }
 
-  // `record.steps[i]` mirrors `pickle.steps[i]` (record-types.ts's own
-  // header) — the official cucumberjs allure adapter names a step
+  // `record.steps[i]` mirrors `pickle.steps[i]` (src/record/scenario-record.ts:
+  // `steps` mirrors the pickle's own step order). The official cucumberjs allure adapter names a step
   // `"<keyword><text>"` (e.g. "Given a passed step"), and the gherkin
   // `keyword` itself already carries its own trailing space, so no
   // separator is added here (`buildStepName`, above).
@@ -1159,7 +1159,8 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   // wrongly folding the second one into the first one's history.
   // `buildScenarioStepsSignature` reads `pickle.steps[].text` directly, not
   // `record.steps[].text` — the two mirror each other exactly
-  // (record-types.ts's own contract), and reading the pickle is what lets
+  // (src/record/scenario-record.ts: `steps` mirrors the pickle's own step
+  // order), and reading the pickle is what lets
   // emitter.ts's own progress snapshot compute this identical value before
   // a `ScenarioRecord` exists at all (this module's own header, just
   // above). `status` is deliberately excluded from this join: a step's
@@ -1284,7 +1285,8 @@ export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenar
     // step it ran after is named into the fixture instead, since that is
     // the only place left for that fact to live without a new Allure-side
     // concept. `hook.step_index` is guaranteed present exactly when
-    // `hook.type === "after_step"` (record-types.ts's own contract).
+    // `hook.type === "after_step"` (src/record/scenario-record.ts: present
+    // only for that type).
     const fixtureType: "before" | "after" = hook.type === "before" ? "before" : "after";
     const name =
       hook.type === "before" ? "Before" : hook.type === "after" ? "After" : `AfterStep[${hook.step_index}]`;

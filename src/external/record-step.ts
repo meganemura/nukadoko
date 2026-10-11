@@ -52,11 +52,11 @@ import { strictArgsSchema } from "../step/strict-args.js";
 // Config (`nukadoko.config.ts`), env, and secrets load the same way `nuka
 // do` loads them (src/cli/do.ts), so http.jsonl's redaction and
 // `ctx.env`/`ctx.requireEnv` behave identically whether a step ran through
-// `nuka do` or through this module. Left out on purpose, all named in the
-// task this module was built for: `--env`/`--session` (no environment or
-// session concept exists here yet — always `DEFAULT_ENVIRONMENT_NAME`/
-// `null`), the version probe, and read-only policy enforcement. Each is a
-// real gap, not an oversight, and each is additive: none of them changes
+// `nuka do` or through this module. Left out on purpose: `--env` and
+// `--session` (no environment or session is selected here: always
+// `DEFAULT_ENVIRONMENT_NAME` and `null`), the version probe, and read-only
+// policy enforcement. Each is a real gap, not an oversight, and each is
+// additive: none of them changes
 // this module's own record shape or its `kind: "external"` meaning if
 // added later.
 //

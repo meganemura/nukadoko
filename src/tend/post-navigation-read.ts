@@ -37,10 +37,10 @@ import type { TendIssue } from "./types.js";
 // on the gap, which this note never gives.
 //
 // A read that lands inside a `ctx.poll` call's own window is excluded:
-// `docs/spec.md:350-375` already asks a step to
-// use `poll()` rather than a direct browser wait precisely so a delayed
-// render cannot flake it, and a step written that way is the thing this
-// note exists to tell apart from - not another instance of it. That
+// docs/spec.md "Tending" leaves that read out, because a step written to
+// `poll()` the way docs/spec.md "Context API" asks is retrying by
+// construction, which is the thing this
+// note exists to tell apart from, not another instance of it. That
 // judgment is a plain timestamp comparison against the step record's own
 // `polls` (never a table of which Playwright method names count as a
 // "read", for the same reason the paragraph above already gives), and it
@@ -237,8 +237,9 @@ function collectMatches(rootDir: string, stateDir: string): Match[] {
       // rather than reported as some other kind of fact.
       if (gapMs < 0 || gapMs > NOT_WORTH_LISTING_ABOVE_MS) continue;
 
-      // A read that a `ctx.poll` call was already retrying was written
-      // the way `docs/spec.md:350-375` asks for - excluded, not reported
+      // A read that a `ctx.poll` call was already retrying follows
+      // docs/spec.md "Tending" (a step written to `poll()` the way "Context
+      // API" asks is retrying by construction): excluded, not reported
       // (this file's own header).
       if (isWithinAnyPollWindow(nextStartedAt, polls)) continue;
 

@@ -61,8 +61,8 @@ export function isCommonJsProject(rootDir: string): boolean {
 // not once per failure. Returns "" (append nothing) unless both conditions
 // hold: the project is CommonJS, and the failed file is itself .ts. A
 // project that isn't CommonJS, or a failure on a file that isn't .ts, gets
-// nothing appended (CLAUDE.md: "a check that guesses is worse than no
-// check").
+// nothing appended. Saying more would guess at a failure this function did
+// not recognize, and a guess is worse than no check.
 export function cjsTsMismatchExplanation(isCjsProject: boolean, filePath: string): string {
   if (!isCjsProject || path.extname(filePath) !== ".ts") {
     return "";

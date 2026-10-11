@@ -26,7 +26,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // pull in dozens of images, a stylesheet, and a script bundle, and a file
 // that tried to hold all of that would stop being something a reader opens.
 // Everything else is tallied into `httpOmitted` instead of being silently
-// dropped (CLAUDE.md "Nothing breaks silently") — the step record's own
+// dropped. The step record's own
 // `http_omitted` field (create-context.ts's `httpOmittedSnapshot`, wired
 // into the step record by cli/do.ts and run-scenario.ts) is that tally's own
 // read side. `observed` (browser-evidence.ts's own `request` listener) is
@@ -58,8 +58,8 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // A write failure here (`appendHttpLogEntry` rejecting) is swallowed: an
 // event handler has no caller to propagate a throw to, and losing one
 // page-issued log line must not break the step the way browser-evidence.ts's
-// own `finalize`/`endStepChunk` teardown already doesn't (docs/spec.md:
-// measurement must never break execution).
+// own `finalize`/`endStepChunk` teardown already doesn't. Measurement must
+// not break execution.
 //
 // Each append is kicked off from inside a `response` handler, which has no
 // caller of its own to await it — unlike http-log.ts's own `logCall`, whose

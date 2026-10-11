@@ -34,20 +34,19 @@ import type { ConsoleErrorEntry, FailedRequestEntry, PageErrorEntry, PageEventsS
 // Capped at 100 entries per category: a
 // redirect loop or a chatty page can emit thousands of these in one step,
 // and a step record that tried to hold all of them would stop being
-// something a reader (or an agent) can open. Silently dropping the rest
-// would violate "nothing breaks silently" (CLAUDE.md), so a truncated
+// something a reader (or an agent) can open. Dropping the rest without
+// saying so would hide how much the page actually emitted, so a truncated
 // category's true count is still reported, but never by changing that
-// category's own type: an earlier version reported it by turning the
-// category from a bare array into `{ entries, total, truncated: true }`
-// once the cap was hit, which meant a step record's own type for
-// `console_errors`/`page_errors`/`failed_requests` depended on how many
+// category's own type. Turning the category from a bare array into
+// `{ entries, total, truncated: true }` once the cap was hit would make a
+// step record's own type for
+// `console_errors`/`page_errors`/`failed_requests` depend on how many
 // entries happened to occur. `jq '.page_events.console_errors | length'`
 // then silently returned a different kind of number depending on which
 // shape it landed on (element count for the array, key count for the
-// object; never the true total either way), the exact "type changes with
-// volume so every reader must branch, and the branch that's missing lies
-// quietly" failure "Nothing breaks silently" (CLAUDE.md) rules out. Each
-// category is now always a bare array, capped at
+// object; never the true total either way). A type that changes with volume
+// forces every reader to branch, and the branch that is missing lies. Each
+// category is always a bare array, capped at
 // `MAX_ENTRIES_PER_CATEGORY`; a category that hit the cap instead adds its
 // name to the snapshot's own sibling `truncated` record, mapping it to its
 // true total (not the entry count shown) — a key that is present only when

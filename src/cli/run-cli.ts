@@ -1,6 +1,6 @@
 import yargs from "yargs";
 // TODO(types): @types/yargs is pinned to the 17.x line (no 18.x types on
-// DefinitelyTyped yet per the task's constraints); CommandModule/Argv here
+// DefinitelyTyped yet); CommandModule/Argv here
 // are the 17.x shapes. yargs 18's runtime behavior used below (command
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
@@ -39,9 +39,9 @@ import {
 } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
-// Responsibility: wires the commands this slice ships (`steps`, `describe`,
-// `do`, `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `accept`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
+// Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
+// `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
+// `clean`, `tend`, `accept`, `harvest`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -49,7 +49,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // tests. `do`'s own setup/execution split and step record writing lives in
 // cli/do.ts, including deciding whether `--session` reaches a live
 // session's own process (src/live/daemon.ts) or builds a fresh `ctx` the
-// way it always has; `session`'s own list/clear/start/stop logic lives in
+// way it always has; `run`'s own execution lives in cli/run.ts;
+// `session`'s own list/clear/start/stop logic lives in
 // cli/session.ts; `init`/`scaffold`'s own generation logic lives in
 // cli/init.ts and
 // cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin

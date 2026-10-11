@@ -88,7 +88,8 @@ import { createExportsManifest } from "../../record/run-exports.js";
 // running reported `"skipped"`, never `"failed"` — the failure itself is
 // visible in that Before fixture's own detail view. The result's own status
 // is `record.status` directly, which the scenario record already sets to
-// `"failed"` whenever any of its steps didn't pass (record-types.ts), and
+// `"failed"` whenever any of its steps didn't pass
+// (src/record/scenario-record.ts: `passed` only when every step passed), and
 // map-scenario.ts's own `firstFailure` search falls back to a classified
 // hook failure exactly for this case, so a Before-hook-stopped scenario
 // still lands in one of `nuka init`'s own seven categories instead of
@@ -725,7 +726,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     // parameter): one number plays both roles at once.
     const sequence = progressSnapshotCount;
     result.start = Math.min(anchor + sequence, ceiling);
-    // Identity only (req 2's own invariant) — `mapScenario`'s own context
+    // Identity only. `mapScenario`'s own context
     // parameters (environment/session/target_version) are excluded from
     // historyId already, so a snapshot that never carries them changes
     // nothing a reader could compare against the real result.

@@ -45,9 +45,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // to name its own version, so `collectTraceEvidence`'s caller is told once,
 // on stderr, rather than a `status: "ok"` step record silently missing a
 // field a reader has no way to know was ever expected. Guessing at a shape this
-// build has never verified would violate the same rule (CLAUDE.md: "Do not
-// automate a verdict on top of a proxy" — a version this code has not
-// checked against is exactly that), so nothing is inferred; the version is
+// build has never verified would turn an unread format into a verdict, so
+// nothing is inferred; the version is
 // simply read and compared against the closed list below.
 
 /** Trace format versions this build knows how to read (measured against

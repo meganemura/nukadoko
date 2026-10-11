@@ -97,7 +97,7 @@ export function findSignoffConditionMismatch(
 
   const issues: TendIssue[] = [];
   for (const [featurePath, latest] of latestByFeature) {
-    if (latest.condition === undefined) continue; // Condition unknown (pre-this-task record): out of scope.
+    if (latest.condition === undefined) continue; // No browser line: nothing recorded to compare.
     if (latest.condition.browserType === undefined) continue; // No browser measured: nothing to compare.
     if (latest.condition.browserType === currentBrowserType) continue;
 

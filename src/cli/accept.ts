@@ -26,15 +26,15 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // as every other command). `accept` never executes
 // anything — src/run/run-scenario.ts is untouched by this file — it only
 // reads what `nuka run` already wrote (record.json/step record.json under
-// `<stateDir>/records/scenarios/*`) and, if every one of the spec's seven refusal
-// conditions is clear, writes one markdown file beside the feature and
+// `<stateDir>/records/scenarios/*`) and, if every refusal below is clear,
+// writes one markdown file beside the feature and
 // prints its own path on stdout — success's own stderr then names the
 // choice that follows sign-off (a feature can stay where it is, proving
 // only that this change was accepted, or move into `featuresDir` and run
 // unattended from then on), never which one to make.
 //
-// The seven refusal conditions (docs/spec.md's own "refusal conditions" list) are checked in the order
-// listed there, each one a `return 1` before anything is written: (1) the
+// The refusals are this command's own, checked in this order, each one a
+// `return 1` before anything is written: (1) the
 // feature itself doesn't exist or doesn't parse, (2) there is no git
 // repository (or no commit yet) to name, (3) the *current* working tree is
 // dirty, once every acceptance record sitting in it is set aside (below —
@@ -49,8 +49,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `git` field, never the current probe from condition 3 — two different
 // questions ("is it safe to accept right now" vs "was the run itself
 // trustworthy") that only happen to share a probe function
-// (src/run/probe-git.ts, reused rather than re-implemented per the spec's
-// own list of things this task must not touch).
+// (src/run/probe-git.ts, reused rather than re-implemented, so both
+// questions are answered by the same measurement).
 //
 // Condition 4's fourth way: a candidate must have run under the *current*
 // condition, both axes — `environment` (this command's own `--env`,

@@ -70,227 +70,160 @@ import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
-// Responsibility: `nuka run`'s actual work, kept out of run-cli.ts so it's
-// unit-testable without going through yargs (same split as cli/do.ts). Two
-// phases, matching docs/spec.md's "Running"/"Records" split exactly —
-// generalized from cli/do.ts's own split to every pickle this invocation
-// selects (one feature file's worth, or every
-// `.feature` file under a directory target folded into this same one
-// invocation) instead of one step:
+// Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
+// unit-testable without going through yargs (same split as cli/do.ts).
+// Two phases, matching docs/spec.md's "Running"/"Records" split:
 //
-//   1. Setup — a malformed feature target (missing file, invalid `:line`,
-//      a parse failure — src/run/select-pickles.ts), a config/discovery
-//      error, an unknown `--env` name, or an invalid `--session` name / a
+//   1. Setup. A malformed feature target (missing file, invalid `:line`,
+//      a parse failure: src/run/select-pickles.ts), a config or discovery
+//      error, an unknown `--env` name, or an invalid `--session` name or a
 //      lock held by another live process. None of these write anything: the
 //      run never started, so there is nothing to attest to.
-//   2. Execution — from the first pickle onward, every pickle that begins
+//   2. Execution. From the first pickle onward, every pickle that begins
 //      executing gets a scenario record no matter what happens inside it
-//      (src/run/run-scenario.ts); a malformed session file discovered before
-//      a *later* scenario's own start is treated the same way a missing
-//      feature file is — a failure before that scenario's execution began,
-//      so no record is written for it, while earlier scenarios' output
-//      stands: storageState is re-read from the session file at each
-//      scenario's own start, precisely so an earlier scenario's save in
+//      (src/run/run-scenario.ts). A malformed session file discovered before
+//      a later scenario's own start is a failure before that scenario's
+//      execution began, so no record is written for it, while earlier
+//      scenarios' output stands. storageState is re-read from the session
+//      file at each scenario's own start, so an earlier scenario's save in
 //      the same run is visible to a later one.
 //
-// The version probe, `ctx.env`, and the run's SecretSet are each computed
-// exactly once, at the top of the execution phase — every scenario record
-// and every step record in this run shares the same `target_version`,
-// `env`, and redaction rules. The set is built before the probe's warning
-// is written: that reason is the probe function's own text and can carry
-// a value loaded from an untracked env file, and the warning is stderr,
-// not a scenario record. The session's lock, when `--session` is
-// given, is acquired once for the whole run and always released in
-// `finally`, covering every scenario rather than one lock per scenario.
+// Computed once, at the top of the execution phase, and shared by every
+// scenario and step record in the run: the version probe, `ctx.env`, the
+// SecretSet, `runId` (src/run/run-id.ts), and `git` (src/run/probe-git.ts).
+// The set is built before the probe's warning is written. That warning is
+// the probe function's own text and can carry a value loaded from an
+// untracked env file, and it goes to stderr, not into a scenario record.
+// The session lock, when `--session` is given, is acquired once for the
+// whole run and released in `finally`, covering every scenario rather than
+// one lock per scenario.
 //
-// `runId` (src/run/run-id.ts) and `git` (src/run/probe-git.ts) join that
-// same "computed once, at the top of the execution phase" group — one id
-// and one git snapshot shared by every scenario record this invocation
-// writes, alongside `targetVersion` above.
+// `resolvedEnv.policy` is passed into every `runScenario` call.
+// src/run/run-scenario.ts owns the refusal and the backstop, because both
+// need a per-step, per-position view this module does not have.
 //
-// `resolvedEnv.policy` is threaded into every `runScenario` call now: this
-// file previously never passed it at all, so `nuka run` enforced no
-// read-only policy whatsoever, unlike `nuka do` — run-scenario.ts is where
-// the actual refusal/backstop logic lives, since it needs a per-step,
-// per-position view this module doesn't have.
+// `registerAllureRuntime()` runs once, at the top of the execution phase,
+// never in setup: a setup failure writes nothing, so there is no pickle for
+// it to matter to yet. Its restore callback runs in that phase's own
+// `finally`, nested inside the lock's own `finally`. Every pickle shares
+// that one registered `TestRuntime`. src/run/run-scenario.ts repoints which
+// collector is active per pickle and per step or hook boundary.
 //
-// `registerAllureRuntime()` is called
-// once, at the top of the execution phase below (never in setup — a setup
-// failure writes nothing, so there is no pickle for it to matter to yet),
-// and its restore callback runs in this phase's own `finally`, nested inside
-// the lock's own `finally`. Every pickle in this `for` loop shares that one
-// registered `TestRuntime`; src/run/run-scenario.ts is what repoints which
-// collector is "active" per pickle and per step/hook boundary.
+// Each pickle carries its own feature's `gherkinDocument`
+// (`SelectedFeature.gherkinDocument`, src/run/select-pickles.ts) into
+// `runScenario`. A directory target spans more than one file, so each
+// pickle carries the document of the file it came from, via the
+// `{ feature, pickle }` pairs `flatPickles` builds.
 //
-// Each pickle's own feature's
-// `gherkinDocument` (`SelectedFeature.gherkinDocument`, src/run/
-// select-pickles.ts) is threaded into every `runScenario` call below — the
-// same document for every pickle that came from the same file, since a
-// Before/After hook's own `HookParameter.gherkinDocument` is that file's
-// document regardless of which pickle triggered the hook. Extended for a
-// directory target: its own pickles span more than one
-// file now, each carrying *its own* feature's document via the
-// `{ feature, pickle }` pairs `flatPickles` below builds, never a single
-// shared one the way a lone `selected.gherkinDocument` field would have
-// implied.
+// `buildStepBindings` receives `compatParameterTypes`. `discoverSteps`'s
+// `instantiateCompatWorld` and `compatHooks` are threaded into every
+// `runScenario` call. Every registered hook's tag expression, if any, is
+// validated once in the setup phase, before any pickle runs. An unsupported
+// tag expression is unsupported for the whole invocation, not for one
+// pickle, so discovering it only when a matching pickle is selected would
+// make a project-wide failure look scenario-dependent.
 //
-// This closes two temporary asymmetries left from an earlier compat slice:
-// `buildStepBindings` now receives `compatParameterTypes` too
-// (previously dropped here as "irrelevant to this slice"), and
-// `discoverSteps`'s `instantiateCompatWorld`/`compatHooks` are threaded into
-// every `runScenario` call. Every registered hook's own tag expression (if
-// any) is validated once, here in the setup phase, before any pickle runs:
-// an unsupported tag expression's syntax is
-// either supported or not, independent of which pickle a given `nuka run`
-// invocation happens to select, so discovering it only when a matching
-// pickle came along would make the failure look scenario-dependent, which
-// it isn't.
+// BeforeAll and AfterAll run here, not in src/run/run-scenario.ts. They
+// belong to this whole `nuka run` invocation, not to any one pickle, the
+// same reason `registerAllureRuntime` is called once here. They sit
+// immediately around the pickle loop, after every setup-phase failure path
+// has already returned, and they are skipped when `flatPickles` is empty:
+// a run that executes nothing has nothing for them to prepare or tear down.
+// `BeforeAll` failing skips the pickle loop, and `AfterAll` is still
+// attempted (the same Before/After asymmetry src/run/run-scenario.ts uses,
+// one level up). Neither has a record of its own. These hooks report
+// through stderr and this function's exit code, the same channel setup
+// failures already use. `runWithTimeout`, `doneCallbackMessage`, and
+// `pendingOrSkippedMessage` come from src/run/run-scenario.ts rather than
+// being copied here.
 //
-// BeforeAll/AfterAll run here, not
-// in src/run/run-scenario.ts — they are a property of this whole `nuka run`
-// invocation, not of any one pickle, the same reason `registerAllureRuntime`
-// above is called once here rather than once per scenario. Placed
-// immediately around the pickle `for` loop below (after every setup-phase
-// failure path has already returned, so environment/session/discovery are
-// all settled by the time either one runs) and skipped entirely when
-// `flatPickles` (below) is empty: a run that selects no
-// pickle must not run BeforeAll/AfterAll at all — a run that executes
-// nothing has nothing for a BeforeAll/AfterAll to prepare or tear down, and
-// running one anyway would be a surprise side effect, e.g. standing up a
-// server for a `nuka run` that never touches it. `BeforeAll` failing skips
-// the pickle loop entirely but `AfterAll` is still attempted (mirrors
-// src/run/run-scenario.ts's own Before/After asymmetry, applied one level
-// up); neither has a record artifact of its own (none exists at the run
-// level, and inventing a new record type solely to carry a BeforeAll/
-// AfterAll failure would be scope creep for what this adds) — both report
-// through stderr + this function's own exit code, the same channel setup
-// failures above already use. `runWithTimeout`/
-// `doneCallbackMessage`/`pendingOrSkippedMessage` are reused, unmodified,
-// from src/run/run-scenario.ts (see that file's own header) rather than
-// duplicated here.
+// The Allure emitter is built and `begin()`-ed once, after `hasPickles` is
+// known, for the same reason BeforeAll and AfterAll are: a run that selects
+// nothing has nothing for the emitter to measure, so it never creates
+// `allure-results/`. Construction and `begin()` share one try/catch even
+// though the emitter's other methods already carry their own
+// (src/report/allure/emitter.ts). `createAllureEmitter` creates `resultsDir`
+// synchronously (src/report/allure/writer.ts's `createAtomicWriter`), which
+// can throw before the emitter's own safety net exists. A failure here is a
+// warning on stderr, never a run failure: measurement must not break
+// execution. `allureEmitter` stays null, and every later
+// `beginScenario`, `emitStep`, and `endScenario` call is skipped for the
+// rest of the run.
 //
-// The Allure emitter is built
-// and `begin()`-ed once, right after `hasPickles` is known (same gate as
-// BeforeAll/AfterAll above, same reason — a run that selects nothing has
-// nothing for the emitter to have measured either, so it never creates
-// `allure-results/`). Both the construction and `begin()` are wrapped in one
-// try/catch here even though every one of its other methods already carries
-// its own (src/report/allure/emitter.ts): `createAllureEmitter` creates
-// `resultsDir` synchronously (src/report/allure/writer.ts's
-// `createAtomicWriter`), a step that can throw before any of the emitter's
-// own internal safety net exists. A failure here is a warning to stderr,
-// never a run failure — measurement must not break execution — and leaves
-// `allureEmitter` `null`, so every `beginScenario`/`emitStep`/`endScenario`
-// call in the pickle loop below is skipped for the rest of this run.
+// A pickle's `emitStep` calls happen once per step, through `runScenario`'s
+// `onStepFinished`, never gated on `--quiet`, before that pickle's
+// `stdout.write`. Each call maps that one step, buffers the result, and
+// writes a disposable progress snapshot (src/report/allure/emitter.ts). The
+// one real Allure test for the scenario reaches disk only at `endScenario`,
+// after the `stdout.write`: stdout's one-line-per-scenario contract must
+// not be disturbed by an emit failure, and none of these methods throws.
+// `endScenario` writes that test result, maps hooks into fixtures, and
+// deletes the progress snapshots. `record.status`, the run's exit code, and
+// stdout's content stay untouched by any of this.
 //
-// A pickle's own `emitStep` calls
-// happen once per step, threaded through `runScenario`'s own
-// `onStepFinished` (never gated on `--quiet`) — well before
-// that pickle's own `stdout.write` below, which only happens once the whole
-// scenario is done. Each call maps that one step, buffers the result, and
-// writes a disposable progress snapshot of the buffer so far
-// (src/report/allure/emitter.ts's own header); the one real Allure test
-// this scenario will end up with still reaches disk only at `endScenario`,
-// which happens after the `stdout.write`, the same position `emitScenario`
-// used to hold: stdout's one-line-per-scenario contract must never be
-// disturbed by an emit failure, and none of these three methods ever
-// throws. `endScenario` is what actually writes this scenario's one real
-// Allure test result (every buffered step nested inside it, hooks mapped
-// into fixtures alongside it), the scope that test and those fixtures
-// share, and deletes every progress snapshot this scenario wrote along the
-// way. `record.status`/the run's exit code/stdout's content are all
-// otherwise untouched by any of this.
-//
-// The messages emitter is
-// built and `begin()`-ed right after the Allure emitter above — same
-// `hasPickles` gate, same one try/catch around construction+`begin()`, same
-// stderr-warning-only failure handling, for the same reasons (see the
-// paragraph above and src/report/messages/emitter.ts's own header). Its
-// `emitScenario` call
-// sits immediately after the Allure emitter's own `endScenario`, both still
-// after the pickle loop's `stdout.write` of that scenario's record.
-// `end(allPassed)` is placed after the AfterAll loop below, immediately
-// before this function's own `return`: it is the one
-// place `allPassed` has already absorbed every BeforeAll/AfterAll failure,
-// so `testRunFinished.success` in the emitted stream is guaranteed to equal
-// this run's own exit code — this emitter's only channel for a run-scope
-// hook's failure, since neither hook has a record of its own to carry it.
+// The messages emitter is built and `begin()`-ed right after the Allure
+// emitter: the same `hasPickles` gate, the same try/catch around
+// construction and `begin()`, and the same stderr-warning-only failure
+// handling (src/report/messages/emitter.ts). `emitScenario` sits immediately
+// after the Allure emitter's `endScenario`, both after that scenario's
+// `stdout.write`. `end(allPassed)` runs after AfterAll, immediately before
+// this function returns. That is the one place `allPassed` has absorbed
+// every BeforeAll and AfterAll failure, so `testRunFinished.success` equals
+// this run's exit code. That stream is the only channel for a run-scope
+// hook's failure, since neither hook has a record of its own.
 //
 // Output-file semantics: one `nuka run` invocation is one stream. Its real
-// file is unique to this invocation, named from `runId` above
-// (src/report/messages/emitter.ts's own `messagesRunOutputPath`); `begin()`
-// truncates that file, never the configured `messagesOutputRel` path
-// itself (appending would produce a second `testRunStarted` in what must
-// read back as a single well-formed message stream, the same reason a
-// second concurrent invocation must never share this invocation's own
-// file — see that module's own header for the corruption this used to
-// allow). One invocation can select more than one feature file now (a
-// directory target folds every `.feature` file it walked into this same
-// one stream, `begin()` called once with all of them — see that call site
-// below), but it is still exactly one invocation, one file. The configured
-// path only ever changes once, in `end()`, replaced atomically with a full
-// copy of this invocation's now-complete stream — so running `nuka run` a
-// second time, sequentially, still leaves the configured path holding
-// exactly the newest run's stream, the same externally-visible behavior
-// "truncated on begin" gave before, but without two concurrent invocations
-// able to interleave writes into one shared file.
+// file is unique to this invocation, named from `runId`
+// (src/report/messages/emitter.ts's `messagesRunOutputPath`). `begin()`
+// truncates that file, never the configured `messagesOutputRel` path.
+// Appending would produce a second `testRunStarted` in what must read back
+// as a single message stream, and a second concurrent invocation must not
+// share this invocation's file. A directory target folds every `.feature`
+// file into this same stream, with `begin()` called once, and it is still
+// one invocation and one file. The configured path changes only in `end()`,
+// replaced atomically with a copy of this invocation's finished stream, so
+// a later sequential `nuka run` still leaves that path holding the newest
+// run.
 //
-// `from`'s structural
-// validation (src/step/validate-from.ts's `validateStepFrom`)
-// is now wired in here too, not just `nuka do` — a setup-phase
-// fatal (stderr + exit 1, no scenario ever written), run once for this whole
-// invocation right after `bindings` builds, never once per pickle (this
-// check is scenario-independent, see that file's own header). Scoped to the
-// step names this run's own selected pickles actually resolve to
-// (`usedStepNames` below, via the same `checkBindings`/`matchPickleStepText`
-// seam src/check/from-order.ts's own guard reuses) rather than the whole
-// vocabulary: a broken `from` on a step this invocation never binds to is
-// not this invocation's problem to refuse over, the same "only the step
-// you're about to run" scope cli/do.ts's own wiring already has — `nuka
-// check` is where a project-wide finding like that belongs instead. The
-// scenario-order guard itself (docs/spec.md "Chaining steps") is a second,
-// separate check, run once *per pickle* inside src/run/run-scenario.ts —
-// see that file's own header for why it has to live there instead of here.
+// `from`'s structural validation (`validateStepFrom` in
+// src/step/validate-from.ts) is a setup-phase fatal: stderr and exit 1, no
+// scenario written. It runs once for the invocation right after `bindings`
+// builds, never once per pickle. It is scoped to the step names this run's
+// selected pickles resolve to (`usedStepNames`, via the same
+// `checkBindings` and `matchPickleStepText` seam src/check/from-order.ts
+// reuses), not the whole vocabulary. A broken `from` on a step this
+// invocation never binds is not this invocation's refusal. `nuka check` is
+// where a project-wide finding belongs. The scenario-order guard
+// (docs/spec.md "Chaining steps") is a separate check, once per pickle,
+// inside src/run/run-scenario.ts, because it needs that pickle's own step
+// order.
 //
-// A `:line` target gets one stderr line
-// right after `selectPickles` resolves it, naming that the run is partial
-// and that `nuka accept` refuses it — said here rather than left for accept
-// to reveal several commands later (docs/spec.md "Scenarios (the scripted
-// path)"). stdout is untouched: its one-record-per-line contract (below)
-// is read by machines, and this notice is not part of it.
+// A `:line` target writes one stderr line after `selectPickles`, naming
+// that the run is partial and that `nuka accept` refuses it, rather than
+// leaving that fact for accept to reveal several commands later
+// (docs/spec.md "Scenarios (the scripted path)"). stdout is untouched: its
+// one-record-per-line contract is read by machines, and this notice is not
+// part of it.
 //
-// The execution phase used to run in complete
-// silence between setup and its own final `stdout.write`/exit code — no way
-// to tell a long scenario apart from a stuck one, and no way to learn where
-// a run's own output landed short of already knowing `config`. Every progress
-// line (src/run/progress-log.ts) goes to stderr, never stdout —
-// stdout's one-JSON-record-per-scenario contract (`stdout.write` below)
-// stays exactly as it was.
-// `onStepProgress` is built once here, the same "one instance per
-// invocation, threaded unchanged into every `runScenario` call" shape
-// `onUnknownTraceVersion` above already has, and is `undefined` under
-// `--quiet`: `--quiet` suppresses only the step and scenario
-// boundary lines — `writeOutputLocations`/`writeRunSummary` near this
-// function's own `return` are unconditional, since each is written exactly
-// once and naming where output landed is never worth suppressing for a flag
-// whose point is a quieter terminal, not a silent one. No TTY check
-// anywhere in this: a CI log wants this exact progress just as much as an
-// interactive terminal does, and stderr staying busy costs nothing stdout's
-// own NDJSON readers can see.
+// Progress lines (src/run/progress-log.ts) go to stderr, never stdout.
+// stdout's one-JSON-record-per-scenario contract stays a machine contract.
+// `onStepProgress` is built once and threaded into every `runScenario`
+// call, and is undefined under `--quiet`. `--quiet` suppresses only the
+// step and scenario boundary lines. `writeOutputLocations` and
+// `writeRunSummary` near the return are unconditional: each is written
+// once, and naming where output landed is not what that flag is for. There
+// is no TTY check. A CI log wants the same progress, and stderr staying
+// busy is invisible to stdout's NDJSON readers.
 //
 // `--concurrency` above 1 diverts to src/run/run-concurrent.ts, in one
-// branch placed after every setup-phase check above (bindings, from,
-// fixtures, tag expressions) and before `registerAllureRuntime` below —
-// every one of those checks still runs project-wide, once, exactly as it
-// does at concurrency 1, so a `--concurrency <n>` invocation refuses the
-// same broken project a `--concurrency 1` one would, before spawning a
-// single worker. The branch itself only fires once two disqualifying cases
-// are excluded (a live `--session`, a target naming one feature file — this
-// file's own comment right above the branch explains why each drops
-// concurrency back to 1 instead of refusing outright): from there on, this
-// function's own execution-phase code below it is what a `--concurrency 1`
-// run — the overwhelming majority of invocations, and the default — always
-// takes, completely unchanged by `--concurrency` existing at all.
+// branch after every setup-phase check (bindings, from, fixtures, tag
+// expressions) and before `registerAllureRuntime`. Those checks still run
+// once, project-wide, so a higher concurrency refuses the same broken
+// project concurrency 1 would, before spawning a worker. Two cases drop
+// concurrency back to 1 instead of refusing: a live `--session`, and a
+// target that names one feature file (the comment above that branch says
+// why). From there, the execution-phase code below is what a concurrency-1
+// run always takes.
 
 /** The `nuka check` codes that mean a step's pattern did not build at all
  * (src/check/binding-check.ts's own classification of a pattern error, plus
@@ -1170,8 +1103,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // failure leaves `hasPickles` true with zero scenario records ever
       // written, and this table only ever names what this run actually
       // wrote. `allure`/`messages` are gated on `hasPickles` itself
-      // (run.ts:530,557 above — the same condition that gates their own
-      // construction): each writes its own environment/categories or
+      // (the same condition that gates their construction above): each
+      // writes its own environment/categories or
       // stream-header data as soon as it is constructed, before any one
       // scenario's own record exists to write. `messages` names this run's
       // own run-id-suffixed file, not `messagesOutputRel` itself — that

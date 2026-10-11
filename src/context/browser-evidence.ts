@@ -116,8 +116,8 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // counterpart create-context.ts's `dispose()` hands to `ScenarioRecord.
 // browser` — never `options.browserType` itself, since a step can override
 // the `page` fixture with a browser this handle never launched, and only
-// what actually ran is trustworthy enough to record (docs/spec.md
-// "Declaration and measurement answer different questions"). An engine
+// what actually ran is trustworthy enough to record: a declared browser and
+// the one that launched can differ. An engine
 // whose binary was never installed (`npx playwright install firefox`/
 // `webkit`) fails right here, at `launch` — Playwright's own error, neither
 // caught nor reworded, since it already names the missing engine as part of
@@ -237,8 +237,8 @@ export interface BrowserEvidenceHandle {
    * writing it to `path`. Executor-only; only ever called when a chunk is
    * actually open. Swallows its own failure — the same fault-tolerance
    * `finalize`'s own teardown calls already have, and for the same reason:
-   * losing one step's own trace chunk must not cost that step's step record
-   * (docs/spec.md's "measurement must never break execution"). */
+   * losing one step's own trace chunk must not cost that step's step record.
+   * Measurement must not break execution. */
   endStepChunk(path: string): Promise<void>;
   /** Waits for every page-issued http.jsonl append this handle's own
    * `subscribePageHttpLogging` subscription has kicked off *so far* to

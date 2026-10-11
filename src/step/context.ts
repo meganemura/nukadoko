@@ -243,12 +243,11 @@ export interface StepFixtures {
  * construction rather than by hand: the object literal below is typed as
  * `Record<keyof StepFixtures, true>`, so a member
  * added to (or removed from) `StepFixtures` without a matching edit here
- * fails to compile. This is the one, closed set src/step/validate-
+ * fails to compile. This is the one, closed set src/fixture/validate-
  * fixtures.ts checks a step's own destructured names against, and the one
  * src/context/create-context.ts's `buildStepFixtures` switches over to
- * build the bag — spec's own closed-set rule (CLAUDE.md: "a contract says
- * what the step demands"), not a list a future fixture can silently miss
- * updating. */
+ * build the bag. A fixture name has to be in this set to be something a
+ * step can demand, so a name missing here cannot still type-check. */
 const FIXTURE_NAME_MEMBERSHIP: Record<keyof StepFixtures, true> = {
   page: true,
   context: true,

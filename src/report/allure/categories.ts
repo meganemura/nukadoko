@@ -29,7 +29,7 @@ const ERROR_KINDS: readonly ErrorKind[] = [
 
 // One human-readable classification name per kind. Only the first four carry
 // the "Contract: ..." register — they are failures the contract layer
-// itself can name (README's own Tier A); the remaining three are not: a
+// itself can name; the remaining three are not: a
 // timeout/unsupported-shape/step_error is a vocabulary or execution defect
 // the contract layer never got to judge, so each gets its own distinct name
 // instead of the same "Contract: ..." register.

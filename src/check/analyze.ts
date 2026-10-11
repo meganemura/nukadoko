@@ -306,8 +306,9 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
   // a report lists every finding, where
   // `run`'s own try/catch existing early-exit behavior is untouched. No
   // `file`: a hook isn't attributed to the file that registered it
-  // (src/discover/discover-steps.ts's own header explains why), and adding
-  // that attribution is out of this task's scope.
+  // (src/discover/discover-steps.ts's own header explains why). Discovery
+  // does not record which file registered a hook, so this finding has no
+  // file to name.
   for (const hook of compatHooks) {
     if (hook.tags === undefined) {
       continue;

@@ -49,9 +49,8 @@ import type { UsedEntry, UsedEntryWithResult } from "../record/types.js";
 // "success is redundant": a *successful* run's step record is the public face a
 // user reads with jq, and if `result` ever leaks onto one, a reader learns
 // "it's there on success too", starts depending on that, and the leak breaks
-// them silently when someone later closes it — the failing side never says
-// anything, which is exactly the kind of mistake docs/spec.md's "Nothing
-// breaks silently" principle exists to rule out.
+// them silently when someone later closes it. The failing side never says
+// anything, so the leak has to be impossible to write, not merely unused.
 //
 // A plain structural extension (`UsedEntry & { result: unknown }`) does not
 // rule it out: TypeScript is structurally typed, so a `{ step_record_id,

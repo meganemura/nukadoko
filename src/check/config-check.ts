@@ -15,9 +15,9 @@ import type { CheckIssue } from "./types.js";
 // (top-level or per-environment) not existing is a warning. The distinction
 // there matters: `do`/`run` are already tolerant of a missing envFile
 // (loadEnvFiles contributes nothing for ENOENT). check's job here is to
-// surface that leniency, not turn it into a reason to fail (docs/spec.md "Secrets":
-// redaction correctness at runtime is the real guarantee; this is
-// visibility only).
+// surface that leniency, not turn it into a reason to fail (docs/spec.md
+// "Sessions, environments, secrets": the executor redacts when it writes a
+// record surface; this warning is visibility only).
 //
 // That same
 // visibility job also covers `secrets-redact-key-too-short`: a `secrets.redact` entry

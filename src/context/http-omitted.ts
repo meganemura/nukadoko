@@ -9,8 +9,7 @@ import type { HttpOmittedCounts } from "../record/types.js";
 // by Playwright's own `request.resourceType()`, so a step's own step record
 // can say
 // how many were dropped and of what kind instead of a reader having to
-// assume http.jsonl already shows everything (CLAUDE.md "Nothing breaks
-// silently"). Same collector shape as observed.ts/page-events.ts
+// assume http.jsonl already shows everything. Same collector shape as observed.ts/page-events.ts
 // (`record()`/`snapshot()`/`reset()`, executor-owned, reset at each step
 // boundary by create-context.ts's `beginStep`, never reachable from a
 // step's own `run`).

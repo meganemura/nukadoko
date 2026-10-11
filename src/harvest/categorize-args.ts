@@ -4,9 +4,9 @@ import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step
 import type { Attachment } from "./render-line.js";
 
 // Responsibility: docs/spec.md "Harvesting"'s three-way split for one
-// step's args keys that a pattern's own named captures don't consume — the
-// only part of `nuka harvest` this task's own spec asks for that isn't
-// covered by src/binding/* or src/run/match-step.ts already. Structural
+// step's args keys that a pattern's own named captures don't consume. That
+// split is the part of `nuka harvest` src/binding/* and
+// src/run/match-step.ts do not already cover. Structural
 // bookkeeping only (which key falls in which bucket), the same kind of
 // static, non-matching computation src/check/unfillable-key.ts and
 // src/check/from-order.ts already do for the same "exactly one unconsumed
@@ -62,7 +62,7 @@ export function toArgsRecord(record: StepRecord): Record<string, unknown> {
  * and plain objects of the same) — never invoked on anything else, so this
  * does not need to handle `Date`, `Map`, or any other referenced type a
  * general-purpose deep-equal would. Exported for build-draft.ts's own round
- * trip, the other place this repo's task needs "are these two JSON-safe
+ * trip, the other place that needs "are these two JSON-safe
  * values the same" without a third re-derivation. */
 export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) {

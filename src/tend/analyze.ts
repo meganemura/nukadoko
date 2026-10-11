@@ -78,9 +78,8 @@ import type { TendIssue, TendReport } from "./types.js";
 // gives. Per-file verdicts on *why* a file failed still stay `check`'s own
 // finding (`step-file-import-failed`); this module only says, once, that
 // some steps went unseen (`findImportFailuresUnseen` below) — silently
-// having fewer steps to look at, with nothing here saying so, is exactly
-// the failure CLAUDE.md's
-// "Nothing breaks silently" rules out. It is still called with
+// having fewer steps to look at, with nothing here saying so, would hide a
+// broken glue file inside every count this report prints. It is still called with
 // `config.featuresDir` alone, unchanged: only
 // `loadFeaturesFromDirs` below widens to include
 // `additionalFeatureDirs` — the vocabulary a step pattern is checked against

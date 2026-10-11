@@ -1330,13 +1330,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
  * doesn't launch a browser" actually happens, not merely something the
  * fixture's own laziness makes true incidentally.
  *
- * `names` is trusted to already be validated (src/step/validate-
+ * `names` is trusted to already be validated (src/fixture/validate-
  * fixtures.ts, run before execution in `nuka check`/`nuka run`/`nuka do`'s
  * own setup phase) — every name in it is one of `StepFixtures`'s own
  * members. The `default` branch below is defense-in-depth only: it should
  * be unreachable in practice, and throwing plainly (not silently building a
- * bag missing a key) is what CLAUDE.md's "nothing breaks silently" asks
- * for if that assumption is ever wrong.
+ * bag missing a key) is what has to happen if that assumption is ever wrong.
  */
 export async function buildStepFixtures(
   ctx: StepContext,

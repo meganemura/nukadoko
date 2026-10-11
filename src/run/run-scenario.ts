@@ -2584,8 +2584,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     status: scenarioFailed ? "failed" : "passed",
     environment,
     ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
-    // Measured, not declared (record-types.ts's own doc comment for
-    // `browser`) — absent whenever this scenario's own run never launched a
+    // Measured, not declared (src/record/scenario-record.ts's `browser`
+    // field). Absent whenever this scenario's own run never launched a
     // browser at all.
     ...(browserInfo !== undefined ? { browser: browserInfo } : {}),
     session,
@@ -2600,7 +2600,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // No scenario-level `trace` any more:
       // the whole-scenario recording this used to report is retired, split
       // into each step's own step record `evidence.trace` instead (this
-      // file's own header). `ScenarioEvidence.trace` (record-types.ts) stays typed
+      // file's own header). `ScenarioEvidence.trace` (src/record/scenario-record.ts) stays typed
       // as optional for src/report/**'s own sake, but this executor never
       // sets it any more.
     },

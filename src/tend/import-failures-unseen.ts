@@ -2,12 +2,10 @@ import type { TendIssue } from "./types.js";
 
 // Responsibility: `nuka tend`
 // (src/tend/analyze.ts) discovers steps with `{ tolerateImportFailures:
-// true }`, the same tolerant mode `nuka check` uses, but until now silently
-// dropped a broken glue file's own steps from every count and finding here
-// without ever saying so: a project mid-migration would see `tend`'s own
-// numbers quietly shrink with no way to tell "this step doesn't exist" apart
-// from "this step exists but couldn't be read" (CLAUDE.md's "Nothing breaks
-// silently"). This is the one note that says so.
+// true }`, the same tolerant mode `nuka check` uses. A broken glue file's
+// steps are then absent from every count and finding here. Without this
+// note, a reader cannot tell "this step doesn't exist" from "this step
+// exists but couldn't be read". This is the one note that says so.
 //
 // One note for the whole run, not one per broken file — a broken file's own verdict is
 // `nuka check`'s finding (`step-file-import-failed`), not tend's: tend

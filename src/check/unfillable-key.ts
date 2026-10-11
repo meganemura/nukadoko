@@ -5,9 +5,10 @@ import { attachmentFilledKey } from "./from-order.js";
 import type { StepTextMatcher } from "./feature-check.js";
 
 // Responsibility: docs/spec.md "Typed steps"' args/returns paragraph
-// ("statically checkable in both directions") made real for the direction
-// that was, until this task, never checked — a required args key that
-// nothing on a given pickle line could possibly fill. There are exactly
+// ("statically checkable in both directions") for the direction that asks
+// whether a required args key could possibly be filled. A required args key
+// that nothing on a given pickle line could fill fails the moment it runs.
+// There are exactly
 // four ways a required key ever gets filled at run time (docs/spec.md
 // "Typed steps"/"Chaining steps"): a named capture in the matched pattern,
 // the one "exactly one unconsumed required key" table/docstring attachment

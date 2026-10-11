@@ -103,9 +103,9 @@ export interface DaemonStartupFailed {
  *
  * `stdio: "ignore"` (spawnDaemon, above) means the daemon can never write
  * *why* it failed anywhere this caller can read; this polling loop is the
- * only signal `nuka session start` gets that something went wrong at all
- * (CLAUDE.md "Nothing breaks silently" — a start that silently leaves no
- * live session and no error would be exactly that).
+ * only signal `nuka session start` gets that something went wrong at all.
+ * A start that leaves no live session and no error would hide the failure
+ * from that signal.
  */
 export function waitForDaemonStartup(
   child: ChildProcess,

@@ -50,8 +50,8 @@ export class MissingEnvError extends Error {
  * second `await import()` of the same file (a distinct module instance with
  * its own, different `Step` object — see src/discover/discover-steps.ts's
  * own header for why discovery goes out of its way to prevent this for its
- * own loads, and tests/resultof.test.ts for the empirical proof that a step
- * file's ordinary relative import does not hit this). The message names
+ * own loads). A step file's ordinary relative import does not produce a
+ * second module instance. The message names
  * that possibility rather than the step itself: unlike `MissingEnvError`,
  * there is no key to single out — a `Step` carries no name of its own (only
  * discovery's vocabulary key does), so the actionable fact here is "how a
@@ -132,8 +132,7 @@ export class ReadOnlyMutatingPartError extends Error {
  * bare segments `"."`/`".."`, or the empty string. Refused, never
  * sanitized — a name silently rewritten to
  * something else would leave a step trusting a file it never actually
- * asked for, and a step naming a path it should not have named is exactly
- * the kind of mistake CLAUDE.md's "nothing breaks silently" asks to fail
+ * asked for, and a step naming a path it should not have named has to fail
  * loudly rather than be quietly corrected. */
 export class InvalidEvidenceNameError extends Error {
   readonly evidenceName: string;

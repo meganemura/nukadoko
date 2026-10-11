@@ -1,10 +1,8 @@
 // Responsibility: the step record shape from docs/spec.md "Records", typed as
 // the discriminated union `status` actually implies — `StepRecordOk` carries
-// `result`, `StepRecordFailed` carries `error`, never both. `session` and
-// `environment` were each widened in turn as their own slices landed instead
-// of being left open from the start — `session` from a `null`-only
-// placeholder to `string | null` (sessions slice), and `environment` from a
-// `"default"`-only placeholder to `string`, plus the optional
+// `result`, `StepRecordFailed` carries `error`, never both. `session` is
+// `string | null` (null when the invocation named no session) and
+// `environment` is the environment's own name, plus the optional
 // `target_version`. `kind` and
 // `scenario_record_id` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a step record's origin apart — the
 // distinction matters for the Allure mapping and sign-off contexts, per
@@ -56,8 +54,8 @@
 // is redundant with the cited step record (resolving it costs one more file
 // read), which is exactly why it is written down anyway: a step record
 // legible on its own, without being resolved against another local working
-// file, is worth the duplication. Breaking change, no back-compat shim —
-// 0.1 hasn't shipped.
+// file, is worth the duplication. The entry is always that object. A bare
+// step-record id string is not a shape this field reads.
 //
 // `sections` is added now: the labels
 // `ctx.section` was called with during this execution, in call order — how
@@ -168,14 +166,12 @@
 // that never called `ctx.page()`, or did and the page stayed clean, carries
 // no `page_events` key at all.
 //
-// `error.kind` and `mutates` are added now: M3's Allure interop needs a machine-readable failure
-// marker (Categories.json can't be generated from `error.message`, free
-// text meant for humans) and a way to check a step's declared `mutates`
-// against what it actually did without a second lookup. `ErrorKind` is a
+// `error.kind` and `mutates` let a report classify a failure without parsing
+// `error.message` (free text meant for humans) and check a step's declared
+// `mutates` against what it actually did without a second lookup. `ErrorKind` is a
 // closed enum on purpose — an open string would grow one value per step and
 // stop being usable as a classifier — and only the first four values name a
-// failure the contract layer itself can point at (the same "Tier A" claim
-// README makes); every other throw is `"step_error"`, the deliberate
+// failure the contract layer itself can point at; every other throw is `"step_error"`, the deliberate
 // catch-all a caller falls back to whenever it isn't sure — default to
 // step_error whenever classification is uncertain, since misnaming a
 // failure as a contract failure is worse than not naming it at all.
@@ -196,8 +192,7 @@
 // a single load can pull in dozens, and a file holding all of it would stop
 // being something a reader opens. What gets left out is never silently
 // dropped: this field counts it by resourceType, e.g.
-// `{ "image": 34, "stylesheet": 5, "script": 12 }` (CLAUDE.md "Nothing
-// breaks silently"). Present only when at least one request was left out,
+// `{ "image": 34, "stylesheet": 5, "script": 12 }`. Present only when at least one request was left out,
 // `page_events`/`sections`' own convention. `observed` (above) is not
 // narrowed by any of this — it keeps counting every request the harness
 // saw, dropped or not, because it answers a different question than
