@@ -133,7 +133,7 @@ describe("formatClientMissingMessage", () => {
       { code: "ERR_MODULE_NOT_FOUND" },
     );
     const message = formatClientMissingMessage(error);
-    expect(message).toContain("@modelcontextprotocol/client@2.0.0");
+    expect(message).toContain("@modelcontextprotocol/client@2.2.0");
     expect(message).toContain("npm install");
   });
 

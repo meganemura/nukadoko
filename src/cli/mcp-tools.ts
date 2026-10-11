@@ -17,7 +17,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // fixture at all.
 
 const CLIENT_SPECIFIER = "@modelcontextprotocol/client";
-const CLIENT_VERSION = "2.0.0";
+const CLIENT_VERSION = "2.2.0";
 
 /**
  * `null` unless `error` is specifically the dynamic `import()` above
