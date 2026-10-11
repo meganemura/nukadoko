@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
 import { defineStep, type Step } from "../src/step/define-step.js";
-import { formatFixtureIssues, validateStepFixtures } from "../src/fixture/validate-fixtures.js";
+import type { FixtureDefinition } from "../src/step/fixture-types.js";
+import { formatFixtureIssues, validateFixtureDefinitions, validateStepFixtures } from "../src/fixture/validate-fixtures.js";
 
 // Responsibility: unit tests for src/fixture/validate-fixtures.ts's pure
 // functions — no discovery, no
@@ -95,6 +98,71 @@ describe("validateStepFixtures", () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]?.message).toContain("destructure");
   });
+});
+
+// Builtins a fixture may name. `call` is deliberately absent: a fixture runs
+// while its dependencies are built, before the step boundary `call` reads.
+const FIXTURE_BUILTINS = ["page", "context", "request", "env", "requireEnv", "baseURL"] as const;
+
+const STEP_BUILTINS = [...FIXTURE_BUILTINS, "resultOf", "section", "poll", "call", "evidence"] as const;
+
+/** A function whose source destructures `names`. The names are drawn from a
+ * closed identifier set, so joining them into the parameter list cannot
+ * change what the fixture-name parser reads. */
+function destructuring(names: readonly string[]): (...args: never[]) => unknown {
+  const pattern = names.length === 0 ? "{}" : `{ ${names.join(", ")} }`;
+  return new Function(pattern, "use", "return undefined") as (...args: never[]) => unknown;
+}
+
+describe("validateFixtureDefinitions", () => {
+  it("reports a fixture that destructures call, for either definition shape", () =>
+    hegel.test((tc) => {
+      const also = tc.draw(
+        gs.arrays(gs.sampledFrom([...FIXTURE_BUILTINS]), {
+          minSize: 0,
+          maxSize: FIXTURE_BUILTINS.length,
+          unique: true,
+        }),
+      );
+      const callProp = tc.draw(gs.booleans()) ? "call: partRunner" : "call";
+      const names = tc.draw(gs.booleans()) ? [callProp, ...also] : [...also, callProp];
+      const fixtureName = `f${tc.draw(gs.text({ alphabet: "abcxyz", minSize: 1, maxSize: 6 }))}`;
+      const fn = destructuring(names);
+      const definition: FixtureDefinition = tc.draw(gs.booleans())
+        ? [fn, { scope: tc.draw(gs.sampledFrom(["scenario", "process"] as const)) }]
+        : fn;
+      const issues = validateFixtureDefinitions({ fixtures: { [fixtureName]: definition } });
+      const reported = issues.filter(
+        (issue) =>
+          issue.code === "fixture-structural-violation" &&
+          issue.fixture === fixtureName &&
+          issue.message.includes('destructures "call"'),
+      );
+      expect(reported).toHaveLength(1);
+    }));
+
+  it("accepts a fixture that names only builtins a fixture can use", () =>
+    hegel.test((tc) => {
+      const names = tc.draw(
+        gs.arrays(gs.sampledFrom([...FIXTURE_BUILTINS]), {
+          minSize: 0,
+          maxSize: FIXTURE_BUILTINS.length,
+          unique: true,
+        }),
+      );
+      const issues = validateFixtureDefinitions({ fixtures: { kept: destructuring(names) } });
+      expect(issues).toEqual([]);
+    }));
+
+  it("accepts a step that destructures call", () =>
+    hegel.test((tc) => {
+      const also = tc.draw(
+        gs.arrays(gs.sampledFrom([...STEP_BUILTINS]), { minSize: 0, maxSize: 4, unique: true }),
+      );
+      const names = ["call", ...also.filter((name) => name !== "call")];
+      const step = stepWithRun(destructuring(names) as Step["run"]);
+      expect(validateStepFixtures("uses-call", step)).toEqual([]);
+    }));
 });
 
 describe("formatFixtureIssues", () => {

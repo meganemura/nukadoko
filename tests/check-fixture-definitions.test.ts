@@ -1,6 +1,8 @@
+import path from "node:path";
+import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `auto: true` is refused with its own dedicated
 // message, and `nuka check`
@@ -53,6 +55,61 @@ describe("nuka check: fixture definition findings", () => {
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toMatch(/fixture-cycle|cycle/i);
+  });
+});
+
+describe("nuka check: a fixture that destructures call", () => {
+  it("reports that fixture and still accepts a fixture that names request", async () => {
+    const rootDir = await copyFixtureToTempDir("check-clean-project");
+    try {
+      await writeFile(
+        path.join(rootDir, "nukadoko.config.ts"),
+        [
+          'import { defineConfig } from "./nukadoko-shim.js";',
+          "export default defineConfig({",
+          "  fixtures: {",
+          "    callFixture: async ({ call }, use) => {",
+          "      await use(undefined);",
+          "    },",
+          "    requestFixture: async ({ request }, use) => {",
+          "      await use(request);",
+          "    },",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr });
+
+      expect(exitCode).toBe(1);
+      const report = JSON.parse(stdout.text()) as { errors: { code: string; message: string; file?: string }[] };
+      const issues = report.errors.filter(
+        (issue) => issue.code === "fixture-structural-violation" && issue.message.includes("callFixture"),
+      );
+      expect(issues).toHaveLength(1);
+      expect(issues[0]!.message).toContain('destructures "call"');
+      expect(issues[0]!.file).toBe("nukadoko.config.ts");
+      expect(report.errors.some((issue) => issue.message.includes("requestFixture"))).toBe(false);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("does not report a step that destructures call", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-parts-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(1);
+    const report = JSON.parse(stdout.text()) as { errors: { code: string; message: string; step?: string }[] };
+    const issues = report.errors.filter(
+      (issue) => issue.code === "fixture-structural-violation" && issue.step === "valid-composite",
+    );
+    expect(issues).toHaveLength(0);
   });
 });
 
