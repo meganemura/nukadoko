@@ -66,6 +66,11 @@ export const CHECK_CODES = {
     description: "A configured envFile does not exist on disk, so nothing in it is ever loaded.",
     severity: "warning",
   },
+  "env-file-skipped-line": {
+    description:
+      "A line in a configured envFile is not a blank line, a comment, or a binding, so nothing on it was loaded.",
+    severity: "warning",
+  },
   "environment-env-file-missing": {
     description: "An entry in one environment's own envFiles does not exist on disk.",
     severity: "warning",

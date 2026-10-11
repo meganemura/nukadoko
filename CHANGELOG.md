@@ -18,6 +18,15 @@ just until 0.1.
 
 ### Fixed
 
+- **An env file is read the way dotenv reads comments, quotes, escapes, and values that span lines.**
+  A trailing `#` was part of the value. Quotes stayed in the value when a
+  comment followed them. `\n` inside double quotes stayed as two characters.
+  A quoted value that spanned lines was split, so a line inside it could
+  become its own key, and a secret written that way was neither in `ctx.env`
+  nor in the secret set. The separator is `=`. `nuka check` warns with
+  `env-file-skipped-line` for a line that was not loaded. The finding names
+  the file and the line, not the text. What an existing project has to
+  change is in docs/upgrading.md.
 - **A Date or URL in a step result is recorded as its JSON form.**
   `redact` walked every object with `Object.entries`. A Date and a URL
   have no enumerable properties, so the step record, the sign-off, and

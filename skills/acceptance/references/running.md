@@ -26,8 +26,10 @@ otherwise costs a whole browser session to discover, since the scenario
 looks correct until the consuming step actually runs. A default-exported
 `defineModel` or `defineRelation` is checked too. An unknown step name,
 and a step that needs a browser, are errors. Check does not run those
-steps. `nuka check --codes` names every finding code `check` can produce.
-Read the catalog there rather than from a list kept anywhere else.
+steps. A line in a configured env file that is not a blank, a comment, or
+a binding is `env-file-skipped-line`. `nuka check --codes` names every
+finding code `check` can produce. Read the catalog there rather than from
+a list kept anywhere else.
 
 If the feature's directory is in `additionalFeatureDirs` (see "What not to
 do" in `SKILL.md`), a bare `nuka check` already covers it, the same as any

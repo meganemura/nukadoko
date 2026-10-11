@@ -37,6 +37,10 @@ This part does not change release to release.
 
 Compat behaviour a project can notice, one redaction change, and one evidence-name change.
 
+The env file parser now follows dotenv for comments, quotes, escapes, and
+values that span lines. A project whose env files relied on the old reading
+has to look at those values before the next run.
+
 - **`this.link`'s second argument is another URL, not a display name.**
   `this.link(a, b)` used to record one link whose name was `b`. It now
   records one declared link per argument, and none of them has a name,
@@ -74,6 +78,24 @@ Compat behaviour a project can notice, one redaction change, and one evidence-na
   case-sensitive volume those two names used to be two files. On a
   case-insensitive volume they used to be one file, and the first body was
   lost.
+- **A `#` in an unquoted value is a comment.** `TOKEN=abc123 # rotated` used
+  to load `abc123 # rotated`. It now loads `abc123`. The `#` needs no space
+  in front of it. To keep a `#` in the value, put the value in quotes.
+- **Double quotes expand `\n` and `\r`.** `KEY="line1\nline2"` used to load
+  the two characters `\` and `n`. It now loads a newline. Single quotes and
+  backticks do not expand escapes, so use those when the backslash must stay.
+  A backslash before `\n` is not special: `\\n` in double quotes is a
+  backslash followed by a newline.
+- **A quoted value may span lines, and backticks are quotes.** A private key
+  written across lines used to be split, and a line inside it could become
+  its own key. The secret then sat in neither `ctx.env` nor the secret set.
+  It is now one value. `` KEY=`backtick` `` used to keep the backtick
+  characters. It now loads `backtick`.
+- **`nuka check` warns with `env-file-skipped-line`.** The finding names the
+  file and the line number, not the text. The run still loads every binding
+  it could read, and the warning does not by itself fail `nuka check`. A
+  line that was never a binding was already not loaded. The warning is how
+  you see it. The separator is `=`. A line that uses `:` is this warning.
 
 ## 0.12.0 to the next release
 

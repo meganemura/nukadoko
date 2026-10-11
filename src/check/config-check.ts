@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFiles, parseEnvFile } from "../context/env.js";
+import { skippedEnvFileLines } from "../env/parse-env-file.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
@@ -147,6 +148,32 @@ export async function checkConfig(
   }
 
   const { allEnvFiles, allDefinedEnv, allDefinedKeys } = collectDefinedEnvKeys(rootDir, config);
+
+  // The same files loadEnvFiles just parsed. A line that did not become a
+  // binding is still invisible to the run. Name it here. The text stays
+  // out of the message: a skipped line is often the secret that failed to
+  // parse, and check does not print secret values.
+  const reportedEnvFiles = new Set<string>();
+  for (const relativePath of allEnvFiles) {
+    if (reportedEnvFiles.has(relativePath)) continue;
+    reportedEnvFiles.add(relativePath);
+    const absolutePath = path.join(rootDir, relativePath);
+    if (!existsSync(absolutePath)) continue;
+    let content: string;
+    try {
+      content = readFileSync(absolutePath, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of skippedEnvFileLines(content)) {
+      warnings.push({
+        code: "env-file-skipped-line",
+        message: `envFile "${relativePath}" line ${line} was skipped, so nothing on it was loaded`,
+        file: relativePath,
+        line,
+      });
+    }
+  }
 
   for (const key of config.secrets.redact) {
     if (!allDefinedKeys.has(key)) {

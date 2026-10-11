@@ -447,8 +447,9 @@ The fixture names:
   If `baseURL` is unset and a step passes a relative path, Playwright produces
   the failure. Nukadoko does not re-implement Playwright's URL resolution to
   prevent that failure first.
-- `env`: read-only environment variables from the configured envFiles. This
-  fixture enforces determinism: the process environment is never merged. It
+- `env`: read-only environment variables from the configured envFiles. The
+  file format is under "Sessions, environments, secrets". This fixture
+  enforces determinism: the process environment is never merged. It
   also enforces secrets redaction: only values that nukadoko loaded are
   redactable. It is not a convenience. The object a step receives is a
   frozen copy of that merged map. Assigning a property throws, so a write
@@ -2753,6 +2754,36 @@ probe is a function because config is executable TypeScript. A URL and
 jsonPath DSL would only provide a more complex form of `fetch`. The tool calls
 the probe once per run with a 10-second budget. An exception or timeout removes
 only `target_version`; it does not stop the run.
+
+An env file is `KEY=VALUE` text. `ctx.env` and the secret set read it with
+the same parser. Comments, quotes, backslash escapes, and a value that spans
+lines follow dotenv's default parser. The separator is `=` only. A `:` is
+not a separator. Line breaks are LF, CRLF, or a lone CR. When a value spans
+lines, the breaks inside the value are LF, whichever break the file used.
+A blank line is ignored. A line whose first non-whitespace character is `#`
+is a comment. `export` followed by whitespace is an optional prefix. The
+first `=` separates the key from the value, and whitespace around it is
+removed. The key is the remaining text before that `=`, and it must not be
+empty. It is not limited to ASCII letters. A later binding for the same key
+replaces an earlier one. `$NAME` is not expanded.
+
+An unquoted value runs to the end of the line or to a `#`. That `#` starts
+a comment even with no space before it. The value is trimmed, and it may
+contain `=`. A value in double quotes, single quotes, or backticks may span
+lines. A backslash immediately before the closing quote keeps that quote in
+the value. After the closing quote, the rest of the line may only be
+whitespace or a `#` comment. Anything else means the line is read as
+unquoted text, quotes included. In double quotes, `\n` becomes a newline
+and `\r` becomes a carriage return. A backslash before either pair is not
+special, so `\\n` is a backslash followed by a newline. Single quotes and
+backticks do not expand escapes. A quote that never closes is ordinary text
+on its own line, including the quote character, and the next line is read
+on its own.
+
+A line that is not blank, not a comment, and not part of a binding is
+skipped. `nuka check` reports it as `env-file-skipped-line`, a warning. The
+finding names the file and the line number, never the text, because that
+text may be a secret. The run still loads every binding it could read.
 
 This example defines both `environments` and `fixtures`:
 

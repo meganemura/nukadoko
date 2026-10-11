@@ -56,6 +56,16 @@ one, not after the tenth (see "What not to do").
 
 Keep it short. Predictability is the reassuring part, not volume.
 
+## Env files
+
+Point `envFiles` at the env files the suite already has. They are
+`KEY=VALUE` text. A `#` comment, an optional `export` prefix, single
+quotes, double quotes, and backticks are read, including a value that
+spans lines. Double quotes expand `\n` and `\r`. The separator is `=`.
+`$NAME` is not expanded. The full rules are in docs/spec.md under
+"Sessions, environments, secrets". A line that is not a blank, a comment,
+or a binding is `env-file-skipped-line` from `nuka check`.
+
 ## Two stages, never at once
 
 Change one thing, then the next. Never both at once. If a step breaks

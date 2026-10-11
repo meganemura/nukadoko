@@ -48,7 +48,9 @@ more. That condition is `nuka check` and `nuka run` going green, not `tsc`
 typechecking cleanly; the two can disagree in either direction. `nuka check
 --codes` lists every finding code `check` can produce, with a one-line
 description of what triggers it, so a code that shows up mid-migration and
-isn't self-explanatory can be looked up without leaving the CLI.
+isn't self-explanatory can be looked up without leaving the CLI. If the
+suite already has env files, point `envFiles` at them (see `SKILL.md`,
+"Env files"). A line the parser skips is `env-file-skipped-line`.
 
 `envFiles` in `nukadoko.config.ts` is read at setup. A path that is not
 on disk contributes nothing, and `nuka check` warns. A path that is

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { parseEnvFile } from "../src/env/parse-env-file.js";
+import { parseEnvFile, skippedEnvFileLines } from "../src/env/parse-env-file.js";
 
 // Responsibility: the env-file parser is a pure function from text to a
 // string map. The examples are the inputs a dotenv file actually contains
@@ -92,6 +92,20 @@ describe("parseEnvFile", () => {
   it("does not expand $ references", () => {
     expect(parseEnvFile("KEY=$OTHER")).toEqual({ KEY: "$OTHER" });
     expect(parseEnvFile('KEY="$OTHER"')).toEqual({ KEY: "$OTHER" });
+  });
+
+  it("expands a doubled backslash-n the way dotenv does", () => {
+    expect(parseEnvFile('KEY="\\\\n"')).toEqual({ KEY: "\\\n" });
+  });
+
+  it("keeps an escaped quote inside a double-quoted value", () => {
+    expect(parseEnvFile('KEY="say \\"hi\\""')).toEqual({ KEY: 'say \\"hi\\"' });
+  });
+
+  it("names a line that is not a binding, including in a CRLF file", () => {
+    expect(skippedEnvFileLines("# c\r\nNOT A BINDING\r\nFOO=1\r\n")).toEqual([2]);
+    expect(skippedEnvFileLines("=nope\nOK=1\n")).toEqual([1]);
+    expect(skippedEnvFileLines("KEY: value\n")).toEqual([1]);
   });
 
   it("parses the same bindings whether lines are joined with LF or CRLF", () =>

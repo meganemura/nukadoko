@@ -121,3 +121,10 @@ that is present but cannot be read, or a directory at that path, is
 refused before the step runs. The refusal names the configured path and
 the errno. `requireEnv` runs only after those files have been read, and
 its message names the missing key.
+
+Those files are `KEY=VALUE` text. A `#` comment, an optional `export`
+prefix, single quotes, double quotes, and backticks are read, including a
+value that spans lines. Double quotes expand `\n` and `\r`. The separator
+is `=`. `$NAME` is not expanded. The full rules are in docs/spec.md under
+"Sessions, environments, secrets". A line that is not a blank, a comment,
+or a binding is `env-file-skipped-line` from `nuka check`.
