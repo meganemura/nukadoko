@@ -37,6 +37,10 @@ CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there instead, and step files need the same `.mts`
 extension.
 
+A flag that takes one string or one number is refused when it is given
+more than once, and the command writes nothing. `--use` and `--fail-on`
+are the repeatable flags. Each value is kept, in the order given.
+
 ## Before the first change
 
 This one rewrites a suite that currently works. Before the first change,

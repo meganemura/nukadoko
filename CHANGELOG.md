@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A repeated singular flag is refused by name.**
+  yargs collects a repeated string or number flag into an array.
+  `nuka init --base-url http://a --base-url http://b` wrote that array
+  into `baseURL` and left the generated files on disk. `--env a --env b`
+  became the environment name `a,b`, and `--concurrency 2 --concurrency 3`
+  became the value `2,3`. The parse now refuses the flag and writes
+  nothing. `--use` and `--fail-on` stay repeatable.
 - **`nuka session start --idle-timeout` refuses a delay the session cannot keep.**
   `abc`, `0`, a negative, and a value above 2147483 seconds used to start a
   session that stopped itself at once. Node clamps each of those timer

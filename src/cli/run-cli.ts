@@ -218,6 +218,29 @@ interface McpToolsArgs {
 
 type SkillPathArgs = Record<string, never>;
 
+// yargs-parser collects a repeated string or number flag into an array.
+// `duplicate-arguments-array: false` would keep the last value, but the
+// switch is parser-wide and would also collapse `--use` and `--fail-on`,
+// which are arrays on purpose. A per-option `coerce` that throws runs
+// before a nested command's positional is bound, and yargs then also
+// reports that positional as missing and as an unknown argument. This
+// check runs once the argv object exists, so the refusal names the flag
+// and nothing else. The parser does not collect a repeated boolean, so
+// booleans are not listed here.
+function rejectRepeatedFlags(flags: readonly string[]) {
+  return (args: Arguments) => {
+    const record = args as unknown as Record<string, unknown>;
+    for (const flag of flags) {
+      const key = flag.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+      const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : record[flag];
+      if (Array.isArray(value)) {
+        throw new Error(`--${flag} was given more than once.`);
+      }
+    }
+    return true;
+  };
+}
+
 export async function runCli(
   argv: readonly string[],
   options: RunCliOptions = {},
@@ -437,7 +460,8 @@ export async function runCli(
             throw new Error("--args is required unless --use supplies this step's arguments");
           }
           return true;
-        }) as Argv<DoArgs>,
+        })
+        .check(rejectRepeatedFlags(["args", "session", "env"])) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       if (argsFailed) return;
       exitCode = await runDo({
@@ -498,7 +522,8 @@ export async function runCli(
             "run every selected scenario n times in this one invocation, whole selection first and then again " +
             "(default 1); for a failure that reproduces one time in several. Each execution is its own scenario " +
             "record under the one run_id, and a scenario that failed at least once gets a `repeat` line after the summary",
-        }) as Argv<RunArgs>,
+        })
+        .check(rejectRepeatedFlags(["session", "env", "concurrency", "repeat"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       exitCode = await runRun({
@@ -577,7 +602,8 @@ export async function runCli(
           type: "string",
           default: "default",
           describe: "environment to clear sessions from",
-        }) as Argv<SessionClearArgs>,
+        })
+        .check(rejectRepeatedFlags(["env"])) as Argv<SessionClearArgs>,
     handler: async (args: Arguments<SessionClearArgs>) => {
       if (argsFailed) return;
       exitCode = await runSessionClear({
@@ -610,7 +636,8 @@ export async function runCli(
           describe:
             "seconds of no execution before the session stops itself " +
             `(default 900; a finite number greater than 0 and at most ${MAX_IDLE_TIMEOUT_SECONDS})`,
-        }) as Argv<SessionStartArgs>,
+        })
+        .check(rejectRepeatedFlags(["env", "idle-timeout"])) as Argv<SessionStartArgs>,
     handler: async (args: Arguments<SessionStartArgs>) => {
       if (argsFailed) return;
       exitCode = await runSessionStart({
@@ -637,7 +664,8 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe: 'target a named environment (omit for the "default" environment)',
-        }) as Argv<SessionStopArgs>,
+        })
+        .check(rejectRepeatedFlags(["env"])) as Argv<SessionStopArgs>,
     handler: async (args: Arguments<SessionStopArgs>) => {
       if (argsFailed) return;
       exitCode = await runSessionStop({
@@ -662,7 +690,8 @@ export async function runCli(
         .option("features-dir", {
           type: "string",
           describe: "featuresDir to use instead of the default, recorded in the generated config",
-        }) as Argv<InitArgs>,
+        })
+        .check(rejectRepeatedFlags(["base-url", "features-dir"])) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
       exitCode = await runInit({
@@ -819,7 +848,8 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe: 'target a named environment (omit for the "default" environment)',
-        }) as Argv<AcceptArgs>,
+        })
+        .check(rejectRepeatedFlags(["env"])) as Argv<AcceptArgs>,
     handler: async (args: Arguments<AcceptArgs>) => {
       if (argsFailed) return;
       exitCode = await runAccept({

@@ -3924,6 +3924,8 @@ nuka experimental webmcp-tools <url> [--json]
                               site
 ```
 
+A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do` and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
+
 Text output (no `--json`) is formatted for a human reading a terminal.
 `--json` is the machine-readable contract.
 
