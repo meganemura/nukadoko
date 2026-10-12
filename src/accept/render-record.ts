@@ -501,6 +501,10 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
   }
 
   const title = options.featureName ?? options.featurePath;
+  // Longer than any backtick run in the source, so a doc string holding a
+  // fence cannot close this one early.
+  const longestRun = Math.max(0, ...(options.featureSource.match(/`+/g) ?? []).map((run) => run.length));
+  const featureFence = "`".repeat(Math.max(3, longestRun + 1));
   const body: string[] = [
     "",
     `# ${title}: green at ${options.commit.slice(0, 7)}`,
@@ -508,13 +512,13 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
     "",
     "## The scenario as it ran",
     "",
-    "```gherkin",
+    `${featureFence}gherkin`,
     // Feature files always end in their own trailing newline; the fence's
     // own closing "```" on the next line already supplies that break, so
     // the source's own trailing newline is trimmed here to avoid a blank
     // line inside the fence.
     options.featureSource.replace(/\n$/, ""),
-    "```",
+    featureFence,
     "",
     "## What the tool measured",
     ...renderStrippedKeysLine(strippedKeys),

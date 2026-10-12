@@ -122,16 +122,24 @@ function decodeFeatureValue(raw: string): string | undefined {
   }
 }
 
-function extractGherkinFence(body: string): string | undefined {
+// The writer sizes the fence longer than any backtick run in the feature
+// source, so the closer is the first line of at least the opener's length
+// (the CommonMark rule). `rest` is what follows the fence: the step-record
+// scan must start there, or a json block quoted inside a doc string would
+// read as a step record.
+function extractGherkinFence(body: string): { source: string; rest: string } | undefined {
   const headingIndex = body.indexOf("## The scenario as it ran");
   if (headingIndex === -1) return undefined;
-  // Searches only after the heading, and stops at the first closing fence
-  // (matching tests/accept.test.ts's own `jsonCodeBlocks` convention for the
-  // same file) — a Gherkin line that itself begins with a bare "```" would
-  // defeat this, but Gherkin has no construct that produces one, so this is
-  // a boundary this module accepts rather than solves.
-  const match = /```gherkin\n([\s\S]*?)\n```/.exec(body.slice(headingIndex));
-  return match?.[1];
+  const after = body.slice(headingIndex);
+  const opener = /^(`{3,})gherkin\n/m.exec(after);
+  if (opener === null) return undefined;
+  const contentStart = opener.index + opener[0].length;
+  const closer = new RegExp(`\\n\`{${opener[1]!.length},}[ \\t]*(?:\\n|$)`).exec(after.slice(contentStart));
+  if (closer === null) return undefined;
+  return {
+    source: after.slice(contentStart, contentStart + closer.index),
+    rest: after.slice(contentStart + closer.index + closer[0].length),
+  };
 }
 
 /** One `#### <step text>` fence this record embeds, narrowed to the shape a
@@ -282,12 +290,12 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
   }
 
   const body = text.slice(frontmatterMatch[0].length);
-  const featureSource = extractGherkinFence(body);
-  if (featureSource === undefined) {
+  const fence = extractGherkinFence(body);
+  if (fence === undefined) {
     return { kind: "malformed", reason: 'missing the "## The scenario as it ran" fenced feature source' };
   }
 
-  const stepRecordsResult = extractStepRecordLikeBlocks(body);
+  const stepRecordsResult = extractStepRecordLikeBlocks(fence.rest);
   if (!stepRecordsResult.ok) {
     return { kind: "malformed", reason: stepRecordsResult.reason };
   }
@@ -320,7 +328,7 @@ export function parseAcceptanceRecord(content: string, relativePath: string): Re
     record: {
       relativePath,
       featurePath,
-      featureSource,
+      featureSource: fence.source,
       stepRecords: stepRecordsResult.stepRecords,
       condition,
       acceptedAt,

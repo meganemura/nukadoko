@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A feature source that holds a code fence no longer breaks its sign-off record.**
+  A doc string with a line of three backticks closed the record's fence early, so
+  `nuka tend` read a truncated feature (a false "feature changed") or a json block
+  inside it as a step record. The record now fences the feature with a run longer
+  than any backtick run in it, and the reader matches the opener's length. Records
+  written before this keep their three-backtick fence and still read the same.
 - **The clean-tree check sees untracked files whatever `status.showUntrackedFiles` says.**
   With `status.showUntrackedFiles=no` in git config, `git status` hid untracked
   files, so a tree with new files read as clean in the scenario record's `git.clean`
