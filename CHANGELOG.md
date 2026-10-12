@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka tend` is faster on a project with many typed steps.**
+  Tend matched every pickle step against every pattern, while `nuka check`
+  already reused one result per distinct step text. Tend now uses the same
+  per-text match. On 400 typed steps and 4000 scenarios of 5 lines, `nuka
+  tend` went from 7.2s to 4.4s. Its output is unchanged.
 - **`schema-field-undescribed` sees a description under any wrapper.**
   A field written `z.string().describe("x").nullable()` was reported as
   undescribed, and the `describe` count in the `nuka tend` summary was too

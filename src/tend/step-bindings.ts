@@ -1,6 +1,6 @@
 import type { PickleStep } from "@cucumber/messages";
 import type { CheckedPattern } from "../check/binding-check.js";
-import { matchPickleStepText } from "../check/feature-check.js";
+import { createStepTextMatcher } from "../check/feature-check.js";
 import type { FeatureFile } from "../feature/load-features.js";
 
 // Responsibility: the one pass over every feature's pickle steps that both
@@ -9,7 +9,7 @@ import type { FeatureFile } from "../feature/load-features.js";
 // *uniquely* resolves to, and (for from-unused.ts) that occurrence's own
 // matched capture set. Built once here and shared by both findings rather
 // than each re-walking every feature, and built through
-// src/check/feature-check.ts's own `matchPickleStepText`, the same capture
+// src/check/feature-check.ts's own `createStepTextMatcher`, the same capture
 // judgment src/check/feature-check.ts/src/check/from-order.ts already use —
 // never a third implementation of pattern matching.
 //
@@ -36,11 +36,12 @@ export function resolveStepOccurrences(
   patterns: readonly CheckedPattern[],
 ): StepOccurrences {
   const occurrences = new Map<string, StepOccurrence[]>();
+  const match = createStepTextMatcher(patterns);
 
   for (const feature of features) {
     for (const pickle of feature.pickles) {
       for (const pickleStep of pickle.steps) {
-        const { stepNames, matched } = matchPickleStepText(pickleStep.text, patterns);
+        const { stepNames, matched } = match(pickleStep.text);
         if (stepNames.length !== 1 || matched === undefined) {
           continue; // Undefined or ambiguous here — not this module's concern.
         }
