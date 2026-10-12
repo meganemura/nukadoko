@@ -99,10 +99,25 @@ describe("classifyPrimitive", () => {
   });
 
   it("classifies anything else as other, including combinators it can't be certain about", () => {
-    expect(classifyPrimitive(z.boolean())).toBe("other");
     expect(classifyPrimitive(z.union([z.string(), z.number()]))).toBe("other");
     expect(classifyPrimitive(z.unknown())).toBe("other");
     expect(classifyPrimitive(z.object({}))).toBe("other");
+  });
+
+  it("classifies boolean and bigint", () => {
+    expect(classifyPrimitive(z.boolean())).toBe("boolean");
+    expect(classifyPrimitive(z.bigint().optional())).toBe("bigint");
+  });
+
+  it("reads a pipe through its input side", () => {
+    expect(classifyPrimitive(z.string().transform((value) => value.length))).toBe("string");
+    expect(classifyPrimitive(z.number().pipe(z.coerce.string()))).toBe("number");
+    expect(classifyPrimitive(z.string().transform((value) => value.length).optional())).toBe("string");
+  });
+
+  it("classifies a pipe as other when its input coerces or is a preprocess", () => {
+    expect(classifyPrimitive(z.coerce.string().pipe(z.string()))).toBe("other");
+    expect(classifyPrimitive(z.preprocess((value) => String(value), z.string()))).toBe("other");
   });
 
   it("classifies a coercing number or string as other, with or without optional or default", () =>
