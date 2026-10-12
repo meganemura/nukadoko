@@ -68,7 +68,8 @@ Change the one import your step files use:
 import { Given, When, Then } from "nukadoko/compat";
 ```
 
-Everything below that import keeps working, unchanged:
+Everything below that import keeps working, unchanged, except for the
+differences listed under [Known limits](#known-limits):
 
 - string and RegExp patterns, matched exactly as cucumber-js matches them
   (no named-capture requirement: that discipline belongs to typed steps).
@@ -134,7 +135,9 @@ this door turns away. Nobody ran those suites.) Everything below fails
 loudly, but not all at the same moment: some of it `nuka check` already
 names before you run anything, some of it only surfaces on the first
 `nuka run` that reaches the step: each item below says which, so the pass
-is a list you can work through, not a hunt.
+is a list you can work through, not a hunt. A difference that changes a
+value without a failure is not on this list. [Known limits](#known-limits)
+lists the measured ones.
 
 - **`setParallelCanAssign`, used as a value**: `nukadoko/compat` does not
   export it. An ES module's named import is resolved at link time, so
@@ -242,7 +245,8 @@ Two independent, incremental moves, safe to take alone, in either order:
   points at `config.parameterTypes` as the typed-era home: moving the
   registration changes nothing about what any pattern matches. A
   transformer's `this` is the scenario's World, and a Promise it returns
-  is awaited before the step.
+  is awaited before the step. This holds for a string pattern. A RegExp
+  pattern differs; see [Known limits](#known-limits).
 
 ## Stage 2: promote steps
 
@@ -353,3 +357,32 @@ you want, which over time should be most of the ones that matter.
 - A `BeforeAll`/`AfterAll` failure is reported on stderr and in the exit
   code only. Records are written per scenario, and these hooks belong to no
   scenario, so there is nowhere yet for a run-level one to go.
+
+The differences below do not fail: the suite runs, and a value or an order
+is not what cucumber-js gives. Each one was measured by running the same
+glue under cucumber-js 13.2.0 and under `nuka run`. Search the glue for
+each one before you rely on the run.
+
+- `AfterStep` hooks run in registration order. cucumber-js runs them in
+  reverse registration order, the order both tools use for `After` hooks.
+- In a RegExp pattern, a group whose source is a `defineParameterType`
+  regexp is converted by that type's transformer, but the transformer's
+  `this` is `null`, not the World, and a Promise it returns reaches the step
+  unawaited. A string pattern (`{color}`) gets the World and the awaited
+  value.
+- A hook's `result.message` is the error message only (`boom`).
+  cucumber-js gives the stack text (`Error: boom` and the frames below it).
+  `result.exception` is not set.
+- A step with no `{ timeout }`, in a suite that never calls
+  `setDefaultTimeout`, has no time limit. cucumber-js fails it after 5
+  seconds.
+- `table.raw()` returns a copy. In cucumber-js, a change to a row of the
+  returned array also changes what `table.hashes()` returns later.
+
+Two more differences fail, but where cucumber-js passes:
+
+- `preferForRegexpMatch` on `defineParameterType` is ignored. A RegExp
+  group that two parameter types match fails the step with "matches
+  multiple parameter types". cucumber-js uses the preferred type.
+- A `{biginteger}` capture stops `nuka run` after the step runs, with "Do
+  not know how to serialize a BigInt". The scenarios after it do not run.

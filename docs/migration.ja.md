@@ -58,7 +58,7 @@ step ファイルが使っている import を 1 つ差し替えます:
 import { Given, When, Then } from "nukadoko/compat";
 ```
 
-その import より下は、変更せずにそのまま動き続けます:
+その import より下は、下の「既知の限界」に挙げた違いを除いて、変更せずにそのまま動き続けます:
 
 - string と RegExp の pattern は、cucumber-js が一致させるのとまったく同じように一致します(named capture は要求されません。
   その規律は typed step のものです)。
@@ -114,6 +114,8 @@ glue はテキストとして読むだけで、実行はしていません。
 以下はどれも大きな声で失敗しますが、そのタイミングは一様ではありません。
 その一部は何かを実行するより前に `nuka check` がすでに名指しし、その一部はその step に達した最初の `nuka run` で初めて表に出ます。
 どちらなのかは以下の各項が言うので、この準備は探し物ではなく順にこなせるリストです。
+失敗せずに値だけを変える違いは、このリストにはありません。
+計測済みのものは下の「既知の限界」に挙げています。
 
 - **`setParallelCanAssign` を値として使う**: `nukadoko/compat` はこれを export していません。
   ES モジュールの named import はリンク時に解決されるため、これを import して呼び出すだけで import 文全体、ひいてはそのファイルが丸ごと落ちます。
@@ -189,6 +191,8 @@ World のサブクラスは、その page と request を `this.page = ...` と 
   そのメッセージはフィールド名を含みます。
 - **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
   transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
+  これは string の pattern での話です。
+  RegExp の pattern では違います(下の「既知の限界」を参照)。
 
 ## Stage 2: step を昇格させる
 
@@ -259,3 +263,30 @@ import の可逆性が存在するのは最初の一歩を編集 1 つ分のコ�
 - `BeforeAll`/`AfterAll` の失敗は、stderr と exit code だけに報告されます。
   record は scenario ごとに書かれますが、これらの hook はどの scenario にも属しません。
   そのため、run レベルの hook 用の行き先はまだありません。
+
+以下の違いは失敗しません。
+スイートは走り、値や順序が cucumber-js の与えるものと違うだけです。
+どれも、同じ glue を cucumber-js 13.2.0 と `nuka run` の両方で走らせて計測しました。
+run の結果に頼る前に、それぞれを glue の中で探してください。
+
+- `AfterStep` の hook は登録順に走ります。
+  cucumber-js は登録の逆順に走らせます。
+  `After` の hook については、どちらのツールも逆順です。
+- RegExp の pattern で、ソースが `defineParameterType` の regexp であるグループは、その型の transformer で変換されます。
+  ただし transformer の `this` は World ではなく `null` であり、返した Promise は await されないまま step に届きます。
+  string の pattern(`{color}`)では、World と await 済みの値が届きます。
+- hook の `result.message` は、エラーのメッセージだけです(`boom`)。
+  cucumber-js は stack のテキストを与えます(`Error: boom` とその下のフレーム)。
+  `result.exception` は設定されません。
+- `{ timeout }` を持たない step は、`setDefaultTimeout` を一度も呼ばないスイートでは時間の上限を持ちません。
+  cucumber-js は 5 秒でそれを失敗させます。
+- `table.raw()` はコピーを返します。
+  cucumber-js では、返った配列の行を変えると、あとで `table.hashes()` が返すものも変わります。
+
+あと 2 つの違いは失敗しますが、cucumber-js では pass するところで失敗します:
+
+- `defineParameterType` の `preferForRegexpMatch` は無視されます。
+  2 つの parameter type が一致する RegExp のグループは、「matches multiple parameter types」で step を失敗させます。
+  cucumber-js は優先された型を使います。
+- `{biginteger}` のキャプチャは、step が走ったあと「Do not know how to serialize a BigInt」で `nuka run` を止めます。
+  それより後の scenario は走りません。

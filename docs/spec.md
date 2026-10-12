@@ -1489,7 +1489,9 @@ import { Given, When, Then } from "nukadoko/compat";
   registrations that still come from support code. The config is their
   final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
-  transformer returns is awaited before the step runs.
+  transformer returns is awaited before the step runs. This holds for a
+  string pattern. A RegExp pattern differs; see [docs/migration.md](migration.md)
+  "Known limits".
 - Execution supports two forms. Glue that starts its own Playwright
   continues to work without measurement. A World subclass assigns that
   page and request with `this.page = ...` and `this.request = ...`, and
@@ -1602,7 +1604,10 @@ import { Given, When, Then } from "nukadoko/compat";
   The audit established a rule: unsupported compat behavior must fail
   during import or the first run. A migrating team can respond to an
   explicit failure, but it cannot see a silent behavior change. A silent
-  change costs more trust than a missing feature costs time.
+  change costs more trust than a missing feature costs time. Import
+  failures and the findings below meet this rule. Some value-level
+  differences remain. They do not fail, so [docs/migration.md](migration.md)
+  "Known limits" lists each measured one.
 - Explicit failures divide into static findings and failures that require
   step execution. `nuka check` reports only static findings.
   **`nuka check` can report these failures**: a step file that throws during

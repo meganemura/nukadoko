@@ -106,10 +106,12 @@ from the vocabulary while any step file failed to import. That note does
 not change the exit code. Fix the import `nuka check` names
 (`step-file-import-failed`), then read tend again.
 
-Do not go looking for a list of what compat doesn't support before you
-start. Whatever will not work fails loudly, at the import, as a `nuka
-check` finding, or on the first `nuka run`: the failure names what broke,
-and that is what to act on. Done-callback glue is one of those findings
+Glue that compat cannot load or run fails loudly, at the import, as a
+`nuka check` finding, or on the first `nuka run`: the failure names what
+broke, and that is what to act on. A few differences do not fail: the suite
+runs, and a value or an order is not what cucumber-js gives. `docs/migration.md`
+"Known limits" lists the measured ones. Read it once before you start, and
+search the glue for each one. Done-callback glue is one of those findings
 (`done-callback-arity`). It covers a hook past the arity the executor
 passes, or a matched step whose function takes more arguments than the
 line's captures plus a table or docstring. A `"pending"` or `"skipped"`

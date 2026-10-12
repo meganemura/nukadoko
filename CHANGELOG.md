@@ -26,6 +26,15 @@ just until 0.1.
 
 ### Fixed
 
+- **The migration docs list what compat still does differently from cucumber-js.**
+  The migration skill said that whatever will not work fails loudly, and told
+  an agent not to look for a list. Some differences do not fail: the suite
+  runs and computes something else. docs/migration.md "Known limits" now lists
+  each one, measured by running the same glue under cucumber-js 13.2.0 and
+  `nuka run`: `AfterStep` order, a RegExp group's custom transformer,
+  `result.message`, the default step timeout, and `table.raw()`. It also lists
+  two that fail where cucumber-js passes. The skill and the spec say that
+  import failures are loud and point at that list.
 - **Every Japanese file holds one sentence per line.**
   The rule that a Japanese file holds one sentence per line had no check, and
   90 lines in README.ja.md and docs/*.ja.md held two or more sentences. Each

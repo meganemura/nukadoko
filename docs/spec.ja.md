@@ -1278,6 +1278,8 @@ import { Given, When, Then } from "nukadoko/compat";
   transformer の `this` は、その scenario の World です。
   step と hook が動くのと同じオブジェクトです。
   transformer が返した Promise は、step が走る前に await されます。
+  これは string の pattern での話です。
+  RegExp の pattern では違います([docs/migration.ja.md](migration.ja.md) の「既知の限界」を参照)。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
   World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。
@@ -1385,6 +1387,9 @@ import { Given, When, Then } from "nukadoko/compat";
   compat がサポートしない挙動は、import 時または最初の run で失敗する必要があります。
   移行するチームは、大きな声の失敗には対処できますが、静かな失敗は見えません。
   だから、黙って振る舞いを変えてしまう抜けは、機能が欠けていることが食ってきた時間よりも多くの信頼を食います。
+  import の失敗と下の所見は、この規則を満たします。
+  値の水準の違いはまだいくつか残っています。
+  それらは失敗しないので、計測済みのものを 1 つずつ [docs/migration.ja.md](migration.ja.md) の「既知の限界」に挙げています。
 - 明示的な失敗は、静的な所見と step の実行が必要な失敗に分かれます。
   `nuka check` は、静的な所見だけを報告します。
   **`nuka check` が報告できる失敗**: import が例外を投げる step ファイルは `step-file-import-failed` エラーになります。
