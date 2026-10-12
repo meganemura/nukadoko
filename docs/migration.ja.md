@@ -1,6 +1,7 @@
 # cucumber-js + Playwright スイートの移行
 
-> 原文は migration.md。相違があれば原文が正。
+> 原文は migration.md。
+> 相違があれば原文が正。
 
 既存の cucumber-js スイートを Playwright に対して実行しているチーム向けで、feature ファイルと step の定義は `features/` 配下にあります(cucumber-js 自身のレイアウト規約であり、nukadoko のデフォルトでもあります)。
 書き換えは不要です: 目標は、スイートを変更せずに nukadoko の harness 上で実行し、その後は自分のペースで一部ずつ昇格させることです。
@@ -59,14 +60,16 @@ import { Given, When, Then } from "nukadoko/compat";
 
 その import より下は、変更せずにそのまま動き続けます:
 
-- string と RegExp の pattern は、cucumber-js が一致させるのとまったく同じように一致します(named capture は要求されません。その規律は typed step のものです)。
+- string と RegExp の pattern は、cucumber-js が一致させるのとまったく同じように一致します(named capture は要求されません。
+  その規律は typed step のものです)。
 - `Given(pattern, fn)` と `Given(pattern, { timeout }, fn)` のどちらの登録形も受け付け、その `timeout` は尊重されます。
 - `World`(`this`)、cucumber-js が受け付ける 3 つの書き方(`Before(fn)`、`Before({ tags }, fn)`、裸の文字列の `Before("@tag", fn)`)で書ける、単一の `@tag` または `not @tag` でフィルタされる `Before`/`After` フック、カスタムの `setWorldConstructor` サブクラス。
   フックは cucumber 自身のフック引数を受け取るので、`Before(function ({ pickle }) {...})` は書いたとおりに動きます。
   `After` は `result.duration` を受け取り、scenario が失敗したときは `result.message` と `error` も受け取ります。
   `AfterStep` もそれらを受け取り、加えて直前の step の `pickleStep` と `testStepId` を受け取ります。
 - `this.attach` は cucumber-js の形を受けます。
-  文字列(`base64:<media type>` を含む。ファイルには復号したバイトが書かれます)、buffer、`{ mediaType, fileName }`、readable stream です。
+  文字列(`base64:<media type>` を含む。
+  ファイルには復号したバイトが書かれます)、buffer、`{ mediaType, fileName }`、readable stream です。
   stream は promise を返すので、step はそれを await します。
   `this.link` は URL を 1 つ以上受け取り、それぞれが `declared` の link 1 件になります。
   第 2 引数は名前ではなく、もう 1 つの URL です。
@@ -105,7 +108,8 @@ glue はテキストとして読むだけで、実行はしていません。
 **その監査を行った時点では、import の差し替えだけで通ったものは 1 つもありませんでした。**
 そこで見つかった最も頻出の障害に対応したことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
 残る 6 本は、まだ短い準備を先に必要とします。
-(これは静的な主張として読んでください。実際その通りで、それらの glue にはもう、この扉が拒むものは何も残っていません。
+(これは静的な主張として読んでください。
+実際その通りで、それらの glue にはもう、この扉が拒むものは何も残っていません。
 それらのスイートを実行したわけではありません。)
 以下はどれも大きな声で失敗しますが、そのタイミングは一様ではありません。
 その一部は何かを実行するより前に `nuka check` がすでに名指しし、その一部はその step に達した最初の `nuka run` で初めて表に出ます。
@@ -124,7 +128,8 @@ glue はテキストとして読むだけで、実行はしていません。
   import の時点で失敗させることが、その約束を守ります。
   このリストの他のすべての名前と同じやり方です。
   feature ファイル全体を worker プロセスへ渡しているのは `nuka run --concurrency <n>` です。
-  (`AfterStep`、`Status`、`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。上記を参照してください。)
+  (`AfterStep`、`Status`、`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。
+  上記を参照してください。)
 - **同じ種類の名前でも、型としてしか使っていない場合**は別のケースであり、上のケースを小さくしたものではありません。
   esbuild が型だけの import をコンパイル済み出力から取り除くため、その名前は実行時には実際には一度も import されません。
   出荷される glue がそのまま実行されるものなので、`nuka check` も `nuka run` も何も問題を見つけません。
@@ -202,7 +207,8 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   compat の step には、そこで nukadoko が信頼できる宣言済みの `mutates` がありません(docs/spec.ja.md の「キーワードの意味論」を参照)。
   そのためこの警告が示しているのは、その位置に静的な手掛かりが何もないという事実であり、ツールが何かを捕まえたわけではありません。
   `defineStep` に昇格させることが、チェックできる宣言を得る方法です。
-- `parameter-type-support-origin` は `nuka tend` に移りました(上の Stage 1.5 参照)。スイートに compat が残っている限り出続けるのが正常な状態であり、毎回の run の前に印字すべきものではないためです。
+- `parameter-type-support-origin` は `nuka tend` に移りました(上の Stage 1.5 参照)。
+  スイートに compat が残っている限り出続けるのが正常な状態であり、毎回の run の前に印字すべきものではないためです。
 - `step-file-import-failed` は、import が例外を投げた step ファイルにエラーを出します。
   未サポートの名前を値として使っている、CommonJS の `require`、深い subpath の import(上の「切り替えで引き継がれないもの」の最初の 3 つの gap です)のいずれかで、Node 自身のエラーメッセージとファイルパスを運びます。
   プロジェクトの残りはそれと並行して引き続き discovery され報告されます。

@@ -105,7 +105,8 @@ jobs:
 
 上の workflow の 3 行が、その経路の 3 つの部分にそれぞれ答えます。
 
-- **`uses:` はタグではなくコミットを名指しします。** `@v4` のようなタグは動きます。
+- **`uses:` はタグではなくコミットを名指しします。**
+  `@v4` のようなタグは動きます。
   侵害されたメンテナのアカウントは、読み手が workflow ファイルで目にする文字列を変えないまま、そのタグを別のコードへ付け替えられます。
   コミット SHA は同じようには動かないので、上の workflow は SHA を名指しています。
   上の 2 つの SHA は、この文章を書いている時点でそれぞれの action の最新リリースでもあります(`checkout` は v7.0.1、`setup-node` は v7.0.0)。
@@ -115,11 +116,13 @@ jobs:
   誰かが手で進めるか、そのために作られた道具に進めさせる必要があります。
   Dependabot は SHA のピンを更新できます。
   それはいくつかある選択肢の 1 つであって、このレシピが求めるものではありません。
-- **`npm ci --ignore-scripts` は上の攻撃が使ったフックを止めます。** このリポジトリ自身の `.npmrc` はすでに `ignore-scripts=true` を設定しているので、CI の行に無くてもこの効果はすでにここで効いています。
+- **`npm ci --ignore-scripts` は上の攻撃が使ったフックを止めます。**
+  このリポジトリ自身の `.npmrc` はすでに `ignore-scripts=true` を設定しているので、CI の行に無くてもこの効果はすでにここで効いています。
   それでもこのフラグを行そのものに書くのは、このレシピを別のプロジェクトへコピーする読み手が持っていくのが YAML であって、このリポジトリの `.npmrc` ではないからです。
   行そのものにフラグが無ければ、そのプロジェクトはすべての依存のインストールスクリプトを既定で実行します。
   それは上の攻撃が頼った、まさにその既定です。
-- **`permissions: contents: read` は job の中のトークンにできることを絞ります。** step が GitHub 自身のトークンで何をできるかは `permissions:` ブロックが決めるものであって、その場その場で決まるものではありません。
+- **`permissions: contents: read` は job の中のトークンにできることを絞ります。**
+  step が GitHub 自身のトークンで何をできるかは `permissions:` ブロックが決めるものであって、その場その場で決まるものではありません。
   job レベルの `permissions: contents: read` はそのトークンをリポジトリの内容を読むことだけに絞るので、すでに侵害された step であっても、それを使ってコミットを push したり新しい workflow ファイルを書いたりはできません。
   このリポジトリ自身の既定の workflow permission はすでに `read` で、リポジトリのシークレットも 0 件です。
   ですが、このレシピをコピーする読み手が持っていくのは YAML であって、このリポジトリのアカウントレベルの設定ではありません。
@@ -130,34 +133,40 @@ jobs:
 すでに動いている Playwright Test の CI 構成から来たチームは、上の大部分をすでに持っています。
 変わるのはこの 4 つです。
 
-- **ブラウザのインストール行がエンジンを名指しします。** 新しいランナー上で `npx playwright test` は `npx playwright install --with-deps` だけで済みます。
+- **ブラウザのインストール行がエンジンを名指しします。**
+  新しいランナー上で `npx playwright test` は `npx playwright install --with-deps` だけで済みます。
   Playwright 自身が、どのブラウザをインストールするかをプロジェクト自身の `playwright.config.ts` から読むからです。
   nukadoko には読み込む先の `playwright.config.ts` がありません。
   代わりに `nukadoko.config.ts` の `browserType` がエンジンを選びます(既定は `"chromium"`)。
   だから上のインストールコマンドはそれを明示的に名指しています。
   firefox と webkit もそれぞれ自分自身のバイナリを必要とします(docs/spec.ja.md の「Session、environment、secret」を参照)。
   `browserType`(や、それを渡り歩く test matrix)が実際に必要とするものを足してください。
-- **テスト対象のアプリは自分の手で起動する必要があります。** `playwright test` から来た人がもっとも見落としがちなのがこれです。
+- **テスト対象のアプリは自分の手で起動する必要があります。**
+  `playwright test` から来た人がもっとも見落としがちなのがこれです。
   そちらでは `webServer` という設定フィールドが、1 つ目の spec が走るより前に自動でアプリを起動します。
   `nuka run` と `nuka do` は `playwright.config.ts` を一切読みません([docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照)。
   だから明示の起動 step が無いと、`page` や `request` に触れる最初の step が、何が欠けていたかを名指すことも無いまま `ECONNREFUSED` で失敗します。
-- **run が残すものには上限があり、それ以外にはありません。** `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
+- **run が残すものには上限があり、それ以外にはありません。**
+  `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
   だから永続するランナーでも、`.nukadoko/records/` と export の出力はその回数ぶんの大きさに留まります。
   決して消さないのは `.nukadoko/cache/`(`nuka do`/session の利用が残す session ファイル)と、nukadoko が run ごとのファイル一覧を残すようになる前に書かれた `allure-results/` です。
   GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこではどちらも問題になりません。
   セルフホストや、それ以外の理由で永続するランナーでは、その 2 つに対して手当てが 2 つあります。
   ジョブの先頭で `rm -rf .nukadoko` するか、`npx nuka clean`(自身の `--help` を参照)を叩くかです。
   後者は同じことをより狭く行い、そのランナー上でまだ生きている `nuka session` があれば、それを理由に丸ごと拒否します。
-- **`nuka tend` は自分自身のトリガーを必要とします。** workflow が明示しない限り、これを定期的に走らせるものは何もありません。
+- **`nuka tend` は自分自身のトリガーを必要とします。**
+  workflow が明示しない限り、これを定期的に走らせるものは何もありません。
   上の `tend` job がそのトリガーで、`check`/`run` の経路からは意図的に外してあります(docs/spec.ja.md の「Tending(手入れ)」を参照)。
   今日対処しなくてよい note が PR を遅くしないためです。
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 3 つあります。どれも小さいものです。
+上の workflow がチームに委ねているものが 3 つあります。
+どれも小さいものです。
 
 - **PR が触った feature すべてに sign-off が在ることを確かめる PR の検査。**
-  `feature-never-signed` は `nuka tend` の note です。週次で、終了コードを赤にすることはありません。
+  `feature-never-signed` は `nuka tend` の note です。
+  週次で、終了コードを赤にすることはありません。
   だから `nuka accept` 無しで merge された feature は、誰かがその note を読むまで署名されないままです。
   PR のジョブが自分でその問いを立てられます。
 
@@ -167,7 +176,8 @@ jobs:
   done
   ```
 
-  record の名前は feature のベース名で始まります(docs/spec.ja.md の「Sign-off」を参照)。この検査が知る必要があるのはそれだけです。
+  record の名前は feature のベース名で始まります(docs/spec.ja.md の「Sign-off」を参照)。
+  この検査が知る必要があるのはそれだけです。
   PR が触った feature だけでなくすべての feature に署名を求めるチームは、そのジョブで代わりに `npx nuka tend --fail-on feature-never-signed` を回します。
 - **`tend` のジョブへの通知 step。**
   終了コードを赤にする finding は、古くなった sign-off record の 1 つだけです。

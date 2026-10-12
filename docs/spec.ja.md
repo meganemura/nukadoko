@@ -2,7 +2,8 @@
 
 > nukadoko(あなたの Gherkin のための生きたぬか床): 型付きの step、step record、そして agent-first な CLI。
 
-> 原文は spec.md。相違があれば原文が正。
+> 原文は spec.md。
+> 相違があれば原文が正。
 
 Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`/`scaffold`、session、environment、secret)。
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
@@ -141,14 +142,19 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   `nuka do --use` と `nuka harvest` は設計上、日をまたいでそれらを読むため、run の回数ではなく日数を与えています。
   寿命を過ぎた record への `--use` は、有効な方針を添えて拒否され、何も返さないまま終わることはありません。
   どちらの数字にも「無効」の値はなく、履歴を長く持ちたいプロジェクトは数字を上げます。
-  既定値は判断です。これまでに測った最も重いスイートは run 1 回あたり約 50 MB なので、20 回で約 1 GB です。それより少ないと、数分おきに走るスイートでは 1 時間前に追っていた失敗が消えてしまいます。
-  live session が 1 つでもある間、retention は何もせず、そう告げます。そのプロセスは動いている間ずっと record を書くからです。
-  export ファイルは、run 自身の一覧を通してだけ消され、古さで消されることはありません。results ディレクトリは他のツールの Allure 出力と共有されることがあり、nukadoko が書いていないファイルは nukadoko が消してよいものではないからです。
+  既定値は判断です。
+  これまでに測った最も重いスイートは run 1 回あたり約 50 MB なので、20 回で約 1 GB です。
+  それより少ないと、数分おきに走るスイートでは 1 時間前に追っていた失敗が消えてしまいます。
+  live session が 1 つでもある間、retention は何もせず、そう告げます。
+  そのプロセスは動いている間ずっと record を書くからです。
+  export ファイルは、run 自身の一覧を通してだけ消され、古さで消されることはありません。
+  results ディレクトリは他のツールの Allure 出力と共有されることがあり、nukadoko が書いていないファイルは nukadoko が消してよいものではないからです。
   `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、カテゴリ丸ごとを消す操作として残ります。
   カテゴリのフラグを指定しなければ、3 つのカテゴリをすべて消します。
   カテゴリのフラグを 1 つ指定すると、操作をそのカテゴリだけに限定します。
   `--dry-run` は実際の run と同じ計画を出力しますが、何も消しません。
-  どこかに live な session が 1 つでもある場合、このコマンドはすべてのカテゴリについて操作全体を拒否します。`nuka session clear` が live な lock を拒否するのと同じ理由です。
+  どこかに live な session が 1 つでもある場合、このコマンドはすべてのカテゴリについて操作全体を拒否します。
+  `nuka session clear` が live な lock を拒否するのと同じ理由です。
   `allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合、何も消す前に拒否します。
   `--dry-run` もそれらのパスを拒否します。
   プロジェクトの中にある results ディレクトリは、そのディレクトリが state directory の親である場合を除き、これまでどおり消します。
@@ -693,7 +699,9 @@ typed step 自身の `run` には締め切りがあります。
 `nukadoko.config.ts` の `stepTimeout` がプロジェクトの既定を決め、既定値は 20 分です。
 `defineStep({ timeout })` は 1 つの step についてそれを上書きします。
 これがあることで、返らない step は `error.kind: "timeout"` の失敗した step になり、run は次の scenario へ進んで summary に到達します。
-「制限なし」を意味する値はありません。返らない step は run 全体を道連れにし、終わらない run は何も報告しないからです。それを止めるためにあります。
+「制限なし」を意味する値はありません。
+返らない step は run 全体を道連れにし、終わらない run は何も報告しないからです。
+それを止めるためにあります。
 `nuka steps` と `nuka describe` は、step が自分の `timeout` を宣言していればそれを示します。
 
 `defineStep` は、有限でない、0 以下、または 2147483647 より大きい `timeout` を拒否します。
@@ -704,9 +712,11 @@ Node のタイマーは、その範囲の外にある遅延を 1ms に切り詰�
 例外は discovery がファイルを import するときに投げられ、`nuka check` はそれを `step-file-import-failed` として報告します。
 
 既定値は「step はこれくらいで終わるはずだ」という見積もりではありません。
-この道具が既に持っていた地平です。Allure emitter は走っている step を 10 秒の heartbeat 120 回ぶんまで描き(「Allure emitter」を参照)、そこが step を見続ける価値の切れる場所です。
+この道具が既に持っていた地平です。
+Allure emitter は走っている step を 10 秒の heartbeat 120 回ぶんまで描き(「Allure emitter」を参照)、そこが step を見続ける価値の切れる場所です。
 1 つの run に地平は 1 つです。
-実際の step の所要時間からは遠く離れています。実物のブラウザのスイートから 800 件の step record を無作為抽出したところ、中央値 66 ms、最大 14 秒で、30 秒を超えたものはありませんでした。
+実際の step の所要時間からは遠く離れています。
+実物のブラウザのスイートから 800 件の step record を無作為抽出したところ、中央値 66 ms、最大 14 秒で、30 秒を超えたものはありませんでした。
 
 compat step は意図して対象外です。
 glue 自身が 0 以上の `{ timeout }` を宣言するか、`setDefaultTimeout` を 0 以上の値で呼ばない限り、無制限で走ります。
@@ -1662,7 +1672,8 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 scenario record は feature のパス、scenario 名、順序付けられた step record id、step ごとの status を含みます。
 
 `nuka run` は 1 つ以上の対象を受け取ります。
-各対象には feature ファイル、Markdown oath(`.md` で終わるパス。「Markdown oaths」を参照)、`ファイル:行`、ディレクトリのいずれかを指定できます。
+各対象には feature ファイル、Markdown oath(`.md` で終わるパス。
+「Markdown oaths」を参照)、`ファイル:行`、ディレクトリのいずれかを指定できます。
 ディレクトリは再帰的に走査され、その下の `.feature` ファイルが選ばれます。
 どの深さでも、走査は `node_modules` と `.` で始まるディレクトリ(`.git`、`.nukadoko`、`.vscode` など)をスキップします。
 これは step discovery がスキップするディレクトリと同じです。
@@ -2013,7 +2024,8 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   「失敗」スクリーンショットが、最後に撮られたものとは別個の事実として存在するという主張です。
   実際にはそうではありませんでした。
   スクリーンショットは `run` がすでに返るか投げたあとに一度しか撮られないため、その 2 つ目のコピーは、それが名指す失敗に対してすでに古びている可能性がありました。
-  `at`(ISO 8601。`started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
+  `at`(ISO 8601。
+  `started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
 - `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture、`page.request`、`context.request`、page のすべてを通じたもの)。
   GET/HEAD 以外はすべて書き込みとして数えられます。
@@ -2027,11 +2039,13 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   どちらの経路のエントリにも必ず付くため、読み手はその行がどちらの経路から来たかを形だけから推測せずに済みます。
   `via: "request"` の呼び出しは、結果にかかわらず記録されます。
   接続の拒否や、エラーステータスに対する `failOnStatusCode` のように、throw した呼び出しも含みます。
-  `url` はレスポンスが返ってきた絶対 URL で、`params` が適用され、リダイレクトも辿られた後のものです。`via: "page"` のエントリと同じ形です。
+  `url` はレスポンスが返ってきた絶対 URL で、`params` が適用され、リダイレクトも辿られた後のものです。
+  `via: "page"` のエントリと同じ形です。
   `declared_url` は step が渡した文字列で、`url` と異なるときだけ現れます。
   レスポンスが無いときは `status` が `0` になり、`error` に失敗メッセージの最初の 1 行が入ります。
   そのとき分かっている URL は宣言された文字列だけなので、それが `url` になります。
-  追記の失敗で step が失敗することはありません。失敗は `http_log_failed`(下記)に数えられます。
+  追記の失敗で step が失敗することはありません。
+  失敗は `http_log_failed`(下記)に数えられます。
   page のリクエストの行は、そのリクエストを送った step のものです。
   パスはリクエストが始まった時点で決まり、その step が返ったあとにレスポンスが届いても、そこへ追記されます。
   それは `observed` がすでにそのリクエストを数えた step と同じです。
@@ -2070,7 +2084,8 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 - `http_log_failed`(数値)は、少なくとも 1 行の http.jsonl への追記に失敗したときだけ現れます。
   例えば step のディレクトリが無い、ディスクが満杯、権限が無い、といった場合です。
   失われた行の数を数えるので、`observed` が数えたのに http.jsonl に無いリクエストが黙って消えることはありません。
-  追記の失敗で step が失敗することはありません。計測が実行を壊してはならないからです。
+  追記の失敗で step が失敗することはありません。
+  計測が実行を壊してはならないからです。
 - `used`(空でないときだけ現れます)は、この実行が値を引き出した以前の実行の一覧です。
   `from` による注入、`resultOf` の呼び出し、あるいは `nuka do` での `--use` の step record のいずれかを通じたものです。
   どの経路もライブラリのコードを通るため、読み取りは計測されるのであって宣言されるのではありません。
@@ -2112,7 +2127,8 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   実際の run がまさにその隙間を露呈させました。
   `status: "failed"` の隣に、対象がまだ存在していることを示す `final.png` が、およそ 8 秒違いで並んでいたにもかかわらず、record にはそれを言うものが何もありませんでした。
   額面どおりに読めば状態が点滅していたように見え、実際にそう誤診断されました。
-  `at`(ISO 8601。`section` が呼ばれた時点でコレクタ自身が取得し、step が渡すことはありません)は、すべてのラベルを、`started_at`/`finished_at`、`polls` 自身の `at`、`evidence.screenshots[].at` がすでに共有している同じ絶対的なタイムラインに乗せます。
+  `at`(ISO 8601。
+  `section` が呼ばれた時点でコレクタ自身が取得し、step が渡すことはありません)は、すべてのラベルを、`started_at`/`finished_at`、`polls` 自身の `at`、`evidence.screenshots[].at` がすでに共有している同じ絶対的なタイムラインに乗せます。
   これにより、「状態が実際に変化したのか」と「その読み取りは状態が落ち着く前に行われたのか」が、step record 単体からは見分けが付かない状態でなくなります。
   失敗した step の `sections` も、失敗するまでに到達したラベルをそのまま保持しており、その配列の最後の要素がすでに「どの段階にいたか」に答えているため、同じ事実の置き場所をもう 1 つ作る `error.section` フィールドは別途ありません。
   `section` を持つのは typed step の fixture bag だけで、compat step には `this` 上に対応するものがないため、`sections` は単に省略されます。
@@ -2187,7 +2203,8 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `evidence.trace` は確かに存在するのに `actions` だけが黙って空になっていると、それは「この build が読めなかった」ではなく「何も起きなかった」と読めてしまうからです。
 - Before、After、AfterStep hook は step record を持ちません(「Compat steps」を参照してください)。
   そのため、その呼び出し自身の trace 証跡は代わりに scenario record の `hooks` 配列にあるその呼び出し自身のエントリに載ります。
-  `trace`(step record の dir ではなく scenario 自身の directory からの相対パスです。hook には record dir 自体がありません)、`actions`、`truncated` は、上と全く同じ形で、全く同じ規則のもとで現れます。
+  `trace`(step record の dir ではなく scenario 自身の directory からの相対パスです。
+  hook には record dir 自体がありません)、`actions`、`truncated` は、上と全く同じ形で、全く同じ規則のもとで現れます。
   hook の呼び出しには `sections`/`polls` は並びません。
   どちらも typed step の `section`/`poll` fixture から来るものであり、hook はどちらを呼ぶための fixture bag も持たず、持つのは World(`this`)だけだからです。
   hook 自身が明示的に呼んだものではなく trace chunk 自体から読み出される `actions` は、この gap の影響を受けません。
@@ -2223,7 +2240,8 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   sign-off は environment と version を凍結するので、記録は run が green だったデプロイ先を識別します。
 - **Secret**。
   git が分類するのは「出自」です。
-  git が追跡していない env file(ignore されているか untracked。この 2 つは区別されません)は secret の源です。
+  git が追跡していない env file(ignore されているか untracked。
+  この 2 つは区別されません)は secret の源です。
   そこで定義される値はすべて secret であり、宣言は不要です。
   追跡されている env file は、working tree が HEAD と一致するときだけただの設定です。
   一致しているとき、その値はコミットされたものであり、nukadoko も secret であるふりをしません。
@@ -2377,7 +2395,8 @@ cucumber-js は同じオブジェクトを自分の設定か `--world-parameters
 配列、文字列、`null` は config のエラーであり、step が欠落として読んでしまう空のオブジェクトにはなりません。
 
 environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", version?: () => string | Promise<string> }` です。
-その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。
+その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。
+dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。
 ディスク上にないパスは、何も寄与しません。
 `nuka check` は `env-file-missing` で警告し、environment 自身のリストにあるパスは `environment-env-file-missing` で警告します。
 存在しているが読めないパス、またはそのパスにあるディレクトリは、setup を止めます。
@@ -2456,13 +2475,18 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
   scenario 全体をまたぐ trace.zip はここにはありません。
   各 step 自身の trace は、その step 自身の `records/steps/<id>/` の下に置かれます(「実行」を参照)。
-- `records/runs/<run_id>/`(`nuka run` の呼び出しごとに 1 つのディレクトリ。`exports` を持ちます)。
+- `records/runs/<run_id>/`(`nuka run` の呼び出しごとに 1 つのディレクトリ。
+  `exports` を持ちます)。
   `exports` は、その run が `export/` の下に書いた result、container、attachment のすべてのファイルと、`messages.output` が置いた場所にあるその run の messages ストリームを、ルートからの相対パスで 1 行に 1 つ列挙したものです。
   ファイルを書いたプロセス自身が追記します(`--concurrency` では worker プロセスが書きます)。
   これがあるので、run の export 出力は run と一緒に消えます(「成果物」を参照)。
-  状態や時刻は持ちません。各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。
+  状態や時刻は持ちません。
+  各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。
 - `cache/sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
-- `export/allure-results/`(emitter の出力。`records/` が持つのと同じ run を持ちます。run のファイルは run と一緒に消えるからです(「成果物」を参照)。新しい Allure launch が欲しければ削除してよい)。
+- `export/allure-results/`(emitter の出力。
+  `records/` が持つのと同じ run を持ちます。
+  run のファイルは run と一緒に消えるからです(「成果物」を参照)。
+  新しい Allure launch が欲しければ削除してよい)。
   `init` もこれを空のまま作ります。
   Allure 自身の CLI は、存在しないディレクトリでは起動を拒む一方、空のディレクトリなら受け付けるからです。
   これにより、最初の `nuka run` より前から `allure watch` を起動しておけます。
@@ -2475,7 +2499,8 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、この 3 つのディレクトリすべてにまたがって一度に消すコマンドです。
 カテゴリのフラグを 1 つも与えなければ、既定はその全部です。
 カテゴリのフラグを 1 つ与えると、削除をそのカテゴリに限定します。
-run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。retention はそこに決して触れません。
+run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。
+retention はそこに決して触れません。
 どこかで `nuka session` が 1 つでも live であれば、カテゴリを問わずコマンド全体を拒否します。
 その session 自身のプロセスが、いままさに `records/` と `export/` に書き込んでいるからです(理由の全体は「成果物」を参照)。
 `allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合も、何も消す前に拒否します。
@@ -2518,7 +2543,8 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   `<feature>:<line>` で選ばれた run は 1 つの scenario しかカバーしていないため、どれだけ green であっても候補にはなりません。
   それを凍結すれば、その run が実際には到達していない feature の大部分の隣に記録が残ってしまいます。
   結果として起こり得る 4 通りは、読む人にとってそれぞれ別の状況であり、別のものとして報告されます: この feature の run が一度も存在しない、直近のフル実行が red だった、部分実行しか存在しない、あるいは green なフル実行は存在するが現在の条件の下ではない(後述)、のいずれかです。
-  run が green とみなされるのは、すべての scenario record が passed で、かつ run の完了マーカー(`records/runs/<run_id>/complete.json`、「成果物」を参照)の断定が `passed` か、scenario の失敗が原因の `failed`(失敗した scenario の数を持ちます。複数 feature の run では、別の feature が失敗しても、この feature は green でありえます)のときだけです。
+  run が green とみなされるのは、すべての scenario record が passed で、かつ run の完了マーカー(`records/runs/<run_id>/complete.json`、「成果物」を参照)の断定が `passed` か、scenario の失敗が原因の `failed`(失敗した scenario の数を持ちます。
+  複数 feature の run では、別の feature が失敗しても、この feature は green でありえます)のときだけです。
   マーカーは scenario record に現れないものを捉えます。
   すべての scenario が passed のあとで AfterAll hook が throw すると `nuka run` は 1 で終了し、その run は拒否されます。
   マーカーのない run も、終わったことを示すものがないので拒否されます。
@@ -2539,7 +2565,8 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 - working tree が完全にクリーンで(untracked file を含む)、かつ凍結しようとしている run が現在の HEAD で行われたのでなければ拒否します。
   記録の主張はまるごと「この scenario は commit X で green だった」というものです。
   discovery が読み込んだはずの untracked な step ファイルや、run と sign-off の間に行われたコミットは、その主張を偽にします。
-  scenario record はこれをチェック可能にするために 1 つのフィールド `git` を増やします(run が始まったときに working tree がどの commit にあったか。「Records」を参照)。
+  scenario record はこれをチェック可能にするために 1 つのフィールド `git` を増やします(run が始まったときに working tree がどの commit にあったか。
+  「Records」を参照)。
   acceptance record は、どの feature のものであっても、ここでの dirty には決して数えられません。
   それは accept 自身が生み出すものであり、凍結しようとしている run が読み込んだ入力では決してないため、それが untracked のまま、あるいは変更された状態で置かれていても、その run 自身の主張を偽にすることはないからです。
   判定は、`nuka tend` がすでに記録を普通のファイルと区別しているのと同じやり方によります(frontmatter が `run_id`/`commit`/`feature`/`scenarios` を運んでいること、「手入れ」を参照)。
@@ -2553,7 +2580,8 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 - 記録は、それが由来する feature の隣に `<feature-filename>.<date>-<sha>.<environment>.<browser>.md` という名前で書かれ、accept した run 自身の条件が名前に織り込まれます(`<browser>` は、run がブラウザを一切起動しなかった場合は文字どおり `no-browser` になります)。
   接頭辞は拡張子を含む feature のファイル名です(`launcher.feature.2026-09-03-42a4e15.default.no-browser.md`)。
   一覧で record が feature の直後に並ぶためで、日付が先頭だと feature の前に並んでいました。
-  record を名前で読むものはありません。ツールは frontmatter で record を見つけるので、以前の `<feature のベース名>.` の形で書かれた record もそのまま読めます。
+  record を名前で読むものはありません。
+  ツールは frontmatter で record を見つけるので、以前の `<feature のベース名>.` の形で書かれた record もそのまま読めます。
   こうすることで、同じ commit の同じ日であっても、2 つの条件が衝突して互いを黙って上書きすることがなくなります。
   browser の**バージョン**はファイル名には決して入りません。
   エンジンの種別だけで、その記録がどの条件のものかを識別するのに十分だからで、バージョンは記録の本文にだけ残ります(後述)。
@@ -2563,9 +2591,12 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   そして stderr には、プロジェクトが上ですでに答えたのと同じ問いを書きます: この feature が述べているのは変更なのか、それともプロダクト自身の経路なのか、そしてどちらの答えがどこに置くべきかを意味するのか、です。
   これは verdict ではなく案内です: このコマンドにはどちらであるかを計測する手段が無く、選択肢を名指しできるだけだからです。
 - 記録本文自身は、冒頭近くに「Condition」節を運びます: `environment` と、accept した run がブラウザを起動していればその計測済みのエンジンとバージョンです。
-  末尾の「Declared vs observed」節の件数もここに載ります。`mutates: false` と宣言しながら書き込みが計測された step が何個あるか、あるいは 1 つも無いか、です。
-  一覧は末尾のままです。上の詳細から導かれるものだからです。
-  件数は先頭に置きます。複数の scenario を持つ record の読み手は末尾まで届かないことがあり、末尾まで行くべきかどうかを告げるのがこの件数だからです。
+  末尾の「Declared vs observed」節の件数もここに載ります。
+  `mutates: false` と宣言しながら書き込みが計測された step が何個あるか、あるいは 1 つも無いか、です。
+  一覧は末尾のままです。
+  上の詳細から導かれるものだからです。
+  件数は先頭に置きます。
+  複数の scenario を持つ record の読み手は末尾まで届かないことがあり、末尾まで行くべきかどうかを告げるのがこの件数だからです。
   起動していなければ、空欄のままにするのではなく、その節がそのことを明示します。
   こうすることで「ブラウザを起動しなかった」ことと「読み手が確認し忘れた」ことが区別できるままになります。
   この節ができる前に accept された記録にはこの節がありません。
@@ -3126,7 +3157,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 
 次の所見は、`tend` が何を調べているか、そしてそれぞれがなぜスタイルの問題ではなく腐敗なのかを示します。
 
-- **もはや自分が凍結したコードと一致しない sign-off。** 記録は、受け入れた feature のソースと、その run のすべての step record を持ちます。
+- **もはや自分が凍結したコードと一致しない sign-off。**
+  記録は、受け入れた feature のソースと、その run のすべての step record を持ちます。
   凍結された `result` がその step の現在の `returns` スキーマをもはや通らない場合、あるいは凍結された feature のソースが元のファイルともはや一致しない場合、あるいはそれが引用する step が語彙から消えている場合、その記録はディスク上に残ったまま、もはや裏付けられない主張をし続けます。
   記録はその result を JSON として保存します。
   `tend` は、保存された JSON が、現在の `returns` スキーマが受け入れる値に対して `JSON.stringify` が書くものと一致するとき、それを受け入れます。
@@ -3144,7 +3176,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   唯一の例外は、`tend` がそもそもパースできない記録です(前述の `signoff-record-unreadable`)。
   その `feature:` の値自体がパースできていない可能性があるため、置き場所で判定する手段がありません。
   記録のように見えて読めないファイルは、そのファイル自身についての事実であり、その主張がいまも成り立っているかどうかとは別の話です。
-- **config からずれた、sign-off 自身が記録している条件。** sign-off は条件にスコープされています(「Sign-off」を参照)。
+- **config からずれた、sign-off 自身が記録している条件。**
+  sign-off は条件にスコープされています(「Sign-off」を参照)。
   条件とは `(environment, browser)` であり、どちらも計測値であって宣言ではありません。
   ある feature の直近の sign-off が、プロジェクトの config がもはや宣言していない browser を記録していても、その sign-off について今この瞬間に何か間違っているわけではありません。
   だからこそ、上の所見とは違い、これはエラーではなく注記です。
@@ -3152,7 +3185,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   そのため、この所見は推測せずにその記録を対象から外します。
   上の所見と同じく、これも feature が `featuresDir` へ移った後は止まります。
   ずれている条件は、もう何にも依存されていない主張についてのものだからです。
-- **import に失敗した step ファイル。** `tend` は `nuka check` と同じ寛容な step 発見を使います(「報告は寛容に、実行は速く失敗する」を参照)。
+- **import に失敗した step ファイル。**
+  `tend` は `nuka check` と同じ寛容な step 発見を使います(「報告は寛容に、実行は速く失敗する」を参照)。
   壊れた glue ファイルは run を止める代わりにスキップされます。
   そのため、それが本来もたらしていたはずのものは、ここでのあらゆる件数と所見から静かに欠落します。
   何も失敗していないから欠落しているのではありません。
@@ -3162,40 +3196,49 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   これには、run 全体で `signoff-step-missing` を控えることも含まれます。
   いずれかのファイルの import に失敗している間、読み込めた語彙に step が無いことは、その step が消えたこととしては呼ばれません。
   そのため、この注記は注記のままです。
-- **何にも行使されない `from` 宣言。** その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされます。
+- **何にも行使されない `from` 宣言。**
+  その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされます。
   そのため、宣言された生産者は一度も何も供給しません。
   これはただの事実として報告されます(その宣言は `nuka do --use` を通じてなお到達可能です)。
   削除すべきだという指示としてではありません。
-- **どの feature からも束ねられていない pattern を持つ step。** CLI 専用のつもりの step は pattern を一切持つべきではありません。
+- **どの feature からも束ねられていない pattern を持つ step。**
+  CLI 専用のつもりの step は pattern を一切持つべきではありません。
   pattern を持っている場合、それは自分が占めていない scenario 上の場所を主張していることになります。
-- **`.describe()` を持たないスキーマフィールド。** これは agent にまっすぐ狙いを定めた tending の所見です。
+- **`.describe()` を持たないスキーマフィールド。**
+  これは agent にまっすぐ狙いを定めた tending の所見です。
   agent がフィールドの意味を知る手段は `nuka describe` です。
   description のないフィールドは、名前がすでに伝えていた以上のことを何も agent に伝えません。
   step ファイルを読む人間は周囲のコードを見られます。
   しかし、2 つの step のどちらかを選ぶ agent にはそれができません。
-- **`rationale` を持たない step。** `description` はその step が何をするかを述べます。
+- **`rationale` を持たない step。**
+  `description` はその step が何をするかを述べます。
   それはその step を呼ぶには十分です。
   `rationale` はなぜこう作られているのか、何が却下されたのかを述べます。
   それは、agent がその step を書き換えてよいと決める前に必要とする情報です。
   それが欠けていれば、あらゆる書き換えは根拠を欠いたまま行われます。
-- **どの pattern からも使われていない設定済みの parameter type。** これは使われていない設定であり、他のものと同様に報告されます。
-- **support コード側にまだ登録されたままの `defineParameterType`。** それは動き続けます。
+- **どの pattern からも使われていない設定済みの parameter type。**
+  これは使われていない設定であり、他のものと同様に報告されます。
+- **support コード側にまだ登録されたままの `defineParameterType`。**
+  それは動き続けます。
   `config.parameterTypes` がその typed 時代の住まいであり、登録をそちらへ移してもマッチは何も変わりません。
   これはかつて `nuka check` の warning でしたが、その分類は誤りでした。
   これは、スイートに compat が少しでも残っている限り現れ続けるものであり、それは正常な状態です。
   毎回の run の前にそれを出力すれば、人々に本当に run を止める行を読み飛ばすことを覚えさせてしまいます。
-- **`secrets.public` または `secrets.redact` のエントリが、どの envFile も定義していないキーを名指ししているもの。** その指示は実在しますが、何にも届きません。
+- **`secrets.public` または `secrets.redact` のエントリが、どの envFile も定義していないキーを名指ししているもの。**
+  その指示は実在しますが、何にも届きません。
   自分が記述している対象のファイルから設定がずれているということです。
   これも同じ理由で `check` から移されました。
   この run を実行すべきかどうかは、これによって何も変わらないからです。
   その隣にある所見は `check` に残っており、対比する価値があります。
   値が短すぎて redact されない `redact` エントリと、secret らしいキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味します。
   それはまさに事前に知っておくべきことだからです。
-- **設定された `additionalFeatureDirs` エントリがディスク上に存在しないもの。** これは `nuka check`/`nuka tend` がスキャンする範囲を広げるためだけに存在します。
+- **設定された `additionalFeatureDirs` エントリがディスク上に存在しないもの。**
+  これは `nuka check`/`nuka tend` がスキャンする範囲を広げるためだけに存在します。
   そのため、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合と同じです。
   ただし `tend` には `check` が持つような config の誤り専用のエラー枠がありません。
   そのため、`nuka check` が同じ事実をエラーとして報告する一方で、ここでは注記になります。
-- **`nuka check`/`nuka tend` がスキャンするどのディレクトリの外にもある、accept 済みの feature。** sign-off の記録は、その feature が green で走ったことをすでに証明しています。
+- **`nuka check`/`nuka tend` がスキャンするどのディレクトリの外にもある、accept 済みの feature。**
+  sign-off の記録は、その feature が green で走ったことをすでに証明しています。
   しかし、ここが一切歩かない feature は、それが結び付ける step を、このレポートの他のあらゆる所見に対して `pattern-unbound` のまま見せ続けます。
   sign-off の記録は、この所見の可視性のためだけに読まれます。
   何をスキャン対象にするかを決めるためではありません。
@@ -3216,7 +3259,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   `featuresDir` の中にあっても、これは黙りません。
   上の sign-off の staleness の所見とは違います。
   あちらは、走っているスイート自身がかつて凍結された record が持っていた保証を運ぶようになった時点で黙りますが、record が一度でも作られたかどうかは別の問いであり、その feature がどこで走るかとは関係ありません。
-- **同じ step で始まる scenario と、その繰り返しにかかったコスト。** 同じ始まりを共有することはよくあります。
+- **同じ step で始まる scenario と、その繰り返しにかかったコスト。**
+  同じ始まりを共有することはよくあります。
   1 つのページについて扱う複数の scenario が、どれもそのページへ移動するところから始まるのは自然です。
   その始まりに時間がかかるのに何も切り出されていない場合は腐敗となり、scenario が増えるたびにコストも増えます。
   この所見は実行記録を計測して得られます。
@@ -3234,7 +3278,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   `process` スコープの fixture です(「Fixtures」を参照)。
   同じ始まりに対する処置は、それらの scenario が共有する状態へ書き込むかどうかに左右され、その事実はこのツールからは見えません。
   節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
-- **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。** `tend` はこれを `.nukadoko/records/steps/` にあるツール自身の step record から読みます(「Records」を参照)。
+- **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。**
+  `tend` はこれを `.nukadoko/records/steps/` にあるツール自身の step record から読みます(「Records」を参照)。
   commit された sign-off の記録は accept した時点で凍結されたコピーを持ちます。
   そのため、run が計測したものをいまも運んでいるのは live な step record のほうです(「Sign-off」を参照)。
   これは、誰かが sign-off したかどうかを問わず、いまもディスク上に step record を持つすべての step に届きます。
@@ -3265,7 +3310,8 @@ sign-off の所見は非ゼロの exit code で終了し、定期実行される
 残りの所見はそうしません。
 プロジェクトはそれらを抱えたままでいることが許されているからです。
 `--fail-on <code>`(繰り返し指定、またはカンマ区切り)は、その code の所見が報告されたときに、その 1 回の呼び出しを非ゼロで終了させ、stderr にそう告げます。
-所見そのものは出力の中で note のままです。変わったのはそのジョブに対するチームの方針であって、所見の性質ではないからです。
+所見そのものは出力の中で note のままです。
+変わったのはそのジョブに対するチームの方針であって、所見の性質ではないからです。
 `tend` が報告しない code は最初に拒否されるので、打ち間違いが「決して発火しないフラグ」になることはありません。
 これが、他の全員の `tend` を赤くせずに、PR のジョブが `feature-never-signed` でゲートを掛ける方法です。
 
@@ -3565,7 +3611,8 @@ nuka experimental webmcp-tools <url> [--json]
   run が行われたタイミングに依存する欠陥(あるタイムゾーンで計算され別のタイムゾーンで読まれる日付、時計がまたぐ境界)は、それが run から欠けていたのとまったく同じように記録からも欠けており、nukadoko はそれを確かめるために凍結された scenario を再実行することはありません。
   正直さとは、記録が語るのは常にただ 1 回の実行についてだけだということです。
   限界とは、欠陥のまるごと 1 つのクラスがどの 1 回の実行からも見えないということです。
-- **このパッケージは ESM だけを出荷します。意図してそうしています。**
+- **このパッケージは ESM だけを出荷します。
+  意図してそうしています。**
   `package.json` の `exports` は `import` の条件だけを持ち、`require` の条件はありません。
   ESM のビルドの隣に CommonJS のビルドは無く、増やす予定もありません。
   自分の `package.json` に `"type": "module"` が無いプロジェクトでも nukadoko は使えます。
@@ -3577,12 +3624,14 @@ nuka experimental webmcp-tools <url> [--json]
   これは compat の扉が本来求める「import 指定子 1 つ」より重く、リネームが要るファイルは `nuka check` が 1 つずつ名指しします。
   読み込みに失敗した設定は、そのファイルと原因を名指しします。
   CommonJS の `.ts` 設定は、同じリネームの文を受けます。
-- **step を `defineStep` に昇格させることは一方通行です。** compat の扉が約束するのは compat の資産についてだけです: import を元に戻せば、ただの cucumber-js スイートが残ります。
+- **step を `defineStep` に昇格させることは一方通行です。**
+  compat の扉が約束するのは compat の資産についてだけです: import を元に戻せば、ただの cucumber-js スイートが残ります。
   `defineStep` には、切り替えて戻す import がありません。
   昇格させた step の body は移ります(`run` は Playwright 自身のオブジェクトに対して書かれており、それは下で述べているのと同じ選択によるものです)。
   けれどもそのスキーマ、step record の `result`、`from` とそれを読む束縛順序のチェック、そしてそれらの上に組まれたあらゆる契約チェックは移らず、ここには元に戻す手段は何もありません。
   埋めるべき欠落としてではなく、限界として述べます: 変換は step ごとの機械的な作業であり、import の可逆性があるのは採用の最初の一歩を安くするためであって、型付き側を選択制にするためではありません。
-- **意図的に driver-agnostic ではない。** `page` と `request` の fixture は Playwright 自身の `Page` と `APIRequestContext` を返し、compat の扉は移行中の glue に、それがすでに使っていたのと同じオブジェクトを渡します。
+- **意図的に driver-agnostic ではない。**
+  `page` と `request` の fixture は Playwright 自身の `Page` と `APIRequestContext` を返し、compat の扉は移行中の glue に、それがすでに使っていたのと同じオブジェクトを渡します。
   それらを nukadoko 自身のインターフェースの背後にラップすれば、そのラッパーが公開し忘れたあらゆる能力を犠牲にし、ユーザーがすでに知っている語彙を、このツールだけが話す語彙に置き換えることになります。
   それは公式の SDK を通して書くことの正反対です。
   引き換えに、別の driver へ後から差し替えるときは public API と compat の扉が同時に壊れます。

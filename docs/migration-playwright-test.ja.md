@@ -1,6 +1,7 @@
 # 第二の扉: Playwright Test のスイート
 
-> 原文は migration-playwright-test.md。相違があれば原文が正。
+> 原文は migration-playwright-test.md。
+> 相違があれば原文が正。
 
 まだ cucumber-js も Gherkin も使っていないプロジェクト向けです。
 Playwright Test に対して直接書かれたスイートには、差し替える import そのものがありません: そのテストは `test("...", async ({ page }) => {...})` であり、リダイレクトする glue レイヤーもありません。
@@ -226,7 +227,8 @@ step を 1 つも定義しないモジュールは単に語彙ではないから
 nukadoko は `playwright` を正確な版で依存に持ち(`npm ls playwright` でどの版かが分かります)、peer ではなく dependency です。
 だから既に別の版の Playwright を使っているプロジェクトは、コピーを 2 つ、ブラウザのダウンロードを 2 つ、`Page` の型を 2 つ持つことになります。
 プロジェクト自身の Playwright を、`npm ls` が nukadoko の下に示す版に固定するか、版の合う nukadoko に上げてください(インストールされたパッケージの `package.json` がその固定版を示します)。
-`playwright` を peer ではなく dependency にしているのは選択です。自前の Playwright を持たないプロジェクトが他に何も入れずに済むようにするためで、2 つのコピーの間で実際の衝突が報告されるまではこのままです。
+`playwright` を peer ではなく dependency にしているのは選択です。
+自前の Playwright を持たないプロジェクトが他に何も入れずに済むようにするためで、2 つのコピーの間で実際の衝突が報告されるまではこのままです。
 
 ## 戻り道
 

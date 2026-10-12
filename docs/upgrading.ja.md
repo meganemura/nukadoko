@@ -1,6 +1,7 @@
 # nukadoko のアップグレード
 
-> 原文は upgrading.md。相違があれば原文が正。
+> 原文は upgrading.md。
+> 相違があれば原文が正。
 
 すでに nukadoko の上で動いているプロジェクトが、新しいリリースへ移る場合の文書です。
 cucumber-js のスイートから来た場合は、代わりに [docs/migration.ja.md](migration.ja.md) を参照してください。
@@ -130,11 +131,15 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
 - **20 分を超えて走る typed step は、失敗するようになりました。**
   以前は無制限に走り、run 全体を道連れにしていました。
   制限は `nukadoko.config.ts` の `stepTimeout` で、1 つの step は `defineStep({ timeout })` で自分の値を持てます。
-  このプロジェクトに、正当にそれより長くかかる step があるなら、上げる前に数字を設定してください。失敗の見え方は `error.kind: "timeout"` を持つふつうの step の失敗です。
+  このプロジェクトに、正当にそれより長くかかる step があるなら、上げる前に数字を設定してください。
+  失敗の見え方は `error.kind: "timeout"` を持つふつうの step の失敗です。
   「制限なし」を意味する値はありません。
-  compat step は影響を受けません。glue 自身が `{ timeout }` を宣言するか `setDefaultTimeout` を呼ばない限り、無制限で走ります。
-- **`--concurrency <n>` の run は、scenario ごとに 1 行増えます。** 開始時に worker と scenario を名指す行です。
-  既存の `scenario <n>/<total>` の行を拾っている script は影響を受けません。`scenario ` で始まる行をすべて拾っているものは、両方を見ることになります。
+  compat step は影響を受けません。
+  glue 自身が `{ timeout }` を宣言するか `setDefaultTimeout` を呼ばない限り、無制限で走ります。
+- **`--concurrency <n>` の run は、scenario ごとに 1 行増えます。**
+  開始時に worker と scenario を名指す行です。
+  既存の `scenario <n>/<total>` の行を拾っている script は影響を受けません。
+  `scenario ` で始まる行をすべて拾っているものは、両方を見ることになります。
   `--quiet` はどちらも抑えます。
 - **default export が無い config ファイル、または default export が Promise の config ファイルは、失敗してそのファイルを名指すようになりました。**
   以前は `{}` として読まれ、ファイルに書いたキーは無視されていました。
@@ -150,10 +155,13 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
 追加がいくつか、修正が 1 つ、名前が 1 つです。
 
 - **新しい acceptance record の名前は `<feature のファイル名>.<date>-<sha>...` で、拡張子を含みます。**
-  既に書かれた record は古い名前のまま、そのまま読めます。record を名前で読むものはありません。
-  `<ベース名>.*.md` で glob するスクリプトは両方の形に一致します。`<ベース名>.20*.md` で glob しているものは古い形にしか一致しないので、`<ベース名>.feature.*.md` も足してください。
+  既に書かれた record は古い名前のまま、そのまま読めます。
+  record を名前で読むものはありません。
+  `<ベース名>.*.md` で glob するスクリプトは両方の形に一致します。
+  `<ベース名>.20*.md` で glob しているものは古い形にしか一致しないので、`<ベース名>.feature.*.md` も足してください。
 - **1 つの step が、同じ行で 1 つのキーを `from` から、もう 1 つを table や docstring から受け取れます。**
-  `table-docstring-key-mismatch` を避けるために chain するキーを optional にしていたスイートは、required に戻せます。その step の from-order の検査が戻ります。
+  `table-docstring-key-mismatch` を避けるために chain するキーを optional にしていたスイートは、required に戻せます。
+  その step の from-order の検査が戻ります。
 - **`nuka run --repeat <n>`、`nuka tend --fail-on <code>`、Condition 節の declared vs observed の件数**は追加で、既にあるものは変わりません。
 
 ## 0.10.1 から 0.11.0 へ
@@ -162,32 +170,40 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
 
 - **アップグレード後の最初の `nuka run` が、最新 20 回より古い run をすべて消します。**
   run は既にディスクにある scenario record から読み取るので、何週間も育った state directory はその最初の run の終わりに縮み、run は消した run の数を 1 行の `retention:` として出力します。
-  それを望まないなら、走らせる前に `nukadoko.config.ts` の `retention.runs` を設定します。「すべて残す」値はなく、あるのは大きな数字だけです。
+  それを望まないなら、走らせる前に `nukadoko.config.ts` の `retention.runs` を設定します。
+  「すべて残す」値はなく、あるのは大きな数字だけです。
   `retention.adHocDays`(既定 7)は、`nuka do` の record のような、どの run にも属さない record の寿命で、別の設定です。
 - **`nuka accept` と `nuka tend` は、保持された run だけを見ます。**
-  最後の green な run が最新 `retention.runs` 回より古い feature は、一度も走っていないものとして読まれます。accept する前にもう一度走らせてください。
-  既に書かれた sign-off record は影響を受けません。feature の隣にあり、`.nukadoko/` の下にはないからです。
+  最後の green な run が最新 `retention.runs` 回より古い feature は、一度も走っていないものとして読まれます。
+  accept する前にもう一度走らせてください。
+  既に書かれた sign-off record は影響を受けません。
+  feature の隣にあり、`.nukadoko/` の下にはないからです。
 - **`nuka do --use <id>` と `nuka harvest <id>` が、以前は解決できた id を拒否することがあります。**
-  拒否の文面は、record が寿命を過ぎた可能性と、有効な方針を述べます。「no such step record」だけでは終わりません。
+  拒否の文面は、record が寿命を過ぎた可能性と、有効な方針を述べます。
+  「no such step record」だけでは終わりません。
 - **0.10 以前が書いた `allure-results/` は刈られません。**
   retention が export ファイルを消すのは、書いた run が `.nukadoko/records/runs/<run_id>/` に残した一覧を通してだけで、古い run はそれを残していません。
   以後の run は寿命を過ぎたときに自分のファイルを自分で消すので、永久に残るのは上げる前に書かれたものだけです。
 
-  `nuka clean --export` はディレクトリ全体を空にします。上げてから保持している run のレポートも一緒に消えます。
-  それを残したいなら、上げた日より古いものだけを消してください。どちらにせよ、それらを追跡しているものはありません。
+  `nuka clean --export` はディレクトリ全体を空にします。
+  上げてから保持している run のレポートも一緒に消えます。
+  それを残したいなら、上げた日より古いものだけを消してください。
+  どちらにせよ、それらを追跡しているものはありません。
 
   ```sh
   find .nukadoko/export/allure-results -type f ! -newermt '<上げた日>' -delete
   ```
 - **`allure-results/` の下の trace と screenshot は、`records/steps/<id>/` の下のファイルへの hard link になりました。**
   読む側には何も変わりません。
-  link を保たないツールで `.nukadoko/` をコピーすると、以前と同じく 2 つのファイルに戻ります。`allure.resultsDir` が別のファイルシステムにあるときは、自動でコピーに戻ります。
+  link を保たないツールで `.nukadoko/` をコピーすると、以前と同じく 2 つのファイルに戻ります。
+  `allure.resultsDir` が別のファイルシステムにあるときは、自動でコピーに戻ります。
 - **`nuka clean --records` は `.nukadoko/records/runs/` も消します。**
   パスを指定して clean をスクリプトにしているプロジェクトは、このディレクトリを含めてください。
 
 ## 0.10.0 から 0.10.1 へ
 
-修正が 1 つ。プロジェクト側から見える変化が 2 つあります。
+修正が 1 つ。
+プロジェクト側から見える変化が 2 つあります。
 
 - **record のオブジェクトのキーが、以前と違って読めることがあります。**
   `redact` はオブジェクトの値だけを歩き、キーはそのまま写していました。
@@ -213,7 +229,8 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
   通らなかった scenario 1 つにつき 1 行で、feature のパス、行、名前を出します。
   `--quiet` は、サマリを残すのと同じ理由でこれらの行も残します。
   このコマンドの stderr を解析しているものには、これまで無かった行が見えます。
-  stdout は変わりません。1 行 1 件の scenario record のままであり、解析すべきチャネルもそちらのままです。
+  stdout は変わりません。
+  1 行 1 件の scenario record のままであり、解析すべきチャネルもそちらのままです。
 - **`nuka tend` に `repeated-scenario-prefix` の所見が増えます。**
   sign-off の staleness 以外のすべての tend の所見と同じく、exit code を変えません。
   tend の exit status で動く定期ジョブに影響はありません。
@@ -279,7 +296,8 @@ Allure のレポート構造には 1 つの破壊的変更があります。
   step record の `args` を送った内容と突き合わせるスクリプトは、これを織り込む必要があります: 足された default は何かが壊れた印ではありません。
   失敗した record はこの影響を受けず、part 自身の `CallEntry.args` もどちらの結果でも生のままなので影響を受けません。
 - **破壊的ではありませんが、知っておく価値があります: `nuka run` はもう run の進行中に `messages.output` へ直接書き込みません。**
-  各呼び出しはいま、設定されたパスの隣にある自分自身のファイル(設定されたパス自身の名前に run id を差し込んだもの。既定のパスなら `messages.<run_id>.ndjson`)に書き込み、run が終わった時点で初めて、原子的に設定されたパスを置き換えます。
+  各呼び出しはいま、設定されたパスの隣にある自分自身のファイル(設定されたパス自身の名前に run id を差し込んだもの。
+  既定のパスなら `messages.<run_id>.ndjson`)に書き込み、run が終わった時点で初めて、原子的に設定されたパスを置き換えます。
   この変更は本物のバグを閉じています: 同じパスに対する 2 つの `nuka run` の呼び出しが、以前は 1 つの壊れたファイルへ互いに割り込み合っていました。
   run をライブで見るために `messages.ndjson` を tail していたスクリプトは、いまは run が終わるまで何も目にしません。
   ライブで見るには代わりに Allure(`npx allure watch`)を使ってください。

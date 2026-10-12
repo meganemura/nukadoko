@@ -26,6 +26,12 @@ just until 0.1.
 
 ### Fixed
 
+- **Every Japanese file holds one sentence per line.**
+  The rule that a Japanese file holds one sentence per line had no check, and
+  90 lines in README.ja.md and docs/*.ja.md held two or more sentences. Each
+  is now split after its 。, with no change of wording. A test now fails on a
+  line with two or more 。 outside a fenced code block. A table row is
+  exempt, because Markdown cannot continue a row on the next line.
 - **Retention, `nuka accept`, and `nuka tend` share one newest-run rule.**
   Each command had its own copy, and they disagreed on a scenario record whose
   `started_at` does not parse. Retention ranked a run with no parsable start as
