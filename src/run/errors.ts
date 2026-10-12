@@ -70,9 +70,11 @@ export class NoFeatureFilesFoundError extends Error {
   readonly relativePath: string;
   readonly resolvedPath: string;
 
-  constructor(relativePath: string, resolvedPath: string, consideredOaths = false) {
+  constructor(relativePath: string, resolvedPath: string, consideredOaths = false, oathDirectory = false) {
     super(
-      consideredOaths
+      oathDirectory
+        ? `no Markdown file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`
+        : consideredOaths
         ? `no .feature file or configured oath was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`
         : `no .feature file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`,
     );

@@ -6,8 +6,9 @@ import path from "node:path";
 // that file. A named directory is every `*.md` under it, except
 // `node_modules` and dot-directories (the same places step discovery
 // refuses to walk: a wide directory must not pull in dependencies or the
-// state directory). Nothing here parses an oath. A missing path or a
-// path that is neither a `.md` file nor a directory is a problem string
+// state directory). Nothing here parses an oath. A missing path, a
+// directory with no `.md` file, or a path that is neither a `.md` file nor
+// a directory is a problem string
 // the caller reports; this function does not throw, so one bad entry
 // does not hide the files that do exist.
 
@@ -20,6 +21,9 @@ export interface ResolvedOaths {
   /** Root-relative `.md` paths, de-duplicated, byte order. */
   readonly files: readonly string[];
   readonly problems: readonly OathPathProblem[];
+  /** Root-relative paths of the entries that are directories, so `nuka run`
+   * can tell an empty oath directory from an empty feature directory. */
+  readonly directories: readonly string[];
 }
 
 /** A path `nuka check` / `nuka run` was given is an oath when it names a
@@ -32,6 +36,7 @@ export function isOathPath(relativePath: string): boolean {
 export function resolveOathPaths(rootDir: string, oaths: readonly string[]): ResolvedOaths {
   const files: string[] = [];
   const problems: OathPathProblem[] = [];
+  const directories: string[] = [];
   const seen = new Set<string>();
 
   const addFile = (relativePath: string): void => {
@@ -53,7 +58,15 @@ export function resolveOathPaths(rootDir: string, oaths: readonly string[]): Res
       continue;
     }
     if (stat.isDirectory()) {
-      for (const file of walkMarkdownFiles(absolute)) {
+      directories.push(relative);
+      const found = walkMarkdownFiles(absolute);
+      if (found.length === 0) {
+        problems.push({
+          path: entry,
+          message: `oaths names "${entry}", which holds no Markdown file (only files ending in .md are read)`,
+        });
+      }
+      for (const file of found) {
         addFile(path.relative(rootDir, file));
       }
       continue;
@@ -69,7 +82,7 @@ export function resolveOathPaths(rootDir: string, oaths: readonly string[]): Res
   }
 
   files.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  return { files, problems };
+  return { files, problems, directories };
 }
 
 function walkMarkdownFiles(dir: string): string[] {

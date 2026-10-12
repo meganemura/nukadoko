@@ -1560,7 +1560,9 @@ step の戻り値を文の中の語句と比べることもありません。
 デフォルトは `[]` です。
 sign-off の記録、README、プロジェクト配下の他の Markdown は、名指しされるまで scenario ではありません。
 ディレクトリの走査は `node_modules` とドットで始まるディレクトリを飛ばします。
-存在しないパス、または Markdown ファイルでもディレクトリでもないパスは `feature-parse-error` です。
+ディレクトリの走査が読むのは、小文字の `.md` で終わるファイルだけです。
+存在しないパス、`.md` ファイルを 1 つも持たないディレクトリ(`.MD` のファイルだけのディレクトリも該当します)、または Markdown ファイルでもディレクトリでもないパスは `feature-parse-error` です。
+`nuka run` に渡した oath のディレクトリに `.md` ファイルが無いときの拒否は、`.feature` ではなく Markdown ファイルが見つからないと述べます。
 `nuka check` または `nuka run` に渡した `.md` のパスは、`oaths` に無くても oath です。
 `nuka run` のディレクトリ対象は、その配下にある設定済みの oath を含み、`.feature` ファイルもこれまで通り歩きます。
 引数なしの `nuka check` と `nuka tend` は、`featuresDir` と `additionalFeatureDirs` に加えて `oaths` を読みます。

@@ -1796,10 +1796,13 @@ Measurement stays here.
 `oaths` in `nukadoko.config.ts` names the files, or a directory of
 `*.md` files. The default is `[]`: a sign-off record, a README, and any
 other Markdown under the project are not scenarios until named. A
-directory walk skips `node_modules` and dot-directories. A missing path,
-or a path that is neither a Markdown file nor a directory, is
-`feature-parse-error`. An explicit `.md` path given to `nuka check` or
-`nuka run` is an oath even when `oaths` does not list it. A directory
+directory walk skips `node_modules` and dot-directories, and reads only
+files that end in lowercase `.md`. A missing path, a directory that holds
+no such file (a directory of `.MD` files is one), or a path that is
+neither a Markdown file nor a directory, is `feature-parse-error`. An explicit `.md` path given to `nuka check` or
+`nuka run` is an oath even when `oaths` does not list it. When `nuka run`
+is given an oath directory that holds no Markdown file, it refuses and
+says that no Markdown file was found. A directory
 target of `nuka run` includes a configured oath that lives under that
 directory, and still walks `.feature` files. `nuka check` and `nuka tend`
 with no argument read `oaths` along with `featuresDir` and

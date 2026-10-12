@@ -168,6 +168,7 @@ export function selectPickles(
   rootDir: string,
   featureArgs: string | readonly string[],
   oathFiles: readonly string[] = [],
+  oathDirectories: readonly string[] = [],
 ): SelectedScenarios {
   const args = typeof featureArgs === "string" ? [featureArgs] : featureArgs;
   const selections = new Map<string, Set<number> | null>();
@@ -216,7 +217,10 @@ export function selectPickles(
   if (selections.size === 0) {
     const relativePaths = scannedDirectories.map(({ relativePath }) => relativePath).join('" and "');
     const absolutePaths = scannedDirectories.map(({ absolutePath }) => absolutePath).join(", ");
-    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths, oathFiles.length > 0);
+    const onlyOathDirectories = scannedDirectories.every(({ relativePath }) =>
+      oathDirectories.includes(path.normalize(relativePath.replace(/[\\/]+$/, "") || ".")),
+    );
+    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths, oathFiles.length > 0, onlyOathDirectories);
   }
 
   let totalPickles = 0;

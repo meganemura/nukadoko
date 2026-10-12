@@ -102,7 +102,9 @@ proves the wrong thing.
 3. Write the feature. `references/writing-the-feature.md`. The same
    criteria can live in a Markdown oath instead of a `.feature` file:
    name it in `oaths`, or pass the `.md` path to `nuka check` and
-   `nuka run`. A sentence no pattern matches is `undefined-step`.
+   `nuka run`. A sentence no pattern matches is `undefined-step`. A named
+   directory is read for `*.md` files only; one with none (`.MD` does not
+   count) is `feature-parse-error`.
    The grammar is in docs/spec.md ("Markdown oaths"). A resource the
    scenario borrows, a wait for an effect that lands elsewhere (`poll`,
    whose `timeout` is a budget for the whole call), or a

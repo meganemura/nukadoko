@@ -382,7 +382,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     let selected;
     try {
-      selected = selectPickles(rootDir, featureArgs, resolveOathPaths(rootDir, config.oaths).files);
+      const oaths = resolveOathPaths(rootDir, config.oaths);
+      selected = selectPickles(rootDir, featureArgs, oaths.files, oaths.directories);
     } catch (error) {
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;

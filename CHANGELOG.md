@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **An `oaths` directory with no Markdown file is now reported.**
+  `nuka check` stayed green when a named oath directory held no `.md`
+  file (an empty directory, or files named `.MD`), while a missing path
+  was `feature-parse-error`. It now reports `feature-parse-error` and
+  says that only `.md` files are read. `nuka run` on such a directory
+  said no `.feature` file was found; it now says no Markdown file was
+  found.
 - **A live session no longer drops a failed fixture teardown or a failed version probe.**
   `nuka session stop` discarded every teardown error, so it printed nothing
   and exited 0, while `nuka do` and `nuka run` warn. A failed environment
