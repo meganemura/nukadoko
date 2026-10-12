@@ -50,6 +50,9 @@ function formatLocation(issue: TendIssue): string {
   if (issue.step !== undefined) {
     return issue.step;
   }
+  if (issue.fixture !== undefined) {
+    return issue.fixture;
+  }
   return "-";
 }
 

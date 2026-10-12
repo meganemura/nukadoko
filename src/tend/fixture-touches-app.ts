@@ -30,7 +30,7 @@ export function findFixturesTouchingApp(graph: FixtureGraph): TendIssue[] {
         message: `Fixture "${name}" reaches page/context, directly or through another fixture, so it can ` +
           `drive the application before any step names it. Not a verdict: storageState setup is the common ` +
           `legitimate reason a fixture does this.`,
-        step: name,
+        fixture: name,
       });
     }
   }

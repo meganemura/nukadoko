@@ -37,6 +37,11 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
 
 `nuka session clear --env` と `nuka session stop` も、以前は終了コード 0 で何も出さなかった打ち間違いを名指すようになりました。
 
+- **`nuka tend --json` は fixture の名前を `step` ではなく `fixture` に入れます。**
+  `fixture-unused` と `fixture-touches-app` の note は、以前は fixture の名前を `step` に入れていました。
+  今は新しい `fixture` フィールドに入れ、`step` は設定しません。
+  これらの note を `.step` で選んでいたスクリプトは、`.fixture` で選んでください。
+  テキスト出力は変わりません。
 - **`this.link` の第 2 引数は表示名ではなく、もう 1 つの URL です。**
   `this.link(a, b)` は以前、名前が `b` である link を 1 件記録していました。
   今は引数ごとに `declared` の link を 1 件記録し、どれにも名前は付きません。

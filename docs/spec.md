@@ -938,6 +938,8 @@ For example, it can log in a user before any step requests a login.
 This has the same effect as work that a step's Given does not describe.
 The report does not prohibit browser access from a fixture.
 For example, a fixture can legitimately generate `storageState`.
+In `--json`, both findings name the fixture in a `fixture` field and leave `step` unset,
+so a fixture and a step of the same name stay apart.
 `tend` only identifies the fixtures, so a reader decides whether each one belongs.
 
 A step record contains `fixtures` only when the list is not empty.

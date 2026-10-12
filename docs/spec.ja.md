@@ -736,6 +736,8 @@ scenario record はすでに閉じている場合があり、stderr がその失
 これは、step の Given が説明しない作業と同じ効果を持ちます。
 この報告は、fixture からのブラウザアクセスを禁止しません。
 たとえば、fixture は正当な目的で `storageState` を生成できます。
+`--json` では、この 2 つの所見は fixture の名前を `fixture` フィールドに入れ、`step` は設定しません。
+同じ名前の fixture と step を区別するためです。
 `tend` は fixture を特定するだけであり、各 fixture がそこに属するかは読み手が判断します。
 
 リストが空でない場合だけ、step record は `fixtures` を含みます。

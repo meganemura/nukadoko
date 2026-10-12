@@ -42,6 +42,11 @@ The env file parser now follows dotenv for comments, quotes, escapes, and
 values that span lines. A project whose env files relied on the old reading
 has to look at those values before the next run.
 
+- **`nuka tend --json` names a fixture in `fixture`, not `step`.** The
+  `fixture-unused` and `fixture-touches-app` notes used to carry the fixture
+  name in `step`. They now carry it in a new `fixture` field and leave `step`
+  unset. A script that selected these notes by `.step` should select by
+  `.fixture`. Text output is unchanged.
 - **`this.link`'s second argument is another URL, not a display name.**
   `this.link(a, b)` used to record one link whose name was `b`. It now
   records one declared link per argument, and none of them has a name,

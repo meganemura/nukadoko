@@ -66,7 +66,7 @@ export function findUnusedFixtures(vocabulary: Vocabulary, graph: FixtureGraph):
       message: `Fixture "${name}" is declared under nukadoko.config.ts's own \`fixtures\`, but no typed step ` +
         `requires it, directly or through another fixture. Still reachable through \`nuka do\`; this is a fact, ` +
         `not a verdict on whether to remove it.`,
-      step: name,
+      fixture: name,
     });
   }
   return issues;

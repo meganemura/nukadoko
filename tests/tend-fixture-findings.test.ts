@@ -55,7 +55,7 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
 
     const byStep = report.notes.filter((note) => note.step === "loggedIn").map((note) => note.code);
     const byFixture = report.notes.filter((note) => note.fixture === "loggedIn").map((note) => note.code);
-    expect(byStep).toEqual(["step-rationale-missing"]);
+    expect(byStep.sort()).toEqual(["pattern-unbound", "step-rationale-missing"]);
     expect(byFixture).toEqual(["fixture-touches-app"]);
   });
 });

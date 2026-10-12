@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka tend --json` no longer puts a fixture name in `step`.**
+  The `fixture-unused` and `fixture-touches-app` notes carried the fixture
+  name in `step`, so selecting `step == "login"` mixed a fixture finding with
+  a step finding of the same name. They now carry it in a new `fixture` field
+  and leave `step` unset, as `nuka check` does for its fixture findings. This
+  changes the `--json` shape of those two notes; docs/upgrading.md says how.
 - **The spec no longer says `browser` is read only for `headless`.**
   The whole `browser` object reaches the engine's `launch`, so `args`,
   `executablePath`, and `slowMo` take effect. `docs/spec.md` and

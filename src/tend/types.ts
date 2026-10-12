@@ -1,6 +1,6 @@
 // Responsibility: the one finding shape `nuka tend`'s six checks all
 // produce. Shaped identically to
-// src/check/types.ts's `CheckIssue` (code/message/optional file/line/step)
+// src/check/types.ts's `CheckIssue` (code/message/optional file/line/step, plus `fixture`)
 // but declared fresh rather than imported: `check` answers "can this run"
 // and `tend` answers "is this healthy" (docs/spec.md "Tending" — deliberately
 // two commands, read at different moments, so a real slowdown-worthy line on
@@ -26,6 +26,9 @@ export interface TendIssue {
   readonly file?: string;
   readonly line?: number;
   readonly step?: string;
+  /** Set instead of `step` on a finding about a `config.fixtures` entry, so a
+   * fixture and a step of the same name stay distinguishable in `--json`. */
+  readonly fixture?: string;
 }
 
 /** How much of a countable thing typed steps declare vs. could declare —
