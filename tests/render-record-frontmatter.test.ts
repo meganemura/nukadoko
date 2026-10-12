@@ -8,7 +8,7 @@ import {
   type RenderAcceptanceRecordOptions,
 } from "../src/accept/render-record.js";
 import { parseAcceptanceRecord } from "../src/tend/record-parse.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for render-record.ts's own frontmatter details
 // tests/render-record.test.ts and the E2E accept*.test.ts files never
@@ -119,11 +119,11 @@ describe("renderAcceptanceRecord: target_version frontmatter", () => {
 });
 
 describe("renderAcceptanceRecord: MissingStepRecordError", () => {
-  function scenarioStep(text: string, recordId: string | null): ScenarioStepRecord {
+  function scenarioStep(text: string, recordId: string | null): ScenarioStepEntry {
     return { text, status: "passed", step_record_id: recordId };
   }
 
-  function scenarioWithSteps(steps: readonly ScenarioStepRecord[]): AcceptedScenario {
+  function scenarioWithSteps(steps: readonly ScenarioStepEntry[]): AcceptedScenario {
     return { record: baseRecord({ steps }), stepRecords: new Map() };
   }
 

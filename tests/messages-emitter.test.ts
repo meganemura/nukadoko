@@ -7,7 +7,7 @@ import { parseFeatureSource } from "../src/feature/load-features.js";
 import { messagesRunOutputPath } from "../src/record/messages-output.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../src/report/messages/emitter.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { readOwnVersion } from "../src/version.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
@@ -120,7 +120,7 @@ describe("createMessagesEmitter", () => {
       mkdirSync(scenarioDir, { recursive: true });
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
 
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
       const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
       const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
       const record: ScenarioRecord = {

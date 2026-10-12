@@ -9,7 +9,7 @@ import {
   type BeginScenarioInput,
   type EmitStepInput,
 } from "../src/report/allure/emitter.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: pins the official allure-cucumberjs structure this Allure
@@ -88,7 +88,7 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
   it("writes exactly one result.json for a 4-step scenario, never one per step plus one for the scenario", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+    const steps: ScenarioStepEntry[] = pickle.steps.map((step) => ({
       text: step.text,
       status: "passed",
       step_record_id: null,
@@ -123,7 +123,7 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
   it("nests every GWT step under that one result's own steps[], keyword included and And left un-normalized", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+    const steps: ScenarioStepEntry[] = pickle.steps.map((step) => ({
       text: step.text,
       status: "passed",
       step_record_id: null,
@@ -163,7 +163,7 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
   it("carries a feature label, and never a parentSuite/suite label", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));

@@ -11,7 +11,7 @@ import type {
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { ActionEntry, CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
-import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepRecord } from "../../record/scenario-record.js";
+import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
 
 // Responsibility: the pure transform at the center of this module, kept in
@@ -202,7 +202,7 @@ export interface MapGwtStepInput {
    * `pickle.steps` — used to resolve this step's own gherkin keyword and
    * its own `argument` (data table/doc string), below. */
   readonly index: number;
-  readonly record: ScenarioStepRecord;
+  readonly record: ScenarioStepEntry;
   /** The exact in-memory object `run-scenario.ts`'s own `writeStepRecord`
    * call just persisted for this step, or `null` for a step with no step
    * record of its own at all (skipped, undefined, ambiguous, or a
@@ -615,7 +615,7 @@ interface Outcome {
  * `stepRecord` is `null` exactly when `step.step_record_id` is `null` (a
  * step that never began at all — skipped, undefined, ambiguous, or a
  * never-began refusal). */
-function resolveStepOutcome(step: ScenarioStepRecord, stepRecord: StepRecord | null): Outcome {
+function resolveStepOutcome(step: ScenarioStepEntry, stepRecord: StepRecord | null): Outcome {
   if (step.status === "passed") {
     return { status: "passed" };
   }

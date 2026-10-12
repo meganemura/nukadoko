@@ -64,7 +64,7 @@ import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js
 import { withStepStdoutOnStderr } from "./step-stdout.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
-import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepRecord } from "../record/scenario-record.js";
+import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../record/scenario-record.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
 
@@ -278,7 +278,7 @@ interface ChainEntry {
  * as close to "this step actually finished" as this file can observe. */
 export interface StepFinishedInfo {
   readonly scenarioId: string;
-  readonly record: ScenarioStepRecord;
+  readonly record: ScenarioStepEntry;
   readonly stepRecord: StepRecord | null;
   readonly index: number;
   readonly finishedAt: Date;
@@ -996,7 +996,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       messages.push(issue.message);
       issuesByStepIndex.set(issue.stepIndex, messages);
     }
-    const stepRecords: ScenarioStepRecord[] = pickle.steps.map((pickleStep, index) => {
+    const stepRecords: ScenarioStepEntry[] = pickle.steps.map((pickleStep, index) => {
       const messages = issuesByStepIndex.get(index);
       if (messages === undefined) {
         return { text: pickleStep.text, status: "skipped", step_record_id: null };
@@ -1079,7 +1079,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         : undefined,
   });
 
-  const stepRecords: ScenarioStepRecord[] = [];
+  const stepRecords: ScenarioStepEntry[] = [];
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
   // The outcome After reads. A passing scenario contributes the last
@@ -1159,7 +1159,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * finished" means for
    * every step, not only the ones with a step record.
    */
-  function pushStepRecord(record: ScenarioStepRecord, durationMs: number, stepRecord: StepRecord | null = null): void {
+  function pushStepRecord(record: ScenarioStepEntry, durationMs: number, stepRecord: StepRecord | null = null): void {
     stepRecords.push(record);
     const finishedAt = new Date();
     onStepEnd?.({
@@ -1543,7 +1543,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // Same backstop as this function's normal end: teardown must not take
       // the scenario record down with it.
     }
-    const failedSteps: ScenarioStepRecord[] = pickle.steps.map((pickleStep, index) => {
+    const failedSteps: ScenarioStepEntry[] = pickle.steps.map((pickleStep, index) => {
       if (index === 0) {
         return {
           text: pickleStep.text,

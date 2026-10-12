@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import { mapScenario } from "../src/report/messages/map-scenario.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for map-scenario.ts's pure transform. No
 // node:fs, no real IdGenerator.uuid(): every
@@ -66,7 +66,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
 }
 
 describe("mapScenario (messages): step status mapping", () => {
-  const CASES: readonly [ScenarioStepRecord["status"], TestStepResultStatus][] = [
+  const CASES: readonly [ScenarioStepEntry["status"], TestStepResultStatus][] = [
     ["passed", TestStepResultStatus.PASSED],
     ["failed", TestStepResultStatus.FAILED],
     ["skipped", TestStepResultStatus.SKIPPED],
@@ -77,7 +77,7 @@ describe("mapScenario (messages): step status mapping", () => {
   it.each(CASES)("maps step status %s to %s", (status, expected) => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status, step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status, step_record_id: null };
     const record = baseRecord({ steps: [step] });
 
     const mapped = mapScenario({
@@ -96,7 +96,7 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
   it("orders testSteps as before hook -> step -> after hook", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
     const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
     const record = baseRecord({ steps: [step], hooks: [beforeHook, afterHook] });
@@ -173,7 +173,7 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
   it("emits no hook-derived test step when the scenario record has no hooks", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const record = baseRecord({ steps: [step], hooks: [] });
 
     const mapped = mapScenario({
@@ -194,7 +194,7 @@ describe("mapScenario (messages): after_step hooks", () => {
   it("gives an after_step hook its own HookType.AFTER_TEST_STEP Hook named AfterStep[<step_index>], not folded onto \"After\"", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
     const record = baseRecord({ steps: [step], hooks: [afterStepHook] });
 
@@ -224,7 +224,7 @@ describe("mapScenario (messages): after_step hooks", () => {
   it("orders testSteps as before -> pickle steps -> after_step -> after", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
     const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
     const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
@@ -250,7 +250,7 @@ describe("mapScenario (messages): after_step hooks", () => {
   it("gives distinct step_index values distinct Hook envelopes and distinct test steps", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = [
+    const steps: ScenarioStepEntry[] = [
       { text: "the cart has items", status: "passed", step_record_id: null },
       { text: "the customer pays", status: "passed", step_record_id: null },
     ];
@@ -277,7 +277,7 @@ describe("mapScenario (messages): after_step hooks", () => {
   it("reuses two already-assigned hookIds.afterStep entries and emits no new Hook envelope for either", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = [
+    const steps: ScenarioStepEntry[] = [
       { text: "the cart has items", status: "passed", step_record_id: null },
       { text: "the customer pays", status: "passed", step_record_id: null },
     ];
@@ -303,7 +303,7 @@ describe("mapScenario (messages): after_step hooks", () => {
   it("collapses multiple after_step hook records for the same step_index onto one shared Hook id", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const hooks: ScenarioHookRecord[] = [
       { type: "after_step", status: "ok", step_index: 0 },
       { type: "after_step", status: "failed", step_index: 0, error: { message: "boom", kind: "step_error" } },
@@ -329,7 +329,7 @@ describe("mapScenario (messages): pickleStepId correspondence", () => {
   it("sets pickleStepId to the matching pickle step's own id, in order", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = [
+    const steps: ScenarioStepEntry[] = [
       { text: "the cart has items", status: "passed", step_record_id: null },
       { text: "the customer pays", status: "passed", step_record_id: null },
       { text: "the order is confirmed", status: "passed", step_record_id: null },
@@ -350,7 +350,7 @@ describe("mapScenario (messages): pickleStepId correspondence", () => {
   it("omits pickleStepId (but still emits the test step) when there is no matching pickle step", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const steps: ScenarioStepRecord[] = [
+    const steps: ScenarioStepEntry[] = [
       { text: "the cart has items", status: "passed", step_record_id: null },
       { text: "the customer pays", status: "passed", step_record_id: null },
       { text: "the order is confirmed", status: "passed", step_record_id: null },
@@ -379,7 +379,7 @@ describe("mapScenario (messages): duration/timestamp", () => {
       started_at: "2026-08-01T00:00:00.500Z",
       finished_at: "2026-08-01T00:00:01.500Z",
     });
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
     const record = baseRecord({ steps: [step] });
 
     const mapped = mapScenario({
@@ -404,7 +404,7 @@ describe("mapScenario (messages): duration/timestamp", () => {
       started_at: "2026-08-01T00:00:00.500Z",
       finished_at: "2026-08-01T00:00:01.500Z",
     });
-    const steps: ScenarioStepRecord[] = [
+    const steps: ScenarioStepEntry[] = [
       { text: "the cart has items", status: "passed", step_record_id: "step-1" },
       { text: "the customer pays", status: "skipped", step_record_id: null },
     ];
@@ -430,7 +430,7 @@ describe("mapScenario (messages): failed step message, no exception", () => {
   it("copies record.error.message onto testStepResult.message, and never sets exception", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = {
+    const step: ScenarioStepEntry = {
       text: "the cart has items",
       status: "failed",
       step_record_id: null,

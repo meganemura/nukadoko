@@ -11,7 +11,7 @@ import {
   type EmitStepInput,
 } from "../src/report/allure/emitter.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: integration tests — drives the real allure-js-commons
@@ -187,8 +187,8 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
       writeFileSync(path.join(scenarioDir, "hook-note.txt"), "hook declared note");
 
-      const step1: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
-      const step2: ScenarioStepRecord = { text: "the total is correct", status: "passed", step_record_id: "step-2" };
+      const step1: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+      const step2: ScenarioStepEntry = { text: "the total is correct", status: "passed", step_record_id: "step-2" };
       const beforeHook: ScenarioHookRecord = {
         type: "before",
         status: "ok",
@@ -402,7 +402,7 @@ describe("createAllureEmitter", () => {
     // fixture in a scope with zero tests attached (verified against its own
     // `_writeFixturesOfScope`: `if (tests.length) { ... }`), the same as it
     // would for a scenario with zero real pickle steps in practice.
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const record: ScenarioRecord = {
       scenario_record_id: "scn-hook-trace-1",
       run_id: "run-1",
@@ -466,7 +466,7 @@ describe("createAllureEmitter", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         steps: pickle.steps.map(
-          (step: { text: string }) => ({ text: step.text, status: "passed", step_record_id: null }) as ScenarioStepRecord,
+          (step: { text: string }) => ({ text: step.text, status: "passed", step_record_id: null }) as ScenarioStepEntry,
         ),
         hooks: [],
         evidence: { dir: `.nukadoko/records/scenarios/${scenarioId}`, screenshots: [] },
@@ -605,7 +605,7 @@ describe("createAllureEmitter", () => {
         error: { message: "it broke on purpose", kind: "step_error" },
       };
       writeStepRecordFile(rootDir, stepRecord);
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "failed", step_record_id: "step-fail-1" };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "failed", step_record_id: "step-fail-1" };
       const record: ScenarioRecord = {
         scenario_record_id: "scn-fail-1",
         run_id: "run-1",
@@ -639,7 +639,7 @@ describe("createAllureEmitter", () => {
     it("leaves statusDetails unset for a passed scenario", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
       const record: ScenarioRecord = {
         scenario_record_id: "scn-pass-1",
         run_id: "run-1",
@@ -673,7 +673,7 @@ describe("createAllureEmitter", () => {
         status: "failed",
         error: { message: "hook blew up", kind: "step_error" },
       };
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "skipped", step_record_id: null };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "skipped", step_record_id: null };
       const record: ScenarioRecord = {
         scenario_record_id: "scn-hook-fail-1",
         run_id: "run-1",
@@ -716,7 +716,7 @@ describe("createAllureEmitter", () => {
     it("degrades gracefully (no throw, a normal result file) when a step's own record is a never-began refusal", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const step: ScenarioStepRecord = {
+      const step: ScenarioStepEntry = {
         text: "the cart has items",
         status: "failed",
         step_record_id: "step-never-written",
@@ -759,7 +759,7 @@ describe("createAllureEmitter", () => {
       // scenario now, so "another step's output" (the old framing) has no
       // meaning inside the *same* scenario any more (this file's own
       // header).
-      const healthyStep: ScenarioStepRecord = { text: "the cart has items", status: "skipped", step_record_id: null };
+      const healthyStep: ScenarioStepEntry = { text: "the cart has items", status: "skipped", step_record_id: null };
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
       emitter.emitStep(
         baseStepInput({ record: healthyStep, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-healthy" }),
@@ -811,7 +811,7 @@ describe("createAllureEmitter", () => {
       writeStepRecordFile(rootDir, stepRecord);
       // Deliberately not writing .nukadoko/records/steps/step-broken/http.jsonl.
 
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-broken" };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-broken" };
       const record: ScenarioRecord = {
         scenario_record_id: "scn-broken",
         run_id: "run-1",
@@ -885,7 +885,7 @@ describe("createAllureEmitter", () => {
         ],
       };
       writeStepRecordFile(rootDir, stepRecord);
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-parts" };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-parts" };
       const record: ScenarioRecord = {
         scenario_record_id: "scn-parts",
         run_id: "run-1",

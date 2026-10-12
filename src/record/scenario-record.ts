@@ -97,7 +97,7 @@ import type { ActionEntry, ErrorKind, ScreenshotEntry } from "./types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
-export interface ScenarioStepRecord {
+export interface ScenarioStepEntry {
   readonly text: string;
   readonly status: ScenarioStepStatus;
   /** The step's own step record id, or `null` when none was written
@@ -136,7 +136,7 @@ export interface ScenarioHookRecord {
   readonly name?: string;
   /** This hook invocation's own trace chunk, relative to the *scenario's*
    * evidence dir (this file's own header) —
-   * unlike `ScenarioStepRecord`, a hook has no step record dir of its own,
+   * unlike `ScenarioStepEntry`, a hook has no step record dir of its own,
    * so its chunk lands beside its sibling hooks' in the scenario's own dir
    * instead, each under a name unique to that one invocation (src/run/
    * run-scenario.ts's `hookChunkFileName`). Present only when this
@@ -210,7 +210,7 @@ export interface ScenarioRecord {
   readonly session: string | null;
   readonly started_at: string;
   readonly finished_at: string;
-  readonly steps: readonly ScenarioStepRecord[];
+  readonly steps: readonly ScenarioStepEntry[];
   readonly hooks: readonly ScenarioHookRecord[];
   /** The commit and cleanliness of the working tree when this run started
    * (docs/spec.md "Sign-off": "the

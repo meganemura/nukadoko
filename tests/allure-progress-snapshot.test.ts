@@ -11,7 +11,7 @@ import {
   type EmitStepInput,
   type EmitStepProgressInput,
 } from "../src/report/allure/emitter.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: the step-granularity liveness mechanism itself (the
@@ -139,7 +139,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("adds one progress file after beginScenario, one more after each emitStep, then zero (and one final) after endScenario", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+    const steps: ScenarioStepEntry[] = pickle.steps.map((step) => ({
       text: step.text,
       status: "passed",
       step_record_id: null,
@@ -178,7 +178,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("gives a progress snapshot the exact same fullName/testCaseId/historyId/non-excluded parameters as the eventual final result (an Outline row, Examples cell included)", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "checkout as guest")!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     const beforeEmitStep = new Set(readProgressFileNames(resultsDir));
@@ -231,7 +231,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("gives one scenario's own snapshots a strictly increasing start, starting at scenarioStart - (stepCount * (heartbeatCap + 1) + 2), all strictly below the real result's own start", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+    const steps: ScenarioStepEntry[] = pickle.steps.map((step) => ({
       text: step.text,
       status: "passed",
       step_record_id: null,
@@ -358,7 +358,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("reflects a completed step's own real status/timing while later steps stay planned", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     const beforeEmitStep = new Set(readProgressFileNames(resultsDir));
@@ -375,7 +375,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("never lists attachments on a snapshot's own steps, even when the real step record would carry one", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: "step-1" };
+    const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: "step-1" };
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     const beforeEmitStep = new Set(readProgressFileNames(resultsDir));
@@ -410,7 +410,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("never lets a progress snapshot's own uuid into the scope container's own children", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
@@ -447,7 +447,7 @@ describe("createAllureEmitter: progress snapshots", () => {
   it("gives every progress snapshot in one scenario the same uuid, each under its own file name, deletes them all at endScenario, and gives the final result a different uuid", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-    const steps: ScenarioStepRecord[] = pickle.steps.map((step) => ({
+    const steps: ScenarioStepEntry[] = pickle.steps.map((step) => ({
       text: step.text,
       status: "passed",
       step_record_id: null,
@@ -500,7 +500,7 @@ describe("createAllureEmitter: progress snapshots", () => {
     const second = pickles.find((p) => p.name === "checkout as member")!;
 
     function runScenario(pickle: typeof first, scenarioId: string): string {
-      const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+      const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
       const uuid = (readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { uuid: string }).uuid;
       emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
@@ -618,7 +618,7 @@ describe("createAllureEmitter: progress snapshots", () => {
     it("does nothing once that step's own real outcome has already been buffered by emitStep (a stale heartbeat never overwrites a finished step)", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles.find((p) => p.name === "a customer checks out")!;
-      const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+      const step: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
       emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
@@ -670,11 +670,11 @@ describe("createAllureEmitter: progress snapshots", () => {
           baseStepProgressInput({ gherkinDocument, pickle, index: 0, liveItems: ["waiting for: x (attempt 2)"] }),
         ),
       );
-      const step0: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+      const step0: ScenarioStepEntry = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
       recordNextStart(() =>
         emitter.emitStep(baseStepInput({ record: step0, stepRecord: null, gherkinDocument, pickle, index: 0 })),
       );
-      const step1: ScenarioStepRecord = { text: pickle.steps[1]!.text, status: "passed", step_record_id: null };
+      const step1: ScenarioStepEntry = { text: pickle.steps[1]!.text, status: "passed", step_record_id: null };
       recordNextStart(() =>
         emitter.emitStep(baseStepInput({ record: step1, stepRecord: null, gherkinDocument, pickle, index: 1 })),
       );

@@ -17,7 +17,7 @@ import {
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../../sink/writable-sink.js";
 import type { StepRecord } from "../../record/types.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../../record/scenario-record.js";
+import type { ScenarioRecord, ScenarioStepEntry } from "../../record/scenario-record.js";
 import { redactString } from "../../secrets/redact.js";
 import type { SecretSet } from "../../secrets/types.js";
 import { buildCategories } from "./categories.js";
@@ -315,7 +315,7 @@ export interface EmitStepInput {
   readonly environment: string;
   readonly session: string | null;
   readonly targetVersion?: string;
-  readonly record: ScenarioStepRecord;
+  readonly record: ScenarioStepEntry;
   /** The exact in-memory object run-scenario.ts's own `writeStepRecord`
    * call just persisted for this step, or `null` for a step with no step
    * record of its own at all — see map-scenario.ts's `MapGwtStepInput.

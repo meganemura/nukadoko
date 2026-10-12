@@ -9,7 +9,7 @@ import {
   type BeginScenarioInput,
   type EmitStepInput,
 } from "../src/report/allure/emitter.js";
-import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
 // Responsibility: tests/allure-emitter.test.ts already drives the full
@@ -106,7 +106,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
   it("emitStep is a silent no-op when no scope is open (beginScenario never ran)", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
-    const record: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const record: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
 
     const before = new Set(readdirSync(resultsDir));
     expect(() =>
@@ -133,7 +133,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
   it("endScenario is a silent no-op the second time in a row (its own beginScenario/endScenario pairing, not just emitStep's)", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const record = baseScenarioRecord({ scenario_record_id: "scn-double-end", steps: [step] });
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -158,7 +158,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
     // longer a second step's own file inside the *same* scenario to isolate
     // from (this file's own header: a bad attachment now costs the whole
     // scenario it belongs to).
-    const healthyStep: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const healthyStep: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: healthyStep, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-healthy" }));
     emitter.endScenario({
@@ -170,7 +170,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
     const healthyFiles = new Set(readdirSync(resultsDir));
     expect(healthyFiles.size).toBeGreaterThan(0);
 
-    const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const record = baseScenarioRecord({
       scenario_record_id: "scn-evidence-broken",
       steps: [step],
@@ -222,7 +222,7 @@ describe("createAllureEmitter: ALLURE_LABEL_* environment labels", () => {
 
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
-      const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: null };
+      const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
       const record = baseScenarioRecord({ scenario_record_id: "scn-env-label", steps: [step] });
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));

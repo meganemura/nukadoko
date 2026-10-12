@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderAcceptanceRecord, type AcceptedScenario, type RenderAcceptanceRecordOptions } from "../src/accept/render-record.js";
 import type { StepRecord } from "../src/record/types.js";
-import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
+import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for render-record.ts's `renderHook`/`hookLabel`
 // — a non-exhaustive ternary used
@@ -145,12 +145,12 @@ function makeStepRecord(overrides: {
   };
 }
 
-function scenarioStep(text: string, recordId: string): ScenarioStepRecord {
+function scenarioStep(text: string, recordId: string): ScenarioStepEntry {
   return { text, status: "passed", step_record_id: recordId };
 }
 
 function scenarioWithSteps(
-  steps: readonly ScenarioStepRecord[],
+  steps: readonly ScenarioStepEntry[],
   stepRecords: ReadonlyMap<string, StepRecord | null>,
   overrides: Partial<ScenarioRecord> = {},
 ): AcceptedScenario {
