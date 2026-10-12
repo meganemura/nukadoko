@@ -53,6 +53,10 @@ export type LiveRequest = LiveDoRequest | LiveStopRequest;
 export interface LiveRecordResponse {
   readonly status: "record";
   readonly record: StepRecord;
+  /** Warning lines (already redacted) the daemon owes this caller, such as a
+   * failed version probe. The daemon has no terminal, so the CLI prints
+   * them to stderr the way `nuka do` would have. */
+  readonly warnings?: readonly string[];
 }
 
 /** A request this session refused before anything ran — a busy session (one
@@ -71,6 +75,9 @@ export interface LiveRejectedResponse {
  * a process that is about to disappear. */
 export interface LiveStoppedResponse {
   readonly status: "stopped";
+  /** One already redacted warning line per fixture whose teardown failed;
+   * the CLI prints them to stderr, and the stop itself still succeeds. */
+  readonly warnings?: readonly string[];
 }
 
 export type LiveResponse = LiveRecordResponse | LiveRejectedResponse | LiveStoppedResponse;
@@ -99,6 +106,10 @@ function quotableStatus(status: string): boolean {
     }
   }
   return true;
+}
+
+function warningLines(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((line): line is string => typeof line === "string") : [];
 }
 
 function unrecognizedReplyDetail(value: unknown): string {
@@ -132,7 +143,11 @@ export function parseLiveResponse(value: unknown): ParsedLiveResponse {
     }
     return {
       ok: true,
-      response: { status: "record", record: value.record as unknown as StepRecord },
+      response: {
+        status: "record",
+        record: value.record as unknown as StepRecord,
+        ...(Array.isArray(value.warnings) ? { warnings: warningLines(value.warnings) } : {}),
+      },
     };
   }
   if (value.status === "rejected") {
@@ -142,7 +157,13 @@ export function parseLiveResponse(value: unknown): ParsedLiveResponse {
     return { ok: true, response: { status: "rejected", message: value.message } };
   }
   if (value.status === "stopped") {
-    return { ok: true, response: { status: "stopped" } };
+    return {
+      ok: true,
+      response: {
+        status: "stopped",
+        ...(Array.isArray(value.warnings) ? { warnings: warningLines(value.warnings) } : {}),
+      },
+    };
   }
   return { ok: false, message: unrecognizedReplyDetail(value) };
 }

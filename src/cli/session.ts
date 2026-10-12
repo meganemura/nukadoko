@@ -395,6 +395,11 @@ export async function runSessionStop(options: RunSessionStopOptions): Promise<nu
     stderr.write(`Session "${name}" did not stop: ${outcome.response.message}\n`);
     return 1;
   }
+  // Exit stays 0, as for `nuka do` and `nuka run`: a failed teardown is
+  // announced, never a failed command.
+  for (const warning of outcome.response.warnings ?? []) {
+    stderr.write(`${warning}\n`);
+  }
 
   return 0;
 }

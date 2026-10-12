@@ -31,7 +31,7 @@ import type { ErrorKind, EvidenceMeta, FixtureUsageEntry, StepRecord } from "../
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { redact } from "../secrets/redact.js";
+import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { acquireLock, releaseLock } from "../session/lock.js";
@@ -286,6 +286,12 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
   // has to assume it might.
   const probeResult = await probeVersion(resolvedEnv.version);
   const targetVersion = probeResult?.ok ? probeResult.version : undefined;
+  // Told to the caller on every record reply, as `nuka do` warns on every
+  // call: the daemon has no terminal of its own to write it to.
+  const probeWarnings =
+    probeResult !== undefined && !probeResult.ok
+      ? [versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets)]
+      : [];
 
   let loadedStorageState: Awaited<ReturnType<typeof readSessionFile>> = null;
   try {
@@ -374,7 +380,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
    * over the socket first (see that function's own comment for why sending
    * the ack any earlier would race the very thing it is meant to promise).
    */
-  async function performCleanup(): Promise<void> {
+  async function performCleanup(): Promise<readonly string[]> {
     busy = true;
     clearTimeout(idleTimer);
 
@@ -385,8 +391,10 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // always `"passed"`: several executions, possibly a mix of `"ok"` and
     // `"failed"`, shared this cache, so there is no single execution's own
     // outcome left to report by the time the session as a whole ends.
-    await teardownFixtureCache(fixtureScenarioCache, "passed");
-    await teardownFixtureCache(fixtureProcessCache, "passed");
+    const teardownErrors = [
+      ...(await teardownFixtureCache(fixtureScenarioCache, "passed")),
+      ...(await teardownFixtureCache(fixtureProcessCache, "passed")),
+    ];
 
     let disposeResult: Awaited<ReturnType<StepContextHandle["dispose"]>>;
     try {
@@ -421,6 +429,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // to.
     await rm(sockDir, { recursive: true, force: true });
     await releaseLock(lockPath);
+    return teardownErrors.map((error) => fixtureTeardownWarning(error.fixture, error.message, secrets));
   }
 
   /** The idle-timeout path: nothing is waiting on an acknowledgement, so
@@ -677,7 +686,11 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
 
     const redactedStepRecord = redact(stepRecord, secrets) as StepRecord;
     await writeStepRecord(evidenceDir, redactedStepRecord);
-    return { status: "record", record: redactedStepRecord };
+    return {
+      status: "record",
+      record: redactedStepRecord,
+      ...(probeWarnings.length > 0 ? { warnings: probeWarnings } : {}),
+    };
   }
 
   /**
@@ -714,8 +727,8 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
       // this process, once that caller's own acknowledgement has actually
       // been sent, is `handleConnection`'s own job below, deliberately not
       // this function's (its own header explains why).
-      await performCleanup();
-      return { status: "stopped" };
+      const warnings = await performCleanup();
+      return { status: "stopped", ...(warnings.length > 0 ? { warnings } : {}) };
     }
 
     if (busy) {

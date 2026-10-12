@@ -52,7 +52,7 @@ import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
-import { redact, redactString } from "../secrets/redact.js";
+import { redact, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
@@ -1128,7 +1128,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     if (processSignal?.interrupted === true) {
       for (const teardownError of fixtureTeardownErrors) {
         process.stderr.write(
-          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+          fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
         );
       }
     }

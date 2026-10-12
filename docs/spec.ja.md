@@ -1856,6 +1856,10 @@ session を止めると、その storageState は session が昔から残して�
 打ち間違えた名前が、session が止まったように見えてはいけません。
 本当のプロセスは、アイドルタイムアウトまでブラウザを持ち続けるからです。
 古びた lock file は今までどおり削除され、その片付けは静かです。
+live session を止めるとき、teardown に失敗した fixture は stderr に報告されます。
+報告は fixture ごとに `Warning: fixture "<name>" teardown failed: <message>` の 1 行で、message は redact されます。
+exit code は、`nuka do` と `nuka run` と同じく 0 のままです。
+environment の `version` probe に失敗した live session は、`nuka do` と同じ警告を、受け付けた `nuka do --session` のたびに繰り返します。
 `nuka session clear --env <name>` は、config が定義していない environment の下に session ファイルも lock file も残っていないとき、その environment を拒否します。
 拒否の文は、ほかのコマンドが未知の environment にすでに使っているものと同じです。
 config から外された environment の下に残っている session ファイルは、今までどおり削除されます。

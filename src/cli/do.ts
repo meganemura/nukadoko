@@ -36,7 +36,7 @@ import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.j
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { redact, redactString } from "../secrets/redact.js";
+import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { acquireLock, liveLockOwner, readLockInfo, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
@@ -184,6 +184,9 @@ async function delegateToLiveSession(
   const { response } = outcome;
   switch (response.status) {
     case "record":
+      for (const warning of response.warnings ?? []) {
+        stderr.write(`${warning}\n`);
+      }
       // The one line saying which world this ran in (docs/spec.md "Live
       // sessions": "a record from a live session must not read like a
       // record from a clean one") — said here, at the moment the caller can
@@ -555,7 +558,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         targetVersion = probeResult.version;
       } else {
         stderr.write(
-          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${redactString(probeResult.reason, secrets)}\n`,
+          versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n",
         );
       }
     }
@@ -626,7 +629,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // The message is the fixture's own text, so a value `ctx.env` handed
         // it is in there, and this line is not a step record.
         stderr.write(
-          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+          fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
         );
       }
       try {

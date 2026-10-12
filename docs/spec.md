@@ -2189,7 +2189,12 @@ When the name also has no session file and no lock, stderr names both,
 `no session "<name>" in environment "<environment>"`. A typo must not look
 like the session stopped, because the real process keeps its browser until
 the idle timeout. A stale lock is still removed, and that cleanup stays
-quiet. `nuka session clear --env <name>` refuses an environment the config
+quiet. When a live session is stopped, a fixture whose teardown fails is
+reported on stderr, one `Warning: fixture "<name>" teardown failed: <message>`
+line each, with the message redacted. The exit code stays 0, as it does for
+`nuka do` and `nuka run`. A live session whose environment `version` probe
+failed repeats the `nuka do` warning on every `nuka do --session` that it
+serves. `nuka session clear --env <name>` refuses an environment the config
 does not define when no session file or lock is left under it, with the
 same message the other commands already use for an unknown environment.
 Session files left under an environment that has been removed from the

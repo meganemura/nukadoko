@@ -53,8 +53,8 @@ import {
 } from "../run/run-scenario.js";
 import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
+import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { redactString } from "../secrets/redact.js";
 import { acquireLock, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
@@ -543,7 +543,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         targetVersion = probeResult.version;
       } else {
         stderr.write(
-          `Warning: version probe for environment "${resolvedEnv.name}" failed: ${redactString(probeResult.reason, secrets)}\n`,
+          versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n",
         );
       }
     }
@@ -768,7 +768,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // The line is the fixture's own text, with no scenario record to
           // redact it first.
           stderr.write(
-            `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+            fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
           );
         }
       });
@@ -1036,7 +1036,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // stderr line has to stay that way on its own.
           for (const teardownError of record.teardown_errors ?? []) {
             stderr.write(
-              `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+              fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
             );
           }
           // After the stdout line, always — see this file's own header.

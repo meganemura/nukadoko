@@ -33,8 +33,8 @@ import {
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "./process-signal.js";
 import { selectPickles } from "./select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
+import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { redactString } from "../secrets/redact.js";
 import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 
 // Responsibility: one `nuka run --concurrency <n>` worker's own process
@@ -173,7 +173,7 @@ async function main(): Promise<void> {
       targetVersion = probeResult.version;
     } else {
       noteSink.write(
-        `Warning: version probe for environment "${resolvedEnv.name}" failed: ${redactString(probeResult.reason, secrets)}\n`,
+        versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n",
       );
     }
   }
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
       const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
       for (const teardownError of processFixtureTeardownErrors) {
         noteSink.write(
-          `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}\n`,
+          fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
         );
       }
     });
@@ -356,7 +356,7 @@ async function main(): Promise<void> {
 
         const notes = (record.teardown_errors ?? []).map(
           (teardownError) =>
-            `Warning: fixture "${teardownError.fixture}" teardown failed: ${redactString(teardownError.message, secrets)}`,
+            fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets),
         );
         emit({ kind: "scenario", record, stepLines, notes });
 

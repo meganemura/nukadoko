@@ -123,7 +123,8 @@ nobody can rebuild is never mistaken for one that passed on its own.
 
 Say what a live session is before starting one, and how to stop it. It
 outlives the command, holding a browser and live credentials until
-`nuka session stop` or its idle timeout. `--idle-timeout` sets that
+`nuka session stop` or its idle timeout. A fixture whose teardown fails
+is named on stderr when the session stops; the exit code stays 0. `--idle-timeout` sets that
 wait, in seconds. A value the process cannot keep is refused before a
 session starts. One execution runs at a time.
 

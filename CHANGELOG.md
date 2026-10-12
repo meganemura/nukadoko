@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A live session no longer drops a failed fixture teardown or a failed version probe.**
+  `nuka session stop` discarded every teardown error, so it printed nothing
+  and exited 0, while `nuka do` and `nuka run` warn. A failed environment
+  `version` probe was dropped the same way. Stop now prints one `Warning:
+  fixture "<name>" teardown failed` line per fixture, redacted, and still
+  exits 0. Each `nuka do --session` prints the `nuka do` version probe
+  warning. The wording now comes from one shared helper.
 - **`tracked-secret-looking-key` no longer fires on a name that only contains the letters KEY.**
   The heuristic matched `_KEY` inside longer words, so `SEARCH_KEYWORD`,
   `MAX_KEYS_PER_PAGE`, and `DEFAULT_KEYBOARD_LAYOUT` got a warning. `KEY` now
@@ -26,7 +33,6 @@ just until 0.1.
   not match. The secrets paragraph of `docs/spec.md` and `docs/spec.ja.md` now
   lists what `nuka check` prints (two warnings) and what `nuka tend` prints
   (the two unknown-key notes).
-
 - **Three `nuka tend` messages now say what the code does.**
   `from-unused` said a `from` key could be filled by a capture or a
   table/docstring, but only a capture fills it. `pattern-unbound` said no
