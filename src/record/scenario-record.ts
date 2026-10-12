@@ -168,8 +168,6 @@ export interface ScenarioEvidence {
   /** Scenario directory, relative to the project root (e.g.
    * ".nukadoko/records/scenarios/scn-..."). */
   readonly dir: string;
-  /** Present only when a browser was used anywhere in the scenario. */
-  readonly trace?: string;
   /** Screenshots actually written; empty when no browser was used. Same
    * shape as `EvidenceMeta.screenshots` (src/record/types.ts) — at most
    * one entry, `final.png`, with its own

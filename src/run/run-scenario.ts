@@ -2607,12 +2607,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     evidence: {
       dir: relativeScenarioDir,
       screenshots: browserEvidence.screenshots,
-      // No scenario-level `trace` any more:
-      // the whole-scenario recording this used to report is retired, split
-      // into each step's own step record `evidence.trace` instead (this
-      // file's own header). `ScenarioEvidence.trace` (src/record/scenario-record.ts) stays typed
-      // as optional for src/report/**'s own sake, but this executor never
-      // sets it any more.
     },
     ...(fixtureTeardownErrors.length > 0 ? { teardown_errors: fixtureTeardownErrors } : {}),
   };

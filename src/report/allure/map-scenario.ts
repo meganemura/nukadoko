@@ -1216,22 +1216,11 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   if (examplesAttachment !== undefined) {
     attachments.push(examplesAttachment);
   }
-  // Scenario-wide browser evidence (the legacy whole-scenario trace field,
-  // and the final-state screenshot `dispose()` takes) attaches directly to
-  // this result now, never a synthetic fixture of its own: by the time
-  // `endScenario` runs, `record.evidence` already carries this run's own
-  // final capture (run-scenario.ts's own `dispose()` call populates it
-  // before this function's caller ever sees the record), so there is no
-  // ordering reason left to defer this evidence onto a fixture the way an
-  // earlier design (before this result existed at all) once had to.
-  if (record.evidence.trace) {
-    attachments.push({
-      kind: "path",
-      name: "trace",
-      contentType: "application/vnd.allure.playwright-trace",
-      path: joinRelative(record.evidence.dir, record.evidence.trace),
-    });
-  }
+  // The final-state screenshot `dispose()` takes attaches directly to this
+  // result, never a synthetic fixture of its own: by the time `endScenario`
+  // runs, `record.evidence` already carries this run's own final capture
+  // (run-scenario.ts's own `dispose()` call populates it before this
+  // function's caller ever sees the record).
   for (const screenshot of record.evidence.screenshots) {
     attachments.push({
       kind: "path",
