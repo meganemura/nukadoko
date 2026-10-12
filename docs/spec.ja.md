@@ -3338,7 +3338,28 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               is still checked), a `.cjs` file discovery
                               walks but never imports, a featuresDir scan
                               that found nothing loadable, unsupported hook
-                              tag expressions; with no argument, scans
+                              tag expressions, a compat hook or step declaring more
+                              parameters than nukadoko passes (read as a done()
+                              callback), a step whose patterns bind different key
+                              sets, a table or docstring with no single args key
+                              left to fill, a pattern that is unnamed, unterminated,
+                              has an invalid capture key, a syntax error, or an
+                              unregistered or duplicate parameter type, an
+                              undefined-step finding held back until such a cause
+                              is fixed, a feature or oath that does not parse, a
+                              scenario outline with no Examples row that runs, a
+                              fixture that destructures a name nukadoko does not
+                              know, a model or relation naming an unknown or
+                              browser-needing step, a step whose `parts` form a
+                              cycle, declare `mutates: false` over a part that
+                              mutates, or name something that is not a registered
+                              step, a `@nukadoko:serial` tag on a Scenario line (it
+                              is only read from the Feature line), a compat step
+                              bound in Then position, an envFile that is missing or
+                              has an unreadable line, a tracked envFile key that
+                              looks secret but is not in secrets.redact, a
+                              secrets.redact key too short to redact; with no
+                              argument, scans
                               featuresDir plus additionalFeatureDirs; a
                               feature argument checks that one file instead,
                               for a feature living outside both. :line and a
@@ -3369,7 +3390,8 @@ nuka tend [--json] [--fail-on <code>]
                               vocabulary is typed rather than compat, how
                               many typed steps are read-only, and how much
                               of it declares what it could, then a sign-off
-                              that no longer matches the code it froze (the
+                              that no longer matches the code it froze, or a record
+                              that is unreadable or in an old format (the
                               one finding that exits non-zero; --fail-on
                               <code> makes a named note exit non-zero too,
                               for that invocation), a step file
@@ -3385,7 +3407,11 @@ nuka tend [--json] [--fail-on <code>]
                               an accepted feature outside every scanned
                               directory, a feature no acceptance record has
                               ever named, a fixture no typed step requires,
-                              a fixture reaching page/context
+                              a fixture reaching page/context, a sign-off whose
+                              recorded browser differs from what the config
+                              would accept today, a step that made a call soon
+                              after its own navigation, and scenarios that
+                              open with the same steps (measured, no advice)
 nuka session list|clear
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check

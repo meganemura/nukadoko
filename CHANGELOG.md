@@ -18,6 +18,14 @@ just until 0.1.
 
 ### Fixed
 
+- **The CLI summary in `docs/spec.md` lists every finding `nuka check` and `nuka tend` report.**
+  The `nuka check` entry lacked the part, serial-tag, parameter-type,
+  capture-syntax, table/docstring, env-file, explore, and other findings that
+  `nuka check --codes` prints. The `nuka tend` entry lacked
+  `signoff-condition-mismatch`, `post-navigation-read`, and
+  `repeated-scenario-prefix`, and did not say that unreadable and old-format
+  records are stale-record findings. Both entries now cover them, in the
+  English and the Japanese spec.
 - **The acceptance skill matches what `nuka check` and `nuka tend` print.**
   `writing-steps.md` said a line with a missing quote is reported as
   `undefined-step` "rather than naming the missing quotes", but check adds a
