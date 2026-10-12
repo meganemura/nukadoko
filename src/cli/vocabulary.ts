@@ -356,6 +356,9 @@ export interface StepSummary {
   readonly patterns: readonly string[];
   readonly description?: string;
   readonly mutates?: boolean;
+  /** `defineStep({ timeout })` in ms, present only when the step declares
+   * one; without it `stepTimeout` applies. */
+  readonly timeout?: number;
   /** The fixture names this step's own `run()` destructures, alphabetized
    * (`src/fixture/step-needs.ts`'s `stepNeeds`) — present and possibly `[]`
    * for a typed entry (a step that needs no fixtures still gets the key, so
@@ -520,6 +523,7 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
+    timeout: entry.step.timeout,
     from: fromResult.rendered,
     from_errors: fromResult.errors,
     parts: partsSummary(entry.step, stepNames),
@@ -581,7 +585,10 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   // attention even in the one-line-per-step text listing, though the full
   // list of broken keys, like `needs` itself, stays a `--json`-only detail.
   const fromErrorLabel = s.from_errors !== undefined ? "  from unreadable" : "";
-  const lines = [`${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}${needsErrorLabel}${fromErrorLabel}`];
+  const timeoutLabel = s.timeout !== undefined ? `  timeout ${s.timeout}ms` : "";
+  const lines = [
+    `${s.name}  ${s.kind}  ${mutatesLabel}${browserLabel}${needsErrorLabel}${fromErrorLabel}${timeoutLabel}`,
+  ];
   const patterns = s.patterns.length > 0 ? s.patterns : ["(no pattern)"];
   for (const pattern of patterns) {
     lines.push(...wrapIndented(pattern, width));
@@ -640,6 +647,8 @@ export interface TypedStepContract {
   readonly patterns: readonly string[];
   readonly description: string;
   readonly mutates: boolean;
+  /** Same field and presence rule as `StepSummary.timeout`. */
+  readonly timeout?: number;
   /** Why this step is implemented this way, and what was rejected
    * (`defineStep`'s own `rationale`) — present only when the step declared
    * one (omitted, not an empty string, same convention as `used` on a
@@ -763,6 +772,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
+    timeout: entry.step.timeout,
     // `rationale` is `string | undefined` on `Step`; `JSON.stringify` drops
     // an `undefined`-valued key on its own, so a step with none simply has
     // no "rationale" key in the output.

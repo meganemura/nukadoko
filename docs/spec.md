@@ -887,7 +887,8 @@ turns a step that never returns into a failed step with
 `error.kind: "timeout"`, so the run continues to the next scenario and
 reaches its summary. There is no value meaning "no limit": a step that
 never returns takes the whole run with it, which is what this exists to
-stop, and a run that never ends reports nothing at all.
+stop, and a run that never ends reports nothing at all. `nuka steps` and
+`nuka describe` show a step's own `timeout` when it declares one.
 
 `defineStep` refuses a `timeout` that is not a finite number of milliseconds
 greater than 0 and at most 2147483647. Node's timer clamps a delay outside
@@ -3986,7 +3987,8 @@ nuka harvest <step-record-id>...
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates, which
+                              name, patterns, description, mutates, timeout
+                              when the step declared one, which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
@@ -3998,7 +4000,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               any step's needs_error or from_errors is
                               present, output printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
-                              rationale when the step declared one, plus
+                              rationale and timeout when the step declared
+                              them, plus
                               import_failures beside it (same shape as nuka
                               steps' own). When args or returns cannot be
                               represented as JSON Schema, that side is null

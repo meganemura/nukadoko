@@ -113,6 +113,13 @@ getters, not bag fields: `defineWorld` refuses them. `nuka check` reports
 which names the field. Reach them with `await this.openPage()` and
 `await this.openRequest()`.
 
+A typed step's `run` has a deadline: `stepTimeout` in `nukadoko.config.ts`,
+twenty minutes unless the project sets it. A step that waits longer by
+design (an export, a batch job) declares its own `timeout` in milliseconds
+on `defineStep`, which overrides `stepTimeout` for that step only. There is
+no value meaning "no limit". `nuka steps` and `nuka describe` show a
+declared `timeout`; a step that shows none runs under `stepTimeout`.
+
 ## `page.goto` and baseURL
 
 A leading slash in `page.goto("/path")` replaces baseURL's own path, the

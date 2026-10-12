@@ -15,6 +15,14 @@ just until 0.1.
   vocabulary. `explore-browser-step` reports a step that needs `page` or
   `context`. A request-only step is allowed. Check does not run the steps.
   `examples/todo/features/explore/` is the request-only case.
+- **`nuka steps` and `nuka describe` show a step's declared `timeout`.**
+  A step's own `defineStep({ timeout })` deadline was visible only in its
+  source, so a reader could not tell which steps run under `stepTimeout`.
+  Both `--json` outputs now carry `timeout` in milliseconds when the step
+  declares one, and the `nuka steps` text names it on the step's first line
+  (`timeout 30000ms`). A step without one shows nothing. The acceptance
+  skill now names the typed-step deadline, how to change it, and how to read
+  an `error.kind: "timeout"` failure.
 
 ### Fixed
 

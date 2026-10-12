@@ -67,6 +67,18 @@ show-trace <evidence.dir>/trace.zip`. That trace is this one step's own
 window now, not the whole scenario's recording, so what it shows is exactly
 this failure, nothing earlier in the scenario to scrub past first.
 
+## A step that timed out
+
+`error.kind: "timeout"` on a typed step means its `run` passed its
+deadline: `stepTimeout` in `nukadoko.config.ts` (twenty minutes unless the
+project sets it), or the step's own `defineStep({ timeout })`, which
+`nuka describe <step>` shows when it is declared. The error message names
+which one fired. Before raising either, read the timeline: the last
+`sections` label says which stage the step was in when the deadline
+passed. A wait on something that will never happen only fails slower
+under a longer deadline. Raise the step's own `timeout` only when the step
+is slow by design, and `stepTimeout` only when most steps are.
+
 ## Testing a hypothesis without a full re-run
 
 If a step record only sharpens a hypothesis rather than confirming it, test

@@ -694,6 +694,7 @@ typed step 自身の `run` には締め切りがあります。
 `defineStep({ timeout })` は 1 つの step についてそれを上書きします。
 これがあることで、返らない step は `error.kind: "timeout"` の失敗した step になり、run は次の scenario へ進んで summary に到達します。
 「制限なし」を意味する値はありません。返らない step は run 全体を道連れにし、終わらない run は何も報告しないからです。それを止めるためにあります。
+`nuka steps` と `nuka describe` は、step が自分の `timeout` を宣言していればそれを示します。
 
 `defineStep` は、有限でない、0 以下、または 2147483647 より大きい `timeout` を拒否します。
 Node のタイマーは、その範囲の外にある遅延を 1ms に切り詰めるため、書いた締め切りとは別の事実として step がタイムアウトしたことになってしまうからです。
@@ -3362,7 +3363,8 @@ nuka harvest <step-record-id>...
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates, which
+                              name, patterns, description, mutates, timeout
+                              when the step declared one, which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
@@ -3374,7 +3376,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               any step's needs_error or from_errors is
                               present, output printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
-                              rationale when the step declared one, plus
+                              rationale and timeout when the step declared
+                              them, plus
                               import_failures beside it (same shape as nuka
                               steps' own). When args or returns cannot be
                               represented as JSON Schema, that side is null
