@@ -76,23 +76,6 @@ export interface FromOrderIssue {
   /** 0-based index into `pickle.steps` — the consuming line. */
   readonly stepIndex: number;
   readonly stepName: string;
-  readonly key: string;
-  /** The candidate producer step name(s) this issue is about — one name for
-   * the "zero bound" case (unchanged from before this check supported
-   * multiple candidates; a
-   * key with several candidates still gets one name per candidate,
-   * enumerated in `message`), two or more for the new "two-or-more bound"
-   * conflict this adds. */
-  readonly upstreamStepNames: readonly string[];
-  /** "missing": none of this key's candidates ever resolves to exactly one
-   * step anywhere in this pickle. "later": at least one does, but never
-   * before `stepIndex`. "ambiguous": two or more candidates are
-   * simultaneously bound before `stepIndex` — an error independent of
-   * required/optional, unlike the
-   * other two. Three distinct causes, one issue code (extended to cover
-   * "ambiguous" rather than
-   * introducing a second code) — the message is what tells them apart. */
-  readonly reason: "missing" | "later" | "ambiguous";
   readonly message: string;
 }
 
@@ -221,18 +204,8 @@ export function checkFromOrder(
     const argsShape = asObjectShape(entry.step.args);
     const matched = matches[stepIndex]!.matched;
     const consumedByCapture = new Set(matched?.captures.map((capture) => capture.key) ?? []);
-    // The attachment can only fill a key neither a capture nor `from` speaks
-    // for, so a `from` key is never `attachmentFillsKey`; the check below
-    // keeps the comparison for the one thing that does override `from`, a
-    // capture of the same key.
-    const attachmentFillsKey = attachmentFilledKey(
-      pickleStep,
-      new Set([...consumedByCapture, ...fromEntries.map(([key]) => key)]),
-      argsShape,
-    );
-
     for (const [key, entryValue] of fromEntries) {
-      if (consumedByCapture.has(key) || key === attachmentFillsKey) {
+      if (consumedByCapture.has(key)) {
         continue; // A pattern capture already wins this key.
       }
 
@@ -296,9 +269,6 @@ export function checkFromOrder(
         issues.push({
           stepIndex,
           stepName,
-          key,
-          upstreamStepNames: names,
-          reason: "ambiguous",
           message: fromOrderAmbiguousMessage(stepName, key, names),
         });
         continue;
@@ -310,9 +280,6 @@ export function checkFromOrder(
       issues.push({
         stepIndex,
         stepName,
-        key,
-        upstreamStepNames: named.map((candidate) => candidate.name),
-        reason: named.every((candidate) => !candidate.boundAnywhere) ? "missing" : "later",
         message: fromOrderMissingMessage(stepName, key, named),
       });
     }
