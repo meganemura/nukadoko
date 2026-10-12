@@ -131,12 +131,13 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   それより古い run は、scenario record、それが引用する step record、その run 自身の `records/runs/<run_id>/exports` が列挙する export ファイル、そして messages ストリームを失います。
   run とは、1 つの `run_id` を共有する scenario record の全体で、最も早い `started_at` で日付を持ちます。
   `nuka accept` と `nuka tend` が最新の run を名指すときの規則と同じなので、3 つのコマンドが「どの run か」で食い違うことはありません。
+  3 つとも、`started_at` を日時として解釈できない scenario record を、`record.json` が読めない record と同じに扱い、どの run にも属させません。
   まだ書いている可能性のある run は消されません。
   run が終わると、`nuka run` は `records/runs/<run_id>/complete.json` を書き、run の断定(`passed` か `failed`)、失敗した scenario の数、終了時刻を入れます。
   このファイルのない run は、最も新しい record が `retention.adHocDays` より古くなって初めて retention が消します。
   実行中の run、強制終了された run、このファイルができる前に書かれた run は見分けがつかず、終わったと証明できないものは消しません。
   retention を適用する run 自身は、より新しい run が先に終わっていても、自分の適用で消されることはありません。
-  保持された run のどれにも属さない record(`nuka do` や `recordStep` の record、run が消えた record、`record.json` が読めない scenario ディレクトリ、最初の scenario が終わる前に止まった run)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
+  保持された run のどれにも属さない record(`nuka do` や `recordStep` の record、run が消えた record、`record.json` が読めないか `started_at` を日時として解釈できない scenario ディレクトリ、最初の scenario が終わる前に止まった run)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
   `nuka do --use` と `nuka harvest` は設計上、日をまたいでそれらを読むため、run の回数ではなく日数を与えています。
   寿命を過ぎた record への `--use` は、有効な方針を添えて拒否され、何も返さないまま終わることはありません。
   どちらの数字にも「無効」の値はなく、履歴を長く持ちたいプロジェクトは数字を上げます。

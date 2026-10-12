@@ -18,6 +18,14 @@ just until 0.1.
 
 ### Fixed
 
+- **Retention, `nuka accept`, and `nuka tend` share one newest-run rule.**
+  Each command had its own copy, and they disagreed on a scenario record whose
+  `started_at` does not parse. Retention ranked a run with no parsable start as
+  the newest, so with `retention.runs: 1` it removed the newest real run in its
+  place. `nuka accept` stopped with "Invalid time value" on such a run, and one
+  such record made its whole run rank as never newest. All three now read the
+  record as unreadable, as `nuka tend` already did: it belongs to no run, and
+  retention removes it by age.
 - **A failed export write no longer leaves its temp file behind.**
   The Allure writer and the messages emitter write each file to a hidden
   `.<name>.tmp-<pid>-<random>` file and rename it into place. When the write or

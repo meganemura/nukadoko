@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { groupRunsNewestFirst } from "../record/newest-run.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { TendIssue } from "./types.js";
@@ -56,34 +57,6 @@ function readScenarioRecords(rootDir: string, stateDir: string): ScenarioRecord[
     }
   }
   return records;
-}
-
-// "When did this run begin" is the earliest `started_at` among its own
-// records, and the newest such run wins. That is the same rule
-// src/accept/select-run.ts uses to pick the run a sign-off may freeze,
-// followed here so both commands answer "which run" the same way. The two
-// rules can disagree: a long run that began first can hold the latest
-// scenario start of all, so picking by the latest start would name it the
-// newest run while `nuka accept` named a shorter, later one.
-function latestRun(records: readonly ScenarioRecord[]): ScenarioRecord[] {
-  const byRun = new Map<string, { startedAt: number; records: ScenarioRecord[] }>();
-  for (const record of records) {
-    const startedAt = Date.parse(record.started_at);
-    if (typeof record.run_id !== "string" || Number.isNaN(startedAt)) continue;
-    const group = byRun.get(record.run_id);
-    if (group === undefined) {
-      byRun.set(record.run_id, { startedAt, records: [record] });
-    } else {
-      group.startedAt = Math.min(group.startedAt, startedAt);
-      group.records.push(record);
-    }
-  }
-
-  let selected: { startedAt: number; records: ScenarioRecord[] } | undefined;
-  for (const group of byRun.values()) {
-    if (selected === undefined || group.startedAt > selected.startedAt) selected = group;
-  }
-  return selected?.records ?? [];
 }
 
 function elapsedMs(startedAt: string, finishedAt: string): number {
@@ -208,7 +181,7 @@ function onePerScenario(records: readonly ScenarioRecord[]): ScenarioRecord[] {
 }
 
 export function findRepeatedScenarioPrefixes(rootDir: string, stateDir: string): TendIssue[] {
-  const records = onePerScenario(latestRun(readScenarioRecords(rootDir, stateDir)));
+  const records = onePerScenario(groupRunsNewestFirst(readScenarioRecords(rootDir, stateDir))[0]?.records ?? []);
   if (records.length === 0) return [];
   const totalScenarioMs = records.reduce(
     (total, record) => total + elapsedMs(record.started_at, record.finished_at),

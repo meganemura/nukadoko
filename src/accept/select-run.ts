@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { groupRunsNewestFirst, type RunGroup } from "../record/newest-run.js";
 import type { RunMarker } from "../record/run-marker.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 
@@ -21,15 +22,10 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // pickle-line set *exactly* (not merely a superset — a partial run's lines
 // are always a subset, never a superset, but "exactly equal" is the literal
 // rule and is what a superset-tolerant `⊇` check would wrongly relax), and
-// every record in it must be `status: "passed"`. Groups that satisfy both
-// are compared on one axis only: the earliest `started_at` among their own
-// records (this file's own stand-in for "when did this run begin" — no
-// single field carries that; `run_id` only names *which* records share one
-// invocation, docs/spec.md "Sign-off" / src/record/scenario-record.ts's own
-// header). The newest such group wins; ties (same
-// millisecond) keep whichever was seen first, an outcome this module makes
-// no promise about since two runs starting in the same millisecond is not a
-// case worth designing for.
+// every record in it must be `status: "passed"`. The newest group that
+// satisfies both wins, newest by the rule retention and `nuka tend` share
+// (src/record/newest-run.ts), which also leaves out a record whose
+// `started_at` does not parse.
 //
 // A group qualifies only when its run's completion marker
 // (src/record/run-marker.ts) also says `passed`. The scenario records
@@ -79,11 +75,6 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // to answer "does one exist under any condition at all" — one selection
 // algorithm, two different inputs, not two algorithms.
 
-export interface RunStartedAt {
-  readonly runId: string;
-  readonly startedAt: Date;
-}
-
 /** Sign-off's own condition (docs/spec.md "Sign-off") — what
  * confirmed an accepted run, as measured, never as declared.
  * `browserType` is `undefined` when no record the condition was read from
@@ -96,23 +87,6 @@ export interface RunStartedAt {
 export interface RunCondition {
   readonly environment: string;
   readonly browserType: string | undefined;
-}
-
-/** One run_id's worth of records, keyed by that id — the same grouping
- * `selectAcceptableRun` needs internally and `listConditionsWithGreenRun`
- * below needs again, factored out once rather than duplicated (this file's
- * own header: one computation path). */
-function groupByRunId(records: readonly ScenarioRecord[]): Map<string, ScenarioRecord[]> {
-  const groups = new Map<string, ScenarioRecord[]>();
-  for (const record of records) {
-    const existing = groups.get(record.run_id);
-    if (existing) {
-      existing.push(record);
-    } else {
-      groups.set(record.run_id, [record]);
-    }
-  }
-  return groups;
 }
 
 /** A group's own condition: `environment` off any one record (uniform
@@ -176,7 +150,7 @@ export function listConditionsWithGreenRun(
   markerOf: MarkerLookup,
 ): RunCondition[] {
   const seen = new Map<string, RunCondition>();
-  for (const group of groupByRunId(featureRecords).values()) {
+  for (const { records: group } of groupRunsNewestFirst(featureRecords)) {
     const condition = groupCondition(group, featureLines, markerOf);
     if (condition === undefined) continue;
     // The two halves of this key are joined by a separator because neither
@@ -228,10 +202,6 @@ export function loadAllScenarioRecords(rootDir: string, stateDir: string): Scena
   return records;
 }
 
-function runStartedAt(group: readonly ScenarioRecord[]): Date {
-  return new Date(Math.min(...group.map((record) => new Date(record.started_at).getTime())));
-}
-
 /** A marker clears a feature's own green scenarios when the run passed, or
  * when it failed only because of scenarios (of this feature or another). */
 function isFinishedGreen(marker: RunMarker | null): boolean {
@@ -266,63 +236,28 @@ export function selectAcceptableRun(
   featureLines: ReadonlySet<number>,
   markerOf: MarkerLookup,
 ): SelectRunResult {
-  if (featureRecords.length === 0) {
+  const groups = groupRunsNewestFirst(featureRecords);
+  if (groups.length === 0) {
     return { kind: "none-ever" };
   }
 
-  const groups = groupByRunId(featureRecords);
-
-  let sawFullCoverage = false;
-  let best: { group: ScenarioRecord[]; startedAt: Date } | null = null;
-  // Tracked alongside `best` (this file's own header): the data a
-  // "red"/"partial-only" refusal needs to name a run, which `best` alone
-  // can't supply once it stays `null`.
-  let bestFullCoverage: { group: ScenarioRecord[]; startedAt: Date } | null = null;
-  let mostRecent: { group: ScenarioRecord[]; startedAt: Date } | null = null;
-
-  for (const group of groups.values()) {
-    const lines = new Set(group.map((record) => record.line));
-    const fullCoverage =
-      lines.size === featureLines.size && [...featureLines].every((line) => lines.has(line));
-    const startedAt = runStartedAt(group);
-
-    if (mostRecent === null || startedAt.getTime() > mostRecent.startedAt.getTime()) {
-      mostRecent = { group, startedAt };
-    }
-
-    if (fullCoverage) {
-      sawFullCoverage = true;
-      if (bestFullCoverage === null || startedAt.getTime() > bestFullCoverage.startedAt.getTime()) {
-        bestFullCoverage = { group, startedAt };
-      }
-    }
-
-    const allPassed = group.every((record) => record.status === "passed");
-    if (fullCoverage && allPassed && isFinishedGreen(markerOf(group[0]!.run_id))) {
-      if (best === null || startedAt.getTime() > best.startedAt.getTime()) {
-        best = { group, startedAt };
-      }
-    }
+  const passed = (group: RunGroup<ScenarioRecord>): boolean => group.records.every((record) => record.status === "passed");
+  const covers = (group: RunGroup<ScenarioRecord>): boolean => {
+    const lines = new Set(group.records.map((record) => record.line));
+    return lines.size === featureLines.size && [...featureLines].every((line) => lines.has(line));
+  };
+  // `groups` is newest first, so each `find` names the newest group that
+  // passes its test.
+  const green = groups.find((group) => covers(group) && passed(group) && isFinishedGreen(markerOf(group.runId)));
+  if (green !== undefined) {
+    return { kind: "ok", group: green.records, startedAt: new Date(green.startedAt) };
   }
-
-  if (best !== null) {
-    return { kind: "ok", group: best.group, startedAt: best.startedAt };
+  const full = groups.find(covers);
+  if (full !== undefined) {
+    const startedAt = new Date(full.startedAt);
+    return passed(full)
+      ? { kind: "unconfirmed", group: full.records, startedAt, marker: markerOf(full.runId) }
+      : { kind: "red", group: full.records, startedAt };
   }
-  if (sawFullCoverage) {
-    // Non-null: `sawFullCoverage` is only set inside the branch that also
-    // sets `bestFullCoverage`.
-    const newest = bestFullCoverage!;
-    if (newest.group.every((record) => record.status === "passed")) {
-      return {
-        kind: "unconfirmed",
-        group: newest.group,
-        startedAt: newest.startedAt,
-        marker: markerOf(newest.group[0]!.run_id),
-      };
-    }
-    return { kind: "red", group: newest.group, startedAt: newest.startedAt };
-  }
-  // Non-null: `featureRecords.length === 0` already returned above, so at
-  // least one group exists, and `mostRecent` is set for every group.
-  return { kind: "partial-only", group: mostRecent!.group, startedAt: mostRecent!.startedAt };
+  return { kind: "partial-only", group: groups[0]!.records, startedAt: new Date(groups[0]!.startedAt) };
 }

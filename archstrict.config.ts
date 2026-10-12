@@ -207,6 +207,7 @@ export default {
       glob: "src/record/**",
       surface: [
         "messages-output.ts",
+        "newest-run.ts",
         "read-step-record.ts",
         "record-id.ts",
         "retention.ts",

@@ -1,6 +1,7 @@
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { messagesRunOutputPath } from "./messages-output.js";
+import { compareNewestFirst, groupRunsNewestFirst, type RunStart } from "./newest-run.js";
 import type { ScenarioRecord } from "./scenario-record.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
 import { readRunMarker } from "./run-marker.js";
@@ -9,9 +10,8 @@ import { readRunMarker } from "./run-marker.js";
 // Two rules, applied at the end of every `nuka run` (src/cli/run.ts):
 //
 // 1. The run rule. A run is every scenario record sharing one `run_id`,
-//    dated by the earliest `started_at` among them (the same rule `nuka
-//    accept` and `nuka tend` use to name the newest run, so the three
-//    commands never disagree about which run that is). The newest
+//    dated by the earliest `started_at` among them (src/record/newest-run.ts,
+//    the rule `nuka accept` and `nuka tend` use too). The newest
 //    `retention.runs` runs keep everything: scenario records, the step
 //    records their `steps[]` cite, the export files their manifest lists
 //    (src/record/run-exports.ts), and their messages stream. Every older
@@ -24,7 +24,7 @@ import { readRunMarker } from "./run-marker.js";
 // 2. The age rule, for what no retained run owns: a `nuka do` or
 //    `recordStep` step record (`run_id: null`), a step record whose run has
 //    since been removed, a scenario directory whose record.json cannot be
-//    read, and a run directory with a manifest but no scenario records (a
+//    read or has a `started_at` that does not parse, and a run directory with a manifest but no scenario records (a
 //    run that stopped before its first scenario finished). Each is dated by
 //    its own record's `finished_at` (`started_at` failing that) and, when
 //    the record cannot be read at all, by the directory's mtime, and is
@@ -76,23 +76,18 @@ export interface RetentionPolicy {
   readonly adHocDays: number;
 }
 
-export interface RunSummary {
-  readonly runId: string;
-  /** Epoch milliseconds of the earliest `started_at` in the run. */
-  readonly startedAt: number;
-}
+export type RunSummary = RunStart;
 
 export interface RunRetentionPlan {
   readonly kept: readonly string[];
   readonly dropped: readonly string[];
 }
 
-/** The newest `keep` runs by `startedAt`, ties broken by `runId` (a run
- * id carries its own wall-clock digits, so a later id ranks newer). Pure,
- * and independent of the order `runs` arrive in: the caller reads them
- * from a directory listing whose order the filesystem decides. */
+/** The newest `keep` runs. Pure, and independent of the order `runs`
+ * arrive in: the caller reads them from a directory listing whose order the
+ * filesystem decides. */
 export function planRunRetention(runs: readonly RunSummary[], keep: number): RunRetentionPlan {
-  const ordered = [...runs].sort((a, b) => b.startedAt - a.startedAt || (b.runId < a.runId ? -1 : b.runId > a.runId ? 1 : 0));
+  const ordered = [...runs].sort(compareNewestFirst);
   const kept = ordered.slice(0, Math.max(0, keep)).map((run) => run.runId);
   const dropped = ordered.slice(Math.max(0, keep)).map((run) => run.runId);
   return { kept, dropped };
@@ -166,36 +161,6 @@ async function readScenarioDirs(scenariosDir: string): Promise<ScenarioDirEntry[
     });
   }
   return entries;
-}
-
-/** Groups scenario records into runs by `run_id`, each dated by its
- * earliest parseable `started_at`. A record whose `started_at` does not
- * parse still belongs to its run; a run with no parseable date at all is
- * dated as newest (never removed by the run rule), since removing what
- * cannot be dated is the one thing neither rule does. */
-function groupRuns(records: readonly ScenarioRecord[]): Map<string, { summary: RunSummary; records: ScenarioRecord[] }> {
-  const byRun = new Map<string, { startedAt: number | null; records: ScenarioRecord[] }>();
-  for (const record of records) {
-    const startedAt = Date.parse(record.started_at);
-    const at = Number.isNaN(startedAt) ? null : startedAt;
-    const group = byRun.get(record.run_id);
-    if (group === undefined) {
-      byRun.set(record.run_id, { startedAt: at, records: [record] });
-    } else {
-      group.records.push(record);
-      if (at !== null) {
-        group.startedAt = group.startedAt === null ? at : Math.min(group.startedAt, at);
-      }
-    }
-  }
-  const runs = new Map<string, { summary: RunSummary; records: ScenarioRecord[] }>();
-  for (const [runId, group] of byRun) {
-    runs.set(runId, {
-      summary: { runId, startedAt: group.startedAt ?? Number.POSITIVE_INFINITY },
-      records: group.records,
-    });
-  }
-  return runs;
 }
 
 /** The record's own `finished_at`, else `started_at`, as epoch
@@ -285,8 +250,9 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
 
   // --- The run rule ---
   const scenarioDirs = await readScenarioDirs(scenariosDir);
-  const runs = groupRuns(scenarioDirs.flatMap((entry) => (entry.record !== null ? [entry.record] : [])));
-  const plan = planRunRetention([...runs.values()].map((run) => run.summary), policy.runs);
+  const groups = groupRunsNewestFirst(scenarioDirs.flatMap((entry) => (entry.record !== null ? [entry.record] : [])));
+  const runs = new Map(groups.map((group) => [group.runId, group]));
+  const plan = planRunRetention(groups, policy.runs);
 
   const cutoff = now.getTime() - policy.adHocDays * 24 * 60 * 60 * 1000;
   const droppable = (runId: string): boolean => {
@@ -338,8 +304,9 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
     unownedRemoved += 1;
   }
 
+  const inSomeRun = new Set<ScenarioRecord>(groups.flatMap((group) => group.records));
   const scenarioEntries: DatedEntry[] = scenarioDirs
-    .filter((entry) => entry.record === null && !ownedScenarios.has(entry.id))
+    .filter((entry) => entry.record === null || !inSomeRun.has(entry.record))
     .map((entry) => ({ id: entry.id, at: entry.mtimeMs }));
   for (const id of planAgeRetention(scenarioEntries, cutoff)) {
     await rm(path.join(scenariosDir, id), { recursive: true, force: true });

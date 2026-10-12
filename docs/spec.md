@@ -130,7 +130,9 @@ questions: "what happens if this is deleted" and "who gets to change it":
   lists, and its messages stream. A run is every scenario record that
   shares one `run_id`, dated by its earliest `started_at`: the same rule
   `nuka accept` and `nuka tend` use to name the newest run, so the three
-  commands never disagree about which run that is. A run that may still be
+  commands never disagree about which run that is. All three read a
+  scenario record whose `started_at` does not parse as one whose
+  `record.json` cannot be read: it belongs to no run. A run that may still be
   writing is never removed. When a run ends, `nuka run` writes
   `records/runs/<run_id>/complete.json`, holding the run's verdict
   (`passed` or `failed`), how many scenarios failed, and the time it ended. Retention removes a run
@@ -140,7 +142,8 @@ questions: "what happens if this is deleted" and "who gets to change it":
   what it cannot prove finished. The run that applies retention is never
   removed by its own pass, even when newer runs ended first. A record no retained
   run owns (a `nuka do` or `recordStep` record, a record whose run is
-  gone, a scenario directory whose `record.json` cannot be read, a run
+  gone, a scenario directory whose `record.json` cannot be read or has a
+  `started_at` that does not parse, a run
   that stopped before its first scenario finished) is removed once it is
   older than `retention.adHocDays` (default 7). `nuka do --use` and `nuka
   harvest` read those across days by design, which is why they get days
