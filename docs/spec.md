@@ -251,9 +251,13 @@ export default defineStep({
   literal occurrences must be escaped, as `\\(`, `\\)`, `\\/` in the
   `pattern` string literal (one backslash in the parsed expression means
   two in TS source), to match literally. Unlike a schema mismatch, an
-  unescaped occurrence still compiles (`nuka check` passes and the step
-  registers), and the pattern then silently never matches the pickle text
-  it was written for (hit independently in two corpora during validation).
+  unescaped occurrence still compiles and the step registers, and the pattern
+  then never matches the pickle text it was written for (hit independently in
+  two corpora during validation). `nuka check` does not stay silent: a feature
+  line that would match if the pattern were escaped is reported as
+  `undefined-step`, with a hint that names the step and the escape. A bare `()`
+  with no text inside is an error of its own, `pattern-syntax-error`. A pattern
+  no feature line uses is not reported.
 - A parameter cannot appear inside an optional group: an inherited
   cucumber-expressions constraint. The constraint binds the group syntax,
   not the parameter itself: a custom parameter type whose own regexp is
@@ -1378,11 +1382,9 @@ would add only a schema to maintain.
 
 One alternative was rejected. A step file could use named exports for
 several steps. This design would keep split operations beside the
-composite step. However, typed step names complete from file names without
-imports (see "Implementation notes"). This property keeps TAB fast as the
-vocabulary grows. The CLI cannot see a named export without importing its
-file. A separate file for each part preserves fast completion and adds one
-file.
+composite step. However, a typed step's name is its file's basename. The CLI
+cannot see a named export without importing its file. A separate file for each part keeps the step name equal to the file name
+and adds one file.
 
 ### Keyword semantics
 
@@ -2665,7 +2667,9 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 - **Sessions** carry login state across CLI calls as Playwright storageState.
   Nukadoko stores each session by environment and uses an advisory lock to
   limit it to one run at a time. Without `--session`, each run starts clean
-  and has no implicit shared state. Sessions do not use a daemon.
+  and has no implicit shared state. A saved session is a storageState file and
+  needs no daemon. `nuka session start` is the exception: it starts a detached
+  process that holds one context open (see "Live sessions").
 - **Environments** name deployment targets. Each environment can define a
   `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
@@ -3674,12 +3678,16 @@ The following findings show what `tend` inspects and why each item is rot rather
   be defined in the file that could not be read. This
   is the one finding here that is an error rather than a note: a sign-off
   that has quietly stopped meaning what it says is worse than no sign-off,
-  because it is still being counted. None of this is checked once the
+  because it is still being counted. A file that looks like a record (its
+  frontmatter has `run_id`, `commit`, `feature`, and `scenarios`) but cannot
+  be read is reported as `signoff-record-unreadable`, with the reason it did
+  not parse. A broken record skipped silently would read as healthy. None of
+  this is checked once the
   feature the record names has moved into `featuresDir`: from then on the
   running suite carries the guarantee, not a record frozen at one commit,
   and a warning that fires on every ordinary edit to a feature already
   running unattended would stop being read. The one exception is a record
-  `tend` cannot even parse (`signoff-record-unreadable`, above): its own
+  `tend` cannot even parse (`signoff-record-unreadable`, described above): its own
   `feature:` value may not have parsed either, so there is no placement
   to judge it by, and a file that looks like a record but cannot be read
   is a fact about the file, not about whether its claim is still current.
@@ -4254,10 +4262,8 @@ would be running against glue it never actually read.
 - id format: `<kind>-<timestamp>-<short random>`.
 - `nuka steps` and `nuka describe` import step modules, because collecting
   compat registrations and patterns requires it, and importing executes a
-  file's top-level code, the same caution as running. Shell completion never
-  imports: typed step names complete from file names, and ids and session
-  names complete from the state directory, so TAB stays fast regardless of
-  vocabulary size.
+  file's top-level code, the same caution as running. The CLI ships no shell
+  completion.
 - The first real-world validation gate, before M2 was designed in detail,
   bound about 10 real feature files and measured whether reviewing
   AI-drafted typed steps actually beats writing glue by hand. It ran

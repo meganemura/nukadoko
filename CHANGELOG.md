@@ -443,6 +443,13 @@ just until 0.1.
   record), and said `nuka init` writes only `.nukadoko/` to `.gitignore` (it
   also writes `.env`, `.env.*`, and `!.env.example`). The migration guide had
   the same init claim. The Japanese files match.
+- **The spec no longer claims shell completion, a silent unescaped `(`, or a daemon-free `session`.**
+  It said typed step names and ids complete in the shell (the CLI has no
+  completion), said `nuka check` passes a pattern with a bare `(` (it reports
+  the feature line that would match if escaped, with a hint), said sessions
+  use no daemon (`nuka session start` starts one), and pointed to
+  `signoff-record-unreadable` "above" where nothing described it. Each
+  statement now matches the CLI, in the English and the Japanese spec.
 
 ## 0.14.1 — 2026-10-10
 

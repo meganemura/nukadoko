@@ -227,9 +227,12 @@ export default defineStep({
 - pattern のリテラル部分も自由な散文ではなく、それ自体が cucumber-expressions の構文です。
   裸の `(` `)` は optional text、裸の `/` は alternation を意味するため、リテラルとして書きたい場合はエスケープしなければなりません。
   `pattern` の文字列リテラルの中では `\\(` `\\)` `\\/` と書きます(パースされた式の中の 1 つのバックスラッシュは、TS のソースでは 2 つになります)。
-  スキーマの不一致と違い、エスケープを忘れてもビルドは成功します。
-  `nuka check` は通り、step も登録されます。
-  そして pattern は、それが書かれた対象の pickle のテキストに無症状のまま一切マッチしなくなります(検証で 2 つの独立した corpus がこれを踏みました)。
+  スキーマの不一致と違い、エスケープを忘れてもビルドは成功し、step も登録されます。
+  そして pattern は、それが書かれた対象の pickle のテキストに一切マッチしなくなります(検証で 2 つの独立した corpus がこれを踏みました)。
+  `nuka check` は黙っていません。
+  pattern をエスケープすればマッチする feature の行は `undefined-step` として報告され、step の名前とエスケープを示すヒントが付きます。
+  中身のない裸の `()` は、それ自体が `pattern-syntax-error` です。
+  どの feature の行も使わない pattern は報告されません。
 - optional group の中にパラメータを入れることはできません。
   これは cucumber-expressions から継承した制約です。
   ただしこの制約が縛るのは group の構文であって、パラメータ自身ではありません。
@@ -1166,10 +1169,9 @@ acceptance record は、その step record を含みます。
 1 つの代替案を却下しました。
 step ファイルは、named export を使って複数の step を export できます。
 この設計では、分割した操作を複合 step の隣に置けます。
-しかし、型付き step の名前は、import をせずにファイル名から補完されます(「実装ノート」を参照)。
-この性質によって、語彙が増えても TAB は高速に動きます。
+しかし、型付き step の名前は、そのファイルの basename です。
 CLI は、named export があるファイルを import しなければ、その export を認識できません。
-part ごとにファイルを分けると、高速な補完を維持し、ファイルが 1 つ増えます。
+part ごとにファイルを分けると、step の名前とファイル名が一致したままになり、ファイルが 1 つ増えます。
 
 ### キーワードの意味論
 
@@ -2187,7 +2189,8 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
 - **Session** は Playwright の storageState として、CLI の呼び出しをまたいでログイン状態を運びます。
   nukadoko は各 session を environment ごとに保存し、advisory lock によって同時に 1 つの run だけに制限します。
   `--session` を指定しないことはクリーンな開始を意味し、暗黙に共有される状態はありません。
-  session は daemon を使いません。
+  保存された session は storageState のファイルであり、daemon を必要としません。
+  例外は `nuka session start` で、1 つの context を開いたまま保つ分離されたプロセスを起動します(「Live sessions」を参照)。
 - **Environment** はデプロイ先に名前を付けます。
   各 environment は `baseURL`、`envFiles`、`policy: "read-only"`、任意の `version` プローブを定義できます。
   read-only policy は mutate する step を拒否します。
@@ -3103,6 +3106,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   これは、ここでの所見のうち唯一、注記ではなくエラーになるものです。
   自分が述べている内容を静かに言い表さなくなった sign-off は、sign-off が無い状態よりも悪いです。
   なぜなら、それはまだ数に入れられ続けているからです。
+  記録のように見える(frontmatter に `run_id`、`commit`、`feature`、`scenarios` がある)のに読めないファイルは、パースできなかった理由とともに `signoff-record-unreadable` として報告されます。
+  壊れた記録を黙って飛ばせば、健全に見えてしまうからです。
   記録が名指す feature が `featuresDir` へ移った後は、これは一切チェックされません。
   以後は、走り続けるスイート自身が保証を担い、1 つの commit で凍結された記録は何も担いません。
   すでに無人で走っている feature へのふつうの編集のたびに警告が鳴れば、その警告は読まれなくなります。
@@ -3592,8 +3597,7 @@ nuka experimental webmcp-tools <url> [--json]
 - id の形式: `<kind>-<timestamp>-<short random>`。
 - `nuka steps` と `nuka describe` は step モジュールをインポートします(compat の登録と pattern を集めるにはそれが必要だからです)。
   インポートはファイルのトップレベルのコードを実行するため、実行時と同じ注意が必要です。
-  Shell の補完は決してインポートしません。
-  型付き step の名前はファイル名から、id と session の名前は state directory から補完されるため、語彙の量にかかわらず TAB は高速なままです。
+  CLI は shell の補完を出荷していません。
 - 最初の実世界での検証ゲート(M2 が詳細に設計される前)。
   約 10 個の実際の feature ファイルを結び付け、AI が下書きした型付き step をレビューすることが、手で glue を書くことより実際に優れているかを測ります。
   公開されている 7 プロジェクトの 11 個の feature ファイルに対して実行し、答えは 7 プロジェクト中 6 つで yes でした。
