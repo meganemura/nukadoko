@@ -1509,6 +1509,16 @@ trace chunk、スクリーンショット、page 通信の `http.jsonl` 行は�
 Playwright がすでにこれらの成果物を作るため、2 つ目のコピーは情報を増やしません。
 external record は、nukadoko だけが計測する args、バリデーション済み result、`observed`、page event を保持します。
 
+`recordStep` には、`nuka do` には無い 4 つの制限があります。
+1 つ目に、`use` は、同じプロセスが先に `recordStep` で実行した step に対してだけ解決されます。
+`recordStep` は step の名前を自分の `name` オプションからしか得ないので、`nuka do` や別のプロセスが書いた record は拒否され、その拒否はこの原因を名指しします。
+2 つ目に、`config.fixtures` のエントリを必要とする step は、record が存在するより前に常に拒否されます。
+`recordStep` が組み立てるのは組み込みの fixture だけだからです。
+3 つ目に、environment は選択されません。
+record は `environment: "default"` と `session: null` を持ち、どの environment の read-only policy も強制されないので、`mutates: true` を宣言した step は、`nuka do` なら拒否される場所でも実行されます。
+4 つ目に、version プローブはありません。
+そのため record は `target_version` を持ちません。
+
 3 つの性質が、record の意味を維持します。
 1 つ目は、record が `kind: "external"` を持つことです。
 これは `do` と `run` に続く 3 つ目の実行元であり、人が入力したコマンドの record と区別します。

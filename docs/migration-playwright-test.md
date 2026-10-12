@@ -192,6 +192,17 @@ the second call. And a step whose fixtures reach for a browser is refused
 before any record exists unless the call also passes a `page`; either
 way, this path never launches a browser of its own.
 
+Four limits set `recordStep` apart from `nuka do`. `use` resolves only
+against a step this same process ran through `recordStep` earlier: the
+step's name comes from that call's `name` option and from nowhere else, so
+a record `nuka do` or another process wrote is refused, and the refusal
+says so. A step that needs a `config.fixtures` entry is always refused
+before any record exists, since only the built-in fixtures are built here.
+No environment is selected: the record says `environment: "default"` and
+`session: null`, and no environment's read-only policy is enforced, so a
+step declaring `mutates: true` runs even where `nuka do` would refuse it.
+And no version probe runs, so the record carries no `target_version`.
+
 What still does not cross is the sign-off. `nuka accept` needs a green
 full `nuka run` and its scenario record, and an external record is not
 that. This tool's guarantee is about executions it drove itself, and one

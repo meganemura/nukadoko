@@ -1755,6 +1755,18 @@ already produces these artifacts, so a second copy adds no information.
 The external record keeps the data that only nukadoko measures: args, the
 validated result, `observed`, and page events.
 
+`recordStep` has four limits that `nuka do` does not have. First, `use`
+resolves only against a step that the same process ran through
+`recordStep` earlier. `recordStep` gets a step's name only from its own
+`name` option, so a record that `nuka do` or another process wrote is
+refused, and the refusal names this cause. Second, a step that needs a
+`config.fixtures` entry is always refused before a record exists:
+`recordStep` builds only the built-in fixtures. Third, no environment is
+selected. The record has `environment: "default"` and `session: null`, and
+no environment's read-only policy is enforced, so a step that declares
+`mutates: true` runs even where `nuka do` would refuse it. Fourth, there is
+no version probe, so the record has no `target_version`.
+
 Three properties preserve the meaning of the record. First, the record has
 `kind: "external"`. This is the third execution source beside `do` and
 `run`, and it distinguishes the record from a command that a person typed.

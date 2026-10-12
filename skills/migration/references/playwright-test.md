@@ -45,6 +45,13 @@ where it came from. `nuka check` stays clean, and `nuka run` goes green,
 but that pass proves only that the server remembers one value, not that
 the steps chain.
 
+`use` also resolves only against a step this same process ran through
+`recordStep` earlier; a record `nuka do` or another process wrote is
+refused. `recordStep` has three more limits: a step that needs a
+`config.fixtures` entry is always refused, no environment is selected (the
+record says `environment: "default"`, and no read-only policy is enforced,
+so a mutating step runs), and no version probe runs (no `target_version`).
+
 A measured optional or defaulted arg that no capture, chain, or
 docstring/table carries is a different comment: the draft names the key
 and the value, and `nuka check` stays silent because the schema allows

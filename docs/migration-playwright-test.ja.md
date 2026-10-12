@@ -171,6 +171,15 @@ record は `kind: "external"` を記し、これは実行がどう起きたか�
 そして、fixture が browser に手を伸ばす step は、呼び出しが `page` も渡さない限り、record が存在するより前に拒否されます。
 どちらの場合も、この経路が自分から browser を起動することはありません。
 
+4 つの制限が、`recordStep` を `nuka do` と分けています。
+`use` は、同じプロセスが先に `recordStep` で実行した step に対してだけ解決されます。
+step の名前はその呼び出しの `name` オプションからだけ得られるので、`nuka do` や別のプロセスが書いた record は拒否され、拒否はそのことを述べます。
+`config.fixtures` のエントリを必要とする step は、record が存在するより前に常に拒否されます。
+ここで組み立てられるのは組み込みの fixture だけだからです。
+environment は選択されません。
+record は `environment: "default"` と `session: null` を記し、どの environment の read-only policy も強制されないので、`mutates: true` を宣言した step は、`nuka do` なら拒否される場所でも実行されます。
+そして version プローブは走らないので、record は `target_version` を持ちません。
+
 それでも渡れないままなのが sign-off です。
 `nuka accept` が必要とするのは green なフル実行の `nuka run` とその scenario record であり、external な record はそれではありません。
 このツールが保証するのは自分自身が駆動した実行についてであり、自分が駆動しなかった実行については、誰かの言葉を受け取ることしかできません。

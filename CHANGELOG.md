@@ -474,6 +474,12 @@ just until 0.1.
   any of this step's `from` entries", which sent the reader to the `from`
   declaration. It now says the upstream has no name here and that `use`
   resolves only against a step recorded earlier in the same process.
+- **The `recordStep` docs state its four limits.**
+  The spec, the Playwright Test migration guide, and the migration skill did
+  not say that `use` resolves only against a step the same process recorded
+  through `recordStep`, that a `config.fixtures` entry is always refused, that
+  no environment is selected and no read-only policy is enforced, or that no
+  version probe runs. They now say all four. The Japanese files match.
 
 ### Breaking
 
