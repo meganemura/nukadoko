@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { attachExternalPageEvidence, launchBrowserWithTracing } from "../src/context/browser-evidence.js";
 import { createStepContext } from "../src/context/create-context.js";
+import { createHttpLogFailedCollector } from "../src/context/http-log-failed.js";
 import { createHttpOmittedCollector } from "../src/context/http-omitted.js";
 import { createObservedCollector } from "../src/context/observed.js";
 import { createPageEventsCollector } from "../src/context/page-events.js";
@@ -649,6 +650,7 @@ describe("launchBrowserWithTracing: browserType defaults to chromium when omitte
         logPath: () => path.join(evidenceDir, "http.jsonl"),
         secrets: [],
         httpOmitted: createHttpOmittedCollector(),
+        httpLogFailed: createHttpLogFailedCollector(),
       });
 
       expect(handle.browserInfo.type).toBe("chromium");
@@ -686,6 +688,7 @@ describe("launchBrowserWithTracing: a throw after launch closes the browser", ()
       logPath: () => path.join(evidenceDir, "http.jsonl"),
       secrets: [],
       httpOmitted: createHttpOmittedCollector(),
+      httpLogFailed: createHttpLogFailedCollector(),
     };
   }
 

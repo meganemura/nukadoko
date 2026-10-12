@@ -690,6 +690,11 @@ export interface StepRecordBase {
    * file's own header). Present
    * only when at least one request was left out. */
   http_omitted?: HttpOmittedCounts;
+  /** How many http.jsonl lines this execution could not append (a missing
+   * directory, a full disk, a permission error), so a request `observed`
+   * counted may be absent from the file. Present only when at least one
+   * append failed. */
+  http_log_failed?: number;
   /** Every Playwright call this step made through `ctx.page()`, read back
    * out of this step's own trace chunk (this file's own header) — `expect`
    * waits included, with their own

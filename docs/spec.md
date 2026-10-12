@@ -2419,6 +2419,12 @@ array identifies each step record by id, so either record leads to the other.
   those calls are worth reading one by one). The two counts are not
   expected to add up to each other, and neither being lower than the other
   is a bug.
+- `http_log_failed` (a number) appears only when at least one http.jsonl
+  line could not be appended, for example because the step directory was
+  missing, the disk was full, or a permission was denied. It counts the
+  lines lost, so a request `observed` counted but http.jsonl lacks is
+  never silent. A failed append does not fail the step: measurement does
+  not break execution.
 - `used` (included only when it has entries) lists the earlier executions whose
   results this one drew a value from: through a `from` injection, a
   `resultOf` call, or a `--use` step record on `nuka do`. Every path runs
@@ -3070,7 +3076,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   `finished_at`, `environment`, `session`, `session_execution`,
   `scenario_record_id`, `run_id`, and `target_version`. It drops
   `evidence`, `actions`, `truncated`, `page_events`, `http_omitted`,
-  `declared`, `sections`, and `polls`: a live step record under
+  `http_log_failed`, `declared`, `sections`, and `polls`: a live step record under
   `.nukadoko/` still carries every one of them (see "Records"), but none
   is something the step's own contract named. A hook entry in the
   scenario record (see "Records") keeps `type`, `status`, `error`,

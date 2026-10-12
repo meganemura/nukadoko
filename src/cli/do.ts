@@ -832,6 +832,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
     // its outcome" way `pageEvents` just above is — `undefined` when
     // nothing was ever left out.
     const httpOmitted = contextHandle.httpOmittedSnapshot();
+    const httpLogFailed = contextHandle.httpLogFailedSnapshot();
     // Application-specific evidence `evidence.attach`/`.path` produced this
     // execution, read the same "after execution, whatever
     // its outcome" way as every other snapshot above — a `path()`-allocated
@@ -912,6 +913,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+            ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
@@ -954,6 +956,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+            ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),

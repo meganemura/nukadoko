@@ -33,6 +33,7 @@ import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
 import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
+import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
 import { createObservedCollector } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
@@ -463,6 +464,10 @@ export interface StepContextHandle {
    * dropped. Never exposed on `ctx` — same rule as
    * `observedCounts()`/`pageEventsSnapshot()`. */
   httpOmittedSnapshot(): HttpOmittedCounts | undefined;
+  /** Executor-only: how many http.jsonl lines since the current step
+   * boundary began could not be appended, or `undefined` when none failed.
+   * Never exposed on `ctx`. */
+  httpLogFailedSnapshot(): number | undefined;
   /** Executor-only: every `ctx.evidence.attach`/`.path`
    * result confirmed to exist since the current step boundary began — see
    * src/context/evidence.ts's own `EvidenceCollector.snapshot` doc comment.
@@ -719,6 +724,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // handed to browser-evidence.ts's launch below, and only ever populated
   // if `ctx.page()` is actually called this ctx's lifetime.
   const httpOmitted = createHttpOmittedCollector();
+  const httpLogFailed = createHttpLogFailedCollector();
   // Same lifetime rule again, for `ctx.evidence.attach`/`.path` —
   // `() => boundaryDir` is the exact same moving-pointer getter
   // `ctx.request()`'s own http.jsonl logging already reads (this file's own
@@ -1058,6 +1064,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         logPath: () => path.join(boundaryDir, "http.jsonl"),
         secrets,
         httpOmitted,
+        httpLogFailed,
         baseURL: config.baseURL,
       });
       // Opens this boundary's own chunk right at launch when a
@@ -1286,6 +1293,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return httpOmitted.snapshot();
   }
 
+  function httpLogFailedSnapshot(): number | undefined {
+    return httpLogFailed.snapshot();
+  }
+
   async function evidenceSnapshot(): Promise<EvidenceSnapshot> {
     return evidence.snapshot();
   }
@@ -1311,6 +1322,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     envReads.reset();
     pageEvents.reset();
     httpOmitted.reset();
+    httpLogFailed.reset();
     evidence.reset();
   }
 
@@ -1332,6 +1344,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     envReadsSnapshot,
     pageEventsSnapshot,
     httpOmittedSnapshot,
+    httpLogFailedSnapshot,
     evidenceSnapshot,
     beginStep,
     endStep,

@@ -186,7 +186,7 @@ function renderFrontmatter(options: RenderAcceptanceRecordOptions): string[] {
 // passed or failed and why, and neither is something a page decided on its
 // own. Anything on a step record not named here — today that means
 // `evidence`, `sections`, `calls`'s own trace-derived siblings `actions`/
-// `truncated`, `polls`, `declared`, `page_events`, `http_omitted` — is
+// `truncated`, `polls`, `declared`, `page_events`, `http_omitted`, `http_log_failed` — is
 // dropped by `pickAllowed` below and named in the record's own disclosure
 // line, never passed through silently.
 const STEP_RECORD_ALLOWLIST: ReadonlySet<string> = new Set([

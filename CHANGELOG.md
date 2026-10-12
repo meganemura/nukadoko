@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A page http.jsonl line that could not be written is counted on the step record.**
+  The append failed silently (a missing directory, a full disk, a permission
+  error), so `observed` counted the request while http.jsonl, `http_omitted`,
+  and `page_events` all said nothing. The step record now carries
+  `http_log_failed`, the number of lines lost, only when it is above zero. The
+  step still does not fail on it.
 - **A step can `await import()` a TypeScript file from its body.**
   Discovery removed its TypeScript loader before any step ran, so
   `await import("./lib/helper.js")` of a `.ts` file failed with "Cannot find

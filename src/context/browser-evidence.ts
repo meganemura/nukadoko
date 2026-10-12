@@ -16,6 +16,7 @@ import {
 import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { StorageState } from "../session/storage-state.js";
+import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
 import type { ObservedCollector } from "./observed.js";
@@ -194,6 +195,9 @@ export interface LaunchBrowserOptions {
    * image/stylesheet/script/etc, by `request.resourceType()` (this file's
    * own header, and http-omitted.ts's). */
   httpOmitted: HttpOmittedCollector;
+  /** Tallies every page-issued http.jsonl line whose append failed
+   * (http-log-failed.ts). */
+  httpLogFailed: HttpLogFailedCollector;
   /** `config.baseURL`, wired into the browser context so `page.goto("/path")`
    * resolves against it (docs/spec.md "Context API"). Omitted from
    * `newContext` when unset — Playwright's own default for an unset
@@ -329,6 +333,7 @@ export async function launchBrowserWithTracing(
       options.logPath,
       options.secrets,
       options.httpOmitted,
+      options.httpLogFailed,
     );
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();

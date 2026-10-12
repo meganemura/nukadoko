@@ -1,6 +1,7 @@
 import type { BrowserContext, Request as PlaywrightRequest } from "playwright";
 import type { SecretSet } from "../secrets/types.js";
 import { appendHttpLogEntry } from "./http-log.js";
+import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 
 // Responsibility: the page-origin half of http.jsonl — everything a step's
@@ -55,11 +56,12 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // that sent it already counted the write (browser-evidence.ts records
 // `observed` on `request`, not on `response`).
 //
-// A write failure here (`appendHttpLogEntry` rejecting) is swallowed: an
+// A write failure here (`appendHttpLogEntry` rejecting) does not throw: an
 // event handler has no caller to propagate a throw to, and losing one
 // page-issued log line must not break the step the way browser-evidence.ts's
 // own `finalize`/`endStepChunk` teardown already doesn't. Measurement must
-// not break execution.
+// not break execution. The lost line is counted into `httpLogFailed`
+// instead (the step record's `http_log_failed`), so it is not silent.
 //
 // Each append is kicked off from inside a `response` handler, which has no
 // caller of its own to await it — unlike http-log.ts's own `logCall`, whose
@@ -77,7 +79,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
  * for why a `flush()` is needed at all. */
 export interface PageHttpLogHandle {
   /** Resolves once every append this subscription has kicked off *so far*
-   * has settled (written, or failed and been swallowed). Does not wait for
+   * has settled (written, or failed and counted). Does not wait for
    * a `response` that has not fired yet — only for writes already in
    * flight when this is called, the same "measurement must never break
    * execution" limit the rest of this file's own writes already have. */
@@ -99,6 +101,7 @@ export function subscribePageHttpLogging(
   logPath: () => string,
   secrets: SecretSet,
   httpOmitted: HttpOmittedCollector,
+  httpLogFailed: HttpLogFailedCollector,
 ): PageHttpLogHandle {
   // `at` is the duration origin. `logPath` is that step's http.jsonl,
   // resolved now so a later step boundary cannot move the line.
@@ -146,6 +149,7 @@ export function subscribePageHttpLogging(
     )
       .catch(() => {
         // See this file's own header: measurement must never break execution.
+        httpLogFailed.record();
       })
       .finally(() => {
         pending.delete(write);

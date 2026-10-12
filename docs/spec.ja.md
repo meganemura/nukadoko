@@ -2026,6 +2026,10 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   image や script の通信も含め、harness が見たリクエストをすべて数え続けます。
   それは http.jsonl とは違う問い(実際に何回の読み取り・書き込みが起きたか)に答えているのに対し、http.jsonl が答えるのは(そのうちどれが 1 つずつ読む価値があるか)という別の問いだからです。
   2 つの数は互いに一致することを期待されておらず、どちらかがもう一方より小さくてもバグではありません。
+- `http_log_failed`(数値)は、少なくとも 1 行の http.jsonl への追記に失敗したときだけ現れます。
+  例えば step のディレクトリが無い、ディスクが満杯、権限が無い、といった場合です。
+  失われた行の数を数えるので、`observed` が数えたのに http.jsonl に無いリクエストが黙って消えることはありません。
+  追記の失敗で step が失敗することはありません。計測が実行を壊してはならないからです。
 - `used`(空でないときだけ現れます)は、この実行が値を引き出した以前の実行の一覧です。
   `from` による注入、`resultOf` の呼び出し、あるいは `nuka do` での `--use` の step record のいずれかを通じたものです。
   どの経路もライブラリのコードを通るため、読み取りは計測されるのであって宣言されるのではありません。
@@ -2516,7 +2520,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   step 自身の契約が名指したものだけに絞り込まれ、run の途中でブラウザがたまたま行ったことは含みません。
   人間が書き写すことは決してありません(書き写しは、計測を主張へと格下げしてしまいます)。
 - ここで保持される step record は `step_record_id`、`step`、`kind`、`status`、`args`、`result`、`error`、`used`、`mutates`、`observed`、`calls`、`fixtures`、`required_env`、`world`、`started_at`、`finished_at`、`environment`、`session`、`session_execution`、`scenario_record_id`、`run_id`、`target_version` を運びます。
-  `evidence`、`actions`、`truncated`、`page_events`、`http_omitted`、`declared`、`sections`、`polls` は外れます。
+  `evidence`、`actions`、`truncated`、`page_events`、`http_omitted`、`http_log_failed`、`declared`、`sections`、`polls` は外れます。
   `.nukadoko/` の下にある live な step record にはこれら全部がこれまでどおり残りますが(「Records」を参照)、そのどれも step 自身の契約が名指したものではありません。
   scenario record の中の hook のエントリ(「Records」を参照)は `type`、`status`、`error`、`step_index`、`name` を保持し、同じ理由で `declared`、`trace`、`actions`、`truncated` を外します。
 - ここに埋め込まれる step record は、外すものの一覧によってではなく allowlist によって絞り込まれます。

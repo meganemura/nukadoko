@@ -598,6 +598,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     const used = contextHandle.usedSnapshot();
     const pageEvents = contextHandle.pageEventsSnapshot();
     const httpOmitted = contextHandle.httpOmittedSnapshot();
+    const httpLogFailed = contextHandle.httpLogFailedSnapshot();
     const evidenceSnapshot = await contextHandle.evidenceSnapshot();
     const finishedAt = new Date();
 
@@ -653,6 +654,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+            ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
@@ -682,6 +684,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
             ...(requiredEnv.length > 0 ? { required_env: requiredEnv } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+            ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),

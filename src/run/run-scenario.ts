@@ -1359,6 +1359,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `undefined` when nothing was
     // ever left out.
     const httpOmitted = contextHandle.httpOmittedSnapshot();
+    const httpLogFailed = contextHandle.httpLogFailedSnapshot();
     // World reads/writes tallied since the current step boundary began —
     // always empty for a typed step (no
     // `this`), so the `world` field below is naturally omitted for one,
@@ -1431,6 +1432,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(declared ? { declared } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+            ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
@@ -1480,6 +1482,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(declared ? { declared } : {}),
             ...(pageEvents ? { page_events: pageEvents } : {}),
             ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+            ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
@@ -2384,6 +2387,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // out of http.jsonl before the uncaught throw still belongs on this
         // step record.
         const httpOmitted = contextHandle.httpOmittedSnapshot();
+        const httpLogFailed = contextHandle.httpLogFailedSnapshot();
         const worldReadsWrites = worldInstrumentation.snapshot();
         const declared = declaredCollector.snapshot();
         // Same backstop-only read again, for `evidence.attach`/`.path` —
@@ -2429,6 +2433,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           ...(declared ? { declared } : {}),
           ...(pageEvents ? { page_events: pageEvents } : {}),
           ...(httpOmitted ? { http_omitted: httpOmitted } : {}),
+          ...(httpLogFailed ? { http_log_failed: httpLogFailed } : {}),
           ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
           ...(truncated !== undefined ? { truncated } : {}),
           // `fixtureUsage` (hoisted above, alongside `began`): whatever this
