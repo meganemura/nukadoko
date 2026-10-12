@@ -86,7 +86,8 @@ not have parsed either, so there is no placement to judge it by, and a
 file that looks like a record but cannot be read stays worth reporting
 regardless of where the feature lives.
 
-`signoff-rot` and `signoff-condition-mismatch` above both start from a
+The stale-record findings (`signoff-feature-changed` and the other
+`signoff-*` codes) and `signoff-condition-mismatch` above both start from a
 record that already exists and ask whether its claim still holds. One
 more starts from the opposite end:
 `feature-never-signed` names a feature under `featuresDir` or

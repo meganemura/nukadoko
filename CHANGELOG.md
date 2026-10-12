@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **The acceptance skill matches what `nuka check` and `nuka tend` print.**
+  `writing-steps.md` said a line with a missing quote is reported as
+  `undefined-step` "rather than naming the missing quotes", but check adds a
+  hint with the rewritten line when exactly one pattern fits. `maintenance.md`
+  named `signoff-rot`, which is not a tend code; it now names the
+  `signoff-*` stale-record codes.
 - **`nuka check` reports `capture-type-mismatch` for every capture that always fails args validation.**
   It used to compare only `{int}`/`{float}` with a string field and
   `{string}`/`{word}` with a number field. `{double}`, `{long}`, `{short}`, and

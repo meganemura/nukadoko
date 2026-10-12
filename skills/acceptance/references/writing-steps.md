@@ -261,8 +261,9 @@ reach for.
 
 `{key:string}` only matches text wrapped in double quotes; an unquoted
 value does not match at all, and `nuka check` reports the whole line as
-`undefined-step` rather than naming the missing quotes. `"a customer
-{email:string} is onboarded"` binds `a customer "ada@example.com" is
+`undefined-step`. When exactly one pattern fits the line once quoted, the
+finding also names the step, the `{...:string}` parameter, and the line
+rewritten with quotes. `"a customer {email:string} is onboarded"` binds `a customer "ada@example.com" is
 onboarded`, quotes included in the line but stripped from the captured
 value; `a customer ada@example.com is onboarded` binds nothing. `{word}`
 differs on both counts: it matches one unquoted, space-free token with no
