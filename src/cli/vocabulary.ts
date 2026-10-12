@@ -699,8 +699,8 @@ export interface TypedStepContract {
  * `nuka describe` on a compat entry: no schema
  * exists to show, so this shape says so explicitly instead of a StepContract
  * with holes in it — `pattern` names what would need a `defineStep` to gain
- * a contract, and `message` states that plainly (docs/spec.md "What compat
- * steps lack").
+ * a contract, and `message` states that plainly (docs/spec.md "Compat
+ * steps (the migration door)").
  */
 export interface CompatStepContract {
   readonly kind: "compat";
@@ -751,7 +751,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
       name: entry.name,
       pattern: entry.compat.patternSource,
       message:
-        'compat steps have no type contract; promote this pattern to defineStep to add one (docs/spec.md "What compat steps lack")',
+        'compat steps have no type contract; promote this pattern to defineStep to add one (docs/spec.md "Compat steps (the migration door)")',
     };
   }
   const fromResult = fromHumanReadable(entry.step.from, stepNames);

@@ -449,7 +449,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
         status: "rejected",
         message:
           `Step "${request.step}" is a compat step and has no typed contract, so it cannot be run ` +
-          "individually; promote it to defineStep to run it via `nuka do` (docs/spec.md \"What compat steps lack\")",
+          "individually; promote it to defineStep to run it via `nuka do` (docs/spec.md \"Compat steps (the migration door)\")",
       };
     }
 

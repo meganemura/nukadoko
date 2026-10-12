@@ -1222,7 +1222,7 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
   `nuka accept` の record だけが、この比較を書き出します(Sign-off を参照)。
   sign-off では、人がすでに run を読み、判断します。
   そこで record は、`nuka run` または `nuka check` の呼び出しごとに偽陽性のノイズを加えず、生の事実を示せます。
-- Compat(型のない)step には、`mutates` の宣言がありません(「compat step に欠けているもの」を参照)。
+- Compat(型のない)step には、`mutates` の宣言がありません(「Compat steps(移行の扉)」を参照)。
   `nuka check` の `then-compat-step` 警告は、compat step が Then の位置に結び付けられたときに、このカバレッジの欠落を示します。
   mutation の矛盾は示しません。
   実行時の観測は他の step と同じ回数を記録しますが、その回数は何もゲートしません。
@@ -2570,7 +2570,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   1 つの scenario ごとに散らすのではなく、1 つのセクションにすべての scenario をまとめます。
   そうすることで見落とされずに済みます。
   食い違いが 1 つもない場合でも記録され、「照合した結果ゼロだった」ことと「そもそも照合していない」ことが読み分けられるようにします。
-  compat step(`mutates: null`、「compat step に欠けているもの」を参照)は `observed` と比較すべき宣言がそもそも存在しません。
+  compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)は `observed` と比較すべき宣言がそもそも存在しません。
   それは別に数えられ、上記のどちらの結果にも混ぜられません。
   「比較する対象がない」ことと「比較して一致した」ことは別の事実だからです。
 - Gherkin にすでにその場所があるので、記録の中にはチケットへのリンクは何もありません。

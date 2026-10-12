@@ -431,6 +431,11 @@ just until 0.1.
   path`) and described `nuka mcp-tools` as nukadoko's own tool list. The
   command lists the tools another MCP server declares over stdio, given after
   `--`. Both lines now say so.
+- **Pointers to a missing spec heading now name "Compat steps (the migration door)".**
+  Three CLI messages (the `nuka steps` compat entry, `nuka do`, and the live
+  session) and two spec passages sent the reader to "What compat steps lack",
+  a heading that no longer exists. They now cite the section that covers it,
+  in the English and the Japanese spec.
 
 ## 0.14.1 — 2026-10-10
 

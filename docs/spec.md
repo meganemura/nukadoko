@@ -1439,8 +1439,8 @@ per-occurrence fact:
   writes this comparison (see Sign-off). At sign-off, a person already
   reads and judges the run. The record can show the raw facts there without
   adding false-positive noise to every `nuka run` or `nuka check` invocation.
-- Compat (untyped) steps have no `mutates` declaration (see "What compat
-  steps lack"). The `then-compat-step` warning from `nuka check` identifies
+- Compat (untyped) steps have no `mutates` declaration (see "Compat steps (the
+  migration door)"). The `then-compat-step` warning from `nuka check` identifies
   this coverage gap when a compat step is bound in Then position. It does
   not identify a mutation conflict. Run-time observation records the same
   counts as it does for any step, but those counts gate nothing.
@@ -3145,8 +3145,8 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   every scenario, not spread one line per scenario, so it cannot be
   scanned past by accident. Written even when nothing disagrees, so
   "compared, found nothing" stays distinguishable from "never compared at
-  all". A compat step (`mutates: null`, see "What compat steps lack") has
-  no declaration to compare against `observed` at all; it is counted
+  all". A compat step (`mutates: null`, see "Compat steps (the migration
+  door)") has no declaration to compare against `observed` at all; it is counted
   separately, never folded into either outcome above, since "nothing to
   compare" and "compared and matched" are different facts.
 - The record has no separate ticket link because Gherkin already provides the
