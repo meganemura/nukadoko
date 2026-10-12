@@ -135,6 +135,9 @@ describe("parseOathSource", () => {
       const openLen = tc.draw(gs.integers({ minValue: 3, maxValue: 5 }));
       const closeLen = openLen + tc.draw(gs.integers({ minValue: 0, maxValue: 2 }));
       const body = tc.draw(gs.text({ alphabet: "abc `~{}\":", minSize: 1, maxSize: 16 }));
+      // A body line that is itself a long enough run of the fence character
+      // closes the fence, as CommonMark says it should.
+      tc.assume(!new RegExp(`^\\${mark}{${openLen},}$`).test(body.trim()));
       const source = [
         "# Fenced",
         "- Given a thing:",
