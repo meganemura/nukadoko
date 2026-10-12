@@ -199,4 +199,23 @@ describe("nuka run: allure-results wiring", () => {
     expect(new Set(all).size).toBe(1);
     expect(all[0]).toBe(first[0]);
   });
+
+  it("writes the result of a scenario whose step returns nothing (`returns: z.void()`), with no result attachment", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/void-result.feature"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stripRunProgressLines(stderr.text())).toBe("");
+    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
+    const results = resultFiles(resultsDir).map((name) => readResult(resultsDir, name)) as {
+      name?: string;
+      status?: string;
+      steps?: { attachments?: { name: string }[] }[];
+    }[];
+    expect(results.map((result) => [result.name, result.status])).toEqual([["a step that returns nothing", "passed"]]);
+    expect(results[0]!.steps!.map((step) => step.attachments!.map((attachment) => attachment.name))).toEqual([
+      ["record.json"],
+    ]);
+  });
 });
