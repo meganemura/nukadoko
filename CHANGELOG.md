@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **The `nuka check` escape hint sees a parameter type registered in compat code.**
+  The hint that names a pattern whose bare `( )` or `/` keeps it from
+  matching was built only from `config.parameterTypes`. A pattern that
+  used a type from a compat `defineParameterType` got a plain
+  `undefined-step` with no hint. The hint now uses the same registry as
+  matching.
 - **`nuka check` reports a finding on a Background or outline line once.**
   A Background line reaches the check once per scenario, and an outline
   line once per Examples row. Every finding about such a line except
