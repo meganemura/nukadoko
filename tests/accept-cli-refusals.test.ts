@@ -284,4 +284,33 @@ describe("nuka accept: a step record missing from disk", () => {
     expect(stderr.text()).toContain("could not be read from .nukadoko/records/steps");
     expect(stderr.text()).toContain(stepRecordId);
   });
+
+  it("names the configured state directory, not the default one, when the step record is missing", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ stateDir: ".custom-state" });\n',
+    );
+    await writeFile(path.join(rootDir, ".gitignore"), ".custom-state/\nfeatures/*.md\n");
+    await initGitRepo(rootDir);
+
+    const runStdout = createCaptureSink();
+    const runExit = await runCli(["run", "features/greeting.feature"], {
+      rootDir,
+      stdout: runStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(runExit).toBe(0);
+    const stepRecordId: string = JSON.parse(runStdout.text().trim().split("\n")[0]!).steps[0].step_record_id;
+    await rm(path.join(rootDir, ".custom-state", "records", "steps", stepRecordId), { recursive: true, force: true });
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["accept", "features/greeting.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toContain("could not be read from .custom-state/records/steps");
+  });
 });
