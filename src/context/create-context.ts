@@ -736,6 +736,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // header).
   let externalPageHandle: ExternalPageEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
+  // In-flight setup shared by concurrent first calls; see `ctx.page()`.
+  let pageSetup: Promise<Page> | undefined;
+  let requestSetup: Promise<APIRequestContext> | undefined;
   // True only once this module's own `playwrightRequest.newContext()` call
   // below actually opens one — never for `options.request`, which some
   // other caller already owns and must close itself (`CreateStepContextOptions.request`'s
@@ -955,93 +958,22 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         }
         return externalPageHandle.page;
       }
-      if (!browserHandle) {
-        browserHandle = await launchBrowserWithTracing({
-          // `config.browserType` — which of
-          // chromium/firefox/webkit to launch; `undefined` behaves like
-          // `"chromium"` (browser-evidence.ts's own default).
-          browserType: config.browserType,
-          browser: config.browser,
-          // `config.browserContext` — schema.ts
-          // already rejects a `browserContext` that sets `baseURL`/
-          // `storageState`, so the two args below can never collide with
-          // it; browser-evidence.ts still spreads them in last anyway.
-          browserContext: config.browserContext,
-          evidenceDir,
-          storageState,
-          observed,
-          pageEvents,
-          // Same getter/secrets pair `ctx.request()` (below) already reads
-          // at call time — page-issued traffic lands on the very same
-          // http.jsonl, redacted the very same way (this file's own header).
-          logPath: () => path.join(httpLogDir, "http.jsonl"),
-          secrets,
-          httpOmitted,
-          baseURL: config.baseURL,
-        });
-        // Opens this boundary's own chunk right at launch when a
-        // title is already pending — `undefined` here means a boundary with
-        // nothing worth tracing (a caller with no `stepTitle` that also
-        // never calls `beginStep` before its first `ctx.page()`), which
-        // simply gets a browser with no chunk at all, on purpose.
-        if (pendingChunkTitle !== undefined) {
-          await browserHandle.beginStepChunk(pendingChunkTitle);
-          chunkOpen = true;
-        }
-      } else if (!chunkOpen && pendingChunkTitle !== undefined) {
-        // The browser was already running (an earlier step or hook launched
-        // it) but this boundary has not opened its own chunk yet — this is
-        // that boundary's own first `ctx.page()` call, so start one now,
-        // same as the fresh-launch branch above.
-        await browserHandle.beginStepChunk(pendingChunkTitle);
-        chunkOpen = true;
-      }
-      return browserHandle.page;
+      // Shared by concurrent first calls (`Promise.all([ctx.page(), ctx.page()])`):
+      // each would otherwise see `browserHandle` unset, launch its own browser,
+      // and leak the one the other assigned first. Cleared once settled so a
+      // failed launch is retried by the next call.
+      pageSetup ??= setUpPage().finally(() => {
+        pageSetup = undefined;
+      });
+      return pageSetup;
     },
     async request(): Promise<APIRequestContext> {
-      if (!requestContext) {
-        if (options.request) {
-          // Take what's already running, per this option's own doc comment
-          // above — no `newContext` call, so `requestContextOwnedHere` stays
-          // `false` and `dispose()` below leaves closing it to whoever
-          // opened it.
-          requestContext = wrapRequestContextWithLogging(
-            options.request,
-            () => path.join(httpLogDir, "http.jsonl"),
-            secrets,
-            observed,
-          );
-        } else {
-          // No `baseURL` requirement here, matching `ctx.page()` above, which
-          // already passes `config.baseURL` through as `undefined` without
-          // complaint — a suite
-          // that only ever talks to absolute URLs across several hosts has no
-          // single baseURL to state, and forcing one into config would make
-          // config assert something untrue. If a step written against a
-          // relative path actually needs a baseURL and none was configured,
-          // Playwright's own `newContext`/fetch call fails on that URL; this
-          // module does not duplicate Playwright's URL-resolution rules to
-          // pre-empt that with its own error.
-          //
-          // `config.requestContext` is spread in
-          // first, `baseURL`/`storageState` after: schema.ts already rejects
-          // a `requestContext` that sets either key, so this ordering never
-          // actually resolves a real collision, only guards the invariant.
-          const raw = await playwrightRequest.newContext({
-            ...(config.requestContext ?? {}),
-            ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-            ...(storageState ? { storageState } : {}),
-          });
-          requestContextOwnedHere = true;
-          requestContext = wrapRequestContextWithLogging(
-            raw,
-            () => path.join(httpLogDir, "http.jsonl"),
-            secrets,
-            observed,
-          );
-        }
-      }
-      return requestContext;
+      // Same sharing as `ctx.page()`: two concurrent first calls must not each
+      // open a context and leak the first.
+      requestSetup ??= setUpRequest().finally(() => {
+        requestSetup = undefined;
+      });
+      return requestSetup;
     },
     resultOf<S extends Step>(step: S) {
       // Checked before the lookup even runs: a Step object discovery never
@@ -1102,6 +1034,97 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // executor-only rule every other collector on this file already follows.
     evidence: { attach: evidence.attach, path: evidence.path },
   };
+
+  async function setUpPage(): Promise<Page> {
+    if (!browserHandle) {
+      browserHandle = await launchBrowserWithTracing({
+        // `config.browserType` — which of
+        // chromium/firefox/webkit to launch; `undefined` behaves like
+        // `"chromium"` (browser-evidence.ts's own default).
+        browserType: config.browserType,
+        browser: config.browser,
+        // `config.browserContext` — schema.ts
+        // already rejects a `browserContext` that sets `baseURL`/
+        // `storageState`, so the two args below can never collide with
+        // it; browser-evidence.ts still spreads them in last anyway.
+        browserContext: config.browserContext,
+        evidenceDir,
+        storageState,
+        observed,
+        pageEvents,
+        // Same getter/secrets pair `ctx.request()` (below) already reads
+        // at call time — page-issued traffic lands on the very same
+        // http.jsonl, redacted the very same way (this file's own header).
+        logPath: () => path.join(httpLogDir, "http.jsonl"),
+        secrets,
+        httpOmitted,
+        baseURL: config.baseURL,
+      });
+      // Opens this boundary's own chunk right at launch when a
+      // title is already pending — `undefined` here means a boundary with
+      // nothing worth tracing (a caller with no `stepTitle` that also
+      // never calls `beginStep` before its first `ctx.page()`), which
+      // simply gets a browser with no chunk at all, on purpose.
+      if (pendingChunkTitle !== undefined) {
+        await browserHandle.beginStepChunk(pendingChunkTitle);
+        chunkOpen = true;
+      }
+    } else if (!chunkOpen && pendingChunkTitle !== undefined) {
+      // The browser was already running (an earlier step or hook launched
+      // it) but this boundary has not opened its own chunk yet — this is
+      // that boundary's own first `ctx.page()` call, so start one now,
+      // same as the fresh-launch branch above.
+      await browserHandle.beginStepChunk(pendingChunkTitle);
+      chunkOpen = true;
+    }
+    return browserHandle.page;
+  }
+
+  async function setUpRequest(): Promise<APIRequestContext> {
+    if (!requestContext) {
+      if (options.request) {
+        // Take what's already running, per this option's own doc comment
+        // above — no `newContext` call, so `requestContextOwnedHere` stays
+        // `false` and `dispose()` below leaves closing it to whoever
+        // opened it.
+        requestContext = wrapRequestContextWithLogging(
+          options.request,
+          () => path.join(httpLogDir, "http.jsonl"),
+          secrets,
+          observed,
+        );
+      } else {
+        // No `baseURL` requirement here, matching `ctx.page()` above, which
+        // already passes `config.baseURL` through as `undefined` without
+        // complaint — a suite
+        // that only ever talks to absolute URLs across several hosts has no
+        // single baseURL to state, and forcing one into config would make
+        // config assert something untrue. If a step written against a
+        // relative path actually needs a baseURL and none was configured,
+        // Playwright's own `newContext`/fetch call fails on that URL; this
+        // module does not duplicate Playwright's URL-resolution rules to
+        // pre-empt that with its own error.
+        //
+        // `config.requestContext` is spread in
+        // first, `baseURL`/`storageState` after: schema.ts already rejects
+        // a `requestContext` that sets either key, so this ordering never
+        // actually resolves a real collision, only guards the invariant.
+        const raw = await playwrightRequest.newContext({
+          ...(config.requestContext ?? {}),
+          ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+          ...(storageState ? { storageState } : {}),
+        });
+        requestContextOwnedHere = true;
+        requestContext = wrapRequestContextWithLogging(
+          raw,
+          () => path.join(httpLogDir, "http.jsonl"),
+          secrets,
+          observed,
+        );
+      }
+    }
+    return requestContext;
+  }
 
   async function dispose(): Promise<DisposeResult> {
     const evidence: EvidenceResult = { screenshots: [] };

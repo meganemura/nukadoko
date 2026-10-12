@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **Concurrent first `ctx.page()` or `ctx.request()` calls share one launch.**
+  Two calls made together, as in `Promise.all([this.openPage(), this.openPage()])`
+  in compat glue, each saw no browser yet and launched their own. The second
+  handle replaced the first, and nothing closed the first. The calls now wait
+  on one in-flight launch and get the same object. A launch that fails is not
+  kept: the next call tries again.
 - **The Markdown oath parser reads an indented or tilde fence as narration, and keeps a heading's trailing `#`.**
   Only a backtick fence at column 0 opened a code block, so a fence inside
   a list item or a `~~~` fence turned every code line into a step. A fence
