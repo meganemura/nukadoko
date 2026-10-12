@@ -182,6 +182,21 @@ describe("applyRetention", () => {
     expect(formatRetention(outcome, policy)).toBe("retention: removed 1 run older than the newest 2 (retention.runs)");
   });
 
+  it("reads a record whose started_at does not parse as unreadable, so its run never takes the newest run's place", async () => {
+    await seedRun("run-older", "2026-08-31T00:00:00Z");
+    await seedRun("run-newest", "2026-09-01T00:00:00Z");
+    await seedRun("run-undated", "not a date", 1, false);
+    writeRunMarker(rootDir, stateDir, "run-undated", "passed", 0, now);
+
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+
+    expect(outcome).toEqual({ skipped: null, runsKept: 1, runsRemoved: 1, unownedRemoved: 0 });
+    expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-older-0"))).toBe(false);
+    expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-newest-0"))).toBe(true);
+    // Unreadable records leave by age, from their directory's own mtime.
+    expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-undated-0"))).toBe(true);
+  });
+
   it("dates a run by its earliest scenario, so a long run that began first is the older one", async () => {
     await seedRun("run-long", "2026-09-01T00:00:00Z");
     // A second scenario of the long run finished after the short run began.

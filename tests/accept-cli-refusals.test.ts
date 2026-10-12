@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -166,6 +166,29 @@ describe("nuka accept: git state refusals below the feature target", () => {
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("no run has ever executed");
+  });
+
+  it("reads a scenario record whose started_at does not parse as unreadable, the same as nuka tend and retention", async () => {
+    await initGitRepo(rootDir);
+    expect(
+      await runCli(["run", "features/greeting.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() }),
+    ).toBe(0);
+    const scenariosDir = path.join(rootDir, ".nukadoko", "records", "scenarios");
+    for (const id of await readdir(scenariosDir)) {
+      const recordPath = path.join(scenariosDir, id, "record.json");
+      const record = JSON.parse(await readFile(recordPath, "utf8")) as Record<string, unknown>;
+      await writeFile(recordPath, JSON.stringify({ ...record, started_at: "not a date" }));
+    }
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["accept", "features/greeting.feature"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      "nuka accept: no run has ever executed features/greeting.feature. Run `nuka run features/greeting.feature` first.\n",
+    );
   });
 
   it("refuses when the run being frozen recorded no git state at all", async () => {
