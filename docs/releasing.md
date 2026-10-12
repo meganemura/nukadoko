@@ -89,7 +89,9 @@ registers the trusted publisher.
    leave `## Unreleased` empty. The heading shape is the one already in
    `CHANGELOG.md`. Set the same version in `package.json`. The tag,
    without the leading `v`, is that version. The workflow stops when
-   they differ.
+   they differ. In `docs/upgrading.md` and `docs/upgrading.ja.md`, rename
+   the heading that ends in "to the next release" (`から次のリリースへ`
+   in Japanese) so it names this version, for example `0.14.1 to 0.15.0`.
 
 2. Run `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check`.
    `pack-check` installs the real tarball into a throwaway project

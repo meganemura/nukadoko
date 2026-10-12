@@ -125,7 +125,7 @@ has to look at those values before the next run.
   line. Stopping a live session, or cleaning up a stale lock, is
   unchanged and still quiet on success.
 
-## 0.12.0 to the next release
+## 0.12.0 to 0.13.0
 
 Behaviour changes worth knowing before upgrading.
 

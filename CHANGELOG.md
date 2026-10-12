@@ -450,6 +450,11 @@ just until 0.1.
   use no daemon (`nuka session start` starts one), and pointed to
   `signoff-record-unreadable` "above" where nothing described it. Each
   statement now matches the CLI, in the English and the Japanese spec.
+- **The upgrading guide names the release that carried the 0.12.0 changes.**
+  The heading "0.12.0 to the next release" stayed after 0.13.0 shipped those
+  changes, so it read as still pending. It is now "0.12.0 to 0.13.0", in both
+  languages. `docs/releasing.md` now has a step that renames the open
+  "to the next release" heading to the version being released.
 
 ## 0.14.1 — 2026-10-10
 
