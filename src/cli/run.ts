@@ -41,6 +41,7 @@ import {
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
+import { writeRunMarker } from "../record/run-marker.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
 import {
   doneCallbackMessage,
@@ -566,12 +567,17 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
 
     // Retention (src/record/retention.ts) runs last in both branches
     // below, after this run's own records and export files are complete,
-    // so this run is the newest one the run rule sees and is never what it
-    // removes. Its line goes out under `--quiet` too: a deletion is worth
+    // so the marker below can say the run ended. Another `nuka run` may have
+    // finished meanwhile and ranked this one older, which is why retention is
+    // told which run is this one and never removes it. Its line goes out under `--quiet` too: a deletion is worth
     // a line to the person whose state directory just shrank. A failure
     // here never changes the exit code, which is the run's own verdict.
-    const pruneAfterRun = async (): Promise<void> => {
+    const pruneAfterRun = async (verdict: "passed" | "failed"): Promise<void> => {
       try {
+        // The marker is the run's last write: it says the run ended and how
+        // (src/record/run-marker.ts). A run with no pickle wrote no records
+        // and gets none.
+        if (flatPickles.length > 0) writeRunMarker(rootDir, config.stateDir, runId, verdict, new Date());
         const outcome = await applyRetention({
           rootDir,
           stateDir: config.stateDir,
@@ -579,6 +585,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
           now: new Date(),
           messagesOutputRel,
           liveSessions: await findLiveSessions(rootDir, config.stateDir),
+          currentRunId: runId,
         });
         const line = formatRetention(outcome, config.retention);
         if (line !== null) stderr.write(`${line}\n`);
@@ -732,7 +739,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       });
       writeFailedScenarios(stderr, failedScenarios);
       writeRepeatTallies(stderr, repeatTallies);
-      await pruneAfterRun();
+      await pruneAfterRun(allPassed ? "passed" : "failed");
 
       return allPassed ? 0 : 1;
     }
@@ -1164,7 +1171,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       });
       writeFailedScenarios(stderr, failedScenarios);
       writeRepeatTallies(stderr, repeatTally.list());
-      await pruneAfterRun();
+      await pruneAfterRun(allPassed ? "passed" : "failed");
 
       return allPassed ? 0 : 1;
     } finally {

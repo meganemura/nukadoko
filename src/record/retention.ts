@@ -3,6 +3,7 @@ import path from "node:path";
 import { messagesRunOutputPath } from "./messages-output.js";
 import type { ScenarioRecord } from "./scenario-record.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
+import { readRunMarker } from "./run-marker.js";
 
 // Responsibility: what leaves the state directory on its own, and when.
 // Two rules, applied at the end of every `nuka run` (src/cli/run.ts):
@@ -14,7 +15,8 @@ import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-export
 //    `retention.runs` runs keep everything: scenario records, the step
 //    records their `steps[]` cite, the export files their manifest lists
 //    (src/record/run-exports.ts), and their messages stream. Every older
-//    run loses all of it. Runs are derived from the records themselves,
+//    run loses all of it, unless it may still be writing (see the end of
+//    this header). Runs are derived from the records themselves,
 //    not from a list the tool keeps, so a run that stopped after writing
 //    some scenario records, and every run written before this rule
 //    existed, still falls under it.
@@ -57,10 +59,17 @@ import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-export
 // --session` holding the name for the length of one command, and at the
 // end of `nuka run` that command is the one running retention.
 //
-// A second `nuka run` in flight at the same time is safe by construction:
-// its scenario records carry its own `run_id` with a `started_at` newer
-// than anything this invocation could rank it below, its manifest is
-// listed under a run this invocation keeps, and the age rule needs days.
+// A second `nuka run` in flight at the same time is safe because the run
+// rule only removes a run that proves it ended. `nuka run` writes a
+// completion marker (src/record/run-marker.ts) into the run's directory as
+// its last act, and a run whose marker is missing is removed only once its
+// newest record is older than `retention.adHocDays`: a run still writing,
+// a run killed mid-way, and a run from before the marker existed all look
+// alike, and removing what cannot be proven finished is the one thing this
+// module does not do. The invocation that is applying retention also never
+// removes its own run, however many newer runs have finished since it began.
+// Its manifest and records are then removed by a later run, as any other
+// finished run's are.
 
 export interface RetentionPolicy {
   readonly runs: number;
@@ -220,6 +229,8 @@ export interface ApplyRetentionOptions {
    * them itself: discovering a daemon is the live module's job, and this
    * module must not import it. An empty list means nothing is live. */
   readonly liveSessions: readonly RetentionLiveSession[];
+  /** The run that is applying retention. It is never removed. */
+  readonly currentRunId: string;
 }
 
 /** The fields retention prints when it skips. Structural on purpose, so
@@ -258,7 +269,7 @@ async function removeRunExports(
 }
 
 export async function applyRetention(options: ApplyRetentionOptions): Promise<RetentionOutcome> {
-  const { rootDir, stateDir, policy, now, messagesOutputRel, liveSessions } = options;
+  const { rootDir, stateDir, policy, now, messagesOutputRel, liveSessions, currentRunId } = options;
 
   if (liveSessions.length > 0) {
     return { skipped: { liveSessions }, runsKept: 0, runsRemoved: 0, unownedRemoved: 0 };
@@ -274,9 +285,22 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
   const runs = groupRuns(scenarioDirs.flatMap((entry) => (entry.record !== null ? [entry.record] : [])));
   const plan = planRunRetention([...runs.values()].map((run) => run.summary), policy.runs);
 
+  const cutoff = now.getTime() - policy.adHocDays * 24 * 60 * 60 * 1000;
+  const droppable = (runId: string): boolean => {
+    if (runId === currentRunId) return false;
+    if (readRunMarker(rootDir, stateDir, runId) !== null) return true;
+    const dates = (runs.get(runId)?.records ?? []).flatMap((record) => {
+      const at = recordDate(record as unknown as Record<string, unknown>);
+      return at === null ? [] : [at];
+    });
+    return dates.length > 0 && Math.max(...dates) < cutoff;
+  };
+  const dropped = plan.dropped.filter(droppable);
+  const retained = [...runs.keys()].filter((runId) => !dropped.includes(runId));
+
   const ownedSteps = new Set<string>();
   const ownedScenarios = new Set<string>();
-  for (const runId of plan.kept) {
+  for (const runId of retained) {
     for (const record of runs.get(runId)?.records ?? []) {
       ownedScenarios.add(record.scenario_record_id);
       for (const step of record.steps) {
@@ -285,7 +309,7 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
     }
   }
 
-  for (const runId of plan.dropped) {
+  for (const runId of dropped) {
     for (const record of runs.get(runId)?.records ?? []) {
       for (const step of record.steps) {
         if (step.step_record_id !== null && !ownedSteps.has(step.step_record_id)) {
@@ -298,7 +322,6 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
   }
 
   // --- The age rule ---
-  const cutoff = now.getTime() - policy.adHocDays * 24 * 60 * 60 * 1000;
   let unownedRemoved = 0;
 
   const stepEntries: DatedEntry[] = [];
@@ -332,8 +355,8 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
 
   return {
     skipped: null,
-    runsKept: plan.kept.length,
-    runsRemoved: plan.dropped.length,
+    runsKept: retained.length,
+    runsRemoved: dropped.length,
     unownedRemoved,
   };
 }

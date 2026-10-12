@@ -18,6 +18,14 @@ just until 0.1.
 
 ### Fixed
 
+- **Retention no longer removes a run that is still writing, or the run applying it.**
+  With two `nuka run` processes overlapping, the one that ended first ranked the
+  other as older and removed its records mid-run, and a run that ended after a
+  newer one removed itself. A run now writes `records/runs/<run_id>/complete.json`
+  (its verdict and end time) as its last act. Retention removes a run without that
+  file only once its newest record is older than `retention.adHocDays`, and a run
+  never removes itself. A run written by an earlier version has no file, so it is
+  kept until it is that old.
 - **`ctx.call` accepts concurrent calls and nests them correctly.**
   `await Promise.all([call(a, {}), call(b, {})])` failed with a false
   "does not list it in its own parts" error, because one global frame stack made
