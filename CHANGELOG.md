@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **A scenario whose step returns nothing keeps its Allure result.**
+  A step with `returns: z.void()` records an undefined `result`. The Allure
+  emitter tried to attach it as `result`, failed, and dropped the whole
+  scenario from allure-results with only a stderr warning. A step that returns
+  no value now gets no `result` attachment, and its scenario is written as usual.
 - **Two records no longer share one record directory when their ids collide.**
   A step or scenario record id has four random characters per second, so a run
   with many steps could draw the same id twice. The second record then reused

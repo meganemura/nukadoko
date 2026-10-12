@@ -974,7 +974,9 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
       fileExtension: ".json",
     });
 
-    if (stepRecord.status === "ok" && stepRecord.result !== null) {
+    // `returns: z.void()` leaves `result` undefined, and JSON.stringify(undefined)
+    // is not a string, so only a step that returned a value gets a result.
+    if (stepRecord.status === "ok" && stepRecord.result !== null && stepRecord.result !== undefined) {
       attachments.push({
         kind: "buffer",
         name: "result",
