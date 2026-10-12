@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Envelope } from "@cucumber/messages";
@@ -305,6 +305,23 @@ describe("createMessagesEmitter", () => {
     // `output` is a copy, byte for byte, of this run's own file — not a
     // reconstruction, not a summary.
     expect(content).toBe(readFileSync(runOutput, "utf8"));
+  });
+
+  it("replaces the configured output under a new inode, so a reader of the previous stream never sees this run's bytes", () => {
+    mkdirSync(path.dirname(output), { recursive: true });
+    writeFileSync(output, "previous complete stream\n");
+    // Stands for a reader that opened the previous stream before end(): it
+    // keeps the old inode, so a copy that rewrote `output` in place would
+    // show through it.
+    const reader = path.join(rootDir, "reader.ndjson");
+    linkSync(output, reader);
+
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
+    emitter.end(true);
+
+    expect(readFileSync(reader, "utf8")).toBe("previous complete stream\n");
+    expect(readFileSync(output, "utf8")).toBe(readFileSync(runOutput, "utf8"));
   });
 
   it("begin() with more than one feature writes meta, then one (source, gherkinDocument, pickle x N) group per feature in the given order, then one testRunStarted", () => {

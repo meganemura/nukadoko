@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -134,6 +134,41 @@ describe("createAtomicWriter", () => {
     writer.writeGlobals("globals.json", {} as never);
     writer.writeProgressSnapshot({ uuid: "r1" } as never, 1);
     expect(written).toEqual(["r1-result.json", "g1-container.json", "a1-attachment.txt", "a2-attachment.zip"]);
+  });
+
+  // A reader that opened the previous file before a write must keep reading
+  // that whole previous file. A hard link made beforehand stands for that
+  // reader: it keeps the old file's inode, so a write that truncated and
+  // refilled the final path in place would show through it.
+  it("replaces an existing file under a new inode, so a reader of the previous file never sees the new bytes", () => {
+    const file = path.join(dir, "environment.properties");
+    writeFileSync(file, "environment=previous");
+    const reader = path.join(dir, "reader");
+    linkSync(file, reader);
+
+    createAtomicWriter(dir).writeEnvironmentInfo({ environment: "staging" });
+
+    expect(readFileSync(reader, "utf8")).toBe("environment=previous");
+    expect(readFileSync(file, "utf8")).toBe("environment=staging");
+  });
+
+  it("replaces an existing attachment under a new inode on both the link and the copy path", () => {
+    const source = path.join(dir, "source.txt");
+    writeFileSync(source, "source content");
+    const failingLink = (): void => {
+      throw Object.assign(new Error("EXDEV: cross-device link not permitted"), { code: "EXDEV" });
+    };
+    for (const [name, options] of [["linked.txt", {}], ["copied.txt", { link: failingLink }]] as const) {
+      const file = path.join(dir, name);
+      writeFileSync(file, "previous");
+      const reader = path.join(dir, `${name}.reader`);
+      linkSync(file, reader);
+
+      createAtomicWriter(dir, options).writeAttachmentFromPath(name, source);
+
+      expect(readFileSync(reader, "utf8"), name).toBe("previous");
+      expect(readFileSync(file, "utf8"), name).toBe("source content");
+    }
   });
 
   it("never removes files that were already there", () => {
