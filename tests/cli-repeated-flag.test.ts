@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -52,6 +52,7 @@ describe("repeated singular flags", () => {
   it("keeps every --use value", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
+    mkdirSync(path.join(rootDir, "features"));
 
     const exitCode = await runCli(["do", "step", "--use", "r1", "--use", "r2"], {
       rootDir,

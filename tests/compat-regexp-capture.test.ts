@@ -33,8 +33,8 @@ function compatVocabulary(pattern: RegExp): Vocabulary {
   return new Map([[name, entry]]);
 }
 
-function matchedValues(pattern: RegExp, text: string): readonly unknown[] {
-  const outcome = matchPickleStep(text, buildStepBindings(compatVocabulary(pattern)));
+async function matchedValues(pattern: RegExp, text: string): Promise<readonly unknown[]> {
+  const outcome = await matchPickleStep(text, buildStepBindings(compatVocabulary(pattern)), null);
   if (outcome.kind !== "matched") {
     throw new Error(`expected ${JSON.stringify(text)} to match ${pattern}, got ${outcome.kind}`);
   }
@@ -43,38 +43,38 @@ function matchedValues(pattern: RegExp, text: string): readonly unknown[] {
 
 describe("compat RegExp capture conversion", () => {
   it("gives a (\\d+) capture to the step as that number", () =>
-    hegel.test((tc) => {
+    hegel.testAsync(async (tc) => {
       const count = tc.draw(gs.integers({ minValue: 0, maxValue: Number.MAX_SAFE_INTEGER }));
-      expect(matchedValues(/^I have (\d+) cukes$/, `I have ${count} cukes`)).toEqual([count]);
+      expect(await matchedValues(/^I have (\d+) cukes$/, `I have ${count} cukes`)).toEqual([count]);
     }));
 
   it("gives a (-?\\d+) capture to the step as that number, including negatives", () =>
-    hegel.test((tc) => {
+    hegel.testAsync(async (tc) => {
       const count = tc.draw(
         gs.integers({ minValue: -Number.MAX_SAFE_INTEGER, maxValue: Number.MAX_SAFE_INTEGER }),
       );
-      expect(matchedValues(/^I have (-?\d+) cukes$/, `I have ${count} cukes`)).toEqual([count]);
+      expect(await matchedValues(/^I have (-?\d+) cukes$/, `I have ${count} cukes`)).toEqual([count]);
     }));
 
-  it("receives the number 5 from (\\d+)", () => {
-    expect(matchedValues(/^I have (\d+) cukes$/, "I have 5 cukes")).toEqual([5]);
+  it("receives the number 5 from (\\d+)", async () => {
+    expect(await matchedValues(/^I have (\d+) cukes$/, "I have 5 cukes")).toEqual([5]);
   });
 
-  it("receives null for an unmatched optional group", () => {
-    expect(matchedValues(/^I have( \d+)? cukes$/, "I have cukes")).toEqual([null]);
+  it("receives null for an unmatched optional group", async () => {
+    expect(await matchedValues(/^I have( \d+)? cukes$/, "I have cukes")).toEqual([null]);
   });
 
-  it("leaves a group that matches no built-in type as a string", () => {
-    expect(matchedValues(/^a ([a-z]+) item$/, "a red item")).toEqual(["red"]);
+  it("leaves a group that matches no built-in type as a string", async () => {
+    expect(await matchedValues(/^a ([a-z]+) item$/, "a red item")).toEqual(["red"]);
   });
 
-  it("converts (\\d+) on every call of a /g pattern", () => {
+  it("converts (\\d+) on every call of a /g pattern", async () => {
     const pattern = /^count (\d+)$/g;
-    expect(matchedValues(pattern, "count 3")).toEqual([3]);
-    expect(matchedValues(pattern, "count 3")).toEqual([3]);
+    expect(await matchedValues(pattern, "count 3")).toEqual([3]);
+    expect(await matchedValues(pattern, "count 3")).toEqual([3]);
   });
 
-  it("still coerces a typed {int} capture to a number", () => {
+  it("still coerces a typed {int} capture to a number", async () => {
     const step = defineStep({
       pattern: "I have {count:int} cukes",
       description: "typed int capture",
@@ -87,7 +87,7 @@ describe("compat RegExp capture conversion", () => {
     const vocabulary: Vocabulary = new Map([
       ["have-cukes", { kind: "typed", name: "have-cukes", filePath: "features/steps/have-cukes.ts", step }],
     ]);
-    const outcome = matchPickleStep("I have 5 cukes", buildStepBindings(vocabulary));
+    const outcome = await matchPickleStep("I have 5 cukes", buildStepBindings(vocabulary), null);
     expect(outcome).toMatchObject({ kind: "matched", values: [5] });
   });
 });

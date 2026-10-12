@@ -110,9 +110,14 @@ for (const name of skillNames) {
       // outside this repository hits exactly this path). Vacuous for a
       // skill with no references/*.md mentions at all.
       const content = await readFile(path.join(dir, "SKILL.md"), "utf8");
-      const referencePaths = [...content.matchAll(/references\/[a-z0-9-]+\.md/g)].map((m) => m[0]);
+      // A path that starts at skills/ points into another skill and
+      // resolves from the repository root.
+      const referencePaths = [...content.matchAll(/(?:skills\/[a-z0-9-]+\/)?references\/[a-z0-9-]+\.md/g)].map(
+        (m) => m[0],
+      );
       for (const referencePath of new Set(referencePaths)) {
-        expect(existsSync(path.join(dir, referencePath))).toBe(true);
+        const base = referencePath.startsWith("skills/") ? path.join(dir, "..", "..") : dir;
+        expect(existsSync(path.join(base, referencePath)), referencePath).toBe(true);
       }
     });
   });

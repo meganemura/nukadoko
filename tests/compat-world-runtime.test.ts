@@ -112,6 +112,7 @@ describe("World (src/compat/world.ts): construction and unopened getters", () =>
       } as StepContext,
       {},
       createDeclaredCollector(),
+      {},
     );
     instrumentation.beginStep();
 
@@ -184,7 +185,7 @@ describe("instantiateWorldForPickle: cucumber-js attach and link forms", () => {
   ): Promise<void> {
     const dir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-world-forms-"));
     const collector = createDeclaredCollector();
-    const { world } = instantiateWorldForPickle(stubCtx(), {}, collector);
+    const { world } = instantiateWorldForPickle(stubCtx(), {}, collector, {});
     collector.beginStep(dir);
     return Promise.resolve(run(dir, world, collector)).finally(() => {
       rmSync(dir, { recursive: true, force: true });

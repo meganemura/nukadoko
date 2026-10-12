@@ -24,14 +24,17 @@ async function checkReport(rootDir: string) {
 }
 
 describe("nuka check: parts findings", () => {
+  // defineStep refuses a non-Step part when the file is imported, so the
+  // finding is the import failure that names the file.
   it("reports a part that is not a Step", async () => {
     const { report, exitCode } = await checkReport(fixture("check-parts-project"));
-    const issues = report.errors.filter(
-      (issue) => issue.code === "part-structural-violation" && issue.step === "not-a-step-part",
-    );
-    expect(issues).toHaveLength(1);
-    expect(issues[0]!.message).toContain("is not a Step");
-    expect(issues[0]!.file).toBe("features/steps/not-a-step-part.ts");
+    const issues = report.errors.filter((issue) => issue.file === "features/steps/not-a-step-part.ts");
+    expect(issues.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: "step-file-import-failed",
+        message: "defineStep parts must be an array of steps, each produced by defineStep.",
+      },
+    ]);
     expect(exitCode).toBe(1);
   });
 

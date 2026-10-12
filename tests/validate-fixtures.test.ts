@@ -3,7 +3,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
 import { defineStep, type Step } from "../src/step/define-step.js";
-import type { FixtureDefinition } from "../src/step/fixture-types.js";
+import type { FixtureDefinition, FixtureFn } from "../src/step/fixture-types.js";
 import { formatFixtureIssues, validateFixtureDefinitions, validateStepFixtures } from "../src/fixture/validate-fixtures.js";
 
 // Responsibility: unit tests for src/fixture/validate-fixtures.ts's pure
@@ -109,9 +109,9 @@ const STEP_BUILTINS = [...FIXTURE_BUILTINS, "resultOf", "section", "poll", "call
 /** A function whose source destructures `names`. The names are drawn from a
  * closed identifier set, so joining them into the parameter list cannot
  * change what the fixture-name parser reads. */
-function destructuring(names: readonly string[]): (...args: never[]) => unknown {
+function destructuring(names: readonly string[]): FixtureFn {
   const pattern = names.length === 0 ? "{}" : `{ ${names.join(", ")} }`;
-  return new Function(pattern, "use", "return undefined") as (...args: never[]) => unknown;
+  return new Function(pattern, "use", "return undefined") as FixtureFn;
 }
 
 describe("validateFixtureDefinitions", () => {
@@ -160,7 +160,7 @@ describe("validateFixtureDefinitions", () => {
         gs.arrays(gs.sampledFrom([...STEP_BUILTINS]), { minSize: 0, maxSize: 4, unique: true }),
       );
       const names = ["call", ...also.filter((name) => name !== "call")];
-      const step = stepWithRun(destructuring(names) as Step["run"]);
+      const step = stepWithRun(destructuring(names) as unknown as Step["run"]);
       expect(validateStepFixtures("uses-call", step)).toEqual([]);
     }));
 });

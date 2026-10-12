@@ -31,6 +31,7 @@ function baseConfig(): NukadokoConfig {
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],
+    worldParameters: {},
     fixtures: {},
     fixtureTimeout: 60_000,
     secrets: { public: [], redact: [] },
