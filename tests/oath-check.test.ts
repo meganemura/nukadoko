@@ -97,6 +97,44 @@ describe("markdown oaths", () => {
     ]);
   });
 
+  it("reports an oath directory with no .md file as feature-parse-error, and names the extension rule", async () => {
+    rootDir = await createEmptyTempDir();
+    await ensureNukadokoShim();
+    await writeProject(rootDir, {
+      "nukadoko.config.ts": config(["docs/oath"]),
+      "features/steps/includes.ts": STEP,
+      "docs/oath/LIST.MD": "# List\n\nThe list includes \"milk\"\n",
+    });
+
+    const report = await analyzeProject(rootDir);
+    expect(report.errors).toEqual([
+      expect.objectContaining({
+        code: "feature-parse-error",
+        file: "docs/oath",
+        message: 'oaths names "docs/oath", which holds no Markdown file (only files ending in .md are read)',
+      }),
+    ]);
+  });
+
+  it("says Markdown file, not .feature file, when nuka run is given an oath directory with none", async () => {
+    rootDir = await createEmptyTempDir();
+    await ensureNukadokoShim();
+    await mkdir(path.join(rootDir, "oaths-empty"), { recursive: true });
+    await writeProject(rootDir, {
+      "nukadoko.config.ts": config(["oaths-empty"]),
+      "features/steps/includes.ts": STEP,
+    });
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "oaths-empty"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toBe(
+      `no Markdown file was found while scanning "oaths-empty" (resolved to ${path.join(rootDir, "oaths-empty")}); nothing can run\n`,
+    );
+  });
+
   it("does not load a Markdown file under featuresDir unless oaths names it", async () => {
     rootDir = await createEmptyTempDir();
     await ensureNukadokoShim();
