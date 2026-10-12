@@ -426,6 +426,11 @@ just until 0.1.
   way two identical names already were: the second gets `-2` before the
   extension. A step that attached a harness file name has to pick a
   different one. See docs/upgrading.md.
+- **`llms.txt` names the real commands.**
+  It said `nuka skill` prints the skills directory (the command is `nuka skill
+  path`) and described `nuka mcp-tools` as nukadoko's own tool list. The
+  command lists the tools another MCP server declares over stdio, given after
+  `--`. Both lines now say so.
 
 ## 0.14.1 — 2026-10-10
 
