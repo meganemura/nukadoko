@@ -488,6 +488,13 @@ just until 0.1.
   through `recordStep`, that a `config.fixtures` entry is always refused, that
   no environment is selected and no read-only policy is enforced, or that no
   version probe runs. They now say all four. The Japanese files match.
+- **The spec's CLI summary names every command and flag the CLI has.**
+  It listed `nuka session list|clear` only, and left out `session start` and
+  `session stop`, `check --codes` and `check --json`, `accept --env`,
+  `session list --json`, `session clear --env`, and `--env` and `--session`
+  on `run` and `do`. It now lists them, with `--idle-timeout` and its default
+  of 900 seconds. The acceptance skill names that default too. The Japanese
+  spec matches.
 
 ### Breaking
 

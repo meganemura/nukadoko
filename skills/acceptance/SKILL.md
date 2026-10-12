@@ -38,8 +38,9 @@ people:
 - **`nuka run`** opens a browser and takes minutes.
 - **`nuka session start`** leaves a process holding a browser and live
   credentials. Say `nuka session stop <name>` with it.
-  `--idle-timeout` sets how long it waits. A value the process cannot
-  keep is refused before it starts (`references/exploring.md`).
+  `--idle-timeout` sets how long it waits, in seconds (900 when
+  omitted). A value the process cannot keep is refused before it starts
+  (`references/exploring.md`).
 - **`nuka accept`** writes a sign-off file meant to be committed. It is
   the only artifact here that claims anything.
 

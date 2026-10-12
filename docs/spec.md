@@ -3931,8 +3931,11 @@ only `request` is allowed.
 The npm package is `nukadoko`. The one command it installs is `nuka`.
 
 ```
-nuka run <feature[:line]|dir>...
+nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               execute scenarios; step records + allure-results.
+                              --env targets a named environment ("default"
+                              when omitted); --session carries login state
+                              across calls via a named session.
                               :line runs one scenario, for iteration only. A
                               partial run can never be accepted. Each target
                               can be a file, file:line, or directory. Targets
@@ -3969,8 +3972,11 @@ nuka run <feature[:line]|dir>...
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list
-nuka do <step> [--args '<json>'] [--use <step-record-id>]
+nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
                               execute one typed step; step record to stdout.
+                              --env and --session as on nuka run; against a
+                              live session the step runs in that session's
+                              own ctx.
                               Text the step writes to the process stdout is
                               delivered on stderr.
                               --args is required unless --use supplies
@@ -4013,7 +4019,7 @@ nuka describe <step>          full contract, schemas as JSON Schema, plus
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
 nuka scaffold <name>          typed step template that fails until implemented
-nuka check [feature]          static checks: pattern/schema mismatches, Then
+nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern
@@ -4059,6 +4065,9 @@ nuka check [feature]          static checks: pattern/schema mismatches, Then
                               directory are refused; a directory is a nuka
                               run argument. Any other failed read keeps the
                               error's own text
+nuka check --codes [--json]   list every finding code nuka check can produce,
+                              with a one-line description, instead of
+                              checking a project
 nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               delete accumulated records/cache/export under
                               the state directory; no category flag cleans
@@ -4073,9 +4082,12 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka accept <feature>         freeze that feature's last green run as a
+nuka accept <feature> [--env <name>]
+                              freeze that feature's last green run as a
                               committed acceptance record beside it. :line
-                              and a directory are refused, same as nuka check
+                              and a directory are refused, same as nuka check.
+                              --env names the environment whose run is
+                              frozen ("default" when omitted)
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
@@ -4105,7 +4117,20 @@ nuka tend [--json] [--fail-on <code>]
                               would accept today, a step that made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps (measured, no advice)
-nuka session list|clear
+nuka session list [--json]    list every session, across all environments;
+                              --json names each one's environment
+nuka session clear [name] [--env <name>]
+                              delete a session, or every session for the
+                              environment when no name is given
+nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
+                              start a live session: a detached process holding
+                              one ctx open across nuka do --session calls. It
+                              stops itself after --idle-timeout seconds with
+                              no execution (default 900; a finite number
+                              greater than 0 and at most 2147483)
+nuka session stop <name> [--env <name>]
+                              persist the session's storageState, then end
+                              its process
 nuka init [--base-url <url>] [--features-dir <dir>]
                               set up a project; ends with a self-check
 nuka skill path               where the bundled skill lives, for a project
