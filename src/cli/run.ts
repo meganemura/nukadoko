@@ -854,7 +854,13 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       if (hasPickles) {
         try {
           const output = path.resolve(rootDir, messagesOutputRel);
-          messagesEmitter = createMessagesEmitter({ output, rootDir, stderr, runId });
+          messagesEmitter = createMessagesEmitter({
+            output,
+            rootDir,
+            stderr,
+            runId,
+            exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
+          });
           // One `features` entry per file `selected` carries —
           // `selected.features` is already in this
           // run's own deterministic order, so this emitter has no reordering

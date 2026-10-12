@@ -406,7 +406,9 @@ describe("nuka run --concurrency applies retention", () => {
     const [firstRunId] = readdirSync(runsDir);
     expect(readdirSync(runsDir)).toHaveLength(1);
     const firstManifest = readExportsManifest(path.join(runsDir, firstRunId!, "exports"));
-    expect([...firstManifest].sort()).toEqual(runFiles(rootDir));
+    expect([...firstManifest].sort()).toEqual(
+      [...runFiles(rootDir), path.join(".nukadoko", "export", `messages.${firstRunId}.ndjson`)].sort(),
+    );
     const resultFiles = firstManifest.filter((name) => name.endsWith("-result.json"));
     expect(resultFiles).toHaveLength(2);
     const resultTexts = resultFiles.map((relative) => readFileSync(path.join(rootDir, relative), "utf8"));

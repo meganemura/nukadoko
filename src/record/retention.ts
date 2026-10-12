@@ -264,6 +264,9 @@ async function removeRunExports(
     if (!isInside(rootDir, absolutePath)) continue;
     await rm(absolutePath, { force: true });
   }
+  // The manifest names the stream of every run that noted it. A run written
+  // before the stream was noted is found by the name the current
+  // `messages.output` gives it.
   await rm(messagesRunOutputPath(path.resolve(rootDir, messagesOutputRel), runId), { force: true });
   await rm(dir, { recursive: true, force: true });
 }

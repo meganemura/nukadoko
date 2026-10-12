@@ -4,7 +4,8 @@ import path from "node:path";
 // Responsibility: which export files one `nuka run` invocation wrote, kept
 // as an append-only manifest under `<stateDir>/records/runs/<run_id>/`.
 // Retention (src/record/retention.ts) reads it to remove a run's own
-// Allure output together with its records; nothing else does.
+// Allure output and messages stream together with its records; nothing else
+// does.
 //
 // Why a file, and why append-only: under `--concurrency <n>` the Allure
 // files are written by worker processes (src/run/run-worker-entry.ts owns
@@ -20,9 +21,10 @@ import path from "node:path";
 // name without breaking the link from result to attachment. Recording the
 // name at write time is the only way the run keeps ownership of it.
 //
-// Root-relative paths, not results-dir-relative: `allure.resultsDir` can
-// be changed between the run that wrote a file and the run that removes
-// it, and a removal must target where the file actually is.
+// Root-relative paths, not results-dir-relative: `allure.resultsDir` and
+// `messages.output` can be changed between the run that wrote a file and
+// the run that removes it, and a removal must target where the file
+// actually is.
 //
 // Not a run record. The manifest carries no status, no timing, and no
 // scenario ids; those already live on every scenario record's own

@@ -2432,7 +2432,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   scenario 全体をまたぐ trace.zip はここにはありません。
   各 step 自身の trace は、その step 自身の `records/steps/<id>/` の下に置かれます(「実行」を参照)。
 - `records/runs/<run_id>/`(`nuka run` の呼び出しごとに 1 つのディレクトリ。`exports` を持ちます)。
-  `exports` は、その run が `export/` の下に書いた result、container、attachment のすべてのファイルを、ルートからの相対パスで 1 行に 1 つ列挙したものです。
+  `exports` は、その run が `export/` の下に書いた result、container、attachment のすべてのファイルと、`messages.output` が置いた場所にあるその run の messages ストリームを、ルートからの相対パスで 1 行に 1 つ列挙したものです。
   ファイルを書いたプロセス自身が追記します(`--concurrency` では worker プロセスが書きます)。
   これがあるので、run の export 出力は run と一緒に消えます(「成果物」を参照)。
   状態や時刻は持ちません。各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。

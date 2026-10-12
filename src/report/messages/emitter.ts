@@ -13,6 +13,7 @@ import {
 } from "@cucumber/messages";
 import type { WritableSink } from "../../sink/writable-sink.js";
 import { messagesRunOutputPath } from "../../record/messages-output.js";
+import { createExportsManifest } from "../../record/run-exports.js";
 import type { ScenarioRecord } from "../../record/scenario-record.js";
 import { readOwnVersion } from "../../version.js";
 import { readStepRecordsForScenario } from "../step-records.js";
@@ -79,6 +80,11 @@ export interface MessagesEmitterOptions {
    * `output`'s own name to build the file this emitter actually writes to
    * (`messagesRunOutputPath`, below). */
   readonly runId: string;
+  /** Absolute path of this run's own exports manifest
+   * (src/record/run-exports.ts). The run file is noted there when `begin()`
+   * creates it, so retention removes it from where it was written even after
+   * `messages.output` has moved. Omitted only by tests. */
+  readonly exportsManifestPath?: string;
 }
 
 /** One feature file's own contribution to `begin()` (a directory-target
@@ -243,6 +249,9 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
         // (this file's own header).
         mkdirSync(path.dirname(runOutput), { recursive: true });
         writeFileSync(runOutput, "");
+        if (options.exportsManifestPath !== undefined) {
+          createExportsManifest(options.exportsManifestPath, options.rootDir).note(runOutput);
+        }
         enabled = true;
 
         appendEnvelope({ meta: buildMeta() });

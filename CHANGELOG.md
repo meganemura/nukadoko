@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **Retention removes an older run's messages stream after `messages.output` moved.**
+  Retention found a run's `messages.<run_id>.ndjson` by the name the current
+  `messages.output` gives it, so a run written before the setting changed kept
+  its stream forever. A run now lists its stream in its own
+  `records/runs/<run_id>/exports` when the stream is created, and retention
+  removes it from there. A run written by an earlier version is still found by
+  the current name.
 - **An absolute `allure.resultsDir` or `messages.output` is used as given.**
   `nuka run` joined the configured path under the project root, so
   `/tmp/out/messages.ndjson` was written to `<root>/tmp/out/messages.ndjson`

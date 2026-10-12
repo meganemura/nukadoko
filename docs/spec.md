@@ -2937,7 +2937,8 @@ for separate purposes (see "Artifacts"):
   `records/steps/<id>/` instead (see "Running")
 - `records/runs/<run_id>/`: one directory per `nuka run` invocation,
   holding `exports`: every result, container, and attachment file that run
-  wrote under `export/`, one root-relative path per line, appended by
+  wrote under `export/`, and its messages stream wherever `messages.output`
+  put it, one root-relative path per line, appended by
   whichever process wrote the file (under `--concurrency`, the worker
   processes do). It is what lets a run's export output leave with the run
   (see "Artifacts"). It carries no status or timing: every scenario record

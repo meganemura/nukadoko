@@ -184,7 +184,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   if (hasPickles) {
     try {
       const output = path.resolve(rootDir, messagesOutputRel);
-      messagesEmitter = createMessagesEmitter({ output, rootDir, stderr, runId });
+      messagesEmitter = createMessagesEmitter({
+        output,
+        rootDir,
+        stderr,
+        runId,
+        exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
+      });
       messagesEmitter.begin({
         features: selected.features.map((feature) => ({
           relativeFeaturePath: feature.relativePath,
