@@ -105,12 +105,6 @@ type _ParameterTypeConfigMatchesBinding = [ParameterTypeConfig] extends [Binding
   : never;
 const _parameterTypeConfigMatchesBinding: _ParameterTypeConfigMatchesBinding = true;
 
-/** `retention.runs`'s default. 20 is a judgment, not a measurement: the
- * heaviest suite measured so far costs about 50 MB per run once trace
- * attachments are hard links rather than copies, so 20 runs is about 1 GB
- * for that suite and far less for a suite without a browser. Fewer than
- * that and the failure a person was chasing an hour ago is already gone on
- * a suite run every few minutes. */
 /** `stepTimeout`'s default: twenty minutes. Not a guess about how long a
  * step should take, but the horizon this tool already had. The Allure
  * emitter draws a running step for at most `HEARTBEAT_TICK_CAP` ticks of
@@ -121,6 +115,12 @@ const _parameterTypeConfigMatchesBinding: _ParameterTypeConfigMatchesBinding = t
  * sampled from a real browser suite ran a median of 66ms, a 99th
  * percentile of 10.7s, and a maximum of 14s, with none over 30s. */
 export const DEFAULT_STEP_TIMEOUT_MS = 1_200_000;
+/** `retention.runs`'s default. 20 is a judgment, not a measurement: the
+ * heaviest suite measured so far costs about 50 MB per run once trace
+ * attachments are hard links rather than copies, so 20 runs is about 1 GB
+ * for that suite and far less for a suite without a browser. Fewer than
+ * that and the failure a person was chasing an hour ago is already gone on
+ * a suite run every few minutes. */
 const DEFAULT_RETENTION_RUNS = 20;
 /** `retention.adHocDays`'s default: long enough that a `nuka do` chain
  * started one week and harvested the next still resolves. */
