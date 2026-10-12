@@ -18,6 +18,10 @@ just until 0.1.
 
 ### Fixed
 
+- **Allure's Examples and Data table CSV attachments quote their cells.**
+  A cell that held a comma, a quote, or a line break was written as is, so the
+  attachment split it into extra columns or rows. Such a cell is now quoted per
+  RFC 4180, with each quote inside it doubled.
 - **A scenario whose step returns nothing keeps its Allure result.**
   A step with `returns: z.void()` records an undefined `result`. The Allure
   emitter tried to attach it as `result`, failed, and dropped the whole

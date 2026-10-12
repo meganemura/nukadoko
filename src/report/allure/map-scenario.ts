@@ -414,8 +414,8 @@ function buildExamplesAttachment(doc: GherkinDocument, pickle: Pickle): MappedAt
   if (!hit) {
     return undefined;
   }
-  const headerLine = (hit.examples.tableHeader?.cells.map((cell) => cell.value) ?? []).join(",");
-  const bodyLine = hit.examples.tableBody.map((row) => row.cells.map((cell) => cell.value).join(",")).join("\n");
+  const headerLine = csvRow(hit.examples.tableHeader?.cells ?? []);
+  const bodyLine = hit.examples.tableBody.map((row) => csvRow(row.cells)).join("\n");
   if (headerLine === "" && bodyLine === "") {
     return undefined;
   }
@@ -428,9 +428,17 @@ function buildExamplesAttachment(doc: GherkinDocument, pickle: Pickle): MappedAt
   };
 }
 
+/** One CSV record. A cell is quoted per RFC 4180 when it holds a comma, a
+ * quote, or a line break; rows stay `\n`-separated, as allure-cucumberjs writes them. */
+function csvRow(cells: readonly { readonly value: string }[]): string {
+  return cells
+    .map(({ value }) => (/[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value))
+    .join(",");
+}
+
 /** This pickle step's own data table (Gherkin's own `argument.dataTable`),
  * as a "Data table" text/csv attachment on its own `steps[]` entry — the
- * same name and CSV shape (rows joined by `,`, each row followed by `\n`)
+ * same name and CSV shape (cells joined by `,`, each row followed by `\n`)
  * a captured allure-cucumberjs run's own attachment carries. `undefined`
  * for a step with no data table at all. */
 function buildDataTableAttachment(argument: PickleStepArgument | undefined): MappedAttachment | undefined {
@@ -438,7 +446,7 @@ function buildDataTableAttachment(argument: PickleStepArgument | undefined): Map
   if (!table || table.rows.length === 0) {
     return undefined;
   }
-  const content = `${table.rows.map((row) => row.cells.map((cell) => cell.value).join(",")).join("\n")}\n`;
+  const content = `${table.rows.map((row) => csvRow(row.cells)).join("\n")}\n`;
   return { kind: "buffer", name: "Data table", contentType: "text/csv", content, fileExtension: ".csv" };
 }
 
