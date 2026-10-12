@@ -77,6 +77,9 @@ export function resolveUse(
    * have been right and the record is simply gone (src/record/
    * retention.ts's `retentionNote`). */
   missingNote?: string,
+  /** Appended when no `from` upstream matched and one of them has no name
+   * in `stepNameOf`: says why a caller's name source can lack a step. */
+  unnamedNote?: string,
 ): ResolveUseResult {
   const stepRecord = readStepRecord(recordId);
   if (stepRecord === null) {
@@ -100,16 +103,29 @@ export function resolveUse(
   // whose `from` lists several producers still matches as long as one of
   // them is this step record's own step.
   const matches: Array<readonly [key: string, upstreamKey: string]> = [];
+  let unnamedKey: string | undefined;
   for (const [key, entry] of Object.entries(step.from)) {
     const candidates = tryFromCandidates(entry);
     if (candidates === null) {
       return { ok: false, message: `--use ${recordId}: ${malformedFromEntryMessage(key, entry)}` };
     }
     for (const [upstream, upstreamKey] of candidates) {
-      if (stepNameOf.get(upstream) === stepRecord.step) {
+      const upstreamName = stepNameOf.get(upstream);
+      if (upstreamName === undefined) unnamedKey ??= key;
+      if (upstreamName === stepRecord.step) {
         matches.push([key, upstreamKey]);
       }
     }
+  }
+  // An upstream with no name may be this record's step under another
+  // module instance, so "not named by any entry" would blame the wrong thing.
+  if (matches.length === 0 && unnamedKey !== undefined) {
+    return {
+      ok: false,
+      message:
+        `--use ${recordId}: its step "${stepRecord.step}" cannot be matched, because the step ` +
+        `\`from.${unnamedKey}\` names has no name here${unnamedNote !== undefined ? `. ${unnamedNote}` : ""}`,
+    };
   }
   if (matches.length === 0) {
     return {

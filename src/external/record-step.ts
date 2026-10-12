@@ -111,9 +111,8 @@ import { strictArgsSchema } from "../step/strict-args.js";
 // resolves against an upstream step this same process already ran through
 // `recordStep` — an id minted by `nuka do`, or by a *different* process's
 // own `recordStep` calls, reads back fine from disk but was never
-// registered here, so `resolveUse` refuses it the same way it refuses an
-// id naming an unrelated step (loud, not silent, matching this project's
-// own "nothing breaks silently" rule).
+// registered here, so `resolveUse` refuses it and names that cause (loud,
+// not silent, matching this project's own "nothing breaks silently" rule).
 
 /** Every `StepFixtures` name this module can always build, regardless of
  * whether a call passes `options.page`
@@ -335,6 +334,8 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
       useStepNameOf,
       (id) => readStepRecordById(rootDir, config.stateDir, id),
       retentionNote(config.retention),
+      "recordStep learns a step's name only when this same process runs that step through recordStep, " +
+        "so use resolves only against a step recorded earlier in this process",
     );
     if (!resolved.ok) {
       throw new Error(resolved.message);

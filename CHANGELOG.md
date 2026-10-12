@@ -467,6 +467,13 @@ just until 0.1.
   session and is absent otherwise, and that `git` holds the commit and the
   cleanliness of the working tree when the run started, which `nuka accept`
   checks. The Japanese spec matches.
+- **`recordStep` names the real cause when a `use` id cannot be matched.**
+  A `use` id recorded by `nuka do`, or by another process, names a step this
+  process never ran through `recordStep`, so `recordStep` has no name for
+  that `from` upstream. The refusal said the record's step was "not named by
+  any of this step's `from` entries", which sent the reader to the `from`
+  declaration. It now says the upstream has no name here and that `use`
+  resolves only against a step recorded earlier in the same process.
 
 ### Breaking
 
