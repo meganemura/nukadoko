@@ -25,6 +25,11 @@ export interface RunMarker {
   readonly verdict: "passed" | "failed";
   /** ISO 8601 time the run ended. */
   readonly finished_at: string;
+  /** How many scenarios of the run failed. A `failed` verdict with none
+   * means the run failed outside every scenario, such as in an AfterAll
+   * hook. With some, a feature whose own scenarios all passed is still
+   * sound evidence, as the failure belongs to another feature of the run. */
+  readonly failed_scenarios: number;
 }
 
 export function runMarkerPath(rootDir: string, stateDir: string, runId: string): string {
@@ -36,11 +41,12 @@ export function writeRunMarker(
   stateDir: string,
   runId: string,
   verdict: RunMarker["verdict"],
+  failedScenarios: number,
   finishedAt: Date,
 ): void {
   const filePath = runMarkerPath(rootDir, stateDir, runId);
   mkdirSync(path.dirname(filePath), { recursive: true });
-  const marker: RunMarker = { verdict, finished_at: finishedAt.toISOString() };
+  const marker: RunMarker = { verdict, finished_at: finishedAt.toISOString(), failed_scenarios: failedScenarios };
   writeFileSync(filePath, `${JSON.stringify(marker)}\n`);
 }
 
@@ -50,9 +56,11 @@ export function readRunMarker(rootDir: string, stateDir: string, runId: string):
   try {
     const parsed: unknown = JSON.parse(readFileSync(runMarkerPath(rootDir, stateDir, runId), "utf8"));
     if (parsed === null || typeof parsed !== "object") return null;
-    const { verdict, finished_at: finishedAt } = parsed as Record<string, unknown>;
-    if ((verdict !== "passed" && verdict !== "failed") || typeof finishedAt !== "string") return null;
-    return { verdict, finished_at: finishedAt };
+    const { verdict, finished_at: finishedAt, failed_scenarios: failed } = parsed as Record<string, unknown>;
+    if ((verdict !== "passed" && verdict !== "failed") || typeof finishedAt !== "string" || typeof failed !== "number") {
+      return null;
+    }
+    return { verdict, finished_at: finishedAt, failed_scenarios: failed };
   } catch {
     return null;
   }

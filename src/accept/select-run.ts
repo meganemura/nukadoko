@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import type { RunMarker } from "../record/run-marker.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: pick the one `nuka run` invocation `nuka accept <feature>`
@@ -29,6 +30,14 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // millisecond) keep whichever was seen first, an outcome this module makes
 // no promise about since two runs starting in the same millisecond is not a
 // case worth designing for.
+//
+// A group qualifies only when its run's completion marker
+// (src/record/run-marker.ts) also says `passed`. The scenario records
+// cannot show a failure outside any scenario, such as an AfterAll hook that
+// threw, and cannot show that the run ended; the marker does both. A run
+// with no marker (killed, or written before the marker existed) is not
+// proven finished, so it never qualifies. The caller supplies the lookup so
+// that this module stays free of file reads beyond the scenario records.
 //
 // The three-way "no" ("no run has ever existed", "a
 // run exists but was red", and "only partial runs exist" are different
@@ -142,11 +151,16 @@ export function browserConditionMatches(record: ScenarioRecord, targetBrowserTyp
  * three-way "no" to distinguish and no cross-group "most recent" to settle;
  * both of those, not this per-group boolean, are the part of that function
  * this module means not to duplicate (this file's own header). */
-function groupCondition(group: readonly ScenarioRecord[], featureLines: ReadonlySet<number>): RunCondition | undefined {
+function groupCondition(
+  group: readonly ScenarioRecord[],
+  featureLines: ReadonlySet<number>,
+  markerOf: MarkerLookup,
+): RunCondition | undefined {
   const lines = new Set(group.map((record) => record.line));
   const fullCoverage = lines.size === featureLines.size && [...featureLines].every((line) => lines.has(line));
   const allPassed = group.every((record) => record.status === "passed");
-  return fullCoverage && allPassed ? conditionOfGroup(group) : undefined;
+  const finished = isFinishedGreen(markerOf(group[0]!.run_id));
+  return fullCoverage && allPassed && finished ? conditionOfGroup(group) : undefined;
 }
 
 /** Every distinct condition among `featureRecords` that has its own
@@ -159,10 +173,11 @@ function groupCondition(group: readonly ScenarioRecord[], featureLines: Readonly
 export function listConditionsWithGreenRun(
   featureRecords: readonly ScenarioRecord[],
   featureLines: ReadonlySet<number>,
+  markerOf: MarkerLookup,
 ): RunCondition[] {
   const seen = new Map<string, RunCondition>();
   for (const group of groupByRunId(featureRecords).values()) {
-    const condition = groupCondition(group, featureLines);
+    const condition = groupCondition(group, featureLines, markerOf);
     if (condition === undefined) continue;
     // The two halves of this key are joined by a separator because neither
     // is length-bounded against the other: environment "stagingchromium"
@@ -217,9 +232,24 @@ function runStartedAt(group: readonly ScenarioRecord[]): Date {
   return new Date(Math.min(...group.map((record) => new Date(record.started_at).getTime())));
 }
 
+/** A marker clears a feature's own green scenarios when the run passed, or
+ * when it failed only because of scenarios (of this feature or another). */
+function isFinishedGreen(marker: RunMarker | null): boolean {
+  return marker !== null && (marker.verdict === "passed" || marker.failed_scenarios > 0);
+}
+
+export type MarkerLookup = (runId: string) => RunMarker | null;
+
 export type SelectRunResult =
   | { readonly kind: "none-ever" }
   | { readonly kind: "red"; readonly group: readonly ScenarioRecord[]; readonly startedAt: Date }
+  | {
+      readonly kind: "unconfirmed";
+      readonly group: readonly ScenarioRecord[];
+      readonly startedAt: Date;
+      /** `null` when the run left no marker. */
+      readonly marker: RunMarker | null;
+    }
   | { readonly kind: "partial-only"; readonly group: readonly ScenarioRecord[]; readonly startedAt: Date }
   | { readonly kind: "ok"; readonly group: readonly ScenarioRecord[]; readonly startedAt: Date };
 
@@ -234,6 +264,7 @@ export type SelectRunResult =
 export function selectAcceptableRun(
   featureRecords: readonly ScenarioRecord[],
   featureLines: ReadonlySet<number>,
+  markerOf: MarkerLookup,
 ): SelectRunResult {
   if (featureRecords.length === 0) {
     return { kind: "none-ever" };
@@ -267,7 +298,7 @@ export function selectAcceptableRun(
     }
 
     const allPassed = group.every((record) => record.status === "passed");
-    if (fullCoverage && allPassed) {
+    if (fullCoverage && allPassed && isFinishedGreen(markerOf(group[0]!.run_id))) {
       if (best === null || startedAt.getTime() > best.startedAt.getTime()) {
         best = { group, startedAt };
       }
@@ -280,7 +311,16 @@ export function selectAcceptableRun(
   if (sawFullCoverage) {
     // Non-null: `sawFullCoverage` is only set inside the branch that also
     // sets `bestFullCoverage`.
-    return { kind: "red", group: bestFullCoverage!.group, startedAt: bestFullCoverage!.startedAt };
+    const newest = bestFullCoverage!;
+    if (newest.group.every((record) => record.status === "passed")) {
+      return {
+        kind: "unconfirmed",
+        group: newest.group,
+        startedAt: newest.startedAt,
+        marker: markerOf(newest.group[0]!.run_id),
+      };
+    }
+    return { kind: "red", group: newest.group, startedAt: newest.startedAt };
   }
   // Non-null: `featureRecords.length === 0` already returned above, so at
   // least one group exists, and `mostRecent` is set for every group.

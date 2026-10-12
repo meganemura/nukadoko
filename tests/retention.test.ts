@@ -124,7 +124,7 @@ describe("applyRetention", () => {
       manifestLines.push(exportFile);
     }
     await writeFile(manifestPath, `${manifestLines.join("\n")}\n`);
-    if (marked) writeRunMarker(rootDir, stateDir, runId, "passed", new Date(startedAt));
+    if (marked) writeRunMarker(rootDir, stateDir, runId, "passed", 0, new Date(startedAt));
     await writeFile(messagesRunOutputPath(abs(messagesOutputRel), runId), "line\n");
   }
 

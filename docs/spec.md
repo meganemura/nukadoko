@@ -133,7 +133,7 @@ questions: "what happens if this is deleted" and "who gets to change it":
   commands never disagree about which run that is. A run that may still be
   writing is never removed. When a run ends, `nuka run` writes
   `records/runs/<run_id>/complete.json`, holding the run's verdict
-  (`passed` or `failed`) and the time it ended. Retention removes a run
+  (`passed` or `failed`), how many scenarios failed, and the time it ended. Retention removes a run
   without that file only once its newest record is older than
   `retention.adHocDays`: a run still in flight, a run that was killed, and a
   run written before the file existed look alike, and nothing here removes
@@ -3009,7 +3009,18 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   Freezing it would place a record beside a feature that the run mostly did not
   reach. The command reports four outcomes separately: no run exists for the
   feature, the latest full run was red, only partial runs exist, or no green
-  full run exists for the current condition (described below). A refusal names
+  full run exists for the current condition (described below). A run
+  qualifies as green only when every scenario record passed and the run's
+  completion marker (`records/runs/<run_id>/complete.json`, see "Artifacts")
+  records verdict `passed`, or records `failed` because of scenarios (it
+  counts them: a run of several features can fail in another feature while
+  this one is green). The marker catches what no scenario record shows: an
+  AfterAll hook that threw after every scenario passed makes `nuka run`
+  exit 1 with no failed scenario, and the run is refused. A run with no marker is refused too, since
+  nothing shows that it ended; this covers a run that was killed and a run
+  written by a version that wrote no marker, so a project upgrading runs the
+  feature once more before it accepts. A refusal for either reason names the
+  run and says which. A refusal names
   the data used for its decision. This includes the run, its start time, its
   failed scenarios, or the conditions that have a run. The record then supports
   the choice of the next command.

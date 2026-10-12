@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka accept` refuses a run that exited 1 because an AfterAll hook threw.**
+  The scenario records of such a run are all green, so accept froze it although
+  `nuka run` had failed. Accept now freezes a run only when its completion marker
+  (`records/runs/<run_id>/complete.json`) records verdict `passed`, or `failed` with a failed scenario elsewhere in the run, and the
+  refusal says whether the verdict was `failed` or the marker is missing. A run
+  written by an earlier version has no marker and is refused too: run the feature
+  once more before accepting it. See docs/upgrading.md.
 - **Retention no longer removes a run that is still writing, or the run applying it.**
   With two `nuka run` processes overlapping, the one that ended first ranked the
   other as older and removed its records mid-run, and a run that ended after a
@@ -32,7 +39,6 @@ just until 0.1.
   `call(b)` look like a call from inside `a`. The current frame now follows the
   async call chain, so each call is checked against the step that made it.
   Concurrent calls appear as siblings in `calls`, in start order.
-
 - **The `nuka accept` missing-step-record refusal names the real records directory.**
   The refusal always said `.nukadoko/records/steps`, so a project with another
   `stateDir` was pointed at a directory it does not have. The message now names

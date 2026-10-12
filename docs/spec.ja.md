@@ -132,7 +132,7 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   run とは、1 つの `run_id` を共有する scenario record の全体で、最も早い `started_at` で日付を持ちます。
   `nuka accept` と `nuka tend` が最新の run を名指すときの規則と同じなので、3 つのコマンドが「どの run か」で食い違うことはありません。
   まだ書いている可能性のある run は消されません。
-  run が終わると、`nuka run` は `records/runs/<run_id>/complete.json` を書き、run の断定(`passed` か `failed`)と終了時刻を入れます。
+  run が終わると、`nuka run` は `records/runs/<run_id>/complete.json` を書き、run の断定(`passed` か `failed`)、失敗した scenario の数、終了時刻を入れます。
   このファイルのない run は、最も新しい record が `retention.adHocDays` より古くなって初めて retention が消します。
   実行中の run、強制終了された run、このファイルができる前に書かれた run は見分けがつかず、終わったと証明できないものは消しません。
   retention を適用する run 自身は、より新しい run が先に終わっていても、自分の適用で消されることはありません。
@@ -2490,6 +2490,12 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   `<feature>:<line>` で選ばれた run は 1 つの scenario しかカバーしていないため、どれだけ green であっても候補にはなりません。
   それを凍結すれば、その run が実際には到達していない feature の大部分の隣に記録が残ってしまいます。
   結果として起こり得る 4 通りは、読む人にとってそれぞれ別の状況であり、別のものとして報告されます: この feature の run が一度も存在しない、直近のフル実行が red だった、部分実行しか存在しない、あるいは green なフル実行は存在するが現在の条件の下ではない(後述)、のいずれかです。
+  run が green とみなされるのは、すべての scenario record が passed で、かつ run の完了マーカー(`records/runs/<run_id>/complete.json`、「成果物」を参照)の断定が `passed` か、scenario の失敗が原因の `failed`(失敗した scenario の数を持ちます。複数 feature の run では、別の feature が失敗しても、この feature は green でありえます)のときだけです。
+  マーカーは scenario record に現れないものを捉えます。
+  すべての scenario が passed のあとで AfterAll hook が throw すると `nuka run` は 1 で終了し、その run は拒否されます。
+  マーカーのない run も、終わったことを示すものがないので拒否されます。
+  強制終了された run と、マーカーを書かない版が書いた run がこれに当たるため、アップグレードしたプロジェクトは accept の前に feature をもう一度実行します。
+  どちらの理由の拒否も、run を名指しし、どちらの理由かを述べます。
   拒否は、判断に使った内容(どの run か、いつ始まったか、どの scenario が失敗したか、あるいはどの条件なら run があるか)を名指しするので、次のコマンドは当てずっぽうではなく記録に基づいて選べます。
 - sign-off は条件にスコープされます。
   条件とは `(environment, browser)` のことで、どちらも run 自身の計測から読まれ、宣言からは読まれません。

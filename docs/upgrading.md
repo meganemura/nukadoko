@@ -35,13 +35,22 @@ This part does not change release to release.
 
 ## 0.14.1 to the next release
 
-Compat behaviour a project can notice, one redaction change, and one evidence-name change.
+Compat behaviour a project can notice, one redaction change, one evidence-name change, and one change to `nuka accept`.
 `nuka session clear --env` and `nuka session stop` also name a typo that used to exit 0 with no output.
 
 The env file parser now follows dotenv for comments, quotes, escapes, and
 values that span lines. A project whose env files relied on the old reading
 has to look at those values before the next run.
 
+- **`nuka accept` refuses a run that has no completion marker.** A run now
+  writes `.nukadoko/records/runs/<run_id>/complete.json` with its verdict as
+  its last act, and `nuka accept` freezes only a run whose verdict is
+  `passed`. A run written by an earlier version has no marker, so a feature
+  whose last green run predates the upgrade is refused with a message that
+  says so. Run the feature once more with `nuka run`, then accept it. Records
+  already signed off are unaffected. A run that exited 1 because an
+  AfterAll hook threw used to be acceptable and no longer is. Retention keeps
+  a run without a marker until it is older than `retention.adHocDays`.
 - **`nuka tend --json` names a fixture in `fixture`, not `step`.** The
   `fixture-unused` and `fixture-touches-app` notes used to carry the fixture
   name in `step`. They now carry it in a new `fixture` field and leave `step`

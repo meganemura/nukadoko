@@ -32,11 +32,19 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 compat の修正で、上げる前に知っておくものがあります。
 redact の変化も 1 つあります。
 evidence の名前の変化も 1 つあります。
+`nuka accept` の変化も 1 つあります。
 env file のパーサは、コメント、引用符、エスケープ、複数行にまたがる値について、dotenv に従うようになりました。
 古い読み方に依存していた env file があるプロジェクトは、次の実行の前に、その値を確認してください。
 
 `nuka session clear --env` と `nuka session stop` も、以前は終了コード 0 で何も出さなかった打ち間違いを名指すようになりました。
 
+- **`nuka accept` は完了マーカーのない run を拒否します。**
+  run は最後の書き込みとして、断定を入れた `.nukadoko/records/runs/<run_id>/complete.json` を書くようになり、`nuka accept` は断定が `passed` の run だけを凍結します。
+  以前の版が書いた run にはマーカーがないため、最後の green な run がアップグレード前のものである feature は、そう述べる拒否を受けます。
+  `nuka run` でその feature をもう一度実行してから accept してください。
+  すでに sign-off 済みの record には影響しません。
+  AfterAll hook が throw して 1 で終了した run は、以前は受け入れられましたが、今は受け入れられません。
+  retention は、マーカーのない run を `retention.adHocDays` より古くなるまで残します。
 - **`nuka tend --json` は fixture の名前を `step` ではなく `fixture` に入れます。**
   `fixture-unused` と `fixture-touches-app` の note は、以前は fixture の名前を `step` に入れていました。
   今は新しい `fixture` フィールドに入れ、`step` は設定しません。

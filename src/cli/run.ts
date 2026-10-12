@@ -572,12 +572,12 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     // told which run is this one and never removes it. Its line goes out under `--quiet` too: a deletion is worth
     // a line to the person whose state directory just shrank. A failure
     // here never changes the exit code, which is the run's own verdict.
-    const pruneAfterRun = async (verdict: "passed" | "failed"): Promise<void> => {
+    const pruneAfterRun = async (verdict: "passed" | "failed", failedScenarioCount: number): Promise<void> => {
       try {
         // The marker is the run's last write: it says the run ended and how
         // (src/record/run-marker.ts). A run with no pickle wrote no records
         // and gets none.
-        if (flatPickles.length > 0) writeRunMarker(rootDir, config.stateDir, runId, verdict, new Date());
+        if (flatPickles.length > 0) writeRunMarker(rootDir, config.stateDir, runId, verdict, failedScenarioCount, new Date());
         const outcome = await applyRetention({
           rootDir,
           stateDir: config.stateDir,
@@ -739,7 +739,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       });
       writeFailedScenarios(stderr, failedScenarios);
       writeRepeatTallies(stderr, repeatTallies);
-      await pruneAfterRun(allPassed ? "passed" : "failed");
+      await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
 
       return allPassed ? 0 : 1;
     }
@@ -1171,7 +1171,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       });
       writeFailedScenarios(stderr, failedScenarios);
       writeRepeatTallies(stderr, repeatTally.list());
-      await pruneAfterRun(allPassed ? "passed" : "failed");
+      await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
 
       return allPassed ? 0 : 1;
     } finally {

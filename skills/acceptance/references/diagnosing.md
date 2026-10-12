@@ -93,4 +93,7 @@ refusal names the condition it looked for and lists every condition that
 does have a run, so the next move is either `nuka run <feature>` again
 under the current condition or pointing `accept`'s own `--env` and/or
 `browserType` in the config at one of the ones already listed, never a
-guess between them.
+guess between them. Another shape: a run whose scenarios all passed can
+still be refused when its completion marker is missing or records a failed
+verdict (an AfterAll hook threw, or the run was interrupted). The refusal
+says which; the fix is the hook or the interruption, then `nuka run` again.

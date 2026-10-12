@@ -16,6 +16,7 @@ import { parseFeatureSource } from "../feature/load-features.js";
 import { findLiveSessions, formatLiveSessionNotice } from "../live/live-session-notice.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { listDirtyPaths, probeGitState } from "../run/probe-git.js";
+import { readRunMarker } from "../record/run-marker.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { parseAcceptanceRecord } from "../tend/record-parse.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -360,17 +361,18 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
   const conditionRecords = featureRecords.filter(
     (record) => record.environment === resolvedEnv.name && browserConditionMatches(record, config.browserType),
   );
-  const outcome = selectAcceptableRun(conditionRecords, featureLines);
+  const markerOf = (runId: string) => readRunMarker(rootDir, config.stateDir, runId);
+  const outcome = selectAcceptableRun(conditionRecords, featureLines, markerOf);
 
   if (outcome.kind !== "ok") {
     // The current condition has no qualifying run. Before falling back to
     // the three condition-blind refusals below, check whether a green
     // full run exists at all, just under some other condition — a
     // materially different situation from "nothing has ever run".
-    const anyConditionOutcome = selectAcceptableRun(featureRecords, featureLines);
+    const anyConditionOutcome = selectAcceptableRun(featureRecords, featureLines, markerOf);
 
     if (anyConditionOutcome.kind === "ok") {
-      const otherConditions = [...listConditionsWithGreenRun(featureRecords, featureLines)].sort(
+      const otherConditions = [...listConditionsWithGreenRun(featureRecords, featureLines, markerOf)].sort(
         (a, b) => a.environment.localeCompare(b.environment) || (a.browserType ?? "").localeCompare(b.browserType ?? ""),
       );
       stderr.write(
@@ -390,6 +392,18 @@ export async function runAccept(options: RunAcceptOptions): Promise<number> {
       const runId = anyConditionOutcome.group[0]!.run_id;
       stderr.write(
         `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${anyConditionOutcome.startedAt.toISOString()}) was not all green: ${formatFailedScenarios(anyConditionOutcome.group)}. Fix the failure(s), then \`nuka run ${featurePath}\` again.\n`,
+      );
+      return 1;
+    }
+    if (anyConditionOutcome.kind === "unconfirmed") {
+      const { marker } = anyConditionOutcome;
+      const runId = anyConditionOutcome.group[0]!.run_id;
+      const why =
+        marker === null
+          ? "has no completion marker, so nothing shows that the run ended (it was interrupted, or an earlier nukadoko version wrote it)"
+          : `passed every scenario, but its completion marker records verdict "${marker.verdict}" (the run exited 1 outside any scenario, such as an AfterAll hook that threw)`;
+      stderr.write(
+        `nuka accept: the most recent full run of ${featurePath} (run_id ${runId}, started ${anyConditionOutcome.startedAt.toISOString()}) ${why}. Fix the cause if there is one, then \`nuka run ${featurePath}\` again.\n`,
       );
       return 1;
     }
