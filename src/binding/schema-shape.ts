@@ -117,3 +117,16 @@ export function isRequiredField(schema: z.ZodTypeAny): boolean {
     return false;
   }
 }
+
+/** The required args keys that `consumed` (pattern captures plus `from`
+ * keys) does not speak for. A table or docstring fills a step's args only
+ * when exactly one such key remains; check, run, and the unfillable-key
+ * check all ask this one question so they cannot disagree. */
+export function unconsumedRequiredKeys(
+  shape: Readonly<Record<string, z.ZodTypeAny>>,
+  consumed: ReadonlySet<string>,
+): string[] {
+  return Object.entries(shape)
+    .filter(([key, fieldSchema]) => !consumed.has(key) && isRequiredField(fieldSchema))
+    .map(([key]) => key);
+}

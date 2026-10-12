@@ -3,7 +3,7 @@ import { PickleStepType } from "@cucumber/messages";
 import { escapeReservedChars } from "../binding/escape-hint.js";
 import { findQuoteHint } from "../binding/quote-hint.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
-import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
+import { asObjectShape, unconsumedRequiredKeys } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FeatureFile } from "../feature/load-features.js";
@@ -327,9 +327,7 @@ export function checkFeatures(
             // `bindStepArgs` builds, mirrored here so check and run never
             // disagree about which key a table/docstring fills.
             const consumed = new Set([...matched.captures.map((c) => c.key), ...Object.keys(entry.step.from)]);
-            const unconsumedRequired = Object.entries(shape)
-              .filter(([key, fieldSchema]) => !consumed.has(key) && isRequiredField(fieldSchema))
-              .map(([key]) => key);
+            const unconsumedRequired = unconsumedRequiredKeys(shape, consumed);
             if (unconsumedRequired.length !== 1) {
               const detail =
                 unconsumedRequired.length === 0

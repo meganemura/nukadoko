@@ -33,9 +33,8 @@ import type { StepTextMatcher } from "./feature-check.js";
 // for the same per-line pattern resolution every other check in
 // this package already shares, and `attachmentFilledKey` (src/check/from-
 // order.ts, exported for this file) for the table/docstring "exactly one
-// unconsumed required key" rule — the same computation src/check/feature-
-// check.ts's own `table-docstring-key-mismatch` inline copy already applies,
-// reused rather than approximated a third time.
+// unconsumed required key" rule — the same shared rule src/check/feature-
+// check.ts's own `table-docstring-key-mismatch` applies.
 //
 // One function, called from both `nuka check` (src/check/feature-check.ts,
 // once per pickle) and `nuka run`'s pre-execution guard (src/run/run-

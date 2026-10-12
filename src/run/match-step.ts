@@ -5,7 +5,7 @@ import { duplicateCaptureKeys } from "../binding/capture.js";
 import { buildExpression } from "../binding/expression.js";
 import { type Capture } from "../binding/pattern.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
-import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
+import { asObjectShape, unconsumedRequiredKeys } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 
@@ -297,9 +297,7 @@ export function bindStepArgs(
   }
 
   const consumedKeys = new Set([...captures.map((c) => c.key), ...fromKeys]);
-  const unconsumedRequired = Object.entries(shape)
-    .filter(([key, fieldSchema]) => !consumedKeys.has(key) && isRequiredField(fieldSchema))
-    .map(([key]) => key);
+  const unconsumedRequired = unconsumedRequiredKeys(shape, consumedKeys);
   if (unconsumedRequired.length !== 1) {
     const detail =
       unconsumedRequired.length === 0

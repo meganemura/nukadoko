@@ -1,5 +1,5 @@
 import type { Pickle, PickleStep } from "@cucumber/messages";
-import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
+import { asObjectShape, isRequiredField, unconsumedRequiredKeys } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { isStep, tryFromCandidates, type Step } from "../step/define-step.js";
 import type { StepTextMatcher } from "./feature-check.js";
@@ -53,9 +53,7 @@ import type { StepTextMatcher } from "./feature-check.js";
 // scenario.ts's own `injectFrom`), so treating that key as still needing an
 // upstream here would itself be a false positive — the attachment, not
 // `from`, is what actually supplies it at run time. The computation below
-// mirrors src/check/feature-check.ts's own inline copy of that same
-// "exactly one unconsumed required key" rule exactly, rather than
-// approximating it.
+// is the shared `unconsumedRequiredKeys` rule, not an approximation of it.
 //
 // A key naming several candidate producers (docs/spec.md "Chaining steps":
 // "A key may name more than one
@@ -147,10 +145,7 @@ function fromOrderAmbiguousMessage(stepName: string, key: string, names: readonl
  * step can take one key from an earlier step and the other from the
  * attachment on the same line, which is the shape a real suite wrote first.
  *
- * Exported so ./unfillable-key.ts's own check
- * asks this exact same question rather than growing a third copy of "exactly
- * one unconsumed required key" alongside this function and
- * src/check/feature-check.ts's own inline one.
+ * Exported so ./unfillable-key.ts's own check asks this exact same question.
  */
 export function attachmentFilledKey(
   pickleStep: PickleStep,
@@ -162,9 +157,7 @@ export function attachmentFilledKey(
   if (!hasAttachment || argsShape === undefined) {
     return undefined;
   }
-  const unconsumedRequired = Object.entries(argsShape)
-    .filter(([shapeKey, fieldSchema]) => !spokenFor.has(shapeKey) && isRequiredField(fieldSchema))
-    .map(([shapeKey]) => shapeKey);
+  const unconsumedRequired = unconsumedRequiredKeys(argsShape, spokenFor);
   return unconsumedRequired.length === 1 ? unconsumedRequired[0] : undefined;
 }
 

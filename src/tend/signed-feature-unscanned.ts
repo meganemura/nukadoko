@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { isFeatureWithinDir } from "./feature-within-dir.js";
 import { discoverMarkdownFiles, parseAcceptanceRecord } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
 
@@ -32,13 +33,6 @@ import type { TendIssue } from "./types.js";
 // re-accepted more than once, and a reader gains nothing from seeing the
 // same "not scanned" fact repeated once per record.
 
-function isWithinScannedDirs(featurePath: string, scannedFeatureDirs: readonly string[]): boolean {
-  return scannedFeatureDirs.some((dir) => {
-    const relative = path.relative(dir, featurePath);
-    return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-  });
-}
-
 export function findSignedFeatureUnscanned(
   rootDir: string,
   scannedFeatureDirs: readonly string[],
@@ -62,7 +56,7 @@ export function findSignedFeatureUnscanned(
     }
 
     const { featurePath } = parsed.record;
-    if (seenFeaturePaths.has(featurePath) || isWithinScannedDirs(featurePath, scannedFeatureDirs)) {
+    if (seenFeaturePaths.has(featurePath) || scannedFeatureDirs.some((dir) => isFeatureWithinDir(featurePath, dir))) {
       continue;
     }
     seenFeaturePaths.add(featurePath);
