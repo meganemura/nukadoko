@@ -1101,6 +1101,14 @@ feature は実行されたすべてを名指し続け、part はその行の下�
 executor は、他の step と同じ方法で part の `args` と `returns` をチェックします。
 part から別の part への呼び出しは、同じ入れ子構造を使います。
 
+step は複数の呼び出しを同時に開始できます。
+たとえば `await Promise.all([call(a, {}), call(b, {})])` です。
+各呼び出しは、それを行った step の `parts` に対してチェックされます。
+そのため、別の part と並んで走る part が、その part の呼び出し元と誤解されることはありません。
+1 つの step が同時に行った呼び出しは、その step の下に兄弟として現れます。
+順序は終了順ではなく、開始順です。
+part が開始した呼び出しは、その part の下に入れ子になります。
+
 step の境界にある計測は分割されません。
 `observed`、`sections`、`used`、`required_env`、evidence directory、trace chunk は、呼び出し元の step に属します。
 それらの合計には、すべての part の作業が含まれます。
@@ -2058,7 +2066,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   それは「後続の step が参照するものを返す」という、参照だけに頼る罠であり、「型付き step」ですでに戒められているものです。
   これはまた、このフィールドが運べるのは上流の step 自身の `returns` スキーマがそもそも保持していたものだけだということも意味します。
   値を落とす `returns` は、ここからもその値を落とします。
-- `calls`(空でないときだけ現れます)は、この実行が `call` fixture を通じて実行した part を、呼び出した順に列挙したものです(「Parts」を参照)。
+- `calls`(空でないときだけ現れます)は、この実行が `call` fixture を通じて実行した part を、呼び出しを開始した順に列挙したものです(「Parts」を参照)。
   各エントリは `{ "step": "create-project", "args": {...}, "result": {...}, "started_at": "...", "finished_at": "..." }` の形です。
   part が失敗したときは `result` の代わりに `error` を運び、その分類は step record 自身の `error` と同じです。
   step record 自身のトップレベルの `args`(上記)とは違い、ここでの `args` はどちらの結果でも常に `call()` に渡された生の値です。

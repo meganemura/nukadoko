@@ -213,8 +213,8 @@ import { createUsedCollector } from "./used.js";
 // of a step's bare `fixtureParameterNames`), so any name a part destructures
 // is already a key on `currentFixtures` by the time `call` reads it. A
 // part's own `.parts` governs the *next* `call()` it makes, not the calling
-// step's — `calls` (src/context/calls.ts) is a frame stack for exactly this
-// reason: `pushFrame`/`popFrame` bracket a part's own `run()`, so a call
+// step's — `calls` (src/context/calls.ts) keeps one frame per call chain for
+// exactly this reason: `within` brackets a part's own `run()`, so a call
 // that part makes from inside its own body is checked, and recorded,
 // against that part, not the frame above it. `beginStep` resets both
 // `calls` and `currentFixtures` the same way it resets every other
@@ -828,6 +828,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // stays identical across all three: only `kind`/`message`/`nested`
   // differ.
   function recordCallFailure(
+    record: (entry: CallEntry) => void,
     step: string,
     args: unknown,
     kind: ErrorKind,
@@ -835,7 +836,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     startedAt: Date,
     nested: readonly CallEntry[],
   ): void {
-    calls.recordEntry({
+    record({
       step,
       args,
       error: { message, kind },
@@ -876,37 +877,38 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
     const name = partName(part);
     const startedAt = new Date();
+    const record = calls.reserve();
     const argsResult = strictArgsSchema(part.args).safeParse(args);
     if (!argsResult.success) {
       const message = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
-      recordCallFailure(name, args, "args_invalid", message, startedAt, []);
+      recordCallFailure(record, name, args, "args_invalid", message, startedAt, []);
       throw new Error(message);
     }
 
     // Opened right before the part's own `run()` starts, so a call *it*
     // makes is checked against *its own* `parts`, not the caller's (this
     // file's own header, and src/context/calls.ts's).
-    calls.pushFrame(part);
+    const frame = calls.enter(part);
     let runResult: unknown;
     try {
       const fixtures = subsetPartFixtures(part);
-      runResult = await part.run(fixtures, argsResult.data);
+      runResult = await calls.within(frame, () => part.run(fixtures, argsResult.data));
     } catch (error) {
-      const nested = calls.popFrame();
+      const nested = calls.entriesOf(frame);
       const message = error instanceof Error ? error.message : String(error);
-      recordCallFailure(name, args, "step_error", message, startedAt, nested);
+      recordCallFailure(record, name, args, "step_error", message, startedAt, nested);
       throw error;
     }
-    const nested = calls.popFrame();
+    const nested = calls.entriesOf(frame);
 
     const returnsResult = part.returns.safeParse(runResult);
     if (!returnsResult.success) {
       const message = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
-      recordCallFailure(name, args, "result_invalid", message, startedAt, nested);
+      recordCallFailure(record, name, args, "result_invalid", message, startedAt, nested);
       throw new Error(message);
     }
 
-    calls.recordEntry({
+    record({
       step: name,
       args,
       result: returnsResult.data,

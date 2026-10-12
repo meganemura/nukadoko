@@ -1314,6 +1314,13 @@ as a step record's `error`. The executor checks a part's `args` and
 `returns` exactly as it checks any other step. Calls from one part to
 another use the same nested structure.
 
+A step may start several calls at once, for example
+`await Promise.all([call(a, {}), call(b, {})])`. Each call is checked
+against the `parts` of the step that made it, so a part that runs beside
+another part is not mistaken for that part's caller. Concurrent calls from
+one step appear as siblings under it, in the order they started and not
+the order they finished. A call that a part starts nests under that part.
+
 Measurements at the step boundary do not split. `observed`, `sections`,
 `used`, `required_env`, the evidence directory, and the trace chunk
 belong to the calling step. Their totals include work from all parts. A
@@ -2465,7 +2472,7 @@ array identifies each step record by id, so either record leads to the other.
   upstream step's own `returns` schema kept in the first place: a
   `returns` that dropped a value drops it from here too.
 - `calls` (included only when it has entries) lists the parts this execution ran
-  through the `call` fixture (see "Parts"), in call order. Each entry is
+  through the `call` fixture (see "Parts"), in the order the calls started. Each entry is
   `{ "step": "create-project", "args": {...}, "result": {...},
   "started_at": "...", "finished_at": "..." }`, and carries `error`
   instead of `result` when the part failed, classified the same way a step

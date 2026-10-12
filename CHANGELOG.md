@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **`ctx.call` accepts concurrent calls and nests them correctly.**
+  `await Promise.all([call(a, {}), call(b, {})])` failed with a false
+  "does not list it in its own parts" error, because one global frame stack made
+  `call(b)` look like a call from inside `a`. The current frame now follows the
+  async call chain, so each call is checked against the step that made it.
+  Concurrent calls appear as siblings in `calls`, in start order.
+
 - **The `nuka accept` missing-step-record refusal names the real records directory.**
   The refusal always said `.nukadoko/records/steps`, so a project with another
   `stateDir` was pointed at a directory it does not have. The message now names
