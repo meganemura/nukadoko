@@ -2776,8 +2776,8 @@ that the run launched (see "Running").
 that the value is an object. The type comes from `defineConfig`, so `tsc`
 reports a typo as it does elsewhere in `nukadoko.config.ts`. Repeating the
 Playwright options in zod would require an update for every new option. Until
-that update, config authors could not use the new option. Nukadoko currently
-reads only `headless` and passes it to the selected engine's `launch` method.
+that update, config authors could not use the new option. Nukadoko passes
+`browser` to the selected engine's `launch` method unchanged.
 `browserType` selects that engine. When omitted, Playwright uses its default,
 `headless: true`. Options such as `viewport` belong to a different Playwright
 type for `newContext`. This key does not accept them. See `browserContext` and

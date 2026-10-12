@@ -18,6 +18,10 @@ just until 0.1.
 
 ### Fixed
 
+- **The spec no longer says `browser` is read only for `headless`.**
+  The whole `browser` object reaches the engine's `launch`, so `args`,
+  `executablePath`, and `slowMo` take effect. `docs/spec.md` and
+  `docs/spec.ja.md` now say it is passed unchanged.
 - **The CLI summary in `docs/spec.md` lists every finding `nuka check` and `nuka tend` report.**
   The `nuka check` entry lacked the part, serial-tag, parameter-type,
   capture-syntax, table/docstring, env-file, explore, and other findings that

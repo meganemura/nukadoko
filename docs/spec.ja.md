@@ -2292,7 +2292,7 @@ scenario record 自身の `browser` フィールド(「実行」を参照)には
 zod は「これがオブジェクトかどうか」以上には形を再検証しません。
 型は `defineConfig` から来るため、`tsc` は `nukadoko.config.ts` の他の場所と同じやり方で typo を捕まえます。
 Playwright のオプションを zod で列挙し直すと、Playwright が 1 つ追加するたびに追随が必要になり、その追随が追いつくまでのあいだ、config を書く人は本当は使える Playwright のオプションを使えなくなってしまいます。
-今日読まれているのは `headless` だけで、選ばれたエンジン自身の `launch` にそのまま渡されます(どのエンジンかを選ぶのは上記の `browserType` です)。
+`browser` は、選ばれたエンジン自身の `launch` にそのまま渡されます(どのエンジンかを選ぶのは上記の `browserType` です)。
 省略した場合は Playwright 自身の既定値(`headless: true`)が適用されます。
 `newContext` の `viewport` のようなオプションは別の Playwright の型であり、この `browser` キーでは受け付けません(下記の `browserContext`/`requestContext` を参照)。
 
