@@ -26,14 +26,13 @@ import type { TendIssue } from "./types.js";
 // confirmed against this repo's own pinned zod 4.4.3). That means *where*
 // the description lives depends on chain
 // order: `.describe(d).optional()` puts it on the pre-wrap schema, one
-// `.unwrap()` down from the field as stored in the shape; `.optional
+// wrapper down from the field as stored in the shape; `.optional
 // ().describe(d)` puts it on the field exactly as stored, no unwrapping
 // needed. `hasDescription` below checks every layer while unwrapping,
 // never just the first or the last, so neither ordering is missed.
-// `isUnwrappable`/`.unwrap()` themselves mirror src/binding/schema-shape.ts's
-// own private (unexported) unwrap step rather than importing it: the check
-// is one line with no behavior to keep in sync — duplicating it here is
-// cheaper and safer than widening that module's exports for one caller.
+// The unwrap step is deliberately wider than src/binding/schema-shape.ts's:
+// that module only needs optional/default to find the shape underneath,
+// while a description can sit under any wrapper.
 //
 // `analyzeFieldDescriptions` is now the one export doing
 // the walk: it returns this finding's issues *and* the total/described field
@@ -42,23 +41,23 @@ import type { TendIssue } from "./types.js";
 // call per field either way, so the summary's number and this finding's
 // "which fields are missing" can never quietly disagree.
 
-type Unwrappable = z.ZodTypeAny & { unwrap(): z.ZodTypeAny };
-
-function isUnwrappable(schema: z.ZodTypeAny): schema is Unwrappable {
-  return schema.type === "optional" || schema.type === "default";
+// Every wrapper that keeps the described schema one level down: optional,
+// default, nullable, nullish, readonly, catch and prefault carry it in
+// `innerType`, a pipe (`.transform()`, `.pipe()`) in `in`.
+function innerSchema(schema: z.ZodTypeAny): z.ZodTypeAny | undefined {
+  const def = schema._zod.def as { innerType?: z.ZodTypeAny; in?: z.ZodTypeAny };
+  return def.innerType ?? def.in;
 }
 
 function hasDescription(fieldSchema: z.ZodTypeAny): boolean {
-  let current = fieldSchema;
-  while (true) {
+  let current: z.ZodTypeAny | undefined = fieldSchema;
+  while (current !== undefined) {
     if (current.meta()?.description !== undefined) {
       return true;
     }
-    if (!isUnwrappable(current)) {
-      return false;
-    }
-    current = current.unwrap();
+    current = innerSchema(current);
   }
+  return false;
 }
 
 // A field's own `label.key` name plus whether it carries a `.describe()` —

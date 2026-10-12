@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`schema-field-undescribed` sees a description under any wrapper.**
+  A field written `z.string().describe("x").nullable()` was reported as
+  undescribed, and the `describe` count in the `nuka tend` summary was too
+  low. Only `optional` and `default` were unwrapped. The check now also
+  looks inside `nullable`, `nullish`, `readonly`, `catch`, `prefault`, and
+  the input side of `.transform()` and `.pipe()`.
 - **Concurrent first `ctx.page()` or `ctx.request()` calls share one launch.**
   Two calls made together, as in `Promise.all([this.openPage(), this.openPage()])`
   in compat glue, each saw no browser yet and launched their own. The second
