@@ -436,6 +436,13 @@ just until 0.1.
   session) and two spec passages sent the reader to "What compat steps lack",
   a heading that no longer exists. They now cite the section that covers it,
   in the English and the Japanese spec.
+- **The README and migration guide match the CLI on four points.**
+  The README said no multi-attempt run ships (`nuka run --repeat` does that),
+  explained the caret only for `0.0.x` (for `0.y.z` it pins the minor), said
+  every non-GET call counts as a write (HEAD is a read, as in the step
+  record), and said `nuka init` writes only `.nukadoko/` to `.gitignore` (it
+  also writes `.env`, `.env.*`, and `!.env.example`). The migration guide had
+  the same init claim. The Japanese files match.
 
 ## 0.14.1 — 2026-10-10
 

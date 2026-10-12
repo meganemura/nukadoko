@@ -20,7 +20,7 @@ Node 20+(`package.json` の `engines.node` は `">=20"`)。
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .nukadoko/ ignores
+npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .gitignore entries
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
@@ -51,8 +51,9 @@ nukadoko は devDependency です。
 ただし、このようなプロジェクトで `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
 そのエラーはそのファイルと原因を名指しし、`nukadoko.config.mts` へのリネームを案内します。
 代わりに `nuka init` は `nukadoko.config.mts` を書きます。
-`.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
+`.nukadoko/`、`.env`、`.env.*` を自分で `.gitignore` に追加する必要はありません。
 `nuka init` が追加します。
+`.env.example` は追跡されたままにします。
 中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
 
 </details>
@@ -243,7 +244,8 @@ agent にとっては、そのループが安価なコマンドでできてい�
 
 `npm install -D nukadoko@latest` を使ってください。
 インストール時に npm はキャレット範囲を書きます。
-`0.0.x` のバージョンではキャレットが patch も固定するため、`npm update` だけでは最初に入れたバージョンを超えません。
+メジャーバージョンが 0 の間は、キャレットが minor も固定します(`^0.14.1` が許すのは `0.14.x` だけで、`0.0.x` では patch まで固定します)。
+そのため `npm update` だけでは最初に入れた minor を超えません。
 0.x の間はどのリリースでも public API が変わり得ます。
 範囲指定に頼らず、[changelog](CHANGELOG.md) を読んでください。
 破壊的変更のあとに実際に何を直すかは、[docs/upgrading.ja.md](docs/upgrading.ja.md) を参照してください。
@@ -335,7 +337,7 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 そうした API を呼ぶ正直な `mutates: false` の step も、書き込みに見えます。
 一般的な HTTP レイヤーのルールでは、その呼び出しと本物の書き込みを区別できません。
 そこで nukadoko は宣言を信頼します。
-自身の request context と page を通じて行われた非 GET の呼び出しはいまも数えますが、step record はその回数を断定ではなく事実として示します。
+自身の request context と page を通じて行われたGET と HEAD を除く呼び出しはいまも数えますが、step record はその回数を断定ではなく事実として示します。
 
 ## Reports fill themselves
 
@@ -601,8 +603,7 @@ Playwright 自身の `retries` と `testInfo.retry` が取る形であり、最�
 scenario を複数回走らせながら、すべての試行それぞれの記録を残し、どの試行が通ったかを名指しすることは、これとは別の形です。
 この形によって、記録が語れない事実を語ることにはなりません。
 この形をスコープ外にしているわけではありません。
-nukadoko が今日それを行う手段をまだ出荷していないというだけです。
-ここに書いているのは、将来の機能が取るべき形についての境界であって、その機能の予告ではありません。
+`nuka run --repeat <n>` がそれを出荷しています(このセクションの末尾を参照)。
 
 記録を消す形の retry をスコープ外にしても、それが覆い隠していたはずの flake が消えるわけではありません。
 サードパーティのスクリプトや CI ランナー上の資源競合は、待ちが正しく置かれている scenario でも失敗させ得ます。

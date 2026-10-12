@@ -32,7 +32,7 @@ CommonJS のスイートでは、`nuka init` は代わりに `nukadoko.config.mt
 そのプロジェクトで `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
 エラーはそのファイルと原因を名指しし、ファイルが `.ts` なので `.mts` へのリネームを案内します。
 
-`nuka init` は `nukadoko.config.ts` か `nukadoko.config.mts` のどちらかが既に存在する場合は実行を拒否し、`<featuresDir>/steps/` を作成し、`.nukadoko/` を `.gitignore` に追加し、(まだ空の)語彙を発見する self-check で終わります。
+`nuka init` は `nukadoko.config.ts` か `nukadoko.config.mts` のどちらかが既に存在する場合は実行を拒否し、`<featuresDir>/steps/` を作成し、`.nukadoko/`、`.env`、`.env.*` を `.gitignore` に追加し(`!.env.example` で example は追跡されたままにします)、(まだ空の)語彙を発見する self-check で終わります。
 `featuresDir` はデフォルトで `features`(cucumber-js 自身の規約)なので、ほとんどのスイートは上書き不要であり、discovery はディレクトリ全体をたどるため、その配下の別の場所にある step ファイル(`features/step_definitions/`、`features/support/`)も並べ替えは不要です。
 
 `this.parameters` を読む cucumber-js スイートは、そのオブジェクトを cucumber.js プロファイルの `worldParameters` か、コマンドラインの `--world-parameters` から受け取っていました。

@@ -38,8 +38,8 @@ that project fails to import. The error names that file and the cause,
 and, because the file is `.ts`, says to rename it to `.mts`.
 
 `nuka init` refuses to run if `nukadoko.config.ts` or `nukadoko.config.mts`
-already exists, creates `<featuresDir>/steps/`, adds `.nukadoko/` to
-`.gitignore`, and ends with a self-check that discovers the (still empty)
+already exists, creates `<featuresDir>/steps/`, adds `.nukadoko/`, `.env`, and `.env.*` to
+`.gitignore` (with `!.env.example` to keep the example tracked), and ends with a self-check that discovers the (still empty)
 vocabulary. `featuresDir` defaults to `features` (cucumber-js's own
 convention), so most suites need no override; discovery walks the whole
 directory, so step files living elsewhere under it

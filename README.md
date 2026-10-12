@@ -20,7 +20,7 @@ Node 20+ (`package.json`'s `engines.node` is `">=20"`).
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .nukadoko/ ignores
+npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .gitignore entries
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
@@ -50,8 +50,9 @@ of the two paths above. Leaving it out is still supported (see the CommonJS
 paragraph above). However, manually writing `nukadoko.config.ts` in such a
 project fails to import. The error names that file and the cause, and says
 to rename it to `nukadoko.config.mts`. `nuka init` writes
-`nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
-`.gitignore` yourself because `nuka init` does that. Traces and screenshots
+`nukadoko.config.mts` instead. You do not need to add `.nukadoko/`, `.env`,
+or `.env.*` to `.gitignore` yourself because `nuka init` does that, and it
+leaves `.env.example` tracked. Traces and screenshots
 inside it are not redacted, so the state directory contains sensitive data.
 
 </details>
@@ -261,8 +262,9 @@ this README says so.
 ## Upgrading
 
 Use `npm install -D nukadoko@latest`. npm writes a caret range during
-installation. For a `0.0.x` version, a caret also pins the patch, so
-`npm update` alone never moves beyond the initially installed version.
+installation. While the major version is 0, a caret also pins the minor
+(`^0.14.1` allows `0.14.x` only; for `0.0.x` it pins the patch), so
+`npm update` alone never moves beyond the initially installed minor.
 While this is 0.x, any release can change the public API. Read the
 [changelog](CHANGELOG.md) instead of relying on the range for safety.
 For what to actually fix after a breaking change, see
@@ -359,7 +361,7 @@ fails for GraphQL, RPC-over-POST, and vendor query APIs that perform a pure
 read over POST. A truthful `mutates: false` step that calls one of these
 APIs still looks like a write. No general HTTP-layer rule can distinguish
 that call from a real write. Nukadoko therefore trusts the declaration. It
-still counts every non-GET call made through its request context and page,
+still counts every call other than GET and HEAD made through its request context and page,
 but the step record presents the count as a fact, not a verdict.
 
 ## Reports fill themselves
@@ -664,9 +666,8 @@ is the shape ruled out here, the one Playwright's own `retries` and
 report. Running a scenario more than once while keeping every attempt's
 own record, and naming which attempt passed, is a different shape:
 nothing about it makes a record state a fact it cannot support. That shape
-is not ruled out; nukadoko just does not ship a way to do it today, so
-read this as a boundary on the shape a future feature would have to take,
-not an announcement of one.
+is not ruled out, and `nuka run --repeat <n>` ships it (see
+the end of this section).
 
 Ruling out the record-discarding shape does not make the flake it would
 have papered over disappear. A third-party script or CI-runner resource
