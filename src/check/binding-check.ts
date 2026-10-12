@@ -68,6 +68,12 @@ export interface BindingCheckResult {
   readonly issues: readonly CheckIssue[];
   readonly warnings: readonly CheckIssue[];
   readonly patterns: readonly CheckedPattern[];
+  /** One per pattern that failed only because it names a parameter type
+   * that is not registered, built with each missing type standing in as
+   * any text. It is never matched against for a verdict: feature-check
+   * uses it to tell a line that this pattern would match from a line no
+   * step covers. */
+  readonly standIns: readonly CheckedPattern[];
 }
 
 interface StripResult {
@@ -139,12 +145,36 @@ function expressionErrorToIssue(
   return { code: "pattern-syntax-error", message: `${context}: ${message}`, step: stepName };
 }
 
+/** The expression `source` would compile to if every parameter type it
+ * names but nobody registered matched any text. `undefined` when it fails
+ * for any other reason, since then there is no expression to stand in. */
+function standInExpression(
+  source: string,
+  registeredTypes: readonly ParameterTypeConfig[],
+): CucumberExpression | undefined {
+  const missing: ParameterTypeConfig[] = [];
+  for (;;) {
+    try {
+      return new CucumberExpression(source, createParameterTypeRegistry([...registeredTypes, ...missing]));
+    } catch (error) {
+      if (
+        !(error instanceof UndefinedParameterTypeError) ||
+        missing.some((type) => type.name === error.undefinedParameterTypeName)
+      ) {
+        return undefined;
+      }
+      missing.push({ name: error.undefinedParameterTypeName, regexp: /.*/ });
+    }
+  }
+}
+
 export function checkBindings(
   vocabulary: Vocabulary,
   customTypes: readonly ParameterTypeConfig[] = [],
   compatParameterTypes: readonly CompatParameterTypeEntry[] = [],
 ): BindingCheckResult {
   const warnings: CheckIssue[] = [];
+  const registeredTypes = [...customTypes, ...compatParameterTypes];
 
   // A name collision in config.parameterTypes (against a built-in type,
   // another config entry, or now a compat-origin entry — this reuses the
@@ -156,13 +186,14 @@ export function checkBindings(
   // return below.
   let registry: ReturnType<typeof createParameterTypeRegistry>;
   try {
-    registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);
+    registry = createParameterTypeRegistry(registeredTypes);
   } catch (error) {
     if (error instanceof ParameterTypeCollisionError) {
       return {
         issues: [{ code: "parameter-type-invalid", message: error.message }],
         warnings,
         patterns: [],
+        standIns: [],
       };
     }
     throw error;
@@ -170,6 +201,7 @@ export function checkBindings(
 
   const issues: CheckIssue[] = [];
   const patterns: CheckedPattern[] = [];
+  const standIns: CheckedPattern[] = [];
   // strippedPattern -> every (stepName, pattern) that normalizes to it,
   // across the *entire* vocabulary and *across kind* — a typed step's stripped
   // pattern and a compat string pattern share this one text namespace
@@ -241,6 +273,10 @@ export function checkBindings(
         expression = new CucumberExpression(stripped.strippedPattern, registry);
       } catch (error) {
         issues.push(expressionErrorToIssue(error, stepName, pattern, registry));
+        const standIn = standInExpression(stripped.strippedPattern, registeredTypes);
+        if (standIn) {
+          standIns.push({ matcherKind: "expression", stepName, pattern, captures: stripped.captures, expression: standIn });
+        }
         continue;
       }
       patterns.push({
@@ -321,6 +357,10 @@ export function checkBindings(
         expression = new CucumberExpression(entry.compat.pattern, registry);
       } catch (error) {
         issues.push(expressionErrorToIssue(error, stepName, pattern, registry));
+        const standIn = standInExpression(entry.compat.pattern, registeredTypes);
+        if (standIn) {
+          standIns.push({ matcherKind: "expression", stepName, pattern, captures: [], expression: standIn });
+        }
         continue;
       }
       patterns.push({ matcherKind: "expression", stepName, pattern, captures: [], expression });
@@ -361,5 +401,5 @@ export function checkBindings(
     }
   }
 
-  return { issues, warnings, patterns };
+  return { issues, warnings, patterns, standIns };
 }

@@ -210,7 +210,7 @@ export const CHECK_CODES = {
   },
   "undefined-step-check-suppressed": {
     description:
-      "One or more step files failed to import, so undefined-step findings that failure could explain are held back until the import is fixed.",
+      "A step file failed to import, or a line would match a step whose pattern has an unregistered parameter type, so the undefined-step finding that cause could explain is held back until it is fixed.",
     severity: "warning",
   },
   "unfillable-required-key": {

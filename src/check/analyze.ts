@@ -546,10 +546,13 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
       line: issue.line,
     });
   }
-  const featureResult = checkFeatures(features, vocabulary, bindingResult.patterns, [
-    ...config.parameterTypes,
-    ...compatParameterTypes,
-  ]);
+  const featureResult = checkFeatures(
+    features,
+    vocabulary,
+    bindingResult.patterns,
+    [...config.parameterTypes, ...compatParameterTypes],
+    bindingResult.standIns,
+  );
   warnings.push(...featureResult.warnings);
 
   // A broken glue file's own missing steps otherwise resurface here as a

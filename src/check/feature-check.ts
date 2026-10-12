@@ -201,6 +201,7 @@ export function checkFeatures(
   vocabulary: Vocabulary,
   patterns: readonly CheckedPattern[],
   customTypes: readonly ParameterTypeConfig[] = [],
+  standIns: readonly CheckedPattern[] = [],
 ): FeatureCheckResult {
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -224,6 +225,18 @@ export function checkFeatures(
             continue;
           }
           reportedUndefinedText.add(step.text);
+          // The step exists and its pattern error is already reported; a
+          // scaffold hint here would tell the author to write it again.
+          const blocked = matchPickleStepText(step.text, standIns).stepNames;
+          if (blocked.length > 0) {
+            warnings.push({
+              code: "undefined-step-check-suppressed",
+              message: `"${step.text}" would match ${blocked.map((name) => `step "${name}"`).join(", ")} once its pattern builds. Fix the pattern error reported for that step`,
+              file: feature.relativePath,
+              line,
+            });
+            continue;
+          }
           const escapeHint = findEscapeHint(step.text, patterns, customTypes);
           const quoteHint = findQuoteHint(step.text, patterns);
           const hintSuffix = escapeHint

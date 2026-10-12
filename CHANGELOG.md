@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A line held up by a pattern that does not build is not called an undefined step.**
+  A pattern that names an unregistered parameter type is reported once as
+  `unknown-parameter-type`. Each line that pattern would have matched was
+  also reported as `undefined-step`, with advice to scaffold a step that
+  already exists. Such a line is now an `undefined-step-check-suppressed`
+  warning that names the step. A line no step could match is still
+  `undefined-step`.
 - **`nuka tend` is faster on a project with many typed steps.**
   Tend matched every pickle step against every pattern, while `nuka check`
   already reused one result per distinct step text. Tend now uses the same
