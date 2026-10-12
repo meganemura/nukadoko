@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -105,6 +106,32 @@ describe("nuka run: messages.ndjson wiring", () => {
     // The default location is untouched — the override moves the output,
     // it doesn't add a second copy.
     expect(existsSync(path.join(rootDir, ".nukadoko", "export", "messages.ndjson"))).toBe(false);
+  });
+
+  it("uses an absolute messages.output and allure.resultsDir as given, not joined under the project root", async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "nukadoko-absolute-export-"));
+    try {
+      const output = path.join(outside, "messages.ndjson");
+      const resultsDir = path.join(outside, "allure-results");
+      await writeFile(
+        path.join(rootDir, "nukadoko.config.ts"),
+        [
+          'import { defineConfig } from "./nukadoko-shim.js";',
+          "",
+          `export default defineConfig({ messages: { output: ${JSON.stringify(output)} }, allure: { resultsDir: ${JSON.stringify(resultsDir)} } });`,
+          "",
+        ].join("\n"),
+      );
+
+      const stderr = createCaptureSink();
+      expect(await runCli(["run", "features/passing.feature"], { rootDir, stdout: createCaptureSink(), stderr })).toBe(0);
+
+      expect(existsSync(output)).toBe(true);
+      expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
+      expect(existsSync(path.join(rootDir, outside))).toBe(false);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it("writes no messages.ndjson at all for a run that selects zero pickles", async () => {

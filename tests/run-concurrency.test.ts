@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readFile, writeFile } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { runCli } from "../src/cli/run-cli.js";
 import { analyzeProject } from "../src/check/analyze.js";
@@ -108,6 +110,31 @@ describe("nuka run --concurrency", () => {
     expect(records.every((r) => r.status === "passed")).toBe(true);
     expect(new Set(records.map((r) => r.run_id)).size).toBe(1);
     expect(stderr.text()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
+  });
+
+  it("uses an absolute messages.output and allure.resultsDir as given at --concurrency 2", async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "nukadoko-absolute-export-"));
+    try {
+      const output = path.join(outside, "messages.ndjson");
+      const resultsDir = path.join(outside, "allure-results");
+      await writeFile(
+        path.join(rootDir, "nukadoko.config.ts"),
+        'import { defineConfig } from "./nukadoko-shim.js";\n\n' +
+          `export default defineConfig({ messages: { output: ${JSON.stringify(output)} }, allure: { resultsDir: ${JSON.stringify(resultsDir)} } });\n`,
+      );
+
+      const stderr = createCaptureSink();
+      expect(
+        await runCli(["run", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr }),
+        stderr.text(),
+      ).toBe(0);
+
+      expect(existsSync(output)).toBe(true);
+      expect(readdirSync(resultsDir).filter((name) => name.endsWith("-result.json"))).toHaveLength(2);
+      expect(existsSync(path.join(rootDir, outside))).toBe(false);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it("runs two file arguments at --concurrency 2 with one shared run_id", async () => {
