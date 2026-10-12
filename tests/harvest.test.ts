@@ -50,6 +50,23 @@ describe("nuka harvest", () => {
     rootDir = await copyFixtureToTempDir("harvest-project");
   });
 
+  it.each(["adjacent", "separated", "three times"])("refuses a repeated record id (%s) before writing a draft", async (layout) => {
+    const create = await doStep(rootDir, "create-project", '{"name":"acme"}');
+    const count = await doStep(rootDir, "count-items", '{"count":3}');
+    expect(create.exitCode).toBe(0);
+    expect(count.exitCode).toBe(0);
+    const id = create.record.step_record_id;
+    const otherId = count.record.step_record_id;
+    if (typeof id !== "string" || typeof otherId !== "string") throw new Error("expected step record ids");
+    const ids = layout === "adjacent" ? [id, id] : layout === "separated" ? [id, otherId, id] : [id, id, id];
+    const result = await harvest(rootDir, ids);
+    expect(result).toEqual({
+      exitCode: 1,
+      stdoutText: "",
+      stderrText: `step record id given more than once: ${id}\n`,
+    });
+  });
+
   afterEach(async () => {
     await removeTempDir(rootDir);
   });
