@@ -2729,7 +2729,10 @@ result は次の label と path を持ちます。
 
 - `feature` label は Feature 名を持ちます。
 - `package` label はプロジェクト名と feature の path をドットで区切って持ちます。
-- pickle が継承した各 tag は `@` を保つ `tag` label になります。
+- pickle が継承した各 tag は、次の二つの形を除いて、`@` を保つ `tag` label になります。
+  `@allure.label.<name>:<value>` という tag は、その値を持つ `<name>` label になります。
+  `@allure.id:<value>` という tag は、その値を持つ `ALLURE_ID` label になります。
+  どちらの形も `:` の代わりに `=` を受け付け、`tag` label にはなりません。
 - scenario result は宣言されたすべての label と link を受け取ります。
 - `titlePath` はプロジェクト名、feature のディレクトリ要素、Feature 名を持ちます。
 - emitter は `parentSuite` と `suite` を未設定のままにします。

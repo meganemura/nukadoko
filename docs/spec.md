@@ -3326,7 +3326,10 @@ The result uses these labels and paths:
 
 - The `feature` label contains the Feature name.
 - The `package` label contains the project name and feature path, separated by dots.
-- Each inherited pickle tag becomes a `tag` label and retains its `@` prefix.
+- Each inherited pickle tag becomes a `tag` label and retains its `@` prefix, except for two forms.
+  A tag `@allure.label.<name>:<value>` becomes a `<name>` label with that value.
+  A tag `@allure.id:<value>` becomes an `ALLURE_ID` label with that value.
+  Both forms also accept `=` in place of `:`, and neither becomes a `tag` label.
 - The scenario result receives all declared labels and links.
 - `titlePath` contains the project name, feature directory segments, and Feature name.
 - The emitter leaves `parentSuite` and `suite` unset.
