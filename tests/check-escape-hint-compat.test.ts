@@ -1,0 +1,32 @@
+import { describe, expect, it } from "vitest";
+import { runCli } from "../src/cli/run-cli.js";
+import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+
+// Responsibility: the undefined-step escape hint sees a parameter type that
+// compat code registered, the same registry matching uses. The fixture's
+// pattern has a bare "(north)" before a compat-registered {c:color}.
+
+describe("nuka check: escape hint with a compat parameter type", () => {
+  it("names the step whose pattern would match once its parens are escaped", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-escape-hint-compat-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    const report = JSON.parse(stdout.text()) as {
+      errors: readonly { code: string; message: string; line?: number }[];
+    };
+
+    expect(exitCode).toBe(1);
+    expect(report.errors.filter((issue) => issue.code === "undefined-step")).toEqual([
+      {
+        code: "undefined-step",
+        message:
+          'No step definition matches "the wall (north) is painted red"; run `nuka scaffold <name>` to add one; hint: would match step "paint" pattern "the wall (north) is painted {c:color}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation',
+        file: "features/wall.feature",
+        line: 4,
+      },
+    ]);
+  });
+});
