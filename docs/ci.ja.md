@@ -190,7 +190,7 @@ jobs:
 この workflow は、実際のランナー上で green になるのを見届けたファイルとしてではなく、手を加えるための出発点として読んでください。
 
 ジョブの後で Allure の出力がどこへ行くかについても、このページは何も言いません。
-trace と screenshot は伏せられません(docs/spec.ja.md の「Sessions, environments, secrets」を参照)。
+trace と screenshot は伏せられません(docs/spec.ja.md の「Session、environment、secret」を参照)。
 隣の `http.jsonl` は秘密を置き換えてありますが、trace はブラウザ自身の状態を cookie ごと持ち、screenshot は画面に出ていたものをそのまま持ちます。
 artifact としてアップロードした `allure-results/` や、チャットに貼った生成済みレポートは、そのすべてを運びます。
 ランナーの中に留めるか、最初のアップロードの前に誰が開いてよいかを決めてください。

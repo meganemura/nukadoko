@@ -72,6 +72,8 @@ workflow は `NPM_TOKEN` を読みません。
    `package.json` に同じ version を書きます。
    先頭の `v` を除いた tag がその version です。
    両者が違えば workflow は止まります。
+   `docs/upgrading.md` と `docs/upgrading.ja.md` では、「to the next release」(日本語では「から次のリリースへ」)で終わる見出しを、このバージョンを名指すように書き換えます。
+   たとえば `0.14.1 to 0.15.0` です。
 
 2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check` を実行します。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。

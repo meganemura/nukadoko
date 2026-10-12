@@ -455,6 +455,13 @@ just until 0.1.
   changes, so it read as still pending. It is now "0.12.0 to 0.13.0", in both
   languages. `docs/releasing.md` now has a step that renames the open
   "to the next release" heading to the version being released.
+- **Four contributor and translation docs are corrected.**
+  `CONTRIBUTING.md` said two tests name `firefox` in a config; five do.
+  `docs/ci.ja.md` cited the spec heading "Sessions, environments, secrets",
+  which the Japanese spec calls "Session、environment、secret".
+  `README.ja.md` linked the English spec for step chaining and now links
+  `docs/spec.ja.md`. The glossary's note and heading rules now cover every
+  paired Japanese file, including the Playwright Test migration page.
 
 ## 0.14.1 — 2026-10-10
 
