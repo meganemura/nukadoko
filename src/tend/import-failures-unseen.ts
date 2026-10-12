@@ -23,7 +23,7 @@ export function findImportFailuresUnseen(
   return [
     {
       code: "import-failures-unseen",
-      message: `this report only sees steps that imported successfully; ${count} step file${count === 1 ? "" : "s"} could not be read and are missing from every count and finding here (run "nuka check" for detail): ${files}`,
+      message: `this report only sees steps that imported successfully; ${count} step file${count === 1 ? "" : "s"} could not be read and ${count === 1 ? "is" : "are"} missing from every count and finding here (run "nuka check" for detail): ${files}`,
     },
   ];
 }

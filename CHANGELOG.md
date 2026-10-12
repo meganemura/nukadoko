@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **Three `nuka tend` messages now say what the code does.**
+  `from-unused` said a `from` key could be filled by a capture or a
+  table/docstring, but only a capture fills it. `pattern-unbound` said no
+  line under `featuresDir` binds the step, but tend also scans
+  `additionalFeatureDirs` and oaths, so it now says "the scanned
+  directories". `import-failures-unseen` printed "1 step file ... are
+  missing"; the verb now agrees with the count.
 - **A line held up by a pattern that does not build is not called an undefined step.**
   A pattern that names an unregistered parameter type is reported once as
   `unknown-parameter-type`. Each line that pattern would have matched was
