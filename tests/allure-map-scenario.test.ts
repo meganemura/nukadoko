@@ -456,6 +456,25 @@ describe("mapGwtStep: Data table attachment", () => {
     });
   });
 
+  it("quotes a Data table cell that holds a comma, a quote, or a newline (RFC 4180)", () => {
+    const source = `Feature: Users
+  Scenario: quoted users
+    Given the following users:
+      | name       | note          |
+      | Smith, Ann | says "hi"     |
+      | Bob        | line1\\nline2 |
+`;
+    const { gherkinDocument, pickles } = parseFeatureSource(source, "features/users.feature");
+    const pickle = pickles[0]!;
+    const step: ScenarioStepRecord = { text: pickle.steps[0]!.text, status: "passed", step_record_id: null };
+
+    const { step: mapped } = callMapGwtStep({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 });
+
+    expect(mapped.attachments.find((a) => a.name === "Data table")).toMatchObject({
+      content: 'name,note\n"Smith, Ann","says ""hi"""\nBob,"line1\nline2"\n',
+    });
+  });
+
   it("attaches no Data table when the step has no argument at all", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
@@ -646,6 +665,25 @@ describe("mapScenario: Examples CSV attachment", () => {
       contentType: "text/csv",
       content: "role\nguest\nmember\n",
       fileExtension: ".csv",
+    });
+  });
+
+  it("quotes an Examples cell that holds a comma, a quote, or a newline (RFC 4180)", () => {
+    const source = `Feature: Roles
+  Scenario Outline: checkout as <role>
+    Given a <role> customer
+
+    Examples:
+      | role          | note       |
+      | guest, member | "vip"      |
+      | admin         | a\\nb      |
+`;
+    const { gherkinDocument, pickles } = parseFeatureSource(source, "features/roles.feature");
+
+    const mapped = callMapScenario({ record: baseRecord({ steps: [] }), gherkinDocument, pickle: pickles[0]! });
+
+    expect(mapped.attachments.find((a) => a.name === "Examples")).toMatchObject({
+      content: 'role,note\n"guest, member","""vip"""\nadmin,"a\nb"\n',
     });
   });
 
