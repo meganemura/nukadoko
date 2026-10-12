@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import {
   MissingStepRecordError,
   renderAcceptanceRecord,
   type AcceptedScenario,
   type RenderAcceptanceRecordOptions,
 } from "../src/accept/render-record.js";
+import { parseAcceptanceRecord } from "../src/tend/record-parse.js";
 import type { ScenarioRecord, ScenarioStepRecord } from "../src/record/scenario-record.js";
 
 // Responsibility: unit tests for render-record.ts's own frontmatter details
@@ -137,4 +140,33 @@ describe("renderAcceptanceRecord: MissingStepRecordError", () => {
       expect((error as Error).message).toContain("no step record id even though the scenario is recorded as passed");
     }
   });
+});
+
+describe("renderAcceptanceRecord: the embedded feature source", () => {
+  const sourcePiece = gs.sampledFrom([
+    "```",
+    "````",
+    "`",
+    "\n",
+    "\n```\n",
+    "```gherkin\n",
+    "```json\n{}\n```",
+    "```json\n",
+    "  ",
+    "a",
+    "Feature: x",
+  ]);
+
+  it("reads back, through the record parser, whatever the feature source holds, backtick runs included", () =>
+    hegel.test((tc) => {
+      const featureSource = tc.draw(gs.arrays(sourcePiece, { minSize: 0, maxSize: 12 })).join("");
+      const markdown = renderAcceptanceRecord(baseOptions({ featureSource }));
+
+      const parsed = parseAcceptanceRecord(markdown, "record.md");
+      expect(parsed.kind).toBe("ok");
+      if (parsed.kind === "ok") {
+        expect(parsed.record.featureSource).toBe(featureSource.replace(/\n$/, ""));
+        expect(parsed.record.stepRecords).toEqual([]);
+      }
+    }));
 });
