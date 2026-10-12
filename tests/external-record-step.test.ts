@@ -792,6 +792,45 @@ describe("recordStep: use", () => {
       { step_record_id: opened.stepRecordId, step: "open-cart", result: opened.result },
     ]);
   });
+
+  it("a use id whose upstream this process never ran through recordStep is refused for that reason, not as an unrelated step", async () => {
+    // Two module instances of open-cart, the way a `nuka do` record and a
+    // spec's own import are: the record exists under the name the `from`
+    // upstream would have, but that upstream object was never recorded here.
+    const unrecordedOpenCart = defineStep({
+      description: "Open a new cart (never passed to recordStep)",
+      args: openCartArgs,
+      returns: openCartReturns,
+      mutates: true,
+      run() {
+        return { id: "unused" };
+      },
+    });
+    const opened = await recordStep(openCartStep, {}, { name: "open-cart", rootDir, request: requestContext });
+    const before = readdirSync(bareStepsDir());
+
+    const error = await recordStep(
+      defineStep({
+        description: "Add an item to a cart opened by the unrecorded twin",
+        args: addItemArgs,
+        returns: addItemReturns,
+        mutates: true,
+        from: { cartId: [unrecordedOpenCart, "id"] },
+        run({}, { cartId }) {
+          return { cartId };
+        },
+      }),
+      {},
+      { name: "add-item-twin", rootDir, request: requestContext, use: [opened.stepRecordId] },
+    ).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toBe(
+      `--use ${opened.stepRecordId}: its step "open-cart" cannot be matched, because the step \`from.cartId\` ` +
+        "names has no name here. recordStep learns a step's name only when this same process runs that step " +
+        "through recordStep, so use resolves only against a step recorded earlier in this process",
+    );
+    expect(readdirSync(bareStepsDir())).toEqual(before);
+  });
 });
 
 describe("recordStep: a malformed from entry", () => {
