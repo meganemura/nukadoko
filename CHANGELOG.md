@@ -18,6 +18,16 @@ just until 0.1.
 
 ### Fixed
 
+- **`ctx.request()` logs a call that throws, and logs the URL that was requested.**
+  A call that threw (a refused connection, `failOnStatusCode` on a 500) wrote no
+  http.jsonl line although `observed` counted it, and `url` was the string the
+  step passed, so a relative path, `params`, and a redirect were not visible.
+  The line is now written whatever the outcome. `url` is the response URL
+  (absolute, params applied, redirects followed), as a page entry's is.
+  `declared_url` keeps the passed string when it differs. With no response,
+  `status` is `0` and `error` holds the first line of the failure message. A
+  failed append on this path no longer throws into the step; it is counted in
+  `http_log_failed`, like a page line.
 - **A page http.jsonl line that could not be written is counted on the step record.**
   The append failed silently (a missing directory, a full disk, a permission
   error), so `observed` counted the request while http.jsonl, `http_omitted`,
@@ -31,7 +41,6 @@ just until 0.1.
   processes), `nuka do`, and the live session now keep the loader until the
   command ends. `nuka check` and `nuka tend` run no steps and still remove it
   when discovery returns.
-
 - **`nuka tend --json` no longer puts a fixture name in `step`.**
   The `fixture-unused` and `fixture-touches-app` notes carried the fixture
   name in `step`, so selecting `step == "login"` mixed a fixture finding with

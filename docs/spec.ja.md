@@ -1991,6 +1991,13 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via" }` です。
   `via` は `request` fixture、または `page.request` か `context.request` を通した呼び出しなら `"request"`、page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
   どちらの経路のエントリにも必ず付くため、読み手はその行がどちらの経路から来たかを形だけから推測せずに済みます。
+  `via: "request"` の呼び出しは、結果にかかわらず記録されます。
+  接続の拒否や、エラーステータスに対する `failOnStatusCode` のように、throw した呼び出しも含みます。
+  `url` はレスポンスが返ってきた絶対 URL で、`params` が適用され、リダイレクトも辿られた後のものです。`via: "page"` のエントリと同じ形です。
+  `declared_url` は step が渡した文字列で、`url` と異なるときだけ現れます。
+  レスポンスが無いときは `status` が `0` になり、`error` に失敗メッセージの最初の 1 行が入ります。
+  そのとき分かっている URL は宣言された文字列だけなので、それが `url` になります。
+  追記の失敗で step が失敗することはありません。失敗は `http_log_failed`(下記)に数えられます。
   page のリクエストの行は、そのリクエストを送った step のものです。
   パスはリクエストが始まった時点で決まり、その step が返ったあとにレスポンスが届いても、そこへ追記されます。
   それは `observed` がすでにそのリクエストを数えた step と同じです。

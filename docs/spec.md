@@ -2366,7 +2366,15 @@ array identifies each step record by id, so either record leads to the other.
   `"page"` for one the page itself made (a `page`
   navigation, or an in-page `fetch`/XHR), present on every entry either path
   produces, so a reader never has to guess which one wrote a line from its
-  shape alone. A page request's line belongs to the step that sent it. The
+  shape alone. A `via: "request"` call is logged whatever its outcome,
+  including one that throws (a refused connection, `failOnStatusCode` on an
+  error status). `url` is the absolute URL the response came from, with
+  `params` applied and any redirect followed, the same shape a `via: "page"`
+  entry has. `declared_url` is the string the step passed and is present
+  only when it differs from `url`. When no response exists, `status` is `0`
+  and `error` holds the first line of the failure message; the declared
+  string is then the only URL known, so it is `url`. A failed append does
+  not fail the step; it is counted in `http_log_failed` (below). A page request's line belongs to the step that sent it. The
   path is taken when the request starts, and the response is appended there
   even when it arrives after that step has returned. That is the same step
   `observed` already counted. Only `document`, `xhr`, and `fetch` requests (Playwright's own

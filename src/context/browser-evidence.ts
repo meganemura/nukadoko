@@ -299,6 +299,7 @@ export async function launchBrowserWithTracing(
       options.logPath,
       options.secrets,
       options.observed,
+      options.httpLogFailed,
     );
     context.on("console", (msg) => {
       if (msg.type() !== "error") {
@@ -460,6 +461,7 @@ export function attachExternalPageEvidence(
      * the launched path's own is (this file's own header). */
     logPath: () => string;
     secrets: SecretSet;
+    httpLogFailed: HttpLogFailedCollector;
   },
 ): ExternalPageEvidenceHandle {
   const context = page.context();
@@ -468,6 +470,7 @@ export function attachExternalPageEvidence(
     options.logPath,
     options.secrets,
     options.observed,
+    options.httpLogFailed,
   );
 
   const onRequest = (request: PlaywrightRequest): void => {

@@ -752,6 +752,7 @@ describe("attachExternalPageEvidence", () => {
           pageEvents,
           logPath: () => path.join(os.tmpdir(), "nukadoko-external-page-http.jsonl"),
           secrets: [],
+          httpLogFailed: createHttpLogFailedCollector(),
         });
 
         const firstConsoleSeen = context.waitForEvent("console", {
@@ -803,6 +804,7 @@ describe("attachExternalPageEvidence", () => {
           pageEvents,
           logPath: () => path.join(os.tmpdir(), "nukadoko-external-page-http.jsonl"),
           secrets: [],
+          httpLogFailed: createHttpLogFailedCollector(),
         });
 
         handle.dispose();

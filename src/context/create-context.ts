@@ -960,6 +960,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
             // `page.request` / `context.request` is logged too.
             logPath: () => path.join(boundaryDir, "http.jsonl"),
             secrets,
+            httpLogFailed,
           });
         }
         return externalPageHandle.page;
@@ -1099,6 +1100,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           () => path.join(boundaryDir, "http.jsonl"),
           secrets,
           observed,
+          httpLogFailed,
         );
       } else {
         // No `baseURL` requirement here, matching `ctx.page()` above, which
@@ -1127,6 +1129,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
           () => path.join(boundaryDir, "http.jsonl"),
           secrets,
           observed,
+          httpLogFailed,
         );
       }
     }

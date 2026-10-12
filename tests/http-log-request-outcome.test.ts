@@ -107,7 +107,7 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
 
     const [line] = await lines();
     expect(line).toMatchObject({
-      url: `${baseURL}/search?q=a%20b`,
+      url: `${baseURL}/search?q=a+b`,
       declared_url: "/search",
       status: 200,
     });

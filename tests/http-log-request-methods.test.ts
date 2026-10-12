@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { APIRequestContext, APIResponse } from "playwright";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHttpLogFailedCollector } from "../src/context/http-log-failed.js";
 import { wrapRequestContextWithLogging } from "../src/context/http-log.js";
 import { createObservedCollector } from "../src/context/observed.js";
 
@@ -14,8 +15,8 @@ import { createObservedCollector } from "../src/context/observed.js";
 // call (tests/secrets.test.ts proves redaction end to end, but only through
 // request.get()/request.post()).
 
-function fakeResponse(status = 200): APIResponse {
-  return { status: () => status } as unknown as APIResponse;
+function fakeResponse(status = 200, url = ""): APIResponse {
+  return { status: () => status, url: () => url } as unknown as APIResponse;
 }
 
 interface FakeTarget {
@@ -25,13 +26,13 @@ interface FakeTarget {
 function fakeRequestContext(): APIRequestContext & FakeTarget {
   const target = {
     disposed: false,
-    get: async () => fakeResponse(),
-    post: async () => fakeResponse(),
-    put: async () => fakeResponse(),
-    patch: async () => fakeResponse(),
-    delete: async () => fakeResponse(),
-    head: async () => fakeResponse(204),
-    fetch: async () => fakeResponse(),
+    get: async (target: string) => fakeResponse(200, target),
+    post: async (target: string) => fakeResponse(200, target),
+    put: async (target: string) => fakeResponse(200, target),
+    patch: async (target: string) => fakeResponse(200, target),
+    delete: async (target: string) => fakeResponse(200, target),
+    head: async (target: string) => fakeResponse(204, target),
+    fetch: async (target: string) => fakeResponse(200, target),
     dispose: async () => {
       target.disposed = true;
     },
@@ -66,7 +67,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
 
   it("put(): logs method PUT, via: request, and tallies a write", async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped.put("https://example.com/items/1", { data: { name: "x" } });
 
@@ -80,7 +81,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
 
   it("delete(): logs method DELETE and tallies a write", async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped.delete("https://example.com/items/1");
 
@@ -93,7 +94,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
 
   it("head(): logs method HEAD, records the response's own status, and tallies a read", async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped.head("https://example.com/items/1");
 
@@ -107,7 +108,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
   it("put()/delete()/head() redact a secret found in the url, the same as get()/post() already do", async () => {
     const observed = createObservedCollector();
     const secrets = [{ name: "API_TOKEN", value: "sekrit-value-123456" }];
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, secrets, observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, secrets, observed, createHttpLogFailedCollector());
 
     await wrapped.put("https://example.com/items?token=sekrit-value-123456");
     await wrapped.delete("https://example.com/items/sekrit-value-123456");
@@ -126,7 +127,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
   it("[Symbol.asyncDispose](): passes straight through to the target's own, never logged or tallied", async () => {
     const observed = createObservedCollector();
     const target = fakeRequestContext();
-    const wrapped = wrapRequestContextWithLogging(target, () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(target, () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped[Symbol.asyncDispose]();
 

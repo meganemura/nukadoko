@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { APIRequestContext, APIResponse, Request } from "playwright";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHttpLogFailedCollector } from "../src/context/http-log-failed.js";
 import { wrapRequestContextWithLogging } from "../src/context/http-log.js";
 import { createObservedCollector } from "../src/context/observed.js";
 
@@ -15,13 +16,17 @@ import { createObservedCollector } from "../src/context/observed.js";
 // actual page/route, which create-context.test.ts already declined to pull
 // in for the same reason.
 
-function fakeResponse(status = 200): APIResponse {
-  return { status: () => status } as unknown as APIResponse;
+function fakeResponse(status = 200, url = ""): APIResponse {
+  return { status: () => status, url: () => url } as unknown as APIResponse;
+}
+
+function requestedUrl(target: string | Request): string {
+  return typeof target === "string" ? target : target.url();
 }
 
 function fakeRequestContext(): APIRequestContext {
   return {
-    fetch: async () => fakeResponse(),
+    fetch: async (target: string | Request) => fakeResponse(200, requestedUrl(target)),
   } as unknown as APIRequestContext;
 }
 
@@ -54,7 +59,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
 
   it("fetch(url string): method defaults to GET, url is the string as given", async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped.fetch("https://example.com/items");
 
@@ -72,7 +77,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
   // header).
   it('every entry carries via: "request", explicitly', async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped.fetch("https://example.com/items");
 
@@ -83,7 +88,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
 
   it('fetch(url string, { method: "post" }): method is upper-cased to POST', async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
 
     await wrapped.fetch("https://example.com/items", { method: "post" });
 
@@ -96,7 +101,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
 
   it("fetch(Request) with no options: method comes from the Request itself, not GET", async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
     const request = fakeRequest("https://example.com/items", "POST");
 
     await wrapped.fetch(request);
@@ -113,7 +118,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
 
   it('fetch(Request, { method: "PUT" }): options.method wins over the Request\'s own method', async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
     const request = fakeRequest("https://example.com/items", "POST");
 
     await wrapped.fetch(request, { method: "PUT" });
@@ -127,7 +132,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
 
   it("fetch(Request): url is taken from request.url()", async () => {
     const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed);
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
     const request = fakeRequest("https://example.com/from-request", "GET");
 
     await wrapped.fetch(request);

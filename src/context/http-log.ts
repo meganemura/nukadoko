@@ -2,6 +2,7 @@ import { appendFile } from "node:fs/promises";
 import type { APIRequestContext, APIResponse } from "playwright";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
+import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { ObservedCollector } from "./observed.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
@@ -28,6 +29,20 @@ import type { ObservedCollector } from "./observed.js";
 // `appendHttpLogEntry` below is exported for that module to call: one
 // redact-and-append call site for both paths, so neither can drift into
 // redacting differently than the other.
+//
+// A call is logged whatever its outcome, from a `finally`: a call that
+// throws (a refused connection, `failOnStatusCode` on a 4xx/5xx) still
+// happened and `observed` already counted it. With no response the line
+// carries `status: 0` and an `error` (the first line of the message only:
+// Playwright appends a call log that can hold request headers). With a
+// response, `url` is `response.url()`, the absolute URL after params and
+// redirects, the same shape a page entry's `url` has; `declared_url` keeps
+// what the step passed, and only when it differs.
+//
+// An append that fails here does not throw into the step, the same policy
+// page-http-log.ts has: it is counted into `httpLogFailed` (the step
+// record's `http_log_failed`). A throw from the `finally` would also replace
+// the call's own error.
 //
 // Every call is also tallied into `observed` (an `ObservedCollector` this
 // module never creates, only writes to — create-context.ts owns and resets
@@ -64,6 +79,12 @@ export interface HttpLogEntry {
   status: number;
   duration_ms: number;
   via: "request" | "page";
+  /** `via: "request"` only: the URL the step passed, when it differs from
+   * `url` (a relative path, a `params` option, a redirect). */
+  declared_url?: string;
+  /** `via: "request"` only: why the call threw. Present exactly when no
+   * response exists, and then `status` is 0. */
+  error?: string;
 }
 
 /** Redacts `entry` and appends it to whatever `logPath()` currently points
@@ -85,6 +106,7 @@ async function logCall(
   url: string,
   secrets: SecretSet,
   observed: ObservedCollector,
+  httpLogFailed: HttpLogFailedCollector,
   send: () => Promise<APIResponse>,
 ): Promise<APIResponse> {
   // Recorded before `send()` resolves, not after: the method is known
@@ -93,14 +115,43 @@ async function logCall(
   // write, not a declared one that quietly didn't happen.
   observed.record(method);
   const startedAt = performance.now();
-  const response = await send();
-  const durationMs = Math.round(performance.now() - startedAt);
-  await appendHttpLogEntry(
-    logPath,
-    { method, url, status: response.status(), duration_ms: durationMs, via: "request" },
-    secrets,
-  );
-  return response;
+  let response: APIResponse | undefined;
+  let failure: unknown;
+  try {
+    response = await send();
+    return response;
+  } catch (error) {
+    failure = error;
+    throw error;
+  } finally {
+    const durationMs = Math.round(performance.now() - startedAt);
+    const entry: HttpLogEntry = response
+      ? {
+          method,
+          url: response.url(),
+          ...(response.url() === url ? {} : { declared_url: url }),
+          status: response.status(),
+          duration_ms: durationMs,
+          via: "request",
+        }
+      : {
+          method,
+          url,
+          status: 0,
+          duration_ms: durationMs,
+          via: "request",
+          error: firstLine(failure instanceof Error ? failure.message : String(failure)),
+        };
+    try {
+      await appendHttpLogEntry(logPath, entry, secrets);
+    } catch {
+      httpLogFailed.record();
+    }
+  }
+}
+
+function firstLine(message: string): string {
+  return message.split("\n", 1)[0] ?? "";
 }
 
 function urlOf(target: Parameters<APIRequestContext["fetch"]>[0]): string {
@@ -128,20 +179,21 @@ export function wrapRequestContextWithLogging(
   logPath: () => string,
   secrets: SecretSet,
   observed: ObservedCollector,
+  httpLogFailed: HttpLogFailedCollector,
 ): APIRequestContext {
   return {
     get: (url, options) =>
-      logCall(logPath, "GET", url, secrets, observed, () => target.get(url, options)),
+      logCall(logPath, "GET", url, secrets, observed, httpLogFailed, () => target.get(url, options)),
     post: (url, options) =>
-      logCall(logPath, "POST", url, secrets, observed, () => target.post(url, options)),
+      logCall(logPath, "POST", url, secrets, observed, httpLogFailed, () => target.post(url, options)),
     put: (url, options) =>
-      logCall(logPath, "PUT", url, secrets, observed, () => target.put(url, options)),
+      logCall(logPath, "PUT", url, secrets, observed, httpLogFailed, () => target.put(url, options)),
     patch: (url, options) =>
-      logCall(logPath, "PATCH", url, secrets, observed, () => target.patch(url, options)),
+      logCall(logPath, "PATCH", url, secrets, observed, httpLogFailed, () => target.patch(url, options)),
     delete: (url, options) =>
-      logCall(logPath, "DELETE", url, secrets, observed, () => target.delete(url, options)),
+      logCall(logPath, "DELETE", url, secrets, observed, httpLogFailed, () => target.delete(url, options)),
     head: (url, options) =>
-      logCall(logPath, "HEAD", url, secrets, observed, () => target.head(url, options)),
+      logCall(logPath, "HEAD", url, secrets, observed, httpLogFailed, () => target.head(url, options)),
     fetch: (urlOrRequest, options) =>
       logCall(
         logPath,
@@ -149,6 +201,7 @@ export function wrapRequestContextWithLogging(
         urlOf(urlOrRequest),
         secrets,
         observed,
+        httpLogFailed,
         () => target.fetch(urlOrRequest, options),
       ),
     dispose: (options) => target.dispose(options),
@@ -184,6 +237,7 @@ export function instrumentApiRequestContext(
   logPath: () => string,
   secrets: SecretSet,
   observed: ObservedCollector,
+  httpLogFailed: HttpLogFailedCollector,
 ): () => void {
   if (instrumentedApiRequests.has(target)) {
     return () => {};
@@ -197,6 +251,7 @@ export function instrumentApiRequestContext(
       urlOf(urlOrRequest),
       secrets,
       observed,
+      httpLogFailed,
       () => originalFetch(urlOrRequest, options),
     );
   return () => {
