@@ -88,7 +88,7 @@ export function collectDefinedEnvKeys(
 // letters "key", like "MONKEY", "KEYWORD", or "MAX_KEYS_PER_PAGE". A name that
 // fuses the word into one token ("APIKEY") is not matched either: a warning
 // that guesses is worse than none.
-const SECRET_LOOKING_KEY_PATTERN = /SECRET|PASSWORD|TOKEN|CREDENTIAL|_KEY|^KEY$/i;
+const SECRET_LOOKING_KEY_PATTERN = /SECRET|PASSWORD|TOKEN|CREDENTIAL|(?:^|_)KEY(?:_|$)/i;
 
 export function looksLikeSecretKey(key: string): boolean {
   return SECRET_LOOKING_KEY_PATTERN.test(key);

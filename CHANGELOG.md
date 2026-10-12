@@ -18,6 +18,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`tracked-secret-looking-key` no longer fires on a name that only contains the letters KEY.**
+  The heuristic matched `_KEY` inside longer words, so `SEARCH_KEYWORD`,
+  `MAX_KEYS_PER_PAGE`, and `DEFAULT_KEYBOARD_LAYOUT` got a warning. `KEY` now
+  counts only as a whole underscore-delimited token (`KEY`, `API_KEY`,
+  `KEY_ID`, `PUBLIC_KEY_URL`), as the code comment always said. `APIKEY` does
+  not match. The secrets paragraph of `docs/spec.md` and `docs/spec.ja.md` now
+  lists what `nuka check` prints (two warnings) and what `nuka tend` prints
+  (the two unknown-key notes).
+
 - **Three `nuka tend` messages now say what the code does.**
   `from-unused` said a `from` key could be filled by a capture or a
   table/docstring, but only a capture fills it. `pattern-unbound` said no

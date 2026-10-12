@@ -2666,17 +2666,21 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   classified tracked and untracked files.
   Therefore, repository membership does not classify that new surface. Traces
   and screenshots are not redacted, so the state directory is sensitive.
-  `nuka check` reports each env file classification and its secret key names,
-  but never their values. It also reports three warnings. The first warns when
-  `secrets.public` or `secrets.redact` names a key that no configured envFile
-  defines. The second warns when `secrets.redact` names a value that is too
-  short for redaction. For a tracked env file that matches HEAD, the third
-  warns when a key name suggests a secret but `secrets.redact` does not name
-  it. The patterns are
-  `SECRET`, `PASSWORD`, `TOKEN`, `CREDENTIAL`, and a `KEY` suffix. This name
-  heuristic controls only the warning. Redaction depends only on git's
-  classification (untracked, ignored, or a tracked file that differs from
-  HEAD, versus a tracked file that matches HEAD) and `secrets.redact`.
+  `nuka check` never prints a key's value. It reports two warnings. The first,
+  `secrets-redact-key-too-short`, warns when `secrets.redact` names a value that
+  is too short for redaction. For a tracked env file that matches HEAD, the
+  second, `tracked-secret-looking-key`, warns when a key name suggests a secret
+  but `secrets.redact` does not name it. A name suggests a secret when it
+  contains `SECRET`, `PASSWORD`, `TOKEN`, or `CREDENTIAL`, or when `KEY` is a
+  whole underscore-delimited token of it (`KEY`, `API_KEY`, `KEY_ID`,
+  `PUBLIC_KEY_URL`). A name that only contains the letters, such as
+  `KEYWORD`, `MAX_KEYS_PER_PAGE`, or `APIKEY`, does not suggest a secret.
+  This name heuristic controls only the warning. Redaction depends only on
+  git's classification (untracked, ignored, or a tracked file that differs
+  from HEAD, versus a tracked file that matches HEAD) and `secrets.redact`.
+  `nuka tend` reports the other two findings as notes:
+  `secrets-public-key-unknown` and `secrets-redact-key-unknown` name a
+  `secrets.public` or `secrets.redact` key that no configured envFile defines.
 
 Configuration lives in `nukadoko.config.ts` and uses `defineConfig`. The table
 lists each accepted key. A key with more details points to a later paragraph

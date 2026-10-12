@@ -2197,14 +2197,18 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   その会話ログは、`.gitignore` の追跡/未追跡という線が引かれた時代にはまだ存在しておらず、「すでにリポジトリにある」がその会話ログについての判断だったことは一度もありません。
   Trace とスクリーンショットは redact されません。
   state directory は機密性の高いものです。
-  `nuka check` は各 env file の分類と secret のキー名を報告し(値は決して報告しません)、さらに 3 つの warning を出します。
-  1 つ目は、`secrets.public`/`secrets.redact` が、設定されたどの envFile にも定義されていないキーを名指ししている場合です。
-  2 つ目は、`secrets.redact` が、値が短すぎて実際には redact されないキーを名指ししている場合です。
-  3 つ目は、HEAD と一致する追跡済みの env file についてだけ、キーの「名前」が secret を保持しているように見える(`SECRET`、`PASSWORD`、`TOKEN`、`CREDENTIAL`、または `KEY` で終わる)のに `secrets.redact` に名指しされていない場合です。
-  最後のこの検査は名前パターンによるヒューリスティクスであり、使い道はただ 1 つ、warning を出すかどうかを決めることだけです。
+  `nuka check` はキーの値を決して報告しません。
+  出す warning は 2 つです。
+  1 つ目の `secrets-redact-key-too-short` は、`secrets.redact` が、値が短すぎて実際には redact されないキーを名指ししている場合です。
+  2 つ目の `tracked-secret-looking-key` は、HEAD と一致する追跡済みの env file についてだけ、キーの「名前」が secret を保持しているように見えるのに `secrets.redact` に名指しされていない場合です。
+  名前が secret に見えるのは、`SECRET`、`PASSWORD`、`TOKEN`、`CREDENTIAL` のいずれかを含む場合と、`KEY` がアンダースコアで区切られた 1 つの語として現れる場合です(`KEY`、`API_KEY`、`KEY_ID`、`PUBLIC_KEY_URL`)。
+  `KEYWORD`、`MAX_KEYS_PER_PAGE`、`APIKEY` のように、文字が含まれているだけの名前は secret に見えるとは扱いません。
+  この検査は名前パターンによるヒューリスティクスであり、使い道はただ 1 つ、warning を出すかどうかを決めることだけです。
   それが redact を決めることは決してありません。
   名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
   それを決めるのは git の分類(未追跡、ignore、HEAD と異なる追跡済みファイル、HEAD と一致する追跡済みファイル)と `secrets.redact` だけです。
+  残りの 2 つの指摘は `nuka tend` が note として報告します。
+  `secrets-public-key-unknown` と `secrets-redact-key-unknown` は、`secrets.public` または `secrets.redact` が、設定されたどの envFile にも定義されていないキーを名指ししている場合です。
 
 Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使います。
 次の表は、受け付ける各キーを示します。
