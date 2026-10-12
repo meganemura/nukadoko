@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -169,6 +169,21 @@ describe("createAtomicWriter", () => {
       expect(readFileSync(reader, "utf8"), name).toBe("previous");
       expect(readFileSync(file, "utf8"), name).toBe("source content");
     }
+  });
+
+  it("removes its temp file and rethrows when the rename fails", () => {
+    // A directory at the final name makes the rename fail on every platform.
+    mkdirSync(path.join(dir, "abc-result.json"));
+    mkdirSync(path.join(dir, "linked.txt"));
+    const source = path.join(dir, "source.txt");
+    writeFileSync(source, "source content");
+    const writer = createAtomicWriter(dir);
+
+    expect(() =>
+      writer.writeResult({ uuid: "abc", statusDetails: {}, stage: "pending" as never, steps: [], attachments: [], parameters: [], labels: [], links: [] } as never),
+    ).toThrow(/^EISDIR/);
+    expect(() => writer.writeAttachmentFromPath("linked.txt", source)).toThrow(/^EISDIR/);
+    expect(readdirSync(dir).sort()).toEqual(["abc-result.json", "linked.txt", "source.txt"]);
   });
 
   it("never removes files that were already there", () => {

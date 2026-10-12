@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Envelope } from "@cucumber/messages";
@@ -322,6 +322,17 @@ describe("createMessagesEmitter", () => {
 
     expect(readFileSync(reader, "utf8")).toBe("previous complete stream\n");
     expect(readFileSync(output, "utf8")).toBe(readFileSync(runOutput, "utf8"));
+  });
+
+  it("removes its temp file when publishing onto the configured output fails", () => {
+    // A directory at the configured path makes the rename fail on every platform.
+    mkdirSync(output, { recursive: true });
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
+    emitter.end(true);
+
+    expect(sink.text()).toMatch(/^warning: messages end failed: EISDIR: /m);
+    expect(readdirSync(path.dirname(output)).sort()).toEqual([path.basename(output), path.basename(runOutput)].sort());
   });
 
   it("begin() with more than one feature writes meta, then one (source, gherkinDocument, pickle x N) group per feature in the given order, then one testRunStarted", () => {
