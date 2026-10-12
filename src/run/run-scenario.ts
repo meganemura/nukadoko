@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
   TimeConversion,
@@ -50,7 +49,7 @@ import {
 
 export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
-import { generateStepRecordId } from "../record/record-id.js";
+import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, fixtureTeardownWarning } from "../secrets/redact.js";
@@ -945,10 +944,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // `request` and needs them still open during its own teardown code).
   const fixtureScenarioCache = createFixtureCache();
 
-  const scenarioId = generateScenarioId();
+  const { id: scenarioId, dir: scenarioDir } = await createRecordDir(
+    path.join(rootDir, config.stateDir, "records", "scenarios"),
+    generateScenarioId,
+  );
   const relativeScenarioDir = path.join(config.stateDir, "records", "scenarios", scenarioId);
-  const scenarioDir = path.join(rootDir, relativeScenarioDir);
-  await mkdir(scenarioDir, { recursive: true });
   // This pickle's own step keywords, for each step's own trace chunk title
   // (this file's own header, just above) — built once per pickle, the same
   // "cheap, rebuilt per call" convention `stepNameOf` below already follows.
@@ -2001,10 +2001,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // --- This step's execution has begun: a step record is always
         // written from here, whatever happens (mirrors cli/do.ts's own
         // execution phase). ---
-        const recordId = generateStepRecordId();
+        const { id: recordId, dir: recordDir } = await createRecordDir(
+          path.join(rootDir, config.stateDir, "records", "steps"),
+          generateStepRecordId,
+        );
         const relativeRecordDir = path.join(config.stateDir, "records", "steps", recordId);
-        const recordDir = path.join(rootDir, relativeRecordDir);
-        await mkdir(recordDir, { recursive: true });
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — the trace chunk `ctx.page()` opens lazily
         // during this step, if it does, self-identifies the same way.
@@ -2186,10 +2187,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // positional arguments —
         // no args/returns schema exists to validate against, so there is no
         // binding-failure branch here the way there is for a typed step.
-        const recordId = generateStepRecordId();
+        const { id: recordId, dir: recordDir } = await createRecordDir(
+          path.join(rootDir, config.stateDir, "records", "steps"),
+          generateStepRecordId,
+        );
         const relativeRecordDir = path.join(config.stateDir, "records", "steps", recordId);
-        const recordDir = path.join(rootDir, relativeRecordDir);
-        await mkdir(recordDir, { recursive: true });
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — same as the typed branch above.
         await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));

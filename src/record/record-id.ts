@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 
 // Responsibility: the `<prefix>-<YYYYMMDD-HHMMSS>-<4 alphanumeric>` id
 // format docs/spec.md "Records" and "The state directory" both use —
@@ -33,4 +35,22 @@ export function generateId(prefix: string, now: Date = new Date()): string {
 
 export function generateStepRecordId(now: Date = new Date()): string {
   return generateId("step", now);
+}
+
+// Four random characters per second leave room for two records of one fast
+// run to draw the same id. A recursive mkdir would hand the second record the
+// first one's directory, so the directory is created exclusively and a taken
+// id is drawn again.
+export async function createRecordDir(parentDir: string, generate: () => string): Promise<{ id: string; dir: string }> {
+  await mkdir(parentDir, { recursive: true });
+  for (;;) {
+    const id = generate();
+    const dir = path.join(parentDir, id);
+    try {
+      await mkdir(dir);
+      return { id, dir };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
 }

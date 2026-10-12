@@ -5,7 +5,6 @@ import {
   classifyCaughtError,
   withStepStdoutOnStderr,
 } from "../run/run-scenario.js";
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
@@ -30,7 +29,7 @@ import {
 } from "../environment/resolve-environment.js";
 import { sendLiveRequest } from "../live/client.js";
 import { removeLiveSockDir } from "../session/live-sock.js";
-import { generateStepRecordId } from "../record/record-id.js";
+import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
 import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
@@ -518,10 +517,11 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
     }
 
     // --- Execution phase: a step record is always written from here on. ---
-    const recordId = generateStepRecordId();
+    const { id: recordId, dir: evidenceDir } = await createRecordDir(
+      path.join(rootDir, config.stateDir, "records", "steps"),
+      generateStepRecordId,
+    );
     const relativeDir = path.join(config.stateDir, "records", "steps", recordId);
-    const evidenceDir = path.join(rootDir, relativeDir);
-    await mkdir(evidenceDir, { recursive: true });
 
     // env is loaded once here (ctx.env's full, merged value) and classified
     // once here (which of those same envFiles are secret sources, per git);

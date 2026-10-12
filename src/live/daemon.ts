@@ -25,7 +25,7 @@ import {
   resolveFixtures,
   teardownFixtureCache,
 } from "../fixture/resolver.js";
-import { generateStepRecordId } from "../record/record-id.js";
+import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
 import type { ErrorKind, EvidenceMeta, FixtureUsageEntry, StepRecord } from "../record/types.js";
@@ -501,10 +501,11 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
 
     // --- From here on a step record is always written — same "never began
     // vs. always attested" split do.ts's own header documents. ---
-    const recordId = generateStepRecordId();
+    const { id: recordId, dir: evidenceDir } = await createRecordDir(
+      path.join(rootDir, config.stateDir, "records", "steps"),
+      generateStepRecordId,
+    );
     const relativeDir = path.join(config.stateDir, "records", "steps", recordId);
-    const evidenceDir = path.join(rootDir, relativeDir);
-    await mkdir(evidenceDir, { recursive: true });
 
     // Opens this execution's own trace chunk (lazily, on this boundary's
     // first `ctx.page()` call) and redirects http.jsonl/`observed`/`used`/

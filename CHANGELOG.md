@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **Two records no longer share one record directory when their ids collide.**
+  A step or scenario record id has four random characters per second, so a run
+  with many steps could draw the same id twice. The second record then reused
+  the first one's directory and overwrote its `record.json` without a warning.
+  The record directory is now created exclusively, and a taken id is drawn again.
 - **`nuka accept` refuses a run that exited 1 because an AfterAll hook threw.**
   The scenario records of such a run are all green, so accept froze it although
   `nuka run` had failed. Accept now freezes a run only when its completion marker

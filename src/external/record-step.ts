@@ -1,4 +1,3 @@
-import { mkdir } from "node:fs/promises";
 import { runWithTimeout } from "../run/run-scenario.js";
 import path from "node:path";
 import type { APIRequestContext, Page } from "playwright";
@@ -14,7 +13,7 @@ import { omitUsedResults } from "../context/used.js";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
-import { generateStepRecordId } from "../record/record-id.js";
+import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
@@ -363,10 +362,11 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
     }
   }
 
-  const recordId = generateStepRecordId();
+  const { id: recordId, dir: evidenceDir } = await createRecordDir(
+    path.join(rootDir, config.stateDir, "records", "steps"),
+    generateStepRecordId,
+  );
   const relativeDir = path.join(config.stateDir, "records", "steps", recordId);
-  const evidenceDir = path.join(rootDir, relativeDir);
-  await mkdir(evidenceDir, { recursive: true });
 
   const envFiles = config.envFiles ?? [];
   const envVars = loadEnvFiles(rootDir, envFiles);
