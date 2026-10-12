@@ -126,6 +126,9 @@ export interface CompatParameterTypeEntry extends CompatParameterTypeRegistratio
 }
 
 export interface DiscoveryResult {
+  /** Tears down the registration `keepRegistered` left alive; a no-op when it
+   * was already torn down. */
+  readonly unregister: () => Promise<void>;
   readonly vocabulary: Vocabulary;
   readonly compatParameterTypes: readonly CompatParameterTypeEntry[];
   /** Constructs one pickle's own World — base `World`, or whatever this
@@ -302,6 +305,12 @@ export interface DiscoverStepsOptions {
    * not a second copy of the loop — keeps this a single source of truth
    * (the migration-door rule: one mechanism, not a fork). */
   readonly tolerateImportFailures?: boolean;
+  /** Keep the tsx registration alive after discovery returns, so a step that
+   * runs later can `await import()` a TypeScript file from its body. The
+   * caller then owes a call to `unregister` once the run is over. Callers that
+   * only read the vocabulary leave this off and the registration is gone on
+   * return. */
+  readonly keepRegistered?: boolean;
 }
 
 export async function discoverSteps(
@@ -309,7 +318,7 @@ export async function discoverSteps(
   featuresDir: string,
   options: DiscoverStepsOptions = {},
 ): Promise<DiscoveryResult> {
-  const { tolerateImportFailures = false } = options;
+  const { tolerateImportFailures = false, keepRegistered = false } = options;
   const featuresRoot = path.join(rootDir, featuresDir);
   const { files, unsupportedExtensionFiles } = walkStepFiles(featuresRoot);
 
@@ -321,6 +330,7 @@ export async function discoverSteps(
   // DuplicateCompatStepError or a broken step file's own throw never leaks
   // it.
   const scoped = register({ namespace: randomUUID() });
+  let succeeded = false;
   try {
     // Loaded through `scoped` itself (not a plain top-level `import`) so
     // this run's own compat registration buffer is the one, and only the
@@ -503,7 +513,9 @@ export async function discoverSteps(
       }
     }
 
+    succeeded = true;
     return {
+      unregister: () => scoped.unregister(),
       vocabulary,
       compatParameterTypes,
       // Read once, after every file's import has finished (this file's own
@@ -533,6 +545,6 @@ export async function discoverSteps(
       relations,
     };
   } finally {
-    await scoped.unregister();
+    if (!(keepRegistered && succeeded)) await scoped.unregister();
   }
 }

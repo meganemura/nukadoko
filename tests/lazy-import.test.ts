@@ -25,7 +25,7 @@ describe("a dynamic import of a TypeScript file inside a step body", () => {
       const stepRecord = readStepRecord(
         path.join(rootDir, ".nukadoko", "records", "steps", scenarioRecord.steps[0].step_record_id),
       );
-      expect(stepRecord?.returns).toEqual({ greeting: "hello ada" });
+      expect((stepRecord as { result?: unknown } | null)?.result).toEqual({ greeting: "hello ada" });
     } finally {
       await removeTempDir(rootDir);
     }

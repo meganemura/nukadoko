@@ -18,6 +18,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A step can `await import()` a TypeScript file from its body.**
+  Discovery removed its TypeScript loader before any step ran, so
+  `await import("./lib/helper.js")` of a `.ts` file failed with "Cannot find
+  module", which read like a missing file. `nuka run` (including its worker
+  processes), `nuka do`, and the live session now keep the loader until the
+  command ends. `nuka check` and `nuka tend` run no steps and still remove it
+  when discovery returns.
+
 - **`nuka tend --json` no longer puts a fixture name in `step`.**
   The `fixture-unused` and `fixture-touches-app` notes carried the fixture
   name in `step`, so selecting `step == "login"` mixed a fixture finding with

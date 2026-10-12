@@ -273,6 +273,15 @@ export interface RunRunOptions {
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
+  const unregisters: Array<() => Promise<void>> = [];
+  try {
+    return await runRunInner(options, unregisters);
+  } finally {
+    for (const unregister of unregisters) await unregister();
+  }
+}
+
+async function runRunInner(options: RunRunOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
   const { rootDir, featureArgs, session, env, quiet, concurrency, repeat, stdout, stderr } = options;
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
@@ -353,6 +362,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     let compatRunHooks;
     let defaultTimeoutMs;
     try {
+      let unregister;
       ({
         vocabulary,
         compatParameterTypes,
@@ -360,7 +370,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         compatHooks,
         compatRunHooks,
         defaultTimeoutMs,
-      } = await discoverSteps(rootDir, config.featuresDir));
+        unregister,
+      } = await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true }));
+      unregisters.push(unregister);
     } catch (error) {
       stderr.write(`${formatVocabularyError(error)}\n`);
       return 1;
