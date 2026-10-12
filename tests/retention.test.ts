@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
@@ -344,6 +346,29 @@ describe("nuka run applies retention", () => {
     expect(results.length).toBe(1);
     const messages = readdirSync(path.join(rootDir, ".nukadoko", "export")).filter((name) => name.startsWith("messages.run-"));
     expect(messages.length).toBe(1);
+  });
+
+  it("removes an older run's messages stream from where that run wrote it, after messages.output moved", async () => {
+    expect(await runCli(["run", "features/greeting.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
+    const exportDir = path.join(rootDir, ".nukadoko", "export");
+    expect(readdirSync(exportDir).filter((name) => name.startsWith("messages.run-"))).toHaveLength(1);
+
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "./nukadoko-shim.js";\n\n' +
+        'export default defineConfig({ retention: { runs: 1 }, messages: { output: "reports/messages.ndjson" } });\n',
+    );
+    // A separate process: this one has already loaded and kept the first config.
+    const repoRoot = path.resolve(import.meta.dirname, "..");
+    const { stderr } = await promisify(execFile)(
+      process.execPath,
+      [path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"), path.join(repoRoot, "src", "cli.ts"), "run", "features/greeting.feature"],
+      { cwd: rootDir },
+    );
+    expect(stderr).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");
+
+    expect(readdirSync(exportDir).filter((name) => name.startsWith("messages.run-"))).toEqual([]);
+    expect(readdirSync(path.join(rootDir, "reports")).filter((name) => name.startsWith("messages.run-"))).toHaveLength(1);
   });
 });
 
