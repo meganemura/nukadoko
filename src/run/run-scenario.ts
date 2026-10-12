@@ -1613,7 +1613,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // Hooks get their own boundary, never a step's own step record dir
   // (a hook's own network stays outside any step
   // boundary) — redirected to the scenario dir itself, the same place
-  // `httpLogDir` already starts out pointed at before any step's own
+  // `boundaryDir` already starts out pointed at before any step's own
   // `beginStep()` call ever runs. That boundary opens
   // once per *individual* hook invocation, inside the loop below, each with
   // its own title/chunk file (`hookChunkTitle`/`hookChunkFileName`) — the

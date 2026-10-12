@@ -14,7 +14,7 @@ import path from "node:path";
 // in-memory tallies, called at the exact points `contextHandle.beginStep`/
 // `worldInstrumentation.beginStep` already are (before each Before/After
 // hook, before each step) — the same "one object, mutable boundary" shape
-// src/context/create-context.ts's own `httpLogDir` already uses. That one
+// src/context/create-context.ts's own `boundaryDir` already uses. That one
 // object reaches its two writers two different ways, both landing on the
 // identical instance: world.ts gets it passed directly, as a plain
 // constructor parameter

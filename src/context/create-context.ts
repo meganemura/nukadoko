@@ -73,10 +73,10 @@ import { createUsedCollector } from "./used.js";
 // trace/screenshots belong to the scenario as a whole. `beginStep` on the
 // handle (never on `ctx` itself — sink
 // switching stays executor-only, same rule as `dispose`) is the minimal seam
-// that split needs: `evidenceDir` still anchors the browser's trace/
-// screenshots for this ctx's whole lifetime, while the http log's directory
-// is a separate, mutable pointer the executor advances at each step
-// boundary. `nuka do` never calls `beginStep`, so its behavior — one fixed
+// that split needs: `evidenceDir` only anchors final.png for this ctx's
+// whole lifetime, while `boundaryDir` (the trace chunk, attachments and
+// http.jsonl) is a separate, mutable pointer the executor advances at each
+// step boundary. `nuka do` never calls `beginStep`, so its behavior — one fixed
 // dir for both, one observed tally spanning the whole execution — is
 // unchanged.
 //
@@ -125,7 +125,7 @@ import { createUsedCollector } from "./used.js";
 // `pageEvents` already are, so a later step's step record does not inherit an
 // earlier step's own dropped-asset counts. `ctx.page()`'s own launch call
 // (below) also now hands the browser launcher this ctx's current
-// `httpLogDir`/`secrets` — the same two values `ctx.request()` already
+// `boundaryDir`/`secrets` — the same two values `ctx.request()` already
 // reads at call time — so page-issued document/xhr/fetch traffic lands on
 // the very same http.jsonl `ctx.request()` writes to, redacted the same
 // single way, rather than a second file or a second redaction pass.
@@ -654,7 +654,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // Mutable, unlike browser evidence's fixed `evidenceDir`: `beginStep`
   // (below) is the only way this ever changes, and `do` never calls it, so
   // `do`'s http.jsonl stays exactly where it always has.
-  let httpLogDir = evidenceDir;
+  let boundaryDir = evidenceDir;
   // This boundary's own trace chunk title —
   // `undefined` means no chunk should open for this boundary at all (before
   // any `stepTitle`/`beginStep` has ever set one, or a boundary that
@@ -662,7 +662,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // first call within a boundary; `beginStep` is the only thing that ever
   // changes it.
   let pendingChunkTitle: string | undefined = options.stepTitle;
-  // This boundary's own chunk output file name, relative to `httpLogDir` —
+  // This boundary's own chunk output file name, relative to `boundaryDir` —
   // always `"trace.zip"` until a hook boundary
   // (run-scenario.ts) names its own, since several hook invocations can
   // share one scenario evidence dir where a step's own chunk never shares
@@ -720,12 +720,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // if `ctx.page()` is actually called this ctx's lifetime.
   const httpOmitted = createHttpOmittedCollector();
   // Same lifetime rule again, for `ctx.evidence.attach`/`.path` —
-  // `() => httpLogDir` is the exact same moving-pointer getter
+  // `() => boundaryDir` is the exact same moving-pointer getter
   // `ctx.request()`'s own http.jsonl logging already reads (this file's own
   // header): `beginStep` below redirects both at once, so an attachment
   // always lands beside that step's own http.jsonl, trace.zip, and
   // final.png, never in a stale directory.
-  const evidence = createEvidenceCollector(() => httpLogDir);
+  const evidence = createEvidenceCollector(() => boundaryDir);
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   // Set only when `options.page` is adopted (below) — kept apart from
@@ -747,7 +747,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   let requestContextOwnedHere = false;
 
   // Closes whatever trace chunk is open for the *current* boundary, writing
-  // it to `httpLogDir` (this file's own header) — a no-op when nothing is
+  // it to `boundaryDir` (this file's own header) — a no-op when nothing is
   // open, covering both "no browser was ever launched this ctx's lifetime"
   // and "this boundary never called `ctx.page()`" without either caller
   // needing to tell the two apart. Called from three places: `beginStep`
@@ -775,7 +775,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       return;
     }
     chunkOpen = false;
-    await browserHandle.endStepChunk(path.join(httpLogDir, pendingChunkFileName));
+    await browserHandle.endStepChunk(path.join(boundaryDir, pendingChunkFileName));
   }
 
   // `step`'s own vocabulary name, or the same fallback wording run-
@@ -952,7 +952,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
             // Same getter/secrets pair the launched path already passes into
             // `instrumentApiRequestContext`, so an adopted page's
             // `page.request` / `context.request` is logged too.
-            logPath: () => path.join(httpLogDir, "http.jsonl"),
+            logPath: () => path.join(boundaryDir, "http.jsonl"),
             secrets,
           });
         }
@@ -1055,7 +1055,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // Same getter/secrets pair `ctx.request()` (below) already reads
         // at call time — page-issued traffic lands on the very same
         // http.jsonl, redacted the very same way (this file's own header).
-        logPath: () => path.join(httpLogDir, "http.jsonl"),
+        logPath: () => path.join(boundaryDir, "http.jsonl"),
         secrets,
         httpOmitted,
         baseURL: config.baseURL,
@@ -1089,7 +1089,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // opened it.
         requestContext = wrapRequestContextWithLogging(
           options.request,
-          () => path.join(httpLogDir, "http.jsonl"),
+          () => path.join(boundaryDir, "http.jsonl"),
           secrets,
           observed,
         );
@@ -1117,7 +1117,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         requestContextOwnedHere = true;
         requestContext = wrapRequestContextWithLogging(
           raw,
-          () => path.join(httpLogDir, "http.jsonl"),
+          () => path.join(boundaryDir, "http.jsonl"),
           secrets,
           observed,
         );
@@ -1159,7 +1159,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // to write it: `endStepChunk` swallows its own failure (the browser/
       // context can be gone by the time it runs), so this must be checked
       // the same way http.jsonl is below rather than assumed (docs/spec.md
-      // "Records": evidence lists only files that exist). `httpLogDir`/
+      // "Records": evidence lists only files that exist). `boundaryDir`/
       // `pendingChunkFileName`, not `evidenceDir`/`"trace.zip"`: the same
       // directory and file name `closeCurrentChunk` just wrote to, which for
       // `nuka run`'s own scenario-level `dispose()` this field is not
@@ -1167,7 +1167,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // from `screenshots` alone) — kept accurate anyway, since `nuka do`'s
       // own step record does read it, and `pendingChunkFileName` stays
       // `"trace.zip"` for `nuka do` regardless (it never calls `beginStep`).
-      if (existsSync(path.join(httpLogDir, pendingChunkFileName))) {
+      if (existsSync(path.join(boundaryDir, pendingChunkFileName))) {
         evidence.trace = pendingChunkFileName;
       }
     }
@@ -1216,7 +1216,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // step's
     // own step record dir directly, right after that step finishes, before the
     // log dir advances again.
-    if (existsSync(path.join(httpLogDir, "http.jsonl"))) {
+    if (existsSync(path.join(boundaryDir, "http.jsonl"))) {
       evidence.http = "http.jsonl";
     }
 
@@ -1292,13 +1292,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   async function beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void> {
     // Closes the *previous* boundary's own chunk before this boundary's own
-    // `httpLogDir`/`pendingChunkTitle`/`pendingChunkFileName` overwrite the
+    // `boundaryDir`/`pendingChunkTitle`/`pendingChunkFileName` overwrite the
     // state that closing needs (this file's own header) — a no-op in normal
     // operation, since `endStep()` already closed the previous boundary's
     // own chunk before this ever runs; real insurance only for a boundary
     // that somehow left one open.
     await closeCurrentChunk();
-    httpLogDir = dir;
+    boundaryDir = dir;
     pendingChunkTitle = title;
     pendingChunkFileName = chunkFileName ?? "trace.zip";
     observed.reset();
