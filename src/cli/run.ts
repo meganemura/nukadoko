@@ -823,7 +823,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       let allureEmitter: AllureEmitter | null = null;
       if (hasPickles) {
         try {
-          const resultsDir = path.join(rootDir, allureResultsDirRel);
+          const resultsDir = path.resolve(rootDir, allureResultsDirRel);
           allureEmitter = createAllureEmitter({
             resultsDir,
             rootDir,
@@ -853,7 +853,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       let messagesEmitter: MessagesEmitter | null = null;
       if (hasPickles) {
         try {
-          const output = path.join(rootDir, messagesOutputRel);
+          const output = path.resolve(rootDir, messagesOutputRel);
           messagesEmitter = createMessagesEmitter({ output, rootDir, stderr, runId });
           // One `features` entry per file `selected` carries —
           // `selected.features` is already in this

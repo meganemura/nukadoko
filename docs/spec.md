@@ -3310,7 +3310,8 @@ The emitter uses the Allure 2 file format, which Allure 2 and Allure 3 can read.
 By default, nukadoko writes results to `.nukadoko/export/allure-results/`.
 nukadoko does not render HTML.
 
-`allure.resultsDir` moves the output to another root-relative path.
+`allure.resultsDir` moves the output to another path.
+A relative path is resolved against the project root, and an absolute path is used as given.
 `nuka clean` removes that directory when it stays inside the project, unless the directory is a parent of the state directory.
 It refuses the command when the path resolves to the project root, to a path outside the project, or to a parent of the state directory.
 The emitter has no enable flag and runs when an invocation selects at least one pickle.
@@ -3508,7 +3509,8 @@ The Allure emitter is where nukadoko's measurement surplus becomes visible, auto
 For each invocation, `nuka run` writes one cucumber messages stream through
 `@cucumber/messages`. The stream uses NDJSON with one envelope per line and
 defaults to `.nukadoko/export/messages.ndjson`. `messages.output` in
-`nukadoko.config.ts` can set another root-relative path. `nuka clean` removes
+`nukadoko.config.ts` can set another path. A relative path is resolved
+against the project root, and an absolute path is used as given. `nuka clean` removes
 that file, and the run-id-suffixed files beside it, when the path stays
 inside the project, unless the path is a parent of the state directory. It refuses
 the command when the path resolves to the project root, to a path outside

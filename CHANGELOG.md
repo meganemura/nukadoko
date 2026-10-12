@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **An absolute `allure.resultsDir` or `messages.output` is used as given.**
+  `nuka run` joined the configured path under the project root, so
+  `/tmp/out/messages.ndjson` was written to `<root>/tmp/out/messages.ndjson`
+  while the output line named `/tmp/out`. The path is now resolved against
+  the project root, as `nuka clean` already did: a relative path stays
+  root-relative, and an absolute path is used as it is written.
 - **A messages run file removed mid-run is no longer published as a fragment.**
   When `nuka clean` removed a run's own `messages.<run_id>.ndjson` while the run
   was still going, the next write created the file again, starting at a later

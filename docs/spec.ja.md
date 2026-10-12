@@ -2712,7 +2712,8 @@ emitter は Allure 2 のファイル形式を使い、Allure 2 と Allure 3 の�
 既定では、nukadoko は `.nukadoko/export/allure-results/` に result を書きます。
 nukadoko は HTML をレンダリングしません。
 
-`allure.resultsDir` は出力先を root からの別の相対パスへ移します。
+`allure.resultsDir` は出力先を別のパスへ移します。
+相対パスはプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 `nuka clean` は、そのディレクトリがプロジェクトの中にあり、state directory の親でないときに、そのディレクトリを消します。
 パスがプロジェクトの root、プロジェクトの外、または state directory の親に解決されるときは、コマンドを拒否します。
 emitter に有効化のフラグはなく、呼び出しが 1 件以上の pickle を選んだときに動きます。
@@ -2973,7 +2974,8 @@ Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日�
 
 `nuka run` は呼び出しごとに、`@cucumber/messages` を通して 1 つの cucumber messages ストリームを書きます。
 ストリームは 1 行 1 envelope の NDJSON を使い、既定の出力先は `.nukadoko/export/messages.ndjson` です。
-`nukadoko.config.ts` の `messages.output` で、root からの別の相対パスを設定できます。
+`nukadoko.config.ts` の `messages.output` で、別のパスを設定できます。
+相対パスはプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 `nuka clean` は、そのパスがプロジェクトの中にあり、state directory の親でないときに、そのファイルと隣にある run-id 付きのファイルを消します。
 パスがプロジェクトの root、プロジェクトの外、または state directory の親に解決されるときは、コマンドを拒否します。
 Allure と同様に、この emitter には `enabled` フラグも CLI フラグもありません。

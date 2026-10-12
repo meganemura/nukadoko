@@ -264,7 +264,7 @@ async function removeRunExports(
     if (!isInside(rootDir, absolutePath)) continue;
     await rm(absolutePath, { force: true });
   }
-  await rm(messagesRunOutputPath(path.join(rootDir, messagesOutputRel), runId), { force: true });
+  await rm(messagesRunOutputPath(path.resolve(rootDir, messagesOutputRel), runId), { force: true });
   await rm(dir, { recursive: true, force: true });
 }
 

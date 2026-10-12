@@ -191,7 +191,7 @@ async function main(): Promise<void> {
   if (hasPickles) {
     try {
       allureEmitter = createAllureEmitter({
-        resultsDir: path.join(rootDir, allureResultsDirRel),
+        resultsDir: path.resolve(rootDir, allureResultsDirRel),
         rootDir,
         exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
         environment: resolvedEnv.name,

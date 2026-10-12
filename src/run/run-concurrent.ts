@@ -163,7 +163,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   let allureEmitter: AllureEmitter | null = null;
   if (hasPickles) {
     try {
-      const resultsDir = path.join(rootDir, allureResultsDirRel);
+      const resultsDir = path.resolve(rootDir, allureResultsDirRel);
       allureEmitter = createAllureEmitter({
         resultsDir,
         rootDir,
@@ -183,7 +183,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   let messagesEmitter: MessagesEmitter | null = null;
   if (hasPickles) {
     try {
-      const output = path.join(rootDir, messagesOutputRel);
+      const output = path.resolve(rootDir, messagesOutputRel);
       messagesEmitter = createMessagesEmitter({ output, rootDir, stderr, runId });
       messagesEmitter.begin({
         features: selected.features.map((feature) => ({
