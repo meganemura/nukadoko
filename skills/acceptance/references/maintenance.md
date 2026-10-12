@@ -70,7 +70,7 @@ accepted record has frozen a copy of, so a step nobody has signed off yet
 still shows up here. It lists a call a step made shortly after its own
 navigation, and it never says the gap was too short, since how long an
 application takes to render after a navigation is not something this tool
-can know. A read that a `ctx.poll` call was already retrying is not
+can know. A read that a `poll` call was already retrying is not
 listed at all. Reaching for a direct browser wait instead does not help:
 that wait is itself a call right after the navigation, so the note comes
 back naming it, which reads as though nothing silences it.

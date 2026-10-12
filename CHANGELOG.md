@@ -495,6 +495,12 @@ just until 0.1.
   on `run` and `do`. It now lists them, with `--idle-timeout` and its default
   of 900 seconds. The acceptance skill names that default too. The Japanese
   spec matches.
+- **The spec names fixtures, not `ctx` members, for typed steps.**
+  Ten passages wrote `ctx.page()`, `ctx.request()`, `ctx.requireEnv`,
+  `ctx.poll`, `ctx.section`, or `ctx.env`, although a typed step reaches each
+  through its fixture bag. They now name the `page`, `request`,
+  `requireEnv`, `poll`, `section`, and `env` fixtures, in the English and the
+  Japanese spec and in the acceptance skill's maintenance reference.
 
 ### Breaking
 

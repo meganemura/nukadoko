@@ -873,7 +873,7 @@ No single scenario record can contain that process-level failure.
 A fixture must call `use(value)` exactly once.
 If the function settles before this call, nukadoko throws an error that names the fixture.
 If the function calls it twice, nukadoko throws an error at the second call and names the fixture.
-These checks address a condition that did not exist for `ctx.page()`.
+These checks address a condition that did not exist for a built-in fixture such as `page`.
 A fixture is a coroutine that nukadoko suspends at `use()` and resumes during teardown.
 Without the first check, a fixture that never reaches `use()` could block the run forever.
 
@@ -1002,8 +1002,8 @@ A successful handshake still returns a live client for teardown to close.
 `connectMcpServer` accepts the client package's stdio parameters without changes.
 It can also accept the package's `ClientOptions` as its second argument.
 It returns the connected `Client` from that package.
-This thin interface follows the choice that `ctx.page()` and `ctx.request()`
-make for Playwright.
+This thin interface follows the choice that the `page` and `request`
+fixtures make for Playwright.
 
 The `versionNegotiation` field in `ClientOptions` selects the MCP protocol era.
 When the caller omits it, the client package uses its default behavior.
@@ -1062,7 +1062,7 @@ A WebMCP tool call crosses a trust boundary.
 The page is the system under test and is not a trusted party.
 The page declares the code that receives `args`; this project does not provide that code.
 `args` enters the page as JSON, and the page's JavaScript reads it.
-For example, a step can read a sensitive value through `ctx.requireEnv`.
+For example, a step can read a sensitive value through the `requireEnv` fixture.
 If it puts that value in `args`, it gives the value to the page under test.
 Do not pass a sensitive value through `experimental_callWebmcpTool`.
 
@@ -2792,10 +2792,10 @@ missing file.
 | `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
 | `stateDir` | where nukadoko writes at run time (default `.nukadoko`, see "The state directory") |
 | `retention` | how long measurement stays: `runs` (default 20) newest runs kept whole, `adHocDays` (default 7) for a record no run owns (see "Artifacts") |
-| `browserType` | which Playwright engine `ctx.page()` launches: `chromium` (default), `firefox`, or `webkit` (below) |
+| `browserType` | which Playwright engine the `page` fixture launches: `chromium` (default), `firefox`, or `webkit` (below) |
 | `browser` | Playwright's own `LaunchOptions`, passed to that engine's `launch` (below) |
 | `browserContext` | Playwright's own `BrowserContextOptions`, passed to `browser.newContext()` (below) |
-| `requestContext` | the matching `newContext` options for `ctx.request()` (below) |
+| `requestContext` | the matching `newContext` options for the `request` fixture (below) |
 | `secrets` | `public`/`redact` lists that adjust a key's redaction handling (above) |
 | `parameterTypes` | custom cucumber-expressions parameter types (below) |
 | `worldParameters` | object a compat World receives as `parameters` (default `{}`, below) |
@@ -2832,7 +2832,7 @@ is named, so a sign-off record is not a scenario. `nuka check` and
 `nuka tend` read the list. `nuka run` reads an entry when the path is
 given, or when a directory target contains it.
 
-`browserType` selects the Playwright engine that `ctx.page()` launches. The
+`browserType` selects the Playwright engine that the `page` fixture launches. The
 choices are `"chromium"` (default), `"firefox"`, and `"webkit"`. It is separate
 from `browser` because Playwright's `LaunchOptions` type has no engine key.
 Playwright selects an engine through the called `launch` function. An option
@@ -2896,7 +2896,7 @@ A path that is not on disk contributes nothing. `nuka check` warns with
 `env-file-missing`, or with `environment-env-file-missing` when the path
 belongs to one environment. A path that is present but cannot be read, or
 a directory at that path, stops setup. The refusal names the configured
-path and the errno. The same read fills `ctx.env` and the secret set, so
+path and the errno. The same read fills the `env` fixture and the secret set, so
 the two agree on whether the file was loaded.
 Only an environment can define `policy` and `version`. Without `--env`, the
 environment name is `default`, which needs no entry. An entry named `default`
@@ -2908,7 +2908,7 @@ jsonPath DSL would only provide a more complex form of `fetch`. The tool calls
 the probe once per run with a 10-second budget. An exception or timeout removes
 only `target_version`; it does not stop the run.
 
-An env file is `KEY=VALUE` text. `ctx.env` and the secret set read it with
+An env file is `KEY=VALUE` text. The `env` fixture and the secret set read it with
 the same parser. Comments, quotes, backslash escapes, and a value that spans
 lines follow dotenv's default parser. The separator is `=` only. A `:` is
 not a separator. Line breaks are LF, CRLF, or a lone CR. When a value spans
@@ -3477,7 +3477,7 @@ Each snapshot uses the completed statuses and timings available at that point.
 
 For a long-running step, the emitter also writes a snapshot every ten seconds between those two points.
 That snapshot draws the running step with no status, a `stop` set to the moment it was written, and its live activity listed as child steps, one flat level deep.
-Two sources feed those children, and both carry words a person wrote: a `ctx.poll` call still retrying contributes `waiting for: <description> (attempt N)`, and each `ctx.section` label reached so far contributes `section: <label>`.
+Two sources feed those children, and both carry words a person wrote: a `poll` call still retrying contributes `waiting for: <description> (attempt N)`, and each `section` label reached so far contributes `section: <label>`.
 A live child is redacted where it is built. Every other value on a snapshot arrives off a step record that was redacted when it was written, and a live child has no such earlier pass to inherit.
 
 When a running step has neither activity to report, the emitter does not write a heartbeat snapshot.
@@ -3857,7 +3857,7 @@ The following findings show what `tend` inspects and why each item is rot rather
   record from the run that exercised it. For each `goto`, `reload`, `goBack`,
   or `goForward` in that step record's own `actions`, the gap to whatever
   call the step made next. A read that lands inside the same step
-  record's own `ctx.poll` window is left out: a step written to `poll()`
+  record's own `poll` window is left out: a step written to `poll()`
   the way the doctrine in "Context API" already asks for is retrying by
   construction, not the thing this note exists to tell apart from it. What
   is reported is only the gap itself, never a verdict: how long a page

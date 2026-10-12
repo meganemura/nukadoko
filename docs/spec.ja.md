@@ -682,7 +682,7 @@ teardown の失敗は step または scenario の成否を変えません。
 fixture は `use(value)` を正確に 1 回呼ぶ必要があります。
 この呼び出しの前に関数が完了すると、nukadoko は fixture 名を含むエラーを投げます。
 関数が 2 回呼ぶと、nukadoko は 2 回目の呼び出しで fixture 名を含むエラーを投げます。
-これらのチェックは、`ctx.page()` には存在しなかった状態を扱います。
+これらのチェックは、`page` のような組み込みの fixture には存在しなかった状態を扱います。
 fixture は、nukadoko が `use()` で中断し、teardown 中に再開するコルーチンです。
 最初のチェックがないと、`use()` に到達しない fixture が run を永遠に止める場合があります。
 
@@ -792,7 +792,7 @@ fixture のスコープによって、scenario ごとの接続か run ごとの�
 `connectMcpServer` は、client パッケージの stdio パラメータを変更せずに受け取ります。
 第二引数には、そのパッケージの `ClientOptions` も渡せます。
 この関数は、そのパッケージの接続済み `Client` を返します。
-この薄いインターフェースは、`ctx.page()` と `ctx.request()` が Playwright に対して採る方針に従います。
+この薄いインターフェースは、`page` と `request` の fixture が Playwright に対して採る方針に従います。
 
 `ClientOptions` の `versionNegotiation` フィールドが MCP プロトコルの世代を選びます。
 呼び出し側が省略すると、client パッケージは既定の動作を使います。
@@ -848,7 +848,7 @@ WebMCP ツールの呼び出しは信頼境界を越えます。
 ページはテスト対象であり、信頼できる相手ではありません。
 `args` を受け取るコードはページが宣言し、このプロジェクトは提供しません。
 `args` は JSON としてページに入り、ページの JavaScript が読みます。
-たとえば、step は `ctx.requireEnv` を通じて機微な値を読めます。
+たとえば、step は `requireEnv` fixture を通じて機微な値を読めます。
 その値を `args` に入れると、テスト対象のページへ渡します。
 `experimental_callWebmcpTool` を通じて機微な値を渡さないでください。
 
@@ -2294,10 +2294,10 @@ default export が無いファイル、または default export が Promise で�
 | `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
 | `stateDir` | nukadoko が実行時に書き込む場所(デフォルトは `.nukadoko`。「State directory」を参照) |
 | `retention` | Measurement を残す長さ。`runs`(既定 20)は丸ごと残す最新の run の数、`adHocDays`(既定 7)はどの run にも属さない record の日数(「成果物」を参照) |
-| `browserType` | `ctx.page()` が起動する Playwright のエンジン: `chromium`(デフォルト)、`firefox`、`webkit`(下記) |
+| `browserType` | `page` fixture が起動する Playwright のエンジン: `chromium`(デフォルト)、`firefox`、`webkit`(下記) |
 | `browser` | Playwright 自身の `LaunchOptions`。そのエンジンの `launch` にそのまま渡される(下記) |
 | `browserContext` | Playwright 自身の `BrowserContextOptions`。`browser.newContext()` に渡される(下記) |
-| `requestContext` | `ctx.request()` に対応する `newContext` のオプション(下記) |
+| `requestContext` | `request` fixture に対応する `newContext` のオプション(下記) |
 | `secrets` | `public`/`redact` のリスト。キーごとの redact の扱いを調整する(上記) |
 | `parameterTypes` | カスタムの cucumber-expressions parameter type(下記) |
 | `worldParameters` | compat の World が `parameters` として受け取るオブジェクト(デフォルトは `{}`。下記) |
@@ -2329,7 +2329,7 @@ step discovery も同じディレクトリをスキップします。
 `nuka check` と `nuka tend` はこの一覧を読みます。
 `nuka run` は、パスが渡されたとき、またはディレクトリ対象がそのファイルを含むときに、エントリを読みます。
 
-`browserType` は `ctx.page()` が起動する Playwright のエンジンを選びます: `"chromium"`(デフォルト)、`"firefox"`、`"webkit"` のいずれかです。
+`browserType` は `page` fixture が起動する Playwright のエンジンを選びます: `"chromium"`(デフォルト)、`"firefox"`、`"webkit"` のいずれかです。
 これは `browser` の中のフィールドではなく、別のキーです。
 `browser` 自身の型である `LaunchOptions`(下記参照)には、エンジンを選ぶキーがそもそも無いからです。
 Playwright はエンジンを、`chromium`/`firefox`/`webkit` のどの名前空間から `launch` を呼ぶかで選びます。
@@ -2382,7 +2382,7 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 `nuka check` は `env-file-missing` で警告し、environment 自身のリストにあるパスは `environment-env-file-missing` で警告します。
 存在しているが読めないパス、またはそのパスにあるディレクトリは、setup を止めます。
 拒否は、設定されたパスと errno を名指しします。
-同じ読み取りが `ctx.env` と secret の集合の両方を埋めるので、ファイルがロードされたかどうかは両者で一致します。
+同じ読み取りが `env` fixture と secret の集合の両方を埋めるので、ファイルがロードされたかどうかは両者で一致します。
 `policy` と `version` は environment ごとにしか存在しません。
 `--env` を指定しないことは名前 `default` を意味し、これはエントリを必要としません。
 それでも `default` という名前のエントリは書けます。
@@ -2393,7 +2393,7 @@ environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", ver
 ツールはこれを実行ごとに 1 回、10 秒の予算で呼び出し、throw やタイムアウトが犠牲にするのは `target_version` だけで、実行そのものが失敗することはありません。
 
 env file は `KEY=VALUE` のテキストです。
-`ctx.env` と secret set は、同じパーサでこれを読みます。
+`env` fixture と secret set は、同じパーサでこれを読みます。
 コメント、引用符、バックスラッシュのエスケープ、複数行にまたがる値は、dotenv のデフォルトのパーサに従います。
 区切りは `=` だけです。
 `:` は区切りではありません。
@@ -2911,7 +2911,7 @@ emitter は各 step の完了後に新しい `<uuid>-<連番>-progress-result.js
 長時間動く step では、emitter はこの 2 点の間にも 10 秒ごとに snapshot を書きます。
 その snapshot では、実行中の step を status 無しで描き、`stop` に書いた時点の時刻を入れ、いまの活動を子ステップとして 1 段の平坦に並べます。
 子の出所は 2 つで、どちらも人が書いた言葉を運びます。
-まだ再試行中の `ctx.poll` が `waiting for: <description> (attempt N)` を、到達済みの `ctx.section` のラベルが `section: <label>` を出します。
+まだ再試行中の `poll` が `waiting for: <description> (attempt N)` を、到達済みの `section` のラベルが `section: <label>` を出します。
 子の文字列は組み立てた場所で redact します。
 snapshot の他の値は書き込み時に redact 済みの step record から来ますが、子にはその一度目がありません。
 
@@ -3240,7 +3240,7 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   これは、誰かが sign-off したかどうかを問わず、いまもディスク上に step record を持つすべての step に届きます。
   まだ誰も sign-off していない step も、それを走らせた run 自身の step record をすでに持っています。
   その step record 自身の `actions` にある `goto`・`reload`・`goBack`・`goForward` のそれぞれについて、その step が次に行った呼び出しまでの間隔を報告します。
-  同じ step record 自身の `ctx.poll` の窓の中に着地する読みは除外されます。
+  同じ step record 自身の `poll` の窓の中に着地する読みは除外されます。
   「Context API」の doctrine がすでに求めているとおり `poll()` を使って書かれた step は、構造上すでにリトライしています。
   これは、この所見が見分けようとしている対象そのものではありません。
   報告されるのは間隔そのものだけであり、判定ではありません。
