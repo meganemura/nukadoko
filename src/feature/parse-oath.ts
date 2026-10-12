@@ -49,8 +49,9 @@ export class OathParseError extends Error {
 const PLACEHOLDER = /<([A-Za-z_][A-Za-z0-9_]*)>/g;
 const SEPARATOR_CELL = /^:?-+:?$/;
 const RULE = /^\s*-{3,}\s*$/;
-const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
-const FENCE = /^(\s*)(`{3,})/;
+const HEADING = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/;
+// Indentation is allowed because a fence inside a list item is indented.
+const FENCE = /^\s*(`{3,}|~{3,})/;
 const LIST_MARKER = /^(?:[-*+]|\d+[.)])\s+/;
 
 interface KeywordPeel {
@@ -243,7 +244,7 @@ export function parseOathSource(source: string, relativePath: string): ParsedFea
   let featureName: string | undefined;
   let current: DraftScenario | undefined;
   let table: TableBuild | undefined;
-  let fenceWidth = 0;
+  let fenceMark = "";
   let inComment = false;
 
   const fail = (message: string, line: number): never => {
@@ -329,10 +330,15 @@ export function parseOathSource(source: string, relativePath: string): ParsedFea
     const lineNumber = index + 1;
     const raw = lines[index]!.replace(/\r$/, "");
 
-    if (fenceWidth > 0) {
+    if (fenceMark !== "") {
       const fence = FENCE.exec(raw);
-      if (fence !== null && fence[2]!.length >= fenceWidth) {
-        fenceWidth = 0;
+      if (
+        fence !== null &&
+        fence[1]![0] === fenceMark[0] &&
+        fence[1]!.length >= fenceMark.length &&
+        raw.trim() === fence[1]
+      ) {
+        fenceMark = "";
       }
       continue;
     }
@@ -363,9 +369,9 @@ export function parseOathSource(source: string, relativePath: string): ParsedFea
     }
 
     const fence = FENCE.exec(line);
-    if (fence !== null && fence[1]!.length === 0) {
+    if (fence !== null && !(fence[1]![0] === "`" && line.slice(fence[0].length).includes("`"))) {
       flushTable();
-      fenceWidth = fence[2]!.length;
+      fenceMark = fence[1]!;
       continue;
     }
 
@@ -430,7 +436,7 @@ export function parseOathSource(source: string, relativePath: string): ParsedFea
     addSentences(lineNumber, line);
   }
 
-  if (fenceWidth > 0) {
+  if (fenceMark !== "") {
     fail("a code fence is not closed", lines.length);
   }
   if (inComment) {

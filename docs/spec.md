@@ -1826,7 +1826,10 @@ The subset this slice reads:
   is a Given.
 - A blockquote (`>`) and a fenced code block are narration. They are not
   steps and they are not findings. That is how this slice accepts prose.
-  An unclosed fence or an unclosed HTML comment (`<!--`) is a parse
+  A fence opens with three or more backticks or tildes, indented or not
+  (a fence in a list item is indented). It closes on a line of the same
+  character, at least as long as the opener, with nothing after it. An
+  unclosed fence or an unclosed HTML comment (`<!--`) is a parse
   error. YAML frontmatter is not stripped: a leading `---` is a scenario
   break, and it is a no-op when nothing precedes it.
 - A pipe table under a step is that step's data table. The separator row

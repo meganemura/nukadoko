@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **The Markdown oath parser reads an indented or tilde fence as narration, and keeps a heading's trailing `#`.**
+  Only a backtick fence at column 0 opened a code block, so a fence inside
+  a list item or a `~~~` fence turned every code line into a step. A fence
+  now opens with three or more backticks or tildes at any indentation. It
+  closes on a line of the same character, at least as long, with nothing
+  after it. `## Learn C#` now names the scenario "Learn C#". A closing `#`
+  sequence is stripped only after whitespace.
 - **The `nuka check` escape hint sees a parameter type registered in compat code.**
   The hint that names a pattern whose bare `( )` or `/` keeps it from
   matching was built only from `config.parameterTypes`. A pattern that
