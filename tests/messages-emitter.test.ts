@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Envelope } from "@cucumber/messages";
@@ -419,6 +419,20 @@ describe("createMessagesEmitter", () => {
     const envelopes = readEnvelopes(output);
     const testRunFinished = envelopes.find((e) => e.testRunFinished)!.testRunFinished!;
     expect(testRunFinished.success).toBe(false);
+  });
+
+  it("keeps the previous stream at the configured path when this run's own file is removed mid-run", () => {
+    mkdirSync(path.dirname(output), { recursive: true });
+    writeFileSync(output, "previous complete stream\n");
+    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
+
+    rmSync(runOutput);
+    emitter.end(true);
+
+    expect(readFileSync(output, "utf8")).toBe("previous complete stream\n");
+    expect(existsSync(runOutput)).toBe(false);
+    expect(sink.text()).toContain(`warning: messages end failed: ENOENT: no such file or directory, open '${runOutput}'\n`);
   });
 
   describe("begin() failure isolation", () => {
