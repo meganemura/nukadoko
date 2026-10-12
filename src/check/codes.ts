@@ -187,7 +187,7 @@ export const CHECK_CODES = {
   },
   "table-docstring-key-mismatch": {
     description:
-      "A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures; exactly one must be left for the attachment to fill.",
+      "A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures (exactly one must be left for the attachment to fill), or the one key it fills is of a type the attachment can never satisfy (a table is string[][], a docstring is a string).",
     severity: "error",
   },
   "then-compat-step": {

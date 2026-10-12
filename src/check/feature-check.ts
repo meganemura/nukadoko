@@ -7,6 +7,7 @@ import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FeatureFile } from "../feature/load-features.js";
+import { attachmentTypeMismatch } from "./attachment-type.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from "./done-callback.js";
 import { checkFromOrder } from "./from-order.js";
@@ -341,6 +342,18 @@ export function checkFeatures(
                 line,
                 step: stepName,
               });
+            } else {
+              const key = unconsumedRequired[0]!;
+              const typeMessage = attachmentTypeMismatch(stepName, key, attachment, shape[key]!);
+              if (typeMessage !== undefined) {
+                errors.push({
+                  code: "table-docstring-key-mismatch",
+                  message: typeMessage,
+                  file: feature.relativePath,
+                  line,
+                  step: stepName,
+                });
+              }
             }
           }
         }

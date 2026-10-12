@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A table or docstring on a key of the wrong type is caught by `nuka check`.**
+  A table is passed as `string[][]` and a docstring as a string. A table on
+  a `z.string()` key, or a docstring on an array, number, boolean, or object
+  key, passed `nuka check` and failed args validation at run. Check now
+  reports it as `table-docstring-key-mismatch`. An array key with a table, a
+  coercing schema, a pipe, a transform, and a union stay silent.
 - **An `oaths` directory with no Markdown file is now reported.**
   `nuka check` stayed green when a named oath directory held no `.md`
   file (an empty directory, or files named `.MD`), while a missing path

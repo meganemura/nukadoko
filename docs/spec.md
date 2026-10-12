@@ -291,7 +291,12 @@ export default defineStep({
   validation. The second direction went unchecked for a while, on the
   reasoning that a key might be filled some way the tool could not see;
   `from` closed that gap by making the remaining way visible, so what is
-  left is genuinely unfillable rather than merely unexplained.
+  left is genuinely unfillable rather than merely unexplained. A table
+  reaches its key as `string[][]` and a docstring as a `string`, so a table
+  on a plain string key, or a docstring on an array, number, boolean, or
+  object key, is reported as `table-docstring-key-mismatch`. An array key
+  with a table, a coercing schema, a pipe, a transform, and a union stay
+  silent.
 - An args key that the pattern, a table/docstring, or `from` did not fill,
   and that the schema does not declare, follows the contract `nuka
   describe` publishes for that schema. `nuka describe` publishes each object `args`

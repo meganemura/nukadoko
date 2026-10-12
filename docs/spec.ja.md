@@ -253,6 +253,8 @@ export default defineStep({
   その行は args のバリデーションに失敗する以外にありえないからです。
   この逆方向は、キーが何かツールに見えない方法で埋まっているかもしれないという理屈のもと、しばらく未チェックのままでした。
   `from` が残る方法を可視化することでその隙間を埋めたため、残っているのは単に説明されていないだけでなく、正真正銘埋まりようのないものです。
+  table は `string[][]`、docstring は `string` としてキーに届くため、素の string キーに付けた table、または array、number、boolean、object のキーに付けた docstring は `table-docstring-key-mismatch` として報告されます。
+  table を付けた array キー、coerce するスキーマ、pipe、transform、union は沈黙します。
 - pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、`nuka describe` がそのスキーマについて公開する契約に従います。
   `nuka describe` は各オブジェクトの `args` スキーマを `z.toJSONSchema` で公開します。
   素の `z.object(...)` は `additionalProperties: false` になり、step の `args` をバリデーション済みの値に変える経路はすべて、同じ閉じた形に対してパースします。
