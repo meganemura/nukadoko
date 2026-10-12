@@ -18,6 +18,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A messages run file removed mid-run is no longer published as a fragment.**
+  When `nuka clean` removed a run's own `messages.<run_id>.ndjson` while the run
+  was still going, the next write created the file again, starting at a later
+  envelope with no `meta`, and the end of the run copied that fragment onto
+  `messages.output`. Only the start of a run now creates the file. A later write
+  to a removed file fails with a warning, and the configured path keeps the
+  previous complete stream.
 - **Allure's Examples and Data table CSV attachments quote their cells.**
   A cell that held a comma, a quote, or a line break was written as is, so the
   attachment split it into extra columns or rows. Such a cell is now quoted per

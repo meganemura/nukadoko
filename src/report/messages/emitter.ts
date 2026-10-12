@@ -1,4 +1,4 @@
-import { appendFileSync, copyFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, constants, copyFileSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   AttachmentContentEncoding,
@@ -190,8 +190,16 @@ export function createMessagesEmitter(options: MessagesEmitterOptions): Messages
     options.stderr.write(`warning: ${message}\n`);
   }
 
+  // Only `begin()` creates `runOutput`. An append that recreated a file
+  // removed mid-run (`nuka clean`) would start it at a later envelope with
+  // no `meta`, and `end()` would publish that fragment onto `output`.
   function appendEnvelope(envelope: Envelope): void {
-    appendFileSync(runOutput, `${JSON.stringify(envelope)}\n`);
+    const fd = openSync(runOutput, constants.O_WRONLY | constants.O_APPEND);
+    try {
+      appendFileSync(fd, `${JSON.stringify(envelope)}\n`);
+    } finally {
+      closeSync(fd);
+    }
   }
 
   // A declared file attachment's bytes are read and base64-encoded here
