@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **A failed export write no longer leaves its temp file behind.**
+  The Allure writer and the messages emitter write each file to a hidden
+  `.<name>.tmp-<pid>-<random>` file and rename it into place. When the write or
+  the rename failed, the temp file stayed in the results directory for good. It
+  is now removed before the error is reported.
 - **Retention removes an older run's messages stream after `messages.output` moved.**
   Retention found a run's `messages.<run_id>.ndjson` by the name the current
   `messages.output` gives it, so a run written before the setting changed kept

@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, constants, copyFileSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, constants, copyFileSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   AttachmentContentEncoding,
@@ -144,15 +144,21 @@ function toPosixPath(relativePath: string): string {
 /** Writes `sourcePath`'s current bytes to `finalPath`, atomically: a temp
  * file in `finalPath`'s own directory (never a different filesystem/mount,
  * which is what makes the rename itself atomic), written in full, then
- * renamed onto `finalPath` — mirrors src/report/allure/writer.ts's own
- * `copyAtomic`, a small, deliberate duplicate for the same "stay this
+ * renamed onto `finalPath`, and removed again when either step fails. It
+ * mirrors src/report/allure/writer.ts's own `replaceAtomic`, a small,
+ * deliberate duplicate for the same "stay this
  * directory's sibling, not its dependent" reason `toPosixPath` above
  * already gives. */
 function copyOutputAtomic(finalPath: string, sourcePath: string): void {
   const tempName = `.${path.basename(finalPath)}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   const tempPath = path.join(path.dirname(finalPath), tempName);
-  copyFileSync(sourcePath, tempPath);
-  renameSync(tempPath, finalPath);
+  try {
+    copyFileSync(sourcePath, tempPath);
+    renameSync(tempPath, finalPath);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
 }
 
 function buildMeta(): Meta {

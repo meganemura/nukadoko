@@ -1,4 +1,4 @@
-import { copyFileSync, linkSync, mkdirSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, linkSync, mkdirSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stringifyEnvInfo, type Writer } from "allure-js-commons/sdk/reporter";
 import type { Category, EnvironmentInfo } from "allure-js-commons/sdk";
@@ -37,10 +37,22 @@ function tempNameFor(finalName: string): string {
   return `.${finalName}.tmp-${process.pid}-${random}`;
 }
 
-function writeAtomic(filePath: string, data: Buffer | string): void {
+/** Runs `fill` on a fresh temp path beside `filePath`, then renames the temp
+ * file onto `filePath`. A failure in either step removes the temp file and
+ * rethrows, so a failed write leaves nothing a later run has to clean. */
+function replaceAtomic(filePath: string, fill: (tempPath: string) => void): void {
   const tempPath = path.join(path.dirname(filePath), tempNameFor(path.basename(filePath)));
-  writeFileSync(tempPath, data);
-  renameSync(tempPath, filePath);
+  try {
+    fill(tempPath);
+    renameSync(tempPath, filePath);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
+}
+
+function writeAtomic(filePath: string, data: Buffer | string): void {
+  replaceAtomic(filePath, (tempPath) => writeFileSync(tempPath, data));
 }
 
 // An attachment that already exists as a file (a step's own trace.zip or
@@ -58,13 +70,13 @@ function writeAtomic(filePath: string, data: Buffer | string): void {
 // and on filesystems without hard links, so any link failure falls back to
 // a copy of the same bytes; the outcome differs only in disk usage.
 function linkOrCopyAtomic(filePath: string, sourcePath: string, link: LinkFile): void {
-  const tempPath = path.join(path.dirname(filePath), tempNameFor(path.basename(filePath)));
-  try {
-    link(sourcePath, tempPath);
-  } catch {
-    copyFileSync(sourcePath, tempPath);
-  }
-  renameSync(tempPath, filePath);
+  replaceAtomic(filePath, (tempPath) => {
+    try {
+      link(sourcePath, tempPath);
+    } catch {
+      copyFileSync(sourcePath, tempPath);
+    }
+  });
 }
 
 /** `linkSync`'s own shape, injectable so a test can force the copy
