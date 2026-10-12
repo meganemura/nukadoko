@@ -248,4 +248,45 @@ describe("call / parts", () => {
     expect(stepRecord.calls).toBeUndefined();
     expect(requests.count).toBe(0);
   });
+
+  type CallShape = { step: string; calls?: CallShape[] };
+  function shape(entries: ReadonlyArray<CallShape>): CallShape[] {
+    return entries.map((entry) => ({
+      step: entry.step,
+      ...(entry.calls === undefined ? {} : { calls: shape(entry.calls) }),
+    }));
+  }
+
+  it("lets a step call two declared parts at once and lists them as siblings in start order", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["do", "calls-parts-concurrently", "--args", "{}"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    // The slow part started first and finished last; the tree follows start order.
+    expect(stepRecord.result).toEqual({ orders: ["slow", "fast"] });
+    expect(shape(stepRecord.calls)).toEqual([{ step: "slow-part" }, { step: "fast-part" }]);
+  });
+
+  it("nests the calls of a part that itself calls concurrently under that part, beside its sibling", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["do", "calls-nested-concurrently", "--args", "{}"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.status).toBe("ok");
+    expect(shape(stepRecord.calls)).toEqual([
+      { step: "concurrent-wrapper-part", calls: [{ step: "slow-part" }, { step: "fast-part" }] },
+      { step: "fast-part" },
+    ]);
+  });
 });
