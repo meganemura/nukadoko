@@ -127,4 +127,38 @@ describe("parseOathSource", () => {
     expect(step?.text).toBe("The cupboard holds a secret");
     expect(step?.location.line).toBe(3);
   });
+
+  it("treats any text inside a fence of either character and any indentation as narration", () =>
+    hegel.test((tc) => {
+      const mark = tc.draw(gs.sampledFrom(["`", "~"]));
+      const indent = " ".repeat(tc.draw(gs.integers({ minValue: 0, maxValue: 6 })));
+      const openLen = tc.draw(gs.integers({ minValue: 3, maxValue: 5 }));
+      const closeLen = openLen + tc.draw(gs.integers({ minValue: 0, maxValue: 2 }));
+      const body = tc.draw(gs.text({ alphabet: "abc `~{}\":", minSize: 1, maxSize: 16 }));
+      const source = [
+        "# Fenced",
+        "- Given a thing:",
+        `${indent}${mark.repeat(openLen)}json`,
+        `${indent}${body}`,
+        `${indent}${mark.repeat(closeLen)}`,
+        "- Then it works.",
+      ].join("\n");
+      const { gherkinDocument } = parseOathSource(source, "fenced.md");
+      const steps = gherkinDocument.feature?.children[0]?.scenario?.steps ?? [];
+      expect(steps.map((step) => step.text)).toEqual(["a thing:", "it works"]);
+    }));
+
+  it("closes a fence only on its own character", () => {
+    const source = ["# F", "Given a.", "~~~", "```", "Then hidden.", "~~~", "Then shown."].join("\n");
+    const { gherkinDocument } = parseOathSource(source, "f.md");
+    const steps = gherkinDocument.feature?.children[0]?.scenario?.steps ?? [];
+    expect(steps.map((step) => step.text)).toEqual(["a", "shown"]);
+  });
+
+  it("keeps a trailing # that no space precedes in a heading", () => {
+    const { gherkinDocument } = parseOathSource(["# F", "## Learn C#", "Given a."].join("\n"), "h.md");
+    expect(gherkinDocument.feature?.children[0]?.scenario?.name).toBe("Learn C#");
+    const closed = parseOathSource(["# F", "## Learn C ##", "Given a."].join("\n"), "h.md");
+    expect(closed.gherkinDocument.feature?.children[0]?.scenario?.name).toBe("Learn C");
+  });
 });
