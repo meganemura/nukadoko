@@ -38,9 +38,15 @@ describe("two overlapping nuka run processes", () => {
   it("keeps the older run's records while it is in flight, and after it ends", async () => {
     const slowStderr = createCaptureSink();
     const slow = runCli(["run", "features/slow.feature"], { rootDir, stdout: createCaptureSink(), stderr: slowStderr });
-    // The slow run has written its first scenario record and is now waiting.
+    // The slow run has written its first scenario record and is now waiting in
+    // the second scenario, whose directory exists from the moment it starts.
     await until(
-      () => existsSync(scenariosDir(rootDir)) && readdirSync(scenariosDir(rootDir)).length === 1,
+      () =>
+        existsSync(scenariosDir(rootDir)) &&
+        readdirSync(scenariosDir(rootDir)).length === 2 &&
+        readdirSync(scenariosDir(rootDir)).some((id) =>
+          existsSync(path.join(scenariosDir(rootDir), id, "record.json")),
+        ),
       () => `the slow run never reached the gate; its stderr:\n${slowStderr.text()}`,
     );
     const slowRecords = readdirSync(scenariosDir(rootDir));
