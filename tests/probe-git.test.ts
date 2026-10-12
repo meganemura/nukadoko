@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { probeGitState } from "../src/run/probe-git.js";
+import { listDirtyPaths, probeGitState } from "../src/run/probe-git.js";
 import { initGitRepo } from "./helpers/fixtures.js";
 
 // Responsibility: unit tests for probeGitState (includes the "no initial
@@ -50,6 +50,17 @@ describe("probeGitState", () => {
 
     const state = await probeGitState(dir);
     expect(state).toEqual({ commit, clean: false });
+  });
+
+  it("reports clean: false for an untracked file even when the repo sets status.showUntrackedFiles=no", async () => {
+    await writeFile(path.join(dir, "a.txt"), "a");
+    const commit = await initGitRepo(dir);
+    await execFileAsync("git", ["-C", dir, "config", "status.showUntrackedFiles", "no"]);
+
+    await writeFile(path.join(dir, "untracked.txt"), "never added or committed");
+
+    await expect(probeGitState(dir)).resolves.toEqual({ commit, clean: false });
+    await expect(listDirtyPaths(dir)).resolves.toEqual(["untracked.txt"]);
   });
 
   it("returns undefined for a git-init'd repo with no commit yet, since no commit sha exists to report", async () => {
