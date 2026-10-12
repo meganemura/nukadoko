@@ -17,6 +17,6 @@ Installed package: `node_modules/nukadoko/skills/...` (this file at `node_module
 - `nuka accept <feature>` — freeze the last green run as an acceptance record
 - `nuka harvest <step-record-ids..>` — draft a feature from `do` record ids
 - `nuka session` / `nuka clean` / `nuka tend` — sessions, cleanup, rot signals
-- `nuka mcp-tools -- <command>` — list the tools another MCP server declares over stdio (not nukadoko's own vocabulary)
+- `nuka mcp-tools -- <command>`: list the tools another MCP server declares over stdio (not nukadoko's own vocabulary)
 
 Prefer `check` before `run`. Do not treat agent narrative as the step record.
