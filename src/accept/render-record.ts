@@ -138,11 +138,11 @@ export interface RenderAcceptanceRecordOptions {
  * being unexpectedly incomplete, reported the same way any other internal
  * inconsistency here would be: thrown, caught once, by cli/accept.ts. */
 export class MissingStepRecordError extends Error {
-  constructor(scenarioId: string, stepText: string, recordId: string | null) {
+  constructor(scenarioId: string, stepText: string, recordId: string | null, stepsDir: string) {
     super(
       recordId === null
         ? `scenario ${scenarioId}, step "${stepText}": no step record id even though the scenario is recorded as passed`
-        : `scenario ${scenarioId}, step "${stepText}": step record ${recordId} could not be read from .nukadoko/records/steps`,
+        : `scenario ${scenarioId}, step "${stepText}": step record ${recordId} could not be read from ${stepsDir}`,
     );
     this.name = "MissingStepRecordError";
   }
@@ -276,28 +276,34 @@ function renderHook(hook: ScenarioRecord["hooks"][number], strippedKeys: Set<str
 // need the same step-to-step-record lookup, and both must fail the same way
 // (MissingStepRecordError) when a passed scenario's own record disagrees
 // with what is actually on disk — one failure mode, one place it is checked.
+// The same location readStepRecordsForScenario reads from, so the message
+// names the directory that was actually searched, whatever `stateDir` is.
+function stepsDirOf(record: ScenarioRecord): string {
+  return `${record.evidence.dir.replace(/[\\/][^\\/]+[\\/][^\\/]+$/, "")}/steps`;
+}
+
 function resolveStepRecord(
-  scenarioId: string,
+  record: ScenarioRecord,
   step: ScenarioRecord["steps"][number],
   stepRecords: ReadonlyMap<string, StepRecord | null>,
 ): StepRecord {
   if (step.step_record_id === null) {
-    throw new MissingStepRecordError(scenarioId, step.text, null);
+    throw new MissingStepRecordError(record.scenario_record_id, step.text, null, stepsDirOf(record));
   }
   const stepRecord = stepRecords.get(step.step_record_id);
   if (stepRecord === null || stepRecord === undefined) {
-    throw new MissingStepRecordError(scenarioId, step.text, step.step_record_id);
+    throw new MissingStepRecordError(record.scenario_record_id, step.text, step.step_record_id, stepsDirOf(record));
   }
   return stepRecord;
 }
 
 function renderStep(
-  scenarioId: string,
+  record: ScenarioRecord,
   step: ScenarioRecord["steps"][number],
   stepRecords: ReadonlyMap<string, StepRecord | null>,
   strippedKeys: Set<string>,
 ): string[] {
-  const stepRecord = resolveStepRecord(scenarioId, step, stepRecords);
+  const stepRecord = resolveStepRecord(record, step, stepRecords);
   const kept = pickAllowed(stepRecord as unknown as Record<string, unknown>, STEP_RECORD_ALLOWLIST, strippedKeys);
   return ["", `#### ${step.text}`, "", "```json", JSON.stringify(kept, null, 2), "```"];
 }
@@ -325,7 +331,7 @@ function renderSummaryTable(
     "| --- | --- | --- | --- | --- | --- |",
   ];
   for (const step of record.steps) {
-    const stepRecord = resolveStepRecord(record.scenario_record_id, step, stepRecords);
+    const stepRecord = resolveStepRecord(record, step, stepRecords);
     const ms = Date.parse(stepRecord.finished_at) - Date.parse(stepRecord.started_at);
     const mutates = stepRecord.mutates === null ? "compat" : String(stepRecord.mutates);
     // A literal `|` inside a step's own text would otherwise be read as a
@@ -346,7 +352,7 @@ function renderScenarioSection(scenario: AcceptedScenario, strippedKeys: Set<str
   const lines: string[] = ["", `### ${record.scenario} (line ${record.line})`];
   lines.push(...renderSummaryTable(record, stepRecords));
   for (const step of record.steps) {
-    lines.push(...renderStep(record.scenario_record_id, step, stepRecords, strippedKeys));
+    lines.push(...renderStep(record, step, stepRecords, strippedKeys));
   }
   for (const hook of record.hooks) {
     lines.push(...renderHook(hook, strippedKeys));
@@ -377,7 +383,7 @@ function collectDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): {
   let compatStepCount = 0;
   for (const { record, stepRecords } of scenarios) {
     for (const step of record.steps) {
-      const stepRecord = resolveStepRecord(record.scenario_record_id, step, stepRecords);
+      const stepRecord = resolveStepRecord(record, step, stepRecords);
       if (stepRecord.mutates === null) {
         compatStepCount += 1;
         continue;

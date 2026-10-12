@@ -18,6 +18,10 @@ just until 0.1.
 
 ### Fixed
 
+- **The `nuka accept` missing-step-record refusal names the real records directory.**
+  The refusal always said `.nukadoko/records/steps`, so a project with another
+  `stateDir` was pointed at a directory it does not have. The message now names
+  the steps directory next to the scenario record that was read.
 - **A feature source that holds a code fence no longer breaks its sign-off record.**
   A doc string with a line of three backticks closed the record's fence early, so
   `nuka tend` read a truncated feature (a false "feature changed") or a json block
