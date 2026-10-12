@@ -21,21 +21,41 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
 
     expect(exitCode).toBe(0); // Notes never fail the exit code.
     const report = JSON.parse(stdout.text()) as {
-      notes: { code: string; message: string; step?: string }[];
+      notes: { code: string; message: string; step?: string; fixture?: string }[];
     };
 
     const unused = report.notes.find((note) => note.code === "fixture-unused");
     expect(unused).toBeDefined();
-    expect(unused?.step).toBe("fixtureReachesUnused");
+    expect(unused?.fixture).toBe("fixtureReachesUnused");
+    expect(unused?.step).toBeUndefined();
 
     const touchesApp = report.notes.find(
-      (note) => note.code === "fixture-touches-app" && note.step === "loggedIn",
+      (note) => note.code === "fixture-touches-app" && note.fixture === "loggedIn",
     );
     expect(touchesApp).toBeDefined();
+    expect(touchesApp?.step).toBeUndefined();
     expect(touchesApp?.message).toContain("page");
 
     // Deliberately not a judgment: the
     // message never says to stop, remove, or fix it.
     expect(touchesApp?.message.toLowerCase()).not.toMatch(/\b(stop|remove|fix)\b/);
+  });
+
+  it("keeps a step and a fixture of the same name apart in --json", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["tend", "--json"], {
+      rootDir: fixture("fixture-touches-browser-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+    const report = JSON.parse(stdout.text()) as {
+      notes: { code: string; step?: string; fixture?: string }[];
+    };
+
+    const byStep = report.notes.filter((note) => note.step === "loggedIn").map((note) => note.code);
+    const byFixture = report.notes.filter((note) => note.fixture === "loggedIn").map((note) => note.code);
+    expect(byStep).toEqual(["step-rationale-missing"]);
+    expect(byFixture).toEqual(["fixture-touches-app"]);
   });
 });
