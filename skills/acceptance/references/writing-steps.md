@@ -294,9 +294,14 @@ Neither side can drift away from the other quietly, so adding an `args`
 field and forgetting the capture costs you one `nuka check`, never a
 browser session.
 
-`capture-type-mismatch` is the type half of that comparison: `{int}` or
-`{float}` against a string field, `{string}` or `{word}` against a number
-field. It does not fire when the schema coerces the captured value
+`capture-type-mismatch` is the type half of that comparison: the JS type
+of a built-in capture against the field's primitive type. `{int}`,
+`{float}`, `{double}`, `{byte}`, `{short}`, and `{long}` give a number;
+`{word}`, `{string}`, the anonymous `{key:}`, and `{bigdecimal}` give a
+string; `{biginteger}` gives a bigint. A number capture against a string
+or boolean field is the finding, and so is any other pair that differs. A
+pipe or transform is read through its input side. A union, `z.any()`, a
+preprocess, and a custom parameter type are never reported. It does not fire when the schema coerces the captured value
 (`z.coerce.number()` for a `{string}`, `z.coerce.string()` for an
 `{int}`), because the run accepts that capture. A field that does not
 coerce still is that finding. The one-line description is `nuka check

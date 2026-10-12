@@ -18,6 +18,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka check` reports `capture-type-mismatch` for every capture that always fails args validation.**
+  It used to compare only `{int}`/`{float}` with a string field and
+  `{string}`/`{word}` with a number field. `{double}`, `{long}`, `{short}`, and
+  `{byte}` against a string, `{word}` or `{int}` against a boolean, the
+  anonymous `{key:}` against a number, and `{int}` against
+  `z.string().transform(...)` all passed check and failed at run. check now maps
+  each built-in capture to its JS type and compares it with the field's
+  primitive, reading a pipe through its input side. A coerce, a union,
+  `z.any()`, a preprocess, and a custom parameter type stay silent.
 - **A table or docstring on a key of the wrong type is caught by `nuka check`.**
   A table is passed as `string[][]` and a docstring as a string. A table on
   a `z.string()` key, or a docstring on an array, number, boolean, or object

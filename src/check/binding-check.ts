@@ -5,10 +5,27 @@ import { type Capture, stripCaptureNames } from "../binding/pattern.js";
 import { ParameterTypeCollisionError } from "../binding/parameter-type-errors.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { InvalidCaptureKeyError, UnnamedCaptureError, UnterminatedCaptureError } from "../binding/errors.js";
-import { asObjectShape, classifyPrimitive } from "../binding/schema-shape.js";
+import { asObjectShape, classifyPrimitive, type PrimitiveClass } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
 import type { CompatParameterTypeEntry, Vocabulary } from "../discover/discover-steps.js";
 import type { CheckIssue } from "./types.js";
+
+// The JS type cucumber-expressions' built-in parameter types produce. A custom
+// type is absent on purpose: its transformer's output is unknown, and a custom
+// type cannot reuse a built-in name. A Map avoids prototype keys.
+const CAPTURED_CLASS: ReadonlyMap<string, PrimitiveClass> = new Map([
+  ["int", "number"],
+  ["float", "number"],
+  ["double", "number"],
+  ["byte", "number"],
+  ["short", "number"],
+  ["long", "number"],
+  ["word", "string"],
+  ["string", "string"],
+  ["", "string"],
+  ["bigdecimal", "string"],
+  ["biginteger", "bigint"],
+]);
 
 // Responsibility: for every pattern-bearing typed step, parse+strip each of its
 // patterns (src/binding/pattern.ts), build the matching CucumberExpression
@@ -300,17 +317,13 @@ export function checkBindings(
           });
           continue;
         }
-        const primitive = classifyPrimitive(fieldSchema);
-        if ((capture.type === "int" || capture.type === "float") && primitive === "string") {
+        const captured = CAPTURED_CLASS.get(capture.type);
+        const declared = classifyPrimitive(fieldSchema);
+        if (captured !== undefined && declared !== "other" && declared !== captured) {
+          const typeLabel = capture.type === "" ? "the anonymous type" : `{${capture.type}}`;
           issues.push({
             code: "capture-type-mismatch",
-            message: `Step "${stepName}" pattern "${pattern}" binds key "${capture.key}" as {${capture.type}} (a number), but args declares "${capture.key}" as a string`,
-            step: stepName,
-          });
-        } else if ((capture.type === "string" || capture.type === "word") && primitive === "number") {
-          issues.push({
-            code: "capture-type-mismatch",
-            message: `Step "${stepName}" pattern "${pattern}" binds key "${capture.key}" as {${capture.type}} (a string), but args declares "${capture.key}" as a number`,
+            message: `Step "${stepName}" pattern "${pattern}" binds key "${capture.key}" as ${typeLabel} (a ${captured}), but args declares "${capture.key}" as a ${declared}`,
             step: stepName,
           });
         }

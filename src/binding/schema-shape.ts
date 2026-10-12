@@ -42,7 +42,7 @@ export function asObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny
   return (unwrapped as unknown as z.ZodObject).shape;
 }
 
-export type PrimitiveClass = "number" | "string" | "other";
+export type PrimitiveClass = "number" | "string" | "boolean" | "bigint" | "other";
 
 /**
  * True when the schema converts its input before checking the declared
@@ -56,26 +56,30 @@ function schemaCoerces(schema: z.ZodTypeAny): boolean {
 }
 
 /** Classifies what a schema field (after unwrapping optional/default)
- * definitely accepts, for the two coercions cucumber-expressions performs
- * (`{int}`/`{float}` -> number,
- * `{string}`/`{word}` -> string). Anything else (boolean, bigint, object,
- * array, union, any, unknown, a transform, or a schema that itself coerces
- * the captured value) is "other": not necessarily wrong, just not
- * something this narrow check can be certain about either way. Coercion is
- * read after optional/default unwrapping, because those wrappers do not
- * carry the flag. */
+ * definitely accepts, as the JS type of a value cucumber-expressions hands
+ * over: number, string, boolean, or bigint. A pipe is read through its input
+ * side, because that side parses the captured value first (a transform on the
+ * output side cannot rescue a wrong input). Anything else (object, array,
+ * union, any, unknown, a preprocess, or a schema that itself coerces the
+ * captured value) is "other": not necessarily wrong, just not something this
+ * narrow check can be certain about either way. Coercion is read after
+ * optional/default unwrapping, because those wrappers do not carry the flag. */
 export function classifyPrimitive(schema: z.ZodTypeAny): PrimitiveClass {
   const unwrapped = unwrapOptionalDefault(schema);
   if (schemaCoerces(unwrapped)) {
     return "other";
   }
-  if (unwrapped.type === "number") {
-    return "number";
+  switch (unwrapped.type) {
+    case "number":
+    case "string":
+    case "boolean":
+    case "bigint":
+      return unwrapped.type;
+    case "pipe":
+      return classifyPrimitive((unwrapped.def as unknown as { in: z.ZodTypeAny }).in);
+    default:
+      return "other";
   }
-  if (unwrapped.type === "string") {
-    return "string";
-  }
-  return "other";
 }
 
 /** A field is required when an object that declares it rejects `{}`.

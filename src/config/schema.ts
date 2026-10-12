@@ -77,7 +77,7 @@ const PARAMETER_TYPE_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
  * its return value is not statically checked: a custom type's captured
  * value skips check's capture-type-mismatch
  * comparison entirely, since `capture.type` for a custom type never equals
- * "int"/"float"/"string"/"word" (see src/check/binding-check.ts); the args
+ * a built-in type name such as "int" or "word" (see src/check/binding-check.ts); the args
  * zod schema is the real, run-time contract for it (docs/spec.md: "the
  * transformer is coercion; the args schema remains the contract"). */
 const parameterTypeConfigSchema = z

@@ -217,8 +217,8 @@ What changed:
   express).
 - The argument is a named capture bound to a schema key
   (`{name:string}` → `args.name`), so the pattern alone shows which text
-  becomes which field. `capture-type-mismatch` is a number capture against
-  a string field, or a string capture against a number field, and only
+  becomes which field. `capture-type-mismatch` is a built-in capture whose JS type
+  (number, string, or bigint) differs from the field's primitive type, and only
   when that field does not coerce. `z.coerce.number()` on a `{string}`
   and `z.coerce.string()` on an `{int}` are not that finding: the run
   accepts the capture. `nuka check --codes` has the one-line description.

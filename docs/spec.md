@@ -281,8 +281,13 @@ export default defineStep({
   result is stored. Captures are coerced by the parameter type (`{int}` →
   number, custom types by their transformer), then the schema is the
   contract; the mapping is statically checkable (`nuka check`) in both
-  directions. A number or string disagreement is reported only when the
-  schema does not coerce the captured value. `z.coerce.number()` accepts
+  directions. A disagreement between the JS type of a built-in capture
+  (`{int}`, `{float}`, `{double}`, `{byte}`, `{short}`, `{long}` give a number;
+  `{word}`, `{string}`, the anonymous `{key:}`, and `{bigdecimal}` give a string;
+  `{biginteger}` gives a bigint) and a number, string, boolean, or bigint
+  schema is reported only when the schema does not coerce the captured value.
+  A pipe or transform is read through its input side. A union, `z.any()`,
+  a preprocess, and a custom parameter type are never reported. `z.coerce.number()` accepts
   a `{string}` and `z.coerce.string()` accepts an `{int}`, and whether
   that particular value parses is settled by the run, so the static check
   stays silent there. A capture with no schema key is an error. So is a **required**

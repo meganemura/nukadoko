@@ -245,7 +245,10 @@ export default defineStep({
   バリデーションの失敗は失敗した実行として扱われ、result は保存されません。
   キャプチャは parameter type によって型強制され(`{int}` → number、カスタム型はそれぞれの transformer による)、そのあとスキーマが契約になります。
   この対応関係は双方向に静的にチェックできます(`nuka check`)。
-  number と string の食い違いは、スキーマがキャプチャした値を型強制しないときだけ報告されます。
+  組み込みキャプチャの JS 型と、number・string・boolean・bigint のスキーマとの食い違いは、スキーマがキャプチャした値を型強制しないときだけ報告されます。
+  組み込みキャプチャの JS 型は、`{int}` `{float}` `{double}` `{byte}` `{short}` `{long}` が number、`{word}` `{string}` 無名の `{key:}` `{bigdecimal}` が string、`{biginteger}` が bigint です。
+  pipe と transform は入力側で判定します。
+  union、`z.any()`、preprocess、カスタム parameter type は報告しません。
   `z.coerce.number()` は `{string}` を受け入れ、`z.coerce.string()` は `{int}` を受け入れます。
   その値がパースできるかどうかは実行が決めることなので、静的チェックはそこでは沈黙します。
   スキーマのキーを持たないキャプチャはエラーです。
