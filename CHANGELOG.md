@@ -18,6 +18,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka check` reports a finding on a Background or outline line once.**
+  A Background line reaches the check once per scenario, and an outline
+  line once per Examples row. Every finding about such a line except
+  `undefined-step` repeated that many times, in the text output and in
+  `--json`. A finding with the same code, file, line, step, and message is
+  now reported once.
 - `nuka harvest` refuses a repeated step record id before it prints a draft.
   The refusal names the repeated id once. One execution cannot become multiple steps.
 - **Feature walks skip `node_modules` and dot-directories.**

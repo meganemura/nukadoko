@@ -205,9 +205,6 @@ export function checkFeatures(
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
   const match = createStepTextMatcher(patterns);
-  // A Background or an outline repeats one source line across pickles. The
-  // arity result is a property of that line, so one finding is enough.
-  const reportedDoneCallback = new Set<string>();
 
   for (const feature of features) {
     const reportedUndefinedText = new Set<string>();
@@ -293,17 +290,13 @@ export function checkFeatures(
             step.argument?.dataTable !== undefined || step.argument?.docString !== undefined;
           const passed = passedArgCountForStep(matchedCaptureCount(matched, step.text), hasAttachment);
           if (declaresDoneCallback(entry.compat.fn.length, passed)) {
-            const key = `${feature.relativePath}\0${String(line)}\0${stepName}`;
-            if (!reportedDoneCallback.has(key)) {
-              reportedDoneCallback.add(key);
-              errors.push({
-                code: "done-callback-arity",
-                message: doneCallbackMessage("Step", stepName),
-                file: feature.relativePath,
-                line,
-                step: stepName,
-              });
-            }
+            errors.push({
+              code: "done-callback-arity",
+              message: doneCallbackMessage("Step", stepName),
+              file: feature.relativePath,
+              line,
+              step: stepName,
+            });
           }
         }
 
@@ -375,5 +368,20 @@ export function checkFeatures(
     }
   }
 
-  return { errors, warnings };
+  return { errors: firstOfEach(errors), warnings: firstOfEach(warnings) };
+}
+
+/** A Background or an outline repeats one source line across pickles, and
+ * every check above runs once per pickle. A finding about that line is the
+ * same finding each time, so only its first occurrence is kept. */
+function firstOfEach(issues: readonly CheckIssue[]): CheckIssue[] {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const key = JSON.stringify([issue.code, issue.file, issue.line, issue.step, issue.message]);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
