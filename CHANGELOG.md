@@ -462,6 +462,12 @@ just until 0.1.
   `README.ja.md` linked the English spec for step chaining and now links
   `docs/spec.ja.md`. The glossary's note and heading rules now cover every
   paired Japanese file, including the Playwright Test migration page.
+- **Two comments in `src/record/types.ts` match the code and the spec.**
+  The `timeout` error kind said only a compat step's own timeout produces it,
+  but a typed step's `stepTimeout` deadline produces it too. The `observed`
+  comment said run-time keyword enforcement and read-only environments act on
+  the count, but they act on the declared `mutates`; the count is a measured
+  fact beside it. Both comments now say that.
 
 ## 0.14.1 — 2026-10-10
 

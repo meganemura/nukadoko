@@ -443,8 +443,10 @@ export type FixtureScope = "scenario" | "process";
  *     do` has no pickle to bind from).
  *   - `world_invalid` — a declared World key's write failed its own
  *     `defineWorld` schema.
- *   - `timeout` — a compat step's/hook's own `{ timeout }` (or the run's
- *     `setDefaultTimeout`) fired before it settled.
+ *   - `timeout` — a deadline fired before the step or hook settled: a typed
+ *     step's `stepTimeout` (twenty minutes by default) or its own
+ *     `defineStep({ timeout })`, or a compat step's/hook's own `{ timeout }`
+ *     (or the run's `setDefaultTimeout`).
  *   - `unsupported` — a compat-only shape nukadoko doesn't implement: a
  *     `done()`-callback arity, or a `"pending"`/`"skipped"` return value.
  *   - `step_error` — anything else: the step's/hook's own code threw. Also
@@ -631,9 +633,11 @@ export interface StepRecordBase {
   evidence: EvidenceMeta;
   /** Network calls the tool itself saw this execution make, through
    * `ctx.request()` and the page alike — GET/HEAD as reads, everything else
-   * as writes. Measured, never declared: this is what run-time keyword
-   * enforcement and read-only environments act on (docs/spec.md "Keyword
-   * semantics", "Records"). */
+   * as writes. Measured, never declared, and never a verdict: the HTTP
+   * method is only a proxy for write semantics, so Then position and
+   * read-only environments act on the declared `mutates`, and this count
+   * sits beside it to make a wrong declaration visible (docs/spec.md
+   * "Keyword semantics", "Records"). */
   observed: ObservedCounts;
   /** Env var names `ctx.requireEnv` was actually called with during this
    * execution (docs/spec.md "Records"). Present only when non-empty;
