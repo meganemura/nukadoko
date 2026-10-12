@@ -184,7 +184,6 @@ describe("createAllureEmitter", () => {
 
       const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
-      writeFileSync(path.join(scenarioDir, "trace.zip"), "trace bytes");
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
       writeFileSync(path.join(scenarioDir, "hook-note.txt"), "hook declared note");
 
@@ -237,7 +236,6 @@ describe("createAllureEmitter", () => {
         hooks: [beforeHook, afterHook],
         evidence: {
           dir: ".nukadoko/records/scenarios/scn-1",
-          trace: "trace.zip",
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.150Z" }],
         },
       };
@@ -366,13 +364,12 @@ describe("createAllureEmitter", () => {
       expect(beforeContainer.befores[0]!.parameters).toContainEqual({ name: "hook-param", value: "y" });
     });
 
-    it("attaches the scenario's own trace/screenshot directly to the result, not any step and not a synthetic fixture", () => {
+    it("attaches the scenario's own screenshot directly to the result, not any step and not a synthetic fixture", () => {
       const results = readResultFiles(resultsDir);
       const result = results[0] as { attachments?: { name: string; type: string; source: string }[] };
-      const names = result.attachments!.map((a) => a.name).sort();
-      expect(names).toEqual(["shot1.png", "trace"]);
-      const trace = result.attachments!.find((a) => a.name === "trace")!;
-      expect(readFileSync(path.join(resultsDir, trace.source), "utf8")).toBe("trace bytes");
+      expect(result.attachments!.map((a) => a.name)).toEqual(["shot1.png"]);
+      const screenshot = result.attachments![0]!;
+      expect(readFileSync(path.join(resultsDir, screenshot.source), "utf8")).toBe("png bytes");
 
       // No "Scenario evidence" fixture exists any more -- the container's
       // own afters list is exactly the real After hook this scenario ran,

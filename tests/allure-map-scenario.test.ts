@@ -613,7 +613,7 @@ describe("mapHooks: status/message mapping", () => {
 });
 
 describe("mapScenario: scenario-wide browser evidence attaches directly to the result", () => {
-  it("adds nothing when there is no trace and no screenshots", () => {
+  it("adds nothing when there are no screenshots", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const record = baseRecord({ evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
@@ -623,31 +623,26 @@ describe("mapScenario: scenario-wide browser evidence attaches directly to the r
     expect(mapped.attachments).toEqual([]);
   });
 
-  it("attaches the trace and every screenshot straight onto the result, no synthetic fixture involved", () => {
+  it("attaches every screenshot straight onto the result, no synthetic fixture involved", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const record = baseRecord({
       evidence: {
         dir: ".nukadoko/records/scenarios/scn-1",
-        trace: "trace.zip",
         screenshots: [{ file: "final.png", at: "2026-08-01T00:00:04.900Z" }],
       },
     });
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
 
-    expect(mapped.attachments).toContainEqual({
-      kind: "path",
-      name: "trace",
-      contentType: "application/vnd.allure.playwright-trace",
-      path: ".nukadoko/records/scenarios/scn-1/trace.zip",
-    });
-    expect(mapped.attachments).toContainEqual({
-      kind: "path",
-      name: "final.png",
-      contentType: "image/png",
-      path: ".nukadoko/records/scenarios/scn-1/final.png",
-    });
+    expect(mapped.attachments).toEqual([
+      {
+        kind: "path",
+        name: "final.png",
+        contentType: "image/png",
+        path: ".nukadoko/records/scenarios/scn-1/final.png",
+      },
+    ]);
   });
 });
 

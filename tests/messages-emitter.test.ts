@@ -118,7 +118,6 @@ describe("createMessagesEmitter", () => {
 
       const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
-      writeFileSync(path.join(scenarioDir, "trace.zip"), "trace bytes");
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
 
       const step: ScenarioStepRecord = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
@@ -139,7 +138,6 @@ describe("createMessagesEmitter", () => {
         hooks: [beforeHook, afterHook],
         evidence: {
           dir: ".nukadoko/records/scenarios/scn-1",
-          trace: "trace.zip",
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.500Z" }],
         },
       };
@@ -260,7 +258,6 @@ describe("createMessagesEmitter", () => {
       expect(logAttachment.body).toBe("did the thing");
       expect(logAttachment.fileName).toBeUndefined();
 
-      expect(attachments.some((a) => a.fileName === "trace.zip")).toBe(false);
       expect(attachments.some((a) => a.fileName === "shot1.png")).toBe(false);
       expect(attachments.some((a) => a.fileName === "http.jsonl")).toBe(false);
       expect(attachments).toHaveLength(2);

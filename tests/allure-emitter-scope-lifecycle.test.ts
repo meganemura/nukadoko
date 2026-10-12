@@ -174,12 +174,15 @@ describe("createAllureEmitter: scope lifecycle", () => {
     const record = baseScenarioRecord({
       scenario_record_id: "scn-evidence-broken",
       steps: [step],
-      // Names a trace file this test deliberately never writes to disk: the
+      // Names a screenshot this test deliberately never writes to disk: the
       // scenario-wide evidence attachment (map-scenario.ts's own
       // `mapScenario`) builds it from this alone, with no existsSync check
       // of its own, so the failure surfaces where writeAttachment's
       // underlying copy actually runs, inside endScenario's own try block.
-      evidence: { dir: ".nukadoko/records/scenarios/scn-evidence-broken", trace: "missing-trace.zip", screenshots: [] },
+      evidence: {
+        dir: ".nukadoko/records/scenarios/scn-evidence-broken",
+        screenshots: [{ file: "missing.png", at: "2026-08-01T00:00:00.400Z" }],
+      },
     });
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
