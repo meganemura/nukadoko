@@ -78,12 +78,6 @@ export interface FixtureGraph {
  * them off, so a `process`-scope fixture may depend on any of the three. */
 const PROCESS_SAFE_BUILTIN_NAMES = new Set(["env", "requireEnv", "baseURL"]);
 
-const BUILTIN_NAME_SET = new Set(BUILTIN_FIXTURE_NAMES);
-
-export function isBuiltinFixtureName(name: string): boolean {
-  return BUILTIN_NAME_SET.has(name);
-}
-
 function builtinScope(name: string): FixtureScope {
   return PROCESS_SAFE_BUILTIN_NAMES.has(name) ? "process" : "scenario";
 }

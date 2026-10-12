@@ -30,8 +30,10 @@ export class UnknownEnvironmentError extends Error {
   }
 }
 
-/** Thrown in `nuka do`'s setup phase (before any step record is written) when a
- * mutating step targets an environment whose `policy` is `"read-only"`. */
+/** The refusal for a mutating step that targets an environment whose `policy`
+ * is `"read-only"`. Never thrown: `nuka do`, `nuka run`, and a live session
+ * each report the refusal as a plain message, and this class is the one home
+ * of that message so the three cannot word it differently. */
 export class ReadOnlyEnvironmentError extends Error {
   readonly stepName: string;
   readonly environmentName: string;

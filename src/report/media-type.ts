@@ -11,7 +11,7 @@
 // limited to plain data, and because the pair only needs to agree on a
 // handful of common extensions, not stay byte-identical.
 
-export const MEDIA_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
+const MEDIA_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
   ".txt": "text/plain",
   ".html": "text/html",
   ".csv": "text/csv",

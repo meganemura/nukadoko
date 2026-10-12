@@ -78,7 +78,7 @@ export type MessagesAttachmentPlan =
  * `main`). Reused here so a consumer's existing "is this a log line" check
  * (matching on this exact media type) keeps working for a nukadoko-produced
  * stream too. */
-export const CUCUMBER_LOG_MEDIA_TYPE = "text/x.cucumber.log+plain";
+const CUCUMBER_LOG_MEDIA_TYPE = "text/x.cucumber.log+plain";
 
 function joinRelative(dir: string, fileName: string): string {
   return `${dir.replace(/\/+$/, "")}/${fileName}`;

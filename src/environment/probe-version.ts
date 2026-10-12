@@ -16,7 +16,7 @@
 // whatever the probe itself started, which is an accepted limitation of not
 // controlling the probe's implementation.
 
-export const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
+const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 
 export type VersionProbeResult =
   | { readonly ok: true; readonly version: string }

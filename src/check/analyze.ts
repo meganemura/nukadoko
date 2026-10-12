@@ -116,7 +116,7 @@ export class CheckFeatureNotFoundError extends Error {
   }
 }
 
-export class CheckLineNotSupportedError extends Error {
+class CheckLineNotSupportedError extends Error {
   readonly relativePath: string;
 
   constructor(relativePath: string, line: string) {

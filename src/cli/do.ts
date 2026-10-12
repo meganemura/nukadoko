@@ -24,6 +24,7 @@ import {
 } from "../fixture/resolver.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
+  ReadOnlyEnvironmentError,
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
@@ -128,19 +129,6 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // once, as a whole object, before either record.json or the stdout copy is
 // written from it — never twice, independently, which could let the two
 // drift apart.
-
-/** The declared-mutates read-only refusal message: matches run-scenario.
- * ts's own `readOnlyDeclaredMutatesMessage` wording exactly, since this is
- * the same fact about the same policy, just reached from `nuka do` this
- * time. `stepName` names whichever `Step` is actually refused — the entry
- * step named on the command line (this file's own setup-phase check,
- * below), or a part `ctx.call` refuses on that step's behalf
- * (`refuseMutatingPart`, passed to `createStepContext`) — so both refusals
- * read as the same fact about the same policy, only reached a different
- * way. */
-function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
-  return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
-}
 
 /**
  * Hands one execution to a live session's own daemon instead of building a
@@ -525,7 +513,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
     // never happened be cited later as if it had. Read-only steps
     // (`mutates: false`) are unaffected regardless of policy.
     if (resolvedEnv.policy === "read-only" && entry.step.mutates) {
-      stderr.write(`${readOnlyDeclaredMutatesMessage(name, resolvedEnv.name)}\n`);
+      stderr.write(`${new ReadOnlyEnvironmentError(name, resolvedEnv.name).message}\n`);
       return 1;
     }
 
@@ -606,10 +594,10 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
       // the reachability path differs from that setup-phase refusal.
       refuseMutatingPart: (part) =>
         resolvedEnv.policy === "read-only" && part.mutates
-          ? readOnlyDeclaredMutatesMessage(
+          ? new ReadOnlyEnvironmentError(
               stepNameOf.get(part) ?? "a step discovery never registered",
               resolvedEnv.name,
-            )
+            ).message
           : undefined,
       // `nuka do` is one execution, one trace chunk — this ctx never
       // calls `beginStep`, so the step's own name, known once here, is the

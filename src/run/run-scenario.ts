@@ -35,6 +35,7 @@ import { createStepContext, type DisposeResult } from "../context/create-context
 import { mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
+import { ReadOnlyEnvironmentError } from "../environment/resolve-environment.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import {
@@ -250,19 +251,6 @@ export { withStepStdoutOnStderr };
 // and skips the whole call to `onStepProgress` when both are empty. A step
 // with nothing to say produces no snapshot at all, never a heartbeat whose
 // only content is proof that the run is alive.
-
-/** The declared-mutates read-only refusal message: matches cli/do.ts's own
- * setup-phase rejection wording, since
- * this is the same fact about the same policy, just reached from `nuka run`
- * this time. `stepName` names whichever `Step` is actually refused — the
- * entry step bound to a pickle line (this file's own read-only branch,
- * below) or a part `ctx.call` refuses on that same step's behalf
- * (`refuseMutatingPart`, passed to `createStepContext`) — so both refusals
- * read as the same fact about the same policy, only reached a different
- * way. */
-function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
-  return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
-}
 
 /** One pickle's own result chain: which Step object most recently finished
  * with `status: "ok"`, and what its validated result, step record id, and
@@ -1087,7 +1075,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // reachability path differs from the entry-step refusal below.
     refuseMutatingPart: (part) =>
       policy === "read-only" && part.mutates
-        ? readOnlyDeclaredMutatesMessage(stepNameOf.get(part) ?? "a step discovery never registered", environment)
+        ? new ReadOnlyEnvironmentError(stepNameOf.get(part) ?? "a step discovery never registered", environment).message
         : undefined,
   });
 
@@ -1996,7 +1984,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // in this file checks a compat step's read-only behavior either.
         if (policy === "read-only" && entry.step.mutates) {
           scenarioFailed = true;
-          const message = readOnlyDeclaredMutatesMessage(outcome.stepName, environment);
+          const message = new ReadOnlyEnvironmentError(outcome.stepName, environment).message;
           noteFailure(message, 0, undefined);
           pushStepRecord(
             {

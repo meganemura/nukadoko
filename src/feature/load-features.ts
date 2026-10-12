@@ -173,7 +173,7 @@ export function parseFeatureSource(source: string, relativePath: string): Parsed
  * Scenario, or Background node's own id is never looked up through a pickle
  * step and is left out.
  */
-export function buildAstNodeLineMap(gherkinDocument: GherkinDocument): ReadonlyMap<string, number> {
+function buildAstNodeLineMap(gherkinDocument: GherkinDocument): ReadonlyMap<string, number> {
   const lineById = new Map<string, number>();
   const feature = gherkinDocument.feature;
   if (feature === undefined) {

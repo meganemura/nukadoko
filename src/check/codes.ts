@@ -29,7 +29,7 @@ export interface CheckCodeInfo {
   readonly severity?: CheckSeverity;
 }
 
-export const CHECK_CODES = {
+const CHECK_CODES = {
   "additional-feature-dir-missing": {
     description: "An entry in additionalFeatureDirs does not exist on disk.",
     severity: "error",

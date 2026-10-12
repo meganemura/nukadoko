@@ -86,7 +86,7 @@ export async function loadVocabulary(
  * apart (src/check/config-check.ts), and this error, and the message it
  * carries, matches that check's own wording so the same mistake reads
  * the same way from either command. */
-export class FeaturesDirMissingError extends Error {
+class FeaturesDirMissingError extends Error {
   constructor(
     readonly featuresDir: string,
     readonly resolvedPath: string,

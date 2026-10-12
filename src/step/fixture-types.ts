@@ -114,7 +114,7 @@ export type FixtureDefinition = FixtureFn | readonly [FixtureFn, FixtureOptions]
  * narrowing accordingly — the one place both halves of `FixtureDefinition`
  * are told apart, so `fixtureFnOf`/`fixtureOptionsOf` below (and any future
  * caller) never re-derive the same `Array.isArray` check by hand. */
-export function isFixtureTuple(
+function isFixtureTuple(
   definition: FixtureDefinition,
 ): definition is readonly [FixtureFn, FixtureOptions] {
   return Array.isArray(definition);

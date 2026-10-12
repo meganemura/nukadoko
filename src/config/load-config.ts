@@ -146,7 +146,7 @@ export interface ResolvedConfigFile {
  * callers fall back to schema defaults the same way an absent
  * nukadoko.config.ts always has.
  */
-export function findConfigFile(rootDir: string): ResolvedConfigFile | null {
+function findConfigFile(rootDir: string): ResolvedConfigFile | null {
   const found = CONFIG_FILE_NAMES.map((fileName) => ({
     fileName,
     path: path.join(rootDir, fileName),

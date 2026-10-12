@@ -164,7 +164,7 @@ async function readScenarioDirs(scenariosDir: string): Promise<ScenarioDirEntry[
  * parse still belongs to its run; a run with no parseable date at all is
  * dated as newest (never removed by the run rule), since removing what
  * cannot be dated is the one thing neither rule does. */
-export function groupRuns(records: readonly ScenarioRecord[]): Map<string, { summary: RunSummary; records: ScenarioRecord[] }> {
+function groupRuns(records: readonly ScenarioRecord[]): Map<string, { summary: RunSummary; records: ScenarioRecord[] }> {
   const byRun = new Map<string, { startedAt: number | null; records: ScenarioRecord[] }>();
   for (const record of records) {
     const startedAt = Date.parse(record.started_at);

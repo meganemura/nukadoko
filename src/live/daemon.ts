@@ -14,6 +14,7 @@ import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
+  ReadOnlyEnvironmentError,
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
@@ -98,10 +99,6 @@ import { encodeLine, type LiveDoRequest, type LiveRequest, type LiveResponse } f
 // compat-step refusal, busy rejection, args/returns validation, the
 // stop-then-cleanup order) can be called directly, without a socket
 // connection or a process of its own to spawn and tear down.
-
-function readOnlyDeclaredMutatesMessage(stepName: string, environment: string): string {
-  return `Step "${stepName}" mutates state but environment "${environment}" has policy "read-only"`;
-}
 
 export interface RunSessionDaemonOptions {
   readonly rootDir: string;
@@ -331,10 +328,10 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     stepNameOf: (step) => stepNameOf.get(step),
     refuseMutatingPart: (part) =>
       resolvedEnv.policy === "read-only" && part.mutates
-        ? readOnlyDeclaredMutatesMessage(
+        ? new ReadOnlyEnvironmentError(
             stepNameOf.get(part) ?? "a step discovery never registered",
             resolvedEnv.name,
-          )
+          ).message
         : undefined,
   });
 
@@ -499,7 +496,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     }
 
     if (resolvedEnv.policy === "read-only" && entry.step.mutates) {
-      return { status: "rejected", message: readOnlyDeclaredMutatesMessage(request.step, resolvedEnv.name) };
+      return { status: "rejected", message: new ReadOnlyEnvironmentError(request.step, resolvedEnv.name).message };
     }
 
     // --- From here on a step record is always written — same "never began

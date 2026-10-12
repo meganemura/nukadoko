@@ -52,10 +52,6 @@ const environmentConfigSchema = z
   })
   .strict();
 
-/** One resolved `environments.<name>` entry, defaults not yet layered onto
- * the top-level config (that layering is resolve-environment.ts's job). */
-export type EnvironmentConfig = z.infer<typeof environmentConfigSchema>;
-
 // A parameter type's own name, same character set as a session/environment
 // name (src/session/name.ts, ENVIRONMENT_NAME_PATTERN above) for the same
 // reason those are restricted: it is not filesystem-derived here, but it is
@@ -125,10 +121,10 @@ const _parameterTypeConfigMatchesBinding: _ParameterTypeConfigMatchesBinding = t
  * sampled from a real browser suite ran a median of 66ms, a 99th
  * percentile of 10.7s, and a maximum of 14s, with none over 30s. */
 export const DEFAULT_STEP_TIMEOUT_MS = 1_200_000;
-export const DEFAULT_RETENTION_RUNS = 20;
+const DEFAULT_RETENTION_RUNS = 20;
 /** `retention.adHocDays`'s default: long enough that a `nuka do` chain
  * started one week and harvested the next still resolves. */
-export const DEFAULT_RETENTION_AD_HOC_DAYS = 7;
+const DEFAULT_RETENTION_AD_HOC_DAYS = 7;
 
 /** `APIRequest.newContext`'s options (`requestContext` below) have no named
  * export from Playwright the way `BrowserContextOptions` does

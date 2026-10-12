@@ -1,5 +1,6 @@
 import type { NukadokoConfig } from "../config/schema.js";
 import { UnknownEnvironmentError } from "./errors.js";
+export { ReadOnlyEnvironmentError } from "./errors.js";
 
 // Responsibility: turn a `--env` name plus the loaded config into the
 // *effective* settings one `do` run actually uses, and never anything
