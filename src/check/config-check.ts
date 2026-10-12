@@ -83,12 +83,14 @@ export function collectDefinedEnvKeys(
 }
 
 // Case-insensitive partial match for the four keyword substrings; `KEY` is
-// deliberately narrower (only as its own underscore-delimited token, or the
-// whole name) so a plain substring check doesn't also fire on a name that
-// merely happens to contain the letters "key", like "MONKEY" or "KEYWORD".
+// deliberately narrower (only as a whole underscore-delimited token) so a
+// plain substring check doesn't also fire on a name that merely contains the
+// letters "key", like "MONKEY", "KEYWORD", or "MAX_KEYS_PER_PAGE". A name that
+// fuses the word into one token ("APIKEY") is not matched either: a warning
+// that guesses is worse than none.
 const SECRET_LOOKING_KEY_PATTERN = /SECRET|PASSWORD|TOKEN|CREDENTIAL|_KEY|^KEY$/i;
 
-function looksLikeSecretKey(key: string): boolean {
+export function looksLikeSecretKey(key: string): boolean {
   return SECRET_LOOKING_KEY_PATTERN.test(key);
 }
 
