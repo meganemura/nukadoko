@@ -2574,7 +2574,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   「Records」を参照)。
   acceptance record は、どの feature のものであっても、ここでの dirty には決して数えられません。
   それは accept 自身が生み出すものであり、凍結しようとしている run が読み込んだ入力では決してないため、それが untracked のまま、あるいは変更された状態で置かれていても、その run 自身の主張を偽にすることはないからです。
-  判定は、`nuka tend` がすでに記録を普通のファイルと区別しているのと同じやり方によります(frontmatter が `run_id`/`commit`/`feature`/`scenarios` を運んでいること、「手入れ」を参照)。
+  判定は、`nuka tend` がすでに記録を普通のファイルと区別しているのと同じやり方によります(frontmatter が `run_id`/`commit`/`feature`/`scenarios` を運んでいること、「Tending(手入れ)」を参照)。
   git がまだそれを追跡しているかどうかによってではありません。
   このチェックがそもそも読み込めないパス(おそらく計測された後に削除されたもの)は、引き続き dirty として数えられます。
   消された記録は本物の変更であり、この除外の対象ではないからです。
@@ -2605,7 +2605,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   起動していなければ、空欄のままにするのではなく、その節がそのことを明示します。
   こうすることで「ブラウザを起動しなかった」ことと「読み手が確認し忘れた」ことが区別できるままになります。
   この節ができる前に accept された記録にはこの節がありません。
-  `nuka tend` はそれを「条件不明」として扱い、条件を推測することは決してなく、この節による比較の対象にすることもありません(「手入れ」を参照)。
+  `nuka tend` はそれを「条件不明」として扱い、条件を推測することは決してなく、この節による比較の対象にすることもありません(「Tending(手入れ)」を参照)。
 - acceptance record は、凍結する run からツールが組み立てます: feature の全文、scenario record、そして各 step 自身の step record です。
   step 自身の契約が名指したものだけに絞り込まれ、run の途中でブラウザがたまたま行ったことは含みません。
   人間が書き写すことは決してありません(書き写しは、計測を主張へと格下げしてしまいます)。
@@ -2758,7 +2758,7 @@ schema が自分で生み出す値は、コメントに書きません。
 2 つ目の実装ではなく `run` の matcher を使うため、両方のコマンドが同じ行の意味を使います。
 
 由来は stderr に出し、feature ファイルには入れません。
-id は gitignore された state directory を指し、そのディレクトリは削除しても安全です(「The state directory」を参照)。
+id は gitignore された state directory を指し、そのディレクトリは削除しても安全です(「State directory」を参照)。
 commit された feature がこれらの id を示すと、読み手がたどれない参照を含むことになります。
 作業情報は作業と同じ場所に残し、耐久性のある feature ファイルには真であり続ける事実だけを残します。
 
@@ -2900,7 +2900,7 @@ step entry の parameter は、その宣言と実際に `observed` されたも�
 計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
 これは自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。
 宣言は nukadoko が信頼し作用する対象であり、`observed` の回数は実際に起きたことであり、この行は両者を目で見比べられる場所です。
-`observed` は意味論上の判定ではなく HTTP メソッドによるプロキシです(「Keyword semantics」を参照)。
+`observed` は意味論上の判定ではなく HTTP メソッドによるプロキシです(「キーワードの意味論」を参照)。
 step が POST ベースの読み取りを呼んでいた場合、正直な `mutates (declared): false` の隣にゼロでない `http writes (observed)` が並ぶことがありますが、それはこのプロキシがテーブルに透けて見えているだけであり、どちらの数値も嘘をついているわけではありません。
 
 失敗した scenario は `statusDetails.message` に `[nukadoko.failure=<kind>]` を入れます。

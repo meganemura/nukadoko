@@ -9,6 +9,13 @@ just until 0.1.
 
 ### Added
 
+- **A test checks the names the docs give for commands, flags, finding codes, and headings.**
+  `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
+  `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the
+  CLI has, every code in a registered family must be a `nuka check` or
+  `nuka tend` code, and every quoted heading must exist in the file it points
+  at. The spec's CLI summary must list every command and flag. Each of these
+  drifted before with no test failing.
 - **Models and relations are declarations `nuka check` can read.**
   `defineModel(initial).commands(...)` and `defineRelation` name steps by
   basename. `explore-unknown-step` reports a name that is not in the
@@ -26,6 +33,10 @@ just until 0.1.
 
 ### Fixed
 
+- **Four Japanese spec cross-references name a heading that exists.**
+  `docs/spec.ja.md` cited 「手入れ」, 「The state directory」, and
+  「Keyword semantics」, which are not its headings. They now cite
+  「Tending(手入れ)」, 「State directory」, and 「キーワードの意味論」.
 - **The migration docs list what compat still does differently from cucumber-js.**
   The migration skill said that whatever will not work fails loudly, and told
   an agent not to look for a list. Some differences do not fail: the suite
