@@ -18,6 +18,11 @@ just until 0.1.
 
 ### Fixed
 
+- **The clean-tree check sees untracked files whatever `status.showUntrackedFiles` says.**
+  With `status.showUntrackedFiles=no` in git config, `git status` hid untracked
+  files, so a tree with new files read as clean in the scenario record's `git.clean`
+  and in the `nuka accept` dirty-tree check. Both calls now pass
+  `--untracked-files=normal`.
 - **`ctx.request()` logs a call that throws, and logs the URL that was requested.**
   A call that threw (a refused connection, `failOnStatusCode` on a 500) wrote no
   http.jsonl line although `observed` counted it, and `url` was the string the

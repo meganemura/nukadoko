@@ -52,7 +52,7 @@ export async function probeGitState(rootDir: string): Promise<GitState | undefin
   try {
     const { stdout } = await execFileAsync(
       "git",
-      ["-C", rootDir, "status", "--porcelain=v2", "--branch"],
+      ["-C", rootDir, "status", "--porcelain=v2", "--branch", "--untracked-files=normal"],
       { encoding: "utf8" },
     );
 
@@ -93,7 +93,7 @@ export async function listDirtyPaths(rootDir: string): Promise<string[]> {
   try {
     const [{ stdout: topLevelOut }, { stdout: statusOut }] = await Promise.all([
       execFileAsync("git", ["-C", rootDir, "rev-parse", "--show-toplevel"], { encoding: "utf8" }),
-      execFileAsync("git", ["-C", rootDir, "status", "--porcelain=v1", "-z"], { encoding: "utf8" }),
+      execFileAsync("git", ["-C", rootDir, "status", "--porcelain=v1", "-z", "--untracked-files=normal"], { encoding: "utf8" }),
     ]);
     const repoRoot = topLevelOut.trim();
 
