@@ -43,6 +43,15 @@ export async function runHarvest(options: RunHarvestOptions): Promise<number> {
     return 1;
   }
 
+  const selectedIds = new Set<string>();
+  for (const id of stepRecordIds) {
+    if (selectedIds.has(id)) {
+      stderr.write(`step record id given more than once: ${id}\n`);
+      return 1;
+    }
+    selectedIds.add(id);
+  }
+
   let config;
   try {
     config = await loadConfig(rootDir);

@@ -18,6 +18,8 @@ just until 0.1.
 
 ### Fixed
 
+- `nuka harvest` refuses a repeated step record id before it prints a draft.
+  The refusal names the repeated id once. One execution cannot become multiple steps.
 - **Feature walks skip `node_modules` and dot-directories.**
   `walkFeatureFiles` entered both, so `featuresDir: "."` and `nuka run .`
   checked and ran `.feature` files from dependencies and from `.nukadoko`.

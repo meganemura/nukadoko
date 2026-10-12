@@ -44,6 +44,9 @@ A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`
 are the repeatable flags. Each value is kept, in the order given.
 
+For a draft from an exploration, run `nuka harvest <step-record-id>...`.
+If it refuses the selection, use stderr to correct the ids before saving the draft.
+
 ## Before the first change
 
 This one rewrites a suite that currently works. Before the first change,
