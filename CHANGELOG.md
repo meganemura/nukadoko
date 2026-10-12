@@ -461,6 +461,12 @@ just until 0.1.
   name the configured directory and the path they resolved, and still
   exit 1. A directory that exists and simply has no such step is
   unchanged.
+- **The spec's "Records" section describes `session_execution` and the scenario record's `git`.**
+  Both fields were written to records but defined nowhere in the spec. It now
+  says that `session_execution` is an execution's 1-based position in a live
+  session and is absent otherwise, and that `git` holds the commit and the
+  cleanliness of the working tree when the run started, which `nuka accept`
+  checks. The Japanese spec matches.
 
 ### Breaking
 

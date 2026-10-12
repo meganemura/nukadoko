@@ -2342,6 +2342,17 @@ array identifies each step record by id, so either record leads to the other.
   which run one step record came from meant opening the scenario record
   beside it first; a step record answers that on its own now, the same way
   it already answers everything else about what this one execution did.
+- `session_execution` (a number, included only when this execution ran
+  against a live session's `ctx`, see "Live sessions") is this execution's
+  1-based position in that session's sequence: `1` for the first `nuka do`
+  the session served, `30` for the thirtieth. `session` alone names a
+  session and cannot say whether the world was built for this execution or
+  was already thirty executions deep; this field is what keeps a record from
+  a live session from reading like one from a clean start. A `nuka do`
+  without a live session and every `nuka run` step record omit it. A `do`
+  the session refused (an unknown step, a `--use` that does not resolve, a
+  mutating step on a read-only environment) writes no step record and takes no number. `nuka do` also
+  names the number on stderr when the step returns.
 - `error.kind` uses a closed set and sits beside the message a person reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
   `timeout`, `unsupported`, `step_error`. Closed because a report has to
@@ -2657,6 +2668,17 @@ array identifies each step record by id, so either record leads to the other.
   already closed, so a `scenario`-scope fixture's own teardown failure
   lands on the scenario record's `teardown_errors` instead (see
   "Fixtures").
+- A scenario record's `git` is `{ "commit", "clean" }`: the full 40-character
+  sha the working tree was at when the run started, and whether
+  `git status --porcelain=v2 --branch` (untracked files included) printed
+  nothing but its `#` header lines then. It is measured once when the run
+  starts, not once per pickle, so every scenario record of one `nuka run`
+  carries the same value even when a step edits a tracked file mid-run
+  (with `--concurrency`, each worker measures it once as it starts). It is
+  absent outside a git repository, before the first commit, and when the
+  git call fails; the run itself never fails over it. `nuka accept` reads
+  it (see "Sign-off"): a run with no `git`, a `commit` other than the
+  current HEAD, or `clean: false` is refused.
 - Step records are stored under `.nukadoko/records/steps/<id>/`. Scenario
   records are stored under `.nukadoko/records/scenarios/<id>/` (see
   "Artifacts"). Both are
@@ -3059,7 +3081,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
   untracked step file the discovery would have loaded, or a commit made
   between the run and the sign-off, makes that claim false. The scenario
   record grows one field to make this checkable: the commit the working
-  tree was at when the run started. An acceptance record, of any feature,
+  tree was at when the run started (`git`, see "Records"). An acceptance record, of any feature,
   is never part of what counts as dirty here: it is what accepting itself
   produces, never an input the run being frozen read, so its sitting there
   untracked or changed cannot make that run's own claim any less true.

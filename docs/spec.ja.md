@@ -1980,6 +1980,13 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
+- `session_execution`(数値)は、この実行が live session の `ctx` に対して走ったときだけ含まれます(「Live sessions」を参照)。
+  値はその session の中でこの実行が何番目かを 1 から数えたものです: session が受けた最初の `nuka do` なら `1`、30 番目なら `30` です。
+  `session` だけでは session の名前しか分からず、world がこの実行のために作られたのか、すでに 30 回の実行を経たものなのかは言えません。
+  このフィールドがあるので、live session の record が新しく始めた record のように読まれることはありません。
+  live session を使わない `nuka do` と、すべての `nuka run` の step record はこれを持ちません。
+  session が拒否した `do`(未知の step、解決できない `--use`、read-only な environment での mutate する step)は step record を書かず、番号も取りません。
+  `nuka do` は step が戻ったときに、この番号を stderr にも出します。
 - `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`step_error`。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
@@ -2179,6 +2186,12 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `{ "name", "scope", "setup_ms"?, "at"?, "reused" }` です(完全な形と、`setup_ms`/`at` が新しく構築されたエントリにしか存在しない理由は「Fixtures」を参照)。
   teardown 自体はこのリストに含まれません。
   teardown はこの step record がすでに閉じたあとに走るので、`scenario` scope の fixture 自身の teardown 失敗は scenario record の `teardown_errors` に載ります(「Fixtures」を参照)。
+- scenario record の `git` は `{ "commit", "clean" }` です。
+  `commit` は run が始まったときに working tree があったコミットの 40 文字の完全な sha で、`clean` はそのとき `git status --porcelain=v2 --branch`(untracked なファイルを含む)が `#` で始まるヘッダ行以外を何も出さなかったかどうかです。
+  pickle ごとではなく run の開始時に 1 回だけ計測するので、step が実行中に追跡対象のファイルを編集しても、1 回の `nuka run` のすべての scenario record は同じ値を持ちます(`--concurrency` では、各 worker が起動時に 1 回計測します)。
+  git リポジトリの外、最初のコミットより前、git の呼び出しが失敗したときは、このフィールドはありません。
+  そのことで run 自体が失敗することはありません。
+  `nuka accept` はこれを読みます(「Sign-off」を参照): `git` の無い run、`commit` が現在の HEAD と違う run、`clean: false` の run は拒否されます。
 - step record は `.nukadoko/records/steps/<id>/` の下に置かれます。
   scenario record は `.nukadoko/records/scenarios/<id>/` の下に置かれます(「成果物」を参照)。
   どちらもローカルな作業上の計測であり、そこから組み立てられる耐久性のある成果物が sign-off です。
@@ -2515,7 +2528,7 @@ nuka accept acceptance/PROJ-123.feature  # freeze the last green run
 - working tree が完全にクリーンで(untracked file を含む)、かつ凍結しようとしている run が現在の HEAD で行われたのでなければ拒否します。
   記録の主張はまるごと「この scenario は commit X で green だった」というものです。
   discovery が読み込んだはずの untracked な step ファイルや、run と sign-off の間に行われたコミットは、その主張を偽にします。
-  scenario record はこれをチェック可能にするために 1 つのフィールドを増やします(run が始まったときに working tree がどの commit にあったか)。
+  scenario record はこれをチェック可能にするために 1 つのフィールド `git` を増やします(run が始まったときに working tree がどの commit にあったか。「Records」を参照)。
   acceptance record は、どの feature のものであっても、ここでの dirty には決して数えられません。
   それは accept 自身が生み出すものであり、凍結しようとしている run が読み込んだ入力では決してないため、それが untracked のまま、あるいは変更された状態で置かれていても、その run 自身の主張を偽にすることはないからです。
   判定は、`nuka tend` がすでに記録を普通のファイルと区別しているのと同じやり方によります(frontmatter が `run_id`/`commit`/`feature`/`scenarios` を運んでいること、「手入れ」を参照)。
