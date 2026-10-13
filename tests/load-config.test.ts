@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -199,6 +199,34 @@ describe("loadConfig", () => {
       expect(last, `median ${first.toFixed(2)}ms then ${last.toFixed(2)}ms`).toBeLessThan(
         first * 2 + 3,
       );
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  // One process can outlive an edit to the config: `nuka run` then `nuka
+  // accept` through runCli, a live session, or the MCP server.
+  it("reads the config again after the file changes in the same process", async () => {
+    const rootDir = await createEmptyTempDir();
+    try {
+      const configPath = path.join(rootDir, "nukadoko.config.ts");
+      await writeFile(configPath, 'export default { browserType: "chromium" };\n');
+      expect((await loadConfig(rootDir)).browserType).toBe("chromium");
+      await writeFile(configPath, 'export default { browserType: "firefox" };\n');
+      expect((await loadConfig(rootDir)).browserType).toBe("firefox");
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
+  it("reads the config again after nukadoko.config.ts is replaced by nukadoko.config.mts", async () => {
+    const rootDir = await createEmptyTempDir();
+    try {
+      await writeFile(path.join(rootDir, "nukadoko.config.ts"), 'export default { featuresDir: "ts" };\n');
+      expect((await loadConfig(rootDir)).featuresDir).toBe("ts");
+      await rm(path.join(rootDir, "nukadoko.config.ts"));
+      await writeFile(path.join(rootDir, "nukadoko.config.mts"), 'export default { featuresDir: "mts" };\n');
+      expect((await loadConfig(rootDir)).featuresDir).toBe("mts");
     } finally {
       await removeTempDir(rootDir);
     }
