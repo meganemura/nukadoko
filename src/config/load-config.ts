@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
@@ -31,9 +31,9 @@ export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
 // does not default-export the object is not empty: a missing default, or
 // a Promise, is a ConfigError naming the file. Reading either as `{}`
 // would ignore every key the file stated, including secrets.redact. A
-// repeated load of the same root returns the already-parsed config
-// (`configByRoot`, below): a fresh tsImport per call cannot be the
-// implementation.
+// repeated load of the same root returns the already-parsed config while
+// the file is unchanged (`configByRoot`, below): a fresh tsImport per call
+// cannot be the implementation.
 //
 // .mts exists for one reason: a project whose package.json has no
 // "type": "module" (CommonJS) cannot load nukadoko.config.ts at all — tsx
@@ -184,24 +184,39 @@ export function resolveConfigFileName(rootDir: string): string {
 // grew from about 5ms to about 45ms, and the same 800 built on register
 // plus unregister in a finally grew the same way. recordStep calls
 // loadConfig once per step inside one process, so that growth is the cost
-// of the run. The config file stays put for that process, so the parsed
-// result is kept per root and the registration happens once. A failed load
-// is dropped, so the next call can see a file that has since been corrected.
-const configByRoot = new Map<string, Promise<NukadokoConfig>>();
+// of the run. So the parsed result is kept per root, and the registration
+// happens once for each version of the file. One process can outlive an
+// edit to the config (runCli called twice, a live session, the MCP server),
+// so the kept result is reused only while the same file name exists with
+// the same mtime and size; a stat per call costs far less than a tsImport.
+// A module the config imports is not part of that check. A failed load is
+// dropped, so the next call can see a file that has since been corrected.
+const configByRoot = new Map<string, { stamp: string; config: Promise<NukadokoConfig> }>();
 
 export async function loadConfig(rootDir: string): Promise<NukadokoConfig> {
   const key = path.resolve(rootDir);
+  const stamp = configFileStamp(key);
   const cached = configByRoot.get(key);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined && cached.stamp === stamp) return cached.config;
 
-  const pending = readConfig(key);
-  configByRoot.set(key, pending);
+  const entry = { stamp, config: readConfig(key) };
+  configByRoot.set(key, entry);
   try {
-    return await pending;
+    return await entry.config;
   } catch (error) {
-    if (configByRoot.get(key) === pending) configByRoot.delete(key);
+    if (configByRoot.get(key) === entry) configByRoot.delete(key);
     throw error;
   }
+}
+
+// Names the config file version a cached result was read from. Each name
+// is stat'ed, so both names existing at once still reaches readConfig's
+// refusal on the next call.
+function configFileStamp(rootDir: string): string {
+  return CONFIG_FILE_NAMES.map((fileName) => {
+    const stats = statSync(path.join(rootDir, fileName), { throwIfNoEntry: false });
+    return stats === undefined ? `${fileName}:-` : `${fileName}:${stats.mtimeMs}:${stats.size}`;
+  }).join("|");
 }
 
 async function readConfig(rootDir: string): Promise<NukadokoConfig> {
