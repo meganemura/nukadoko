@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { asObjectShape } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
+import { tryFromCandidates, type StepFromMap } from "../step/define-step.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: docs/spec.md "Tending"'s "A schema field with no
@@ -70,14 +71,35 @@ interface FieldCoverageEntry {
   readonly described: boolean;
 }
 
-function fieldCoverage(schema: z.ZodTypeAny, label: "args" | "returns"): FieldCoverageEntry[] {
+// An args key `from` fills is a value the agent never writes: `nuka
+// describe` names its producer, and the producer's returns field explains
+// it. Asking each consumer to repeat that sentence would duplicate it, and
+// the copies drift. So the key counts as described when every candidate
+// producer's field does; an undescribed producer field still leaves it
+// reported, since then nothing explains it.
+function describedByProducers(from: StepFromMap, key: string): boolean {
+  const entry = from[key];
+  if (entry === undefined) {
+    return false;
+  }
+  const candidates = tryFromCandidates(entry);
+  if (candidates === null) {
+    return false;
+  }
+  return candidates.every(([producer, producerKey]) => {
+    const producerField = asObjectShape(producer.returns)?.[producerKey];
+    return producerField !== undefined && hasDescription(producerField);
+  });
+}
+
+function fieldCoverage(schema: z.ZodTypeAny, label: "args" | "returns", from: StepFromMap = {}): FieldCoverageEntry[] {
   const shape = asObjectShape(schema);
   if (shape === undefined) {
     return [];
   }
   return Object.entries(shape).map(([key, fieldSchema]) => ({
     name: `${label}.${key}`,
-    described: hasDescription(fieldSchema),
+    described: hasDescription(fieldSchema) || describedByProducers(from, key),
   }));
 }
 
@@ -101,7 +123,10 @@ export function analyzeFieldDescriptions(vocabulary: Vocabulary): FieldDescripti
     if (entry.kind !== "typed") {
       continue; // Compat has no zod schema at all.
     }
-    const fields = [...fieldCoverage(entry.step.args, "args"), ...fieldCoverage(entry.step.returns, "returns")];
+    const fields = [
+      ...fieldCoverage(entry.step.args, "args", entry.step.from),
+      ...fieldCoverage(entry.step.returns, "returns"),
+    ];
     const missing = fields.filter((field) => !field.described);
     totalFields += fields.length;
     describedFields += fields.length - missing.length;

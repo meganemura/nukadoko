@@ -33,6 +33,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka tend` reads a `from`-filled arg's description from its producer.**
+  An args field that `from` fills was reported as undescribed unless the
+  consumer repeated the producer's `.describe()`. A six-step CLI scenario
+  that chained a directory, a path, and a commit through `from` got 16 such
+  notes out of 29 fields. The field now counts as described when every
+  producer it names describes that `returns` field, in the
+  `schema-field-undescribed` note and in the `declared:` summary. An
+  undescribed producer field still leaves the consumer's field reported.
+
 - **Four Japanese spec cross-references name a heading that exists.**
   `docs/spec.ja.md` cited 「手入れ」, 「The state directory」, and
   「Keyword semantics」, which are not its headings. They now cite

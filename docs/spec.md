@@ -3774,7 +3774,11 @@ The following findings show what `tend` inspects and why each item is rot rather
   specifically for the agent: `nuka describe` is how an agent learns what
   a field means, and a field with no description tells it nothing a name
   did not already. Human readers of the step file can see the surrounding
-  code; the agent choosing between two steps cannot.
+  code; the agent choosing between two steps cannot. An args field that
+  `from` fills counts as described when every producer it names describes
+  that `returns` field: the agent never writes that value, and `nuka
+  describe` names the producer whose field explains it. Repeating the
+  sentence on every consumer would only make copies that drift.
 - **A step with no `rationale`.** `description` says what the step does,
   which is enough to call it. `rationale` says why it is built this way and
   what was rejected, which is what an agent needs before deciding it may
