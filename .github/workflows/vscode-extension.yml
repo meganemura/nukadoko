@@ -13,10 +13,18 @@ on:
     paths:
       - "vscode/**"
       - ".github/workflows/vscode-extension.yml"
+      # vscode/ depends on this checkout's root package (file:..), so a
+      # change to its source or manifest can break the extension too.
+      - "src/**"
+      - "package.json"
   pull_request:
     paths:
       - "vscode/**"
       - ".github/workflows/vscode-extension.yml"
+      # vscode/ depends on this checkout's root package (file:..), so a
+      # change to its source or manifest can break the extension too.
+      - "src/**"
+      - "package.json"
 
 # Nothing here writes anything back. An injected workflow is limited by what
 # its token may do, so the token is given only what this one needs.

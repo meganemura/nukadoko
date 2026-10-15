@@ -46,6 +46,7 @@
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && esbuild src/extension.ts --bundle --format=cjs --platform=node --external:vscode --outfile=dist/extension.js && node scripts/copy-wasm-assets.mjs",
     "test": "vitest run",
+    "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies"
   },
   "dependencies": {

@@ -19,6 +19,8 @@
   line, and the other files stay indexed. One such file made Go to
   definition and completion fail for the whole workspace before. A
   failure to list the workspace shows an error message.
+- `vsce package` builds `dist/` first, so a package made from a clean
+  checkout holds the extension's code.
 
 ## 0.1.0
 
