@@ -1,7 +1,7 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a signed-off Gherkin scenario, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, or a path already explored one `nuka do` call at a time and now worth fixing in a scenario.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka check, nuka run, nuka accept, nuka tend).
+description: Use when turning a requirement into a signed-off Gherkin scenario, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka explore` should run.
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka explore, nuka check, nuka run, nuka accept, nuka tend).
 license: MIT
 ---
 
@@ -82,8 +82,12 @@ If it refuses the selection, use stderr to correct the ids before saving the dra
 4. **You already ran the path** with `nuka do` and want it fixed in a
    scenario: `references/exploring.md`, then join the loop at step 4
    (`nuka check`).
+5. **You want sequences generated against a model, or two runs compared
+   by a relation**, with request-only steps: `references/models.md`
+   (`nuka explore`), then paste what it prints and join the loop at
+   step 4.
 
-If none of the four is true, ask what this is supposed to do before
+If none of the five is true, ask what this is supposed to do before
 writing anything. A scenario started without knowing what it proves
 proves the wrong thing.
 
@@ -159,6 +163,9 @@ proves the wrong thing.
   stands (`references/writing-steps.md`). A prompt that asks for a
   different amount of patience overrides the three; it is not a config
   setting.
+- Don't change a model or a relation only to make a failure `nuka explore`
+  printed go away. A person reads the printed scenario first
+  (`references/models.md`).
 - Don't hand-edit a written record. It exists because it was measured, not
   claimed; editing it by hand turns it back into a claim.
 - Don't delete a record and redo it to get a cleaner one. Its git history

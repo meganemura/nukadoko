@@ -179,6 +179,29 @@ still walks `.feature` files the way it always has.
 and what it leaves for later, is in
 [docs/spec.md](docs/spec.md#markdown-oaths).
 
+## Exploring a model
+
+A scenario is one sequence a person chose. A model says what any sequence
+of request-only steps should do, and `nuka explore` generates sequences
+from it:
+
+```
+nuka explore features/explore/add-model.ts --seed 1
+```
+
+Each sequence is built from `draw.int` and `draw.pick` choices taken from
+one seed, so the same command reruns the same sequences. The first
+failure is shrunk: a step is deleted, then a choice is lowered, and an
+edit stays only while the sequence still fails. stdout then gets the
+shortest scenario found, written in the project's own step patterns and
+ready to paste into a feature. A relation runs a declared sequence and a
+second one built from it, and prints both scenarios when their results
+disagree. Nothing is added to a feature on its own: a person reads the
+printed scenario and decides. The model in
+`examples/todo/features/explore/` runs against the todo app, and
+[docs/spec.md](docs/spec.md#exploring-a-model-or-a-relation) has the
+rules.
+
 ## Why this exists now
 
 Code is increasingly written the way this sentence was: someone describes
@@ -248,7 +271,7 @@ more of the roadmap has landed, not that the surface has frozen.
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), tending (`nuka tend`), scenario
-harvesting (`nuka harvest`), the MCP tool listing (`nuka mcp-tools`),
+harvesting (`nuka harvest`), models and relations (`nuka explore`), the MCP tool listing (`nuka mcp-tools`),
 Varar-style Markdown oaths (a second front beside Gherkin; see
 [Markdown oaths](#markdown-oaths)), and two agent skills. Not implemented:
 an AI-assisted glue converter, and the rest of Varar (comparing a step's
