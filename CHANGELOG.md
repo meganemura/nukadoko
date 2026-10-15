@@ -31,6 +31,15 @@ just until 0.1.
   skill now names the typed-step deadline, how to change it, and how to read
   an `error.kind: "timeout"` failure.
 
+### Changed
+
+- **A version bump that lands on main now publishes the npm package.**
+  `.github/workflows/publish.yml` runs on a push to `main` that changes
+  `package.json`, publishes when no `v<version>` tag exists yet, and then
+  creates that tag and the GitHub release on the published commit. Nobody
+  pushes a `v*` tag by hand any more. The VS Code extension keeps its own
+  `vscode-v*` tag flow.
+
 ### Fixed
 
 - **`nuka tend` reads a `from`-filled arg's description from its producer.**

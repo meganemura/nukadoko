@@ -2,24 +2,28 @@
 
 nukadoko はすでに npm にあります。
 リリースは npm パッケージと、`package.json` の version に `v` を付けた git tag です。
-その tag を push すると [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) が走ります。
-workflow は tag と `package.json` を突き合わせ、その commit をインストールし、`dist/` をビルドし、このリポジトリ自身の CI と同じチェック(`npm run archstrict` を含む)を実行し、`npm run pack-check` を実行してから `npm publish` します。
+`package.json` を変える `main` への push が [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) を走らせます。
+その `check` ジョブは `package.json` の version を読み、tag `v<version>` を探します。
+依存の更新のあとのように、その tag が既にあれば、その実行は何もリリースしません。
+無ければ publish ジョブが push された commit をインストールし、`dist/` をビルドし、このリポジトリ自身の CI と同じチェック(`npm run archstrict` を含む)を実行し、`npm run pack-check` を実行してから `npm publish` します。
 npm は GitHub Actions の OIDC で認証します。
 リポジトリとパッケージがどちらも公開されているので、npm の provenance は自動で付きます。
 GitHub の Environment `publish` が人のゲートです。
 publish ジョブは承認されるまでそこで待ちます。
 
-`npm publish` が成功したあと、別のジョブがそのバージョンの GitHub release を作ります。
-そのジョブは publish ジョブが checkout したのと同じ commit を checkout し、`CHANGELOG.md` からそのバージョンの節だけを取り出し、`gh release create --verify-tag` を実行します。
-同じ tag の release が既にあれば、そのまま残します。
-同じ tag を再実行しても失敗しません。
+`npm publish` が成功したあと、3 つめのジョブがそのバージョンの tag と GitHub release を作ります。
+そのジョブは publish ジョブが checkout したのと同じ commit を checkout し、`CHANGELOG.md` からそのバージョンの節だけを取り出し、publish した commit を指定して `gh release create --target` を実行します。
+その呼び出しが、その commit に tag `v<version>` を作ります。
+その tag を手で push する人はいません。
+release が既にあれば、そのまま残します。
+ジョブを再実行しても失敗しません。
 publish ジョブの権限は `id-token: write` と `contents: read` です。
 release ジョブの権限は `contents: write` です。
 そのジョブは npm の OIDC トークンを持ちません。
 
 パッケージが載せるのは、`dist/` にコンパイルした JavaScript(`nuka` の bin は `dist/cli.js`)、それに `src/`、`docs/`、`skills/`、`CHANGELOG.md`、`llms.txt` です。
 `dist/` は `.gitignore` に入っています。
-workflow が tag の付いた commit からそれをビルドします。
+workflow が push された commit からそれをビルドします。
 `README.md`、`README.ja.md`、`LICENSE`、`package.json` は npm が常に tarball へ入れるので、それらも入ります。
 
 `package.json` は `prepublishOnly` を宣言していますが、`.npmrc` が `ignore-scripts=true` なので、`npm publish` のあいだその hook は走りません。
@@ -30,24 +34,37 @@ workflow が自分で `npm run build` を実行します。
 workflow は `NPM_TOKEN` を読みません。
 リポジトリの secrets にも置きません。
 最初の 1 回をトークンで publish する手順はありません。
-パッケージは既にあるので、Trusted Publisher を直接付けられます。
+パッケージは既にあり、その Trusted Publisher も登録済みです。
 
-`vscode/` の VS Code 拡張は別パッケージで、tag は `vscode-v*` です。
-`v*` だけのフィルタはその接頭辞にも一致するので、workflow は `vscode-v*` を除外します。
-この workflow は拡張を publish しません。
+`vscode/` の VS Code 拡張は別パッケージです。
+拡張は独自の `vscode-v*` tag で、別にバージョンを付けてリリースします。
+このページはそれを扱いません。
+`publish.yml` が読むのはルートの `package.json` だけなので、`vscode/package.json` を変えてもこの workflow は始まらず、拡張を publish することもありません。
 
 ## 一度だけの準備
 
+Environment と trusted publisher は、2026-09-23 の時点で既に設定済みです。
+どちらも、無くなったときだけ作り直します。
 これは人の手順です。
 このリポジトリの中の何も、Environment を作ったり trusted publisher を登録したりはしません。
 
-1. GitHub リポジトリ `meganemura/nukadoko` に、名前が `publish` の Environment を作り、承認する人を必須にします。
-   workflow のジョブは `environment: publish` を指定しているので、承認されるまで実行は待ちます。
-   最初の tag より前に Environment を作ります。
+1. GitHub リポジトリ `meganemura/nukadoko` には、名前が `publish` で承認する人を必須にした Environment があります。
+   workflow のジョブは `environment: publish` を指定しているので、リリースの実行は承認されるまでそこで待ちます。
+
+   その実行は tag からではなく、`main` ブランチから来ます。
+   Environment が deployment の対象にできるブランチと tag を絞っているなら、その一覧で `main` を許可しなければなりません。
+   `v*` の tag だけを許可する一覧は、その実行を拒否します。
+   これはオーナーが、リポジトリ設定の Environments で変えます。
+
+   trusted publisher を登録しても、承認待ちは開きません。
+   承認待ちが現れるのは、リリースの実行が Environment `publish` に入ったときだけです。
+
+   Environment が無ければ、次のリリースより前にそれを作り、承認する人を必須にします。
    そうしないと GitHub は最初の実行時に、承認する人が必須でない Environment を作り、チェックが通った瞬間に publish します。
 
-2. npmjs.com の `nukadoko` パッケージに、GitHub Actions の trusted publisher を 1 つ足します。
+2. npmjs.com の `nukadoko` パッケージには、`npm publish` を許可した GitHub Actions の trusted publisher が 1 つあります。
    フィールドは大文字小文字を区別します。
+   publisher が無ければ、次の値で足します。
 
    - Organization or user: `meganemura`
    - Repository: `nukadoko`
@@ -62,16 +79,17 @@ workflow は `NPM_TOKEN` を読みません。
    `package.json` の `repository.url` は既に `git+https://github.com/meganemura/nukadoko.git` です。
    npm はその URL を workflow のリポジトリと突き合わせます。
 
-3. Actions からの最初の publish が成功したあと、パッケージ設定で二要素認証を必須にし、トークンによる publish を禁止できます。
+3. Actions からの OIDC による publish が動いたあと、パッケージ設定で二要素認証を必須にし、トークンによる publish を禁止できます。
+   これは任意の強化です。
    trusted publisher はそのまま動きます。
 
 ## 各バージョン
 
 1. `## Unreleased` の下にあるノートを新しいバージョンの見出しへ移し、`## Unreleased` は空にします。
-   見出しの形は `CHANGELOG.md` に既にあるものと同じです。
-   `package.json` に同じ version を書きます。
-   先頭の `v` を除いた tag がその version です。
-   両者が違えば workflow は止まります。
+   見出しの形は `CHANGELOG.md` に既にあるものを保ちます。
+   release ジョブは、見出しが `##` とそのバージョンと空白で始まる節を取り出すからです。
+   `package.json` と `package-lock.json` に同じ version を書きます。
+   workflow はその version から tag を作ります。
    `docs/upgrading.md` と `docs/upgrading.ja.md` では、「to the next release」(日本語では「から次のリリースへ」)で終わる見出しを、このバージョンを名指すように書き換えます。
    たとえば `0.14.1 to 0.15.0` です。
 
@@ -79,14 +97,16 @@ workflow は `NPM_TOKEN` を読みません。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。
    これが捕まえるのは、このリポジトリが devDependency にしか挙げていないパッケージへ `bin` が依存していることと、`dist/` が `src/` と一致していないことです。
 
-3. `chore: release <version>` として commit します。
-   `v<version>` を tag します。
-   commit と tag を push します。
-   tag の push が workflow を開始します。
+3. version の更新、changelog、upgrading の見出しを 1 つにまとめ、`chore: release <version>` として commit します。
+   その commit を `queue` ブランチ経由で `main` に入れます。
+   それが `main` に届くと workflow が始まります。
+   `v*` の tag を手で push しません。
+   tag は workflow が作ります。
    この publish は `publish.yml` だけです。
    checkout から `npm publish` を実行しません。
 
 4. その Actions の実行で Environment `publish` を承認します。
+   承認待ちは、その実行が Environment に入ったことです。
    workflow は `ubuntu-latest` の Node 24 を使い、npm の registry URL を設定します。
    npm 11.5.1 以上を要求します。
    その版が、GitHub の OIDC トークンを publish 用の資格情報に交換できる版だからです。
@@ -101,5 +121,6 @@ workflow は `NPM_TOKEN` を読みません。
 
 5. workflow の `release` ジョブが、`npm publish` のあとに GitHub release を作ります。
    `CHANGELOG.md` は、publish ジョブが checkout した commit から読みます。
-   `--notes-file CHANGELOG.md` はすべてのバージョンのノートを貼るので、ジョブは見出しが `##` とそのバージョンと空白で始まる節だけを取り出してから、`--verify-tag` 付きで `gh release create` を実行します。
-   release を作るのはそのジョブです。
+   `--notes-file CHANGELOG.md` はすべてのバージョンのノートを貼るので、ジョブは見出しが `##` とそのバージョンと空白で始まる節だけを取り出してから、publish した commit を `--target` に指定して `gh release create` を実行します。
+   その呼び出しが tag `v<version>` と release を作ります。
+   両方を作るのはそのジョブです。

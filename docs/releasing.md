@@ -1,29 +1,34 @@
 # Releasing
 
 nukadoko is already on npm. A release is the npm package and a git tag
-whose name is `v` plus the `package.json` version. Pushing that tag runs
-[`.github/workflows/publish.yml`](../.github/workflows/publish.yml). The
-workflow checks the tag against `package.json`, installs the tagged
-commit, builds `dist/`, runs the same checks this repository's own CI
-runs (including `npm run archstrict`), runs `npm run pack-check`, and
-runs `npm publish`. npm authenticates with GitHub Actions OIDC.
-Provenance is attached automatically because the repository and the
+whose name is `v` plus the `package.json` version. A push to `main` that
+changes `package.json` runs
+[`.github/workflows/publish.yml`](../.github/workflows/publish.yml). Its
+`check` job reads the `package.json` version and looks for the tag
+`v<version>`. When that tag already exists, as it does after a
+dependency bump, the run releases nothing. Otherwise the publish job
+installs the pushed commit, builds `dist/`, runs the same checks this
+repository's own CI runs (including `npm run archstrict`), runs
+`npm run pack-check`, and runs `npm publish`. npm authenticates with
+GitHub Actions OIDC. Provenance is attached automatically because the repository and the
 package are public. The GitHub Environment `publish` is the human
 gate: the publish job waits there until it is approved.
 
-After `npm publish` succeeds, a second job creates the GitHub release
-for that version. It checks out the same commit the publish job
-checked out, extracts this version's section of `CHANGELOG.md`, and
-runs `gh release create --verify-tag`. A release that already exists
-is left in place, so running the same tag again does not fail. The
-publish job's permissions are `id-token: write` and `contents: read`.
+After `npm publish` succeeds, a third job creates the tag and the
+GitHub release for that version. It checks out the same commit the
+publish job checked out, extracts this version's section of
+`CHANGELOG.md`, and runs `gh release create --target` with the
+published commit, which creates the tag `v<version>` there. Nobody
+pushes that tag by hand. A release that already exists is left in
+place, so a re-run of the job does not fail. The publish job's
+permissions are `id-token: write` and `contents: read`.
 The release job's permission is `contents: write`. That job does not
 hold the npm OIDC token.
 
 The package ships compiled JavaScript in `dist/` (the `nuka` bin is
 `dist/cli.js`), plus `src/`, `docs/`, `skills/`, `CHANGELOG.md`, and
 `llms.txt`. `dist/` is gitignored. The workflow builds it from the
-tagged commit. `README.md`, `README.ja.md`, `LICENSE`, and
+pushed commit. `README.md`, `README.ja.md`, `LICENSE`, and
 `package.json` are in the tarball because npm always packs them.
 
 `package.json` declares `prepublishOnly`, and `.npmrc` sets
@@ -36,9 +41,11 @@ The workflow stores no `NPM_TOKEN`. The repository secrets do not keep
 one either. There is no token bootstrap. The package already exists, and
 its Trusted Publisher is already registered.
 
-The VS Code extension under `vscode/` is a different package, tagged
-`vscode-v*`. A filter of only `v*` would match that prefix too, so the
-workflow also excludes `vscode-v*`. It does not publish the extension.
+The VS Code extension under `vscode/` is a different package. It is
+versioned and released separately, on its own `vscode-v*` tags, and
+this page does not cover it. `publish.yml` reads only the root
+`package.json`, so a change to `vscode/package.json` does not start it,
+and it never publishes the extension.
 
 ## One-time setup
 
@@ -49,15 +56,20 @@ registers the trusted publisher.
 
 1. The GitHub repository `meganemura/nukadoko` has an Environment named
    `publish` with required reviewers. The workflow job sets
-   `environment: publish`, so a `v*` tag run waits there until a
+   `environment: publish`, so a release run waits there until a
    reviewer approves it.
 
+   The run comes from the `main` branch, not from a tag. If the
+   Environment limits its deployment branches and tags, that list must
+   allow `main`. A list that allows only `v*` tags refuses the run. The
+   owner changes this in the repository settings, under Environments.
+
    Registering the trusted publisher does not open a pending approval.
-   The approval appears only when a `v*` tag run enters the Environment
+   The approval appears only when a release run enters the Environment
    `publish`.
 
    If the Environment is missing, create it and require reviewers before
-   the next tag. Otherwise GitHub creates it on the first run with no
+   the next release. Otherwise GitHub creates it on the first run with no
    required reviewers, and that run publishes as soon as the checks pass.
 
 2. The `nukadoko` package on npmjs.com has one GitHub Actions trusted
@@ -86,10 +98,11 @@ registers the trusted publisher.
 ## Each version
 
 1. Move the notes under `## Unreleased` to a new version heading and
-   leave `## Unreleased` empty. The heading shape is the one already in
-   `CHANGELOG.md`. Set the same version in `package.json`. The tag,
-   without the leading `v`, is that version. The workflow stops when
-   they differ. In `docs/upgrading.md` and `docs/upgrading.ja.md`, rename
+   leave `## Unreleased` empty. Keep the heading shape already in
+   `CHANGELOG.md`: the release job extracts the section whose heading
+   starts with `##`, the version, and a space. Set the same version in
+   `package.json` and `package-lock.json`. The workflow creates the tag
+   from that version. In `docs/upgrading.md` and `docs/upgrading.ja.md`, rename
    the heading that ends in "to the next release" (`から次のリリースへ`
    in Japanese) so it names this version, for example `0.14.1 to 0.15.0`.
 
@@ -99,9 +112,12 @@ registers the trusted publisher.
    a `bin` that depends on a package this repository only lists as a
    devDependency, and a `dist/` that does not match `src/`.
 
-3. Commit as `chore: release <version>`. Tag `v<version>`. Push the
-   commit and the tag. The tag push starts the workflow. This publish
-   is `publish.yml` only. Do not run `npm publish` from a checkout.
+3. Commit the version bump, the changelog, and the upgrading headings
+   together as `chore: release <version>`. Land that commit on `main`
+   through the `queue` branch. Its arrival on `main` starts the
+   workflow. Do not push a `v*` tag by hand: the workflow creates it.
+   This publish is `publish.yml` only. Do not run `npm publish` from a
+   checkout.
 
 4. Approve the `publish` Environment when that Actions run asks for it.
    The pending approval is that run entering the Environment. The
@@ -127,5 +143,6 @@ registers the trusted publisher.
    job checked out. `--notes-file CHANGELOG.md` would paste every
    version's notes, so the job extracts only the section whose heading
    starts with `##` plus that version and a space, then runs
-   `gh release create` with `--verify-tag`. Creating the release is
-   that job.
+   `gh release create` with `--target` set to the published commit.
+   That call creates the tag `v<version>` and the release. Creating
+   both is that job.

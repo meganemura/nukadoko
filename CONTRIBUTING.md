@@ -56,11 +56,13 @@ resolve to.
 
 ## Releasing
 
-The publish path is [docs/releasing.md](docs/releasing.md). Pushing a
-`v*` tag runs `.github/workflows/publish.yml`, which publishes with
-GitHub Actions OIDC and then creates the GitHub release for that
-version. Do not `npm publish` from a checkout, and do not
-put an `NPM_TOKEN` in repository secrets.
+The publish path is [docs/releasing.md](docs/releasing.md). A commit
+that bumps the `package.json` version and lands on `main` through
+`queue` runs `.github/workflows/publish.yml`, which publishes with
+GitHub Actions OIDC and then creates the `v<version>` tag and the
+GitHub release for that version. Do not push a release tag by hand,
+do not `npm publish` from a checkout, and do not put an `NPM_TOKEN` in
+repository secrets.
 
 `package.json` declares `prepublishOnly`, and with `ignore-scripts` on
 it does not fire. The workflow builds before it publishes. The same
