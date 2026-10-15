@@ -18,8 +18,9 @@ scenario World, the same object the step runs against. A Promise it
 returns is awaited before the step. `docs/spec.md` states that contract.
 `nuka tend` notes a registration that still lives in support code
 (`parameter-type-support-origin`) and points at `config.parameterTypes`.
-A registration that sets `preferForRegexpMatch` stays in support code:
-`config.parameterTypes` has no such key.
+A registration that sets `preferForRegexpMatch` stays in support code
+while a RegExp step relies on it: `config.parameterTypes` has no such key,
+so moving it with the key is a config error.
 
 `this.attach` and `this.link` follow cucumber-js: a `base64:` media type is
 decoded, `{ mediaType, fileName }` names the file, a readable stream returns

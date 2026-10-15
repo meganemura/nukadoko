@@ -1485,7 +1485,8 @@ import { Given, When, Then } from "nukadoko/compat";
   `defineStep` enables single-step execution.
 - `defineParameterType` in compat code and `config.parameterTypes` use one
   registry. Moving a registration to the config does not change pattern
-  matching, so a team can make this move early. `nuka check` warns about
+  matching, so a team can make this move early. A registration that sets
+  `preferForRegexpMatch` is the exception (below). `nuka check` warns about
   registrations that still come from support code. The config is their
   final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
@@ -1493,7 +1494,11 @@ import { Given, When, Then } from "nukadoko/compat";
   string pattern and a RegExp pattern alike. `preferForRegexpMatch` on a
   compat registration picks the type for a RegExp group that several types
   match, as in cucumber-js. `config.parameterTypes` has no such key, so a
-  registration that sets it stays in compat code.
+  registration that sets it stays in compat code while a RegExp step
+  relies on it. Moved to config with the key, it is a config error; moved
+  without it, a RegExp group that two types match fails again. Two types
+  that prefer one regexp, or a type that prefers a built-in type's regexp
+  such as `{int}`'s, are a `parameter-type-invalid` error.
 - Execution supports two forms. Glue that starts its own Playwright
   continues to work without measurement. A World subclass assigns that
   page and request with `this.page = ...` and `this.request = ...`, and
@@ -3803,7 +3808,10 @@ The following findings show what `tend` inspects and why each item is rot rather
   configuration, reported like any other.
 - **A `defineParameterType` still registered in support code.** It continues
   to work, and `config.parameterTypes` is its typed-era home; moving the
-  registration changes no match. This one used to be a `nuka check`
+  registration changes no match. A registration that sets
+  `preferForRegexpMatch` is the exception: config rejects the key, so the
+  note says to keep it in support code while a RegExp step relies on it.
+  This one used to be a `nuka check`
   warning, but that classification was wrong: it appears for as long as a suite has any
   compat left, which is a normal state to be in, and printing it before
   every run trains people past the lines that do stop a run.
