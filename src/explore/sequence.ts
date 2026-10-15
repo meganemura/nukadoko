@@ -23,9 +23,16 @@ export interface SequenceSession {
 
 export type OpenSequence = () => Promise<SequenceSession>;
 
+/** `step`: the step itself failed. `post-false` and `post-threw`: the step
+ * returned and the model's `post` did not hold. */
+export type FailureKind = "step" | "post-false" | "post-threw";
+
 export interface SequenceFailure {
   /** 0-based position of the step that failed. */
   readonly index: number;
+  readonly kind: FailureKind;
+  /** The step name at `index`. */
+  readonly command: string;
   readonly message: string;
 }
 

@@ -18,7 +18,8 @@ import {
 //
 // Shrinking edits the recorded choices and builds the sequence again from
 // them. It first deletes one step's choices, then lowers one choice at a
-// time, and keeps an edit only when the rebuilt sequence still fails. Each
+// time, and keeps an edit only when the rebuilt sequence still fails the
+// same way (`sameFailure`). Each
 // kept edit makes the choice list shorter, or the same length and
 // lexicographically smaller, so shrinking ends. This is the choice-list
 // shrinking Hypothesis uses, cut down to its two simplest passes.
@@ -107,16 +108,19 @@ async function execute(model: Model, planned: Plan, open: OpenSequence): Promise
   try {
     for (const [index, step] of planned.steps.entries()) {
       const outcome = await session.run(step.name, step.args);
-      if (!outcome.ok) return { index, message: outcome.message };
+      const command = step.name;
+      if (!outcome.ok) return { index, kind: "step", command, message: outcome.message };
       let holds: boolean;
       try {
-        holds = model.commands[step.name]!.post(step.state, step.args, outcome.result);
+        holds = model.commands[command]!.post(step.state, step.args, outcome.result);
       } catch (error) {
-        return { index, message: `post of command "${step.name}" threw: ${describeError(error)}` };
+        return { index, kind: "post-threw", command, message: `post of command "${command}" threw: ${describeError(error)}` };
       }
       if (!holds) {
         return {
           index,
+          kind: "post-false",
+          command,
           message: `post of command "${step.name}" returned false for result ${JSON.stringify(outcome.result)}`,
         };
       }
@@ -135,6 +139,14 @@ function simpler(a: readonly number[], b: readonly number[]): boolean {
     if (a[i] !== b[i]) return a[i]! < b[i]!;
   }
   return false;
+}
+
+/** The message is not compared. It carries the result and the args, and
+ * those are what shrinking changes: a duplicate add shrunk from 3 to 2
+ * still fails the same post, with a different number in its message. */
+function sameFailure(a: SequenceFailure, b: SequenceFailure): boolean {
+  if (a.kind !== b.kind) return false;
+  return a.kind === "step" || a.command === b.command;
 }
 
 function lowered(value: number): number[] {
@@ -165,7 +177,7 @@ async function shrink(
       throw error;
     }
     const failure = await execute(options.model, candidate, options.open);
-    if (failure === undefined) return false;
+    if (failure === undefined || !sameFailure(failure, best.failure)) return false;
     const cut = cutAt(candidate, failure.index);
     if (!simpler(cut.choices, best.plan.choices)) return false;
     best = { plan: cut, failure };

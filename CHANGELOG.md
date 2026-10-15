@@ -20,7 +20,9 @@ just until 0.1.
   each sequence from `draw.int` and `draw.pick` choices taken from one
   `--seed`, runs `--runs` sequences of at most `--length` request-only
   steps, and shrinks the first failure by deleting a step and then
-  lowering a choice. A relation runs its source and its follow and calls
+  lowering a choice. Shrinking keeps an edit only when the sequence still
+  fails the same way: the same failure kind, and for a `post` failure the
+  same command. A relation runs its source and its follow and calls
   `relate`. On a failure stdout gets the scenario to paste (two for a
   relation) and the command that reruns it. No step record is written,
   and nothing is added to a feature. A model's `args` now receives

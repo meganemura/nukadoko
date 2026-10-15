@@ -3988,11 +3988,21 @@ sequences.
 A failure is shrunk. Shrinking edits the recorded choices and builds the
 sequence again: first it deletes one step's choices, then it lowers one
 choice toward zero, and it keeps an edit only when the new sequence still
-fails. A lower choice means an earlier command in declaration order, a
+fails the same way. A lower choice means an earlier command in declaration order, a
 `draw.int` nearer its `min`, or an earlier item of `draw.pick`. Each kept edit makes
 the choice list shorter or smaller, so shrinking ends, and it stops after
-200 attempts. A shrunk sequence can fail differently from the one that was
-found. Its failure is the one printed.
+200 attempts.
+
+The same way means the same failure kind, and for a `post` failure the
+same command. There are three kinds: the step failed (`step`), `post`
+returned false (`post-false`), and `post` threw (`post-threw`). A shorter
+sequence that fails another way shows a different problem, and printing it
+would hide the one the run found. The message is not compared. It carries
+the step's result and args, and those are what shrinking changes: a
+duplicate add shrunk from one value to a smaller one still fails the same
+`post` with a different number in its message. A `step` failure does not
+compare the command either, because a refused connection or a failing
+fixture fails whichever step runs first.
 
 A relation run runs `source` in one world, calls `follow`, runs that second
 sequence in a fresh world, and calls `relate` on the two lists of results.

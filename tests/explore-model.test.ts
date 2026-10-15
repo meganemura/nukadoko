@@ -96,6 +96,8 @@ describe("exploreModel", () => {
     ]);
     expect(result.failure).toEqual({
       index: 2,
+      kind: "post-false",
+      command: "count-numbers",
       message: 'post of command "count-numbers" returned false for result {"count":2}',
     });
     expect(result.found.length).toBeGreaterThanOrEqual(3);

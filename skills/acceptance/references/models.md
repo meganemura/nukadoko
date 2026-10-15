@@ -91,7 +91,8 @@ smallest case that shows the relation.
    how that step failed. Any step failure counts, not only a `post` that
    does not hold: a fixture that fails to set up, or a target that refuses
    the connection, is shrunk and printed the same way. Read that comment
-   before you decide the system is wrong.
+   before you decide the system is wrong. Shrinking keeps the way the run
+   failed: a shorter sequence that fails another way is not printed.
 
 ## Pasting the printed scenario
 
