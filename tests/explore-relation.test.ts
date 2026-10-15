@@ -74,6 +74,7 @@ describe("exploreRelation", () => {
       ],
       failure: {
         sequence: "relate",
+        threw: false,
         message: 'relate returned false for source results [{"total":3}] and follow results [{"total":3},{"total":7}]',
       },
       sourceOutcomes: [{ ok: true, result: { total: 3 } }],
@@ -141,16 +142,17 @@ describe("exploreRelation", () => {
       expect(result).toMatchObject({
         status: "failed",
         source: [
-          { name: "add-count", args: { n: 0 } },
           { name: "add-count", args: { n: 1 } },
+          { name: "add-count", args: { n: 0 } },
         ],
         follow: [
-          { name: "add-count", args: { n: 1 } },
           { name: "add-count", args: { n: 0 } },
+          { name: "add-count", args: { n: 1 } },
         ],
         failure: {
           sequence: "relate",
-          message: 'relate returned false for source results [{"total":0},{"total":0}] and follow results [{"total":1},{"total":1}]',
+          threw: false,
+          message: 'relate returned false for source results [{"total":1},{"total":1}] and follow results [{"total":0},{"total":0}]',
         },
         generated: { seed: 1, run: 1 },
       });

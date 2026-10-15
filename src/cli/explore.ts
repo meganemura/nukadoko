@@ -34,6 +34,7 @@ import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
+import { isModel, type RelationSource, type RelationStep } from "../step/define-explore.js";
 import type { Step } from "../step/define-step.js";
 import { toStoredForm } from "../stored-form/stored-form.js";
 import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
@@ -71,7 +72,7 @@ function positiveInteger(flag: string, value: number, stderr: WritableSink): boo
   return false;
 }
 
-/** A relation has no seed: its source is declared, not generated. */
+/** A relation with a declared source has no seed. */
 function rerunCommand(options: RunExploreOptions, seed: number | null): string {
   const generated = seed === null ? "" : ` --seed ${seed} --runs ${options.runs} --length ${options.length}`;
   const env = options.env === null ? "" : ` --env ${shellWord(options.env)}`;
@@ -169,7 +170,7 @@ async function exploreDiscovered(
   const declaredSteps =
     model !== undefined
       ? Object.keys(model.model.commands)
-      : relation!.relation.source.map((entry) => nameOf(vocabulary, entry.step)!);
+      : relationSourceSteps(relation!.relation.source, vocabulary);
   const knownFixtures = knownFixtureNames(config);
   const fixtureIssues = [...new Set(declaredSteps)].flatMap((name) => {
     const entry = vocabulary.get(name);
@@ -291,19 +292,32 @@ async function exploreDiscovered(
         return { name };
       },
       open,
+      seed,
+      runs: options.runs,
+      length: options.length,
     });
-    const rerun = rerunCommand(options, null);
-    const head = { kind: "relation", file, name: declared.name, verdict: result.status === "relation-error" ? "error" : result.status };
+    const generated = !Array.isArray(declared.source);
+    const rerun = rerunCommand(options, generated ? seed : null);
+    const head = {
+      kind: "relation",
+      file,
+      name: declared.name,
+      verdict: result.status === "relation-error" ? "error" : result.status,
+      ...(generated ? { seed, runs: options.runs, length: options.length } : {}),
+    };
     if (result.status === "passed") {
       emit({ ...head, rerun }, []);
-      stderr.write(`Passed: relation "${declared.name}". Rerun: ${rerun}\n`);
+      const counts = generated ? `, ${plural(options.runs, "run")}, seed ${seed}` : "";
+      stderr.write(`Passed: relation "${declared.name}"${counts}. Rerun: ${rerun}\n`);
       return 0;
     }
     if (result.status === "relation-error") {
-      emit({ ...head, rerun, message: result.message }, []);
-      stderr.write(`The relation "${declared.name}" failed before it ran: ${result.message}\n`);
+      emit({ ...head, rerun, ...(result.generated === undefined ? {} : { run: result.generated.run }), message: result.message }, []);
+      const where = result.generated === undefined ? "" : ` on run ${result.generated.run}, seed ${seed}`;
+      stderr.write(`The relation "${declared.name}" failed before it ran${where}: ${result.message}\n`);
       return 1;
     }
+    const found = result.generated;
     const { failure } = result;
     const note = (sequence: "source" | "follow"): Map<number, string> =>
       failure.sequence === sequence ? failedNote(failure.index, failure.message) : new Map();
@@ -313,6 +327,14 @@ async function exploreDiscovered(
       {
         ...head,
         rerun,
+        ...(found === undefined
+          ? {}
+          : {
+              run: found.run,
+              found_steps: found.foundSteps,
+              shrunk_steps: result.source.length,
+              shrink_attempts: found.shrinkAttempts,
+            }),
         failure,
         source: { steps: stepResults(result.source, result.sourceOutcomes), scenario: lines(sourceScenario) },
         follow: { steps: stepResults(result.follow, result.followOutcomes), scenario: lines(followScenario) },
@@ -320,6 +342,12 @@ async function exploreDiscovered(
       [
         `# ${rerun}`,
         `# Relation "${declared.name}" failed${failure.sequence === "relate" ? `: ${oneLine(failure.message)}` : ` in its ${failure.sequence} sequence.`}`,
+        ...(found === undefined
+          ? []
+          : [
+              `# Run ${found.run} of ${options.runs} failed with ${plural(found.foundSteps, "source step")}. ` +
+                `Shrunk to ${plural(result.source.length, "source step")} in ${plural(found.shrinkAttempts, "attempt")}.`,
+            ]),
         ...sourceScenario,
         "",
         ...followScenario,
@@ -349,6 +377,15 @@ function stepResults(steps: readonly PlannedStep[], outcomes: readonly StepOutco
       ? { ...head, status: "ok", result: toStoredForm(outcome.result) }
       : { ...head, status: "failed", message: outcome.message };
   });
+}
+
+/** The steps setup can judge before a run: a declared source's, or a
+ * model source's commands. A source drawn by a function names its steps
+ * only when it runs, and each is judged then. */
+function relationSourceSteps(source: RelationSource, vocabulary: Vocabulary): string[] {
+  if (isModel(source)) return Object.keys(source.commands);
+  if (!Array.isArray(source)) return [];
+  return (source as readonly RelationStep[]).map((entry) => nameOf(vocabulary, entry.step)!);
 }
 
 function nameOf(vocabulary: Vocabulary, step: Step): string | undefined {

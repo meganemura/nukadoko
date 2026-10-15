@@ -27,8 +27,12 @@ just until 0.1.
   prints one object on stdout with the verdict, the seed and counts, and
   on a failure each step's result, the failure kind and message, and the
   scenario. A step whose args take a table or a docstring prints one,
-  through the renderer and read-back `nuka harvest` uses. A relation runs its source and its follow and calls
-  `relate`. On a failure stdout gets the scenario to paste (two for a
+  through the renderer and read-back `nuka harvest` uses. A relation's
+  source can be generated, from a function of `draw` or a model's
+  commands; it then takes `--seed`, `--runs`, and `--length`, and a
+  failing source is shrunk while the relation fails the same way.
+  Shrinking also deletes two adjacent steps at once. A relation runs
+  its source and its follow and calls `relate`. On a failure stdout gets the scenario to paste (two for a
   relation) and the command that reruns it. No step record is written,
   and nothing is added to a feature. A model's `args` now receives
   `(state, draw)`; a model written for `(state)` still compiles.

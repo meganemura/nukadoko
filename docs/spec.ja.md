@@ -3369,6 +3369,14 @@ basename は、拡張子を除いた step ファイルの名前です。
 check が読むのは `source` だけです。
 2 本目の列は `follow` を呼んだ結果だからです。
 
+`source` は生成させることもできます。
+関数 `(draw, length) => [...]` は、最大 `length` 個の要素を返し、変化する値はすべて `draw` から取ります。
+モデルの command で生成することもできます。
+その場合、モデルの実行と同じく `pre`、`args`、`next` が各 step を選び、モデルの `post` は呼ばれません。
+関数の source では、`relate` が受け取る source の result にはその step の型が付きます。
+モデルの source では `unknown` です。
+check は、モデルの source の command をモデルと同じように読み、関数の source は呼びません。
+
 discovery は、どちらかの宣言の default export を step ではなくその宣言として扱います。
 ファイルは `featuresDir` の下ならどこでも置けます。
 `examples/todo/features/explore/` は、request だけを使う model と relation です。
@@ -3400,7 +3408,7 @@ step は `nuka do` で失敗するどの理由でも失敗し、fixture の準�
 
 失敗は縮小されます。
 縮小は、記録した選択を編集して列を組み立て直します。
-まず 1 つの step の選択を削除し、次に 1 つの選択を 0 に向けて小さくします。
+まず 1 つの step の選択を削除し、次に隣り合う 2 つの step の選択を削除し、次に 1 つの選択を 0 に向けて小さくします。
 編集を残すのは、新しい列がまだ同じように失敗するときだけです。
 小さい選択は、宣言順で前の command、`min` に近い `draw.int`、`draw.pick` のより前の要素を意味します。
 残した編集はどれも選択の列を短くするか小さくするので、縮小は終わります。
@@ -3418,8 +3426,15 @@ step が失敗した(`step`)、`post` が false を返した(`post-false`)、`po
 拒否された接続や失敗する fixture は、最初に実行される step がどれでも失敗させるからです。
 
 関係の実行は、`source` を 1 つの world で実行し、`follow` を呼び、その 2 本目の列を新しい world で実行し、2 つの result の並びについて `relate` を呼びます。
-`source` は宣言された列なので、関係の実行には seed がなく、縮小もしません。
-2 本目の列に語彙にない step、またはブラウザを必要とする step があると、関係は実行される前に止まります。
+宣言された `source` は 1 回だけ実行され、seed はなく、縮小もしません。
+生成される `source` は、モデルと同じく `--seed`、`--runs`、`--length` を取ります。
+各実行は新しい source を引き、それについて関係を実行します。
+最初の失敗は同じやり方で縮小されます。
+関数の source の step は選択と対応付けられないため、選択を 1 つずつ削除します。
+編集を残すのは、関係がまだ同じように失敗するときだけです。
+つまり同じ列で失敗し、`relate` なら前と同じく false を返すか例外を投げるかのどちらかです。
+出力には、実行の番号、見つかった source の step 数、縮小後の step 数のコメントが加わります。
+2 本目の列、または関数が引いた source に、語彙にない step、またはブラウザを必要とする step があると、関係は実行される前に止まります。
 
 各列は新しい `ctx` と新しい scenario scope の fixture のキャッシュを受け取ります。
 そのため、対象をリセットする scenario scope の fixture は、各列の前に動きます。
@@ -3456,8 +3471,10 @@ capture も `from` も受け持たない必須の args のキーが 1 つだけ�
 失敗したモデルは、`run`、`found_steps`、`shrunk_steps`、`shrink_attempts`、`failure`(`index`、`kind`、`command`、`message`)、`steps`、`scenario` を加えます。
 これらはすべて縮小した列についての値です。
 関係は `name` を加えます。
-失敗した関係は、`failure`(`sequence`、`sequence` が `relate` でなければ `index`、そして `message`)と、`source` と `follow` を加えます。
+失敗した関係は、`failure`(`sequence`、`sequence` が `relate` でなければ `index`、`relate` なら `threw`、そして `message`)と、`source` と `follow` を加えます。
 `source` と `follow` には、それぞれ `steps` と `scenario` があります。
+source を生成する関係は、さらに `seed`、`runs`、`length` を加え、失敗すると `run`、`found_steps`、`shrunk_steps`、`shrink_attempts` を加えます。
+step 数は source の step で数えます。
 `steps` の各要素には `step`、`args`、`status` があります。
 `status` は、`result` を伴う `"ok"`、`message` を伴う `"failed"`、失敗した列のあとの step を表す `"not-run"` のいずれかです。
 `scenario` は、通常の出力が表示するテキストから先頭の 2 行のコメントを除いたものです。
@@ -3542,7 +3559,8 @@ nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--j
                               step record. A model runs --runs sequences
                               (default 20) of at most --length steps (default
                               10) from one --seed, and shrinks the first
-                              failure. On a failure stdout gets the scenario to
+                              failure; so does a relation whose source is
+                              generated. On a failure stdout gets the scenario to
                               paste (two for a relation) and the command that
                               reruns it; stdout is empty on a pass. --json
                               prints one object instead, on a pass too: the

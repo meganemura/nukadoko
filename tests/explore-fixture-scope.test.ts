@@ -80,7 +80,7 @@ describe("fixture scope under nuka explore", () => {
     );
 
     expect(exitCode).toBe(1);
-    expect(stdout.text().split("\n")[1]).toBe("# Run 1 of 3 failed after 3 steps. Shrunk to 3 steps in 3 attempts.");
+    expect(stdout.text().split("\n")[1]).toBe("# Run 1 of 3 failed after 3 steps. Shrunk to 3 steps in 5 attempts.");
     const log = await readLog(rootDir);
     expect({
       ledgerSetups: count(log, "ledger", "setup"),
@@ -90,8 +90,8 @@ describe("fixture scope under nuka explore", () => {
     }).toEqual({
       ledgerSetups: 1,
       ledgerTeardowns: [{ fixture: "ledger", phase: "teardown", outcome: "failed" }],
-      tenantSetups: 4,
-      tenantTeardowns: 4,
+      tenantSetups: 6,
+      tenantTeardowns: 6,
     });
     expect(log.at(-1)).toEqual({ fixture: "ledger", phase: "teardown", outcome: "failed" });
   });

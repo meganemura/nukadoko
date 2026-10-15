@@ -77,15 +77,33 @@ export default defineRelation({
 });
 ```
 
-A relation has no seed and does not shrink. Write the source as the
-smallest case that shows the relation.
+A declared source has no seed and does not shrink. Write it as the
+smallest case that shows the relation. To let `nuka explore` find the
+case, generate the source instead: a function of `draw` and `length`, or
+a model whose commands pick the steps. It then takes `--seed`, `--runs`,
+and `--length`, and a failing source is shrunk:
+
+```ts
+export default defineRelation({
+  name: "adding in reverse order reaches the same total",
+  source: (draw, length) =>
+    Array.from({ length: draw.int(1, length) }, () => relationEntry(addNumber, { n: draw.int(0, 9) })),
+  follow: (source) => [...source].reverse(),
+  relate: (source, follow) => source.at(-1)!.total === follow.at(-1)!.total,
+});
+```
+
+`nuka check` cannot see the steps a function source returns, so a step
+that is not in the vocabulary, or needs a browser, stops the relation
+when it runs.
 
 ## Running it
 
 1. `nuka check`. Fix every `explore-unknown-step` and
    `explore-browser-step` finding first.
-2. `nuka explore <file>`. For a model, `--runs` and `--length` set how
-   much it tries. The seed is printed either way.
+2. `nuka explore <file>`. For a model, or a relation with a generated
+   source, `--runs` and `--length` set how much it tries. The seed is
+   printed either way.
 3. A pass prints one line on stderr and nothing on stdout. Add `--json`
    to get one object on stdout instead, on a pass too: the verdict, the
    seed and counts, and on a failure each step's `args` and `result`,

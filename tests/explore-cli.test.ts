@@ -120,7 +120,7 @@ describe("nuka explore", () => {
       exitCode: 1,
       stdout: [
         "# nuka explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
-        "# Run 1 of 5 failed after 7 steps. Shrunk to 2 steps in 12 attempts.",
+        "# Run 1 of 5 failed after 7 steps. Shrunk to 2 steps in 13 attempts.",
         "  Scenario: (name me)",
         '    * a todo titled "bread" is added',
         '    # step 2 failed: post of command "complete-todo" returned false for result {"id":"<id>","title":"bread","done":true}',
@@ -224,7 +224,7 @@ describe("nuka explore", () => {
         run: 1,
         found_steps: 7,
         shrunk_steps: 2,
-        shrink_attempts: 12,
+        shrink_attempts: 13,
         failure: {
           index: 1,
           kind: "post-false",

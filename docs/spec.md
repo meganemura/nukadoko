@@ -3951,6 +3951,15 @@ over the two runs' results. `relationEntry` checks `args` against that step.
 `follow` and `relate` are stored. Check reads `source` only, because the
 second sequence is the result of calling `follow`.
 
+`source` can instead be generated. A function `(draw, length) => [...]`
+returns at most `length` entries and takes every varying value from
+`draw`. A model's commands can also generate it: `pre`, `args`, and
+`next` pick each step as in a model run, and the model's `post` is not
+called. For a function source, `relate` receives the source results
+typed by its step. For a model source they are `unknown`. Check reads a
+model source's commands as it reads a model, and does not call a
+function source.
+
 Discovery treats a default export of either declaration as that declaration,
 not as a step. The file can live anywhere under `featuresDir`.
 `examples/todo/features/explore/` is a request-only model and relation.
@@ -3986,8 +3995,8 @@ run, and the output always prints it, so the same command reruns the same
 sequences.
 
 A failure is shrunk. Shrinking edits the recorded choices and builds the
-sequence again: first it deletes one step's choices, then it lowers one
-choice toward zero, and it keeps an edit only when the new sequence still
+sequence again: first it deletes one step's choices, then two adjacent
+steps' choices, then it lowers one choice toward zero, and it keeps an edit only when the new sequence still
 fails the same way. A lower choice means an earlier command in declaration order, a
 `draw.int` nearer its `min`, or an earlier item of `draw.pick`. Each kept edit makes
 the choice list shorter or smaller, so shrinking ends, and it stops after
@@ -4006,9 +4015,16 @@ fixture fails whichever step runs first.
 
 A relation run runs `source` in one world, calls `follow`, runs that second
 sequence in a fresh world, and calls `relate` on the two lists of results.
-`source` is the declared sequence, so a relation run has no seed and does
-not shrink. A step of the second sequence that is not in the vocabulary, or
-needs a browser, stops the relation before it runs.
+A declared `source` runs once, with no seed, and does not shrink. A
+generated `source` takes `--seed`, `--runs`, and `--length` as a model
+does: each run draws a new source and runs the relation on it, and the
+first failure is shrunk by the same passes. A function source's steps
+are not known by choice, so each choice is deleted on its own. An edit is kept only when the relation still fails the
+same way: in the same sequence, and for `relate`, by returning false or
+by throwing as before. The output adds a comment with the run, the
+number of source steps found, and the number after shrinking. A step of
+the second sequence, or of a source drawn by a function, that is not in
+the vocabulary, or needs a browser, stops the relation before it runs.
 
 Each sequence gets a fresh `ctx` and a fresh scenario-scope fixture cache,
 so a scenario-scope fixture that resets the target runs before every
@@ -4048,8 +4064,11 @@ threw before a step ran), and `rerun`. A model adds `seed`, `runs`, and
 adds `run`, `found_steps`, `shrunk_steps`, `shrink_attempts`, `failure`
 (`index`, `kind`, `command`, `message`), `steps`, and `scenario`, all for
 the shrunk sequence. A relation adds `name`, and a failing one adds
-`failure` (`sequence`, and `index` unless the sequence is `relate`, and
-`message`) plus `source` and `follow`, each with `steps` and `scenario`.
+`failure` (`sequence`; `index` unless the sequence is `relate`, and
+`threw` when it is; and `message`) plus `source` and `follow`, each with
+`steps` and `scenario`. A relation with a generated source also adds
+`seed`, `runs`, and `length`, and on a failure `run`, `found_steps`,
+`shrunk_steps`, and `shrink_attempts`, counted in source steps.
 Each entry of `steps` has `step`, `args`, and `status`: `"ok"` with
 `result`, `"failed"` with `message`, or `"not-run"` for a step after a
 failed sequence. `scenario` is the text the plain output prints, without
@@ -4134,7 +4153,8 @@ nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--j
                               step record. A model runs --runs sequences
                               (default 20) of at most --length steps (default
                               10) from one --seed, and shrinks the first
-                              failure. On a failure stdout gets the scenario to
+                              failure; so does a relation whose source is
+                              generated. On a failure stdout gets the scenario to
                               paste (two for a relation) and the command that
                               reruns it; stdout is empty on a pass. --json
                               prints one object instead, on a pass too: the

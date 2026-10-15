@@ -1,5 +1,6 @@
 import type { Model } from "../step/define-explore.js";
 import { drawFrom, generatedSource, replayedSource, seededUint32, type ChoiceSource } from "./choices.js";
+import { shrinkChoices, type Shrinkable } from "./shrink.js";
 import {
   describeError,
   type OpenSequence,
@@ -18,15 +19,10 @@ import {
 // before that step. The first failed step, or the first `post` that does
 // not hold, ends the run.
 //
-// Shrinking edits the recorded choices and builds the sequence again from
-// them. It first deletes one step's choices, then lowers one choice at a
-// time, and keeps an edit only when the rebuilt sequence still fails the
-// same way (`sameFailure`). Each
-// kept edit makes the choice list shorter, or the same length and
-// lexicographically smaller, so shrinking ends. This is the choice-list
-// shrinking Hypothesis uses, cut down to its two simplest passes.
+// Shrinking (shrink.ts) edits the recorded choices and builds the
+// sequence again from them, and keeps an edit only when the rebuilt
+// sequence still fails the same way (`sameFailure`).
 
-export const DEFAULT_MAX_SHRINK_ATTEMPTS = 200;
 
 export interface ExploreModelOptions {
   readonly model: Model;
@@ -53,20 +49,20 @@ export type ExploreModelResult =
     }
   | { readonly status: "model-error"; readonly seed: number; readonly run: number; readonly message: string };
 
-interface PlannedWithState extends PlannedStep {
+export interface PlannedWithState extends PlannedStep {
   readonly state: unknown;
 }
 
-interface Plan {
+export interface Plan {
   readonly steps: readonly PlannedWithState[];
   /** `[start, end)` of each step's choices in `choices`. */
   readonly spans: readonly (readonly [number, number])[];
   readonly choices: readonly number[];
 }
 
-class ModelCallbackError extends Error {}
+export class ModelCallbackError extends Error {}
 
-function callModel<T>(what: string, fn: () => T): T {
+export function callModel<T>(what: string, fn: () => T): T {
   try {
     return fn();
   } catch (error) {
@@ -74,7 +70,7 @@ function callModel<T>(what: string, fn: () => T): T {
   }
 }
 
-function plan(model: Model, source: ChoiceSource, length: number): Plan {
+export function plan(model: Model, source: ChoiceSource, length: number): Plan {
   const names = Object.keys(model.commands);
   const draw = drawFrom(source);
   const steps: PlannedWithState[] = [];
@@ -154,16 +150,6 @@ async function runSteps(
   return undefined;
 }
 
-/** Shortlex: fewer choices first, then the smaller choice at the first
- * difference. */
-function simpler(a: readonly number[], b: readonly number[]): boolean {
-  if (a.length !== b.length) return a.length < b.length;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return a[i]! < b[i]!;
-  }
-  return false;
-}
-
 /** The message is not compared. It carries the result and the args, and
  * those are what shrinking changes: a duplicate add shrunk from 3 to 2
  * still fails the same post, with a different number in its message. */
@@ -172,67 +158,36 @@ function sameFailure(a: SequenceFailure, b: SequenceFailure): boolean {
   return a.kind === "step" || a.command === b.command;
 }
 
-function lowered(value: number): number[] {
-  if (value === 0) return [];
-  return [...new Set([0, Math.floor(value / 2), value - 1])];
-}
-
-interface Failing {
+interface Failing extends Shrinkable {
   readonly plan: Plan;
   readonly failure: SequenceFailure;
   readonly outcomes: readonly StepOutcome[];
+}
+
+function failing(plan: Plan, failure: SequenceFailure, outcomes: readonly StepOutcome[]): Failing {
+  return { plan, choices: plan.choices, spans: plan.spans, failure, outcomes };
 }
 
 async function shrink(
   options: ExploreModelOptions,
   first: Failing,
 ): Promise<{ readonly best: Failing; readonly attempts: number }> {
-  const limit = options.maxShrinkAttempts ?? DEFAULT_MAX_SHRINK_ATTEMPTS;
-  let best = first;
-  let attempts = 0;
-
-  async function attempt(choices: readonly number[]): Promise<boolean> {
-    attempts += 1;
-    let candidate: Plan;
-    try {
-      candidate = plan(options.model, replayedSource(choices), options.length);
-    } catch (error) {
-      if (error instanceof ModelCallbackError) return false;
-      throw error;
-    }
-    const { failure, outcomes } = await execute(options.model, candidate, options.open);
-    if (failure === undefined || !sameFailure(failure, best.failure)) return false;
-    const cut = cutAt(candidate, failure.index);
-    if (!simpler(cut.choices, best.plan.choices)) return false;
-    best = { plan: cut, failure, outcomes };
-    return true;
-  }
-
-  let improved = true;
-  while (improved && attempts < limit) {
-    improved = false;
-    const { spans, choices } = best.plan;
-    for (const [start, end] of spans) {
-      if (attempts >= limit) break;
-      if (await attempt([...choices.slice(0, start), ...choices.slice(end)])) {
-        improved = true;
-        break;
+  return shrinkChoices(
+    first,
+    async (choices) => {
+      let candidate: Plan;
+      try {
+        candidate = plan(options.model, replayedSource(choices), options.length);
+      } catch (error) {
+        if (error instanceof ModelCallbackError) return undefined;
+        throw error;
       }
-    }
-    if (improved) continue;
-    outer: for (const [position, value] of choices.entries()) {
-      for (const candidate of lowered(value)) {
-        if (attempts >= limit) break outer;
-        const edited = [...choices];
-        edited[position] = candidate;
-        if (await attempt(edited)) {
-          improved = true;
-          break outer;
-        }
-      }
-    }
-  }
-  return { best, attempts };
+      const { failure, outcomes } = await execute(options.model, candidate, options.open);
+      if (failure === undefined || !sameFailure(failure, first.failure)) return undefined;
+      return failing(cutAt(candidate, failure.index), failure, outcomes);
+    },
+    options.maxShrinkAttempts,
+  );
 }
 
 function withoutState(steps: readonly PlannedWithState[]): PlannedStep[] {
@@ -259,7 +214,7 @@ export async function exploreModel(options: ExploreModelOptions): Promise<Explor
       continue;
     }
     const found = cutAt(planned, failure.index);
-    const { best, attempts } = await shrink(options, { plan: found, failure, outcomes });
+    const { best, attempts } = await shrink(options, failing(found, failure, outcomes));
     return {
       status: "failed",
       seed,

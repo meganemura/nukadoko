@@ -1,5 +1,5 @@
 import type { Vocabulary } from "../discover/discover-steps.js";
-import type { Model, Relation } from "../step/define-explore.js";
+import { isModel, type Model, type Relation, type RelationStep } from "../step/define-explore.js";
 import { isStep, type Step } from "../step/define-step.js";
 import type { CheckIssue } from "./types.js";
 
@@ -43,41 +43,27 @@ function registeredName(vocabulary: Vocabulary, step: Step): string | undefined 
 /**
  * One finding per command key and per source entry that fails. A
  * request-only step produces nothing here. The second sequence is the
- * return value of `follow`, which is only known once a run calls it, so
- * check does not read it.
+ * return value of `follow`, and a source drawn by a function is the
+ * return value of that function; both are only known once a run calls
+ * them, so check does not read them. A model source is checked as a
+ * model is.
  */
 export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[] {
   const issues: CheckIssue[] = [];
 
   for (const file of input.models) {
-    for (const [name, command] of Object.entries(file.model.commands)) {
-      const where = `command "${name}"`;
-      if (!isStep(command.step)) {
-        issues.push(unknown(file.filePath, name, where));
-        continue;
-      }
-      const registered = registeredName(input.vocabulary, command.step);
-      if (registered === undefined) {
-        issues.push(unknown(file.filePath, name, where));
-        continue;
-      }
-      if (registered !== name) {
-        issues.push({
-          code: "explore-unknown-step",
-          message: `${where} is not the step registered as "${registered}"`,
-          file: file.filePath,
-          step: name,
-        });
-        continue;
-      }
-      if (input.needsBrowser(command.step)) {
-        issues.push(browser(file.filePath, name, where));
-      }
-    }
+    issues.push(...checkModelCommands(input, file.filePath, file.model, ""));
   }
 
   for (const file of input.relations) {
-    file.relation.source.forEach((entry, index) => {
+    const { source } = file.relation;
+    if (isModel(source)) {
+      issues.push(...checkModelCommands(input, file.filePath, source, `relation "${file.relation.name}" source `));
+      continue;
+    }
+    // A source drawn by a function has no steps until a run calls it.
+    if (!Array.isArray(source)) continue;
+    (source as readonly RelationStep[]).forEach((entry, index) => {
       const where = `relation "${file.relation.name}" source[${index}]`;
       if (!isStep(entry.step)) {
         issues.push({
@@ -102,6 +88,35 @@ export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[]
     });
   }
 
+  return issues;
+}
+
+function checkModelCommands(input: CheckExploreInput, filePath: string, model: Model, prefix: string): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  for (const [name, command] of Object.entries(model.commands)) {
+    const where = `${prefix}command "${name}"`;
+    if (!isStep(command.step)) {
+      issues.push(unknown(filePath, name, where));
+      continue;
+    }
+    const registered = registeredName(input.vocabulary, command.step);
+    if (registered === undefined) {
+      issues.push(unknown(filePath, name, where));
+      continue;
+    }
+    if (registered !== name) {
+      issues.push({
+        code: "explore-unknown-step",
+        message: `${where} is not the step registered as "${registered}"`,
+        file: filePath,
+        step: name,
+      });
+      continue;
+    }
+    if (input.needsBrowser(command.step)) {
+      issues.push(browser(filePath, name, where));
+    }
+  }
   return issues;
 }
 
