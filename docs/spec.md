@@ -4010,9 +4010,15 @@ sequence in a fresh world, and calls `relate` on the two lists of results.
 not shrink. A step of the second sequence that is not in the vocabulary, or
 needs a browser, stops the relation before it runs.
 
-Each sequence gets a fresh `ctx` and fresh fixture caches. Both fixture
-scopes last one sequence, so a scenario-scope fixture that resets the
-target runs before every sequence. The target itself is not reset, and a
+Each sequence gets a fresh `ctx` and a fresh scenario-scope fixture cache,
+so a scenario-scope fixture that resets the target runs before every
+sequence. A process-scope fixture is set up once for the invocation, as
+under `nuka run`: every run and every shrink attempt shares it, and it is
+torn down after the last sequence. A fixture's `use()` returns `"failed"`
+for a sequence whose step failed or whose `post` did not hold, and the
+process scope gets `"failed"` when any sequence did. SIGINT or SIGTERM
+tears down the open sequence's fixtures and then the process-scope ones
+before the process exits, as for `nuka do`. The target itself is not reset, and a
 model whose initial state assumes an empty target needs that fixture. A
 step runs through the same function `nuka do` and a live session use: the
 args are validated, the fixture bag is opened, `run` is called under the

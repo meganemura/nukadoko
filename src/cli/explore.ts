@@ -11,7 +11,7 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
-import { exploreModel, exploreRelation, renderScenario, worldOpener, type PlannedStep } from "../explore/index.js";
+import { exploreModel, exploreRelation, openWorld, renderScenario, type PlannedStep } from "../explore/index.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
 import {
@@ -22,6 +22,7 @@ import {
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
+import { installProcessSignalHandlers } from "../run/process-signal.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -196,19 +197,24 @@ async function exploreDiscovered(
   });
 
   const scratchDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-explore-"));
+  const signal = installProcessSignalHandlers();
+  // `process.exit` from the signal handler does not run the `finally` below.
+  signal.setSignalFinalizer(() => rm(scratchDir, { recursive: true, force: true }));
+  const world = openWorld({
+    config: { ...config, baseURL: resolvedEnv.baseURL },
+    vocabulary,
+    env,
+    secrets,
+    environment: resolvedEnv.name,
+    policy: resolvedEnv.policy,
+    fixtureGraph,
+    needsBrowser,
+    scratchDir,
+    warn: (line) => stderr.write(`${line}\n`),
+    signal,
+  });
+  const { open } = world;
   try {
-    const open = worldOpener({
-      config: { ...config, baseURL: resolvedEnv.baseURL },
-      vocabulary,
-      env,
-      secrets,
-      environment: resolvedEnv.name,
-      policy: resolvedEnv.policy,
-      fixtureGraph,
-      needsBrowser,
-      scratchDir,
-      warn: (line) => stderr.write(`${line}\n`),
-    });
     const render = (title: string, steps: readonly PlannedStep[], notes: ReadonlyMap<number, string>) =>
       renderScenario({ title, steps, notes, vocabulary, bindings });
 
@@ -277,6 +283,8 @@ async function exploreDiscovered(
     stderr.write(`Failed: relation "${declared.name}". Both scenarios are on stdout.\n`);
     return 1;
   } finally {
+    await world.close();
+    signal.stop();
     await rm(scratchDir, { recursive: true, force: true });
   }
 }

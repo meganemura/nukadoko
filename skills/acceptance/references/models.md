@@ -56,7 +56,8 @@ export default defineModel(() => ({ open: [] as string[] })).commands({
 
 The target is not reset between sequences. When the model's initial state
 assumes an empty system, give the steps a scenario-scope fixture that
-resets it (`references/fixtures.md`); each sequence opens it again.
+resets it (`references/fixtures.md`); each sequence opens it again. A
+process-scope fixture is set up once for the whole `nuka explore` call.
 
 ## Writing a relation
 

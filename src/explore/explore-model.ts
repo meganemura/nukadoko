@@ -5,6 +5,7 @@ import {
   type OpenSequence,
   type PlannedStep,
   type SequenceFailure,
+  type SequenceSession,
 } from "./sequence.js";
 
 // Responsibility: run a model and shrink the first failure it finds.
@@ -105,30 +106,37 @@ function cutAt(failing: Plan, index: number): Plan {
 
 async function execute(model: Model, planned: Plan, open: OpenSequence): Promise<SequenceFailure | undefined> {
   const session = await open();
+  let passed = false;
   try {
-    for (const [index, step] of planned.steps.entries()) {
-      const outcome = await session.run(step.name, step.args);
-      const command = step.name;
-      if (!outcome.ok) return { index, kind: "step", command, message: outcome.message };
-      let holds: boolean;
-      try {
-        holds = model.commands[command]!.post(step.state, step.args, outcome.result);
-      } catch (error) {
-        return { index, kind: "post-threw", command, message: `post of command "${command}" threw: ${describeError(error)}` };
-      }
-      if (!holds) {
-        return {
-          index,
-          kind: "post-false",
-          command,
-          message: `post of command "${step.name}" returned false for result ${JSON.stringify(outcome.result)}`,
-        };
-      }
-    }
-    return undefined;
+    const failure = await runSteps(model, planned, session);
+    passed = failure === undefined;
+    return failure;
   } finally {
-    await session.close();
+    await session.close(passed ? "passed" : "failed");
   }
+}
+
+async function runSteps(model: Model, planned: Plan, session: SequenceSession): Promise<SequenceFailure | undefined> {
+  for (const [index, step] of planned.steps.entries()) {
+    const outcome = await session.run(step.name, step.args);
+    const command = step.name;
+    if (!outcome.ok) return { index, kind: "step", command, message: outcome.message };
+    let holds: boolean;
+    try {
+      holds = model.commands[command]!.post(step.state, step.args, outcome.result);
+    } catch (error) {
+      return { index, kind: "post-threw", command, message: `post of command "${command}" threw: ${describeError(error)}` };
+    }
+    if (!holds) {
+      return {
+        index,
+        kind: "post-false",
+        command,
+        message: `post of command "${command}" returned false for result ${JSON.stringify(outcome.result)}`,
+      };
+    }
+  }
+  return undefined;
 }
 
 /** Shortlex: fewer choices first, then the smaller choice at the first

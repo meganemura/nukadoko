@@ -22,7 +22,8 @@ just until 0.1.
   steps, and shrinks the first failure by deleting a step and then
   lowering a choice. Shrinking keeps an edit only when the sequence still
   fails the same way: the same failure kind, and for a `post` failure the
-  same command. A relation runs its source and its follow and calls
+  same command. A process-scope fixture lasts the whole invocation, and
+  SIGINT or SIGTERM tears fixtures down as under `nuka do`. A relation runs its source and its follow and calls
   `relate`. On a failure stdout gets the scenario to paste (two for a
   relation) and the command that reruns it. No step record is written,
   and nothing is added to a feature. A model's `args` now receives

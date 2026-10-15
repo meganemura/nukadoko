@@ -3421,9 +3421,13 @@ step が失敗した(`step`)、`post` が false を返した(`post-false`)、`po
 `source` は宣言された列なので、関係の実行には seed がなく、縮小もしません。
 2 本目の列に語彙にない step、またはブラウザを必要とする step があると、関係は実行される前に止まります。
 
-各列は新しい `ctx` と新しい fixture のキャッシュを受け取ります。
-fixture の 2 つの scope はどちらも 1 つの列の間だけ続きます。
+各列は新しい `ctx` と新しい scenario scope の fixture のキャッシュを受け取ります。
 そのため、対象をリセットする scenario scope の fixture は、各列の前に動きます。
+process scope の fixture は、`nuka run` と同じく 1 回の起動につき 1 回だけ準備されます。
+すべての実行とすべての縮小の試行がそれを共有し、最後の列のあとで片付けられます。
+step が失敗した列、または `post` が成り立たなかった列では、fixture の `use()` は `"failed"` を返します。
+process scope は、どれかの列が失敗したとき `"failed"` を受け取ります。
+SIGINT または SIGTERM を受けると、`nuka do` と同じく、開いている列の fixture、次に process scope の fixture を片付けてからプロセスが終了します。
 対象そのものはリセットされません。
 初期状態が空の対象を前提とするモデルには、その fixture が必要です。
 step は、`nuka do` と live session が使うのと同じ関数を通って実行されます。

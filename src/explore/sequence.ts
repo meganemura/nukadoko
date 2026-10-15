@@ -18,7 +18,9 @@ export type StepOutcome =
  * what the last sequence left. The target system is not reset. */
 export interface SequenceSession {
   run(name: string, args: unknown): Promise<StepOutcome>;
-  close(): Promise<void>;
+  /** `failed` when a step failed or `post` did not hold. A fixture's
+   * `use()` receives it. */
+  close(outcome: "passed" | "failed"): Promise<void>;
 }
 
 export type OpenSequence = () => Promise<SequenceSession>;

@@ -51,6 +51,7 @@ async function runAll(
   open: OpenSequence,
 ): Promise<{ readonly results: unknown[] } | { readonly index: number; readonly message: string }> {
   const session = await open();
+  let passed = false;
   try {
     const results: unknown[] = [];
     for (const [index, step] of steps.entries()) {
@@ -58,9 +59,10 @@ async function runAll(
       if (!outcome.ok) return { index, message: outcome.message };
       results.push(outcome.result);
     }
+    passed = true;
     return { results };
   } finally {
-    await session.close();
+    await session.close(passed ? "passed" : "failed");
   }
 }
 
