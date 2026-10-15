@@ -3973,9 +3973,13 @@ A model run builds each sequence from the model alone. From the state, it
 takes the commands whose `pre` holds, picks one, calls `args(state, draw)`,
 and moves the state with `next`. `draw.int(min, max)` and `draw.pick(items)`
 are the only sources of variation, so a sequence is a function of the
-choices it made. The sequence then runs step by step, and `post` judges each
+choices it made. `next` returns a new state and leaves the one it was
+given unchanged, because that state object is the one `post` later
+receives. The sequence then runs step by step, and `post` judges each
 result against the state from before that step. The first step that fails,
-or the first `post` that does not hold, fails the sequence. `--runs`
+or the first `post` that does not hold, fails the sequence. A step fails
+for any reason it fails under `nuka do`, a fixture setup or a refused
+connection included. `--runs`
 (default 20) sets how many sequences run, and `--length` (default 10) sets
 the most steps one sequence has. One `--seed` drives every choice of every
 run, and the output always prints it, so the same command reruns the same
@@ -3985,7 +3989,7 @@ A failure is shrunk. Shrinking edits the recorded choices and builds the
 sequence again: first it deletes one step's choices, then it lowers one
 choice toward zero, and it keeps an edit only when the new sequence still
 fails. A lower choice means an earlier command in declaration order, a
-smaller `draw.int`, or an earlier item of `draw.pick`. Each kept edit makes
+`draw.int` nearer its `min`, or an earlier item of `draw.pick`. Each kept edit makes
 the choice list shorter or smaller, so shrinking ends, and it stops after
 200 attempts. A shrunk sequence can fail differently from the one that was
 found. Its failure is the one printed.

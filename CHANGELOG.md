@@ -57,8 +57,10 @@ just until 0.1.
   through `nuka do --session` against a live session that outlived its
   deadline was recorded with `error.kind: "step_error"`, and the message
   named the session instead of the step. It now records `"timeout"` and
-  names the step, as `nuka do` without a live session does. `nuka do`, a
-  live session, and `nuka explore` now run a step through one function.
+  names the step, as `nuka do` without a live session does. Text the step
+  writes to stdout now goes to stderr there too, as under `nuka do`. `nuka
+  do`, a live session, and `nuka explore` now run a step through one
+  function.
 - **A `{biginteger}` capture no longer aborts `nuka run`.** A typed step
   that bound a `{biginteger}` capture to `z.bigint()`, or a compat step with
   a `{biginteger}` capture, stopped the whole run with

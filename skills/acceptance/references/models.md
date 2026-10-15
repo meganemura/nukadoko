@@ -46,11 +46,13 @@ export default defineModel(() => ({ open: [] as string[] })).commands({
 - `pre` says when a command makes sense. A command whose `args` needs
   something from the state needs a `pre` that guarantees it.
 - `next` moves the state from the args alone. It never sees the result.
+  Return a new state and leave the one it was given unchanged: that same
+  object is what `post` receives for this step.
 - `post` judges the result against the state from before the step. Say
   what the requirement says, not what the system happens to return.
 - Put the commands in the order you want a shrunk scenario to prefer:
-  shrinking moves toward the first command and the first item of a
-  `pick`.
+  shrinking moves toward the first command, the first item of a `pick`,
+  and the `min` of a `draw.int`.
 
 The target is not reset between sequences. When the model's initial state
 assumes an empty system, give the steps a scenario-scope fixture that
@@ -84,9 +86,12 @@ smallest case that shows the relation.
 2. `nuka explore <file>`. For a model, `--runs` and `--length` set how
    much it tries. The seed is printed either way.
 3. A pass prints one line on stderr and nothing on stdout.
-4. A failure prints a scenario on stdout. Its first comment is the command
-   that reruns the same sequences. The comment above a line says how that
-   step failed.
+4. A failure prints a scenario on stdout. Its first comment is the
+   command that reruns the same sequences. The comment above a line says
+   how that step failed. Any step failure counts, not only a `post` that
+   does not hold: a fixture that fails to set up, or a target that refuses
+   the connection, is shrunk and printed the same way. Read that comment
+   before you decide the system is wrong.
 
 ## Pasting the printed scenario
 

@@ -271,12 +271,12 @@ more of the roadmap has landed, not that the surface has frozen.
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, sign-off (`nuka accept`), tending (`nuka tend`), scenario
-harvesting (`nuka harvest`), models and relations (`nuka explore`), the MCP tool listing (`nuka mcp-tools`),
-Varar-style Markdown oaths (a second front beside Gherkin; see
-[Markdown oaths](#markdown-oaths)), and two agent skills. Not implemented:
-an AI-assisted glue converter, and the rest of Varar (comparing a step's
-return value to words in the sentence, every dialect). See the
-[roadmap](docs/spec.md#roadmap).
+harvesting (`nuka harvest`), models and relations (`nuka explore`), the
+MCP tool listing (`nuka mcp-tools`), Varar-style Markdown oaths (a second
+front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
+agent skills. Not implemented: an AI-assisted glue converter, and the rest
+of Varar (comparing a step's return value to words in the sentence, every
+dialect). See the [roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
 carries a number was measured; where something was only reasoned about,
