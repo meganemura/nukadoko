@@ -7,7 +7,9 @@ import type { TendIssue } from "./types.js";
 // (docs/spec.md "Tending": "This one used to be a `nuka check` warning,
 // which was a mis-sort"). It keeps
 // working, and `config.parameterTypes` is its typed-era home; moving the
-// registration changes no match. It fires for as long as a suite has any
+// registration changes no match, except for one that sets
+// `preferForRegexpMatch`. Config rejects that key, so such a registration
+// stays in support code while a RegExp step relies on it. It fires for as long as a suite has any
 // compat left, which is a normal in-progress state, not something that
 // should reappear on every `check` run and teach readers to skim past the
 // line that does have to be fixed today.
@@ -20,6 +22,13 @@ import type { TendIssue } from "./types.js";
 // of check's warning.
 
 function supportOriginParameterTypeNote(entry: CompatParameterTypeEntry): TendIssue {
+  if (entry.preferForRegexpMatch === true) {
+    return {
+      code: "parameter-type-support-origin",
+      message: `Custom parameter type "${entry.name}" is registered from compat ("support") code at ${entry.filePath} with preferForRegexpMatch: keep it in support code while a RegExp step relies on that preference; config.parameterTypes rejects the key, and without it a RegExp group that another type also matches fails again`,
+      file: entry.filePath,
+    };
+  }
   return {
     code: "parameter-type-support-origin",
     message: `Custom parameter type "${entry.name}" is registered from compat ("support") code at ${entry.filePath}, not from config.parameterTypes: config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
