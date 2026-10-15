@@ -1486,9 +1486,9 @@ import { Given, When, Then } from "nukadoko/compat";
 - `defineParameterType` in compat code and `config.parameterTypes` use one
   registry. Moving a registration to the config does not change pattern
   matching, so a team can make this move early. A registration that sets
-  `preferForRegexpMatch` is the exception (below). `nuka check` warns about
-  registrations that still come from support code. The config is their
-  final location. A transformer's `this` is that scenario's World, the
+  `preferForRegexpMatch` is the exception (below). `nuka tend` lists
+  registrations that still come from support code (see "Tending"). The
+  config is their final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
   transformer returns is awaited before the step runs. This holds for a
   string pattern and a RegExp pattern alike. `preferForRegexpMatch` on a
