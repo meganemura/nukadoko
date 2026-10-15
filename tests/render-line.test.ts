@@ -73,7 +73,7 @@ describe("renderAttachmentBlock: docstring content colliding with the closing fe
     expect(block).toEqual([
       '  """',
       "  plain line",
-      '  \\"""not a real close',
+      '  \\"\\"\\"not a real close',
       "  last line",
       '  """',
     ]);

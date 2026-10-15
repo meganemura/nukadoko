@@ -60,6 +60,13 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka harvest` writes a docstring line that starts with three quotes
+  so it reads back.** The line was written as a backslash and three
+  quotes, which the Gherkin reader keeps as written, so the draft carried
+  a "does not read back to the same args" comment and a pasted line ran
+  with a stray backslash. Each quote now gets its own backslash, which
+  the reader removes.
+
 - **A live session records a step timeout as a timeout.** A step run
   through `nuka do --session` against a live session that outlived its
   deadline was recorded with `error.kind: "step_error"`, and the message

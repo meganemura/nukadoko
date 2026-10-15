@@ -388,7 +388,7 @@ describe("nuka explore", () => {
         "    * a todo is added with this title",
         '      """',
         "      first line",
-        '      \\"""',
+        '      \\"\\"\\"',
         "      third line",
         '      """',
         "",
