@@ -261,6 +261,34 @@ describe("createSessionCore: request dispatch", () => {
     expect(doubled.status === "ok" && doubled.result).toEqual({ doubled: "246913578024691357802469135780" });
   });
 
+  it("--args and --use hand a pipe, a codec, and a transform the input side of their schema", async () => {
+    const { core } = await newCore();
+    const counted = expectRecord(await core.dispatchRequest({ kind: "do", step: "count-atoms", args: { count: "5" } }));
+    const shaped = expectRecord(
+      await core.dispatchRequest({
+        kind: "do",
+        step: "shape-atoms",
+        args: { coded: "6", stamped: "2024-01-01T00:00:00.000Z", epoch: "2024-01-01T00:00:00.000Z" },
+        use: [counted.step_record_id],
+      }),
+    );
+    expect(shaped.status === "ok" && shaped.result).toEqual({
+      piped: "5",
+      coded: "6",
+      stamped: "2024-01-01T00:00:00.000Z",
+      doubled: "10",
+      epoch: 1704067200000,
+    });
+  });
+
+  it("--args leaves a string alone where a union option accepts it, whichever option is declared first", async () => {
+    const { core } = await newCore();
+    const sorted = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "sort-atoms", args: { first: "5", second: "5" } }),
+    );
+    expect(sorted.status === "ok" && sorted.result).toEqual({ first: "string", second: "string" });
+  });
+
   it("does not treat a --use-filled key as extra, but still rejects a genuinely extra key given alongside it", async () => {
     const { core } = await newCore();
     const created = expectRecord(
