@@ -1279,6 +1279,8 @@ import { Given, When, Then } from "nukadoko/compat";
   step と hook が動くのと同じオブジェクトです。
   transformer が返した Promise は、step が走る前に await されます。
   string の pattern でも RegExp の pattern でも同じです。
+  compat の登録の `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
+  `config.parameterTypes` にはこのキーがないため、これを設定する登録は compat コードに残ります。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
   World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。

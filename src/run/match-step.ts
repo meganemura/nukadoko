@@ -7,7 +7,7 @@ import { type Capture } from "../binding/pattern.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { asObjectShape, unconsumedRequiredKeys } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
-import type { Vocabulary } from "../discover/discover-steps.js";
+import type { CompatParameterTypeEntry, Vocabulary } from "../discover/discover-steps.js";
 
 // Responsibility: the run-time half of the shared seam — build the matching
 // CucumberExpression for every string pattern in the vocabulary directly
@@ -81,7 +81,7 @@ export type StepBinding =
 export function buildStepBindings(
   vocabulary: Vocabulary,
   customTypes: readonly ParameterTypeConfig[] = [],
-  compatParameterTypes: readonly ParameterTypeConfig[] = [],
+  compatParameterTypes: readonly CompatParameterTypeEntry[] = [],
 ): readonly StepBinding[] {
   const registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);
   const bindings: StepBinding[] = [];

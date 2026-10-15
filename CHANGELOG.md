@@ -62,6 +62,11 @@ just until 0.1.
   string that an option of a union already accepts is left as it is.
   `docs/migration.md` no longer lists this as a compat difference.
 
+- **`defineParameterType({ preferForRegexpMatch })` picks the type for a RegExp group.**
+  The option never reached the parameter type registry, so a RegExp group
+  that two types matched failed the step with "matches multiple parameter
+  types". cucumber-js 13.2.0 converts it with the preferred type, and
+  `nuka run` now does too. `config.parameterTypes` does not take the key.
 - **A RegExp step's transformed group gets the World and the awaited value.**
   In a compat RegExp pattern, a group converted by a `defineParameterType`
   transformer ran that transformer with `this` set to `null`, and an async
