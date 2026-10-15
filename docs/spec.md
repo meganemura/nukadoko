@@ -4029,11 +4029,14 @@ records.
 
 On a failure, stdout gets a scenario to paste into a feature: a comment with
 the command that reruns it, a comment that says how the run failed, and one
-`*` line per step, written from the step's first pattern as `nuka harvest`
-writes one. The failing step has a comment above it with its message. A
+`*` line per step, written from the step's first pattern by the renderer
+`nuka harvest` uses. The one required args key that no capture and no
+`from` speaks for is written as a table when it is a list of string rows,
+or as a docstring when it is a string, the way `nuka run` binds it. The
+failing step has a comment above it with its message. A
 relation prints two scenarios, the source and the follow. Every line is
 read back the way `nuka run` reads it, and a line that does not return the
-same step and args, or an args key the line has no capture for, is named in
+same step and args, or an args key the line cannot carry, is named in
 a comment above it. stdout stays empty on a pass, stderr gets one summary
 line either way, and the exit code is 0 only for a pass.
 

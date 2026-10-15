@@ -1,11 +1,12 @@
 import { parseCaptureToken, type Capture } from "../binding/capture.js";
 
 // Responsibility: turn one step's pattern plus a `used`/`from`-independent
-// value bag into the literal Gherkin text `nuka harvest` writes for a line,
-// and the table/docstring block that follows it when one is needed
+// value bag into the literal Gherkin text `nuka harvest` and `nuka explore`
+// write for a line, and the table/docstring block that follows it when one
+// is needed
 // (docs/spec.md "Harvesting"). This module only renders text — it never
 // judges whether the result is right, that is what the round trip in
-// src/harvest/build-draft.ts is for (docs/spec.md: "Rather than pick
+// src/draft/scenario.ts is for (docs/spec.md: "Rather than pick
 // quietly, harvest reads every line it wrote back").
 //
 // `renderPatternLine` walks the pattern text itself rather than reusing
@@ -37,7 +38,7 @@ export interface RenderLineError {
  * `float`, a compat `word`, the anonymous type, or a custom parameter type
  * — is written bare via `String(value)`. Getting a custom type's own
  * textual form wrong is not this function's problem to solve: docs/spec.md
- * "Harvesting" puts that judgment on the round trip in build-draft.ts,
+ * "Harvesting" puts that judgment on the round trip in scenario.ts,
  * which reads every line back and names the ones that do not return the
  * args they came from. A per-type reverse table here would be a second
  * answer to a question that already has one.

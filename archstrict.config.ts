@@ -56,7 +56,7 @@ export default {
   // Leaves and package doors that should not accumulate frozen debt.
   // A bypass here is fixed by extending that module's surface, not by
   // writing it into the todo file.
-  strict: ["binding", "check", "compat", "entry", "env", "explore", "feature", "issues", "matching", "mcp", "sink", "stored-form", "version"],
+  strict: ["binding", "check", "compat", "draft", "entry", "env", "explore", "feature", "issues", "matching", "mcp", "sink", "stored-form", "version"],
   classify: [
     { glob: "src/env/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/issues/**", tags: ["layer:leaf", "pkghost:library"] },
@@ -79,6 +79,7 @@ export default {
     { glob: "src/report/**", tags: ["layer:service", "pkghost:library"] },
     { glob: "src/run/**", tags: ["layer:run", "pkghost:library"] },
     { glob: "src/accept/**", tags: ["layer:workflow", "pkghost:library"] },
+    { glob: "src/draft/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/harvest/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/explore/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/live/**", tags: ["layer:workflow", "pkghost:library"] },
@@ -291,7 +292,8 @@ export default {
       ],
     },
     { name: "accept", glob: "src/accept/**", surface: ["render-record.ts", "select-run.ts"] },
-    { name: "harvest", glob: "src/harvest/**", surface: ["build-draft.ts", "categorize-args.ts", "render-line.ts"] },
+    { name: "draft", glob: "src/draft/**", surface: ["index.ts"] },
+    { name: "harvest", glob: "src/harvest/**", surface: ["build-draft.ts"] },
     { name: "explore", glob: "src/explore/**", surface: ["index.ts"] },
     {
       name: "live",

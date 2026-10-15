@@ -26,7 +26,8 @@ just until 0.1.
   SIGINT or SIGTERM tears fixtures down as under `nuka do`. `--json`
   prints one object on stdout with the verdict, the seed and counts, and
   on a failure each step's result, the failure kind and message, and the
-  scenario. A relation runs its source and its follow and calls
+  scenario. A step whose args take a table or a docstring prints one,
+  through the renderer and read-back `nuka harvest` uses. A relation runs its source and its follow and calls
   `relate`. On a failure stdout gets the scenario to paste (two for a
   relation) and the command that reruns it. No step record is written,
   and nothing is added to a feature. A model's `args` now receives

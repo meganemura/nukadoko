@@ -1,7 +1,7 @@
 import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { StepRecord } from "../record/types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
-import type { Attachment } from "./render-line.js";
+import { attachmentFor, deepEqual, type Attachment } from "../draft/index.js";
 
 // Responsibility: docs/spec.md "Harvesting"'s three-way split for one
 // step's args keys that a pattern's own named captures don't consume. That
@@ -55,31 +55,6 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * the same guard. */
 export function toArgsRecord(record: StepRecord): Record<string, unknown> {
   return isPlainRecord(record.args) ? record.args : {};
-}
-
-/** Structural equality over the JSON-safe values a step record's own
- * `args`/`result` are built from (string/number/boolean/null, plus arrays
- * and plain objects of the same) — never invoked on anything else, so this
- * does not need to handle `Date`, `Map`, or any other referenced type a
- * general-purpose deep-equal would. Exported for build-draft.ts's own round
- * trip, the other place that needs "are these two JSON-safe
- * values the same" without a third re-derivation. */
-export function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (Array.isArray(a) && Array.isArray(b)) {
-    return a.length === b.length && a.every((value, index) => deepEqual(value, b[index]));
-  }
-  if (isPlainRecord(a) && isPlainRecord(b)) {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-    if (aKeys.length !== bKeys.length) {
-      return false;
-    }
-    return aKeys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && deepEqual(a[key], b[key]));
-  }
-  return false;
 }
 
 export interface ChainOutsideList {
@@ -286,17 +261,9 @@ export function categorizeArgs(
 
   const key = attachmentCandidates[0]!;
   const value = args[key];
-  if (typeof value === "string") {
-    return { chainKeys, chainOutsideList, attachment: { kind: "docstring", key, value }, unfillable: [], omittedMeasured };
-  }
-  if (Array.isArray(value) && value.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string"))) {
-    return {
-      chainKeys,
-      chainOutsideList,
-      attachment: { kind: "table", key, value: value as readonly (readonly string[])[] },
-      unfillable: [],
-      omittedMeasured,
-    };
+  const attachment = attachmentFor(key, value);
+  if (attachment !== undefined) {
+    return { chainKeys, chainOutsideList, attachment, unfillable: [], omittedMeasured };
   }
   return { chainKeys, chainOutsideList, unfillable: [{ key, value }], omittedMeasured };
 }

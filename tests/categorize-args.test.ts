@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
-import { categorizeArgs, deepEqual } from "../src/harvest/categorize-args.js";
+import { deepEqual } from "../src/draft/index.js";
+import { categorizeArgs } from "../src/harvest/categorize-args.js";
 import { defineStep, type Step } from "../src/step/define-step.js";
 import type { StepRecordOk } from "../src/record/types.js";
 
