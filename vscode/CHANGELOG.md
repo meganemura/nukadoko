@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Go to definition, completion, and the static-unresolved warning now
+  read the same step files `nuka` loads: `.ts`, `.mts`, `.js`, and `.mjs`.
+  A `.mts`, `.js`, or `.mjs` step file was not read before. A `.tsx` file
+  and a `.d.ts` or `.d.mts` declaration file are no longer read, because
+  `nuka` never loads a step from one.
+
 ## 0.1.0
 
 - Syntax highlight for `.feature` files and for the `{key:type}` capture

@@ -35,7 +35,11 @@ import {
 const execFileAsync = promisify(execFile);
 
 const GHERKIN_LANGUAGE = "gherkin";
-const STEP_FILE_GLOB = "**/*.{ts,tsx}";
+// The extensions `nuka` itself loads a step from (src/discover/discover-
+// steps.ts in the root package). A declaration file shares a matched
+// extension but holds no step, so listFiles drops it after the glob.
+const STEP_FILE_GLOB = "**/*.{ts,mts,js,mjs}";
+const DECLARATION_FILE = /\.d\.m?ts$/;
 // Explicit, rather than relying on the user's own files.exclude: a
 // workspace that never configured that setting would otherwise have this
 // extension read every file under node_modules.
@@ -54,7 +58,7 @@ function createWorkspaceFileSource(): FileSource {
   return {
     async listFiles() {
       const uris = await vscode.workspace.findFiles(STEP_FILE_GLOB, STEP_FILE_EXCLUDE);
-      return uris.map((uri) => uri.fsPath);
+      return uris.map((uri) => uri.fsPath).filter((filePath) => !DECLARATION_FILE.test(filePath));
     },
     async readFile(filePath) {
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
