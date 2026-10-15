@@ -1,7 +1,7 @@
 import type { PickleStep } from "@cucumber/messages";
 import { parseFeatureSource } from "../feature/load-features.js";
 import type { StepRecord } from "../record/types.js";
-import { redact } from "../secrets/redact.js";
+import { toStoredForm } from "../stored-form/stored-form.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "../run/match-step.js";
 import type { Step } from "../step/define-step.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
@@ -322,7 +322,7 @@ async function runRoundTrip(
     }
     // The record holds args in their stored form (a bigint as its decimal
     // string), so the bound value is compared in that same form.
-    const readBack = redact(bound.value, []);
+    const readBack = toStoredForm(bound.value);
     if (!deepEqual(readBack, entry.expectedInlineArgs)) {
       entry.roundTripFailure =
         `this line does not read back to the same args: wrote ${formatValue(entry.expectedInlineArgs)}; ` +

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
+import { toStoredForm } from "../stored-form/stored-form.js";
 import { isFeatureWithinDir } from "./feature-within-dir.js";
 import { discoverMarkdownFiles, normalizeSignoffText, parseAcceptanceRecord } from "./record-parse.js";
 import type { TendIssue } from "./types.js";
@@ -104,9 +105,7 @@ const UNWRAP = new Set(["optional", "nullable", "default", "prefault", "catch", 
 
 function jsonForm(value: unknown): unknown {
   try {
-    const text = JSON.stringify(value);
-    if (typeof text !== "string") return undefined;
-    return JSON.parse(text) as unknown;
+    return toStoredForm(value);
   } catch {
     return undefined;
   }
