@@ -3,7 +3,7 @@
 // really does spawn `nuka check` and turn its report into diagnostics, and
 // that nothing before that command runs does. The command handler's own
 // logic (JSON -> DiagnosticsEntry[]) is already unit-tested through
-// buildDiagnosticsFromCheckReport (tests/diagnostics/build-diagnostics.
+// readCheckReport (tests/diagnostics/build-diagnostics.
 // test.ts); what only an end-to-end run through the bundled dist/
 // extension.js can show is that the wiring between "a user runs this
 // command" and "a real `nuka` process starts" actually holds.

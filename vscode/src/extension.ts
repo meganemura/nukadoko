@@ -20,8 +20,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
 import {
-  buildDiagnosticsFromCheckReport,
   buildUnresolvedDiagnostics,
+  readCheckReport,
   type DiagnosticsEntry,
 } from "./diagnostics/index.js";
 import { matchStepText, type ExtractionResult } from "./extraction/index.js";
@@ -167,7 +167,15 @@ async function runCheckCommand(collection: vscode.DiagnosticCollection): Promise
     stdout = stdoutFromError;
   }
 
-  applyDiagnostics(collection, workspaceRoot, buildDiagnosticsFromCheckReport(stdout));
+  const reading = readCheckReport(stdout);
+  if (reading.kind === "unreadable") {
+    collection.clear();
+    vscode.window.showErrorMessage(
+      `nukadoko: Check could not read the output of nuka check --json as a report. The output starts with ${JSON.stringify(reading.firstLine)}. A step file may print to stdout when it is imported.`,
+    );
+    return;
+  }
+  applyDiagnostics(collection, workspaceRoot, reading.entries);
 }
 
 export function activate(context: vscode.ExtensionContext): void {

@@ -7,6 +7,10 @@
   A `.mts`, `.js`, or `.mjs` step file was not read before. A `.tsx` file
   and a `.d.ts` or `.d.mts` declaration file are no longer read, because
   `nuka` never loads a step from one.
+- `nukadoko: Check` shows an error when the output of `nuka check --json`
+  is not a report, and names its first line. A step file that prints
+  when it is imported caused this. The command failed with no message
+  before and kept the diagnostics of an earlier run; it now clears them.
 
 ## 0.1.0
 

@@ -45,6 +45,21 @@ function toEntry(issue: CheckIssue, severity: "error" | "warning"): DiagnosticsE
   };
 }
 
+/** What the Check command can show for one `nuka check --json` run. A step
+ * file runs when `nuka check` imports it, so anything it prints lands on
+ * the same stdout as the report; `unreadable` carries the first line of
+ * that output, so a user can find which file printed it. */
+export type CheckReportReading =
+  | { readonly kind: "report"; readonly entries: readonly DiagnosticsEntry[] }
+  | { readonly kind: "unreadable"; readonly firstLine: string };
+
+function isCheckReport(value: unknown): value is CheckReport {
+  const report = value as Partial<CheckReport> | null;
+  return (
+    typeof report === "object" && report !== null && Array.isArray(report.errors) && Array.isArray(report.warnings)
+  );
+}
+
 /**
  * Flattens a `nuka check --json` report's `errors`/`warnings` into one list,
  * each entry tagged with the severity its own array already meant. Never
@@ -52,8 +67,17 @@ function toEntry(issue: CheckIssue, severity: "error" | "warning"): DiagnosticsE
  * the one kind of issue it can't point at a line would defeat the purpose
  * of running it at all.
  */
-export function buildDiagnosticsFromCheckReport(checkReportJson: string): readonly DiagnosticsEntry[] {
-  const report = JSON.parse(checkReportJson) as CheckReport;
+export function readCheckReport(stdout: string): CheckReportReading {
+  let report: unknown;
+  try {
+    report = JSON.parse(stdout);
+  } catch {
+    report = undefined;
+  }
+  if (!isCheckReport(report)) {
+    const firstLine = stdout.split("\n").find((line) => line.trim().length > 0) ?? "";
+    return { kind: "unreadable", firstLine: firstLine.trim() };
+  }
   const entries: DiagnosticsEntry[] = [];
   for (const issue of report.errors) {
     entries.push(toEntry(issue, "error"));
@@ -61,5 +85,5 @@ export function buildDiagnosticsFromCheckReport(checkReportJson: string): readon
   for (const issue of report.warnings) {
     entries.push(toEntry(issue, "warning"));
   }
-  return entries;
+  return { kind: "report", entries };
 }
