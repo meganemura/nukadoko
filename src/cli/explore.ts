@@ -7,6 +7,7 @@ import { loadEnvFiles } from "../context/env.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
+  ReadOnlyEnvironmentError,
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
@@ -59,8 +60,14 @@ function positiveInteger(flag: string, value: number, stderr: WritableSink): boo
 /** A relation has no seed: its source is declared, not generated. */
 function rerunCommand(options: RunExploreOptions, seed: number | null): string {
   const generated = seed === null ? "" : ` --seed ${seed} --runs ${options.runs} --length ${options.length}`;
-  const env = options.env === null ? "" : ` --env ${options.env}`;
-  return `nuka explore ${options.file}${generated}${env}`;
+  const env = options.env === null ? "" : ` --env ${shellWord(options.env)}`;
+  return `nuka explore ${shellWord(options.file)}${generated}${env}`;
+}
+
+/** The rerun line is meant to be pasted into a shell, so a path with a
+ * space or a quote in it is single-quoted. */
+function shellWord(word: string): string {
+  return /^[A-Za-z0-9_./:=@%+-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`;
 }
 
 function oneLine(text: string): string {
@@ -158,6 +165,18 @@ async function exploreDiscovered(
     stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
     return 1;
   }
+  if (resolvedEnv.policy === "read-only") {
+    const mutating = [...new Set(declaredSteps)].filter((name) => {
+      const entry = vocabulary.get(name);
+      return entry?.kind === "typed" && entry.step.mutates;
+    });
+    if (mutating.length > 0) {
+      for (const name of mutating) {
+        stderr.write(`${new ReadOnlyEnvironmentError(name, resolvedEnv.name).message}\n`);
+      }
+      return 1;
+    }
+  }
 
   let bindings: readonly StepBinding[];
   try {
@@ -227,6 +246,9 @@ async function exploreDiscovered(
         const name = nameOf(vocabulary, step);
         if (name === undefined) return { error: "this step is not in the vocabulary" };
         if (needsBrowser(step)) return { error: `step "${name}" needs a browser, and nuka explore runs request-only steps` };
+        if (resolvedEnv.policy === "read-only" && step.mutates) {
+          return { error: new ReadOnlyEnvironmentError(name, resolvedEnv.name).message };
+        }
         return { name };
       },
       open,

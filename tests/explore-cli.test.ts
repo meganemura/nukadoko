@@ -50,6 +50,7 @@ const WRONG_MODEL = [
 describe("nuka explore", () => {
   let server: Server | undefined;
   let rootDir: string;
+  let requests = 0;
 
   afterEach(async () => {
     if (server !== undefined) await new Promise<void>((resolve) => server!.close(() => resolve()));
@@ -57,18 +58,30 @@ describe("nuka explore", () => {
     await removeTempDir(rootDir);
   });
 
-  async function explore(v2: boolean, args: string[], extraModel?: string) {
+  async function explore(v2: boolean, args: string[], extraModel?: string, modelFile = "wrong-model.ts") {
     const started = await startTodoApp(v2);
     server = started.server;
     rootDir = await copyExampleToTempDir("todo");
     await ensureNukadokoShim();
     if (extraModel !== undefined) {
-      await writeFile(path.join(rootDir, "features", "explore", "wrong-model.ts"), extraModel);
+      await writeFile(path.join(rootDir, "features", "explore", modelFile), extraModel);
     }
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ baseURL: "${started.baseURL}" });\n`,
+      [
+        'import { defineConfig } from "nukadoko";',
+        "",
+        "export default defineConfig({",
+        `  baseURL: "${started.baseURL}",`,
+        `  environments: { staging: { baseURL: "${started.baseURL}", policy: "read-only" } },`,
+        "});",
+        "",
+      ].join("\n"),
     );
+    requests = 0;
+    server.on("request", () => {
+      requests += 1;
+    });
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["explore", ...args], { rootDir, stdout, stderr });
@@ -143,6 +156,32 @@ describe("nuka explore", () => {
       exitCode: 0,
       stdout: "",
       stderr: 'Passed: relation "add then listed". Rerun: nuka explore features/explore/add-relation.ts\n',
+    });
+  });
+
+  it("refuses a mutating step under a read-only environment before any step runs", async () => {
+    const result = await explore(false, ["features/explore/add-model.ts", "--env", "staging"]);
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr:
+        'Step "add-todo" mutates state but environment "staging" has policy "read-only"\n' +
+        'Step "complete-todo" mutates state but environment "staging" has policy "read-only"\n',
+    });
+    expect(requests).toBe(0);
+  });
+
+  it("quotes a file path with a space in the rerun command", async () => {
+    const result = await explore(
+      false,
+      ["features/explore/my model.ts", "--seed", "2", "--runs", "1", "--length", "1"],
+      WRONG_MODEL,
+      "my model.ts",
+    );
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: "",
+      stderr: "Passed: 1 run, 1 step, seed 2. Rerun: nuka explore 'features/explore/my model.ts' --seed 2 --runs 1 --length 1\n",
     });
   });
 
