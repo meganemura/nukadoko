@@ -248,6 +248,19 @@ describe("createSessionCore: request dispatch", () => {
     expect(used.used?.[0]?.step).toBe("create-thing");
   });
 
+  it("--args and --use hand a z.bigint() key the bigint its stored decimal string spells", async () => {
+    const { core } = await newCore();
+    const counted = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "count-atoms", args: { count: "123456789012345678901234567890" } }),
+    );
+    expect(counted.status === "ok" && counted.result).toEqual({ total: "123456789012345678901234567890" });
+
+    const doubled = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "double-atoms", args: {}, use: [counted.step_record_id] }),
+    );
+    expect(doubled.status === "ok" && doubled.result).toEqual({ doubled: "246913578024691357802469135780" });
+  });
+
   it("does not treat a --use-filled key as extra, but still rejects a genuinely extra key given alongside it", async () => {
     const { core } = await newCore();
     const created = expectRecord(
