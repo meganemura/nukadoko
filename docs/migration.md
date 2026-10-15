@@ -245,8 +245,8 @@ Two independent, incremental moves, safe to take alone, in either order:
   points at `config.parameterTypes` as the typed-era home: moving the
   registration changes nothing about what any pattern matches. A
   transformer's `this` is the scenario's World, and a Promise it returns
-  is awaited before the step. This holds for a string pattern. A RegExp
-  pattern differs; see [Known limits](#known-limits).
+  is awaited before the step, for a string pattern and a RegExp pattern
+  alike.
 
 ## Stage 2: promote steps
 
@@ -365,11 +365,6 @@ each one before you rely on the run.
 
 - `AfterStep` hooks run in registration order. cucumber-js runs them in
   reverse registration order, the order both tools use for `After` hooks.
-- In a RegExp pattern, a group whose source is a `defineParameterType`
-  regexp is converted by that type's transformer, but the transformer's
-  `this` is `null`, not the World, and a Promise it returns reaches the step
-  unawaited. A string pattern (`{color}`) gets the World and the awaited
-  value.
 - A hook's `result.message` is the error message only (`boom`).
   cucumber-js gives the stack text (`Error: boom` and the frames below it).
   `result.exception` is not set.

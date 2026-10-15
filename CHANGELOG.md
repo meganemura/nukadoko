@@ -62,6 +62,12 @@ just until 0.1.
   string that an option of a union already accepts is left as it is.
   `docs/migration.md` no longer lists this as a compat difference.
 
+- **A RegExp step's transformed group gets the World and the awaited value.**
+  In a compat RegExp pattern, a group converted by a `defineParameterType`
+  transformer ran that transformer with `this` set to `null`, and an async
+  transformer's Promise reached the step unawaited. A `{color}` string
+  pattern already got the World and the resolved value, as cucumber-js
+  13.2.0 gives both. A RegExp group is now resolved the same way.
 - **`nuka tend` reads a `from`-filled arg's description from its producer.**
   An args field that `from` fills was reported as undescribed unless the
   consumer repeated the producer's `.describe()`. A six-step CLI scenario
