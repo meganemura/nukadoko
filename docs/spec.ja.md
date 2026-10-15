@@ -2011,6 +2011,10 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `nuka do` は `--use` の値を保存された record から読み、`--args` を JSON として読みます。
   そのため、step の `args` スキーマが bigint や Date を期待するところでは、保存された文字列を先にそれへ戻します。
   それ以外の文字列は、文字列のままスキーマに届きます。
+  このとき読むのは、スキーマが受け取る側の型です。
+  `z.coerce.bigint()` へ pipe した文字列、文字列を decode する codec、`z.preprocess()` の関数は、与えられた文字列をそのまま受け取ります。
+  `z.bigint().transform(...)` は bigint を受け取ります。
+  union のどれかの選択肢が、与えられた文字列をそのまま受け付けるなら、選択肢を宣言した順序にかかわらず、文字列はそのまま残ります。
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。

@@ -47,7 +47,10 @@ just until 0.1.
   session too, turns the stored string back into a bigint where the
   step's `args` schema expects one, for a value `--use` reads from a
   record and for `--args` JSON, which cannot spell a bigint either; a
-  Date in `--args` is read back from its ISO string the same way.
+  Date in `--args` is read back from its ISO string the same way. This
+  follows the schema's input side, so a string piped into
+  `z.coerce.bigint()` or a string codec still gets the string, and a
+  string that an option of a union already accepts is left as it is.
   `docs/migration.md` no longer lists this as a compat difference.
 
 - **`nuka tend` reads a `from`-filled arg's description from its producer.**
