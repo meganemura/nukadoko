@@ -87,7 +87,7 @@ const CHECK_CODES = {
   },
   "explore-empty-model": {
     description:
-      "A model, or a relation's model source, declares no commands, so every sequence it builds is empty and passes.",
+      "A model declares no commands, so every sequence it builds is empty and passes.",
     severity: "error",
   },
   "explore-unknown-step": {
@@ -97,7 +97,7 @@ const CHECK_CODES = {
   },
   "explore-unseeded-random": {
     description:
-      "A model command's args, pre, or next, or a relation's drawn source, calls Math.random or crypto.random* directly. The seed does not drive that value, so a run cannot be replayed or shrunk.",
+      "A model command's args, pre, or next, or a relation's drawn source, calls Math.random directly. The seed does not drive that value, so a run cannot be replayed or shrunk.",
     severity: "error",
   },
   "feature-parse-error": {

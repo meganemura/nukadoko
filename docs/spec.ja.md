@@ -3386,13 +3386,19 @@ discovery は、どちらかの宣言の default export を step ではなくそ
 `request` だけを必要とする step は許されます。
 
 宣言を読んで、結果が 1 通りにしかならない所見がさらに 2 つあります。
-`explore-empty-model` は、command を 1 つも持たないモデル、または関係のモデルの source を報告します。
+`explore-empty-model` は、command を 1 つも持たないモデルを報告します。
 それが組み立てる列はすべて空なので、どの実行も合格し、何も分かりません。
-`explore-unseeded-random` は、command の `args`、`pre`、`next`、または関係の draw する source の中で、`Math.random` や `crypto.random*` の関数を直接呼ぶことを報告します。
+関係のモデルの source が command を持たない場合は報告しません。
+空の source でも `follow` と `relate` は実行され、そこで失敗しうるからです。
+`explore-unseeded-random` は、command の `args`、`pre`、`next`、または関係の draw する source の中で、`Math.random` を直接呼ぶことを報告します。
 その値は seed が決めないので、実行を seed から再現できず、縮小の編集もそれまでと同じ意味を持ちません。
 check はこのために関数のソーステキストを読み、関数を呼びません。
 文字列、コメント、正規表現、テンプレートの文字部分にある呼び出しは、呼び出しではありません。
-import、ヘルパー、別名を経由する呼び出しと、関数が自分で束縛した名前に対する呼び出しは、届かない範囲にあり、check はそれについて何も言いません。
+check が見るのはソーステキストだけなので、関数の外の束縛（モジュールのスコープや import）は届かない範囲にあります。
+そのため `crypto.random*` は報告しません。
+モジュールのスコープの `crypto` は、seed を持つ生成器かもしれないからです。
+ヘルパーや別名を経由する呼び出しと、関数が自分で束縛した `Math` も、届かない範囲にあります。
+check はそのどれについても何も言いません。
 推測する check は、check がないより悪いからです。
 
 ### モデルまたは関係を探索する
@@ -3486,9 +3492,9 @@ capture も `from` も受け持たない必須の args のキーが 1 つだけ�
 source を生成する関係は、さらに `seed`、`runs`、`length` を加え、失敗すると `run`、`found_steps`、`shrunk_steps`、`shrink_attempts` を加えます。
 step 数は source の step で数えます。
 `steps` の各要素には `step`、`args`、`status` があります。
-`status` は、`result` を伴う `"ok"`、`message` を伴う `"failed"`、失敗した列のあとの step を表す `"not-run"` のいずれかです。
+`status` は、`result` を伴う `"ok"`、`message` を伴う `"failed"`、同じ列の中で失敗した step のあとにある step を表す `"not-run"` のいずれかです。
 `scenario` は、通常の出力が表示するテキストから先頭の 2 行のコメントを除いたものです。
-`error` は `message` を持ちます。
+`error` は `message` を持ち、モデルと source を生成する関係では `run` も持ちます。
 step を実行する前の拒否では、`--json` がないときと同じく stdout には何も出ません。
 explore はオブジェクトを stdout にだけ書き、`.nukadoko/` の下には書きません。
 そのため `nuka accept` と `nuka tend` がそれを実行として読むことはありません。

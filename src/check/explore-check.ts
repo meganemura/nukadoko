@@ -54,13 +54,17 @@ export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[]
   const issues: CheckIssue[] = [];
 
   for (const file of input.models) {
-    issues.push(...checkModelCommands(input, file.filePath, file.model, ""));
+    issues.push(...checkModelCommands(input, file.filePath, file.model, "", true));
   }
 
   for (const file of input.relations) {
     const { source } = file.relation;
     if (isModel(source)) {
-      issues.push(...checkModelCommands(input, file.filePath, source, `relation "${file.relation.name}" source `));
+      // An empty model source is not reported: follow and relate still run
+      // on the empty source, and they can fail there.
+      issues.push(
+        ...checkModelCommands(input, file.filePath, source, `relation "${file.relation.name}" source `, false),
+      );
       continue;
     }
     // A source drawn by a function has no steps until a run calls it.
@@ -104,13 +108,19 @@ export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[]
   return issues;
 }
 
-function checkModelCommands(input: CheckExploreInput, filePath: string, model: Model, prefix: string): CheckIssue[] {
+function checkModelCommands(
+  input: CheckExploreInput,
+  filePath: string,
+  model: Model,
+  prefix: string,
+  reportEmpty: boolean,
+): CheckIssue[] {
   const issues: CheckIssue[] = [];
   const commands = Object.entries(model.commands);
-  if (commands.length === 0) {
+  if (reportEmpty && commands.length === 0) {
     issues.push({
       code: "explore-empty-model",
-      message: `${prefix === "" ? "the model" : prefix.trimEnd()} has no commands, so every sequence it builds is empty and passes`,
+      message: "the model has no commands, so every sequence it builds is empty and passes",
       file: filePath,
     });
   }

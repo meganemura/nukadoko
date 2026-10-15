@@ -32,9 +32,9 @@ just until 0.1.
   commands; it then takes `--seed`, `--runs`, and `--length`, and a
   failing source is shrunk while the relation fails the same way.
   Shrinking also deletes two adjacent steps at once. A relation runs
-  its source and its follow and calls `relate`. On a failure stdout gets the scenario to paste (two for a
-  relation) and the command that reruns it. No step record is written,
-  and nothing is added to a feature. A model's `args` now receives
+  its source and its follow and calls `relate`. On a failure stdout gets
+  the scenario to paste (two for a relation) and the command that reruns
+  it. No step record is written, and nothing is added to a feature. A model's `args` now receives
   `(state, draw)`; a model written for `(state)` still compiles.
   `examples/todo/features/explore/add-model.ts` now adds and completes
   todos.
@@ -45,11 +45,11 @@ just until 0.1.
   `context`. A request-only step is allowed. Check does not run the steps.
   `examples/todo/features/explore/` is the request-only case.
   `explore-empty-model` reports a model with no commands, whose every run
-  passes. `explore-unseeded-random` reports a direct `Math.random` or
-  `crypto.random*` call in a command's `args`, `pre`, or `next`, or in a
-  relation's drawn source, since the seed cannot replay or shrink that
-  value. Check reads the source text and stays silent for a call it cannot
-  see directly.
+  passes. `explore-unseeded-random` reports a direct `Math.random` call in
+  a command's `args`, `pre`, or `next`, or in a relation's drawn source,
+  since the seed cannot replay or shrink that value. Check reads only the
+  function's source text, so it stays silent for `crypto.random*` and for
+  any binding outside the function, which it cannot see.
 - **`nuka steps` and `nuka describe` show a step's declared `timeout`.**
   A step's own `defineStep({ timeout })` deadline was visible only in its
   source, so a reader could not tell which steps run under `stepTimeout`.

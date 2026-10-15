@@ -43,8 +43,8 @@ export default defineModel(() => ({ open: [] as string[] })).commands({
   `draw.pick(items)` for every value that varies, and nothing else: no
   `Math.random`, no clock. A value the draw did not make cannot be
   replayed from the seed or shrunk. `nuka check` reports
-  `explore-unseeded-random` for a direct `Math.random` or `crypto.random*`
-  call in `args`, `pre`, or `next`, and `explore-empty-model` for a model
+  `explore-unseeded-random` for a direct `Math.random` call in `args`,
+  `pre`, or `next`, and `explore-empty-model` for a model
   with no commands.
 - `pre` says when a command makes sense. A command whose `args` needs
   something from the state needs a `pre` that guarantees it.

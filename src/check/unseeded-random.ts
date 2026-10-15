@@ -1,29 +1,25 @@
-// Responsibility: name the direct calls to Math.random and crypto.random*
-// in one function's source text. It reads the text only; it never calls
-// the function. Its boundary is the source string: a call reached through
-// an import, a helper, or an alias is out of reach, and it says nothing
-// about one. A name that the text also uses in a way other than a member
-// call (a parameter, a local, a value passed along) could be a shadowing
-// binding, so that name reports nothing: a check that guesses teaches
-// people to ignore the ones that are right.
+// Responsibility: name the direct calls to Math.random in one function's
+// source text. It reads the text only; it never calls the function. Its
+// boundary is the source string, so a binding outside the function (module
+// scope or an import) is out of reach. That is why `crypto` is not
+// checked: a module-level `const crypto = seeded(seed)` or an imported
+// `crypto` is common and invisible from here. `Math` is a global nobody
+// rebinds at module scope in practice; a name the function binds itself,
+// or uses other than as a member call, reports nothing. A check that
+// guesses teaches people to ignore the ones that are right.
 
-const CALL =
-  /(?<![\w$.]\s*)(?:globalThis\s*\.\s*)?(Math|crypto)\s*\.\s*(random[\w$]*)\s*\(/g;
+const CALL = /(?<!\.\s*)(?<![\w$])(?:globalThis\s*\.\s*)?Math\s*\.\s*random\s*\(/g;
 
 function bareUse(code: string, name: string): boolean {
-  return new RegExp(`(?<![\\w$.]\\s*)${name}(?![\\w$])(?!\\s*\\.)`).test(code);
+  return new RegExp(`(?<!\\.\\s*)(?<![\\w$])${name}(?![\\w$])(?!\\s*\\.)`).test(code);
 }
 
 /** The calls in the order they appear, each written as `Math.random()`. */
 export function unseededRandomCalls(source: string): string[] {
   const code = codeOnly(source);
   const found: string[] = [];
-  for (const match of code.matchAll(CALL)) {
-    const [, object, member] = match;
-    if (object === "Math" && member !== "random") continue;
-    if (bareUse(code, object!)) continue;
-    found.push(`${object}.${member}()`);
-  }
+  if (bareUse(code, "Math")) return found;
+  for (const _match of code.matchAll(CALL)) found.push("Math.random()");
   return found;
 }
 
@@ -94,7 +90,13 @@ export function codeOnly(source: string): string {
       skipTemplateText();
       continue;
     }
-    if (char === "/" && (lastSignificant === "" || REGEX_AFTER.has(lastSignificant) || REGEX_AFTER_WORD.test(out.trimEnd()))) {
+    // After `++` or `--` the operand is complete, so `/` divides.
+    const afterIncrement = /(?:\+\+|--)\s*$/.test(out);
+    if (
+      char === "/" &&
+      !afterIncrement &&
+      (lastSignificant === "" || REGEX_AFTER.has(lastSignificant) || REGEX_AFTER_WORD.test(out.trimEnd()))
+    ) {
       index += 1;
       let inClass = false;
       while (index < length) {

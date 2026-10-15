@@ -3971,18 +3971,22 @@ registered. It reports `explore-browser-step` when that step needs `page` or
 only `request` is allowed.
 
 Two more findings read the declaration and end only one way.
-`explore-empty-model` reports a model, or a relation's model source, with
-no commands: every sequence it builds is empty, so every run passes and
-says nothing. `explore-unseeded-random` reports a direct call to
-`Math.random` or to a `crypto.random*` function in a command's `args`,
-`pre`, or `next`, or in a relation's drawn source. The seed does not drive
-that value, so a run cannot be replayed from its seed and a shrink edit
-does not mean what it meant. Check reads the function's source text for
-this and does not call the function. A call in a string, a comment, a
-regular expression, or a template's text is not a call. A call reached
-through an import, a helper, or an alias, and a call on a name the function
-binds itself, are out of reach, and check says nothing about them, because
-a check that guesses is worse than none.
+`explore-empty-model` reports a model with no commands: every sequence it
+builds is empty, so every run passes and says nothing. A relation whose
+model source has no commands is not reported, because `follow` and
+`relate` still run on the empty source and can fail there.
+`explore-unseeded-random` reports a direct call to `Math.random` in a
+command's `args`, `pre`, or `next`, or in a relation's drawn source. The
+seed does not drive that value, so a run cannot be replayed from its seed
+and a shrink edit does not mean what it meant. Check reads the function's
+source text for this and does not call the function. A call in a string, a
+comment, a regular expression, or a template's text is not a call. The
+source text is all check sees, so a binding outside the function (at
+module scope or from an import) is out of reach. For that reason
+`crypto.random*` is not reported: a module-level `crypto` can be a seeded
+generator. A call reached through a helper or an alias, and a `Math` the
+function binds itself, are out of reach too. Check says nothing about any
+of them, because a check that guesses is worse than none.
 
 ### Exploring a model or a relation
 
@@ -4083,9 +4087,10 @@ the shrunk sequence. A relation adds `name`, and a failing one adds
 `seed`, `runs`, and `length`, and on a failure `run`, `found_steps`,
 `shrunk_steps`, and `shrink_attempts`, counted in source steps.
 Each entry of `steps` has `step`, `args`, and `status`: `"ok"` with
-`result`, `"failed"` with `message`, or `"not-run"` for a step after a
-failed sequence. `scenario` is the text the plain output prints, without
-the two leading comments. An `error` carries `message`. A refusal before
+`result`, `"failed"` with `message`, or `"not-run"` for a step after the
+failed step in the same sequence. `scenario` is the text the plain output prints, without
+the two leading comments. An `error` carries `message`, and `run` for a
+model or a relation with a generated source. A refusal before
 any step runs prints nothing on stdout, as without `--json`. Explore
 writes the object to stdout only, never under the state directory, so
 `nuka accept` and `nuka tend` never read it as a run.
