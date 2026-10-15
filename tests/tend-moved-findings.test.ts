@@ -60,6 +60,34 @@ describe("nuka tend: findings moved from nuka check", () => {
     expect(supportOrigin.message).toContain(expectedRelativePath);
   });
 
+  it("parameter-type-support-origin: tells a registration that sets preferForRegexpMatch to stay in support code, and still offers the move to one that does not", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["tend", "--json"], {
+      rootDir: fixture("compat-prefer-regexp-match-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text());
+    const file = path.join("features", "steps", "code-glue.ts");
+    const supportOrigin = report.notes.filter(
+      (issue: { code: string }) => issue.code === "parameter-type-support-origin",
+    );
+    expect(supportOrigin).toEqual([
+      {
+        code: "parameter-type-support-origin",
+        message: `Custom parameter type "codeA" is registered from compat ("support") code at ${file}, not from config.parameterTypes: config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
+        file,
+      },
+      {
+        code: "parameter-type-support-origin",
+        message: `Custom parameter type "codeB" is registered from compat ("support") code at ${file} with preferForRegexpMatch: keep it in support code while a RegExp step relies on that preference; config.parameterTypes rejects the key, and without it a RegExp group that another type also matches fails again`,
+        file,
+      },
+    ]);
+    expect(exitCode).toBe(0);
+  });
+
   it("secrets-public-key-unknown: names the key, appears as a note, and does not fail the run", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend", "--json"], {
