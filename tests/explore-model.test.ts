@@ -188,6 +188,48 @@ describe("exploreModel", () => {
     });
   });
 
+  it("keeps the failure it found when a shorter sequence fails another way", async () => {
+    const result = await exploreModel({
+      model: setModel,
+      seed: 2,
+      runs: 20,
+      length: 10,
+      open: async () => {
+        const stored: number[] = [];
+        return {
+          async run(name, args) {
+            if (name === "count-numbers") return { ok: true, result: { count: stored.length } };
+            const { n } = args as { n: number };
+            if (n === 1) return { ok: false, message: "1 is refused" };
+            stored.push(n);
+            return { ok: true, result: {} };
+          },
+          async close() {},
+        };
+      },
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      found: [
+        { name: "count-numbers", args: {} },
+        { name: "add-number", args: { n: 3 } },
+        { name: "add-number", args: { n: 3 } },
+        { name: "count-numbers", args: {} },
+      ],
+      shrunk: [
+        { name: "add-number", args: { n: 3 } },
+        { name: "add-number", args: { n: 3 } },
+        { name: "count-numbers", args: {} },
+      ],
+      failure: {
+        index: 2,
+        kind: "post-false",
+        command: "count-numbers",
+        message: 'post of command "count-numbers" returned false for result {"count":2}',
+      },
+    });
+  });
+
   it("names the model callback that threw instead of running anything", async () => {
     const broken = defineModel(() => 0).commands({
       "count-numbers": modelCommand(countNumbers)({
