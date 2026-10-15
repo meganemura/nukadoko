@@ -49,6 +49,11 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //   - a value with toJSON is redacted as the result of that call. Date and
 //     URL have no enumerable properties, so walking them with Object.entries
 //     stores {}. JSON.stringify would have stored the ISO string or the href;
+//   - a bigint is stored as its decimal string. JSON has no bigint, and
+//     JSON.stringify throws on one, which aborted a whole run whose step
+//     bound a {biginteger} capture. The string is then redacted like any
+//     other string, so a second redact of the stored form agrees with the
+//     first;
 //   - object keys are redacted exactly like string values are, and if two
 //     distinct keys end up identical after redaction, redact throws rather
 //     than picking one and dropping the other's subtree (see redactInner).
@@ -164,6 +169,9 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
   if (typeof value === "string") {
     return applyReplacements(value, replacements);
   }
+  if (typeof value === "bigint") {
+    return applyReplacements(value.toString(), replacements);
+  }
   if (Array.isArray(value)) {
     return value.map((item) => redactInner(item, replacements));
   }
@@ -202,7 +210,8 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
 
 /** Recursively redacts every string found anywhere inside `value`. A value
  * with toJSON is redacted as the result of that call, which is the form
- * JSON.stringify would store, and then the same way as any other value.
+ * JSON.stringify would store, and then the same way as any other value. A
+ * bigint becomes its decimal string.
  * Returns a new value; `value` itself is never mutated. */
 export function redact(value: unknown, secrets: SecretSet): unknown {
   return redactInner(value, buildReplacements(secrets));
