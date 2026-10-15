@@ -1,4 +1,4 @@
-import { readdir, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -319,6 +319,96 @@ describe("nuka explore", () => {
       exitCode: 0,
       stdout: "features/todo.feature.<date>-<sha>.default.no-browser.md\n",
     });
+  });
+
+  it("prints a table and a docstring that nuka run reads back to the same args", async () => {
+    const noteStep = [
+      'import { defineStep, z } from "nukadoko";',
+      "",
+      "export default defineStep({",
+      '  pattern: "a todo is added with this title",',
+      '  description: "Create a todo whose title is the docstring",',
+      "  args: z.object({ title: z.string() }),",
+      "  returns: z.object({ title: z.string() }),",
+      "  mutates: true,",
+      "  async run({ request }, args) {",
+      '    const res = await request.post("/todos", { data: { title: args.title } });',
+      "    return { title: ((await res.json()) as { title: string }).title };",
+      "  },",
+      "});",
+      "",
+    ].join("\n");
+    const attachedModel = [
+      'import { defineModel, modelCommand } from "nukadoko";',
+      'import addTodos from "../steps/add-todos-from-table.js";',
+      'import addNote from "../steps/add-note.js";',
+      "",
+      "export default defineModel(() => ({ tables: 0 })).commands({",
+      '  "add-todos-from-table": modelCommand(addTodos)({',
+      '    args: (_state, draw) => ({ todos: draw.pick([[["pipe | in a cell"], ["back\\\\slash"]]]) }),',
+      "    pre: () => true,",
+      "    next: (state) => ({ tables: state.tables + 1 }),",
+      "    post: () => true,",
+      "  }),",
+      '  "add-note": modelCommand(addNote)({',
+      "    args: (_state, draw) => ({ title: draw.pick([\"first line\\n\\\"\\\"\\\"\\nthird line\"]) }),",
+      "    pre: () => true,",
+      "    next: (state) => state,",
+      "    post: (state) => state.tables === 0,",
+      "  }),",
+      "});",
+      "",
+    ].join("\n");
+    const started = await startTodoApp(false);
+    server = started.server;
+    rootDir = await copyExampleToTempDir("todo");
+    await ensureNukadokoShim();
+    await writeFile(path.join(rootDir, "features", "steps", "add-note.ts"), noteStep);
+    await writeFile(path.join(rootDir, "features", "explore", "attached-model.ts"), attachedModel);
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      ['import { defineConfig } from "nukadoko";', "", `export default defineConfig({ baseURL: "${started.baseURL}" });`, ""].join("\n"),
+    );
+    const cli = async (args: string[]) => {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(args, { rootDir, stdout, stderr });
+      return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+    };
+
+    const explored = await cli(["explore", "features/explore/attached-model.ts", "--seed", "1", "--runs", "5", "--length", "4", "--json"]);
+    const json = JSON.parse(explored.stdout) as { scenario: string; steps: { step: string; args: unknown }[] };
+    expect(json.scenario).toBe(
+      [
+        "  Scenario: (name me)",
+        "    * the following todos are added",
+        "      | pipe \\| in a cell |",
+        "      | back\\\\slash |",
+        '    # step 2 failed: post of command "add-note" returned false for result {"title":"first line\\n\\"\\"\\"\\nthird line"}',
+        "    * a todo is added with this title",
+        '      """',
+        "      first line",
+        '      \\"""',
+        "      third line",
+        '      """',
+        "",
+      ].join("\n"),
+    );
+
+    await writeFile(path.join(rootDir, "features", "pasted.feature"), `Feature: pasted\n\n${json.scenario}`);
+    expect((await cli(["run", "features/pasted.feature", "--quiet"])).exitCode).toBe(0);
+    const recordsDir = path.join(rootDir, ".nukadoko", "records", "steps");
+    const records = await Promise.all(
+      (await readdir(recordsDir)).map(async (id) =>
+        JSON.parse(await readFile(path.join(recordsDir, id, "record.json"), "utf8")) as { step: string; args: unknown; started_at: string },
+      ),
+    );
+    const ran = records.sort((a, b) => a.started_at.localeCompare(b.started_at)).map(({ step, args }) => ({ step, args }));
+    expect(ran).toEqual(json.steps.map(({ step, args }) => ({ step, args })));
+    expect(ran).toEqual([
+      { step: "add-todos-from-table", args: { todos: [["pipe | in a cell"], ["back\\slash"]] } },
+      { step: "add-note", args: { title: 'first line\n"""\nthird line' } },
+    ]);
   });
 
   it("refuses a file that is not a model or a relation, before any step runs", async () => {
