@@ -63,7 +63,7 @@ export function createParameterTypeRegistry(
     );
     // cucumber-expressions refuses a second preferential type for one regexp
     // with its own CucumberExpressionError, which names no registration.
-    if (parameterType.preferForRegexpMatch === true) {
+    if (parameterType.preferForRegexpMatch) {
       for (const existing of registry.parameterTypes) {
         const regexp = existing.preferForRegexpMatch
           ? parameterType.regexpStrings.find((source) => existing.regexpStrings.includes(source))
