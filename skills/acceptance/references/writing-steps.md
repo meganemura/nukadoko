@@ -26,7 +26,11 @@ criterion's wording doesn't match a pattern verbatim.
 
 ## When the vocabulary has no step for it
 
-1. `nuka scaffold <name>`, kebab-case, one file per step.
+1. `nuka scaffold <name> --pattern "<feature line>"`, kebab-case, one
+   file per step. Each `{key:type}` capture becomes an args field, so the
+   file passes `nuka check` against that line before `run` is written.
+   Add `--then` for a step a Then line binds: it writes `mutates: false`
+   and no `returns`. Leave `--pattern` out for a step reached by name only.
 2. Implement it. The shape of that file is the next section.
 3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
    record, before it ever touches a feature. Fix and re-run until it does
@@ -100,11 +104,18 @@ pass one of its own schemas into a step, that schema needs to be zod 4.
 `pattern` is one string. Use `patterns: [...]` for a step that answers to
 more than one line, and omit both for a step only ever reached by name.
 
+`returns` can be left out. It then defaults to an empty object, and `run`
+may return nothing. That fits a step with nothing to report beyond passing,
+such as a Then step whose observed values arrived as args through `from`.
+A step that observed something returns it ("Writing a step that checks
+something" below says why).
+
 `run`'s first argument has to be written as an object destructuring
 pattern, every time, because nukadoko reads which fixtures to build from
 that pattern's source text without ever calling `run`. A step needing no
 fixtures at all writes `run({}, args)`, and one needing neither writes
-`run()`. Any other parameter, `_ctx` included, is refused. `page`,
+`run()`. `run({ sum })` reads `sum` as a fixture; when `sum` is an args
+key, `nuka check` says so and names `run({}, { sum })`. Any other parameter, `_ctx` included, is refused. `page`,
 `context` and `request` are Playwright's own objects, so reach for
 Playwright's documentation for what to call on them rather than guessing.
 On the compat door those same `page` and `request` names are harness

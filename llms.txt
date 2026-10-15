@@ -11,7 +11,7 @@ Installed package: `node_modules/nukadoko/skills/...` (this file at `node_module
 ## Commands
 
 - `nuka init` — project setup with self-check
-- `nuka steps` / `nuka describe <name>` / `nuka scaffold <name>` — vocabulary and stubs
+- `nuka steps` / `nuka describe <name>` / `nuka scaffold <name> [--pattern <text>] [--then]` — vocabulary and stubs
 - `nuka check [feature]` — static checks before run
 - `nuka do <name>` / `nuka run <feature..>` — execute under contracts; records on stdout
 - `nuka accept <feature>` — freeze the last green run as an acceptance record

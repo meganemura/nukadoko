@@ -176,6 +176,8 @@ interface InitArgs {
 
 interface ScaffoldArgs {
   name: string;
+  pattern?: string;
+  then?: boolean;
 }
 
 interface CheckArgs {
@@ -713,16 +715,29 @@ export async function runCli(
     command: "scaffold <name>",
     describe: "typed step template that fails until implemented",
     builder: (y: Argv) =>
-      y.positional("name", {
-        type: "string",
-        demandOption: true,
-        describe: "step name, kebab-case (becomes the step's file name)",
-      }) as Argv<ScaffoldArgs>,
+      y
+        .positional("name", {
+          type: "string",
+          demandOption: true,
+          describe: "step name, kebab-case (becomes the step's file name)",
+        })
+        .option("pattern", {
+          type: "string",
+          describe: "the feature line text the step matches; each {key:type} capture becomes an args field",
+        })
+        .option("then", {
+          type: "boolean",
+          default: false,
+          describe: "an assertion for a Then line: mutates: false and no returns",
+        })
+        .check(rejectRepeatedFlags(["pattern"])) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
       if (argsFailed) return;
       exitCode = await runScaffold({
         rootDir,
         name: args.name,
+        pattern: args.pattern ?? null,
+        then: args.then ?? false,
         stdout,
         stderr,
       });

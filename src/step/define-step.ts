@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import type { StepFixtures } from "./context.js";
 import { STEP_BRAND } from "./brand.js";
 
@@ -63,7 +63,10 @@ import { STEP_BRAND } from "./brand.js";
  * whether or not it even declares `from`. */
 type ObjectShapeOf<T extends z.ZodTypeAny> = T extends z.ZodObject<infer Shape>
   ? Shape
-  : Record<string, never>;
+  : T extends DefaultReturns
+    ? // A step that declares no `returns` has no key a `from` can name.
+      {}
+    : Record<string, never>;
 
 /** The keys of object shape `Shape` whose own value type is assignable to
  * `V` — bullet 3 of `from`'s three checks (this file's own header),
@@ -274,6 +277,25 @@ export function malformedFromEntryMessage(key: string, entry: unknown): string {
   return `from.${key} is not usable: ${describeMalformedFromEntry(entry)}`;
 }
 
+/** The `returns` schema of a step that declares none: an empty object, and
+ * the same empty object when `run` returns nothing. A step with nothing for
+ * a later step to cite (most assertion steps) then needs neither the schema
+ * line nor a `return {}`. A default rather than a wrapper around `run`,
+ * because nukadoko reads fixture names from `run`'s own source text, and a
+ * wrapper would hide it. */
+export type DefaultReturns = z.ZodDefault<z.ZodObject<Record<string, never>>>;
+
+function defaultReturns(): DefaultReturns {
+  return z.object({}).default(() => ({}));
+}
+
+/** What `run` may give back. A step without `returns` may return nothing,
+ * which its default schema reads as `{}`. Every other step returns the
+ * value its own schema produces, exactly as before. */
+export type StepRunResult<TReturns extends z.ZodTypeAny> = TReturns extends DefaultReturns
+  ? z.input<TReturns> | void
+  : z.infer<TReturns>;
+
 export interface StepDefinitionInput<
   TArgs extends z.ZodTypeAny = z.ZodTypeAny,
   TReturns extends z.ZodTypeAny = z.ZodTypeAny,
@@ -287,7 +309,10 @@ export interface StepDefinitionInput<
    * to call. Shown in `nuka steps`' one-line-per-step listing. */
   description: string;
   args: TArgs;
-  returns: TReturns;
+  /** What `run` returns. Omit it for a step that returns nothing a later
+   * step cites or a failure is diagnosed from: it defaults to an empty
+   * object, and `run` may then return nothing. */
+  returns?: TReturns;
   /** Whether the step changes state anywhere it touches. Defaults to `true`. */
   mutates?: boolean;
   /** Where an args key's value comes from when a pickle line doesn't capture
@@ -337,7 +362,7 @@ export interface StepDefinitionInput<
   run(
     fixtures: StepFixtures,
     args: z.infer<TArgs>,
-  ): Promise<z.infer<TReturns>> | z.infer<TReturns>;
+  ): Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
 }
 
 export interface Step<
@@ -369,7 +394,7 @@ export interface Step<
   readonly run: (
     fixtures: StepFixtures,
     args: z.infer<TArgs>,
-  ) => Promise<z.infer<TReturns>> | z.infer<TReturns>;
+  ) => Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
   readonly [STEP_BRAND]: true;
 }
 
@@ -429,7 +454,7 @@ function validateStepDefinition(definition: {
   pattern?: unknown;
   patterns?: unknown;
   args: unknown;
-  returns: unknown;
+  returns?: unknown;
   run: unknown;
   timeout?: unknown;
   parts?: unknown;
@@ -450,9 +475,9 @@ function validateStepDefinition(definition: {
       "defineStep args must be a zod schema. A missing or plain value is read later as if it were one, which aborts nuka check with a TypeError.",
     );
   }
-  if (!isZodSchema(definition.returns)) {
+  if (definition.returns !== undefined && !isZodSchema(definition.returns)) {
     throw new InvalidStepDefinitionError(
-      "defineStep returns must be a zod schema. A missing schema is only noticed after the step body has already run.",
+      "defineStep returns must be a zod schema, or omitted for a step that returns nothing. A plain value is only noticed after the step body has already run.",
     );
   }
   if (typeof definition.run !== "function") {
@@ -482,7 +507,7 @@ function isHonoredStepTimeout(timeout: unknown): timeout is number {
 
 export function defineStep<
   TArgs extends z.ZodTypeAny,
-  TReturns extends z.ZodTypeAny,
+  TReturns extends z.ZodTypeAny = DefaultReturns,
   const TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
 >(definition: StepDefinitionInput<TArgs, TReturns, TFrom>): Step<TArgs, TReturns> {
   validateStepDefinition(definition);
@@ -490,7 +515,10 @@ export function defineStep<
     patterns: resolvePatterns(definition),
     description: definition.description,
     args: definition.args,
-    returns: definition.returns,
+    // The cast names what an omitted `returns` means at the type level:
+    // `TReturns` falls back to `DefaultReturns` exactly when there is no
+    // `returns` to infer it from.
+    returns: definition.returns ?? (defaultReturns() as unknown as TReturns),
     mutates: definition.mutates ?? true,
     // Cast is the one place `TFrom`'s validated-literal type (checked against
     // this exact step's `args`) gets widened to `Step.from`'s own loose,

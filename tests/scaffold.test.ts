@@ -52,22 +52,32 @@ describe("nuka scaffold", () => {
     expect(scaffoldExit).toBe(0);
     expect(scaffoldStdout.text().trim()).toBe(path.join("features", "steps", "send-invite.ts"));
 
-    const filePath = path.join(rootDir, "features", "steps", "send-invite.ts");
-    expect(existsSync(filePath)).toBe(true);
-    const content = await readFile(filePath, "utf8");
-    expect(content).toContain('from "nukadoko"');
     // `z` comes from nukadoko's own re-export, not a direct `zod`
     // dependency: a step file that imported `zod` itself would fail to
     // resolve it under a package manager that does not hoist a
     // dependency's own dependencies to the project's top level.
-    expect(content).not.toContain('from "zod"');
-    expect(content).toContain("TODO: describe send-invite");
-    // `pattern` shows up only as a commented-out line (see the `patterns:
-    // []` assertion on `nuka steps --json` below), never as an active
-    // field: the template still scaffolds a CLI-only step by default.
-    expect(content).not.toMatch(/^\s*pattern:/m);
-    expect(content).toContain('// pattern: "TODO:');
-    expect(content).toContain(".describe(");
+    const content = await readFile(path.join(rootDir, "features", "steps", "send-invite.ts"), "utf8");
+    expect(content).toBe(
+      [
+        'import { defineStep, z } from "nukadoko";',
+        "",
+        "export default defineStep({",
+        '  description: "TODO: describe send-invite",',
+        '  // pattern: "the feature line this step matches", (without one, the step is called by name only)',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({}),",
+        "  // Return what later steps cite and the values this step's correctness rests on;",
+        '  // beside an absence (false, 0, ""), return proof the read was valid.',
+        "  returns: z.object({}),",
+        "  // Why this shape, and what was rejected. `nuka tend` reports step-rationale-missing without it.",
+        '  // rationale: "",',
+        "  run() {",
+        '    throw new Error("not implemented: send-invite");',
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
 
     const stepsStdout = createCaptureSink();
     const stepsExit = await runCli(["steps", "--json"], {
@@ -87,31 +97,6 @@ describe("nuka scaffold", () => {
         }),
       ]),
     );
-  });
-
-  it("explains rationale in the generated template: why nuka tend wants it, and how it differs from description", async () => {
-    // `nuka tend` flags a
-    // scaffolded step's missing rationale (`step-rationale-missing`,
-    // src/tend/missing-rationale.ts) the moment it exists, but the template
-    // that generated it never said the field existed at all. A guide
-    // comment, matching the density of the existing `args`/`returns` ones,
-    // is the fix — not filling `rationale` in with a placeholder value.
-    await runCli(["scaffold", "send-invite"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-
-    const filePath = path.join(rootDir, "features", "steps", "send-invite.ts");
-    const content = await readFile(filePath, "utf8");
-
-    expect(content).toContain("rationale");
-    expect(content).toContain("nuka tend");
-    expect(content).toContain("step-rationale-missing");
-    // Must read as distinct from `description` ("what"), not a restatement
-    // of it.
-    expect(content).toMatch(/description/);
-    expect(content).toMatch(/why/i);
   });
 
   it("fails until implemented: `nuka do` exits 1 with a failed step record", async () => {

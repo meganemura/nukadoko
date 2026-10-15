@@ -400,6 +400,13 @@ export default defineStep({
 - `parts` (default `[]`) lists the steps this step's own `run` may call
   through the `call` fixture (see "Parts"). A step that calls none of
   them omits it, the same convention `from` follows.
+- `returns` may be omitted. It then defaults to an empty object schema,
+  and a `run` that returns nothing is recorded as `{}`. This fits a step
+  with nothing a later step cites and nothing a failure would be diagnosed
+  from: typically a Then step whose observed values already arrived as
+  args through `from`. A step that observes something still returns it
+  (see above). A declared `returns` keeps its meaning: `run` returns the
+  value that schema validates, and returning nothing fails the step.
 - `rationale` is optional with no default: omitted, `Step.rationale` is
   `undefined`, the same convention as `pattern`. It answers a different
   question than `description`: `description` is what the step does, the
@@ -644,6 +651,13 @@ this refusal at run time, or the reverse. An unknown fixture name, a
 default value, or a rest property refuses execution before it begins, the
 same "never began" outcome an undefined step already gets, never a step
 failure.
+
+An unknown name that is one of the step's own args keys gets the fix in
+the same message: args are `run`'s second parameter, so a step that needs
+no fixture writes `run({}, { sum })`. There is no one-parameter `run`
+that takes args alone. `run({ page })` with one parameter already means a
+step that needs `page` and no args, and TypeScript cannot type one
+parameter position as either the fixture bag or the args.
 
 That reading is exposed outside `check` too: `nuka steps --json` reports
 each typed step's own destructured names as `needs` (alphabetized, `[]`
@@ -4054,7 +4068,13 @@ nuka describe <step>          full contract, schemas as JSON Schema, plus
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name>          typed step template that fails until implemented
+nuka scaffold <name> [--pattern <text>] [--then]
+                              typed step template that fails until
+                              implemented. --pattern writes the pattern and
+                              one args field per {key:type} capture, and
+                              refuses a pattern check would refuse in any
+                              project. --then writes mutates: false and no
+                              returns, for a step a Then line binds
 nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns

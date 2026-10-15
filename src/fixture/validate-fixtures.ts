@@ -16,6 +16,7 @@ import {
   type FixtureConsumer,
 } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
+import { asObjectShape } from "../binding/schema-shape.js";
 
 // Responsibility: the one judgment "does this step's run() ask for fixtures
 // nukadoko can actually build" — the fixture-bag counterpart to src/step/
@@ -95,7 +96,11 @@ export function knownFixtureNames(config: Pick<NukadokoConfig, "fixtures">): Rea
  * worded for a step; the caller attaches the step name. A config fixture
  * does not use these strings: `fixtureDefinitionStructuralMessages` names
  * the fixture and does not reuse step wording. */
-function validateFixtureConsumer(fn: FixtureConsumer, knownNames: ReadonlySet<string>): string[] {
+function validateFixtureConsumer(
+  fn: FixtureConsumer,
+  knownNames: ReadonlySet<string>,
+  argsKeys: ReadonlySet<string> = new Set(),
+): string[] {
   let names: readonly string[];
   try {
     names = fixtureParameterNames(fn);
@@ -113,9 +118,14 @@ function validateFixtureConsumer(fn: FixtureConsumer, knownNames: ReadonlySet<st
   const messages: string[] = [];
   for (const name of names) {
     if (!knownNames.has(name)) {
+      // A name that is no fixture but is one of the step's own args keys
+      // was meant as an arg: `run`'s first parameter is the fixture bag, so
+      // a step that needs no fixture still writes `{}` before its args.
+      const hint = argsKeys.has(name)
+        ? `. "${name}" is an args key, and args are run()'s second parameter: run({}, { ${name} })`
+        : " (a project-defined name must be declared under nukadoko.config.ts's own `fixtures`)";
       messages.push(
-        `run() destructures unknown fixture "${name}": known fixtures are ${[...knownNames].sort().join(", ")} ` +
-          "(a project-defined name must be declared under nukadoko.config.ts's own `fixtures`)",
+        `run() destructures unknown fixture "${name}": known fixtures are ${[...knownNames].sort().join(", ")}${hint}`,
       );
     }
   }
@@ -224,7 +234,8 @@ export function validateStepFixtures(
   step: Step,
   knownNames: ReadonlySet<string> = KNOWN_BUILTIN_FIXTURE_NAMES,
 ): FixtureIssue[] {
-  return validateFixtureConsumer(step.run, knownNames).map((message) => ({ step: stepName, message }));
+  const argsKeys = new Set(Object.keys(asObjectShape(step.args) ?? {}));
+  return validateFixtureConsumer(step.run, knownNames, argsKeys).map((message) => ({ step: stepName, message }));
 }
 
 /** Renders `issues` as one line per issue, `"<step>: <message>"` — matches

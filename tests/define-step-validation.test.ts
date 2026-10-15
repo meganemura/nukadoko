@@ -25,13 +25,14 @@ const MISSING_ARGS = [
   "",
 ].join("\n");
 
-const MISSING_RETURNS = [
+const PLAIN_RETURNS = [
   'import { defineStep, z } from "../../nukadoko-shim.js";',
   "",
   "export default defineStep({",
   '  pattern: "a thing happens",',
   '  description: "broken returns",',
   "  args: z.object({}),",
+  '  returns: { id: "string" },',
   "  async run() {",
   "    return {};",
   "  },",
@@ -125,8 +126,8 @@ describe("defineStep validation reaches nuka check and nuka do", () => {
     expect(report.stdout).not.toContain("Cannot read properties of undefined");
   });
 
-  it("reports a step with no returns schema as step-file-import-failed", async () => {
-    await writeProject("broken.js", MISSING_RETURNS);
+  it("reports a step whose returns is a plain value, not a schema, as step-file-import-failed", async () => {
+    await writeProject("broken.js", PLAIN_RETURNS);
     const report = await checkReport();
     expect(report.exitCode).toBe(1);
     const finding = report.errors.find((issue) => issue.code === "step-file-import-failed");

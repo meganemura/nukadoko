@@ -124,6 +124,12 @@ has to look at those values before the next run.
   environment. A script that treats any stderr as failure will see that
   line. Stopping a live session, or cleaning up a stale lock, is
   unchanged and still quiet on success.
+- **`returns` is optional, and `nuka scaffold` takes `--pattern` and
+  `--then`. Nothing a project already has changes meaning.** A step that
+  declares `returns` still has to return the value it validates, and a
+  one-parameter `run({ page })` still names a fixture. A step whose
+  `returns` is `z.object({})` may drop that line and its `return {}`, and
+  does not have to.
 
 ## 0.12.0 to 0.13.0
 

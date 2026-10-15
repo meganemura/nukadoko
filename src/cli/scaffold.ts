@@ -3,6 +3,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { isCommonJsProject } from "../config/module-kind.js";
+import { UndefinedParameterTypeError } from "@cucumber/cucumber-expressions/dist/Errors.js";
+import { duplicateCaptureKeys } from "../binding/capture.js";
+import { buildExpression } from "../binding/expression.js";
+import { type Capture, stripCaptureNames } from "../binding/pattern.js";
+import { createParameterTypeRegistry } from "../binding/registry.js";
+import type { PrimitiveClass } from "../binding/schema-shape.js";
+import { CAPTURED_CLASS } from "../check/binding-check.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -23,71 +30,96 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // step that already has a real implementation must never be silently
 // replaced by this template.
 //
-// The `returns` comment deliberately does not frame the field as "what
-// later steps cite" alone (docs/spec.md "Typed steps"): that framing is
-// what a first reader adopts, and it drops every value the step's own
-// correctness depends on but nothing downstream reads — which is exactly
-// the set a step record gets interrogated for once a run has gone wrong: a
-// step that sends a date nothing cites, computed in the wrong timezone,
-// leaves a step record that cannot say which date it sent, and the answer
-// has to be reconstructed from someone else's error message instead.
+// The template keeps one comment line per lesson a first reader needs, not
+// the lesson itself: `returns` carries the values a failure is diagnosed
+// from, not only what later steps cite, and an absence (`false`, `0`) needs
+// proof the read was valid beside it (docs/spec.md "Typed steps" has the
+// reasoning). `run` always throws `not implemented: <name>`, so the step is
+// discoverable (`nuka steps`) the moment it is scaffolded but fails every
+// `nuka do`/`nuka run` call until someone replaces the body: "fails until
+// implemented" (docs/spec.md "CLI summary"), enforced by the template
+// itself rather than by a separate check.
 //
-// The absence line right beneath it is the same idea, sharpened by an
-// incident: `visible: false` and `count: 0` erase the difference between
-// "genuinely not there" and "not rendered yet" unless the step returns
-// proof of which one it saw (docs/spec.md "Typed steps").
+// `--pattern` writes the pattern and one args field per `{key:type}`
+// capture, so the file passes `nuka check` against a feature line as
+// written: a capture with no args key, or a key nothing fills, is a check
+// error. A built-in type gets the schema of the value it produces (the same
+// table `nuka check` compares captures against); a custom type gets
+// `z.unknown()`, because only its transformer knows what it produces. A
+// pattern that `nuka check` would refuse whatever the project declares
+// (an unnamed or repeated capture, an unterminated `{`, a
+// cucumber-expressions syntax error) is refused here instead, before a file
+// exists. An unknown type name is not refused: it may be a custom type the
+// project registers, and only `nuka check` sees the whole registry.
 //
-// The template omits `pattern`/`patterns` on purpose: no pattern means
-// CLI-only vocabulary by default (docs/
-// spec.md "Typed steps") — a human adds a pattern by hand when the step is
-// ready to be bound into a feature file. The generated file itself now
-// carries that choice as a commented-out `pattern` line, so a reader
-// cannot mistake "omitted on purpose" for "forgotten". `run` always throws
-// `not implemented: <name>`, so the step is discoverable (`nuka steps`) the
-// moment it's scaffolded but fails every `nuka do`/`nuka run` call until a
-// human replaces the body — "fails until implemented" (docs/spec.md
-// "CLI summary"), enforced by the template itself rather than by a
-// separate check.
+// `--then` is for an assertion step. It writes `mutates: false`, which a
+// step bound to a Then line must declare (`then-mutates`), and no `returns`,
+// so the body can throw on a failed assertion and otherwise return nothing.
+// It is a flag rather than a default because whether a step changes state
+// is the author's declaration: nukadoko does not guess it.
 
 export interface RunScaffoldOptions {
   rootDir: string;
   name: string;
+  /** The `--pattern` text, or `null` for a step called by name only. */
+  pattern: string | null;
+  then: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 const VALID_STEP_NAME = /^[a-z0-9-]+$/;
 
-function stepTemplate(name: string): string {
+const ZOD_FOR_CLASS: ReadonlyMap<PrimitiveClass, string> = new Map([
+  ["number", "z.number()"],
+  ["string", "z.string()"],
+  ["bigint", "z.bigint()"],
+]);
+
+interface StepTemplate {
+  readonly name: string;
+  readonly pattern: string | null;
+  readonly captures: readonly Capture[];
+  readonly then: boolean;
+}
+
+function argsLines(captures: readonly Capture[]): string[] {
+  if (captures.length === 0) {
+    return ["  args: z.object({}),"];
+  }
+  const fields = captures.map((capture) => {
+    const captured = CAPTURED_CLASS.get(capture.type);
+    const schema = (captured && ZOD_FOR_CLASS.get(captured)) ?? "z.unknown()";
+    return `    ${capture.key}: ${schema},`;
+  });
+  return ["  args: z.object({", ...fields, "  }),"];
+}
+
+function stepTemplate({ name, pattern, captures, then }: StepTemplate): string {
+  const patternLine =
+    pattern === null
+      ? ['  // pattern: "the feature line this step matches", (without one, the step is called by name only)']
+      : [`  pattern: ${JSON.stringify(pattern)},`];
+  const outcomeLines = then
+    ? ["  mutates: false,"]
+    : [
+        "  // Return what later steps cite and the values this step's correctness rests on;",
+        '  // beside an absence (false, 0, ""), return proof the read was valid.',
+        "  returns: z.object({}),",
+      ];
+  const runParameters = captures.length === 0 ? "" : `{}, { ${captures.map((capture) => capture.key).join(", ")} }`;
   return [
     'import { defineStep, z } from "nukadoko";',
     "",
     "export default defineStep({",
     `  description: "TODO: describe ${name}",`,
-    "  // Binds this step to a feature line (cucumber-expressions syntax);",
-    "  // unnecessary for a step that is only ever called by name.",
-    '  // pattern: "TODO: the feature line text this step matches",',
-    "  // Give every field a .describe(): `nuka describe` surfaces it, and that is",
-    "  // what lets an acceptance criterion's own wording be matched to the field",
-    "  // that answers it.",
-    "  args: z.object({",
-    '    // name: z.string().describe("what this value is, in the words a criterion uses"),',
-    "  }),",
-    "  returns: z.object({",
-    "    // Not only what later steps cite: also the values this step's own",
-    "    // correctness rests on (the date it computed, the id it picked)",
-    "    // because a step record can only be read for what it was given.",
-    "    // If a result can be an absence (false, 0, an empty string), return",
-    "    // proof the read was valid too, not the absence on its own.",
-    '    // id: z.string().describe("what this step produced, and what a failure here would be diagnosed from"),',
-    "  }),",
-    "  // Why this step is built this way, and what was tried and rejected:",
-    "  // not what it does (`description` above already says that), but why",
-    "  // it looks like this. `nuka tend` flags a step with none",
-    "  // (`step-rationale-missing`), because that is the material a later",
-    "  // reader needs before deciding whether this step may be rewritten.",
-    '  // rationale: "why this shape, what was rejected",',
-    "  run() {",
+    ...patternLine,
+    "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+    ...argsLines(captures),
+    ...outcomeLines,
+    "  // Why this shape, and what was rejected. `nuka tend` reports step-rationale-missing without it.",
+    '  // rationale: "",',
+    `  run(${runParameters}) {`,
     `    throw new Error("not implemented: ${name}");`,
     "  },",
     "});",
@@ -95,13 +127,43 @@ function stepTemplate(name: string): string {
   ].join("\n");
 }
 
+/** The pattern's captures, or the reason `nuka check` would refuse it in
+ * any project. */
+function readPattern(pattern: string): { captures: readonly Capture[] } | { refusal: string } {
+  if (pattern === "") {
+    // defineStep reads an empty `pattern` as no pattern at all, so the step
+    // would quietly match no feature line.
+    return { refusal: "the pattern is empty" };
+  }
+  let captures: readonly Capture[];
+  try {
+    captures = buildExpression(pattern, createParameterTypeRegistry()).captures;
+  } catch (error) {
+    if (!(error instanceof UndefinedParameterTypeError)) {
+      return { refusal: error instanceof Error ? error.message : String(error) };
+    }
+    captures = stripCaptureNames(pattern).captures;
+  }
+  const repeated = duplicateCaptureKeys(captures);
+  if (repeated.length > 0) {
+    return { refusal: `the pattern captures ${repeated.map((key) => `"${key}"`).join(", ")} more than once, and one args field holds one value` };
+  }
+  return { captures };
+}
+
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
-  const { rootDir, name, stdout, stderr } = options;
+  const { rootDir, name, pattern, then, stdout, stderr } = options;
 
   if (!VALID_STEP_NAME.test(name)) {
     stderr.write(
       `Invalid step name "${name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name)\n`,
     );
+    return 1;
+  }
+
+  const read = pattern === null ? { captures: [] } : readPattern(pattern);
+  if ("refusal" in read) {
+    stderr.write(`Refusing to scaffold: ${read.refusal}\n`);
     return 1;
   }
 
@@ -129,7 +191,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, stepTemplate(name));
+  await writeFile(filePath, stepTemplate({ name, pattern, captures: read.captures, then }));
 
   stdout.write(`${relativeFilePath}\n`);
   return 0;

@@ -33,6 +33,25 @@ just until 0.1.
   parent's stderr under `--quiet` too. Before this, the error existed only
   in the stdout NDJSON, so a CI log said `FAIL` and never why. stdout is
   unchanged.
+- **A step may omit `returns`, and `nuka scaffold` takes `--pattern` and `--then`.**
+  Every assertion step in every adopting project repeated
+  `returns: z.object({})`, `return {}`, and `mutates: false`. `returns` now
+  defaults to an empty object schema, and a `run` that returns nothing is
+  recorded as `{}`. A declared `returns` keeps its meaning, and so does the
+  type check on a `from` that names a key the producer cannot return.
+  `nuka scaffold <name> --pattern "<text>"` writes the pattern and one args
+  field per `{key:type}` capture (the schema of the value a built-in type
+  produces, `z.unknown()` for a custom one), and refuses a pattern
+  `nuka check` would refuse in any project: an unnamed or repeated capture,
+  an unterminated `{`, an empty pattern, or a cucumber-expressions syntax
+  error. `--then` writes `mutates: false` and no `returns`, so the file
+  passes `nuka check` under a Then line once `run` is filled. The template
+  itself is shorter: one comment line per lesson. `mutates` still defaults
+  to `true`. A one-parameter `run(args)` was considered and not added:
+  `run({ page })` already means a step that needs `page` and no args, and
+  TypeScript cannot type one parameter as either. Instead, `nuka check`'s
+  unknown-fixture message names the fix when the unknown name is one of the
+  step's own args keys: `run({}, { sum })`.
 - **A test checks the names the docs give for commands, flags, finding codes, and headings.**
   `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
   `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the

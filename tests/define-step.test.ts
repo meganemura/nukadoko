@@ -185,7 +185,7 @@ describe("defineStep", () => {
   });
 
   it("refuses returns that are not a zod schema", () => {
-    const error = refusal({ ...validDefinition(), returns: undefined });
+    const error = refusal({ ...validDefinition(), returns: { id: "string" } });
     expect(error.name).toBe("InvalidStepDefinitionError");
     expect(error.message).toContain("returns must be a zod schema");
   });
@@ -239,4 +239,57 @@ describe("defineStep", () => {
         expect(error.message).not.toContain("timed out after");
       }
     }));
+
+  it("gives a step without returns an empty-object schema that reads a run returning nothing as {}", async () => {
+    const step = defineStep({
+      description: "asserts only",
+      args: z.object({ sum: z.number() }),
+      mutates: false,
+      run({}, { sum }) {
+        if (sum !== 4) throw new Error(`expected 4, got ${sum}`);
+      },
+    });
+    const returned = await step.run({} as never, { sum: 4 });
+    expect(returned).toBeUndefined();
+    expect(step.returns.safeParse(returned)).toEqual({ success: true, data: {} });
+    expect(step.returns.safeParse({ extra: 1 })).toEqual({ success: true, data: {} });
+    expect(step.returns.safeParse("text").success).toBe(false);
+  });
+
+  it("keeps an explicit returns schema's own demand at the type level", () => {
+    const withId = defineStep({
+      description: "produces an id",
+      args: z.object({}),
+      returns: z.object({ id: z.string() }),
+      run() {
+        return { id: "p-1" };
+      },
+    });
+    const assertOnly = defineStep({
+      description: "returns nothing",
+      args: z.object({}),
+      run() {},
+    });
+    defineStep({
+      description: "explicit returns",
+      args: z.object({}),
+      returns: z.object({ id: z.string() }),
+      // @ts-expect-error a declared returns schema still needs its value
+      run() {},
+    });
+    defineStep({
+      description: "reads an id",
+      args: z.object({ id: z.string() }),
+      from: { id: [withId, "id"] },
+      run() {},
+    });
+    defineStep({
+      description: "reads a key a step without returns does not have",
+      args: z.object({ id: z.string() }),
+      // @ts-expect-error a step without returns has no key to cite
+      from: { id: [assertOnly, "id"] },
+      run() {},
+    });
+    expect(assertOnly.returns.safeParse(undefined)).toEqual({ success: true, data: {} });
+  });
 });

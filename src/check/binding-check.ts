@@ -13,7 +13,7 @@ import type { CheckIssue } from "./types.js";
 // The JS type cucumber-expressions' built-in parameter types produce. A custom
 // type is absent on purpose: its transformer's output is unknown, and a custom
 // type cannot reuse a built-in name. A Map avoids prototype keys.
-const CAPTURED_CLASS: ReadonlyMap<string, PrimitiveClass> = new Map([
+export const CAPTURED_CLASS: ReadonlyMap<string, PrimitiveClass> = new Map([
   ["int", "number"],
   ["float", "number"],
   ["double", "number"],

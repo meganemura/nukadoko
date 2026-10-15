@@ -69,6 +69,30 @@ describe("validateStepFixtures", () => {
     expect(issues[0]?.message).toContain('unknown fixture "bogus"');
   });
 
+  it("names the fix when the unknown fixture is one of the step's own args keys", () => {
+    const step = {
+      ...defineStep({
+        description: "args destructured where fixtures go",
+        args: z.object({ sum: z.number() }),
+        run() {},
+      }),
+      run: (({ sum }: any) => {
+        void sum;
+      }) as Step["run"],
+    };
+    const [issue] = validateStepFixtures("sum-is", step);
+    expect(issue?.message).toBe(
+      'run() destructures unknown fixture "sum": known fixtures are baseURL, call, context, env, evidence, page, poll, request, requireEnv, resultOf, section. ' +
+        '"sum" is an args key, and args are run()\'s second parameter: run({}, { sum })',
+    );
+
+    const bogus = { ...step, run: (({ bogus }: any) => void bogus) as Step["run"] };
+    expect(validateStepFixtures("sum-is", bogus)[0]?.message).toBe(
+      'run() destructures unknown fixture "bogus": known fixtures are baseURL, call, context, env, evidence, page, poll, request, requireEnv, resultOf, section ' +
+        "(a project-defined name must be declared under nukadoko.config.ts's own `fixtures`)",
+    );
+  });
+
   it("flags a default value on a destructured fixture, by its own dedicated message", () => {
     const step = stepWithRun((async ({ baseURL = "unused" }: any) => {
       void baseURL;
