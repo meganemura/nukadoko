@@ -59,6 +59,23 @@ describe("createParameterTypeRegistry", () => {
     expect(caught).toBeInstanceOf(ParameterTypeCollisionError);
     expect((caught as ParameterTypeCollisionError).reason).toBe("duplicate");
   });
+
+  it("names the anonymous parameter type when a preferred type takes its regexp", () => {
+    expect(() => createParameterTypeRegistry([{ name: "anything", regexp: /.*/, preferForRegexpMatch: true }])).toThrow(
+      'Custom parameter type "anything" sets preferForRegexpMatch on /.*/, which the anonymous parameter type already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
+    );
+  });
+
+  it("treats a truthy non-boolean preferForRegexpMatch as set, as cucumber-expressions does", () => {
+    expect(() =>
+      createParameterTypeRegistry([
+        { name: "codeA", regexp: /[A-Z]+/, preferForRegexpMatch: true },
+        { name: "codeB", regexp: /[A-Z]+/, preferForRegexpMatch: 1 as unknown as boolean },
+      ]),
+    ).toThrow(
+      'Custom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
+    );
+  });
 });
 
 describe("buildExpression", () => {

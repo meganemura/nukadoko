@@ -142,7 +142,7 @@ const CHECK_CODES = {
   },
   "parameter-type-invalid": {
     description:
-      "Two parameter types share the same name, whether both come from config.parameterTypes or one comes from a compat defineParameterType call.",
+      "A custom parameter type takes the name of a built-in type, two parameter types share the same name (from config.parameterTypes or a compat defineParameterType call), or a type sets preferForRegexpMatch on a regexp that another type, built-in or custom, already prefers.",
     severity: "error",
   },
   "part-cycle": {

@@ -19,6 +19,7 @@ export type ParameterTypeCollisionReason = "built-in" | "duplicate" | "preferent
 /** The type that already prefers the regexp, for a "preferential" collision. */
 export interface PreferredRegexp {
   readonly regexp: string;
+  /** Empty for cucumber-expressions' anonymous built-in type. */
   readonly preferredBy: string;
 }
 
@@ -34,7 +35,7 @@ export class ParameterTypeCollisionError extends Error {
         ? `collides with one of cucumber-expressions' own built-in parameter types; redefining what {${typeName}} means would quietly change the meaning of every pattern that already uses it`
         : reason === "duplicate"
           ? "is registered more than once in parameterTypes"
-          : `sets preferForRegexpMatch on /${preferred?.regexp}/, which {${preferred?.preferredBy}} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them`;
+          : `sets preferForRegexpMatch on /${preferred?.regexp}/, which ${preferred?.preferredBy ? `{${preferred.preferredBy}}` : "the anonymous parameter type"} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them`;
     super(`Custom parameter type "${typeName}" ${detail}`);
     this.name = "ParameterTypeCollisionError";
     this.typeName = typeName;
