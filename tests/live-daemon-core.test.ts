@@ -127,6 +127,36 @@ describe("createSessionCore: request dispatch", () => {
     return { core: result.core, exitCalls };
   }
 
+  it("records a step that outlives its own timeout as a timeout, named after the step", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "steps", "never-ends.ts"),
+      [
+        'import { z } from "zod";',
+        'import { defineStep } from "../../nukadoko-shim.js";',
+        "export default defineStep({",
+        '  description: "Waits on a promise that never settles",',
+        "  args: z.object({}),",
+        "  returns: z.object({}),",
+        "  mutates: false,",
+        "  timeout: 200,",
+        "  async run() {",
+        "    await new Promise(() => {});",
+        "    return {};",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const { core } = await newCore({ name: "timeout-core" });
+    const record = expectRecord(await core.dispatchRequest({ kind: "do", step: "never-ends", args: {} }));
+    expect(record.status).toBe("failed");
+    if (record.status !== "failed") throw new Error("unreachable");
+    expect(record.error).toEqual({
+      kind: "timeout",
+      message: 'Step "never-ends" timed out after 200ms (the step\'s own timeout)',
+    });
+  });
+
   it("an unknown step is rejected", async () => {
     const { core } = await newCore();
     const response = await core.dispatchRequest({ kind: "do", step: "no-such-step", args: {} });
