@@ -281,4 +281,39 @@ describe("nuka do --use", () => {
     // lifetime, with the numbers in force.
     expect(archiveStderr.text()).toContain("older than the newest 20 runs");
   });
+
+  it("--args and --use hand a z.bigint() key the bigint its stored decimal string spells", async () => {
+    const countStdout = createCaptureSink();
+    const countExit = await runCli(
+      ["do", "count-atoms", "--args", '{"count":"123456789012345678901234567890"}'],
+      { rootDir, stdout: countStdout, stderr: createCaptureSink() },
+    );
+    expect(countExit).toBe(0);
+    const countStepRecord = JSON.parse(countStdout.text());
+    expect(countStepRecord.result).toEqual({ total: "123456789012345678901234567890" });
+
+    const doubleStdout = createCaptureSink();
+    const doubleExit = await runCli(["do", "double-atoms", "--use", countStepRecord.step_record_id], {
+      rootDir,
+      stdout: doubleStdout,
+      stderr: createCaptureSink(),
+    });
+    expect(doubleExit).toBe(0);
+    const doubleStepRecord = JSON.parse(doubleStdout.text());
+    expect(doubleStepRecord.status).toBe("ok");
+    expect(doubleStepRecord.args).toEqual({ total: "123456789012345678901234567890" });
+    expect(doubleStepRecord.result).toEqual({ doubled: "246913578024691357802469135780" });
+  });
+
+  it("--args with a string that is not a decimal integer still fails a z.bigint() key", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["do", "count-atoms", "--args", '{"count":"12x"}'], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(1);
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.error.message).toBe("args validation failed: count: Invalid input: expected bigint, received string");
+  });
 });
