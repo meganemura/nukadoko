@@ -27,8 +27,10 @@ agent-first engine that runs Gherkin with typed step contracts.
 - Static-unresolved diagnostics: a step declaration with a pattern this
   extension cannot read without running the file (a variable, a function
   call, or a template literal with a substitution) gets a warning on its
-  own line. This warning appears on open or save; no command run is
-  needed. It comes from the same static parse as Go to definition and
+  own line. This warning appears once the extension is active, which is
+  when a `.feature` file is opened or the `nukadoko: Check` command runs,
+  and it is refreshed whenever a step file is saved, created, or deleted.
+  It comes from the same static parse as Go to definition and
   Completion, never from a `nuka` process -- unlike the `nuka check`
   diagnostics below.
 - Diagnostics: the `nukadoko: Check` command (Command Palette) runs `nuka
