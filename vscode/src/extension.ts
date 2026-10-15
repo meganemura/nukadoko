@@ -20,16 +20,18 @@ import path from "node:path";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
 import {
+  buildUnreadableDiagnostics,
   buildUnresolvedDiagnostics,
   readCheckReport,
   type DiagnosticsEntry,
 } from "./diagnostics/index.js";
-import { matchStepText, type ExtractionResult } from "./extraction/index.js";
+import { matchStepText } from "./extraction/index.js";
 import {
   buildCompletionCandidates,
   buildStepIndex,
   parseStepLine,
   type FileSource,
+  type StepIndex,
 } from "./index/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -197,18 +199,28 @@ export function activate(context: vscode.ExtensionContext): void {
   // build's unresolved declarations into a newer sweep (applyDiagnostics
   // always clears the collection before it sets, so whichever call lands
   // last wins outright).
-  function refreshUnresolvedDiagnostics(result: Promise<ExtractionResult>): void {
-    void result.then((index) => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-      applyDiagnostics(unresolvedDiagnosticCollection, workspaceRoot, buildUnresolvedDiagnostics(index.unresolved));
-    });
+  function refreshUnresolvedDiagnostics(result: Promise<StepIndex>): void {
+    result.then(
+      (index) => {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+        applyDiagnostics(unresolvedDiagnosticCollection, workspaceRoot, [
+          ...buildUnresolvedDiagnostics(index.unresolved),
+          ...buildUnreadableDiagnostics(index.unreadable),
+        ]);
+      },
+      (error: unknown) => {
+        unresolvedDiagnosticCollection.clear();
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`nukadoko: indexing step files failed: ${message}`);
+      },
+    );
   }
 
   // Built once here and awaited by every provider call below, not rebuilt
   // per call -- only a file save (via the watcher) replaces it. A provider
   // that rebuilt on every keystroke would re-parse the whole workspace on
   // every definition lookup and completion request.
-  let indexPromise: Promise<ExtractionResult> = buildStepIndex(createWorkspaceFileSource());
+  let indexPromise: Promise<StepIndex> = buildStepIndex(createWorkspaceFileSource());
   refreshUnresolvedDiagnostics(indexPromise);
 
   const watcher = vscode.workspace.createFileSystemWatcher(STEP_FILE_GLOB);

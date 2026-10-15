@@ -15,6 +15,10 @@
   of the raw pattern, which matched no step. Each stop starts with a
   value of the parameter's type, optional text is left out, and the first
   alternative of `a/b` is kept, so the inserted line binds to its step.
+- A step file the index cannot read or parse gets a warning on its first
+  line, and the other files stay indexed. One such file made Go to
+  definition and completion fail for the whole workspace before. A
+  failure to list the workspace shows an error message.
 
 ## 0.1.0
 

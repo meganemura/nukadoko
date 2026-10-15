@@ -6,11 +6,13 @@
 // Never imports "vscode" -- same split as the rest of src/diagnostics, kept
 // runnable under vitest.
 import type { UnresolvedDeclaration } from "../extraction/index.js";
+import type { UnreadableFile } from "../index/index.js";
 import type { DiagnosticsEntry } from "./build-diagnostics.js";
 
 // Stable across releases: a user or a future check could match on this
 // string, so it never changes shape just because the message wording does.
 const UNRESOLVED_CODE = "nukadoko-static-unresolved";
+const UNREADABLE_CODE = "nukadoko-static-unreadable";
 
 /**
  * One `DiagnosticsEntry` per `UnresolvedDeclaration`, never filtered or
@@ -29,5 +31,17 @@ export function buildUnresolvedDiagnostics(
     message: `This step declaration is statically unresolvable: ${declaration.reason}`,
     severity: "warning",
     code: UNRESOLVED_CODE,
+  }));
+}
+
+/** One `DiagnosticsEntry` per file the step index could not read or parse,
+ * on its first line, since there is no declaration to point at. */
+export function buildUnreadableDiagnostics(unreadable: readonly UnreadableFile[]): readonly DiagnosticsEntry[] {
+  return unreadable.map((file) => ({
+    file: file.file,
+    line: 1,
+    message: `nukadoko could not read this file to index its steps: ${file.reason}`,
+    severity: "warning",
+    code: UNREADABLE_CODE,
   }));
 }

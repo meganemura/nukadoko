@@ -13,17 +13,35 @@ export interface FileSource {
   readFile(filePath: string): Promise<string>;
 }
 
-export async function buildStepIndex(source: FileSource): Promise<ExtractionResult> {
+export interface UnreadableFile {
+  readonly file: string;
+  readonly reason: string;
+}
+
+/** A file that cannot be read or parsed is recorded in `unreadable` and the
+ * rest are still indexed: one locked or vanished file must not cost every
+ * definition and completion in the workspace. */
+export interface StepIndex extends ExtractionResult {
+  readonly unreadable: readonly UnreadableFile[];
+}
+
+export async function buildStepIndex(source: FileSource): Promise<StepIndex> {
   const filePaths = await source.listFiles();
   const patterns: ExtractionResult["patterns"][number][] = [];
   const unresolved: ExtractionResult["unresolved"][number][] = [];
+  const unreadable: UnreadableFile[] = [];
 
   for (const filePath of filePaths) {
-    const sourceText = await source.readFile(filePath);
-    const result = await extractStepDeclarations(filePath, sourceText);
+    let result: ExtractionResult;
+    try {
+      result = await extractStepDeclarations(filePath, await source.readFile(filePath));
+    } catch (error) {
+      unreadable.push({ file: filePath, reason: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
     patterns.push(...result.patterns);
     unresolved.push(...result.unresolved);
   }
 
-  return { patterns, unresolved };
+  return { patterns, unresolved, unreadable };
 }
