@@ -1175,6 +1175,8 @@ acceptance record は、その step record を含みます。
 いずれもない場合は、`features/steps/lib/` の下にある通常の関数を使います。
 ヘルパーには、独立した record エントリがありません。
 その HTTP 呼び出しは呼び出し元の step の `observed` に引き続き加わり、`section` は実行の進行を示せます。
+コマンドラインのプログラムを実行するヘルパーは `runCommand` を使います(「Records」を参照してください)。
+そうすると、ヘルパーが起動した各プロセスは、呼び出し元の step の `observed.processes` に並びます。
 たとえば、payload を整形する関数や fixture ファイルを選ぶ関数には、通常、保存する価値がある契約や result がありません。
 この関数を part にすると、維持する schema だけが増えます。
 
@@ -2038,6 +2040,16 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   この回数はそれ単独では何も決めません。
   Then の位置も読み取り専用の environment も、作用する対象は `mutates` の宣言であり、この回数では決してありません。
   `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
+- `observed.processes`(少なくとも 1 つのプロセスが実行された場合にのみ含まれます)は、その実行の間に `runCommand` が起動した子プロセスを、呼び出し順に並べます。
+  各エントリは `{ "command", "cwd", "exit_code", "duration_ms" }` です。
+  シグナルがプロセスを終了させた場合は `"signal"` が加わり、`timeout` オプションがプロセスを止めた場合は `"timed_out": true` が加わります。
+  `command` は配列で、プログラムとその引数を順に持ちます。
+  `command` は、ほかのフィールドと同じく redact されます。
+  `runCommand(command, args, { cwd, env, input, timeout })` は `nukadoko` からの import であり、fixture ではありません。
+  0 以外を含むすべての終了で `{ exitCode, signal, stdout, stderr }` に resolve し、reject するのは、プログラムを起動できなかった場合と `timeout` がプロセスを止めた場合だけです。
+  step の `run`、part、compat step の中の呼び出しはエントリを加えます。
+  それ以外の場所の呼び出しは同じように動き、エントリを加えません。
+  step がほかの手段(`node:child_process` の直接利用)で起動したプロセスは計測されないため、ここには現れません。
 - `evidence.http`(少なくとも 1 回の呼び出しが記録されたときだけ現れます)は http.jsonl を指します。
   1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via" }` です。
   `via` は `request` fixture、または `page.request` か `context.request` を通した呼び出しなら `"request"`、page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。

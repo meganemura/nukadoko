@@ -1380,6 +1380,9 @@ has a useful contract, useful inputs, and a useful result. Use an ordinary
 function under `features/steps/lib/` when it has none of these. A helper
 has no separate record entry. Its HTTP calls still contribute to the
 calling step's `observed`, and `section` can show its execution progress.
+A helper that runs a command-line program uses `runCommand` (see
+"Records"), so each process it starts is listed in the calling step's
+`observed.processes`.
 For example, a function that formats a payload or selects a fixture file
 usually has no useful contract or result to preserve. Making it a part
 would add only a schema to maintain.
@@ -2408,6 +2411,20 @@ array identifies each step record by id, so either record leads to the other.
   position and read-only environments act on the `mutates` declaration,
   never on this count. `observed` sits beside `mutates` (declared) so a
   wrong declaration is falsifiable, here and in the Allure report.
+- `observed.processes` (included only after at least one process ran)
+  lists each child process that `runCommand` started during the execution,
+  in call order: `{ "command", "cwd", "exit_code", "duration_ms" }`, plus
+  `"signal"` when a signal ended the process and `"timed_out": true` when
+  the `timeout` option stopped it. `command` is an array, the program
+  followed by its arguments, and the record redacts it like every other
+  field. `runCommand(command, args, { cwd, env, input, timeout })` is an
+  import from `nukadoko`, not a fixture. It resolves to
+  `{ exitCode, signal, stdout, stderr }` for every exit, nonzero included,
+  and rejects only when the program could not start or `timeout` stopped
+  it. A call inside a step's `run`, a part, or a compat step adds an entry;
+  a call anywhere else runs the same way and adds none. A process that a
+  step starts by other means (`node:child_process` directly) is not
+  measured, so it does not appear here.
 - `evidence.http` (included only after at least one call was logged) points to
   http.jsonl, one JSON object per line: `{ "method", "url", "status",
   "duration_ms", "via" }`. `via` is `"request"` for a call made through the

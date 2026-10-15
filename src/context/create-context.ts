@@ -40,6 +40,7 @@ import { createPageEventsCollector } from "./page-events.js";
 import { pollWithRecording } from "./poll.js";
 import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
+import { withProcessRecording } from "./run-command.js";
 import { createUsedCollector } from "./used.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution builds
@@ -429,6 +430,11 @@ export interface StepContextHandle {
    * `nuka run` (run-scenario.ts) and `nuka do` (cli/do.ts) both do. Never
    * exposed on `ctx`. */
   beginStepRun(step: Step, fixtures: StepFixtures): void;
+  /** Executor-only: runs a step's own body (`step.run`, or a compat
+   * step's glue function) so that every `runCommand` it reaches records
+   * into this boundary's `observed.processes` (src/context/run-command.ts).
+   * Never exposed on `ctx`: a step cannot open a scope of its own. */
+  recordingProcesses<T>(fn: () => T): T;
   /** Executor-only: every `ctx.poll` call that finished since the current
    * step boundary began, in completion order.
    * Never exposed on `ctx` — same rule as `observedCounts()`/
@@ -1344,6 +1350,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     sectionsSnapshot,
     callsSnapshot,
     beginStepRun,
+    recordingProcesses: <T>(fn: () => T): T => withProcessRecording(observed, fn),
     pollsSnapshot,
     livePollsSnapshot,
     envReadsSnapshot,

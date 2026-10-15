@@ -566,7 +566,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
         fixtureUsage = resolved.usage;
         contextHandle.beginStepRun(entry.step, resolved.fixtures);
         const runResult = await runWithTimeout(
-          () => Promise.resolve(entry.step.run(resolved.fixtures, argsResult.data)),
+          () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(resolved.fixtures, argsResult.data))),
           entry.step.timeout ?? config.stepTimeout,
           "Step",
           name,

@@ -36,6 +36,8 @@ export type {
   UsedEntry,
   UsedEntryWithResult,
 } from "./record/types.js";
+export { runCommand } from "./context/run-command.js";
+export type { RunCommandOptions, RunCommandResult } from "./context/run-command.js";
 export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
 export type {
   CallEntry,
@@ -43,6 +45,7 @@ export type {
   EvidenceAttachmentEntry,
   EvidenceMeta,
   PollRecord,
+  ProcessEntry,
   ScreenshotEntry,
   SectionEntry,
   StepRecord,

@@ -453,7 +453,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
       const fixtures = await buildStepFixtures(contextHandle.ctx, fixtureNames);
       contextHandle.beginStepRun(step, fixtures);
       const runResult = await runWithTimeout(
-        () => Promise.resolve(step.run(fixtures, argsResult.data)),
+        () => contextHandle.recordingProcesses(() => Promise.resolve(step.run(fixtures, argsResult.data))),
         step.timeout ?? config.stepTimeout,
         "Step",
         options.name,

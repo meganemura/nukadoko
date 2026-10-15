@@ -193,6 +193,7 @@ export default {
         "errors.ts",
         "evidence.ts",
         "poll.ts",
+        "run-command.ts",
         "trace-actions.ts",
         "used.ts",
       ],

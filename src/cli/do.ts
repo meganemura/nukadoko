@@ -748,7 +748,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
         contextHandle.beginStepRun(entry.step, fixtures);
         const runResult = await withStepStdoutOnStderr(() =>
           runWithTimeout(
-            () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+            () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(fixtures, argsResult.data))),
             entry.step.timeout ?? config.stepTimeout,
             "Step",
             name,

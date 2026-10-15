@@ -2125,7 +2125,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
                 () =>
                   withStepStdoutOnStderr(() =>
                     runWithTimeout(
-                      () => Promise.resolve(entry.step.run(fixtures, argsResult.data)),
+                      () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(fixtures, argsResult.data))),
                       entry.step.timeout ?? config.stepTimeout,
                       "Step",
                       outcome.stepName,
@@ -2259,7 +2259,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               () =>
                 withStepStdoutOnStderr(() =>
                   runWithTimeout(
-                    () => Promise.resolve(entry.compat.fn.apply(world, positionalArgs)),
+                    () => contextHandle.recordingProcesses(() => Promise.resolve(entry.compat.fn.apply(world, positionalArgs))),
                     entry.compat.timeoutMs ?? defaultTimeoutMs,
                     "Step",
                     outcome.stepName,

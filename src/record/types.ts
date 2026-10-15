@@ -254,6 +254,28 @@ export interface HttpOmittedCounts {
 export interface ObservedCounts {
   http_reads: number;
   http_writes: number;
+  /** Every child process `runCommand` started during this execution, in
+   * call order (docs/spec.md "Records"). Present only when non-empty, the
+   * same convention as `sections`. */
+  processes?: ProcessEntry[];
+}
+
+/** One process `runCommand` ran. Measured by the helper itself, never
+ * declared by the step. */
+export interface ProcessEntry {
+  /** The program and its arguments, exactly as `runCommand` passed them to
+   * the operating system: an array, so no quoting rule has to be guessed. */
+  readonly command: readonly string[];
+  /** The absolute working directory the process ran in. */
+  readonly cwd: string;
+  /** The exit code, or `null` when a signal ended the process. */
+  readonly exit_code: number | null;
+  /** The signal that ended the process. Present only when one did. */
+  readonly signal?: string;
+  /** `true` when `runCommand`'s own `timeout` stopped the process. Present
+   * only then. */
+  readonly timed_out?: true;
+  readonly duration_ms: number;
 }
 
 /** One `console.error` call, error type only (warning is excluded as

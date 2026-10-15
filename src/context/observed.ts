@@ -1,4 +1,4 @@
-import type { ObservedCounts } from "../record/types.js";
+import type { ObservedCounts, ProcessEntry } from "../record/types.js";
 
 // Responsibility: the network-write observation tally docs/spec.md's
 // "Keyword semantics" and "Records" (`observed`) describe — a single
@@ -8,6 +8,10 @@ import type { ObservedCounts } from "../record/types.js";
 // instance create-context.ts hands them. Kept in its own file rather than
 // living inside either of those two: putting it in one would make the other
 // import from it, and create-context.ts already imports both — a cycle.
+//
+// The same collector also keeps the processes `runCommand`
+// (run-command.ts) started, because both answer one question: what did this
+// execution reach outside its own process.
 //
 // Owned and reset by the executor's step boundary (create-context.ts's
 // `beginStep`) — never reachable from a
@@ -23,6 +27,12 @@ export interface ObservedCollector {
    * write attempt that fails on the wire is still a write the execution
    * made, not one it merely declared. */
   record(method: string): void;
+  /** Takes the next position in the process list when a process starts,
+   * and returns the function that fills it when the process ends. Entries
+   * therefore appear in start order, whatever order the processes finish
+   * in. A position never filled (the process was still running when the
+   * step record was built) is left out of the snapshot. */
+  startProcess(): (entry: ProcessEntry) => void;
   /** A snapshot of the counts accumulated since the last `reset()` (or since
    * creation, for `nuka do`'s single execution-wide boundary). */
   snapshot(): ObservedCounts;
@@ -35,6 +45,7 @@ const READ_METHODS = new Set(["GET", "HEAD"]);
 export function createObservedCollector(): ObservedCollector {
   let httpReads = 0;
   let httpWrites = 0;
+  let processes: (ProcessEntry | undefined)[] = [];
 
   return {
     record(method: string): void {
@@ -44,12 +55,28 @@ export function createObservedCollector(): ObservedCollector {
         httpWrites += 1;
       }
     },
+    startProcess(): (entry: ProcessEntry) => void {
+      // Captured, not re-read at fill time: a process that outlives a reset
+      // fills the list it started in, never the next step's.
+      const list = processes;
+      const index = list.length;
+      list.push(undefined);
+      return (entry) => {
+        list[index] = entry;
+      };
+    },
     snapshot(): ObservedCounts {
-      return { http_reads: httpReads, http_writes: httpWrites };
+      const ran = processes.filter((entry): entry is ProcessEntry => entry !== undefined);
+      return {
+        http_reads: httpReads,
+        http_writes: httpWrites,
+        ...(ran.length > 0 ? { processes: ran } : {}),
+      };
     },
     reset(): void {
       httpReads = 0;
       httpWrites = 0;
+      processes = [];
     },
   };
 }

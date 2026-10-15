@@ -9,6 +9,18 @@ just until 0.1.
 
 ### Added
 
+- **`runCommand` runs a command-line program and records it on the step record.**
+  `import { runCommand } from "nukadoko"` takes `(command, args, { cwd, env,
+  input, timeout })` and resolves to `{ exitCode, signal, stdout, stderr }`.
+  A nonzero exit resolves like any other; it rejects only when the program
+  cannot start or `timeout` stopped it. Projects that test a CLI each kept
+  their own `spawnSync` wrapper, and the step record could not show that a
+  process ran. Now each call inside a step's `run`, a part, or a compat
+  step adds `{ command, cwd, exit_code, duration_ms }` (with `signal` or
+  `timed_out` when they apply) to the step record's `observed.processes`, in
+  call order. The field is absent when no process ran, and the command is
+  redacted like the rest of the record. It is an import, not a fixture, and
+  a call outside a step records nothing.
 - **A test checks the names the docs give for commands, flags, finding codes, and headings.**
   `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
   `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the
