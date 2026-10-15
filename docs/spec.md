@@ -2360,7 +2360,12 @@ array identifies each step record by id, so either record leads to the other.
   bigint itself. `nuka do` reads `--use` values from the stored record and
   `--args` as JSON, so where the step's `args` schema expects a bigint or
   a Date, it turns the stored string back into one first. Any other
-  string still reaches the schema as a string.
+  string still reaches the schema as a string. It reads the schema's
+  input side: a string piped into `z.coerce.bigint()`, a codec that
+  decodes a string, and a `z.preprocess()` function get the string as
+  given, and `z.bigint().transform(...)` gets the bigint. Where an option
+  of a union already accepts the string as given, the string is left as
+  it is, whatever order the options are declared in.
 - `scenario_record_id` and `run_id` identify what this execution belongs to:
   the owning scenario record's id and the `nuka run` invocation's own id
   for a `run`-originated step (`kind: "run"`), both `null` for a
