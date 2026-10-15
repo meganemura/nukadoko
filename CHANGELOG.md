@@ -42,9 +42,13 @@ just until 0.1.
   `nuka do`, a live session, and the Allure and messages emitters. `nuka
   harvest` compares a read-back line in that same form, so a
   `{biginteger}` line reads back instead of being named as a mismatch.
-  `nuka do --use` hands the stored string to the next step, so a key that
-  `z.bigint()` declares needs `z.coerce.bigint()` there. `docs/migration.md`
-  no longer lists this as a compat difference.
+  `nuka tend` accepts a sign-off whose frozen result holds that string
+  where the `returns` schema says `z.bigint()`. `nuka do`, in a live
+  session too, turns the stored string back into a bigint where the
+  step's `args` schema expects one, for a value `--use` reads from a
+  record and for `--args` JSON, which cannot spell a bigint either; a
+  Date in `--args` is read back from its ISO string the same way.
+  `docs/migration.md` no longer lists this as a compat difference.
 
 - **`nuka tend` reads a `from`-filled arg's description from its producer.**
   An args field that `from` fills was reported as undescribed unless the

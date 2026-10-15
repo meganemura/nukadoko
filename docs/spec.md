@@ -2356,10 +2356,11 @@ array identifies each step record by id, so either record leads to the other.
 - A bigint is stored as its decimal string, in `args`, in `result`, and
   anywhere else in a record, because JSON has no bigint. A `{biginteger}`
   capture bound to `z.bigint()` records `"v": "123456789012345678901234567890"`.
-  Inside one `nuka run` scenario, a `from` chain still hands the next step
-  the bigint itself. `nuka do --use` reads the stored record, so the key
-  arrives as the string, and only a schema that takes both forms
-  (`z.coerce.bigint()`) accepts it.
+  Inside one `nuka run` scenario, a `from` chain hands the next step the
+  bigint itself. `nuka do` reads `--use` values from the stored record and
+  `--args` as JSON, so where the step's `args` schema expects a bigint or
+  a Date, it turns the stored string back into one first. Any other
+  string still reaches the schema as a string.
 - `scenario_record_id` and `run_id` identify what this execution belongs to:
   the owning scenario record's id and the `nuka run` invocation's own id
   for a `run`-originated step (`kind: "run"`), both `null` for a
@@ -3726,9 +3727,10 @@ The following findings show what `tend` inspects and why each item is rot rather
   taken from, or a step it cites is gone from the vocabulary, then the
   record remains on disk with a claim it can no longer support. The
   record stores that result as JSON. `tend` accepts the stored JSON when
-  it is what `JSON.stringify` would write for a value the current
-  `returns` schema accepts, so a Date kept as its ISO string still
-  passes `z.date()`. A cited
+  it is the stored form of a value the current `returns` schema accepts
+  (what `JSON.stringify` would write, with a bigint as its decimal
+  string), so a Date kept as its ISO string still passes `z.date()`, and
+  a bigint kept as its decimal string still passes `z.bigint()`. A cited
   step is called gone only when every step file imported. While any file
   failed to import, that judgment is withheld, because the step may still
   be defined in the file that could not be read. This

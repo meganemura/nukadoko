@@ -2008,8 +2008,9 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   JSON には bigint が無いからです。
   `{biginteger}` のキャプチャを `z.bigint()` に結び付けると、`"v": "123456789012345678901234567890"` と記録されます。
   1 つの `nuka run` の scenario の中では、`from` の連鎖は次の step に bigint そのものを渡します。
-  `nuka do --use` は保存された record を読むので、そのキーには文字列が届きます。
-  それを受け付けるのは、両方の形を受け付けるスキーマ(`z.coerce.bigint()`)だけです。
+  `nuka do` は `--use` の値を保存された record から読み、`--args` を JSON として読みます。
+  そのため、step の `args` スキーマが bigint や Date を期待するところでは、保存された文字列を先にそれへ戻します。
+  それ以外の文字列は、文字列のままスキーマに届きます。
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
@@ -3172,8 +3173,9 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   記録は、受け入れた feature のソースと、その run のすべての step record を持ちます。
   凍結された `result` がその step の現在の `returns` スキーマをもはや通らない場合、あるいは凍結された feature のソースが元のファイルともはや一致しない場合、あるいはそれが引用する step が語彙から消えている場合、その記録はディスク上に残ったまま、もはや裏付けられない主張をし続けます。
   記録はその result を JSON として保存します。
-  `tend` は、保存された JSON が、現在の `returns` スキーマが受け入れる値に対して `JSON.stringify` が書くものと一致するとき、それを受け入れます。
-  そのため、ISO 文字列として残った Date は `z.date()` をなお通ります。
+  `tend` は、保存された JSON が、現在の `returns` スキーマが受け入れる値の保存形と一致するとき、それを受け入れます。
+  保存形とは、`JSON.stringify` が書くものに、bigint を 10 進数の文字列にする 1 点を加えたものです。
+  そのため、ISO 文字列として残った Date は `z.date()` をなお通り、10 進数の文字列として残った bigint は `z.bigint()` をなお通ります。
   引用された step が消えたと呼ばれるのは、すべての step ファイルの import が成功したときだけです。
   いずれかのファイルの import に失敗している間は、その step が読めなかったファイルの中にまだ定義されているかもしれないため、その判定は控えられます。
   これは、ここでの所見のうち唯一、注記ではなくエラーになるものです。
