@@ -16,6 +16,17 @@ just until 0.1.
   `nuka tend` code, and every quoted heading must exist in the file it points
   at. The spec's CLI summary must list every command and flag. Each of these
   drifted before with no test failing.
+- **`nuka explore <file>` runs a model or a relation.** A model builds
+  each sequence from `draw.int` and `draw.pick` choices taken from one
+  `--seed`, runs `--runs` sequences of at most `--length` request-only
+  steps, and shrinks the first failure by deleting a step and then
+  lowering a choice. A relation runs its source and its follow and calls
+  `relate`. On a failure stdout gets the scenario to paste (two for a
+  relation) and the command that reruns it. No step record is written,
+  and nothing is added to a feature. A model's `args` now receives
+  `(state, draw)`; a model written for `(state)` still compiles.
+  `examples/todo/features/explore/add-model.ts` now adds and completes
+  todos.
 - **Models and relations are declarations `nuka check` can read.**
   `defineModel(initial).commands(...)` and `defineRelation` name steps by
   basename. `explore-unknown-step` reports a name that is not in the
