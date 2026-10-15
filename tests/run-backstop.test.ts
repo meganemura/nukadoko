@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // run-scenario.ts). A step whose own `args`/`returns` validate fine and
 // whose own `run()` never throws can still fail once the executor tries to
 // turn its validated result into a step record: this step returns a
-// BigInt, which `JSON.stringify` cannot serialize. That throw happens
+// value whose toJSON throws. That throw happens
 // *after* this step's own step record directory already exists, so it
 // lands in the same "began, but never finished" family as any other
 // execution-phase failure (docs/spec.md "Running": once a pickle begins
@@ -39,7 +39,7 @@ describe("nuka run: the general per-step backstop", () => {
   it("still writes a failed step record when the validated result can't reach disk, and skips the rest of the scenario", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/bigint-result.feature"], {
+    const exitCode = await runCli(["run", "features/unserializable-result.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -57,13 +57,13 @@ describe("nuka run: the general per-step backstop", () => {
     // failed.
     const recordId = first.step_record_id as string;
     expect(recordId).not.toBeNull();
-    expect(first.error.message).toContain("BigInt");
+    expect(first.error.message).toContain("this value cannot be written as JSON");
 
     const stepRecord = await readStepRecord(rootDir, recordId);
     expect(stepRecord.status).toBe("failed");
     const error = stepRecord.error as { message: string; kind: string };
     expect(error.kind).toBe("step_error");
-    expect(error.message).toContain("BigInt");
+    expect(error.message).toContain("this value cannot be written as JSON");
 
     // The rest of the scenario never runs, the same as any other failed step.
     expect(second.status).toBe("skipped");
