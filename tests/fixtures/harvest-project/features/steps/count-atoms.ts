@@ -6,7 +6,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 export default defineStep({
   pattern: "there are {count:biginteger} atoms",
   description: "Record how many atoms there are",
-  args: z.object({ count: z.coerce.bigint() }),
+  args: z.object({ count: z.bigint() }),
   returns: z.object({ total: z.bigint() }),
   async run({}, args) {
     return { total: args.count };

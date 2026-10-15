@@ -54,6 +54,7 @@ import {
 } from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
+import { reviveStoredForm } from "../stored-form/revive.js";
 import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -666,6 +667,9 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
     // resolved `--use` could touch, because the `from` structural check
     // above already required `entry.step.args` to be an object schema for
     // every one of that step's own `from` keys.
+    // --args is JSON, which has no bigint or Date, so a value this step's
+    // args declare as one arrives as its stored string.
+    parsedArgs = reviveStoredForm(entry.step.args, parsedArgs);
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const resolved of resolvedUses) {

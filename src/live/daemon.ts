@@ -49,6 +49,7 @@ import {
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
+import { reviveStoredForm } from "../stored-form/revive.js";
 import { encodeLine, type LiveDoRequest, type LiveRequest, type LiveResponse } from "./protocol.js";
 
 // Responsibility: one live session's own process — everything cli/session.ts's
@@ -516,7 +517,9 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // `--use`'s own effect, applied only now: `contextHandle.recordUsed`
     // writes into the `used` collector `beginStep` just reset, so applying
     // it any earlier would be silently wiped out.
-    let parsedArgs = request.args;
+    // --args is JSON, which has no bigint or Date, so a value this step's
+    // args declare as one arrives as its stored string.
+    let parsedArgs = reviveStoredForm(entry.step.args, request.args);
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const resolved of resolvedUses) {
