@@ -136,7 +136,7 @@ export default {
   declaredModules: [
     { name: "env", glob: "src/env/**", surface: ["load-env-files.ts", "parse-env-file.ts"] },
     { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
-    { name: "stored-form", glob: "src/stored-form/**", surface: ["stored-form.ts"] },
+    { name: "stored-form", glob: "src/stored-form/**", surface: ["revive.ts", "stored-form.ts"] },
     {
       name: "binding",
       glob: "src/binding/**",
