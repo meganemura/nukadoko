@@ -13,6 +13,7 @@
 // file's own shape stays proof that "what the e2e tests exercise" and
 // "what activate() actually calls" never quietly drift apart.
 import Module, { createRequire } from "node:module";
+import path from "node:path";
 
 export interface FakeUri {
   readonly fsPath: string;
@@ -139,8 +140,13 @@ export function createVscodeStub(): VscodeStub {
       get workspaceFolders(): FakeWorkspaceFolder[] | undefined {
         return stub.workspaceFolders;
       },
-      async findFiles(): Promise<Uri[]> {
-        return Array.from(files.keys()).map((fsPath) => Uri.file(fsPath));
+      // Honors both globs, so a test can see which files the extension asks
+      // for, not only what it does with every file the stub holds.
+      async findFiles(include: string, exclude?: string): Promise<Uri[]> {
+        return Array.from(files.keys())
+          .filter((fsPath) => path.matchesGlob(fsPath, include))
+          .filter((fsPath) => exclude === undefined || !path.matchesGlob(fsPath, exclude))
+          .map((fsPath) => Uri.file(fsPath));
       },
       fs: {
         async readFile(uri: Uri): Promise<Buffer> {
