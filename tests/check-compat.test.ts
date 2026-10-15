@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
@@ -86,6 +87,49 @@ describe("nuka check: compat integration", () => {
     expect(report.errors).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "parameter-type-invalid" })]),
     );
+    expect(exitCode).toBe(1);
+  });
+  it("reports two compat types that prefer one regexp as parameter-type-invalid, naming the file", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-compat-preferential-regexp-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(stderr.text()).toBe("");
+    const report = JSON.parse(stdout.text());
+    expect(report.errors.filter((issue: { code: string }) => issue.code === "parameter-type-invalid")).toEqual([
+      {
+        code: "parameter-type-invalid",
+        message:
+          'Custom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
+        file: path.join("features", "steps", "code-glue.ts"),
+      },
+    ]);
+    expect(exitCode).toBe(1);
+  });
+
+  it("reports a compat type that prefers a built-in type's regexp as parameter-type-invalid, naming the file", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], {
+      rootDir: fixture("check-compat-preferential-builtin-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(stderr.text()).toBe("");
+    const report = JSON.parse(stdout.text());
+    expect(report.errors.filter((issue: { code: string }) => issue.code === "parameter-type-invalid")).toEqual([
+      {
+        code: "parameter-type-invalid",
+        message:
+          'Custom parameter type "count" sets preferForRegexpMatch on /-?\\d+/, which {int} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
+        file: path.join("features", "steps", "count-glue.ts"),
+      },
+    ]);
     expect(exitCode).toBe(1);
   });
 });

@@ -2,7 +2,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stripRunProgressLines } from "./helpers/fixtures.js";
+import {
+  copyFixtureToTempDir,
+  createCaptureSink,
+  fixture,
+  removeTempDir,
+  stripRunProgressLines,
+} from "./helpers/fixtures.js";
 
 // Responsibility: a compat `defineParameterType({ preferForRegexpMatch })`
 // decides which of two matching parameter types converts a RegExp group,
@@ -38,5 +44,34 @@ describe("nuka run: preferForRegexpMatch", () => {
       "record.json",
     );
     expect(JSON.parse(await readFile(stepRecordPath, "utf8")).args).toEqual(["B:ABC"]);
+  });
+
+  it("fails setup naming both types when two types prefer one regexp", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/code.feature"], {
+      rootDir: fixture("check-compat-preferential-regexp-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toBe(
+      'Custom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them\n',
+    );
+  });
+
+  it("leaves nuka tend running when two types prefer one regexp", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["tend", "--json"], {
+      rootDir: fixture("check-compat-preferential-regexp-project"),
+      stdout,
+      stderr,
+    });
+
+    expect(stderr.text()).toBe("");
+    expect(exitCode).toBe(0);
   });
 });
