@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check` reports explore-unknown-step and
 // explore-browser-step with the file and the step name, says nothing about
@@ -56,5 +56,44 @@ describe("nuka check: explore declarations", () => {
         issue.file === "features/explore/request-model.ts",
     );
     expect(request).toEqual([]);
+  });
+
+  it("reports a model with no commands and a direct random call, and nothing for a quoted one", async () => {
+    const { report } = await checkReport(fixture("check-explore-project"));
+    const found = report.errors
+      .filter((issue) => issue.code === "explore-empty-model" || issue.code === "explore-unseeded-random")
+      .sort((a, b) => `${a.file}${a.step}${a.message}`.localeCompare(`${b.file}${b.step}${b.message}`));
+    expect(found).toEqual([
+      {
+        code: "explore-empty-model",
+        message: "the model has no commands, so every sequence it builds is empty and passes",
+        file: "features/explore/empty-model.ts",
+      },
+      {
+        code: "explore-unseeded-random",
+        message:
+          'command "add-todo" args calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
+        file: "features/explore/random-model.ts",
+        step: "add-todo",
+      },
+      {
+        code: "explore-unseeded-random",
+        message:
+          'command "add-todo" next calls crypto.randomUUID(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
+        file: "features/explore/random-model.ts",
+        step: "add-todo",
+      },
+    ]);
+  });
+
+  it("finds nothing to report in the todo example's model and relation", async () => {
+    const rootDir = await copyExampleToTempDir("todo");
+    try {
+      await ensureNukadokoShim();
+      const { report } = await checkReport(rootDir);
+      expect([...report.errors, ...report.warnings].filter((issue) => issue.code.startsWith("explore-"))).toEqual([]);
+    } finally {
+      await removeTempDir(rootDir);
+    }
   });
 });
