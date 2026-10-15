@@ -1,11 +1,11 @@
-import { writeFile } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka explore` against the todo example and its real
 // app. The v1 app passes the model and the relation. The v2 app renames
@@ -182,6 +182,142 @@ describe("nuka explore", () => {
       exitCode: 0,
       stdout: "",
       stderr: "Passed: 1 run, 1 step, seed 2. Rerun: nuka explore 'features/explore/my model.ts' --seed 2 --runs 1 --length 1\n",
+    });
+  });
+
+  it("prints one JSON object for a passing model", async () => {
+    const result = await explore(false, ["features/explore/add-model.ts", "--seed", "1", "--runs", "5", "--length", "6", "--json"]);
+    expect({ ...result, stdout: JSON.parse(result.stdout) }).toEqual({
+      exitCode: 0,
+      stdout: {
+        kind: "model",
+        file: "features/explore/add-model.ts",
+        verdict: "passed",
+        seed: 1,
+        runs: 5,
+        length: 6,
+        steps: 30,
+        rerun: "nuka explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
+      },
+      stderr:
+        "Passed: 5 runs, 30 steps, seed 1. Rerun: nuka explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
+    });
+  });
+
+  it("prints the shrunk sequence's step results and failure as JSON for a failing model", async () => {
+    const result = await explore(
+      false,
+      ["features/explore/wrong-model.ts", "--seed", "1", "--runs", "5", "--length", "8", "--json"],
+      WRONG_MODEL,
+    );
+    const json = JSON.parse(result.stdout.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<id>"));
+    expect({ ...result, stdout: json }).toEqual({
+      exitCode: 1,
+      stdout: {
+        kind: "model",
+        file: "features/explore/wrong-model.ts",
+        verdict: "failed",
+        seed: 1,
+        runs: 5,
+        length: 8,
+        rerun: "nuka explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
+        run: 1,
+        found_steps: 7,
+        shrunk_steps: 2,
+        shrink_attempts: 12,
+        failure: {
+          index: 1,
+          kind: "post-false",
+          command: "complete-todo",
+          message: 'post of command "complete-todo" returned false for result {"id":"<id>","title":"bread","done":true}',
+        },
+        steps: [
+          { step: "add-todo", args: { title: "bread" }, status: "ok", result: { id: "<id>", title: "bread", done: false } },
+          { step: "complete-todo", args: { title: "bread" }, status: "ok", result: { id: "<id>", title: "bread", done: true } },
+        ],
+        scenario: [
+          "  Scenario: (name me)",
+          '    * a todo titled "bread" is added',
+          '    # step 2 failed: post of command "complete-todo" returned false for result {"id":"<id>","title":"bread","done":true}',
+          '    * the todo titled "bread" is completed',
+          "",
+        ].join("\n"),
+      },
+      stderr: "Failed: run 1, seed 1, shrunk to 2 steps. The scenario is on stdout.\n",
+    });
+  });
+
+  it("prints both sequences' step results as JSON for a failing relation", async () => {
+    const result = await explore(true, ["features/explore/add-relation.ts", "--json"]);
+    expect({ ...result, stdout: JSON.parse(result.stdout) }).toEqual({
+      exitCode: 1,
+      stdout: {
+        kind: "relation",
+        file: "features/explore/add-relation.ts",
+        name: "add then listed",
+        verdict: "failed",
+        rerun: "nuka explore features/explore/add-relation.ts",
+        failure: {
+          sequence: "source",
+          index: 0,
+          message: "returns validation failed: title: Invalid input: expected string, received undefined",
+        },
+        source: {
+          steps: [
+            {
+              step: "add-todo",
+              args: { title: "milk" },
+              status: "failed",
+              message: "returns validation failed: title: Invalid input: expected string, received undefined",
+            },
+          ],
+          scenario: [
+            '  Scenario: (name me) source of "add then listed"',
+            "    # step 1 failed: returns validation failed: title: Invalid input: expected string, received undefined",
+            '    * a todo titled "milk" is added',
+            "",
+          ].join("\n"),
+        },
+        follow: {
+          steps: [{ step: "todo-list-includes", args: { title: "milk" }, status: "not-run" }],
+          scenario: ['  Scenario: (name me) follow of "add then listed"', '    * the todo list includes "milk"', ""].join("\n"),
+        },
+      },
+      stderr: 'Failed: relation "add then listed". Both scenarios are on stdout.\n',
+    });
+  });
+
+  it("leaves what nuka tend and nuka accept read unchanged after a failing explore", async () => {
+    const started = await startTodoApp(false);
+    server = started.server;
+    rootDir = await copyExampleToTempDir("todo");
+    await ensureNukadokoShim();
+    await writeFile(path.join(rootDir, "features", "explore", "wrong-model.ts"), WRONG_MODEL);
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      ['import { defineConfig } from "nukadoko";', "", `export default defineConfig({ baseURL: "${started.baseURL}" });`, ""].join("\n"),
+    );
+    await writeFile(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
+    await initGitRepo(rootDir);
+    const cli = async (args: string[]) => {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(args, { rootDir, stdout, stderr });
+      return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+    };
+    expect((await cli(["run", "features/todo.feature", "--quiet"])).exitCode).toBe(0);
+    const tendBefore = await cli(["tend", "--json"]);
+    const stateBefore = (await readdir(path.join(rootDir, ".nukadoko"), { recursive: true })).sort();
+
+    const explored = await cli(["explore", "features/explore/wrong-model.ts", "--seed", "1", "--runs", "5", "--length", "8", "--json"]);
+    expect(JSON.parse(explored.stdout).verdict).toBe("failed");
+
+    expect((await readdir(path.join(rootDir, ".nukadoko"), { recursive: true })).sort()).toEqual(stateBefore);
+    expect(await cli(["tend", "--json"])).toEqual(tendBefore);
+    const accepted = await cli(["accept", "features/todo.feature"]);
+    expect({ exitCode: accepted.exitCode, stdout: accepted.stdout.replace(/\d{4}-\d{2}-\d{2}-[0-9a-f]{7}/, "<date>-<sha>") }).toEqual({
+      exitCode: 0,
+      stdout: "features/todo.feature.<date>-<sha>.default.no-browser.md\n",
     });
   });
 
