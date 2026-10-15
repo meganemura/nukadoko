@@ -79,7 +79,7 @@ describe("nuka check: explore declarations", () => {
       {
         code: "explore-unseeded-random",
         message:
-          'command "add-todo" next calls crypto.randomUUID(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
+          'command "add-todo" next calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
         file: "features/explore/random-model.ts",
         step: "add-todo",
       },

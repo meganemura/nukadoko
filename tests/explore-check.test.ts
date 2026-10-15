@@ -169,7 +169,7 @@ describe("checkExploreDeclarations", () => {
     expect(drawn).toBe(0);
   });
 
-  it("reports an empty model source and a random call in a drawn source", () => {
+  it("leaves an empty model source alone, and reports a random call in a drawn source", () => {
     const known = stepNamed("known");
     const vocabulary = new Map<string, VocabularyEntry>([
       ["known", { kind: "typed", name: "known", filePath: "features/steps/known.ts", step: known }],
@@ -195,11 +195,6 @@ describe("checkExploreDeclarations", () => {
       needsBrowser: () => false,
     });
     expect(issues).toEqual([
-      {
-        code: "explore-empty-model",
-        message: 'relation "e" source has no commands, so every sequence it builds is empty and passes',
-        file: "empty-source.ts",
-      },
       {
         code: "explore-unseeded-random",
         message:

@@ -3,17 +3,27 @@ import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { unseededRandomCalls } from "../src/check/unseeded-random.js";
 
-// Responsibility: the scanner names a direct Math.random or crypto.random*
-// call, and stays silent for the same text in a string, a template's text,
+// Responsibility: the scanner names a direct Math.random call, and stays silent for the same text in a string, a template's text,
 // a comment, or a regular expression, and for a name the function binds.
 
 const TEXT = gs.text({ maxSize: 20, alphabet: "Mathcrypo.random()UUID/*`'\"\\${} \n" });
 
 describe("unseededRandomCalls", () => {
-  it("names each direct call in order", () => {
-    expect(
-      unseededRandomCalls("(s) => ({ id: crypto.randomUUID(), n: Math.random () * globalThis.crypto.randomInt(3) })"),
-    ).toEqual(["crypto.randomUUID()", "Math.random()", "crypto.randomInt()"]);
+  it("names each direct Math.random call in order", () => {
+    expect(unseededRandomCalls("(s) => ({ n: Math.random () * globalThis.Math.random() })")).toEqual([
+      "Math.random()",
+      "Math.random()",
+    ]);
+  });
+
+  it("stays silent for crypto, which a module-level binding or an import can name", () => {
+    expect(unseededRandomCalls("(s) => ({ id: crypto.randomUUID(), n: globalThis.crypto.randomInt(3) })")).toEqual([]);
+  });
+
+  it("reads a slash after ++ or -- as a division", () => {
+    expect(unseededRandomCalls('(x) => { x++ / 2; const t = "/"; return "Math.random()"; }')).toEqual([]);
+    expect(unseededRandomCalls('(x) => { x-- / 2; const t = "/"; return "Math.random()"; }')).toEqual([]);
+    expect(unseededRandomCalls('(x) => { x++ / 2; const t = "/"; return Math.random(); }')).toEqual(["Math.random()"]);
   });
 
   it("finds the call inside a template's ${} part", () => {
@@ -22,7 +32,7 @@ describe("unseededRandomCalls", () => {
 
   it("stays silent for a member of another object, a reference, and a bound name", () => {
     expect(unseededRandomCalls("(s) => s.Math.random() + Math.floor(1) + [1].map(Math.random).length")).toEqual([]);
-    expect(unseededRandomCalls("(state, crypto) => crypto.randomUUID()")).toEqual([]);
+    expect(unseededRandomCalls("(state, Math) => Math.random()")).toEqual([]);
     expect(unseededRandomCalls("() => { const Math = { random: () => 1 }; return Math.random(); }")).toEqual([]);
   });
 
