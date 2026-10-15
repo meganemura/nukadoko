@@ -10,7 +10,7 @@ import { formatValidationIssues } from "../issues/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
-import { mergeTruncated } from "../context/evidence.js";
+import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
@@ -568,6 +568,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
       // per-environment counterpart.
       config: { ...config, baseURL: resolvedEnv.baseURL },
       evidenceDir,
+      rootDir,
       env: envVars,
       secrets,
       storageState: loadedStorageState ?? undefined,
@@ -886,7 +887,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
             evidence: {
               dir: relativeDir,
               ...evidence,
-              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+              ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
             mutates: entry.step.mutates,
@@ -930,7 +931,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
             evidence: {
               dir: relativeDir,
               ...evidence,
-              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+              ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
             // Unstripped here, unlike the "ok" branch above: a failed

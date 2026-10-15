@@ -589,6 +589,20 @@ The fixture names:
   landed on one of them would replace it. Nukadoko never silently rewrites
   these names. A loud error at the call is better than letting a step trust a
   name that it did not request.
+- `scratch.dir(prefix?)` / `scratch.copy(source)`: temporary directories a
+  step can write into freely. `dir` creates an empty directory under the OS
+  temporary directory and returns its absolute path; the name starts with
+  `prefix` (default `nukadoko-scratch`), and a prefix that holds a path
+  separator throws `InvalidScratchPrefixError`. `copy` copies `source` into a
+  new directory and returns that directory: a directory's contents land at
+  its top, a file lands in it under its own name. A relative `source`
+  resolves against the project root. Every directory is removed when the
+  scenario ends, whether it passed or failed (for `nuka do`, when the
+  execution ends; in a live session, when the session ends). The step
+  record lists each one in `evidence.scratch` (see "Records"). Cleanup is
+  the executor's job because only the executor knows when a scenario has
+  ended; a step that removed its own directory would put cleanup into the
+  scenario, and one that forgot would leak it.
 
 Where a wait belongs is a contract question, not a convenience one. A step
 that writes to a system whose effect lands elsewhere asynchronously is not
@@ -725,7 +739,7 @@ be read as a claim that it does.
 
 The fixture bag in "Context API" is closed.
 It contains only `page`, `context`, `request`, `env`, `requireEnv`, `baseURL`,
-`resultOf`, `call`, `section`, `poll`, and `evidence`.
+`resultOf`, `call`, `section`, `poll`, `evidence`, and `scratch`.
 A step can also need a project resource, such as a tenant, a seeded database,
 or an uploaded fixture file.
 Previously, the step had no suitable place for the cleanup code.
@@ -754,7 +768,7 @@ dependencies are `page`, `context`, `request`, or `baseURL`.
 This shared subset describes the definition shape only.
 It is not a broader compatibility promise.
 Playwright's runner does not understand a fixture that destructures `env`,
-`section`, `poll`, `resultOf`, `call`, `evidence`, or another nukadoko-only name.
+`section`, `poll`, `resultOf`, `call`, `evidence`, `scratch`, or another nukadoko-only name.
 nukadoko also refuses `auto: true` and explains the reason in its message.
 That option lets Playwright build a fixture that no consumer requested.
 The feature file must name everything that ran, so nukadoko cannot build an
@@ -781,7 +795,8 @@ calling the fixture.
 It reads step dependencies in the same way.
 A fixture can name a builtin dependency: `page`, `context`, `request`, `env`,
 `requireEnv`, or `baseURL`.
-A scenario fixture can also name `resultOf`, `section`, `poll`, or `evidence`.
+A scenario fixture can also name `resultOf`, `section`, `poll`, `evidence`, or
+`scratch`.
 Those record on the step that caused the fixture to be built, and they do not
 need the step boundary to exist yet.
 `call` is not one of those names.
@@ -806,6 +821,16 @@ An override that destructures neither `page` nor `context` cannot return a
 page that the executor still owns and measures.
 Therefore, `check` refuses it with `page-override-unowned`.
 
+A project that already declares its own `scratch` fixture keeps it.
+Its `config.fixtures` entry replaces the builtin at run time, as any
+override does.
+Its type wins too: a project types its own fixture by augmenting
+`StepFixtures` (`declare module "nukadoko"`), and `scratch` is not a member
+of that interface, so a declaration with a different shape still compiles.
+A step's `run` receives `FixtureBag`: `StepFixtures`, plus each replaceable
+builtin (`ReplaceableFixtures`, today only `scratch`) that the project did
+not declare under the same name.
+
 Two scopes exist.
 The default `scenario` scope rebuilds a fixture for each scenario or each
 `nuka do` execution.
@@ -826,7 +851,7 @@ A `process` fixture can depend only on other `process` fixtures and three
 builtins: `env`, `requireEnv`, and `baseURL`.
 The values of these builtins do not depend on a scenario context.
 `fixture-scope-violation` refuses a dependency on `page`, `context`, `request`,
-`resultOf`, `call`, `section`, `poll`, `evidence`, or a `scenario` fixture.
+`resultOf`, `call`, `section`, `poll`, `evidence`, `scratch`, or a `scenario` fixture.
 A dependency on `call` is refused for every fixture, not only a `process` one,
 because `call` needs the step boundary.
 A `process` fixture can outlive the scenario that would supply any of these values.
@@ -2504,6 +2529,11 @@ array identifies each step record by id, so either record leads to the other.
   does; the attachment's own file *contents* are never redacted (redacting
   arbitrary bytes would as often corrupt them as protect them). What
   `attach` is given is the step's own responsibility to keep secret-free.
+- `evidence.scratch` (included only when it has entries) lists the absolute
+  paths of the directories `scratch.dir`/`scratch.copy` created during this
+  execution, in creation order (see "Context API"). The directories are
+  removed when the scenario ends, so a path here says where the step
+  worked, not a file that still exists.
 - `http_omitted` appears only when at least one page request was omitted.
   It makes the omission visible by counting what
   didn't make it into http.jsonl, by resource type, e.g.

@@ -31,7 +31,7 @@ import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../step/context.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
-import { mergeTruncated } from "../context/evidence.js";
+import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { ReadOnlyEnvironmentError } from "../environment/resolve-environment.js";
@@ -1062,6 +1062,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const contextHandle = createStepContext({
     config,
     evidenceDir: scenarioDir,
+    rootDir,
     env,
     secrets,
     storageState: storageState ?? undefined,
@@ -1406,7 +1407,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
-              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+              ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
             mutates,
@@ -1456,7 +1457,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
-              ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+              ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
             mutates,
@@ -2413,7 +2414,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
             ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
-            ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+            ...evidenceMetaFields(evidenceSnapshot),
           },
           observed,
           mutates: began.mutates,

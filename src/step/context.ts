@@ -239,16 +239,51 @@ export interface StepFixtures {
   };
 }
 
-/** Every name `StepFixtures` carries, kept in sync with that interface by
+/** What a step receives when it destructures `scratch`. */
+export interface Scratch {
+  /** Creates an empty directory under the OS temporary directory and
+   * returns its absolute path. `prefix` starts the directory name; omit it
+   * for `"nukadoko-scratch"`. A prefix that holds a path separator throws:
+   * the directory is always created directly under the temporary
+   * directory. */
+  dir(prefix?: string): string;
+  /** Copies `source` (a directory or a file; a relative path resolves
+   * against the project root) into a new directory from `dir()` and returns
+   * that directory's absolute path. A directory's contents land at the top of
+   * the new directory; a file lands in it under its own name. */
+  copy(source: string): Promise<string>;
+}
+
+/** Builtins a project may replace with a fixture of its own shape.
+ *
+ * Kept out of `StepFixtures` on purpose. A project types its own fixture
+ * by augmenting `StepFixtures` (`declare module "nukadoko"`), and
+ * TypeScript refuses a second declaration of a property with a different
+ * type (TS2717). Projects already declared their own `scratch` that way
+ * before this builtin existed, with a narrower shape, so a `scratch` member
+ * on `StepFixtures` would stop them compiling. `FixtureBag` below lets the
+ * project's declaration win instead, which is also what happens at run
+ * time: a `config.fixtures` entry with a builtin's name replaces it. */
+export interface ReplaceableFixtures {
+  /** Temporary directories, removed when the scenario ends, pass or fail
+   * (src/context/scratch.ts). */
+  readonly scratch: Scratch;
+}
+
+/** What a step's `run` receives: `StepFixtures`, plus each replaceable
+ * builtin the project did not declare under the same name. */
+export type FixtureBag = StepFixtures & Omit<ReplaceableFixtures, keyof StepFixtures>;
+
+/** Every name `FixtureBag` carries, kept in sync with it by
  * construction rather than by hand: the object literal below is typed as
- * `Record<keyof StepFixtures, true>`, so a member
+ * `Record<keyof FixtureBag, true>`, so a member
  * added to (or removed from) `StepFixtures` without a matching edit here
  * fails to compile. This is the one, closed set src/fixture/validate-
  * fixtures.ts checks a step's own destructured names against, and the one
  * src/context/create-context.ts's `buildStepFixtures` switches over to
  * build the bag. A fixture name has to be in this set to be something a
  * step can demand, so a name missing here cannot still type-check. */
-const FIXTURE_NAME_MEMBERSHIP: Record<keyof StepFixtures, true> = {
+const FIXTURE_NAME_MEMBERSHIP: Record<keyof FixtureBag, true> = {
   page: true,
   context: true,
   request: true,
@@ -260,6 +295,7 @@ const FIXTURE_NAME_MEMBERSHIP: Record<keyof StepFixtures, true> = {
   poll: true,
   call: true,
   evidence: true,
+  scratch: true,
 };
 
 export const BUILTIN_FIXTURE_NAMES: readonly string[] = Object.keys(FIXTURE_NAME_MEMBERSHIP);
@@ -333,4 +369,6 @@ export interface StepContext {
     readonly attach: (name: string, body: string | Uint8Array) => Promise<void>;
     readonly path: (name: string) => string;
   };
+  /** The same object as `FixtureBag.scratch`. */
+  readonly scratch: Scratch;
 }

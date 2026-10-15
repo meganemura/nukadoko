@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { StepFixtures } from "./context.js";
+import type { FixtureBag } from "./context.js";
 import { STEP_BRAND } from "./brand.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
@@ -348,7 +348,7 @@ export interface StepDefinitionInput<
    * `from` and a step's own fixture destructuring both already have (this
    * file's own header). Omit it entirely for a step that calls no parts. */
   parts?: readonly Step[];
-  /** `fixtures` is a `StepFixtures` bag, named by destructuring
+  /** `fixtures` is a `FixtureBag` (src/step/context.ts), named by destructuring
    * (`run({ page, section }, args) => ...`) —
    * only the names actually destructured get built at all (docs/spec.md
    * "Context API"): a step that never destructures `page`/`context` never
@@ -360,7 +360,7 @@ export interface StepDefinitionInput<
    * needs no fixtures at all writes `run({}, args)`, or, needing neither
    * fixtures nor args, `run()`. */
   run(
-    fixtures: StepFixtures,
+    fixtures: FixtureBag,
     args: z.infer<TArgs>,
   ): Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
 }
@@ -392,7 +392,7 @@ export interface Step<
    * iterate it unconditionally rather than checking for `undefined` first. */
   readonly parts: readonly Step[];
   readonly run: (
-    fixtures: StepFixtures,
+    fixtures: FixtureBag,
     args: z.infer<TArgs>,
   ) => Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
   readonly [STEP_BRAND]: true;

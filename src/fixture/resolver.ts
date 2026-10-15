@@ -1,4 +1,4 @@
-import type { StepContext, StepFixtures } from "../step/context.js";
+import type { FixtureBag, StepContext } from "../step/context.js";
 import { buildStepFixtures } from "../context/create-context.js";
 import { closeFixtureNames, resolveDependencyEdge, type FixtureGraph, type FixtureNode } from "./graph.js";
 import { startFixture, type FixtureInstance } from "./lifecycle.js";
@@ -121,7 +121,7 @@ export interface ResolveFixturesOptions {
  */
 export async function resolveFixtures(
   options: ResolveFixturesOptions,
-): Promise<{ readonly fixtures: StepFixtures; readonly usage: FixtureUsageEntry[] }> {
+): Promise<{ readonly fixtures: FixtureBag; readonly usage: FixtureUsageEntry[] }> {
   const { names, graph, ctx, scenarioCache, processCache, defaultTimeoutMs } = options;
   const closure = closeFixtureNames(names, graph);
 
@@ -159,7 +159,7 @@ export async function resolveFixtures(
   for (const name of names) {
     fixtures[name] = resolvedValues[name];
   }
-  return { fixtures: fixtures as unknown as StepFixtures, usage };
+  return { fixtures: fixtures as unknown as FixtureBag, usage };
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { FixtureScope } from "../record/types.js";
-import type { StepFixtures } from "./context.js";
+import type { FixtureBag } from "./context.js";
 
 // Responsibility: the *types* a user-defined fixture is shaped by — no
 // execution logic here (src/fixture/lifecycle.ts
@@ -80,7 +80,7 @@ export type UseFn = <V>(value: V) => Promise<FixtureOutcome>;
  * fixture, read by name) this type cannot know about without the
  * self-referencing inference this file's own header explains nukadoko does
  * not attempt. */
-export type FixtureDeps = StepFixtures & Record<string, unknown>;
+export type FixtureDeps = FixtureBag & Record<string, unknown>;
 
 /** One fixture's own setup+teardown function — always async in practice
  * (an `await use(...)` sits inside), typed to also allow a synchronous

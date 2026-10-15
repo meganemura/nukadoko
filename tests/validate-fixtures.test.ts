@@ -82,13 +82,13 @@ describe("validateStepFixtures", () => {
     };
     const [issue] = validateStepFixtures("sum-is", step);
     expect(issue?.message).toBe(
-      'run() destructures unknown fixture "sum": known fixtures are baseURL, call, context, env, evidence, page, poll, request, requireEnv, resultOf, section. ' +
+      'run() destructures unknown fixture "sum": known fixtures are baseURL, call, context, env, evidence, page, poll, request, requireEnv, resultOf, scratch, section. ' +
         '"sum" is an args key, and args are run()\'s second parameter: run({}, { sum })',
     );
 
     const bogus = { ...step, run: (({ bogus }: any) => void bogus) as Step["run"] };
     expect(validateStepFixtures("sum-is", bogus)[0]?.message).toBe(
-      'run() destructures unknown fixture "bogus": known fixtures are baseURL, call, context, env, evidence, page, poll, request, requireEnv, resultOf, section ' +
+      'run() destructures unknown fixture "bogus": known fixtures are baseURL, call, context, env, evidence, page, poll, request, requireEnv, resultOf, scratch, section ' +
         "(a project-defined name must be declared under nukadoko.config.ts's own `fixtures`)",
     );
   });

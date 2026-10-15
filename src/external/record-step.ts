@@ -8,7 +8,7 @@ import { loadConfig } from "../config/load-config.js";
 import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import { buildStepFixtures, createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
-import { mergeTruncated } from "../context/evidence.js";
+import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { omitUsedResults } from "../context/used.js";
 import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
 import { readStepRecordById } from "../record/read-step-record.js";
@@ -382,6 +382,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
   const contextHandle = createStepContext({
     config,
     evidenceDir,
+    rootDir,
     env: envVars,
     secrets,
     request,
@@ -529,7 +530,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
           evidence: {
             dir: relativeDir,
             ...evidence,
-            ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+            ...evidenceMetaFields(evidenceSnapshot),
           },
           observed,
           mutates: step.mutates,
@@ -561,7 +562,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
           evidence: {
             dir: relativeDir,
             ...evidence,
-            ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+            ...evidenceMetaFields(evidenceSnapshot),
           },
           observed,
           ...(used.length > 0 ? { used } : {}),

@@ -171,3 +171,20 @@ export class ReservedEvidenceNameError extends Error {
     this.evidenceName = name;
   }
 }
+
+/** Thrown by `scratch.dir(prefix)` (docs/spec.md "Context API") for a
+ * prefix that holds a path separator. Refused rather than sanitized, the
+ * same choice `InvalidEvidenceNameError` makes: a directory created
+ * somewhere other than where the step asked is worse than a loud error. */
+export class InvalidScratchPrefixError extends Error {
+  readonly prefix: string;
+
+  constructor(prefix: string) {
+    super(
+      `scratch.dir prefix ${JSON.stringify(prefix)} is not allowed: it must not contain "/" or "\\". ` +
+        "Every scratch directory is created directly under the OS temporary directory.",
+    );
+    this.name = "InvalidScratchPrefixError";
+    this.prefix = prefix;
+  }
+}

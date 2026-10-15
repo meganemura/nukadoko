@@ -58,6 +58,18 @@ If the handshake fails, `connectMcpServer` stops the process it spawned
 before rejecting, and the error names the command. A successful handshake
 still returns a live client for teardown to close.
 
+## Temporary directories
+
+Don't declare a fixture for a temporary directory: `scratch` is a builtin.
+`scratch.dir(prefix?)` returns a new empty directory, and
+`scratch.copy(source)` returns a new directory holding a copy of `source`
+(relative to the project root), so a scenario that writes never touches
+the repository's own files. Every directory is removed when the scenario
+ends, pass or fail, and the step record lists each path under
+`evidence.scratch`. A project that already declares its own `scratch`
+fixture keeps it: its fixture and its `StepFixtures` declaration both win
+over the builtin, so delete them only when the builtin's shape is enough.
+
 ## Waiting for an external effect
 
 A step that writes to a system whose effect lands elsewhere asynchronously

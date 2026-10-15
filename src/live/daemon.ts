@@ -8,7 +8,7 @@ import { formatValidationIssues } from "../issues/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type StepContextHandle } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
-import { mergeTruncated } from "../context/evidence.js";
+import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
@@ -309,6 +309,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
 
   const contextHandle: StepContextHandle = createStepContext({
     config: { ...config, baseURL: resolvedEnv.baseURL },
+    rootDir,
     // A placeholder that only has to exist until this session's first
     // execution calls `beginStep` and redirects it for real — see
     // create-context.ts's own header for why every boundary-based caller
@@ -622,7 +623,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
       screenshots: [],
       ...(existsSync(path.join(evidenceDir, "http.jsonl")) ? { http: "http.jsonl" } : {}),
       ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
-      ...(evidenceSnapshot.attachments.length > 0 ? { attachments: evidenceSnapshot.attachments } : {}),
+      ...evidenceMetaFields(evidenceSnapshot),
     };
 
     const stepRecord: StepRecord =

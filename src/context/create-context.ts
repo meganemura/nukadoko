@@ -4,7 +4,7 @@ import { request as playwrightRequest, type APIRequestContext, type Page } from 
 import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { PollOptions, StepContext, StepFixtures } from "../step/context.js";
+import type { FixtureBag, PollOptions, StepContext } from "../step/context.js";
 import type {
   CallEntry,
   ErrorKind,
@@ -32,6 +32,7 @@ import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
 import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
+import { createScratchCollector } from "./scratch.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
@@ -429,7 +430,7 @@ export interface StepContextHandle {
    * fixture/resolver.ts) and before calling `step.run(fixtures, args)` —
    * `nuka run` (run-scenario.ts) and `nuka do` (cli/do.ts) both do. Never
    * exposed on `ctx`. */
-  beginStepRun(step: Step, fixtures: StepFixtures): void;
+  beginStepRun(step: Step, fixtures: FixtureBag): void;
   /** Executor-only: runs a step's own body (`step.run`, or a compat
    * step's glue function) so that every `runCommand` it reaches records
    * into this boundary's `observed.processes` (src/context/run-command.ts).
@@ -531,6 +532,11 @@ export interface CreateStepContextOptions {
    * screenshots) and, until `beginStep` first moves it, http.jsonl too; must
    * already exist. */
   evidenceDir: string;
+  /** The project root. `scratch.copy(source)` resolves a relative `source`
+   * against it, so a step names a path in the project the same way whether
+   * `nuka` was started there or with another working directory. Defaults
+   * to the current working directory. */
+  rootDir?: string;
   /** The merged env map the executor loaded from every configured envFile.
    * This module never reads an envFile itself, so a run's env files are
    * parsed exactly once no matter how many contexts get created from them.
@@ -704,7 +710,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // `undefined` by `beginStep` the same defense-in-depth way `calls` itself
   // is (this file's own header). `ctx.call` subsets this rather than
   // building a bag of its own.
-  let currentFixtures: StepFixtures | undefined;
+  let currentFixtures: FixtureBag | undefined;
   // Same lifetime rule again, for `ctx.poll`'s own finished-call log.
   const polls = createPollsCollector();
   // The step boundary's own in-flight `ctx.poll` calls, keyed by a token
@@ -738,6 +744,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // always lands beside that step's own http.jsonl, trace.zip, and
   // final.png, never in a stale directory.
   const evidence = createEvidenceCollector(() => boundaryDir);
+  // Lives as long as this handle: `beginStep` only starts a new list for the
+  // step record, and `dispose()` removes every directory. Under `nuka run`
+  // one handle spans a scenario, so that is where "removed when the
+  // scenario ends" comes from.
+  const scratch = createScratchCollector({ rootDir: options.rootDir ?? process.cwd() });
 
   let browserHandle: BrowserEvidenceHandle | undefined;
   // Set only when `options.page` is adopted (below) — kept apart from
@@ -807,7 +818,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // all), and src/step/step-fixture-names.ts's `stepFixtureNames` closure
   // is what run-scenario.ts/cli/do.ts already use to guarantee every name a
   // part destructures is a key on that bag before execution ever begins.
-  function subsetPartFixtures(part: Step): StepFixtures {
+  function subsetPartFixtures(part: Step): FixtureBag {
     if (currentFixtures === undefined) {
       throw new Error(
         "internal: ctx.call() reached with no current fixture bag; " +
@@ -826,7 +837,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       }
       subset[name] = bag[name];
     }
-    return subset as unknown as StepFixtures;
+    return subset as unknown as FixtureBag;
   }
 
   // Records one failed `CallEntry` — shared by `call`'s three failure paths
@@ -1048,6 +1059,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // actually are; `snapshot`/`reset` are deliberately left off, the same
     // executor-only rule every other collector on this file already follows.
     evidence: { attach: evidence.attach, path: evidence.path },
+    scratch: scratch.scratch,
   };
 
   async function setUpPage(): Promise<Page> {
@@ -1145,6 +1157,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   }
 
   async function dispose(): Promise<DisposeResult> {
+    // In `finally`: a teardown failure above must not leave the scenario's
+    // scratch directories behind.
+    try {
+      return await disposeOpenedResources();
+    } finally {
+      await scratch.removeAll();
+    }
+  }
+
+  async function disposeOpenedResources(): Promise<DisposeResult> {
     const evidence: EvidenceResult = { screenshots: [] };
     let browserStorageState: StorageState | undefined;
     let requestStorageState: StorageState | undefined;
@@ -1279,7 +1301,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return calls.snapshot();
   }
 
-  function beginStepRun(step: Step, fixtures: StepFixtures): void {
+  function beginStepRun(step: Step, fixtures: FixtureBag): void {
     calls.beginRoot(step);
     currentFixtures = fixtures;
   }
@@ -1309,7 +1331,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   }
 
   async function evidenceSnapshot(): Promise<EvidenceSnapshot> {
-    return evidence.snapshot();
+    return { ...(await evidence.snapshot()), scratch: scratch.snapshot() };
   }
 
   async function beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void> {
@@ -1335,6 +1357,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     httpOmitted.reset();
     httpLogFailed.reset();
     evidence.reset();
+    scratch.reset();
   }
 
   async function endStep(): Promise<void> {
@@ -1388,13 +1411,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 export async function buildStepFixtures(
   ctx: StepContext,
   names: readonly string[],
-): Promise<StepFixtures> {
+): Promise<FixtureBag> {
   // `-readonly`: `StepFixtures`'s own members are `readonly` for a step
   // reading them (this file's own header, and src/step/context.ts's), but this
   // function is the one place that is allowed to write them, once, while
   // building the bag it then hands back as the (readonly-again) public
   // type.
-  const fixtures: { -readonly [K in keyof StepFixtures]?: StepFixtures[K] } = {};
+  const fixtures: { -readonly [K in keyof FixtureBag]?: FixtureBag[K] } = {};
   for (const name of names) {
     switch (name) {
       case "page":
@@ -1432,6 +1455,9 @@ export async function buildStepFixtures(
       case "evidence":
         fixtures.evidence = ctx.evidence;
         break;
+      case "scratch":
+        fixtures.scratch = ctx.scratch;
+        break;
       default:
         throw new Error(
           `internal: unknown fixture name "${name}" reached buildStepFixtures, ` +
@@ -1439,5 +1465,5 @@ export async function buildStepFixtures(
         );
     }
   }
-  return fixtures as StepFixtures;
+  return fixtures as FixtureBag;
 }

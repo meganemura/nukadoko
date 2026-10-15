@@ -6,8 +6,8 @@
 export type { NukadokoConfig, NukadokoConfigInput } from "./config/schema.js";
 export { defineConfig } from "./config/define-config.js";
 export { ConfigError } from "./config/errors.js";
-export type { StepFixtures } from "./step/context.js";
-export { MissingEnvError } from "./context/errors.js";
+export type { FixtureBag, ReplaceableFixtures, Scratch, StepFixtures } from "./step/context.js";
+export { InvalidScratchPrefixError, MissingEnvError } from "./context/errors.js";
 export { defineFixtures } from "./fixture/define-fixtures.js";
 export type {
   FixtureDefinition,

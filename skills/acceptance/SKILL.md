@@ -107,9 +107,10 @@ proves the wrong thing.
    directory is read for `*.md` files only; one with none (`.MD` does not
    count) is `feature-parse-error`.
    The grammar is in docs/spec.md ("Markdown oaths"). A resource the
-   scenario borrows, a wait for an effect that lands elsewhere (`poll`,
-   whose `timeout` is a budget for the whole call), or a
-   required environment variable: `references/fixtures.md`.
+   scenario borrows, a temporary directory (the builtin `scratch`), a wait
+   for an effect that lands elsewhere (`poll`, whose `timeout` is a budget
+   for the whole call), or a required environment variable:
+   `references/fixtures.md`.
    `nuka check` reports `fixture-structural-violation` for a config fixture
    whose destructuring cannot be read, and that finding names the fixture.
    Application-specific evidence: `references/evidence.md`.

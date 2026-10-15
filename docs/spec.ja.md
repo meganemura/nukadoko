@@ -508,6 +508,17 @@ fixture の名前:
   拒否は `ReservedEvidenceNameError` です。
   nukadoko は、これらの名前を黙って書き換えません。
   step が要求していない名前を信頼するよりも、その呼び出しで明確なエラーを出す方が適切です。
+- `scratch.dir(prefix?)` / `scratch.copy(source)`: step が自由に書き込める一時ディレクトリです。
+  `dir` は OS の一時ディレクトリの下に空のディレクトリを作り、その絶対パスを返します。
+  名前は `prefix`(既定は `nukadoko-scratch`)で始まります。
+  パス区切りを含む prefix は `InvalidScratchPrefixError` を投げます。
+  `copy` は `source` を新しいディレクトリにコピーし、そのディレクトリを返します。
+  ディレクトリの中身はその直下に置かれ、ファイルはそのファイル自身の名前で置かれます。
+  相対パスの `source` はプロジェクトのルートを基準に解決されます。
+  どのディレクトリも、scenario が終わるときに、成功でも失敗でも削除されます(`nuka do` では実行が終わるとき、live session では session が終わるときです)。
+  step record は、それぞれを `evidence.scratch` に記録します(「Records」を参照)。
+  片付けが executor の役目なのは、scenario が終わったことを知っているのが executor だけだからです。
+  step が自分でディレクトリを削除すると片付けが scenario に入り込み、削除を忘れると漏れます。
 
 待ちがどこに属するかは契約の問題であり、便利さの問題ではありません。
 効果が非同期に別の場所へ現れるシステムに書き込む step は、書き込みが受理された時点では終わらず、次の step が見る対象に効果が現れた時点で終わるため、待ちはその step の内側に属します。
@@ -562,7 +573,7 @@ nukadoko は現在この shadowing 自体を検出しないため、上の説明
 ### Fixtures
 
 「Context API」の fixture bag は閉じています。
-含まれるのは、`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`call`、`section`、`poll`、`evidence`だけです。
+含まれるのは、`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`だけです。
 step は、テナント、シード済みデータベース、アップロード済み fixture ファイルなど、プロジェクトの資源も必要とする場合があります。
 以前は、その片付けコードを置く適切な場所が step にありませんでした。
 step 内の片付けは、受け入れ条件ではないものを feature ファイルに加えます。
@@ -587,7 +598,7 @@ Playwright の fixture 定義もこの 2 つの形を使います。
 したがって、すべての依存が `page`、`context`、`request`、`baseURL` なら、`base.extend()` は変更のない fixture を受け取れます。
 この共有部分は定義の形だけを表します。
 それより広い互換性の約束ではありません。
-`env`、`section`、`poll`、`resultOf`、`call`、`evidence`、その他の nukadoko 固有名を分割代入する fixture を Playwright の runner は理解しません。
+`env`、`section`、`poll`、`resultOf`、`call`、`evidence`、`scratch`、その他の nukadoko 固有名を分割代入する fixture を Playwright の runner は理解しません。
 nukadoko は `auto: true` も拒否し、メッセージで理由を説明します。
 このオプションを使うと、利用側が要求していない fixture を Playwright が構築できます。
 feature ファイルは実行されたものをすべて名指す必要があるため、nukadoko は要求されていない fixture を構築できません。
@@ -608,7 +619,7 @@ fixture は step と同じ方法で第一引数を分割代入します。
 `check` は fixture を呼ばずに、ソーステキストから fixture の依存名を読みます。
 step の依存も同じ方法で読みます。
 fixture は builtin の依存として `page`、`context`、`request`、`env`、`requireEnv`、`baseURL` を名指せます。
-scenario fixture は、加えて `resultOf`、`section`、`poll`、`evidence` を名指せます。
+scenario fixture は、加えて `resultOf`、`section`、`poll`、`evidence`、`scratch` を名指せます。
 これらは、その fixture を構築させた step の記録に載り、step の境界が開いている必要はありません。
 `call` はこれらに含まれません。
 fixture は依存の構築中に実行され、その時点では step の境界はまだ開いていません。
@@ -628,6 +639,14 @@ use(page); }`)。
 `page` も `context` も分割代入しない上書きは、executor が引き続き所有して計測するページを返せません。
 したがって、`check` は `page-override-unowned` で拒否します。
 
+自分の `scratch` fixture をすでに宣言しているプロジェクトは、それをそのまま使えます。
+その `config.fixtures` エントリは、他の上書きと同じく、実行時に builtin を置き換えます。
+型もプロジェクトのものが優先されます。
+プロジェクトは `StepFixtures` を拡張して(`declare module "nukadoko"`)自分の fixture に型を付けますが、`scratch` はそのインターフェースのメンバーではありません。
+そのため、形の違う宣言もそのままコンパイルできます。
+step の `run` が受け取るのは `FixtureBag` です。
+これは `StepFixtures` に、プロジェクトが同じ名前で宣言していない置き換え可能な builtin(`ReplaceableFixtures`、現在は `scratch` だけ)を加えたものです。
+
 スコープは 2 つあります。
 既定の `scenario` スコープは、scenario ごと、または `nuka do` の実行ごとに fixture を再構築します。
 その scenario または実行の終わりに fixture を teardown します。
@@ -643,7 +662,7 @@ worker はプロセスであるため、`worker` スコープは存在しませ�
 
 `process` fixture が依存できるのは、別の `process` fixture と、`env`、`requireEnv`、`baseURL` の 3 つの builtin だけです。
 これらの builtin の値は scenario context に依存しません。
-`fixture-scope-violation` は、`page`、`context`、`request`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scenario` fixture への依存を拒否します。
+`fixture-scope-violation` は、`page`、`context`、`request`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`、`scenario` fixture への依存を拒否します。
 `call` への依存は `process` fixture に限らず、すべての fixture で拒否されます。
 `call` は step の境界を必要とするためです。
 `process` fixture は、これらの値を供給する scenario より長く生きる場合があります。
@@ -2108,6 +2127,9 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   step record の `name`/`file` という文字列は、他のどのフィールドとも同じ 1 回の redact を通ります。
   attachment 自身のファイルの *中身* は決して redact されません(任意のバイト列を redact すれば、保護するのと同じくらいの頻度で壊してしまうからです)。
   `attach` に渡すものを secret 抜きに保つのは、step 自身の責任です。
+- `evidence.scratch`(空でないときだけ現れます)は、`scratch.dir`/`scratch.copy` がこの実行で作ったディレクトリの絶対パスを、作った順に並べたものです(「Context API」を参照)。
+  ディレクトリは scenario が終わるときに削除されます。
+  そのため、ここにあるパスは step が作業した場所を示すもので、まだ存在するファイルを示すものではありません。
 - `http_omitted` は、少なくとも 1 件の page 由来のリクエストが省かれたときだけ現れます。
   省かれたものを数えることで、その省略を可視化します。
   http.jsonl に入らなかった分をリソースタイプ別に数えます。

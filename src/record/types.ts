@@ -601,6 +601,13 @@ export interface EvidenceMeta {
    * `truncated.evidence` (`StepRecordBase.truncated`, below), the same
    * sibling-field convention `truncated.actions` already uses. */
   attachments?: readonly EvidenceAttachmentEntry[];
+  /** Absolute paths of the directories the `scratch` fixture created during
+   * this execution, in creation order. Present only when non-empty. The
+   * directories are removed when the scenario ends (for `nuka do`, when the
+   * execution ends; in a live session, when the session ends), so a path
+   * here tells a reader where the step worked, not a file that still
+   * exists. */
+  scratch?: readonly string[];
 }
 
 // Exported by name: `StepRecordOk` and `StepRecordFailed` extend it, and a

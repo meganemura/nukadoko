@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { EvidenceAttachmentEntry } from "../record/types.js";
+import type { EvidenceAttachmentEntry, EvidenceMeta } from "../record/types.js";
 import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
@@ -87,6 +87,10 @@ export interface EvidenceSnapshot {
    * actually hit" convention `page_events.truncated`/`traceEvidence.
    * truncated` already follow). */
   readonly truncatedCount?: number;
+  /** The `scratch` directories this step boundary created. The evidence
+   * collector does not own them, so its own `snapshot()` leaves this out;
+   * the context handle's `evidenceSnapshot()` adds it. */
+  readonly scratch?: readonly string[];
 }
 
 export interface EvidenceCollector {
@@ -221,4 +225,15 @@ export function mergeTruncated(
     merged.evidence = evidenceTruncatedCount;
   }
   return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/** The optional `EvidenceMeta` fields a step boundary's snapshot fills, each
+ * present only when non-empty. One function, so every executor that writes
+ * a step record (`nuka run`, `nuka do`, a live session, `recordStep`) adds
+ * the same fields the same way. */
+export function evidenceMetaFields(snapshot: EvidenceSnapshot): Pick<EvidenceMeta, "attachments" | "scratch"> {
+  return {
+    ...(snapshot.attachments.length > 0 ? { attachments: snapshot.attachments } : {}),
+    ...(snapshot.scratch !== undefined && snapshot.scratch.length > 0 ? { scratch: snapshot.scratch } : {}),
+  };
 }

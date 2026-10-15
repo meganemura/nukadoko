@@ -52,6 +52,25 @@ just until 0.1.
   TypeScript cannot type one parameter as either. Instead, `nuka check`'s
   unknown-fixture message names the fix when the unknown name is one of the
   step's own args keys: `run({}, { sum })`.
+- **`scratch` is a builtin fixture: temporary directories removed when the scenario ends.**
+  Projects that ran filesystem scenarios each declared the same fixture in
+  `nukadoko.config.ts`, with a `StepFixtures` augmentation, so a first
+  config started as a fixture lesson. A step now destructures `{ scratch }`
+  with `defineConfig({})`. `scratch.dir(prefix?)` creates an empty directory
+  under the OS temporary directory; `scratch.copy(source)` copies a
+  directory or a file (relative to the project root) into a new one. Every
+  directory is removed when the scenario ends, pass or fail (for `nuka do`,
+  when the execution ends; in a live session, when the session ends). The
+  step record lists each path under the new `evidence.scratch` field, and
+  `nuka steps --json` lists `scratch` under `needs`. A prefix that holds a
+  path separator throws `InvalidScratchPrefixError`.
+  Not breaking: a project fixture named `scratch` still replaces the
+  builtin at run time, and its own `StepFixtures` declaration still
+  compiles and still wins. `scratch` is not a member of `StepFixtures`; a
+  step's `run` now receives `FixtureBag`, which is `StepFixtures` plus each
+  replaceable builtin (`ReplaceableFixtures`) the project did not declare.
+  `FixtureBag`, `ReplaceableFixtures`, and `Scratch` are exported types, and
+  `InvalidScratchPrefixError` is exported for `instanceof`.
 - **A test checks the names the docs give for commands, flags, finding codes, and headings.**
   `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
   `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the
