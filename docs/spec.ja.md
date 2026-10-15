@@ -1278,8 +1278,7 @@ import { Given, When, Then } from "nukadoko/compat";
   transformer の `this` は、その scenario の World です。
   step と hook が動くのと同じオブジェクトです。
   transformer が返した Promise は、step が走る前に await されます。
-  これは string の pattern での話です。
-  RegExp の pattern では違います([docs/migration.ja.md](migration.ja.md) の「既知の限界」を参照)。
+  string の pattern でも RegExp の pattern でも同じです。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
   World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。

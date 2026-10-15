@@ -1490,8 +1490,7 @@ import { Given, When, Then } from "nukadoko/compat";
   final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
   transformer returns is awaited before the step runs. This holds for a
-  string pattern. A RegExp pattern differs; see [docs/migration.md](migration.md)
-  "Known limits".
+  string pattern and a RegExp pattern alike.
 - Execution supports two forms. Glue that starts its own Playwright
   continues to work without measurement. A World subclass assigns that
   page and request with `this.page = ...` and `this.request = ...`, and
