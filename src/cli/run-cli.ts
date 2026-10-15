@@ -155,6 +155,7 @@ interface ExploreArgs {
   runs?: number;
   length?: number;
   env?: string;
+  json?: boolean;
 }
 
 interface SessionListArgs {
@@ -598,6 +599,11 @@ export async function runCli(
         .option("runs", { type: "number", describe: `how many sequences a model runs (default ${DEFAULT_EXPLORE_RUNS})` })
         .option("length", { type: "number", describe: `the most steps in one sequence (default ${DEFAULT_EXPLORE_LENGTH})` })
         .option("env", { type: "string", describe: 'target a named environment (omit for the "default" environment)' })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "one JSON object on stdout: the verdict, the seed and counts, and on a failure each step's result and the scenario",
+        })
         .check(rejectRepeatedFlags(["seed", "runs", "length", "env"])) as Argv<ExploreArgs>,
     handler: async (args: Arguments<ExploreArgs>) => {
       if (argsFailed) return;
@@ -608,6 +614,7 @@ export async function runCli(
         runs: args.runs ?? DEFAULT_EXPLORE_RUNS,
         length: args.length ?? DEFAULT_EXPLORE_LENGTH,
         env: args.env ?? null,
+        json: args.json ?? false,
         stdout,
         stderr,
       });

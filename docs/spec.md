@@ -4037,6 +4037,24 @@ same step and args, or an args key the line has no capture for, is named in
 a comment above it. stdout stays empty on a pass, stderr gets one summary
 line either way, and the exit code is 0 only for a pass.
 
+`--json` replaces the stdout text with one JSON object, printed on a pass
+too. Every object has `kind` (`"model"` or `"relation"`), `file`, `verdict`
+(`"passed"`, `"failed"`, or `"error"` for a model or relation callback that
+threw before a step ran), and `rerun`. A model adds `seed`, `runs`, and
+`length`; a pass adds `steps`, the number of steps run. A failing model
+adds `run`, `found_steps`, `shrunk_steps`, `shrink_attempts`, `failure`
+(`index`, `kind`, `command`, `message`), `steps`, and `scenario`, all for
+the shrunk sequence. A relation adds `name`, and a failing one adds
+`failure` (`sequence`, and `index` unless the sequence is `relate`, and
+`message`) plus `source` and `follow`, each with `steps` and `scenario`.
+Each entry of `steps` has `step`, `args`, and `status`: `"ok"` with
+`result`, `"failed"` with `message`, or `"not-run"` for a step after a
+failed sequence. `scenario` is the text the plain output prints, without
+the two leading comments. An `error` carries `message`. A refusal before
+any step runs prints nothing on stdout, as without `--json`. Explore
+writes the object to stdout only, never under the state directory, so
+`nuka accept` and `nuka tend` never read it as a run.
+
 The scenario is not added to any feature. Only a person who read it decides
 whether it becomes a scenario, whether the system or the model was wrong,
 and what the scenario claims. Generated sequences that passed are not kept.
@@ -4107,7 +4125,7 @@ nuka harvest <step-record-id>...
                               record it came from are named in the draft and
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
-nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>]
+nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
                               run one model or relation file found under
                               featuresDir, request-only steps only, with no
                               step record. A model runs --runs sequences
@@ -4115,8 +4133,11 @@ nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>]
                               10) from one --seed, and shrinks the first
                               failure. On a failure stdout gets the scenario to
                               paste (two for a relation) and the command that
-                              reruns it; stdout is empty on a pass. Exits 1
-                              on a failure or a refusal
+                              reruns it; stdout is empty on a pass. --json
+                              prints one object instead, on a pass too: the
+                              verdict, the seed and counts, and on a failure
+                              each step's result, the failure, and the
+                              scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, timeout
                               when the step declared one, which

@@ -86,7 +86,12 @@ smallest case that shows the relation.
    `explore-browser-step` finding first.
 2. `nuka explore <file>`. For a model, `--runs` and `--length` set how
    much it tries. The seed is printed either way.
-3. A pass prints one line on stderr and nothing on stdout.
+3. A pass prints one line on stderr and nothing on stdout. Add `--json`
+   to get one object on stdout instead, on a pass too: the verdict, the
+   seed and counts, and on a failure each step's `args` and `result`,
+   the failure's `kind` and `message`, and the scenario text. Read
+   `steps[].result` when the comment alone does not say why a `post`
+   failed.
 4. A failure prints a scenario on stdout. Its first comment is the
    command that reruns the same sequences. The comment above a line says
    how that step failed. Any step failure counts, not only a `post` that

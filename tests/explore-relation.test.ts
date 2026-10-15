@@ -74,6 +74,11 @@ describe("exploreRelation", () => {
         sequence: "relate",
         message: 'relate returned false for source results [{"total":3}] and follow results [{"total":3},{"total":7}]',
       },
+      sourceOutcomes: [{ ok: true, result: { total: 3 } }],
+      followOutcomes: [
+        { ok: true, result: { total: 3 } },
+        { ok: true, result: { total: 7 } },
+      ],
     });
   });
 

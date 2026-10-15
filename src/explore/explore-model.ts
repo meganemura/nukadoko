@@ -6,6 +6,7 @@ import {
   type PlannedStep,
   type SequenceFailure,
   type SequenceSession,
+  type StepOutcome,
 } from "./sequence.js";
 
 // Responsibility: run a model and shrink the first failure it finds.
@@ -46,6 +47,8 @@ export type ExploreModelResult =
       readonly found: readonly PlannedStep[];
       readonly shrunk: readonly PlannedStep[];
       readonly failure: SequenceFailure;
+      /** What each step of `shrunk` returned, the failed step's included. */
+      readonly outcomes: readonly StepOutcome[];
       readonly shrinkAttempts: number;
     }
   | { readonly status: "model-error"; readonly seed: number; readonly run: number; readonly message: string };
@@ -104,21 +107,33 @@ function cutAt(failing: Plan, index: number): Plan {
   };
 }
 
-async function execute(model: Model, planned: Plan, open: OpenSequence): Promise<SequenceFailure | undefined> {
+interface Executed {
+  readonly failure: SequenceFailure | undefined;
+  readonly outcomes: readonly StepOutcome[];
+}
+
+async function execute(model: Model, planned: Plan, open: OpenSequence): Promise<Executed> {
   const session = await open();
+  const outcomes: StepOutcome[] = [];
   let passed = false;
   try {
-    const failure = await runSteps(model, planned, session);
+    const failure = await runSteps(model, planned, session, outcomes);
     passed = failure === undefined;
-    return failure;
+    return { failure, outcomes };
   } finally {
     await session.close(passed ? "passed" : "failed");
   }
 }
 
-async function runSteps(model: Model, planned: Plan, session: SequenceSession): Promise<SequenceFailure | undefined> {
+async function runSteps(
+  model: Model,
+  planned: Plan,
+  session: SequenceSession,
+  outcomes: StepOutcome[],
+): Promise<SequenceFailure | undefined> {
   for (const [index, step] of planned.steps.entries()) {
     const outcome = await session.run(step.name, step.args);
+    outcomes.push(outcome);
     const command = step.name;
     if (!outcome.ok) return { index, kind: "step", command, message: outcome.message };
     let holds: boolean;
@@ -165,6 +180,7 @@ function lowered(value: number): number[] {
 interface Failing {
   readonly plan: Plan;
   readonly failure: SequenceFailure;
+  readonly outcomes: readonly StepOutcome[];
 }
 
 async function shrink(
@@ -184,11 +200,11 @@ async function shrink(
       if (error instanceof ModelCallbackError) return false;
       throw error;
     }
-    const failure = await execute(options.model, candidate, options.open);
+    const { failure, outcomes } = await execute(options.model, candidate, options.open);
     if (failure === undefined || !sameFailure(failure, best.failure)) return false;
     const cut = cutAt(candidate, failure.index);
     if (!simpler(cut.choices, best.plan.choices)) return false;
-    best = { plan: cut, failure };
+    best = { plan: cut, failure, outcomes };
     return true;
   }
 
@@ -237,13 +253,13 @@ export async function exploreModel(options: ExploreModelOptions): Promise<Explor
       }
       throw error;
     }
-    const failure = await execute(model, planned, open);
+    const { failure, outcomes } = await execute(model, planned, open);
     if (failure === undefined) {
       steps += planned.steps.length;
       continue;
     }
     const found = cutAt(planned, failure.index);
-    const { best, attempts } = await shrink(options, { plan: found, failure });
+    const { best, attempts } = await shrink(options, { plan: found, failure, outcomes });
     return {
       status: "failed",
       seed,
@@ -251,6 +267,7 @@ export async function exploreModel(options: ExploreModelOptions): Promise<Explor
       found: withoutState(found.steps),
       shrunk: withoutState(best.plan.steps),
       failure: best.failure,
+      outcomes: best.outcomes,
       shrinkAttempts: attempts,
     };
   }

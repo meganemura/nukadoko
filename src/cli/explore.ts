@@ -11,7 +11,14 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
-import { exploreModel, exploreRelation, openWorld, renderScenario, type PlannedStep } from "../explore/index.js";
+import {
+  exploreModel,
+  exploreRelation,
+  openWorld,
+  renderScenario,
+  type PlannedStep,
+  type StepOutcome,
+} from "../explore/index.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
 import {
@@ -28,6 +35,7 @@ import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { Step } from "../step/define-step.js";
+import { toStoredForm } from "../stored-form/stored-form.js";
 import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
 
 // Responsibility: `nuka explore`'s wiring. Setup refuses before any step
@@ -35,7 +43,10 @@ import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js"
 // would report for it, a fixture problem `nuka do` would refuse on. Then
 // the model or the relation runs, and on failure stdout gets the scenario
 // to paste, with the command that reruns it. stdout stays empty on a pass,
-// so a caller can tell the two apart without reading stderr.
+// so a caller can tell the two apart without reading stderr. `--json`
+// prints one object on stdout instead, for a pass too. It is written to
+// stdout only, never under the state directory, so `nuka accept` and
+// `nuka tend` never read an explore run as the newest run.
 
 export const DEFAULT_EXPLORE_RUNS = 20;
 export const DEFAULT_EXPLORE_LENGTH = 10;
@@ -48,6 +59,8 @@ export interface RunExploreOptions {
   readonly runs: number;
   readonly length: number;
   readonly env: string | null;
+  /** One JSON object on stdout, for a pass too, in place of the scenario. */
+  readonly json: boolean;
   readonly stdout: WritableSink;
   readonly stderr: WritableSink;
 }
@@ -217,27 +230,47 @@ async function exploreDiscovered(
   try {
     const render = (title: string, steps: readonly PlannedStep[], notes: ReadonlyMap<number, string>) =>
       renderScenario({ title, steps, notes, vocabulary, bindings });
+    const failedNote = (index: number, message: string) => new Map([[index, `step ${index + 1} failed: ${message}`]]);
+    const emit = (json: Record<string, unknown>, text: readonly string[]) => {
+      if (options.json) stdout.write(`${JSON.stringify(json, null, 2)}\n`);
+      else if (text.length > 0) stdout.write(`${text.join("\n")}\n`);
+    };
+    const file = path.relative(rootDir, target);
 
     if (model !== undefined) {
       const result = await exploreModel({ model: model.model, seed, runs: options.runs, length: options.length, open });
+      const rerun = rerunCommand(options, seed);
+      const head = { kind: "model", file, verdict: result.status === "model-error" ? "error" : result.status, seed, runs: options.runs, length: options.length };
       if (result.status === "passed") {
-        stderr.write(
-          `Passed: ${plural(result.runs, "run")}, ${plural(result.steps, "step")}, seed ${seed}. ` +
-            `Rerun: ${rerunCommand(options, seed)}\n`,
-        );
+        emit({ ...head, steps: result.steps, rerun }, []);
+        stderr.write(`Passed: ${plural(result.runs, "run")}, ${plural(result.steps, "step")}, seed ${seed}. Rerun: ${rerun}\n`);
         return 0;
       }
       if (result.status === "model-error") {
+        emit({ ...head, rerun, run: result.run, message: result.message }, []);
         stderr.write(`The model failed on run ${result.run}, seed ${seed}: ${result.message}\n`);
         return 1;
       }
-      const lines = [
-        `# ${rerunCommand(options, seed)}`,
-        `# Run ${result.run} of ${options.runs} failed after ${plural(result.found.length, "step")}. ` +
-          `Shrunk to ${plural(result.shrunk.length, "step")} in ${plural(result.shrinkAttempts, "attempt")}.`,
-        ...(await render("(name me)", result.shrunk, new Map([[result.failure.index, `step ${result.failure.index + 1} failed: ${result.failure.message}`]]))),
-      ];
-      stdout.write(`${lines.join("\n")}\n`);
+      const scenario = await render("(name me)", result.shrunk, failedNote(result.failure.index, result.failure.message));
+      emit(
+        {
+          ...head,
+          rerun,
+          run: result.run,
+          found_steps: result.found.length,
+          shrunk_steps: result.shrunk.length,
+          shrink_attempts: result.shrinkAttempts,
+          failure: result.failure,
+          steps: stepResults(result.shrunk, result.outcomes),
+          scenario: lines(scenario),
+        },
+        [
+          `# ${rerun}`,
+          `# Run ${result.run} of ${options.runs} failed after ${plural(result.found.length, "step")}. ` +
+            `Shrunk to ${plural(result.shrunk.length, "step")} in ${plural(result.shrinkAttempts, "attempt")}.`,
+          ...scenario,
+        ],
+      );
       stderr.write(
         `Failed: run ${result.run}, seed ${seed}, shrunk to ${plural(result.shrunk.length, "step")}. ` +
           "The scenario is on stdout.\n",
@@ -259,27 +292,39 @@ async function exploreDiscovered(
       },
       open,
     });
+    const rerun = rerunCommand(options, null);
+    const head = { kind: "relation", file, name: declared.name, verdict: result.status === "relation-error" ? "error" : result.status };
     if (result.status === "passed") {
-      stderr.write(`Passed: relation "${declared.name}". Rerun: ${rerunCommand(options, null)}\n`);
+      emit({ ...head, rerun }, []);
+      stderr.write(`Passed: relation "${declared.name}". Rerun: ${rerun}\n`);
       return 0;
     }
     if (result.status === "relation-error") {
+      emit({ ...head, rerun, message: result.message }, []);
       stderr.write(`The relation "${declared.name}" failed before it ran: ${result.message}\n`);
       return 1;
     }
     const { failure } = result;
     const note = (sequence: "source" | "follow"): Map<number, string> =>
-      failure.sequence === sequence
-        ? new Map([[failure.index, `step ${failure.index + 1} failed: ${failure.message}`]])
-        : new Map();
-    const lines = [
-      `# ${rerunCommand(options, null)}`,
-      `# Relation "${declared.name}" failed${failure.sequence === "relate" ? `: ${oneLine(failure.message)}` : ` in its ${failure.sequence} sequence.`}`,
-      ...(await render(`(name me) source of "${declared.name}"`, result.source, note("source"))),
-      "",
-      ...(await render(`(name me) follow of "${declared.name}"`, result.follow, note("follow"))),
-    ];
-    stdout.write(`${lines.join("\n")}\n`);
+      failure.sequence === sequence ? failedNote(failure.index, failure.message) : new Map();
+    const sourceScenario = await render(`(name me) source of "${declared.name}"`, result.source, note("source"));
+    const followScenario = await render(`(name me) follow of "${declared.name}"`, result.follow, note("follow"));
+    emit(
+      {
+        ...head,
+        rerun,
+        failure,
+        source: { steps: stepResults(result.source, result.sourceOutcomes), scenario: lines(sourceScenario) },
+        follow: { steps: stepResults(result.follow, result.followOutcomes), scenario: lines(followScenario) },
+      },
+      [
+        `# ${rerun}`,
+        `# Relation "${declared.name}" failed${failure.sequence === "relate" ? `: ${oneLine(failure.message)}` : ` in its ${failure.sequence} sequence.`}`,
+        ...sourceScenario,
+        "",
+        ...followScenario,
+      ],
+    );
     stderr.write(`Failed: relation "${declared.name}". Both scenarios are on stdout.\n`);
     return 1;
   } finally {
@@ -287,6 +332,23 @@ async function exploreDiscovered(
     signal.stop();
     await rm(scratchDir, { recursive: true, force: true });
   }
+}
+
+function lines(scenario: readonly string[]): string {
+  return scenario.map((line) => `${line}\n`).join("");
+}
+
+/** A step past the one that failed, or in a sequence that never ran, is
+ * `not-run`. Values go out in stored form, as a step record writes them. */
+function stepResults(steps: readonly PlannedStep[], outcomes: readonly StepOutcome[]): unknown[] {
+  return steps.map((planned, index) => {
+    const head = { step: planned.name, args: toStoredForm(planned.args) };
+    const outcome = outcomes[index];
+    if (outcome === undefined) return { ...head, status: "not-run" };
+    return outcome.ok
+      ? { ...head, status: "ok", result: toStoredForm(outcome.result) }
+      : { ...head, status: "failed", message: outcome.message };
+  });
 }
 
 function nameOf(vocabulary: Vocabulary, step: Step): string | undefined {

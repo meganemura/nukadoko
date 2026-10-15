@@ -3446,6 +3446,24 @@ step record は書きません。
 成功したとき stdout は空のままで、stderr にはどちらの場合も 1 行の要約が出ます。
 終了コードが 0 になるのは成功したときだけです。
 
+`--json` は、stdout のテキストを 1 つの JSON オブジェクトに置き換え、成功したときも表示します。
+どのオブジェクトにも `kind`(`"model"` または `"relation"`)、`file`、`verdict`、`rerun` があります。
+`verdict` は `"passed"`、`"failed"`、または `"error"` です。
+`"error"` は、step を実行する前にモデルや関係の callback が例外を投げたことを表します。
+モデルは `seed`、`runs`、`length` を加え、成功すると実行した step の数 `steps` を加えます。
+失敗したモデルは、`run`、`found_steps`、`shrunk_steps`、`shrink_attempts`、`failure`(`index`、`kind`、`command`、`message`)、`steps`、`scenario` を加えます。
+これらはすべて縮小した列についての値です。
+関係は `name` を加えます。
+失敗した関係は、`failure`(`sequence`、`sequence` が `relate` でなければ `index`、そして `message`)と、`source` と `follow` を加えます。
+`source` と `follow` には、それぞれ `steps` と `scenario` があります。
+`steps` の各要素には `step`、`args`、`status` があります。
+`status` は、`result` を伴う `"ok"`、`message` を伴う `"failed"`、失敗した列のあとの step を表す `"not-run"` のいずれかです。
+`scenario` は、通常の出力が表示するテキストから先頭の 2 行のコメントを除いたものです。
+`error` は `message` を持ちます。
+step を実行する前の拒否では、`--json` がないときと同じく stdout には何も出ません。
+explore はオブジェクトを stdout にだけ書き、`.nukadoko/` の下には書きません。
+そのため `nuka accept` と `nuka tend` がそれを実行として読むことはありません。
+
 scenario はどの feature にも追加されません。
 それが scenario になるか、間違っていたのはシステムかモデルか、その scenario が何を主張するかは、それを読んだ人だけが決めます。
 成功した生成済みの列は残しません。
@@ -3516,7 +3534,7 @@ nuka harvest <step-record-id>...
                               record it came from are named in the draft and
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
-nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>]
+nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
                               run one model or relation file found under
                               featuresDir, request-only steps only, with no
                               step record. A model runs --runs sequences
@@ -3524,8 +3542,11 @@ nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>]
                               10) from one --seed, and shrinks the first
                               failure. On a failure stdout gets the scenario to
                               paste (two for a relation) and the command that
-                              reruns it; stdout is empty on a pass. Exits 1
-                              on a failure or a refusal
+                              reruns it; stdout is empty on a pass. --json
+                              prints one object instead, on a pass too: the
+                              verdict, the seed and counts, and on a failure
+                              each step's result, the failure, and the
+                              scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, timeout
                               when the step declared one, which
