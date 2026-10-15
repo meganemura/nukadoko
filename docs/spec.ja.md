@@ -3352,10 +3352,12 @@ model と relation は、step の語彙の隣に置く宣言です。
 `nuka check` はそれらを読みます。
 `initial`、`args`、`pre`、`next`、`post`、`follow`、`relate` は呼びません。
 step も実行しません。
+それらを実行するのは `nuka explore` です(「モデルまたは関係を探索する」を参照)。
 
 `defineModel(initial).commands({ ... })` は、初期状態のあと、step の basename ごとに 1 つの command を取ります。
 command は `modelCommand(step)({ args, pre, next, post })` です。
 `args` と `post` は、その step の args と result に対して型が付きます。
+`args` は状態と、唯一の変化の源である `draw` を受け取ります。
 `next` は、状態と args から model を更新します。
 basename は、拡張子を除いた step ファイルの名前です。
 2 回に分かれているのは、callback を検査する前に状態の型が決まっている必要があるからです。
@@ -3374,6 +3376,63 @@ discovery は、どちらかの宣言の default export を step ではなくそ
 `nuka check` は、command のキーがその step の basename でないとき、または列の step が登録されていないとき、`explore-unknown-step` を報告します。
 その step が `page` または `context` を必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
 `request` だけを必要とする step は許されます。
+
+### モデルまたは関係を探索する
+
+`nuka explore <file>` は、1 つのモデルまたは 1 つの関係を実行します。
+ファイルは、discovery が `featuresDir` の下で見つけたものです。
+step を 1 つも実行する前に、このコマンドはそれらの step について `nuka check` と `nuka do` が行う拒否を行います。
+対象は、`explore-unknown-step` または `explore-browser-step` の所見、fixture の問題、未知の `--env` です。
+どれかに当てはまると、何も実行しません。
+
+モデルの実行は、各列をモデルだけから組み立てます。
+状態から `pre` が成り立つ command を集め、1 つを選び、`args(state, draw)` を呼び、`next` で状態を進めます。
+変化の源は `draw.int(min, max)` と `draw.pick(items)` だけです。
+したがって列は、それが行った選択の関数です。
+その後、列を 1 step ずつ実行し、`post` が各 result をその step の前の状態に照らして判定します。
+最初に失敗した step、または最初に成り立たなかった `post` が、その列を失敗にします。
+`--runs`(既定値 20)は実行する列の数を、`--length`(既定値 10)は 1 つの列の最大 step 数を決めます。
+1 つの `--seed` がすべての実行のすべての選択を決め、出力は必ずそれを表示します。
+そのため、同じコマンドは同じ列を再実行します。
+
+失敗は縮小されます。
+縮小は、記録した選択を編集して列を組み立て直します。
+まず 1 つの step の選択を削除し、次に 1 つの選択を 0 に向けて小さくします。
+編集を残すのは、新しい列がまだ失敗するときだけです。
+小さい選択は、宣言順で前の command、より小さい `draw.int`、`draw.pick` のより前の要素を意味します。
+残した編集はどれも選択の列を短くするか小さくするので、縮小は終わります。
+また 200 回試すと止まります。
+縮小した列は、見つかった列とは違う失敗をすることがあります。
+表示されるのは縮小した列の失敗です。
+
+関係の実行は、`source` を 1 つの world で実行し、`follow` を呼び、その 2 本目の列を新しい world で実行し、2 つの result の並びについて `relate` を呼びます。
+`source` は宣言された列なので、関係の実行には seed がなく、縮小もしません。
+2 本目の列に語彙にない step、またはブラウザを必要とする step があると、関係は実行される前に止まります。
+
+各列は新しい `ctx` と新しい fixture のキャッシュを受け取ります。
+fixture の 2 つの scope はどちらも 1 つの列の間だけ続きます。
+そのため、対象をリセットする scenario scope の fixture は、各列の前に動きます。
+対象そのものはリセットされません。
+初期状態が空の対象を前提とするモデルには、その fixture が必要です。
+step は、`nuka do` と live session が使うのと同じ関数を通って実行されます。
+args を検証し、fixture の袋を開き、step の期限の下で `run` を呼び、result を検証します。
+step record は書きません。
+1 回の実行は多くの列を試し、そのほとんどは成功します。
+失敗の記録は人が残す scenario であり、その scenario を `nuka run` すると記録が書かれます。
+
+失敗すると、stdout には feature に貼り付ける scenario が出ます。
+中身は、それを再実行するコマンドのコメント、どう失敗したかのコメント、そして step ごとに 1 行の `*` の行です。
+行は、`nuka harvest` が書くのと同じく、その step の最初の pattern から書かれます。
+失敗した step の上には、そのメッセージのコメントが付きます。
+関係は、source と follow の 2 つの scenario を表示します。
+すべての行は `nuka run` が読むのと同じやり方で読み戻されます。
+同じ step と args に戻らない行、または行に capture がない args のキーは、その行の上のコメントで名指しされます。
+成功したとき stdout は空のままで、stderr にはどちらの場合も 1 行の要約が出ます。
+終了コードが 0 になるのは成功したときだけです。
+
+scenario はどの feature にも追加されません。
+それが scenario になるか、間違っていたのはシステムかモデルか、その scenario が何を主張するかは、それを読んだ人だけが決めます。
+成功した生成済みの列は残しません。
 
 ## CLI summary
 
@@ -3441,6 +3500,16 @@ nuka harvest <step-record-id>...
                               record it came from are named in the draft and
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
+nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>]
+                              run one model or relation file found under
+                              featuresDir, request-only steps only, with no
+                              step record. A model runs --runs sequences
+                              (default 20) of at most --length steps (default
+                              10) from one --seed, and shrinks the first
+                              failure. On a failure stdout gets the scenario to
+                              paste (two for a relation) and the command that
+                              reruns it; stdout is empty on a pass. Exits 1
+                              on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, timeout
                               when the step declared one, which
@@ -3717,6 +3786,9 @@ nuka experimental webmcp-tools <url> [--json]
 - **M13(Markdown oaths)**: Gherkin の隣にある 2 つ目の表側です。
   名指しされた Markdown ファイルは同じ pickle にコンパイルされ、同じ `defineStep` の語彙に結び付き、どの pattern にもマッチしない文では `nuka check` が失敗します(「Markdown oaths」を参照)。
   これは oath の表面であり、Varar のエンジンではありません。
+- **M14(exploring)**: `nuka explore` です。
+  request だけを使う step に対してモデルまたは関係を実行し、モデルの失敗を seed から再生できる選択の列で縮小し、貼り付ける scenario を表示します(「モデルまたは関係を探索する」を参照)。
+  feature ファイルは、人が残すと決めた列の集まりのままです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
   Varar の完全な対応(すべての方言、step の戻り値と文中の語句の比較、doc string、tag、Markdown の中の `@nukadoko:serial`)もここに残します。
 

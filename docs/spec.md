@@ -3933,11 +3933,13 @@ fixes up a dirty tree.
 
 A model and a relation sit next to the step vocabulary. They are declarations.
 `nuka check` reads them. It does not run them, and it does not call `initial`,
-`args`, `pre`, `next`, `post`, `follow`, or `relate`.
+`args`, `pre`, `next`, `post`, `follow`, or `relate`. `nuka explore` runs them
+(see "Exploring a model or a relation").
 
 `defineModel(initial).commands({ ... })` takes the initial state, then one
 command per step basename. A command is `modelCommand(step)({ args, pre, next,
 post })`. `args` and `post` are typed against that step's args and result.
+`args` receives the state and a `draw`, the one source of variation.
 `next` updates the model from the state and the args. The basename is the
 step file's name, without its extension. The two calls exist so the state
 type is known before those callbacks are checked. One object literal widens
@@ -3958,6 +3960,66 @@ basename of the step it holds, or when a sequence entry's step was never
 registered. It reports `explore-browser-step` when that step needs `page` or
 `context`, including through a fixture that reaches one. A step that needs
 only `request` is allowed.
+
+### Exploring a model or a relation
+
+`nuka explore <file>` runs one model or one relation. The file is one that
+discovery found under `featuresDir`. Before any step runs, the command makes
+the refusals `nuka check` and `nuka do` make for those steps: an
+`explore-unknown-step` or `explore-browser-step` finding, a fixture problem,
+and an unknown `--env`. Nothing runs when one of them applies.
+
+A model run builds each sequence from the model alone. From the state, it
+takes the commands whose `pre` holds, picks one, calls `args(state, draw)`,
+and moves the state with `next`. `draw.int(min, max)` and `draw.pick(items)`
+are the only sources of variation, so a sequence is a function of the
+choices it made. The sequence then runs step by step, and `post` judges each
+result against the state from before that step. The first step that fails,
+or the first `post` that does not hold, fails the sequence. `--runs`
+(default 20) sets how many sequences run, and `--length` (default 10) sets
+the most steps one sequence has. One `--seed` drives every choice of every
+run, and the output always prints it, so the same command reruns the same
+sequences.
+
+A failure is shrunk. Shrinking edits the recorded choices and builds the
+sequence again: first it deletes one step's choices, then it lowers one
+choice toward zero, and it keeps an edit only when the new sequence still
+fails. A lower choice means an earlier command in declaration order, a
+smaller `draw.int`, or an earlier item of `draw.pick`. Each kept edit makes
+the choice list shorter or smaller, so shrinking ends, and it stops after
+200 attempts. A shrunk sequence can fail differently from the one that was
+found. Its failure is the one printed.
+
+A relation run runs `source` in one world, calls `follow`, runs that second
+sequence in a fresh world, and calls `relate` on the two lists of results.
+`source` is the declared sequence, so a relation run has no seed and does
+not shrink. A step of the second sequence that is not in the vocabulary, or
+needs a browser, stops the relation before it runs.
+
+Each sequence gets a fresh `ctx` and fresh fixture caches. Both fixture
+scopes last one sequence, so a scenario-scope fixture that resets the
+target runs before every sequence. The target itself is not reset, and a
+model whose initial state assumes an empty target needs that fixture. A
+step runs through the same function `nuka do` and a live session use: the
+args are validated, the fixture bag is opened, `run` is called under the
+step's deadline, and the result is validated. No step record is written. A
+run tries many sequences and most of them pass. The record of a failure is
+the scenario a person keeps, and `nuka run` of that scenario writes the
+records.
+
+On a failure, stdout gets a scenario to paste into a feature: a comment with
+the command that reruns it, a comment that says how the run failed, and one
+`*` line per step, written from the step's first pattern as `nuka harvest`
+writes one. The failing step has a comment above it with its message. A
+relation prints two scenarios, the source and the follow. Every line is
+read back the way `nuka run` reads it, and a line that does not return the
+same step and args, or an args key the line has no capture for, is named in
+a comment above it. stdout stays empty on a pass, stderr gets one summary
+line either way, and the exit code is 0 only for a pass.
+
+The scenario is not added to any feature. Only a person who read it decides
+whether it becomes a scenario, whether the system or the model was wrong,
+and what the scenario claims. Generated sequences that passed are not kept.
 
 ## CLI summary
 
@@ -4025,6 +4087,16 @@ nuka harvest <step-record-id>...
                               record it came from are named in the draft and
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
+nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>]
+                              run one model or relation file found under
+                              featuresDir, request-only steps only, with no
+                              step record. A model runs --runs sequences
+                              (default 20) of at most --length steps (default
+                              10) from one --seed, and shrinks the first
+                              failure. On a failure stdout gets the scenario to
+                              paste (two for a relation) and the command that
+                              reruns it; stdout is empty on a pass. Exits 1
+                              on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, timeout
                               when the step declared one, which
@@ -4345,6 +4417,11 @@ would be running against glue it never actually read.
   Markdown files compile into the same pickles, bind the same `defineStep`
   vocabulary, and fail `nuka check` on a sentence no pattern matches (see
   "Markdown oaths"). This is the oath surface, not Varar's engine.
+- **M14 (exploring)**: `nuka explore`, which runs a model or a relation
+  against request-only steps, shrinks a model's failure with a seeded,
+  replayable list of choices, and prints the scenario to paste (see
+  "Exploring a model or a relation"). The feature file stays the set of
+  sequences a person chose to keep.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs
   in-place coexistence rather than migration. Full Varar parity (every
