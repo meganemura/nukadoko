@@ -2062,9 +2062,16 @@ output for a person who watches the run: a boundary before each pickle, one
 line after each step, the paths written by the run, and a one-line summary.
 `--quiet` suppresses the per-step and per-scenario progress lines. The paths
 and summary still appear because the flag makes the terminal quieter, not
-silent. After the summary line, stderr names each failed scenario with its
-feature path, line, and name. These lines appear for serial and concurrent
-runs, and `--quiet` keeps them.
+silent. A failed step's line is followed by two indented lines: the first
+line of its error message, without terminal color codes, and the path of
+its step record (`<stateDir>/records/steps/<id>`). A step that never began
+has no step record and gets the error line only. `--quiet` keeps a failed
+step's line and these two lines, and drops every other step line. After the
+summary line, stderr names each failed scenario with its feature path, line,
+and name, and follows each with a `rerun` line: `nuka run <feature>:<line>`,
+plus `--env <name>` when the run was given one, quoted for a POSIX shell
+where a word needs it. These lines appear for serial and concurrent runs,
+and `--quiet` keeps them.
 
 The paths line matters even when nothing was configured: `allure` and
 `messages` output already exist with zero configuration, and their config
@@ -3976,12 +3983,15 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               nothing. stderr
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
-                              line. Each failed scenario follows with its
-                              feature, line, and name. Then one retention
+                              line. A failed step's line is followed by its
+                              error's first line and its step record path.
+                              Each failed scenario follows the summary with
+                              its feature, line, and name, then a rerun
+                              line (nuka run <feature>:<line>). Then one retention
                               line, when a run older than the newest
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
-                              progress lines only.
+                              progress lines only, except a failed step's.
                               stdout stays NDJSON, one record per scenario,
                               always. Text a step writes to the process stdout
                               is delivered on stderr.

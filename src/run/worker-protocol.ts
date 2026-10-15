@@ -41,7 +41,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // `"scenario"` bundles everything one finished pickle produced: the record
 // itself, the per-step progress lines src/run/progress-log.ts's
 // `createStepProgressLogger` would have written directly to stderr under
-// `--concurrency 1` (already fully rendered text, empty under `--quiet`,
+// `--concurrency 1` (already fully rendered text, only a failed step's under `--quiet`,
 // since a step's own "N/total" numbering is local to its scenario and needs
 // no renumbering the way a scenario boundary line's own index does), and
 // any fixture-teardown warning that scenario's own execution produced

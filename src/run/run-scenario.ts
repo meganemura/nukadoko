@@ -52,7 +52,7 @@ import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
-import { redact, fixtureTeardownWarning } from "../secrets/redact.js";
+import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { writeSessionFile } from "../session/store.js";
 import type { StorageState } from "../session/storage-state.js";
@@ -398,7 +398,8 @@ export interface RunScenarioOptions {
    * invocation (src/run/progress-log.ts's `createStepProgressLogger`, built
    * once by cli/run.ts, same "build once, thread unchanged into every
    * runScenario call" shape `onUnknownTraceVersion` above already has).
-   * `undefined` under `--quiet` and under `nuka do` (which has no scenario,
+   * Built under `--quiet` too, where it writes only a failed step's lines.
+   * `undefined` under `nuka do` (which has no scenario,
    * hence no `runScenario` call at all, hence nothing to wire this into).
    * Called from exactly one place in this file, `pushStepRecord` below —
    * see that function's own header for why every step-record append site
@@ -1168,6 +1169,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       status: record.status === "passed" ? "passed" : record.status === "skipped" ? "skipped" : "failed",
       durationMs,
       text: record.text,
+      // The in-memory entry is not redacted yet (the scenario record is,
+      // when it is written), and this message goes straight to stderr.
+      errorMessage: record.error === undefined ? undefined : redactString(record.error.message, secrets),
+      stepRecordId: record.step_record_id,
     });
     onStepFinished?.({
       scenarioId,

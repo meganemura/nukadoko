@@ -21,6 +21,18 @@ just until 0.1.
   call order. The field is absent when no process ran, and the command is
   redacted like the rest of the record. It is an import, not a fixture, and
   a call outside a step records nothing.
+- **`nuka run` says on stderr why a step failed and how to rerun the scenario.**
+  A failed step's `FAIL` line is now followed by the first line of its
+  error message (terminal color codes removed) and the path of its step
+  record (`record  <stateDir>/records/steps/<id>`; a step that never began
+  has no step record and gets the error line only). After the summary, each
+  `failed` line is followed by `rerun  nuka run <feature>:<line>`, with
+  `--env <name>` when the run was given one. `--quiet` keeps a failed
+  step's lines and the rerun lines, and still drops every other progress
+  line; under `--concurrency` the worker's failed step lines reach the
+  parent's stderr under `--quiet` too. Before this, the error existed only
+  in the stdout NDJSON, so a CI log said `FAIL` and never why. stdout is
+  unchanged.
 - **A test checks the names the docs give for commands, flags, finding codes, and headings.**
   `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
   `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the

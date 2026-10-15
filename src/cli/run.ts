@@ -564,6 +564,8 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
 
     const runId = generateRunId();
     const git = await probeGitState(rootDir);
+    // A rerun line has to land in the same environment the failure came from.
+    const rerunFlags = env === null ? [] : ["--env", env];
 
     // Retention (src/record/retention.ts) runs last in both branches
     // below, after this run's own records and export files are complete,
@@ -601,10 +603,9 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     const onUnknownTraceVersion = createTraceVersionWarner(stderr);
 
     // Same "one instance, threaded unchanged into every `runScenario` call"
-    // shape as `onUnknownTraceVersion` just above
-    // — `undefined` under `--quiet` so `runScenario` never has to know that
-    // flag exists at all; it only ever sees "is there a callback to call".
-    const onStepEnd = quiet ? undefined : createStepProgressLogger(stderr);
+    // shape as `onUnknownTraceVersion` just above. Built under `--quiet` too:
+    // the logger itself drops every line but a failed step's.
+    const onStepEnd = createStepProgressLogger(stderr, { stateDir: config.stateDir, quiet });
 
     // Only `baseURL` is overridden from the resolved environment, same as
     // cli/do.ts: every other config field has no per-environment counterpart.
@@ -737,7 +738,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      writeFailedScenarios(stderr, failedScenarios);
+      writeFailedScenarios(stderr, failedScenarios, rerunFlags);
       writeRepeatTallies(stderr, repeatTallies);
       await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
 
@@ -1175,7 +1176,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      writeFailedScenarios(stderr, failedScenarios);
+      writeFailedScenarios(stderr, failedScenarios, rerunFlags);
       writeRepeatTallies(stderr, repeatTally.list());
       await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
 

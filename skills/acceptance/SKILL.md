@@ -121,8 +121,9 @@ proves the wrong thing.
    checked out. Debugging against a dirty tree is fine; it cannot be
    accepted.
 6. `nuka run <feature>` until green. `references/running.md`. When it
-   fails, diagnose from the failed step's own step record before
-   repeating the run: `references/diagnosing.md`. A compat World that
+   fails, stderr names the failed step's error, its step record path, and
+   a `rerun` command per failed scenario. Diagnose from that step record
+   before repeating the run: `references/diagnosing.md`. A compat World that
    throws while it is constructed fails that scenario only: stderr gets
    one setup line, later scenarios still run, and the messages export is
    finalized. There is no step record for that failure. `run` needs a

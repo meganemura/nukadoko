@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s own progress output — what src/step/context.ts
@@ -6,9 +7,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // here writes to stderr only; stdout's one-JSON-record-per-scenario contract
 // (src/cli/run.ts) is untouched by any of it. Display only: nothing written
 // here is read back by `nuka accept` or any other command, so its exact
-// wording is free to change without a compat concern. `--quiet` is not this
-// file's own concern — cli/run.ts decides which of these calls to make, this
-// file just formats and writes.
+// wording is free to change without a compat concern. `--quiet` is mostly not this
+// file's concern: cli/run.ts decides which of these calls to make. The one
+// exception is the step logger, which alone knows whether a step failed,
+// and a failed step's lines survive the flag.
 
 /** One pickle step's own outcome, reported once it stops running.
  * `stepIndex` is 1-based ("step 3/20", how a person reads a position, not a
@@ -22,6 +24,58 @@ export interface StepProgressInfo {
   readonly status: "passed" | "failed" | "skipped";
   readonly durationMs: number;
   readonly text: string;
+  /** The scenario record's `error.message` for this step, secrets already
+   * redacted, present whenever `status` is `"failed"`. */
+  readonly errorMessage?: string;
+  /** `null` for a step that never began, so it has no step record. */
+  readonly stepRecordId: string | null;
+}
+
+export interface StepProgressOptions {
+  /** Root-relative, as the config holds it: the record line names the step
+   * record by the path a reader can open from the project root. */
+  readonly stateDir: string;
+  /** Under `--quiet` only a failed step writes, and it writes the same lines
+   * it would without the flag. The flag asks for a quieter terminal, and a
+   * CI log that says FAIL but not why is the reason this output exists. */
+  readonly quiet: boolean;
+}
+
+// Playwright's assertion messages carry color codes; a CI log or a file
+// shows them as literal escape noise.
+const ANSI_ESCAPE = /\u001b\[[0-9;]*[A-Za-z]/g;
+
+/** The first line of an error message that has any text in it, without
+ * color codes and trailing space: enough to say why a step failed in one
+ * line, while the step record keeps the whole message. A message with no
+ * visible text reads `(no message)` so the line is never blank. */
+export function firstErrorLine(message: string): string {
+  for (const line of message.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/)) {
+    const trimmed = line.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return "(no message)";
+}
+
+export interface StepFailure {
+  readonly errorMessage: string | undefined;
+  /** Root-relative path of the step record, or `null` when none was written. */
+  readonly recordPath: string | null;
+}
+
+/** The lines that say why one step failed, unindented: the error's first
+ * line, then where its step record is. Kept apart from the stderr writer so
+ * a run summary in another format can say the same thing the same way. */
+export function formatStepFailure(failure: StepFailure): string[] {
+  const lines = [firstErrorLine(failure.errorMessage ?? "")];
+  if (failure.recordPath !== null) lines.push(`record  ${failure.recordPath}`);
+  return lines;
+}
+
+/** `<stateDir>/records/steps/<id>`, the directory every step record is
+ * written to (src/record/read-step-record.ts). */
+export function stepRecordPath(stateDir: string, stepRecordId: string): string {
+  return path.join(stateDir, "records", "steps", stepRecordId);
 }
 
 function formatStepDuration(durationMs: number): string {
@@ -53,12 +107,23 @@ function formatStepStatusWord(status: StepProgressInfo["status"]): string {
  * line's whole point is to keep appearing for as long as the scenario runs.
  * One line, never wrapped (a long step name runs off the right edge rather
  * than break the one-step-one-line guarantee). */
-export function createStepProgressLogger(stderr: WritableSink): (info: StepProgressInfo) => void {
+export function createStepProgressLogger(
+  stderr: WritableSink,
+  options: StepProgressOptions,
+): (info: StepProgressInfo) => void {
   return (info: StepProgressInfo): void => {
-    stderr.write(
+    if (options.quiet && info.status !== "failed") return;
+    let text =
       `  step ${info.stepIndex}/${info.totalSteps}  ${formatStepStatusWord(info.status)}  ` +
-        `${formatStepDuration(info.durationMs)}  ${info.text}\n`,
-    );
+      `${formatStepDuration(info.durationMs)}  ${info.text}\n`;
+    if (info.status === "failed") {
+      const failure = formatStepFailure({
+        errorMessage: info.errorMessage,
+        recordPath: info.stepRecordId === null ? null : stepRecordPath(options.stateDir, info.stepRecordId),
+      });
+      text += failure.map((line) => `      ${line}\n`).join("");
+    }
+    stderr.write(text);
   };
 }
 
@@ -231,8 +296,29 @@ export function writeRepeatTallies(stderr: WritableSink, tallies: readonly Repea
 /** Names only the scenario records counted as failures by the summary.
  * The caller retains these three display values instead of retaining every
  * record from the run. */
-export function writeFailedScenarios(stderr: WritableSink, failures: readonly FailedScenario[]): void {
+export function writeFailedScenarios(
+  stderr: WritableSink,
+  failures: readonly FailedScenario[],
+  rerunFlags: readonly string[],
+): void {
   for (const failure of failures) {
     stderr.write(`failed  ${failure.feature}:${failure.line}  ${failure.scenario}\n`);
+    stderr.write(`  rerun  ${formatRerunCommand(failure, rerunFlags)}\n`);
   }
+}
+
+// Characters a POSIX shell reads as one plain word; anything else is single
+// quoted, so a feature path with a space still pastes as one argument.
+const SHELL_SAFE = /^[A-Za-z0-9_./:=+,-]+$/;
+
+function shellWord(word: string): string {
+  return SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;
+}
+
+/** The command that runs one failed scenario again, in the same environment.
+ * `rerunFlags` carries only flags that change which world the scenario ran
+ * against (`--env`): a flag that only shapes output stays out, so the line
+ * stays short enough to copy. */
+export function formatRerunCommand(failure: Pick<FailedScenario, "feature" | "line">, rerunFlags: readonly string[]): string {
+  return ["nuka", "run", `${failure.feature}:${failure.line}`, ...rerunFlags].map(shellWord).join(" ");
 }

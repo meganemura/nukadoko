@@ -282,12 +282,15 @@ async function main(): Promise<void> {
           name: pickle.name,
         });
         const stepLines: string[] = [];
-        const onStepEnd = quiet ? undefined : createStepProgressLogger({
-          write(chunk: string): boolean {
-            stepLines.push(chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk);
-            return true;
+        const onStepEnd = createStepProgressLogger(
+          {
+            write(chunk: string): boolean {
+              stepLines.push(...(chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk).split("\n"));
+              return true;
+            },
           },
-        });
+          { stateDir: config.stateDir, quiet },
+        );
 
         allureEmitter?.beginScenario({
           pickle,

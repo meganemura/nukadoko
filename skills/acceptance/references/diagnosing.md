@@ -2,6 +2,13 @@
 
 ## Work through the failed step first
 
+`nuka run`'s stderr already names where to start: under the failed step's
+`FAIL` line, the first line of its error and the path of its step record
+(`record  <stateDir>/records/steps/<id>`), and after the summary, a `rerun`
+line per failed scenario with the command that runs that scenario alone.
+`--quiet` keeps all of these. Open that path's `record.json` rather than
+searching the records directory.
+
 Before repeating `nuka run <feature>`, read the failed step's own step
 record in this order. The sections below are how to read the items that
 need more than a glance.
@@ -19,8 +26,9 @@ need more than a glance.
 4. `nuka do <step> --use <upstream-step-record-id>` when the record
    sharpens a hypothesis rather than confirming it ("Testing a hypothesis
    without a full re-run").
-5. Re-run the whole feature last, once the step itself passes under `do`,
-   not as the first thing tried after a failure.
+5. Re-run the scenario last, with the `rerun` line `nuka run` printed,
+   once the step itself passes under `do`, not as the first thing tried
+   after a failure.
 
 ## Reading a step record as a timeline
 

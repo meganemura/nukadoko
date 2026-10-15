@@ -651,6 +651,19 @@ trail behind.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only); stdout stays NDJSON either way.
+A failed step prints the first line of its error and the path of its step
+record under its progress line, so a CI log says why it failed. After the
+summary, each failed scenario gets a `rerun` line with the command that runs
+it again. `--quiet` keeps all of these.
+
+```text
+  step 2/2  FAIL  0.0s  the sum is 5
+      expected 5, got 4
+      record  .nukadoko/records/steps/<id>
+...
+failed  features/sum.feature:3  two and two
+  rerun  nuka run features/sum.feature:3
+```
 
 **A retry that replaces the record is out of scope permanently, not "not
 yet".** A green scenario is no evidence that its waits are placed

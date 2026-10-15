@@ -152,6 +152,77 @@ describe("nuka run: progress output", () => {
     );
   });
 
+  // Durations and step record ids differ on every run; everything else on
+  // stderr is fixed, so the rest is compared literally.
+  function normalizeRun(stderrText: string): string {
+    return stderrText
+      .replace(/\d+\.\d+s/g, "<d>s")
+      .replace(/\(\d+(h|m|s)[^)]*\)/g, "(<duration>)")
+      .replaceAll(path.sep, "/")
+      .replace(/records\/steps\/[a-z0-9-]+/g, "records/steps/<id>")
+      .replace(/messages\.run-[a-z0-9-]+\.ndjson/g, "messages.<run>.ndjson");
+  }
+
+  it("names a failed step's error and step record, and how to rerun the scenario", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/failing.feature"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(normalizeRun(stderr.text())).toBe(
+      [
+        "scenario 1/1  features/failing.feature:3  an operation fails partway through",
+        "  step 1/3  ok  <d>s  a thing \"widget\" exists",
+        "  step 2/3  FAIL  <d>s  the operation fails",
+        "      operation failed on purpose",
+        "      record  .nukadoko/records/steps/<id>",
+        "  step 3/3  skip  <d>s  this step never runs",
+        "steps     .nukadoko/records/steps/      2",
+        "scenarios .nukadoko/records/scenarios/  1",
+        "allure    .nukadoko/export/allure-results/",
+        "messages  .nukadoko/export/messages.<run>.ndjson",
+        "1 scenario: 0 passed, 1 failed  (<duration>)",
+        "failed  features/failing.feature:3  an operation fails partway through",
+        "  rerun  nuka run features/failing.feature:3",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("--quiet still writes a failed step's lines, and only those", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/failing.feature", "--quiet"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    const lines = nonEmptyLines(normalizeRun(stderr.text()));
+    expect(lines.slice(0, 3)).toEqual([
+      "  step 2/3  FAIL  <d>s  the operation fails",
+      "      operation failed on purpose",
+      "      record  .nukadoko/records/steps/<id>",
+    ]);
+    expect(stepLines(stderr.text())).toHaveLength(1);
+  });
+
+  it("the rerun line carries --env, so the scenario reruns where it failed", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({ environments: { staging: {} } });\n',
+    );
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/failing.feature", "--env", "staging", "--quiet"], {
+      rootDir,
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    const lines = nonEmptyLines(stderr.text());
+    const failedIndex = lines.findIndex((line) => line.startsWith("failed  "));
+    expect(lines[failedIndex + 1]).toBe("  rerun  nuka run features/failing.feature:3 --env staging");
+  });
+
   it("writes no failed scenario line when every scenario passes", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

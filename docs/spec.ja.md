@@ -1777,7 +1777,15 @@ worker の stdout は、親プロセスが読む envelope の列です。
 run を見守る人向けの出力は stderr に置きます: 各 pickle の前の境界、各 step の後の 1 行、run が書いたパス、1 行のサマリです。
 `--quiet` は step ごとと scenario ごとの進捗行を抑止します。
 このフラグは端末を静かにしますが、無音にはしないため、パスとサマリは表示されます。
+失敗した step の行の後には、字下げした 2 行が続きます。
+1 行目はエラーメッセージの最初の行で、端末の色コードを除いたものです。
+2 行目はその step record のパス(`<stateDir>/records/steps/<id>`)です。
+始まらなかった step には step record がないため、エラーの行だけが付きます。
+`--quiet` は、失敗した step の行とこの 2 行を残し、それ以外の step の行を落とします。
 サマリ行の後では、失敗した各 scenario を feature のパス、行、名前とともに stderr に表示します。
+その各行に `rerun` 行が続きます。
+`rerun` 行は `nuka run <feature>:<line>` で、run に `--env <name>` が与えられていればそれも付きます。
+単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
 
 書き込み先の行は、何も設定していないときにこそ効きます。
@@ -3393,12 +3401,15 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               nothing. stderr
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
-                              line. Each failed scenario follows with its
-                              feature, line, and name. Then one retention
+                              line. A failed step's line is followed by its
+                              error's first line and its step record path.
+                              Each failed scenario follows the summary with
+                              its feature, line, and name, then a rerun
+                              line (nuka run <feature>:<line>). Then one retention
                               line, when a run older than the newest
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
-                              progress lines only.
+                              progress lines only, except a failed step's.
                               stdout stays NDJSON, one record per scenario,
                               always. Text a step writes to the process stdout
                               is delivered on stderr.

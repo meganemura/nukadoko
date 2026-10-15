@@ -257,9 +257,11 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         line: record.line,
         name: record.scenario,
       });
-      for (const line of stepLines) {
-        stderr.write(`${line}\n`);
-      }
+    }
+    // The worker's own logger already dropped every line `--quiet` hides,
+    // so what is left here is a failed step's lines, which always print.
+    for (const line of stepLines) {
+      stderr.write(`${line}\n`);
     }
     for (const note of notes) {
       stderr.write(`${note}\n`);

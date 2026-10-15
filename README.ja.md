@@ -596,6 +596,19 @@ access to a document you need, say so rather than assuming.
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
 stdout はどちらの場合も NDJSON のままです。
+失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
+そのため、CI のログだけで失敗の理由が分かります。
+サマリの後では、失敗した各 scenario に、それを再実行するコマンドを載せた `rerun` 行が付きます。
+`--quiet` でも、これらの行はすべて残ります。
+
+```text
+  step 2/2  FAIL  0.0s  the sum is 5
+      expected 5, got 4
+      record  .nukadoko/records/steps/<id>
+...
+failed  features/sum.feature:3  two and two
+  rerun  nuka run features/sum.feature:3
+```
 
 **記録を置き換える retry は恒久的にスコープ外であり、「いまはまだ」ではありません。**
 green な scenario は、その待ちが正しい場所に置かれている証拠には一切なりません。

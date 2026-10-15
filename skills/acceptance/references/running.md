@@ -58,7 +58,9 @@ nothing.
 2. `nuka run <feature>`, repeat until every scenario is green. stderr
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary
-   line; `--quiet` drops the progress lines when the terminal gets noisy.
+   line. A failed step adds its error's first line and its step record
+   path, and each failed scenario gets a `rerun` line after the summary;
+   `--quiet` drops the other progress lines when the terminal gets noisy.
    stdout stays NDJSON, one scenario record per line, unaffected either
    way. Text a step writes to the process stdout is delivered on stderr,
    so a `console.log` in a step does not break that stream. A compat World
