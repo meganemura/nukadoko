@@ -379,10 +379,8 @@ each one before you rely on the run.
 - `table.raw()` returns a copy. In cucumber-js, a change to a row of the
   returned array also changes what `table.hashes()` returns later.
 
-Two more differences fail, but where cucumber-js passes:
+One more difference fails, where cucumber-js passes:
 
 - `preferForRegexpMatch` on `defineParameterType` is ignored. A RegExp
   group that two parameter types match fails the step with "matches
   multiple parameter types". cucumber-js uses the preferred type.
-- A `{biginteger}` capture stops `nuka run` after the step runs, with "Do
-  not know how to serialize a BigInt". The scenarios after it do not run.

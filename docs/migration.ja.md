@@ -283,10 +283,8 @@ run の結果に頼る前に、それぞれを glue の中で探してくださ�
 - `table.raw()` はコピーを返します。
   cucumber-js では、返った配列の行を変えると、あとで `table.hashes()` が返すものも変わります。
 
-あと 2 つの違いは失敗しますが、cucumber-js では pass するところで失敗します:
+あと 1 つの違いは失敗しますが、cucumber-js では pass するところで失敗します:
 
 - `defineParameterType` の `preferForRegexpMatch` は無視されます。
   2 つの parameter type が一致する RegExp のグループは、「matches multiple parameter types」で step を失敗させます。
   cucumber-js は優先された型を使います。
-- `{biginteger}` のキャプチャは、step が走ったあと「Do not know how to serialize a BigInt」で `nuka run` を止めます。
-  それより後の scenario は走りません。

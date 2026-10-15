@@ -2353,6 +2353,13 @@ array identifies each step record by id, so either record leads to the other.
   given, since a value the schema already rejected cannot be reconstructed
   into the validated shape. A compat step's `args` is never validated
   either way, having no schema to validate against.
+- A bigint is stored as its decimal string, in `args`, in `result`, and
+  anywhere else in a record, because JSON has no bigint. A `{biginteger}`
+  capture bound to `z.bigint()` records `"v": "123456789012345678901234567890"`.
+  Inside one `nuka run` scenario, a `from` chain still hands the next step
+  the bigint itself. `nuka do --use` reads the stored record, so the key
+  arrives as the string, and only a schema that takes both forms
+  (`z.coerce.bigint()`) accepts it.
 - `scenario_record_id` and `run_id` identify what this execution belongs to:
   the owning scenario record's id and the `nuka run` invocation's own id
   for a `run`-originated step (`kind: "run"`), both `null` for a

@@ -42,6 +42,19 @@ just until 0.1.
 
 ### Fixed
 
+- **A `{biginteger}` capture no longer aborts `nuka run`.** A typed step
+  that bound a `{biginteger}` capture to `z.bigint()`, or a compat step with
+  a `{biginteger}` capture, stopped the whole run with
+  "Do not know how to serialize a BigInt", because JSON has no bigint and
+  the step record was never written. A record now stores a bigint as its
+  decimal string, in `args`, in `result`, and anywhere else, for `nuka run`,
+  `nuka do`, a live session, and the Allure and messages emitters. `nuka
+  harvest` compares a read-back line in that same form, so a
+  `{biginteger}` line reads back instead of being named as a mismatch.
+  `nuka do --use` hands the stored string to the next step, so a key that
+  `z.bigint()` declares needs `z.coerce.bigint()` there. `docs/migration.md`
+  no longer lists this as a compat difference.
+
 - **`nuka tend` reads a `from`-filled arg's description from its producer.**
   An args field that `from` fills was reported as undescribed unless the
   consumer repeated the producer's `.describe()`. A six-step CLI scenario
