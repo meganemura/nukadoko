@@ -44,6 +44,12 @@ just until 0.1.
   vocabulary. `explore-browser-step` reports a step that needs `page` or
   `context`. A request-only step is allowed. Check does not run the steps.
   `examples/todo/features/explore/` is the request-only case.
+  `explore-empty-model` reports a model with no commands, whose every run
+  passes. `explore-unseeded-random` reports a direct `Math.random` or
+  `crypto.random*` call in a command's `args`, `pre`, or `next`, or in a
+  relation's drawn source, since the seed cannot replay or shrink that
+  value. Check reads the source text and stays silent for a call it cannot
+  see directly.
 - **`nuka steps` and `nuka describe` show a step's declared `timeout`.**
   A step's own `defineStep({ timeout })` deadline was visible only in its
   source, so a reader could not tell which steps run under `stepTimeout`.

@@ -2,6 +2,7 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 import { isModel, type Model, type Relation, type RelationStep } from "../step/define-explore.js";
 import { isStep, type Step } from "../step/define-step.js";
 import type { CheckIssue } from "./types.js";
+import { unseededRandomCalls } from "./unseeded-random.js";
 
 // Responsibility: the static half of a model or a relation. A command key
 // or a sequence entry either names a step discovery registered, or it does
@@ -9,7 +10,8 @@ import type { CheckIssue } from "./types.js";
 // through a fixture that reaches one), or it does not. Both are facts
 // about the declaration. This file does not call `initial`, `args`, `pre`,
 // `next`, `post`, `follow`, or `relate`, and it does not call `step.run`.
-// Calling any of those would turn a check into a run.
+// Calling any of those would turn a check into a run. The one thing it
+// reads from a callback is its source text, for a direct random call.
 
 export interface ExploreModelFile {
   readonly filePath: string;
@@ -62,7 +64,18 @@ export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[]
       continue;
     }
     // A source drawn by a function has no steps until a run calls it.
-    if (!Array.isArray(source)) continue;
+    if (!Array.isArray(source)) {
+      if (typeof source === "function") {
+        for (const call of unseededRandomCalls(String(source))) {
+          issues.push({
+            code: "explore-unseeded-random",
+            message: `relation "${file.relation.name}" source ${unseeded(call)}`,
+            file: file.filePath,
+          });
+        }
+      }
+      continue;
+    }
     (source as readonly RelationStep[]).forEach((entry, index) => {
       const where = `relation "${file.relation.name}" source[${index}]`;
       if (!isStep(entry.step)) {
@@ -93,8 +106,28 @@ export function checkExploreDeclarations(input: CheckExploreInput): CheckIssue[]
 
 function checkModelCommands(input: CheckExploreInput, filePath: string, model: Model, prefix: string): CheckIssue[] {
   const issues: CheckIssue[] = [];
-  for (const [name, command] of Object.entries(model.commands)) {
+  const commands = Object.entries(model.commands);
+  if (commands.length === 0) {
+    issues.push({
+      code: "explore-empty-model",
+      message: `${prefix === "" ? "the model" : prefix.trimEnd()} has no commands, so every sequence it builds is empty and passes`,
+      file: filePath,
+    });
+  }
+  for (const [name, command] of commands) {
     const where = `${prefix}command "${name}"`;
+    for (const part of ["args", "pre", "next"] as const) {
+      const callback: unknown = command[part];
+      if (typeof callback !== "function") continue;
+      for (const call of unseededRandomCalls(String(callback))) {
+        issues.push({
+          code: "explore-unseeded-random",
+          message: `${where} ${part} ${unseeded(call)}`,
+          file: filePath,
+          step: name,
+        });
+      }
+    }
     if (!isStep(command.step)) {
       issues.push(unknown(filePath, name, where));
       continue;
@@ -118,6 +151,10 @@ function checkModelCommands(input: CheckExploreInput, filePath: string, model: M
     }
   }
   return issues;
+}
+
+function unseeded(call: string): string {
+  return `calls ${call}, which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick`;
 }
 
 function unknown(filePath: string, stepName: string, where: string): CheckIssue {

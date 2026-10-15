@@ -3970,13 +3970,26 @@ registered. It reports `explore-browser-step` when that step needs `page` or
 `context`, including through a fixture that reaches one. A step that needs
 only `request` is allowed.
 
+Two more findings read the declaration and end only one way.
+`explore-empty-model` reports a model, or a relation's model source, with
+no commands: every sequence it builds is empty, so every run passes and
+says nothing. `explore-unseeded-random` reports a direct call to
+`Math.random` or to a `crypto.random*` function in a command's `args`,
+`pre`, or `next`, or in a relation's drawn source. The seed does not drive
+that value, so a run cannot be replayed from its seed and a shrink edit
+does not mean what it meant. Check reads the function's source text for
+this and does not call the function. A call in a string, a comment, a
+regular expression, or a template's text is not a call. A call reached
+through an import, a helper, or an alias, and a call on a name the function
+binds itself, are out of reach, and check says nothing about them, because
+a check that guesses is worse than none.
+
 ### Exploring a model or a relation
 
 `nuka explore <file>` runs one model or one relation. The file is one that
 discovery found under `featuresDir`. Before any step runs, the command makes
-the refusals `nuka check` and `nuka do` make for those steps: an
-`explore-unknown-step` or `explore-browser-step` finding, a fixture problem,
-and an unknown `--env`. Nothing runs when one of them applies.
+the refusals `nuka check` and `nuka do` make for those steps: any of the
+four `explore-*` findings above, a fixture problem, and an unknown `--env`. Nothing runs when one of them applies.
 
 A model run builds each sequence from the model alone. From the state, it
 takes the commands whose `pre` holds, picks one, calls `args(state, draw)`,

@@ -3385,12 +3385,22 @@ discovery は、どちらかの宣言の default export を step ではなくそ
 その step が `page` または `context` を必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
 `request` だけを必要とする step は許されます。
 
+宣言を読んで、結果が 1 通りにしかならない所見がさらに 2 つあります。
+`explore-empty-model` は、command を 1 つも持たないモデル、または関係のモデルの source を報告します。
+それが組み立てる列はすべて空なので、どの実行も合格し、何も分かりません。
+`explore-unseeded-random` は、command の `args`、`pre`、`next`、または関係の draw する source の中で、`Math.random` や `crypto.random*` の関数を直接呼ぶことを報告します。
+その値は seed が決めないので、実行を seed から再現できず、縮小の編集もそれまでと同じ意味を持ちません。
+check はこのために関数のソーステキストを読み、関数を呼びません。
+文字列、コメント、正規表現、テンプレートの文字部分にある呼び出しは、呼び出しではありません。
+import、ヘルパー、別名を経由する呼び出しと、関数が自分で束縛した名前に対する呼び出しは、届かない範囲にあり、check はそれについて何も言いません。
+推測する check は、check がないより悪いからです。
+
 ### モデルまたは関係を探索する
 
 `nuka explore <file>` は、1 つのモデルまたは 1 つの関係を実行します。
 ファイルは、discovery が `featuresDir` の下で見つけたものです。
 step を 1 つも実行する前に、このコマンドはそれらの step について `nuka check` と `nuka do` が行う拒否を行います。
-対象は、`explore-unknown-step` または `explore-browser-step` の所見、fixture の問題、未知の `--env` です。
+対象は、上の 4 つの `explore-*` の所見のどれか、fixture の問題、未知の `--env` です。
 どれかに当てはまると、何も実行しません。
 
 モデルの実行は、各列をモデルだけから組み立てます。

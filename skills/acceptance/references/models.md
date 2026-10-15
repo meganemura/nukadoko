@@ -42,7 +42,10 @@ export default defineModel(() => ({ open: [] as string[] })).commands({
 - `args` gets the state and a `draw`. Use `draw.int(min, max)` and
   `draw.pick(items)` for every value that varies, and nothing else: no
   `Math.random`, no clock. A value the draw did not make cannot be
-  replayed from the seed or shrunk.
+  replayed from the seed or shrunk. `nuka check` reports
+  `explore-unseeded-random` for a direct `Math.random` or `crypto.random*`
+  call in `args`, `pre`, or `next`, and `explore-empty-model` for a model
+  with no commands.
 - `pre` says when a command makes sense. A command whose `args` needs
   something from the state needs a `pre` that guarantees it.
 - `next` moves the state from the args alone. It never sees the result.
@@ -99,8 +102,9 @@ when it runs.
 
 ## Running it
 
-1. `nuka check`. Fix every `explore-unknown-step` and
-   `explore-browser-step` finding first.
+1. `nuka check`. Fix every `explore-unknown-step`,
+   `explore-browser-step`, `explore-empty-model`, and
+   `explore-unseeded-random` finding first.
 2. `nuka explore <file>`. For a model, or a relation with a generated
    source, `--runs` and `--length` set how much it tries. The seed is
    printed either way.

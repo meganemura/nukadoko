@@ -168,4 +168,44 @@ describe("checkExploreDeclarations", () => {
     ]);
     expect(drawn).toBe(0);
   });
+
+  it("reports an empty model source and a random call in a drawn source", () => {
+    const known = stepNamed("known");
+    const vocabulary = new Map<string, VocabularyEntry>([
+      ["known", { kind: "typed", name: "known", filePath: "features/steps/known.ts", step: known }],
+    ]);
+    const issues = checkExploreDeclarations({
+      vocabulary,
+      models: [],
+      relations: [
+        {
+          filePath: "empty-source.ts",
+          relation: defineRelation({ name: "e", source: defineModel(() => ({})).commands({}), follow: () => [], relate: () => true }),
+        },
+        {
+          filePath: "drawn-source.ts",
+          relation: defineRelation({
+            name: "d",
+            source: () => [relationEntry(known, {})].slice(0, Math.random() > 2 ? 0 : 1),
+            follow: () => [],
+            relate: () => true,
+          }),
+        },
+      ],
+      needsBrowser: () => false,
+    });
+    expect(issues).toEqual([
+      {
+        code: "explore-empty-model",
+        message: 'relation "e" source has no commands, so every sequence it builds is empty and passes',
+        file: "empty-source.ts",
+      },
+      {
+        code: "explore-unseeded-random",
+        message:
+          'relation "d" source calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
+        file: "drawn-source.ts",
+      },
+    ]);
+  });
 });
