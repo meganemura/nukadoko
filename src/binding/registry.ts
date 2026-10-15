@@ -53,9 +53,30 @@ export function createParameterTypeRegistry(
     // consulted for snippet generation (cucumber-expressions' own
     // CucumberExpressionGenerator), which this project doesn't use.
     // `preferForRegexpMatch` decides a RegExp group that several types match.
-    registry.defineParameterType(
-      new ParameterType(entry.name, entry.regexp, null, entry.transformer, undefined, entry.preferForRegexpMatch),
+    const parameterType = new ParameterType(
+      entry.name,
+      entry.regexp,
+      null,
+      entry.transformer,
+      undefined,
+      entry.preferForRegexpMatch,
     );
+    // cucumber-expressions refuses a second preferential type for one regexp
+    // with its own CucumberExpressionError, which names no registration.
+    if (parameterType.preferForRegexpMatch === true) {
+      for (const existing of registry.parameterTypes) {
+        const regexp = existing.preferForRegexpMatch
+          ? parameterType.regexpStrings.find((source) => existing.regexpStrings.includes(source))
+          : undefined;
+        if (regexp !== undefined) {
+          throw new ParameterTypeCollisionError(entry.name, "preferential", {
+            regexp,
+            preferredBy: existing.name ?? "",
+          });
+        }
+      }
+    }
+    registry.defineParameterType(parameterType);
   }
 
   return registry;

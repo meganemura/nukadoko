@@ -38,6 +38,9 @@ just until 0.1.
   that two types matched failed the step with "matches multiple parameter
   types". cucumber-js 13.2.0 converts it with the preferred type, and
   `nuka run` now does too. `config.parameterTypes` does not take the key.
+  Two types that prefer one regexp, or a type that prefers a built-in
+  type's regexp such as `{int}`'s, are a `parameter-type-invalid` error in
+  `nuka check` that names the file, and a setup failure in `nuka run`.
 - **A RegExp step's transformed group gets the World and the awaited value.**
   In a compat RegExp pattern, a group converted by a `defineParameterType`
   transformer ran that transformer with `this` set to `null`, and an async
