@@ -101,6 +101,24 @@ describe("exploreModel", () => {
     expect(result.found.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("stops shrinking after maxShrinkAttempts sequences", async () => {
+    const unlimited = await exploreModel({ model: setModel, seed: 7, runs: 50, length: 10, open: listSystem().open });
+    expect(unlimited.status === "failed" && unlimited.shrinkAttempts > 3).toBe(true);
+
+    const system = listSystem();
+    const result = await exploreModel({
+      model: setModel,
+      seed: 7,
+      runs: 50,
+      length: 10,
+      open: system.open,
+      maxShrinkAttempts: 3,
+    });
+    expect(result.status === "failed" ? result.shrinkAttempts : undefined).toBe(3);
+    const runsBeforeFailure = result.status === "failed" ? result.run : 0;
+    expect(system.opened()).toBe(runsBeforeFailure + 3);
+  });
+
   it("passes when the system keeps a set, and counts every step it ran", async () => {
     const result = await exploreModel({
       model: setModel,
