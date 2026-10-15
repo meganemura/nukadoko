@@ -7,8 +7,8 @@
 // src/extension.ts's activate() and its diagnostics command actually touch:
 // registering providers/commands/watchers, one diagnostic collection, two
 // user-facing messages, and the handful of value classes those calls
-// construct (Uri, Position, Range, Location, CompletionItem, Diagnostic,
-// DiagnosticSeverity). Not a general vscode mock -- a new API surface
+// construct (Uri, Position, Range, Location, CompletionItem, SnippetString,
+// Diagnostic, DiagnosticSeverity). Not a general vscode mock -- a new API surface
 // src/extension.ts starts using belongs here too, on purpose, so this
 // file's own shape stays proof that "what the e2e tests exercise" and
 // "what activate() actually calls" never quietly drift apart.
@@ -119,8 +119,13 @@ export function createVscodeStub(): VscodeStub {
     ) {}
   }
 
+  class SnippetString {
+    constructor(public readonly value: string) {}
+  }
+
   class CompletionItem {
     detail: string | undefined;
+    insertText: string | SnippetString | undefined;
     constructor(public readonly label: string) {}
   }
 
@@ -202,6 +207,7 @@ export function createVscodeStub(): VscodeStub {
     Range,
     Location,
     CompletionItem,
+    SnippetString,
     Diagnostic,
     DiagnosticSeverity,
   };
