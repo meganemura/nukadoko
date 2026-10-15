@@ -18,6 +18,15 @@ export const RELATION_BRAND: unique symbol = Symbol.for("nukadoko.relation");
 type ArgsOf<S extends Step> = z.infer<S["args"]>;
 type ResultOf<S extends Step> = z.infer<S["returns"]>;
 
+/** The one source of variation a model's `args` gets. Each call is one
+ * recorded choice, so `nuka explore` can replay and shrink a sequence. A
+ * lower choice is a smaller `int` or an earlier item of `pick`. */
+export interface Draw {
+  /** A whole number from `min` to `max`, both included. */
+  int(min: number, max: number): number;
+  pick<T>(items: readonly T[]): T;
+}
+
 /** One command in a model. `step` carries the args and result types. The
  * record key is the step's basename, the name discovery gives the file.
  * `post` sees the validated result. `next` sees the model and the args
@@ -25,7 +34,7 @@ type ResultOf<S extends Step> = z.infer<S["returns"]>;
  * declare. */
 export interface ModelCommand<TState, S extends Step> {
   readonly step: S;
-  args: (state: TState) => ArgsOf<S>;
+  args: (state: TState, draw: Draw) => ArgsOf<S>;
   pre: (state: TState) => boolean;
   next: (state: TState, args: ArgsOf<S>) => TState;
   post: (state: TState, args: ArgsOf<S>, result: ResultOf<S>) => boolean;
@@ -39,7 +48,7 @@ export interface Model {
       string,
       {
         readonly step: Step;
-        args: (state: unknown) => unknown;
+        args: (state: unknown, draw: Draw) => unknown;
         pre: (state: unknown) => boolean;
         next: (state: unknown, args: unknown) => unknown;
         post: (state: unknown, args: unknown, result: unknown) => boolean;
@@ -57,7 +66,7 @@ export interface Model {
  */
 export function modelCommand<S extends Step>(step: S) {
   return <TState>(body: {
-    args: (state: TState) => ArgsOf<S>;
+    args: (state: TState, draw: Draw) => ArgsOf<S>;
     pre: (state: TState) => boolean;
     next: (state: TState, args: ArgsOf<S>) => TState;
     post: (state: TState, args: ArgsOf<S>, result: ResultOf<S>) => boolean;
