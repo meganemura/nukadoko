@@ -192,6 +192,8 @@ World のサブクラスは、その page と request を `this.page = ...` と 
 - **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
   transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
   string の pattern でも RegExp の pattern でも同じです。
+  `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
+  `config.parameterTypes` にはこのキーがないため、これを設定する登録は support コードに残ります。
 
 ## Stage 2: step を昇格させる
 
@@ -279,10 +281,7 @@ run の結果に頼る前に、それぞれを glue の中で探してくださ�
 - `table.raw()` はコピーを返します。
   cucumber-js では、返った配列の行を変えると、あとで `table.hashes()` が返すものも変わります。
 
-あと 2 つの違いは失敗しますが、cucumber-js では pass するところで失敗します:
+あと 1 つの違いは失敗しますが、cucumber-js では pass するところで失敗します:
 
-- `defineParameterType` の `preferForRegexpMatch` は無視されます。
-  2 つの parameter type が一致する RegExp のグループは、「matches multiple parameter types」で step を失敗させます。
-  cucumber-js は優先された型を使います。
 - `{biginteger}` のキャプチャは、step が走ったあと「Do not know how to serialize a BigInt」で `nuka run` を止めます。
   それより後の scenario は走りません。

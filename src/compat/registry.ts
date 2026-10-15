@@ -83,7 +83,8 @@ export interface CompatStepOptions {
   readonly timeout?: number;
 }
 
-/** Same shape a `config.parameterTypes` entry takes. `regexp`/`transformer`
+/** The shape a `config.parameterTypes` entry takes, plus cucumber-js's
+ * `preferForRegexpMatch`. `regexp`/`transformer`
  * are handed to `@cucumber/cucumber-expressions`' own `ParameterType` almost
  * verbatim, same as the config-origin path (src/binding/registry.ts). This
  * registration only stores the transformer. When a step is matched,
@@ -94,6 +95,9 @@ export interface CompatParameterTypeOptions {
   readonly name: string;
   readonly regexp: RegExp | string;
   readonly transformer?: (...match: string[]) => unknown;
+  /** cucumber-js's own option: this type converts a RegExp group that
+   * several registered types match, instead of the step failing. */
+  readonly preferForRegexpMatch?: boolean;
 }
 
 export interface CompatParameterTypeRegistration extends CompatParameterTypeOptions {

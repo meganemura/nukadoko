@@ -1490,7 +1490,10 @@ import { Given, When, Then } from "nukadoko/compat";
   final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
   transformer returns is awaited before the step runs. This holds for a
-  string pattern and a RegExp pattern alike.
+  string pattern and a RegExp pattern alike. `preferForRegexpMatch` on a
+  compat registration picks the type for a RegExp group that several types
+  match, as in cucumber-js. `config.parameterTypes` has no such key, so a
+  registration that sets it stays in compat code.
 - Execution supports two forms. Glue that starts its own Playwright
   continues to work without measurement. A World subclass assigns that
   page and request with `this.page = ...` and `this.request = ...`, and

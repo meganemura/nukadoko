@@ -246,7 +246,9 @@ Two independent, incremental moves, safe to take alone, in either order:
   registration changes nothing about what any pattern matches. A
   transformer's `this` is the scenario's World, and a Promise it returns
   is awaited before the step, for a string pattern and a RegExp pattern
-  alike.
+  alike. `preferForRegexpMatch` picks the type for a RegExp group that
+  several types match, as in cucumber-js. `config.parameterTypes` has no
+  such key, so a registration that sets it stays in support code.
 
 ## Stage 2: promote steps
 
@@ -374,10 +376,7 @@ each one before you rely on the run.
 - `table.raw()` returns a copy. In cucumber-js, a change to a row of the
   returned array also changes what `table.hashes()` returns later.
 
-Two more differences fail, but where cucumber-js passes:
+One more difference fails, but where cucumber-js passes:
 
-- `preferForRegexpMatch` on `defineParameterType` is ignored. A RegExp
-  group that two parameter types match fails the step with "matches
-  multiple parameter types". cucumber-js uses the preferred type.
 - A `{biginteger}` capture stops `nuka run` after the step runs, with "Do
   not know how to serialize a BigInt". The scenarios after it do not run.
