@@ -669,7 +669,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
     // every one of that step's own `from` keys.
     // --args is JSON, which has no bigint or Date, so a value this step's
     // args declare as one arrives as its stored string.
-    parsedArgs = reviveStoredForm(entry.step.args, parsedArgs);
+    parsedArgs = reviveStoredForm(entry.step.args, parsedArgs, "input");
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const resolved of resolvedUses) {
