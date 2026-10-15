@@ -16,13 +16,13 @@ describe("buildCompletionCandidates", () => {
       typedPattern("a {x:int} widgets", "steps/widgets.ts"),
     ]);
 
-    expect(candidates).toEqual([{ insertText: "a {x:int} widgets", detail: "widgets.ts" }]);
+    expect(candidates).toEqual([{ label: "a {x:int} widgets", snippet: "a ${1:1} widgets", detail: "widgets.ts" }]);
   });
 
   it("includes a compat string pattern", () => {
     const candidates = buildCompletionCandidates([compatPattern("a {int} widgets", "steps/compat.ts")]);
 
-    expect(candidates).toEqual([{ insertText: "a {int} widgets", detail: "compat.ts" }]);
+    expect(candidates).toEqual([{ label: "a {int} widgets", snippet: "a ${1:1} widgets", detail: "compat.ts" }]);
   });
 
   it("drops a compat regexp pattern, since it has no literal text to insert", () => {
@@ -31,7 +31,7 @@ describe("buildCompletionCandidates", () => {
     expect(candidates).toEqual([]);
   });
 
-  it("collapses two patterns with the same insertText into one candidate", () => {
+  it("collapses two patterns with the same label into one candidate", () => {
     const candidates = buildCompletionCandidates([
       typedPattern("a {x:int} widgets", "steps/widgets.ts"),
       typedPattern("a {x:int} widgets", "steps/widgets.ts"),

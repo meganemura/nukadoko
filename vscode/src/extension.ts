@@ -248,7 +248,8 @@ export function activate(context: vscode.ExtensionContext): void {
       async provideCompletionItems() {
         const index = await indexPromise;
         return buildCompletionCandidates(index.patterns).map((candidate) => {
-          const item = new vscode.CompletionItem(candidate.insertText);
+          const item = new vscode.CompletionItem(candidate.label);
+          item.insertText = new vscode.SnippetString(candidate.snippet);
           item.detail = candidate.detail;
           return item;
         });

@@ -11,6 +11,10 @@
   is not a report, and names its first line. A step file that prints
   when it is imported caused this. The command failed with no message
   before and kept the diagnostics of an earlier run; it now clears them.
+- Completion inserts a snippet with one tab stop per parameter instead
+  of the raw pattern, which matched no step. Each stop starts with a
+  value of the parameter's type, optional text is left out, and the first
+  alternative of `a/b` is kept, so the inserted line binds to its step.
 
 ## 0.1.0
 
