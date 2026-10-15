@@ -316,4 +316,71 @@ describe("nuka do --use", () => {
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.error.message).toBe("args validation failed: count: Invalid input: expected bigint, received string");
   });
+
+  it("--args hands a pipe, a codec, and a transform the input side of their schema", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(
+      [
+        "do",
+        "shape-atoms",
+        "--args",
+        '{"piped":"5","coded":"6","stamped":"2024-01-01T00:00:00.000Z","doubled":"7","epoch":"2024-01-01T00:00:00.000Z"}',
+      ],
+      { rootDir, stdout, stderr: createCaptureSink() },
+    );
+    const stepRecord = JSON.parse(stdout.text());
+    expect(stepRecord.error).toBeUndefined();
+    expect(exitCode).toBe(0);
+    expect(stepRecord.result).toEqual({
+      piped: "5",
+      coded: "6",
+      stamped: "2024-01-01T00:00:00.000Z",
+      doubled: "14",
+      epoch: 1704067200000,
+    });
+  });
+
+  it("--use hands a pipe, a codec, and a transform the input side of their schema", async () => {
+    const countStdout = createCaptureSink();
+    await runCli(["do", "count-atoms", "--args", '{"count":"5"}'], {
+      rootDir,
+      stdout: countStdout,
+      stderr: createCaptureSink(),
+    });
+    const countStepRecord = JSON.parse(countStdout.text());
+
+    const shapeStdout = createCaptureSink();
+    const shapeExit = await runCli(
+      [
+        "do",
+        "shape-atoms",
+        "--args",
+        '{"stamped":"2024-01-01T00:00:00.000Z","epoch":"2024-01-01T00:00:00.000Z"}',
+        "--use",
+        countStepRecord.step_record_id,
+      ],
+      { rootDir, stdout: shapeStdout, stderr: createCaptureSink() },
+    );
+    const shapeStepRecord = JSON.parse(shapeStdout.text());
+    expect(shapeStepRecord.error).toBeUndefined();
+    expect(shapeExit).toBe(0);
+    expect(shapeStepRecord.result).toEqual({
+      piped: "5",
+      coded: "5",
+      stamped: "2024-01-01T00:00:00.000Z",
+      doubled: "10",
+      epoch: 1704067200000,
+    });
+  });
+
+  it("--args leaves a string alone where a union option accepts it, whichever option is declared first", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["do", "sort-atoms", "--args", '{"first":"5","second":"5"}'], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout.text()).result).toEqual({ first: "string", second: "string" });
+  });
 });
