@@ -2004,6 +2004,12 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `failed` な record では与えられたものをそのまま保持します。
   スキーマがすでに拒否した値を、検証済みの形に組み立て直すことはできないからです。
   compat の step の `args` は、検証対象のスキーマが無いため、どちらの結果でも検証されません。
+- bigint は、`args` でも `result` でも record のほかのどこでも、10 進数の文字列として保存されます。
+  JSON には bigint が無いからです。
+  `{biginteger}` のキャプチャを `z.bigint()` に結び付けると、`"v": "123456789012345678901234567890"` と記録されます。
+  1 つの `nuka run` の scenario の中では、`from` の連鎖は次の step に bigint そのものを渡します。
+  `nuka do --use` は保存された record を読むので、そのキーには文字列が届きます。
+  それを受け付けるのは、両方の形を受け付けるスキーマ(`z.coerce.bigint()`)だけです。
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
