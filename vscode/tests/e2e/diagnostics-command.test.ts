@@ -20,9 +20,9 @@ const distExtensionPath = path.join(vscodeRoot, "dist", "extension.js");
 const distCliPath = path.join(repoRoot, "dist", "cli.js");
 
 const fixtureDir = path.join(here, "fixtures", "diagnostics-workspace");
-const nukaBinDir = path.join(fixtureDir, "node_modules", ".bin");
-const nukaBinPath = path.join(nukaBinDir, "nuka");
+const nukaBinPath = path.join(fixtureDir, "node_modules", ".bin", "nuka");
 const featureFilePath = path.join(fixtureDir, "features", "todo.feature");
+const noisyFixtureDir = path.join(here, "fixtures", "noisy-check-workspace");
 
 const CHECK_COMMAND = "nukadoko.check";
 
@@ -38,10 +38,19 @@ const CHECK_COMMAND = "nukadoko.check";
 // this repository's existing CLI tests rather than re-proven here.
 // POSIX-only (a `#!/bin/sh` shebang script, not `.cmd`) -- this repository's
 // CI runs ubuntu-latest only (.github/workflows/vscode-extension.yml).
-function writeNukaShim(): void {
-  mkdirSync(nukaBinDir, { recursive: true });
-  writeFileSync(nukaBinPath, `#!/bin/sh\nexec node ${JSON.stringify(distCliPath)} "$@"\n`);
-  chmodSync(nukaBinPath, 0o755);
+function writeNukaShim(workspaceDir: string): void {
+  const binDir = path.join(workspaceDir, "node_modules", ".bin");
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(path.join(binDir, "nuka"), `#!/bin/sh\nexec node ${JSON.stringify(distCliPath)} "$@"\n`);
+  chmodSync(path.join(binDir, "nuka"), 0o755);
+}
+
+function activateIn(workspaceDir: string): { stub: VscodeStub; restoreModuleLoad: () => void } {
+  const stub = createVscodeStub();
+  stub.workspaceFolders = [{ uri: { fsPath: workspaceDir, toString: () => `file://${workspaceDir}` } }];
+  const restoreModuleLoad = installVscodeModule(stub);
+  requireFreshExtension(distExtensionPath).activate({ subscriptions: [] });
+  return { stub, restoreModuleLoad };
 }
 
 describe("nukadoko.check: the one command allowed to run workspace code", () => {
@@ -49,16 +58,8 @@ describe("nukadoko.check: the one command allowed to run workspace code", () => 
   let restoreModuleLoad: () => void;
 
   beforeAll(() => {
-    writeNukaShim();
-
-    stub = createVscodeStub();
-    stub.workspaceFolders = [
-      { uri: { fsPath: fixtureDir, toString: () => `file://${fixtureDir}` } },
-    ];
-
-    restoreModuleLoad = installVscodeModule(stub);
-    const extension = requireFreshExtension(distExtensionPath);
-    extension.activate({ subscriptions: [] });
+    writeNukaShim(fixtureDir);
+    ({ stub, restoreModuleLoad } = activateIn(fixtureDir));
   });
 
   afterAll(() => {
@@ -100,6 +101,39 @@ describe("nukadoko.check: the one command allowed to run workspace code", () => 
           message: expect.stringContaining('No step definition matches "a step nothing in this project defines"'),
         }),
       ]);
+    },
+    60_000,
+  );
+});
+
+describe("nukadoko.check: a step file that prints on stdout when it is imported", () => {
+  let stub: VscodeStub;
+  let restoreModuleLoad: () => void;
+
+  beforeAll(() => {
+    writeNukaShim(noisyFixtureDir);
+    ({ stub, restoreModuleLoad } = activateIn(noisyFixtureDir));
+  });
+
+  afterAll(() => {
+    restoreModuleLoad();
+    rmSync(path.join(noisyFixtureDir, "node_modules"), { recursive: true, force: true });
+  });
+
+  it(
+    "names the line that is not JSON and clears the diagnostics of an earlier run",
+    async () => {
+      const staleFile = path.join(noisyFixtureDir, "features", "noisy.feature");
+      stub.diagnosticCollection?.set({ fsPath: staleFile, toString: () => `file://${staleFile}` }, [
+        { message: "from an earlier run", severity: 0, code: "undefined-step" },
+      ]);
+
+      await stub.commands.get(CHECK_COMMAND)?.();
+
+      expect(stub.errorMessages).toEqual([
+        'nukadoko: Check could not read the output of nuka check --json as a report. The output starts with "noisy-step loaded". A step file may print to stdout when it is imported.',
+      ]);
+      expect(stub.diagnosticCollection?.entries.size).toBe(0);
     },
     60_000,
   );
