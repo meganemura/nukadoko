@@ -20,11 +20,21 @@ defineParameterType({
   },
 });
 
-Given("it arrives {later}", function (this: any, word: unknown) {
+function expectSoonFromThisWorld(world: unknown, word: unknown): void {
   if (typeof word !== "string" || word !== "SOON") {
     throw new Error(`expected the string SOON, got ${typeof word} ${String(word)}`);
   }
-  if (this == null || this !== transformerThis) {
+  if (world == null || world !== transformerThis) {
     throw new Error("transformer this was not this step's World");
   }
+}
+
+Given("it arrives {later}", function (this: any, word: unknown) {
+  expectSoonFromThisWorld(this, word);
+});
+
+// The group's source equals the type's regexp source, so cucumber-js
+// converts it with the same transformer.
+Given(/^it arrives by regexp (soon|never)$/, function (this: any, word: unknown) {
+  expectSoonFromThisWorld(this, word);
 });
