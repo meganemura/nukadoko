@@ -596,6 +596,17 @@ describe("redact property-based", () => {
       expect(stored).toEqual({ args: { v: decimal }, list: [decimal] });
       const reread = JSON.parse(JSON.stringify(stored)) as { args: { v: string } };
       expect(BigInt(reread.args.v)).toBe(big);
+      expect(redact(stored, [])).toEqual(stored);
+    });
+  });
+
+  it("replaces a bigint whose digits are an eligible secret with that secret's token, and a second redact changes nothing", () => {
+    hegel.test((tc) => {
+      const big = tc.draw(gs.bigIntegers({ minValue: 1000n }));
+      const secrets: SecretEntry[] = [{ name: "PIN", value: big.toString() }];
+      const once = redact({ v: big, other: big + 1n }, secrets);
+      expect(once).toEqual({ v: "{{secret.PIN}}", other: redactString((big + 1n).toString(), secrets) });
+      expect(redact(once, secrets)).toEqual(once);
     });
   });
 
