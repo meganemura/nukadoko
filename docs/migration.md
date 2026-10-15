@@ -244,14 +244,15 @@ Two independent, incremental moves, safe to take alone, in either order:
   works, but `nuka tend` notes it (`parameter-type-support-origin`) and
   points at `config.parameterTypes` as the typed-era home: moving the
   registration changes nothing about what any pattern matches, unless it
-  sets `preferForRegexpMatch`. A transformer's `this` is the scenario's World, and a Promise it returns
-  is awaited before the step, for a string pattern and a RegExp pattern
-  alike. `preferForRegexpMatch` picks the type for a RegExp group that
-  several types match, as in cucumber-js. `config.parameterTypes` has no
-  such key, so a registration that sets it stays in support code while a
-  RegExp step relies on it. Moved to config with the key, it is a config
-  error. Moved without it, a RegExp group that two types match fails the
-  step with "matches multiple parameter types" again.
+  sets `preferForRegexpMatch`. A transformer's `this` is the scenario's
+  World, and a Promise it returns is awaited before the step, for a string
+  pattern and a RegExp pattern alike. `preferForRegexpMatch` picks the
+  type for a RegExp group that several types match, as in cucumber-js.
+  `config.parameterTypes` has no such key, so a registration that sets it
+  stays in support code while a RegExp step relies on it. Moved to config
+  with the key, it is a config error. Moved without it, a RegExp group that
+  two types match fails the step with "matches multiple parameter types"
+  again.
 
 ## Stage 2: promote steps
 

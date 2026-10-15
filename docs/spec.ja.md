@@ -1274,7 +1274,7 @@ import { Given, When, Then } from "nukadoko/compat";
 - compat コードの `defineParameterType` と `config.parameterTypes` は、1 つのレジストリを使います。
   登録を config へ移しても pattern のマッチは変わらないため、チームはこの移動を早く行えます。
   例外は `preferForRegexpMatch` を設定する登録です(後述)。
-  `nuka check` は support 由来の登録を警告として列挙します。
+  `nuka tend` は support 由来の登録を note として列挙します(「Tending(手入れ)」を参照)。
   config が、それらの引退先です。
   transformer の `this` は、その scenario の World です。
   step と hook が動くのと同じオブジェクトです。
