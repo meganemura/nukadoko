@@ -86,7 +86,7 @@ export function assessFrozenResult(
 ): { ok: true } | { ok: false; detail: string } {
   const walkable = schema as WalkableSchema;
   const candidates: unknown[] = [frozen];
-  const revived = reviveStoredForm(walkable, frozen);
+  const revived = reviveStoredForm(walkable, frozen, "output");
   if (!jsonEqual(revived, frozen)) candidates.push(revived);
 
   let directFailure: string | undefined;

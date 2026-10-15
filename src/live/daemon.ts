@@ -519,7 +519,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // it any earlier would be silently wiped out.
     // --args is JSON, which has no bigint or Date, so a value this step's
     // args declare as one arrives as its stored string.
-    let parsedArgs = reviveStoredForm(entry.step.args, request.args);
+    let parsedArgs = reviveStoredForm(entry.step.args, request.args, "input");
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const resolved of resolvedUses) {

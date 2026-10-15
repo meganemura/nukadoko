@@ -9,6 +9,12 @@ import { toStoredForm } from "./stored-form.js";
 // reaches the schema as a string and fails it there. tend checks a frozen
 // result this way, and `nuka do` reads --args and --use values this way,
 // so a contract that says z.bigint() is satisfied by what a record holds.
+//
+// A pipe, a codec, or a transform has two types, and the caller names the
+// side. --args and --use are what the schema parses, so they follow its
+// input side: a string piped into z.coerce.bigint() stays a string, and a
+// preprocess function receives what was given. A frozen result is what the
+// schema produced, so tend follows its output side.
 
 export type Parsed =
   | { success: true; data: unknown }
@@ -26,6 +32,7 @@ interface SchemaDef {
   left?: WalkableSchema;
   right?: WalkableSchema;
   getter?: () => WalkableSchema;
+  in?: WalkableSchema;
   out?: WalkableSchema;
   catchall?: WalkableSchema;
 }
@@ -33,6 +40,15 @@ interface SchemaDef {
 export interface WalkableSchema {
   def: SchemaDef;
   safeParse(data: unknown): Parsed;
+}
+
+/** Which side of a pipe to follow: the type the schema parses, or the type
+ * it produces. */
+export type SchemaSide = "input" | "output";
+
+interface Walk {
+  side: SchemaSide;
+  stack: Set<WalkableSchema>;
 }
 
 const UNWRAP = new Set(["optional", "nullable", "default", "prefault", "catch", "readonly", "nonoptional"]);
@@ -77,7 +93,7 @@ function reviveBigint(value: unknown): unknown {
   return big.toString() === value ? big : value;
 }
 
-function reviveObject(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+function reviveObject(def: SchemaDef, value: unknown, walk: Walk): unknown {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
   const source = value as Record<string, unknown>;
   const shape = def.shape ?? {};
@@ -85,7 +101,7 @@ function reviveObject(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>
   for (const key of Object.keys(shape)) {
     if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
     const child = shape[key];
-    if (child !== undefined) out[key] = revive(child, source[key], stack);
+    if (child !== undefined) out[key] = revive(child, source[key], walk);
   }
   const catchall = def.catchall;
   if (
@@ -95,32 +111,36 @@ function reviveObject(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>
     catchall.def.type !== "any"
   ) {
     for (const key of Object.keys(source)) {
-      if (!Object.prototype.hasOwnProperty.call(shape, key)) out[key] = revive(catchall, source[key], stack);
+      if (!Object.prototype.hasOwnProperty.call(shape, key)) out[key] = revive(catchall, source[key], walk);
     }
   }
   return out;
 }
 
-function reviveTuple(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+function reviveTuple(def: SchemaDef, value: unknown, walk: Walk): unknown {
   if (!Array.isArray(value) || def.items === undefined) return value;
   return value.map((item, index) => {
     const itemSchema = def.items?.[index] ?? def.rest;
-    return itemSchema == null ? item : revive(itemSchema, item, stack);
+    return itemSchema == null ? item : revive(itemSchema, item, walk);
   });
 }
 
-function reviveRecord(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
+function reviveRecord(def: SchemaDef, value: unknown, walk: Walk): unknown {
   if (value === null || typeof value !== "object" || Array.isArray(value) || def.valueType === undefined) return value;
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = revive(def.valueType, item, stack);
+    out[key] = revive(def.valueType, item, walk);
   }
   return out;
 }
 
-function reviveUnion(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>): unknown {
-  for (const option of def.options ?? []) {
-    const candidate = revive(option, value, stack);
+function reviveUnion(def: SchemaDef, value: unknown, walk: Walk): unknown {
+  const options = def.options ?? [];
+  // A value some option already accepts stays as it was given, so the order
+  // the options are declared in does not decide what a step receives.
+  if (options.some((option) => option.safeParse(value).success)) return value;
+  for (const option of options) {
+    const candidate = revive(option, value, walk);
     const outcome = option.safeParse(candidate);
     if (!outcome.success) continue;
     const form = jsonForm(outcome.data);
@@ -129,14 +149,14 @@ function reviveUnion(def: SchemaDef, value: unknown, stack: Set<WalkableSchema>)
   return value;
 }
 
-function revive(schema: WalkableSchema, value: unknown, stack: Set<WalkableSchema>): unknown {
-  if (stack.has(schema)) return value;
-  stack.add(schema);
+function revive(schema: WalkableSchema, value: unknown, walk: Walk): unknown {
+  if (walk.stack.has(schema)) return value;
+  walk.stack.add(schema);
   try {
     const def = schema.def;
     if (UNWRAP.has(def.type) && def.innerType !== undefined) {
       if (value === null || value === undefined) return value;
-      return revive(def.innerType, value, stack);
+      return revive(def.innerType, value, walk);
     }
     switch (def.type) {
       case "date":
@@ -144,33 +164,39 @@ function revive(schema: WalkableSchema, value: unknown, stack: Set<WalkableSchem
       case "bigint":
         return reviveBigint(value);
       case "object":
-        return reviveObject(def, value, stack);
+        return reviveObject(def, value, walk);
       case "array":
         if (!Array.isArray(value) || def.element === undefined) return value;
-        return value.map((item) => revive(def.element as WalkableSchema, item, stack));
+        return value.map((item) => revive(def.element as WalkableSchema, item, walk));
       case "tuple":
-        return reviveTuple(def, value, stack);
+        return reviveTuple(def, value, walk);
       case "record":
-        return reviveRecord(def, value, stack);
+        return reviveRecord(def, value, walk);
       case "union":
-        return reviveUnion(def, value, stack);
+        return reviveUnion(def, value, walk);
       case "intersection":
         if (def.left === undefined || def.right === undefined) return value;
-        return revive(def.right, revive(def.left, value, stack), stack);
+        return revive(def.right, revive(def.left, value, walk), walk);
       case "lazy":
-        return def.getter === undefined ? value : revive(def.getter(), value, stack);
-      case "pipe":
-        return def.out === undefined ? value : revive(def.out, value, stack);
+        return def.getter === undefined ? value : revive(def.getter(), value, walk);
+      case "pipe": {
+        const side = walk.side === "input" ? def.in : def.out;
+        return side === undefined ? value : revive(side, value, walk);
+      }
       default:
         return value;
     }
   } finally {
-    stack.delete(schema);
+    walk.stack.delete(schema);
   }
 }
 
-/** `value` with every Date and bigint the schema expects revived from its
- * stored string. Anything else is returned as it is. */
-export function reviveStoredForm(schema: { safeParse(data: unknown): unknown }, value: unknown): unknown {
-  return revive(schema as WalkableSchema, value, new Set());
+/** `value` with every Date and bigint the schema expects on `side` revived
+ * from its stored string. Anything else is returned as it is. */
+export function reviveStoredForm(
+  schema: { safeParse(data: unknown): unknown },
+  value: unknown,
+  side: SchemaSide,
+): unknown {
+  return revive(schema as WalkableSchema, value, { side, stack: new Set() });
 }

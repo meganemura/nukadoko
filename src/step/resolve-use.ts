@@ -151,7 +151,7 @@ export function resolveUse(
     ok: true,
     // The record holds the stored form, so a bigint this step's args
     // declare arrives as its decimal string until it is revived here.
-    filled: reviveStoredForm(step.args, filled) as Record<string, unknown>,
+    filled: reviveStoredForm(step.args, filled, "input") as Record<string, unknown>,
     used: { step_record_id: recordId, step: stepRecord.step, result: stepRecord.result },
   };
 }
