@@ -208,6 +208,8 @@ export function Then(
  * own — a name collision between the two sources is caught there exactly
  * like a collision between two config entries, and moving a registration
  * from here to config later changes nothing about what any pattern matches.
+ * A registration that sets `preferForRegexpMatch` is the exception: config
+ * rejects the key, so it stays here while a RegExp step relies on it.
  */
 export function defineParameterType(options: CompatParameterTypeOptions): void {
   parameterTypeBuffer.push({ ...options, registrationOrder: registrationCounter++ });

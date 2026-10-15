@@ -189,11 +189,13 @@ World のサブクラスは、その page と request を `this.page = ...` と 
   `defineWorld` は import 時にどちらの名前も拒みます。
   `nuka check` は `step-file-import-failed` を報告し、`nuka run` は同じメッセージで止まります。
   そのメッセージはフィールド名を含みます。
-- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
+- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(`preferForRegexpMatch` を設定していなければ、登録を移してもどの pattern のマッチも変わりません)。
   transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
   string の pattern でも RegExp の pattern でも同じです。
   `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
-  `config.parameterTypes` にはこのキーがないため、これを設定する登録は support コードに残ります。
+  `config.parameterTypes` にはこのキーがないため、これを設定する登録は、RegExp の step がそれに頼っている間は support コードに残ります。
+  キーごと config へ移すと config のエラーになります。
+  キーを外して移すと、2 つの型が一致する RegExp のグループは、再び "matches multiple parameter types" で step を失敗させます。
 
 ## Stage 2: step を昇格させる
 

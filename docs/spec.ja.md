@@ -1273,6 +1273,7 @@ import { Given, When, Then } from "nukadoko/compat";
   `defineStep` への昇格によって、単体 step の実行が可能になります。
 - compat コードの `defineParameterType` と `config.parameterTypes` は、1 つのレジストリを使います。
   登録を config へ移しても pattern のマッチは変わらないため、チームはこの移動を早く行えます。
+  例外は `preferForRegexpMatch` を設定する登録です(後述)。
   `nuka check` は support 由来の登録を警告として列挙します。
   config が、それらの引退先です。
   transformer の `this` は、その scenario の World です。
@@ -1280,7 +1281,9 @@ import { Given, When, Then } from "nukadoko/compat";
   transformer が返した Promise は、step が走る前に await されます。
   string の pattern でも RegExp の pattern でも同じです。
   compat の登録の `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
-  `config.parameterTypes` にはこのキーがないため、これを設定する登録は compat コードに残ります。
+  `config.parameterTypes` にはこのキーがないため、これを設定する登録は、RegExp の step がそれに頼っている間は compat コードに残ります。
+  キーごと config へ移すと config のエラーになり、キーを外して移すと 2 つの型が一致する RegExp のグループは再び失敗します。
+  2 つの型が 1 つの正規表現を優先する場合や、ある型が `{int}` のような組み込み型の正規表現を優先する場合は、`parameter-type-invalid` エラーです。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
   World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。
@@ -3231,6 +3234,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 - **support コード側にまだ登録されたままの `defineParameterType`。**
   それは動き続けます。
   `config.parameterTypes` がその typed 時代の住まいであり、登録をそちらへ移してもマッチは何も変わりません。
+  例外は `preferForRegexpMatch` を設定する登録です。
+  config はこのキーを拒否するため、この note は、RegExp の step がそれに頼っている間は support コードに残すよう伝えます。
   これはかつて `nuka check` の warning でしたが、その分類は誤りでした。
   これは、スイートに compat が少しでも残っている限り現れ続けるものであり、それは正常な状態です。
   毎回の run の前にそれを出力すれば、人々に本当に run を止める行を読み飛ばすことを覚えさせてしまいます。
