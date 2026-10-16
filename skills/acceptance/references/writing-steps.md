@@ -41,7 +41,11 @@ criterion's wording doesn't match a pattern verbatim.
    refused unless a file is there): it
    writes `const cli = resolve("<entry point>")`, the `runCommand` call in
    `scratch.dir()`, and `returns` of `exitCode`, `stdout`, and `stderr`, so
-   a Then step can be scaffolded `--from` it at once. Without a value the
+   a Then step can be scaffolded `--from` it at once. The step runs the
+   entry point with `node` itself, so when the project's `.ts` files import
+   each other as `./x.js`, name the built program (`dist/cli.js`, with
+   `"pretest:scenarios": "npm run build"`); scaffold refuses a `.ts` entry
+   point whose `./x.js` import is absent beside an `x.ts`. Without a value the
    `cli` line holds a TODO, and the step throws `fill in the entry point:
    <file>:<line>` until it is filled in. Add `--description "<text>"` for
    what the step does; without it the description is `TODO: describe

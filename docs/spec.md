@@ -4223,7 +4223,12 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               directory; a value that is not a file
                               there is refused, and a step name read as
                               the value (--command before the name) is
-                              named as such. Without a value that line
+                              named as such. A .ts, .mts, or .cts entry
+                              point is refused when one of its own static
+                              imports names a relative .js (.mjs, .cjs)
+                              file that is absent while its TypeScript
+                              sibling is present: the step runs it with
+                              node, which does not rewrite the specifier. Without a value that line
                               holds a TODO, and run throws "fill in the
                               entry point: <file>:<line>" before it calls
                               runCommand, so do and run fail by name at

@@ -82,6 +82,9 @@ features/steps/run-greet.ts
 `--command src/cli.ts` がエントリポイントを指定するので、このファイルは編集しません。
 `resolve` は、`nuka` を実行したディレクトリから読みます。
 そこにファイルがないパスは、scaffold が拒否します。
+step はエントリポイントを `node` そのもので実行します。
+そのため、`.ts` ファイルどうしが `.js` の specifier で import し合うプロジェクトでは、エントリポイントはビルドした後のプログラム(たとえば `--command dist/cli.js`)で、`"pretest:scenarios": "npm run build"` があれば、clone した直後のチェックアウトでも green になります。
+`.ts` のエントリポイントが import する `.js` ファイルがなく、その横に `.ts` ファイルがあるときは、scaffold が拒否します。
 値を省くと、その行には TODO が残り、埋めるまで step はファイル名と行番号を示して失敗します。
 scaffold が書く内容は次のとおりです:
 

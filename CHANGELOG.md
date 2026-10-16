@@ -127,6 +127,32 @@ just until 0.1.
 
 ### Changed
 
+- **`nuka scaffold --command <entry point>` refuses a TypeScript entry point that plain `node` cannot start.**
+  The step runs the entry point with `node` itself, which strips types and
+  does not rewrite a `./greet.js` specifier to the `./greet.ts` beside it.
+  In a NodeNext project that imports with `.js` specifiers, the scaffold
+  used to write a step whose run exited 1 with `ERR_MODULE_NOT_FOUND`
+  before the program started. For an entry point ending in `.ts`, `.mts`,
+  or `.cts`, scaffold now reads the entry file's own static `import` and
+  `export ... from` lines (not type-only ones, not dynamic `import()`, not
+  comments) and refuses, with nothing written, when a relative `.js`,
+  `.mjs`, or `.cjs` target is absent and its `.ts`, `.mts`, or `.cts`
+  sibling is present: `Refusing to scaffold: entry point "src/cli.ts"
+  imports "./greet.js", which does not exist (src/greet.ts does); node
+  runs a .ts file without rewriting that specifier, so the step would exit
+  1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for
+  example dist/cli.js, after npm run build), or import "./greet.ts" with
+  "rewriteRelativeImportExtensions": true in tsconfig.json`. It is a
+  refusal, not a warning beside a written file, because that file's only
+  measured outcome is a red run, and `--command`'s other check on the
+  value already refuses. Imports of imported files are not read, and a
+  target that exists, or whose sibling is absent too, is not claimed. The
+  README walkthrough says the step runs the entry point with `node` and
+  that such a project points `--command` at the built program, with
+  `"pretest:scenarios": "npm run build"`. The migration skill's
+  `compatibility` line now says the CLI is run as `npx nuka` from a
+  devDependency install, as the acceptance skill's does.
+
 - **`nuka scaffold --pattern` refuses a capture type the project does not register.**
   `{a:number}` used to be written as `a: z.unknown()`, and the next
   `nuka check` reported `unknown-parameter-type`, so `nuka run` refused to

@@ -1,7 +1,7 @@
 ---
 name: migration
 description: Use when moving an existing test suite onto nukadoko, whether from cucumber-js (typically driving Playwright), from a Playwright Test suite with no cucumber and no Gherkin, or from another DSL already shaped as typed steps. Covers the two-stage discipline that keeps every failure traceable to one change, the `nukadoko/compat` door, sharing an implementation with a Playwright Test suite, and promoting steps to typed `defineStep`s at your own pace.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do, nuka harvest).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do, nuka harvest).
 license: MIT
 ---
 

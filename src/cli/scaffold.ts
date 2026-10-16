@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
@@ -551,6 +551,42 @@ async function entryPointRefusal(rootDir: string, entryPoint: string, commandBef
   return `entry point ${JSON.stringify(entryPoint)} is not a file (looked at ${resolved}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO${order}`;
 }
 
+/** The relative `.js`, `.mjs`, and `.cjs` specifiers a TypeScript source
+ * loads statically, in source order. A whole-statement `import type` or
+ * `export type` is left out: Node's type stripping erases it, so it loads
+ * nothing. Only a statement that starts its line is read, so an import
+ * spelled inside a string is not; a dynamic `import()` is not read either,
+ * and comments are dropped first. What is missed is never claimed. */
+export function relativeJsImports(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const statement =
+    /^[ \t]*(?:import|export)\s+(?!type\s+(?!from\b)[\w${*])(?:[^;'"]*?\bfrom\s*)?(["'])(\.{1,2}\/[^"'\r\n]*\.[mc]?js)\1/gm;
+  return [...code.matchAll(statement)].map((match) => match[2]!);
+}
+
+/** Why a TypeScript entry point cannot start under plain `node`, or `null`.
+ * Node runs a `.ts` file by stripping its types and does not rewrite a
+ * `./greet.js` specifier to the `./greet.ts` beside it, so the program exits
+ * with ERR_MODULE_NOT_FOUND before it runs. Only the entry file's own imports
+ * are read, and only a `.js` target that is absent while its TypeScript
+ * sibling is present is claimed: anything else may still resolve. */
+async function unloadableImportRefusal(rootDir: string, entryPoint: string): Promise<string | null> {
+  const resolved = path.resolve(rootDir, entryPoint);
+  if (!/\.[mc]?ts$/.test(resolved)) return null;
+  // An unreadable file is not claimed: the step may run under other permissions.
+  const source = await readFile(resolved, "utf8").catch(() => "");
+  for (const specifier of relativeJsImports(source)) {
+    const target = path.resolve(path.dirname(resolved), specifier);
+    if (existsSync(target)) continue;
+    const sibling = target.replace(/js$/, "ts");
+    if (!existsSync(sibling)) continue;
+    const siblingName = path.relative(rootDir, sibling).split(path.sep).join("/");
+    const tsSpecifier = specifier.replace(/js$/, "ts");
+    return `entry point ${JSON.stringify(entryPoint)} imports ${JSON.stringify(specifier)}, which does not exist (${siblingName} does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import ${JSON.stringify(tsSpecifier)} with "rewriteRelativeImportExtensions": true in tsconfig.json`;
+  }
+  return null;
+}
+
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
   const { rootDir, name, pattern, then, command, entryPoint, description, from, stdout, stderr } = options;
 
@@ -583,7 +619,9 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
 
   if (entryPoint !== null) {
-    const refusal = await entryPointRefusal(rootDir, entryPoint, options.commandBeforeName);
+    const refusal =
+      (await entryPointRefusal(rootDir, entryPoint, options.commandBeforeName)) ??
+      (await unloadableImportRefusal(rootDir, entryPoint));
     if (refusal !== null) {
       stderr.write(`Refusing to scaffold: ${refusal}\n`);
       return 1;

@@ -8,6 +8,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { relativeJsImports } from "../src/cli/scaffold.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -623,5 +624,181 @@ describe("every scaffolded variant", () => {
     const typecheck = await typecheckSteps(files);
     expect(typecheck.output).toBe("");
     expect(typecheck.code).toBe(0);
+  });
+});
+
+// A TypeScript entry point that imports a sibling as `./greet.js` cannot
+// start under plain `node`, which does not rewrite the specifier to the
+// `./greet.ts` that exists. The scaffold refuses that entry point instead of
+// writing a step whose run is red before the program starts.
+describe("nuka scaffold --command <entry point>: the entry point's own imports", () => {
+  let rootDir: string;
+  let counter = 0;
+
+  beforeAll(async () => {
+    rootDir = await initProject();
+  });
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  async function scaffoldWith(files: Record<string, string>, entry: string): Promise<{ result: Awaited<ReturnType<typeof cli>>; written: boolean }> {
+    await rm(path.join(rootDir, "src"), { recursive: true, force: true });
+    for (const [file, text] of Object.entries(files)) {
+      await mkdir(path.dirname(path.join(rootDir, file)), { recursive: true });
+      await writeFile(path.join(rootDir, file), text);
+    }
+    counter += 1;
+    const name = `run-imports-${counter}`;
+    const result = await cli(rootDir, ["scaffold", name, "--command", entry]);
+    const written = existsSync(stepPath(rootDir, name));
+    await rm(stepPath(rootDir, name), { force: true });
+    return { result, written };
+  }
+
+  const greet = "export const greet = (name: string): string => `hello ${name}`;\n";
+
+  it("refuses an entry point that imports ./greet.js beside greet.ts, and writes nothing", async () => {
+    const { result, written } = await scaffoldWith(
+      { "src/cli.ts": 'import { greet } from "./greet.js";\nconsole.log(greet("a"));\n', "src/greet.ts": greet },
+      "src/cli.ts",
+    );
+
+    expect(result.stderr).toBe(
+      'Refusing to scaffold: entry point "src/cli.ts" imports "./greet.js", which does not exist (src/greet.ts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "./greet.ts" with "rewriteRelativeImportExtensions": true in tsconfig.json\n',
+    );
+    expect(result.stdout).toBe("");
+    expect(result.exitCode).toBe(1);
+    expect(written).toBe(false);
+  });
+
+  it("accepts the same entry point when greet.js exists on disk", async () => {
+    const { result, written } = await scaffoldWith(
+      {
+        "src/cli.ts": 'import { greet } from "./greet.js";\nconsole.log(greet("a"));\n',
+        "src/greet.ts": greet,
+        "src/greet.js": "export const greet = (name) => `hello ${name}`;\n",
+      },
+      "src/cli.ts",
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(written).toBe(true);
+  });
+
+  it.each([
+    ["no relative import", { "src/cli.ts": 'import { argv } from "node:process";\nconsole.log(argv);\n' }],
+    ["a .ts specifier", { "src/cli.ts": 'import { greet } from "./greet.ts";\nconsole.log(greet("a"));\n', "src/greet.ts": greet }],
+    ["a .js specifier with no .ts sibling either", { "src/cli.ts": 'import "./missing.js";\n' }],
+    ["a type-only import, which type stripping erases", { "src/cli.ts": 'import type { T } from "./greet.js";\nconst x: T = "a";\n', "src/greet.ts": "export type T = string;\n" }],
+    ["an import in a comment", { "src/cli.ts": '// import { greet } from "./greet.js";\n/* export * from "./greet.js"; */\n', "src/greet.ts": greet }],
+  ])("accepts an entry point with %s", async (_label, files) => {
+    const { result, written } = await scaffoldWith(files, "src/cli.ts");
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(written).toBe(true);
+  });
+
+  it("never reads a .js entry point for this", async () => {
+    const { result, written } = await scaffoldWith(
+      { "src/cli.js": 'import { greet } from "./greet.js";\n', "src/greet.ts": greet },
+      "src/cli.js",
+    );
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(written).toBe(true);
+  });
+
+  it("resolves ../ against the entry point's directory, and maps .mjs to .mts", async () => {
+    const { result, written } = await scaffoldWith(
+      { "src/bin/cli.mts": 'export { run } from "../lib/run.mjs";\n', "src/lib/run.mts": "export const run = (): void => {};\n" },
+      "src/bin/cli.mts",
+    );
+
+    expect(result.stderr).toBe(
+      'Refusing to scaffold: entry point "src/bin/cli.mts" imports "../lib/run.mjs", which does not exist (src/lib/run.mts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "../lib/run.mts" with "rewriteRelativeImportExtensions": true in tsconfig.json\n',
+    );
+    expect(result.exitCode).toBe(1);
+    expect(written).toBe(false);
+  });
+
+  // Property: for any entry file whose import lines name random relative
+  // targets, with a random subset of each target's `.js` and TypeScript files
+  // on disk, the scaffold refuses iff some value import's `.js` target is
+  // absent while its TypeScript sibling is present.
+  it("refuses iff some imported .js target is absent and its TypeScript sibling present", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const count = tc.draw(gs.integers({ minValue: 1, maxValue: 4 }));
+        const imports = Array.from({ length: count }, (_, index) => ({
+          dir: tc.draw(gs.sampledFrom(["./", "../", "./lib/", "../lib/"])),
+          base: tc.draw(gs.sampledFrom(["a", "b", "c"])),
+          ext: tc.draw(gs.sampledFrom(["js", "mjs", "cjs", "ts"])),
+          form: tc.draw(gs.sampledFrom(["named", "side-effect", "re-export", "type-only", "multi-line"])),
+          index,
+        }));
+        const files: Record<string, string> = {};
+        const states = new Map<string, string>();
+        for (const entry of imports) {
+          const target = path.posix.join("src/bin", `${entry.dir}${entry.base}.${entry.ext}`);
+          if (states.has(target)) continue;
+          const state = tc.draw(gs.sampledFrom(["none", "js", "ts", "both"]));
+          states.set(target, state);
+          const tsTwin = target.replace(/js$/, "ts");
+          if (state === "js" || state === "both") files[target] = "export const v = 1;\n";
+          if ((state === "ts" || state === "both") && tsTwin !== target) files[tsTwin] = "export const v = 1;\n";
+        }
+        const lines = imports.map(({ dir, base, ext, form, index }) => {
+          const specifier = JSON.stringify(`${dir}${base}.${ext}`);
+          if (form === "named") return `import { v as v${index} } from ${specifier};`;
+          if (form === "side-effect") return `import ${specifier};`;
+          if (form === "re-export") return `export * from ${specifier};`;
+          if (form === "multi-line") return `import {\n  v as m${index},\n} from ${specifier};`;
+          return `import type { V } from ${specifier};`;
+        });
+        files["src/bin/cli.ts"] = `${lines.join("\n")}\n`;
+        const refuses = imports.some(({ dir, base, ext, form }) => {
+          if (form === "type-only" || ext === "ts") return false;
+          const target = path.posix.join("src/bin", `${dir}${base}.${ext}`);
+          return !(target in files) && target.replace(/js$/, "ts") in files;
+        });
+
+        const { result, written } = await scaffoldWith(files, "src/bin/cli.ts");
+
+        expect(result.exitCode).toBe(refuses ? 1 : 0);
+        expect(written).toBe(!refuses);
+        if (refuses) expect(result.stderr).toMatch(/^Refusing to scaffold: entry point "src\/bin\/cli\.ts" imports "/);
+        else expect(result.stderr).toBe("");
+      },
+      { testCases: 30, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 300_000);
+});
+
+describe("relativeJsImports", () => {
+  it("names each static value import and re-export, in source order, and skips type-only, dynamic, commented, and quoted ones", () => {
+    const source = [
+      'import a from "./a.js";',
+      "import {",
+      "  b,",
+      '} from "../b.mjs";',
+      "import './c.cjs';",
+      'export { d } from "./d.js";',
+      'export * as e from "./e.js";',
+      'import { type F } from "./f.js";',
+      'import type { G } from "./g.js";',
+      'export type { H } from "./h.js";',
+      'const i = await import("./i.js");',
+      'import j from "pkg/j.js";',
+      'import k from "./k.ts";',
+      '// import l from "./l.js";',
+      'import type from "./m.js";',
+      'const n = \'import "./n.js"\';',
+    ].join("\n");
+
+    expect(relativeJsImports(source)).toEqual(["./a.js", "../b.mjs", "./c.cjs", "./d.js", "./e.js", "./f.js", "./m.js"]);
   });
 });

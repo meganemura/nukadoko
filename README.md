@@ -83,7 +83,13 @@ features/steps/run-greet.ts
 
 `--command src/cli.ts` names the entry point, so the file needs no edit.
 `resolve` reads it from the directory `nuka` runs in, and the scaffold
-refuses a path that is not a file there. Without a value,
+refuses a path that is not a file there. The step runs the entry point
+with `node` itself, so in a project whose `.ts` files import each other
+with `.js` specifiers the entry point is the built program (for example
+`--command dist/cli.js`), and `"pretest:scenarios": "npm run build"` keeps
+a fresh checkout green; the scaffold refuses a `.ts` entry point that
+imports a `.js` file which is absent while its `.ts` sibling is present.
+Without a value,
 the line holds a TODO, and the step fails with the file and line until it
 is filled in. The scaffold writes:
 
