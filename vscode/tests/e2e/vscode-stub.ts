@@ -71,6 +71,11 @@ export interface VscodeStub {
   diagnosticCollection?: FakeDiagnosticCollection;
   readonly errorMessages: string[];
   readonly warningMessages: string[];
+  /** Calls every listener the extension registered on its file system
+   * watchers for this event, as VS Code would on a file write. */
+  fireFileEvent(event: "change" | "create" | "delete", fsPath: string): void;
+  /** How many times the extension has called workspace.findFiles. */
+  findFilesCalls: number;
 }
 
 export function createVscodeStub(): VscodeStub {
@@ -78,6 +83,7 @@ export function createVscodeStub(): VscodeStub {
   const commands = new Map<string, (...args: unknown[]) => unknown>();
   const errorMessages: string[] = [];
   const warningMessages: string[] = [];
+  const fileListeners: { event: "change" | "create" | "delete"; listener: (uri: FakeUri) => unknown }[] = [];
 
   const stub: VscodeStub = {
     module: undefined,
@@ -86,6 +92,14 @@ export function createVscodeStub(): VscodeStub {
     commands,
     errorMessages,
     warningMessages,
+    fireFileEvent(event, fsPath) {
+      for (const entry of fileListeners) {
+        if (entry.event === event) {
+          entry.listener(Uri.file(fsPath));
+        }
+      }
+    },
+    findFilesCalls: 0,
   };
 
   class Uri implements FakeUri {
@@ -148,6 +162,7 @@ export function createVscodeStub(): VscodeStub {
       // Honors both globs, so a test can see which files the extension asks
       // for, not only what it does with every file the stub holds.
       async findFiles(include: string, exclude?: string): Promise<Uri[]> {
+        stub.findFilesCalls += 1;
         return Array.from(files.keys())
           .filter((fsPath) => path.matchesGlob(fsPath, include))
           .filter((fsPath) => exclude === undefined || !path.matchesGlob(fsPath, exclude))
@@ -163,10 +178,14 @@ export function createVscodeStub(): VscodeStub {
         },
       },
       createFileSystemWatcher() {
+        const listen = (event: "change" | "create" | "delete") => (listener: (uri: FakeUri) => unknown) => {
+          fileListeners.push({ event, listener });
+          return { dispose(): void {} };
+        };
         return {
-          onDidChange: () => ({ dispose(): void {} }),
-          onDidCreate: () => ({ dispose(): void {} }),
-          onDidDelete: () => ({ dispose(): void {} }),
+          onDidChange: listen("change"),
+          onDidCreate: listen("create"),
+          onDidDelete: listen("delete"),
           dispose(): void {},
         };
       },

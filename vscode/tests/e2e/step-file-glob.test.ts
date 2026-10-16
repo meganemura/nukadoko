@@ -50,3 +50,31 @@ describe("dist/extension.js: the step files it indexes", () => {
     );
   });
 });
+
+describe("dist/extension.js: the file events that rebuild the index", () => {
+  let stub: VscodeStub;
+  let restoreModuleLoad: () => void;
+
+  beforeAll(() => {
+    stub = createVscodeStub();
+    stub.workspaceFolders = [{ uri: { fsPath: "/work/build/app", toString: () => "file:///work/build/app" } }];
+    restoreModuleLoad = installVscodeModule(stub);
+    requireFreshExtension(distExtensionPath).activate({ subscriptions: [] });
+  });
+
+  afterAll(() => {
+    restoreModuleLoad();
+  });
+
+  it("ignores a write under an excluded directory and rebuilds for a step file", () => {
+    expect(stub.findFilesCalls).toBe(1);
+
+    stub.fireFileEvent("change", "/work/build/app/node_modules/dep/index.js");
+    stub.fireFileEvent("create", "/work/build/app/dist/extension.js");
+    stub.fireFileEvent("delete", "/work/build/app/packages/web/node_modules/x/a.mjs");
+    expect(stub.findFilesCalls).toBe(1);
+
+    stub.fireFileEvent("change", "/work/build/app/features/steps/todo.ts");
+    expect(stub.findFilesCalls).toBe(2);
+  });
+});

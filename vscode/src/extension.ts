@@ -45,7 +45,18 @@ const DECLARATION_FILE = /\.d\.m?ts$/;
 // Explicit, rather than relying on the user's own files.exclude: a
 // workspace that never configured that setting would otherwise have this
 // extension read every file under node_modules.
-const STEP_FILE_EXCLUDE = "**/{node_modules,dist,out,.git,.nukadoko}/**";
+const EXCLUDED_DIRECTORIES = ["node_modules", "dist", "out", ".git", ".nukadoko"];
+const STEP_FILE_EXCLUDE = `**/{${EXCLUDED_DIRECTORIES.join(",")}}/**`;
+
+// The watcher takes no exclude glob, so without this an npm install or a
+// bundler in watch mode would start a full re-index on every file it
+// writes. Relative to the workspace folder, so a folder that itself sits
+// under a directory named like an excluded one still gets its events.
+function isUnderExcludedDirectory(fsPath: string): boolean {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const relative = workspaceRoot === undefined ? fsPath : path.relative(workspaceRoot, fsPath);
+  return relative.split(/[\\/]/).some((segment) => EXCLUDED_DIRECTORIES.includes(segment));
+}
 
 const CHECK_COMMAND = "nukadoko.check";
 const DIAGNOSTIC_COLLECTION_NAME = "nukadoko";
@@ -224,7 +235,10 @@ export function activate(context: vscode.ExtensionContext): void {
   refreshUnresolvedDiagnostics(indexPromise);
 
   const watcher = vscode.workspace.createFileSystemWatcher(STEP_FILE_GLOB);
-  const rebuildIndex = () => {
+  const rebuildIndex = (uri: vscode.Uri) => {
+    if (isUnderExcludedDirectory(uri.fsPath)) {
+      return;
+    }
     indexPromise = buildStepIndex(createWorkspaceFileSource());
     refreshUnresolvedDiagnostics(indexPromise);
   };
