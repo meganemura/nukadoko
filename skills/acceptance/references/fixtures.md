@@ -19,7 +19,19 @@ export default defineConfig({
     },
   },
 });
+
+declare module "nukadoko" {
+  interface StepFixtures {
+    tenant: Tenant;
+  }
+}
 ```
+
+`tsc` needs the `declare module` block: without it, a step that
+destructures `tenant` fails with `Property 'tenant' does not exist on type
+'FixtureBag'`. `nuka check` does not need it, because it reads fixture
+names from the source text. Write the block in `nukadoko.config.ts`, next
+to the fixture, with the type the fixture passes to `use()`.
 
 A step reaches it the same way it reaches `page` or `request`, by
 destructuring the name: `async ({ tenant }, args) => {...}`. Setup runs the

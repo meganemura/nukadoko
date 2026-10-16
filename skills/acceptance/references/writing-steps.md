@@ -124,7 +124,9 @@ something" below says why).
 pattern, every time, because nukadoko reads which fixtures to build from
 that pattern's source text without ever calling `run`. A step needing no
 fixtures at all writes `run({}, args)`, and one needing neither writes
-`run()`. `run({ sum })` reads `sum` as a fixture; when `sum` is an args
+`run()`. A fixture the project declares in `nukadoko.config.ts` also needs
+a `StepFixtures` declaration before `tsc` accepts a step that
+destructures it ("Declaring a fixture" in `fixtures.md` shows the block). `run({ sum })` reads `sum` as a fixture; when `sum` is an args
 key, `nuka check` says so and names `run({}, { sum })`. Any other parameter, `_ctx` included, is refused. `page`,
 `context` and `request` are Playwright's own objects, so reach for
 Playwright's documentation for what to call on them rather than guessing.

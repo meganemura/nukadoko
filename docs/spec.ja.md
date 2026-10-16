@@ -626,6 +626,22 @@ TypeScript はそのオブジェクトリテラルをインラインとして扱
 その宣言型には自己参照的な型推論が必要です。
 実測時にはドキュメント化されていないコンパイラ挙動でしか動かなかったため、このパッケージはその推論を実装しません。
 
+プロジェクトの fixture を分割代入する step には、その fixture の型も必要です。
+step の `run` は `FixtureBag` を受け取ります。
+プロジェクトは `nukadoko.config.ts` で `StepFixtures` を拡張して、fixture をそこに加えます:
+
+```ts
+declare module "nukadoko" {
+  interface StepFixtures {
+    tenant: Tenant;
+  }
+}
+```
+
+`tsc` にはこの拡張が必要です。
+これがないと、`tenant` を分割代入する step は `Property 'tenant' does not exist on type 'FixtureBag'` で失敗します。
+`nuka check` は fixture の名前をソーステキストから読むので、この拡張を必要としません。
+
 fixture は step と同じ方法で第一引数を分割代入します。
 `check` は fixture を呼ばずに、ソーステキストから fixture の依存名を読みます。
 step の依存も同じ方法で読みます。

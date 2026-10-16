@@ -806,6 +806,24 @@ Its declared type would require self-referencing inference.
 This package does not implement that inference because it only worked through
 an undocumented compiler behavior during measurement.
 
+A step that destructures a project fixture needs that fixture's type too.
+A step's `run` receives `FixtureBag`, and a project adds a fixture to it by
+augmenting `StepFixtures` in `nukadoko.config.ts`:
+
+```ts
+declare module "nukadoko" {
+  interface StepFixtures {
+    tenant: Tenant;
+  }
+}
+```
+
+`tsc` needs the augmentation.
+Without it, a step that destructures `tenant` fails with
+`Property 'tenant' does not exist on type 'FixtureBag'`.
+`nuka check` does not need it, because it reads fixture names from the
+source text.
+
 A fixture destructures its first argument in the same way as a step.
 `check` reads the fixture dependency names from the source text without
 calling the fixture.

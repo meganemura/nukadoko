@@ -210,6 +210,11 @@
       "note": "docs/spec.md \"Fixtures\" の fixture の scenario/process scope で入った。config の options.scope や step record の \"scope\" フィールドなど JSON のキー・値そのものを指すときはコードスパンの scope のまま残す(訳さない)。文中で一般名詞として scope そのものを指すときだけカタカナのスコープにする"
     },
     {
+      "en": ["augment", "augments", "augmenting", "augmentation"],
+      "ja": "拡張",
+      "note": "TypeScript の module augmentation(declare module \"nukadoko\" で StepFixtures にメンバーを足すこと)。docs/spec.ja.md \"Fixtures\" で使われていた訳に揃えた。動詞化するときは「StepFixtures を拡張する」"
+    },
+    {
       "en": ["outcome"],
       "ja": "成否",
       "note": "docs/spec.md \"Fixtures\" の fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す"

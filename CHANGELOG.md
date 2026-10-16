@@ -83,6 +83,12 @@ just until 0.1.
   lacks the key (the refusal names the keys it has), when the value is not
   `<step>.<key>` with an identifier key, or when two `--from` values or a
   capture fill the same args key.
+- **The `StepFixtures` augmentation is written down.** "Declaring a
+  fixture" in the acceptance skill's `fixtures.md`, "Fixtures" in
+  docs/spec.md and docs/spec.ja.md, and the fixture paragraph of
+  `writing-steps.md` now show `declare module "nukadoko" { interface
+  StepFixtures { ... } }` and say that `tsc` needs it and `nuka check` does
+  not. `docs/glossary.json` settles 拡張 for augmentation.
 
 ### Changed
 
