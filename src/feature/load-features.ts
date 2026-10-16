@@ -3,6 +3,9 @@ import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile, dialects } from "@cucumber/gherkin";
 import { OathParseError, parseOathSource } from "./parse-oath.js";
 import { resolveOathPaths } from "./resolve-oaths.js";
+import { enterOnce, entryKind } from "./walk-entry.js";
+
+export { enterOnce, entryKind, type EntryKind } from "./walk-entry.js";
 import {
   IdGenerator,
   type GherkinDocument,
@@ -107,7 +110,10 @@ export interface LoadFeaturesResult {
  * header for why): the tree-order sort this function applies below is
  * `nuka check`/`nuka tend`'s own convention, not what a run's own
  * determinism needs. */
-export function walkFeatureFiles(dir: string): string[] {
+export function walkFeatureFiles(dir: string, entered: Set<string> = new Set()): string[] {
+  if (!enterOnce(dir, entered)) {
+    return [];
+  }
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -121,7 +127,8 @@ export function walkFeatureFiles(dir: string): string[] {
   const files: string[] = [];
   for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
+    const kind = entryKind(fullPath, entry);
+    if (kind === "directory") {
       // `featuresDir: "."` is a real configuration. Entering `node_modules`
       // or a dot-directory (`.git`, `.nukadoko`, `.vscode`, ...) would make
       // `nuka check` and `nuka run` treat a dependency's features and the
@@ -132,8 +139,8 @@ export function walkFeatureFiles(dir: string): string[] {
       if (entry.name === "node_modules" || entry.name.startsWith(".")) {
         continue;
       }
-      files.push(...walkFeatureFiles(fullPath));
-    } else if (entry.isFile() && entry.name.endsWith(".feature")) {
+      files.push(...walkFeatureFiles(fullPath, entered));
+    } else if (kind === "file" && entry.name.endsWith(".feature")) {
       files.push(fullPath);
     }
   }
@@ -396,8 +403,10 @@ export function loadFeaturesFromDirs(
       seenAbsolutePaths.add(filePath);
 
       const relativePath = path.relative(rootDir, filePath);
-      const source = readFileSync(filePath, "utf8");
       try {
+        // Inside the try: a dangling link reaches here as a file, and its
+        // read failure is this file's entry, not the end of the report.
+        const source = readFileSync(filePath, "utf8");
         // This caller (src/check/*.ts, src/tend/*.ts) has no hook to run
         // against, so it never keeps the `gherkinDocument`
         // `parseFeatureSource` also returns the way `nuka run`'s own path

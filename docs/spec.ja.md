@@ -181,6 +181,13 @@ step 名は、ファイル名から拡張子を取り除いた名前です。
 discovery は、どの深さでも `node_modules` と `.git`、`.nukadoko`、`.vscode` などのドットディレクトリをスキップします。
 `.d.ts`、`.d.mts`、`.d.cts` は step 定義ではなく型宣言であるため、対象から除外します。
 
+discovery も、`.feature` ファイルと oath を歩く処理も、シンボリックリンクをたどります。
+そのため monorepo は、共有の step や feature を `featuresDir` にリンクできます。
+どの処理も、各ディレクトリには一度だけ入ります。
+そのため、ツリーの上を指すリンクがあってもループせず、同じディレクトリを指す 2 つのリンクがあってもファイルを二重に並べません。
+リンク先が存在しないリンクも、歩く対象に残ります。
+その import や読み込みが失敗し、その失敗がリンクを名指しします。
+
 discovery は `.cjs` と `.cts` のファイルを特定しますが、インポートしません。
 どちらの拡張子も定義上 CommonJS であり、nukadoko は ESM-only です。
 同じ CommonJS の go/no-go については、後述の「Compat steps」を参照してください。

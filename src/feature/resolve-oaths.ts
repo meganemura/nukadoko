@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { enterOnce, entryKind } from "./walk-entry.js";
 
 // Responsibility: turn `config.oaths` into the Markdown files `nuka check`,
 // `nuka tend`, and a directory `nuka run` should read. A named file is
@@ -85,7 +86,10 @@ export function resolveOathPaths(rootDir: string, oaths: readonly string[]): Res
   return { files, problems, directories };
 }
 
-function walkMarkdownFiles(dir: string): string[] {
+function walkMarkdownFiles(dir: string, entered: Set<string> = new Set()): string[] {
+  if (!enterOnce(dir, entered)) {
+    return [];
+  }
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -98,9 +102,10 @@ function walkMarkdownFiles(dir: string): string[] {
       continue;
     }
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkMarkdownFiles(fullPath));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+    const kind = entryKind(fullPath, entry);
+    if (kind === "directory") {
+      files.push(...walkMarkdownFiles(fullPath, entered));
+    } else if (kind === "file" && entry.name.endsWith(".md")) {
       files.push(fullPath);
     }
   }

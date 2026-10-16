@@ -123,6 +123,16 @@ just until 0.1.
 
 ### Fixed
 
+- **Discovery, the `.feature` walk, and the oath walk follow symbolic links.**
+  A step file, a feature, or a directory linked into `featuresDir` (a
+  monorepo's shared steps, for example) used to be skipped with no report,
+  so its steps turned up as `undefined-step` with a scaffold hint and its
+  scenarios never ran. Each walk now follows a link and enters a directory
+  once, so a link back up the tree does not loop. A link whose target is
+  missing is passed on: `nuka check` reports a step file as
+  `step-file-import-failed` and a feature as a parse error, each naming the
+  link.
+
 - **`nuka check` names a `.cts` step file as `step-file-unsupported-extension`, the same as a `.cjs` file.**
   A `.cts` file is CommonJS by extension, so discovery never imports it.
   Before, discovery skipped it without a word, and every step it defined

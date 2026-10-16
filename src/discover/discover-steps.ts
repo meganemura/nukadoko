@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { importInNamespace, newNamespace } from "../config/ts-loader.js";
+import { enterOnce, entryKind } from "../feature/load-features.js";
 import type { z } from "zod";
 import type { DeclaredCollector } from "../compat/declared.js";
 import type { HookRegistration } from "../compat/hooks.js";
@@ -237,7 +238,10 @@ interface WalkStepFilesResult {
 // error if it did), so importing one would only ever produce an empty
 // module -- something to skip outright, not something worth spending an
 // import call on.
-function walkStepFiles(dir: string): WalkStepFilesResult {
+function walkStepFiles(dir: string, entered: Set<string> = new Set()): WalkStepFilesResult {
+  if (!enterOnce(dir, entered)) {
+    return { files: [], unsupportedExtensionFiles: [] };
+  }
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -252,16 +256,17 @@ function walkStepFiles(dir: string): WalkStepFilesResult {
   const unsupportedExtensionFiles: string[] = [];
   for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
+    const kind = entryKind(fullPath, entry);
+    if (kind === "directory") {
       if (entry.name === "node_modules" || entry.name.startsWith(".")) {
         continue;
       }
-      const nested = walkStepFiles(fullPath);
+      const nested = walkStepFiles(fullPath, entered);
       files.push(...nested.files);
       unsupportedExtensionFiles.push(...nested.unsupportedExtensionFiles);
       continue;
     }
-    if (!entry.isFile()) {
+    if (kind !== "file") {
       continue;
     }
     if (DECLARATION_FILE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {

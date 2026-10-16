@@ -194,6 +194,12 @@ The step name omits the file's extension. At every depth, discovery skips
 It also excludes `.d.ts`, `.d.mts`, and `.d.cts` type declarations because
 they are not step definitions.
 
+Discovery, the `.feature` walk, and the oath walk follow symbolic links, so a
+monorepo can link shared steps or features into `featuresDir`. A walk enters
+each directory once, so a link back up the tree does not loop and two links
+to one directory do not list its files twice. A link whose target is missing
+stays in the walk: its import or read fails, and that failure names the link.
+
 Discovery identifies each `.cjs` and `.cts` file but never imports it. Both
 extensions are CommonJS by definition, and nukadoko is ESM-only. See "Compat steps" below for the same CommonJS decision. `nuka check`
 reports the file as `step-file-unsupported-extension`. This report prevents its
