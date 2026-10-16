@@ -115,6 +115,7 @@ const repeat: number = Number(repeatRawArg);
 
 const envelopeStdout = divertProcessStdoutToStderr();
 const parentPid = process.ppid;
+const ignoreStreamError = (): void => {};
 const CHANNEL_CLOSED_FROM_INSIDE =
   "Code in this worker closed its IPC channel to the parent while the parent was still running " +
   "(process.disconnect()). nukadoko reads a closed channel as the parent ending, so this worker " +
@@ -250,13 +251,19 @@ async function main(): Promise<void> {
   // After a forwarded signal it is no signal at all: the parent was killed
   // while this worker tore down, and that teardown must finish.
   //
+  // With the parent gone, every write to stdout or stderr fails with EPIPE,
+  // and an unhandled stream error would end this worker in the middle of
+  // its teardown. The listeners go on first, before any write below and on
+  // the forwarded-signal path too, since that teardown is still running.
+  //
   // Project code can close the channel too, with process.disconnect(). The
   // parent is then still this worker's parent, so the line below says why
-  // the worker stops. The parent's death reparents this worker, and a write
-  // to its dead pipes would fail, so nothing is written then. The kernel
-  // can deliver the channel's end a moment before it reparents; in that
-  // window the line is written to a closed pipe.
+  // the worker stops. The parent's death reparents this worker, so nothing
+  // is written then. The kernel can deliver the channel's end a moment
+  // before it reparents; the listeners make that write harmless.
   const onParentGone = (): void => {
+    process.stdout.on("error", ignoreStreamError);
+    process.stderr.on("error", ignoreStreamError);
     if (processSignal?.interrupted !== false) return;
     if (process.ppid === parentPid) noteSink.write(`${CHANNEL_CLOSED_FROM_INSIDE}\n`);
     processSignal.trigger("SIGHUP");
