@@ -4,23 +4,61 @@ A recipe, not a requirement: `nuka check` and `nuka run` are ordinary CLI
 commands that exit `0` when everything holds and non-zero the moment
 something is wrong (see [README.md](../README.md#running-this-in-ci) and
 "CLI summary" in [docs/spec.md](spec.md#cli-summary)), so any CI system can
-run them. This page fills in what a two-line excerpt cannot: a whole
-workflow file, why three of its lines exist, and the four things a
+run them. This page fills in what a two-line excerpt cannot: two whole
+workflow files (one job for a project whose scenarios run a program, and a
+browser workflow), why three of their lines exist, and the four things a
 project coming from `npx playwright test` usually has to add by hand
 that `nuka run` never does on its own.
 
-## A workflow you can copy whole
+## A CLI project: one job
+
+A project whose scenarios run its own program (steps built on
+`runCommand`) and never open a browser needs one job. `nuka init` already
+wrote the `test:scenarios` script, which runs `nuka check` and then
+`nuka run features`, so the job runs it beside the unit tests:
+
+```yaml
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      # Checks every feature, then runs it. A failure prints the step, its
+      # error, and a rerun command; the Markdown run summary lands on this
+      # job's summary page by itself.
+      - run: npm run test:scenarios
+```
+
+There is no browser to install and no app to start: a step that runs the
+program starts it itself. The `tend` job in the browser workflow below
+fits beside this one unchanged. The pinned `uses:` lines,
+`--ignore-scripts`, and `permissions:` are explained further down this
+page; they hold for both files.
+
+## A browser project: a workflow you can copy whole
 
 This is one file, `.github/workflows/nukadoko.yml`. It runs `nuka check` on
 every push and pull request (seconds, no browser), `nuka run` after it
 passes (the gate that actually executes), and `nuka tend` on a weekly
 schedule, since nothing else here reminds anyone to run it.
 
-A project set up with `nuka init` already has `npm run test:scenarios`,
-which runs `nuka check` and then `nuka run features`. One job that runs it
-is the shortest form of this workflow. The file below splits the two
-commands into two jobs, so a failed check stops the run before a browser
-is installed.
+The CLI job above runs both commands as `npm run test:scenarios`. The file
+below splits them into two jobs, so a failed check stops the run before a
+browser is installed.
 
 ```yaml
 name: nukadoko
@@ -244,9 +282,10 @@ Three things the workflow above leaves to the team, each small.
 
 ## What this page does not claim
 
-The workflow above has not been run inside GitHub Actions itself; nothing
+Neither workflow above has been run inside GitHub Actions itself; nothing
 in this repository can execute one. What was verified instead: the YAML
-parses as valid YAML, and every `npx nuka ...` command in it (including
+parses as valid YAML, `npm run test:scenarios` was run green and red in a
+CLI project with a freshly installed tarball of this package, and every `npx nuka ...` command in it (including
 `nuka run features/`, the directory form used above, not just a single
 feature file) was run against a real, freshly `npm install`ed copy of
 this package, including the live-session refusal on `nuka clean`. The

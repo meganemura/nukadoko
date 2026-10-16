@@ -8,10 +8,9 @@
 > acceptance criteria and what actually ran.
 
 nukadoko runs Gherkin scenarios under typed step contracts and writes a
-step record for every execution. It accepts Varar-style Markdown oaths as
-well, as another front over those same typed steps and step records. The
-tool measures this record instead of relying on an agent's report. The
-criteria remain in the language used by the people who set them.
+step record for every execution. The tool measures this record instead of
+relying on an agent's report. The criteria remain in the language used by
+the people who set them.
 Everything between those sentences and the system under test is typed,
 checked before execution, and reviewable in a diff. Every run ends in a
 Markdown run summary that CI posts on the pull request: a person reads the
@@ -20,57 +19,195 @@ request is the sign-off.
 
 ## Install
 
-Node 20+ (`package.json`'s `engines.node` is `">=20"`).
+Node 20+ (`package.json`'s `engines.node` is `">=20"`). nukadoko is a
+devDependency:
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts (or .mts, see below), features/steps/, .gitignore, and a package.json script
-npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
-`nuka init` sets up a CLI or API project. It adds `.nukadoko/` to
-`.gitignore` and `"test:scenarios": "nuka check && nuka run features"` to
-the `package.json` scripts, unless a script by that name already exists.
-`npm run test:scenarios` is then the one command a person or CI runs.
-When `tsconfig.json` has an `include` that leaves out `features/` or the
-config file, `init` prints one line naming the entries to add. Two flags
-add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
-(see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
-`!.env.example` to `.gitignore` for a project that keeps env files.
+## Beside your unit tests
 
-nukadoko is a devDependency. It ships its TypeScript source alongside
-`dist/`, so stack traces point to the actual code. An agent reading
-`node_modules` can see why something works, not only its type.
+Unit tests (vitest, `node:test`) check functions from the inside. A
+scenario checks the program from the outside, in sentences the person who
+asked for the change can read on the pull request. The everyday loop is
+four things: a `.feature` file, one `defineStep` per kind of line,
+`nuka check`, and `nuka run`.
 
-If an existing `package.json` has no `"type": "module"`, the project uses
-CommonJS, as a plain `npm init -y` does. `nuka init` still works. It writes
-`nukadoko.config.mts` instead of `nukadoko.config.ts` and prints a one-line
-reminder that step files also need `.mts`. In such a project, Node reads a
-plain `.ts` file as CommonJS, while nukadoko supports only ESM.
+The walkthrough below adds one scenario to a project whose CLI,
+`src/cli.ts`, prints `Hello, <name>!`. Every output block is copied from a
+real run.
 
-<details>
-<summary>No `package.json` yet (Rails, Django, and other non-Node repos)?</summary>
-
-Create one first. Skip `npm init -y`. It copies the first line of the
-existing `README.md` into `description` and the directory name into `name`.
-Writing the minimum by hand is more reliable:
-
-```json
-{ "private": true, "type": "module" }
+```sh
+npx nuka init
 ```
 
-`"type": "module"` keeps every generated file as `.ts`, which is the simpler
-of the two paths above. Leaving it out is still supported (see the CommonJS
-paragraph above). However, manually writing `nukadoko.config.ts` in such a
-project fails to import. The error names that file and the cause, and says
-to rename it to `nukadoko.config.mts`. `nuka init` writes
-`nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
-`.gitignore` yourself because `nuka init` does that. `nuka init --env` also
-adds `.env` and `.env.*`, and leaves `.env.example` tracked. Traces and
-screenshots inside the state directory are not redacted, so it contains
-sensitive data.
+```text
+nukadoko.config.ts
+features/steps
+.gitignore
+package.json
+```
 
-</details>
+`init` adds `.nukadoko/` to `.gitignore` and a `test:scenarios` script to
+`package.json`, the one command a person or CI runs. The CommonJS case,
+`tsconfig.json`, and the `--allure` and `--env` flags are in
+[Setup details](#setup-details).
+
+Scaffold one step per kind of line. Each stub fails until it is
+implemented:
+
+```sh
+npx nuka scaffold run-greet --pattern "I run greet with {name:string}"
+npx nuka scaffold output-says --pattern "the output says {text:string}" --then
+```
+
+```text
+features/steps/run-greet.ts
+features/steps/output-says.ts
+```
+
+Fill in the When step. `scratch.dir()` is an empty directory that is
+removed after the scenario, and `runCommand` puts the process it ran into
+the step record:
+
+```ts
+// features/steps/run-greet.ts
+import { defineStep, runCommand, z } from "nukadoko";
+import { resolve } from "node:path";
+
+const cli = resolve("src/cli.ts");
+
+export default defineStep({
+  description: "Run the greet CLI in an empty scratch directory",
+  pattern: "I run greet with {name:string}",
+  args: z.object({ name: z.string() }),
+  returns: z.object({ exitCode: z.number().nullable(), stdout: z.string() }),
+  async run({ scratch }, { name }) {
+    const { exitCode, stdout } = await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });
+    return { exitCode, stdout };
+  },
+});
+```
+
+Then the Then step. `from` hands it the `stdout` the When step returned,
+and the feature line supplies `text`:
+
+```ts
+// features/steps/output-says.ts
+import { defineStep, z } from "nukadoko";
+import runGreet from "./run-greet.ts";
+
+export default defineStep({
+  description: "The CLI printed exactly this line",
+  pattern: "the output says {text:string}",
+  args: z.object({ text: z.string(), stdout: z.string() }),
+  from: { stdout: [runGreet, "stdout"] },
+  mutates: false,
+  run({}, { text, stdout }) {
+    if (stdout.trim() !== text) throw new Error(`expected "${text}", got "${stdout.trim()}"`);
+  },
+});
+```
+
+The feature is the two sentences:
+
+```gherkin
+# features/greet.feature
+Feature: greet
+
+  Scenario: greets by name
+    When I run greet with "Ada"
+    Then the output says "Hello, Ada!"
+```
+
+Run it:
+
+```sh
+npm run test:scenarios
+```
+
+```text
+> test:scenarios
+> nuka check && nuka run features
+
+ok: no issues found
+scenario 1/1  features/greet.feature:4  greets by name
+  step 1/2  ok  0.4s  I run greet with "Ada"
+  step 2/2  ok  0.0s  the output says "Hello, Ada!"
+steps     .nukadoko/records/steps/      2
+scenarios .nukadoko/records/scenarios/  1
+summary   .nukadoko/records/runs/run-20261016-113842-fdeq/summary.md
+1 scenario: 1 passed, 0 failed  (4s)
+```
+
+(`nuka run` also prints one JSON scenario record per scenario on stdout;
+it is left out above.)
+
+When a scenario fails, stderr names the step, its error, its step record,
+and the command that reruns it. Here the feature expects `"Hi, Ada!"`:
+
+```text
+scenario 1/1  features/greet.feature:4  greets by name
+  step 1/2  ok  0.3s  I run greet with "Ada"
+  step 2/2  FAIL  0.0s  the output says "Hi, Ada!"
+      expected "Hi, Ada!", got "Hello, Ada!"
+      record  .nukadoko/records/steps/step-20261016-113855-9ygo
+steps     .nukadoko/records/steps/      2
+scenarios .nukadoko/records/scenarios/  1
+summary   .nukadoko/records/runs/run-20261016-113855-pd55/summary.md
+1 scenario: 0 passed, 1 failed  (5s)
+failed  features/greet.feature:4  greets by name
+  rerun  nuka run features/greet.feature:4
+```
+
+The same facts go into the Markdown run summary. On GitHub Actions it
+lands on the job's summary page by itself. Its first part:
+
+```text
+<!-- nukadoko:run -->
+# nukadoko run failed: 1 scenario, 0 passed, 1 failed
+
+- commit: `cfb10c8`
+- environment: default
+- browser: none launched
+- nukadoko: 0.15.0
+- run: run-20261016-113855-pd55
+- started 2026-10-16T11:38:51.111Z, finished 2026-10-16T11:38:55.841Z (5s)
+
+## features/greet.feature
+
+| scenario | line | status | duration | failure |
+| --- | --- | --- | --- | --- |
+| greets by name | 4 | failed | 0.3s | step "the output says "Hi, Ada!"": `expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-113855-9ygo` |
+```
+
+In CI it is one more line beside the unit tests
+([docs/ci.md](docs/ci.md) has the whole workflow):
+
+```yaml
+- run: npm run test:scenarios
+```
+
+Commit `features/` (the feature and its steps), `nukadoko.config.ts`, and
+the `package.json` change. Do not commit `.nukadoko/`: it holds the step
+records, the run summaries, and session state, may hold live credentials
+in plaintext, and `nuka init` already ignores it.
+
+## More
+
+Everything past the loop above, one line each:
+
+- [Wrong before it runs](#wrong-before-it-runs): what `nuka check` catches before anything executes, and running one step alone with `nuka do`.
+- [Markdown oaths](#markdown-oaths): the same steps behind sentences in a Markdown file instead of a `.feature`.
+- [Exploring a model](#exploring-a-model): `nuka explore` generates sequences of request-only steps and prints the shortest failing one.
+- [The compat door](#the-compat-door): bring an existing cucumber-js suite in by switching one import.
+- [Reports fill themselves](#reports-fill-themselves): the Allure and cucumber-messages emitters.
+- [Running this in CI](#running-this-in-ci): the PR gate, the merge gate, `--concurrency`, and `--repeat`.
+- Sessions, environments, and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Sessions, environments, secrets" in [docs/spec.md](docs/spec.md#sessions-environments-secrets)): login state across calls, named environments, redaction.
+- [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
+- [The bed has to be tended](#the-bed-has-to-be-tended): `nuka tend`, for what is rotting rather than broken.
+- [Setup details](#setup-details), [Upgrading](#upgrading), [Status](#status), and [Why this exists now](#why-this-exists-now).
 
 ## Wrong before it runs
 
@@ -283,6 +420,52 @@ dialect). See the [roadmap](docs/spec.md#roadmap).
 Maintenance is one person working in the open. Every claim below that
 carries a number was measured; where something was only reasoned about,
 this README says so.
+
+## Setup details
+
+`nuka init` sets up a CLI or API project. It adds `.nukadoko/` to
+`.gitignore` and `"test:scenarios": "nuka check && nuka run features"` to
+the `package.json` scripts, unless a script by that name already exists.
+`npm run test:scenarios` is then the one command a person or CI runs.
+When `tsconfig.json` has an `include` that leaves out `features/` or the
+config file, `init` prints one line naming the entries to add. Two flags
+add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
+(see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
+`!.env.example` to `.gitignore` for a project that keeps env files.
+
+nukadoko ships its TypeScript source alongside `dist/`, so stack traces
+point to the actual code. An agent reading
+`node_modules` can see why something works, not only its type.
+
+If an existing `package.json` has no `"type": "module"`, the project uses
+CommonJS, as a plain `npm init -y` does. `nuka init` still works. It writes
+`nukadoko.config.mts` instead of `nukadoko.config.ts` and prints a one-line
+reminder that step files also need `.mts`. In such a project, Node reads a
+plain `.ts` file as CommonJS, while nukadoko supports only ESM.
+
+<details>
+<summary>No `package.json` yet (Rails, Django, and other non-Node repos)?</summary>
+
+Create one first. Skip `npm init -y`. It copies the first line of the
+existing `README.md` into `description` and the directory name into `name`.
+Writing the minimum by hand is more reliable:
+
+```json
+{ "private": true, "type": "module" }
+```
+
+`"type": "module"` keeps every generated file as `.ts`, which is the simpler
+of the two paths above. Leaving it out is still supported (see the CommonJS
+paragraph above). However, manually writing `nukadoko.config.ts` in such a
+project fails to import. The error names that file and the cause, and says
+to rename it to `nukadoko.config.mts`. `nuka init` writes
+`nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
+`.gitignore` yourself because `nuka init` does that. `nuka init --env` also
+adds `.env` and `.env.*`, and leaves `.env.example` tracked. Traces and
+screenshots inside the state directory are not redacted, so it contains
+sensitive data.
+
+</details>
 
 ## Upgrading
 
@@ -660,10 +843,18 @@ access to a document you need, say so rather than assuming.
 
 `nuka check` and `nuka run` are both scriptable. Each exits with `0` when
 everything holds and with a nonzero value when something is wrong. Either
-command can therefore run as an ordinary pipeline step. The example below
-is an excerpt. [docs/ci.md](docs/ci.md) contains a complete workflow and
-the four items that projects moving from `npx playwright test` usually add
-manually.
+command can therefore run as an ordinary pipeline step. A project whose
+scenarios drive a CLI needs one line, the script `nuka init` wrote:
+
+```yaml
+- run: npm run test:scenarios
+```
+
+A project whose scenarios open a browser splits the two commands, so a
+failed check stops the job before a browser is installed. The example
+below is an excerpt. [docs/ci.md](docs/ci.md) contains both complete
+workflows and the four items that projects moving from
+`npx playwright test` usually add manually.
 
 ```yaml
 # excerpt from a CI workflow

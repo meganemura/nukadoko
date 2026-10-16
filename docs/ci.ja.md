@@ -3,13 +3,56 @@
 これはレシピであって要件ではありません。
 `nuka check` と `nuka run` は普通の CLI コマンドで、すべてが保たれていれば `0` で終了し、何かが壊れた瞬間に非ゼロで終了します([README.md](../README.ja.md#running-this-in-ci) と [docs/spec.ja.md](spec.ja.md#cli-summary) の「CLI summary」を参照)。
 だからどの CI システムからでも呼び出せます。
-このページが埋めるのは 2 行の抜粋には書けないもの、すなわち丸ごと 1 つの workflow ファイルと、そのうち 3 行が存在する理由と、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある、そして `nuka run` が自分では決してやらない 4 つのことです。
+このページが埋めるのは 2 行の抜粋には書けないものです。
+すなわち、丸ごと 2 つの workflow ファイル(scenario がプログラムを実行するプロジェクトのための 1 つの job と、ブラウザの workflow)、そのうち 3 行が存在する理由、そして `npx playwright test` から来たプロジェクトが自分の手で足す必要があり、`nuka run` が自分では決してやらない 4 つのことです。
 
-## そのままコピーできる workflow
+## CLI のプロジェクト: 1 つの job
+
+scenario が自分のプログラムを実行し(`runCommand` の上に作った step)、ブラウザを開かないプロジェクトに必要な job は 1 つです。
+`nuka init` が `test:scenarios` script を既に書いており、それは `nuka check` の後に `nuka run features` を実行します。
+そのため、job はユニットテストの横でそれを実行します:
+
+```yaml
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      # Checks every feature, then runs it. A failure prints the step, its
+      # error, and a rerun command; the Markdown run summary lands on this
+      # job's summary page by itself.
+      - run: npm run test:scenarios
+```
+
+インストールするブラウザも、起動するアプリもありません。
+プログラムを実行する step が、自分でそれを起動するからです。
+下のブラウザの workflow にある `tend` job は、そのままこの job の横に置けます。
+固定した `uses:` 行、`--ignore-scripts`、`permissions:` については、このページの後半で説明します。
+説明は両方のファイルに当てはまります。
+
+## ブラウザのプロジェクト: そのままコピーできる workflow
 
 これは 1 つのファイル、`.github/workflows/nukadoko.yml` です。
 すべての push と pull request で `nuka check` を実行し(数秒、ブラウザ不要)、それが通ったら `nuka run` を実行し(実際に実行するゲート)、`nuka tend` を毎週のスケジュールで実行します。
 これを実行しろと思い出させるものが他に無いからです。
+
+上の CLI の job は、両方のコマンドを `npm run test:scenarios` として実行します。
+下のファイルはそれらを 2 つの job に分けます。
+そうすれば、check が失敗したときに、ブラウザをインストールする前に run が止まります。
 
 ```yaml
 name: nukadoko
@@ -204,9 +247,10 @@ jobs:
 
 ## このページが主張しないこと
 
-上の workflow は GitHub Actions の中で実際に実行してはいません。
+上のどちらの workflow も、GitHub Actions の中で実際に実行してはいません。
 このリポジトリの中では、それを実行する手段が無いからです。
 代わりに確かめたのは次のことです。
+`npm run test:scenarios` は、本パッケージの tarball を新しくインストールした CLI のプロジェクトで、green と red の両方を実行しました。
 この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否も含めて)です。
 「チームがその上に足すもの」にある pull request のコメント step も実行していません。
 その `gh pr comment` のフラグは `gh` 自身のヘルプから読んだもので、実際の pull request に対して試してはいません。
