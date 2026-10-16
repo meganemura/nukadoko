@@ -192,6 +192,7 @@ export default {
         "load-config.ts",
         "module-kind.ts",
         "schema.ts",
+        "tsx-cache-off.ts",
       ],
     },
     {
