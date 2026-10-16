@@ -24,14 +24,25 @@ just until 0.1.
   builtin and is not reported. A step that no checked line binds is not
   reported, so a run of a command-line scenario is not stopped by a browser
   step file beside it. `nuka run --no-check` keeps the run-time failure.
-- **`nuka scaffold <name> --command` writes the When step of a command-line program.**
+- **`nuka scaffold <name> --command [<entry point>]` writes the When step of a command-line program.**
   The step runs `runCommand(process.execPath, [cli, ...args], { cwd:
   scratch.dir() })` with the pattern's captures as argv (a capture that is
   not a string is passed as its text), and declares `returns` of
   `exitCode`, `stdout`, and `stderr`. So `nuka scaffold <then-step> --then
   --from <name>.stdout` (or `.exitCode`, `.stderr`) works right after it,
-  with no hand edit in between. The one line left to fill in is
-  `const cli = resolve("<TODO: the entry point>")`. `--command` with
+  with no hand edit in between. The flag's value is the entry point,
+  written as `const cli = resolve("src/cli.ts")` (a JSON string literal,
+  so a quote or a backslash in the path is escaped), so the walkthrough's
+  When step needs no edit at all. Without a value the line is
+  `const cli = resolve("<TODO: the entry point>")`, and `run` throws
+  `fill in the entry point: features/steps/<name>.ts:<line>` before it
+  calls `runCommand` while that placeholder is there: `nuka check` still
+  passes, because the file imports, but `nuka do` and `nuka run` fail by
+  name at that step. Before, the step ran Node on a path that does not
+  exist, passed with `exitCode: 1`, and the cause showed up only in the
+  step record's `stderr` while the next step failed on an empty `stdout`.
+  An args key named `Error` is refused in that form too, since the guard
+  throws one. `--command` given twice is refused. `--command` with
   `--then` is refused with no file written, because a step that runs a
   program changes state. An args key that would hide a name the written
   body reads (`cli`, `runCommand`, `process`, `scratch`, `String`) is

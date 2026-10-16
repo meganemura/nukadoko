@@ -33,11 +33,14 @@ criterion's wording doesn't match a pattern verbatim.
    and no `returns`. Add `--from <step>.<key>` for each value the step
    reads from an earlier step's result: it writes the import, the args
    field, and the `from` entry ("Chaining a value from an earlier step").
-   Add `--command` for a When step that runs a program: it writes the
-   `runCommand` call in `scratch.dir()` and `returns` of `exitCode`,
-   `stdout`, and `stderr`, so a Then step can be scaffolded `--from` it
-   at once; the entry point (`const cli = resolve(...)`) is the one line
-   to fill in. Leave `--pattern` out for a step reached by name only.
+   Add `--command <entry point>` for a When step that runs a program
+   (`--command src/cli.ts`, relative to the directory `nuka` runs in): it
+   writes `const cli = resolve("<entry point>")`, the `runCommand` call in
+   `scratch.dir()`, and `returns` of `exitCode`, `stdout`, and `stderr`, so
+   a Then step can be scaffolded `--from` it at once. Without a value the
+   `cli` line holds a TODO, and the step throws `fill in the entry point:
+   <file>:<line>` until it is filled in. Leave `--pattern` out for a step
+   reached by name only.
 2. Implement it. The shape of that file is the next section.
 3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
    record, before it ever touches a feature. Fix and re-run until it does

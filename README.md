@@ -74,15 +74,17 @@ and returns its `exitCode`, `stdout`, and `stderr`. `runCommand` puts the
 process it ran into the step record:
 
 ```sh
-npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command
+npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command src/cli.ts
 ```
 
 ```text
 features/steps/run-greet.ts
 ```
 
-The entry point is the one line to fill in. `resolve` reads it from the
-directory `nuka` runs in:
+`--command src/cli.ts` names the entry point, so the file needs no edit.
+`resolve` reads it from the directory `nuka` runs in. Without a value,
+the line holds a TODO, and the step fails with the file and line until it
+is filled in. The scaffold writes:
 
 ```ts
 // features/steps/run-greet.ts

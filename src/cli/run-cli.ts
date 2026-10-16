@@ -173,7 +173,9 @@ interface ScaffoldArgs {
   name: string;
   pattern?: string;
   then?: boolean;
-  command?: boolean;
+  /** `""` when the flag is given with no value, and `false` for yargs'
+   * own `--no-command`, which means the flag is absent. */
+  command?: string | false;
   from?: string[];
 }
 
@@ -831,10 +833,9 @@ export async function runCli(
           describe: "an assertion for a Then line: mutates: false and no returns",
         })
         .option("command", {
-          type: "boolean",
-          default: false,
+          type: "string",
           describe:
-            "a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point is the one TODO",
+            "[entry point] a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point is written into the file, or left as a TODO the step refuses to run with",
         })
         .option("from", {
           type: "string",
@@ -842,7 +843,7 @@ export async function runCli(
           describe:
             "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
         })
-        .check(rejectRepeatedFlags(["pattern"])) as Argv<ScaffoldArgs>,
+        .check(rejectRepeatedFlags(["pattern", "command"])) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
       if (argsFailed) return;
       const { runScaffold } = await import("./scaffold.js");
@@ -851,7 +852,8 @@ export async function runCli(
         name: args.name,
         pattern: args.pattern ?? null,
         then: args.then ?? false,
-        command: args.command ?? false,
+        command: typeof args.command === "string",
+        entryPoint: typeof args.command === "string" && args.command !== "" ? args.command : null,
         from: args.from ?? [],
         stdout,
         stderr,

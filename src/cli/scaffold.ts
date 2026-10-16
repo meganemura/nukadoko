@@ -75,12 +75,18 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // with the args as argv, in `scratch.dir()`, and returns `exitCode`,
 // `stdout`, and `stderr`. Those three keys are written into `returns` so a
 // Then step can be scaffolded `--from` it at once, with no hand edit in
-// between; the entry point is the one thing scaffold cannot know, so it is
-// the one TODO. Until it is filled in, the program Node is asked to run is
-// a path that does not exist, so the step returns a nonzero `exitCode`
-// with the TODO text in `stderr` rather than throwing. `--command` and `--then` are refused together, because a
-// step that runs a program changes state and a Then step declares that it
-// does not.
+// between. The entry point is the one thing scaffold cannot read from the
+// project, so `--command <entry point>` takes it as a value and writes it
+// into `resolve(...)` as a JSON string literal (JSON's escapes are valid
+// JavaScript, so any path reads back as itself). Without a value the line
+// holds a TODO, and `run` throws `fill in the entry point: <file>:<line>`
+// while it does. Without that guard, Node would be asked to run a path that
+// does not exist: `runCommand` rightly treats a nonzero exit as a result,
+// so the When step passed and the cause surfaced only as an empty `stdout`
+// in the next step. The placeholder is not a program under test, so it
+// fails by name instead. `--command` and `--then` are refused together,
+// because a step that runs a program changes state and a Then step
+// declares that it does not.
 //
 // A stub's thrown message names its args, so a project that compiles with
 // `noUnusedParameters` accepts the file as written, and the first failed
@@ -96,6 +102,9 @@ export interface RunScaffoldOptions {
   then: boolean;
   /** `--command`: run a program and return its exit code and output. */
   command: boolean;
+  /** `--command`'s value, the entry point the step runs, or `null` to
+   * leave the TODO line that `run` refuses until it is filled in. */
+  entryPoint: string | null;
   /** Each `--from` value as typed, `<step>.<key>`, in order. */
   from: readonly string[];
   stdout: WritableSink;
@@ -160,7 +169,13 @@ interface StepTemplate {
   readonly captures: readonly Capture[];
   readonly chained: readonly ChainedField[];
   readonly variant: Variant;
+  readonly entryPoint: string | null;
+  /** The written file, relative to the project root, as the guard names it. */
+  readonly relativeFilePath: string;
 }
+
+/** The text `cli` holds until someone names the entry point. */
+const ENTRY_POINT_PLACEHOLDER = "<TODO: the entry point>";
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
@@ -284,7 +299,7 @@ function commandArgv(fields: readonly Field[]): string {
   return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
 }
 
-function stepTemplate({ name, pattern, captures, chained, variant }: StepTemplate): string {
+function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, relativeFilePath }: StepTemplate): string {
   const fields = fieldsOf(captures, chained);
   const keys = fields.map((field) => field.key);
   const argsParameter = keys.length === 0 ? "" : `{ ${keys.join(", ")} }`;
@@ -299,9 +314,18 @@ function stepTemplate({ name, pattern, captures, chained, variant }: StepTemplat
         'import { resolve } from "node:path";',
         ...importLines(chained),
         "",
-        'const cli = resolve("<TODO: the entry point>");',
+        `const cli = resolve(${JSON.stringify(entryPoint ?? ENTRY_POINT_PLACEHOLDER)});`,
       ]
     : ['import { defineStep, z } from "nukadoko";', ...importLines(chained)];
+  // The `cli` line is the last header line, so its 1-based number is the header's length.
+  const placeholderGuard =
+    command && entryPoint === null
+      ? [
+          `    if (cli.includes(${JSON.stringify(ENTRY_POINT_PLACEHOLDER)})) throw new Error(${JSON.stringify(
+            `fill in the entry point: ${relativeFilePath}:${headerLines.length}`,
+          )});`,
+        ]
+      : [];
   const description = command ? "Run the command under test in an empty scratch directory" : `TODO: describe ${name}`;
   const outcomeLines =
     variant === "then"
@@ -322,6 +346,7 @@ function stepTemplate({ name, pattern, captures, chained, variant }: StepTemplat
   const runLines = command
     ? [
         `  async run({ scratch }${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
+        ...placeholderGuard,
         `    return await runCommand(process.execPath, [${commandArgv(fields)}], { cwd: scratch.dir() });`,
       ]
     : [`  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`, stubBody(name, fields)];
@@ -443,7 +468,7 @@ function resolveChain(
 }
 
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
-  const { rootDir, name, pattern, then, command, from, stdout, stderr } = options;
+  const { rootDir, name, pattern, then, command, entryPoint, from, stdout, stderr } = options;
 
   if (!VALID_STEP_NAME.test(name)) {
     stderr.write(
@@ -459,7 +484,12 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     return 1;
   }
   const variant: Variant = command ? "command" : then ? "then" : "when";
-  const shape = VARIANTS[variant];
+  const variantShape = VARIANTS[variant];
+  // The placeholder guard throws an `Error`, so an args key may not hide it.
+  const shape: VariantShape =
+    command && entryPoint === null
+      ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
+      : variantShape;
 
   const read = pattern === null ? { captures: [] } : readPattern(pattern);
   if ("refusal" in read) {
@@ -522,7 +552,18 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, stepTemplate({ name, pattern, captures: read.captures, chained, variant }));
+  await writeFile(
+    filePath,
+    stepTemplate({
+      name,
+      pattern,
+      captures: read.captures,
+      chained,
+      variant,
+      entryPoint,
+      relativeFilePath: relativeFilePath.split(path.sep).join("/"),
+    }),
+  );
 
   stdout.write(`${relativeFilePath}\n`);
   return 0;

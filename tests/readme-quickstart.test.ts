@@ -9,6 +9,7 @@ import { fixture, removeTempDir, repoRoot, testsDir } from "./helpers/fixtures.j
 // written. Its commands run in order in a scratch copy of the CLI project it
 // describes, its file blocks are written where their first-line comment
 // says, and the last command it shows, `npm run test:scenarios`, exits 0.
+// The When step's block is exactly what its scaffold command wrote.
 // README.ja.md carries the same blocks, so the two cannot drift apart.
 //
 // `npm install -D nukadoko` is the one line not run: the scratch project
@@ -90,9 +91,14 @@ describe("README.md: Beside your unit tests", () => {
     const env = { ...inherited, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` };
 
     const ran: string[] = [];
+    // A file block the scaffold already wrote as shown, path comment aside:
+    // the walkthrough promises the When step needs no edit.
+    const unedited: string[] = [];
     for (const block of blocks) {
       const target = filePath(block);
       if (target !== undefined) {
+        const written = await readFile(path.join(projectDir, target), "utf8").catch(() => undefined);
+        if (written === block.body.slice(block.body.indexOf("\n") + 1)) unedited.push(target);
         await mkdir(path.dirname(path.join(projectDir, target)), { recursive: true });
         await writeFile(path.join(projectDir, target), block.body);
         continue;
@@ -110,5 +116,6 @@ describe("README.md: Beside your unit tests", () => {
       }
     }
     expect(ran.at(-1)).toBe("npm run test:scenarios");
+    expect(unedited).toEqual(["features/steps/run-greet.ts"]);
   }, 120_000);
 });

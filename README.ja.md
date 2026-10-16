@@ -71,15 +71,17 @@ When の step を scaffold します。
 `runCommand` は、実行したプロセスを step record に入れます:
 
 ```sh
-npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command
+npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command src/cli.ts
 ```
 
 ```text
 features/steps/run-greet.ts
 ```
 
-埋めるのはエントリポイントの 1 行だけです。
-`resolve` は、`nuka` を実行したディレクトリから読みます:
+`--command src/cli.ts` がエントリポイントを指定するので、このファイルは編集しません。
+`resolve` は、`nuka` を実行したディレクトリから読みます。
+値を省くと、その行には TODO が残り、埋めるまで step はファイル名と行番号を示して失敗します。
+scaffold が書く内容は次のとおりです:
 
 ```ts
 // features/steps/run-greet.ts

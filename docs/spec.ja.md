@@ -3599,7 +3599,7 @@ nuka describe <step>          full contract, schemas as JSON Schema, plus
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command] [--from <step>.<key>]...
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>]...
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -3621,10 +3621,15 @@ nuka scaffold <name> [--pattern <text>] [--then | --command] [--from <step>.<key
                               runCommand(process.execPath, [cli, ...args],
                               { cwd: scratch.dir() }),
                               returns exitCode, stdout, and stderr (so
-                              --from can chain them at once), and one
-                              const cli = resolve("<TODO: the entry
-                              point>") line as the only TODO. --command
-                              with --then is refused
+                              --from can chain them at once), and
+                              const cli = resolve("<entry point>"), the
+                              value given, relative to the working
+                              directory. Without a value that line
+                              holds a TODO, and run throws "fill in the
+                              entry point: <file>:<line>" before it calls
+                              runCommand, so do and run fail by name at
+                              that step while check still passes.
+                              --command with --then is refused
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

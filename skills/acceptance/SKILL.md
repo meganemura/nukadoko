@@ -106,8 +106,8 @@ those four; the rest carries the result to a person.
 1. **Steps.** Read the vocabulary: `nuka steps --json`, then
    `nuka describe <step>` for anything that looks relevant. When an
    operation is missing: `nuka scaffold <name> --pattern "<line>"`
-   (`--then` for a Then step, `--command` for a When step that runs a
-   program, `--from <step>.<key>` for each value it reads from an earlier
+   (`--then` for a Then step, `--command <entry point>` for a When step
+   that runs a program, `--from <step>.<key>` for each value it reads from an earlier
    step), implement it, exercise it alone with
    `nuka do`. `references/writing-steps.md` ("Reading the vocabulary",
    "When the vocabulary has no step for it"). The same file: chaining

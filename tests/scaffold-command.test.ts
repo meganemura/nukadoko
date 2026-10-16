@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { runInNewContext } from "node:vm";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -19,8 +20,10 @@ import {
 // Responsibility: `nuka scaffold <name> --command`, the When step that runs
 // a program, and the stub every other scaffold writes. The command step has
 // to return the three keys a Then step chains with `--from` right after it,
-// run a real program once its one TODO is filled in, and every scaffolded
-// file has to compile under `noUnusedLocals` and `noUnusedParameters`.
+// run a real program, either named on the command line or once its one
+// TODO is filled in, refuse to run while the TODO is still there, and every
+// scaffolded file has to compile under `noUnusedLocals` and
+// `noUnusedParameters`.
 
 async function initProject(): Promise<string> {
   const rootDir = await createEmptyTempDir();
@@ -80,6 +83,7 @@ describe("nuka scaffold --command", () => {
         "    stderr: z.string(),",
         "  }),",
         "  async run({ scratch }, { name }) {",
+        '    if (cli.includes("<TODO: the entry point>")) throw new Error("fill in the entry point: features/steps/run-greet.ts:4");',
         "    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });",
         "  },",
         "});",
@@ -113,6 +117,7 @@ describe("nuka scaffold --command", () => {
         "    stderr: z.string(),",
         "  }),",
         "  async run({ scratch }) {",
+        '    if (cli.includes("<TODO: the entry point>")) throw new Error("fill in the entry point: features/steps/run-help.ts:4");',
         "    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
         "  },",
         "});",
@@ -128,7 +133,15 @@ describe("nuka scaffold --command", () => {
     ],
     [
       ["--command", "--pattern", "run {cli:string}"],
-      'Refusing to scaffold: args key "cli" would hide a name the written step body reads (cli, runCommand, process, scratch, String); name the capture or the key something else\n',
+      'Refusing to scaffold: args key "cli" would hide a name the written step body reads (cli, runCommand, process, scratch, String, Error); name the capture or the key something else\n',
+    ],
+    [
+      ["--command", "--pattern", "run {Error:string}"],
+      'Refusing to scaffold: args key "Error" would hide a name the written step body reads (cli, runCommand, process, scratch, String, Error); name the capture or the key something else\n',
+    ],
+    [
+      ["--command", "src/a.ts", "--command", "src/b.ts"],
+      "--command was given more than once.\n",
     ],
     [
       ["--pattern", "parse {JSON:string}"],
@@ -140,6 +153,81 @@ describe("nuka scaffold --command", () => {
     expect(result.stderr).toBe(message);
     expect(result.exitCode).toBe(1);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
+  });
+
+  it("writes a named entry point in place of the TODO, with no guard", async () => {
+    const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", "src/cli.ts"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toBe("features/steps/run-greet.ts\n");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(stepPath(rootDir, "run-greet"), "utf8")).toBe(
+      [
+        'import { defineStep, runCommand, z } from "nukadoko";',
+        'import { resolve } from "node:path";',
+        "",
+        'const cli = resolve("src/cli.ts");',
+        "",
+        "export default defineStep({",
+        '  description: "Run the command under test in an empty scratch directory",',
+        '  pattern: "I run greet with {name:string}",',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({",
+        "    name: z.string(),",
+        "  }),",
+        "  returns: z.object({",
+        "    exitCode: z.number().nullable(),",
+        "    stdout: z.string(),",
+        "    stderr: z.string(),",
+        "  }),",
+        "  async run({ scratch }, { name }) {",
+        "    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("reads --no-command as no --command", async () => {
+    const result = await cli(rootDir, ["scaffold", "plain", "--no-command"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(stepPath(rootDir, "plain"), "utf8")).toContain('throw new Error("not implemented: plain");');
+  });
+
+  it("escapes a quote and a backslash in the entry point", async () => {
+    const result = await cli(rootDir, ["scaffold", "run-odd", "--command", 'bin/say "hi"\\x.mjs']);
+
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(stepPath(rootDir, "run-odd"), "utf8")).toContain(
+      'const cli = resolve("bin/say \\"hi\\"\\\\x.mjs");\n',
+    );
+  });
+
+  it("passes check with the TODO left in, and fails do and run by name at the When step", async () => {
+    await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command"]);
+    await cli(rootDir, ["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
+    await writeFile(
+      path.join(rootDir, "features", "greet.feature"),
+      ["Feature: greet", "  Scenario: greet a name", '    When I run greet with "Ada"', '    Then the output says "Hello, Ada!"', ""].join(
+        "\n",
+      ),
+    );
+
+    const check = await cli(rootDir, ["check"]);
+    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+
+    const message = "fill in the entry point: features/steps/run-greet.ts:4";
+    const done = await cli(rootDir, ["do", "run-greet", "--args", '{"name":"Ada"}']);
+    expect(done.exitCode).not.toBe(0);
+    expect(done.stdout + done.stderr).toContain(message);
+
+    const run = await cli(rootDir, ["run", "features/greet.feature"]);
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain(message);
+    // The Then step is never reached with an empty stdout.
+    expect(run.stdout).not.toContain("not implemented: output-says");
   });
 
   it("chains --from at once, and runs a real program green once the entry point and the assertion are filled in", async () => {
@@ -202,6 +290,69 @@ describe("nuka scaffold --command", () => {
     expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
     expect(green.exitCode).toBe(0);
   });
+
+  it("runs a real program green with the entry point named on the command line, with no edit to the When step", async () => {
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(path.join(rootDir, "src", "greet.mjs"), 'process.stdout.write(`Hello, ${process.argv[2]}!\\n`);\n');
+    // Absolute, because `resolve` reads a relative path from the directory
+    // nuka runs in, and this test runs nuka in-process from elsewhere.
+    const entry = path.join(rootDir, "src", "greet.mjs");
+    await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
+
+    const done = await cli(rootDir, ["do", "run-greet", "--args", '{"name":"Ada"}']);
+    expect(done.exitCode).toBe(0);
+    expect(done.stdout).toContain('Hello, Ada!');
+  });
+});
+
+// Property: whatever entry point is given, the `resolve(...)` literal the
+// file holds evaluates back to that same string, so a quote, a backslash,
+// or any other character cannot break the file or change the path.
+describe("nuka scaffold --command <entry point>: any path", () => {
+  let rootDir: string;
+  let counter = 0;
+
+  beforeAll(async () => {
+    rootDir = await initProject();
+  });
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("round trips through the written resolve() literal", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const entry = tc.draw(
+          gs.oneOf(
+            gs.text({ minSize: 1, maxSize: 30 }),
+            // Line terminators, which a regex `.` and a source line both treat specially.
+            gs.text({ minSize: 1, maxSize: 4, alphabet: "a\u2028\u2029\r" }),
+            // The characters a string literal escapes or a template literal reads.
+            gs.text({ minSize: 1, maxSize: 12, alphabet: "a/\\\"'`${}.\n" }),
+          ),
+        );
+        // yargs reads a leading "-" as a flag; such a value never reaches scaffold.
+        tc.assume(!entry.startsWith("-"));
+        counter += 1;
+        const name = `run-path-${counter}`;
+        try {
+          const result = await cli(rootDir, ["scaffold", name, "--command", entry]);
+          expect(result.stderr).toBe("");
+          expect(result.exitCode).toBe(0);
+          const text = await readFile(stepPath(rootDir, name), "utf8");
+          const line = text.split("\n")[3]!;
+          // `s`: a JSON string may hold U+2028, which `.` alone does not match.
+          const literal = /^const cli = resolve\((.*)\);$/s.exec(line)?.[1];
+          expect(literal).toBeDefined();
+          expect(runInNewContext(literal!)).toBe(entry);
+          expect(text).not.toContain("fill in the entry point");
+        } finally {
+          await rm(stepPath(rootDir, name), { force: true });
+        }
+      },
+      { testCases: 40, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 300_000);
 });
 
 // Property: for any pattern built from literal words and typed captures,
@@ -369,6 +520,7 @@ describe("every scaffolded variant", () => {
       ["scaffold", "chained-then", "--pattern", "it printed {text:string}", "--then", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
       ["scaffold", "chained-command", "--command", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
       ["scaffold", "chained-optional", "--command", "--from", "maybe-name.name"],
+      ["scaffold", "run-named", "--pattern", "run named {s:string}", "--command", "src/cli.ts"],
     ];
     const files: Record<string, string> = { "maybe-name.ts": maybeName };
     for (const argv of variants) {
@@ -379,6 +531,13 @@ describe("every scaffolded variant", () => {
     }
     expect(files["chained-command.ts"]).toContain("[cli, stdout, String(exitCode)]");
     expect(files["chained-optional.ts"]).toContain("[cli, String(name)]");
+    // The guard names the line that holds the TODO, imports or not.
+    for (const file of ["run-bare.ts", "run-args.ts", "chained-command.ts", "chained-optional.ts"]) {
+      const text = files[file]!;
+      const named = new RegExp(`fill in the entry point: features/steps/${file.replace(".", "\\.")}:(\\d+)`).exec(text);
+      expect(named).not.toBeNull();
+      expect(text.split("\n")[Number(named![1]) - 1]).toBe('const cli = resolve("<TODO: the entry point>");');
+    }
 
     const typecheck = await typecheckSteps(files);
     expect(typecheck.output).toBe("");
