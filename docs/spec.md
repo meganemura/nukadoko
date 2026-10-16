@@ -4412,7 +4412,10 @@ does it only report on the vocabulary? `nuka steps`, `nuka describe`,
 `nuka check`, and `nuka tend` are reporting tools. Each discovers steps per
 file, so one file whose import fails does not empty what the rest of the
 project could still show. `nuka check` names the failure as
-`step-file-import-failed`. `nuka steps`/`nuka describe` carry the same fact
+`step-file-import-failed`. When the cause is a relative `.js`, `.mjs`, or
+`.cjs` import whose `.ts`, `.mts`, or `.cts` file does not exist, it
+appends that file and the file whose import to edit, both relative to the
+project root, after Node's own text. `nuka steps`/`nuka describe` carry the same fact
 as `import_failures` (above). `nuka tend` adds a single
 `import-failures-unseen` note instead of silently under-counting around the
 file it never read (see "Tending"). `nuka run`, `nuka do`, and `nuka init`

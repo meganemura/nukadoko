@@ -182,6 +182,19 @@ just until 0.1.
   `compatibility` line now says the CLI is run as `npx nuka` from a
   devDependency install, as the acceptance skill's does.
 
+- **`step-file-import-failed` names the `.ts` file a missing `.js` import stands for.**
+  A step file imports another as `./run-greet.js` for `run-greet.ts`, the
+  way the scaffold writes it. When `run-greet.ts` was renamed or deleted,
+  `nuka check` printed only Node's text, which names the absolute `.js`
+  path that never existed. After that text it now appends `;
+  features/steps/run-greet.js stands for features/steps/run-greet.ts,
+  which does not exist; update the import in
+  features/steps/output-says.ts`, with both paths relative to the project
+  root. The loader's own mapping decides the file (`.js` to `.ts`, `.mjs`
+  to `.mts`, `.cjs` to `.cts`). Nothing is appended when that file exists,
+  for a path inside `node_modules`, or for a missing package. The finding
+  code and `line` are unchanged.
+
 - **`nuka scaffold --pattern` refuses a capture type the project does not register.**
   `{a:number}` used to be written as `a: z.unknown()`, and the next
   `nuka check` reported `unknown-parameter-type`, so `nuka run` refused to

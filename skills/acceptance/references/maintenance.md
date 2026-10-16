@@ -13,7 +13,10 @@ A step file that failed to import is a different report. `nuka tend` adds
 the note `import-failures-unseen`, because that file's steps are missing
 from every count and finding it prints. `nuka check` names the cause as
 `step-file-import-failed`. Fix that import first; the rest of the tend
-report is not complete until it is.
+report is not complete until it is. When the finding ends with `stands
+for features/steps/<name>.ts, which does not exist`, a step file was
+renamed or deleted under an import that still names it: point the import
+in the file it names at the new file, or remove it.
 
 Do not run `nuka tend` on every pull request. It runs on a schedule, as
 its own CI job (`docs/ci.md` in the nukadoko package), so its notes reach

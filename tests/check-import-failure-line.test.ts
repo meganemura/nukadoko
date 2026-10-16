@@ -1,6 +1,17 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
+import { missingTsSourceSentence } from "../src/check/missing-ts-source.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import {
+  createCaptureSink,
+  createEmptyTempDir,
+  ensureNukadokoShim,
+  fixture,
+  removeTempDir,
+} from "./helpers/fixtures.js";
 
 // Responsibility: `step-file-import-
 // failed` findings get `CheckIssue.line` filled in when (and only when) the
@@ -140,4 +151,160 @@ describe("nuka check: step-file-import-failed carries a line when the message ha
     expect(grouped).not.toMatch(/\(2 files\):\d/);
     expect(exitCode).toBe(1);
   });
+});
+
+// A relative `.js` import whose `.ts` file was renamed or deleted: Node's
+// text names the `.js` path, absolute, so the finding appends the `.ts` file
+// it stood for and the file whose import to edit, both root-relative.
+describe("nuka check: step-file-import-failed names the .ts file a missing .js import stands for", () => {
+  const producer = [
+    'import { z } from "zod";',
+    'import { defineStep } from "nukadoko";',
+    "",
+    "export default defineStep({",
+    '  pattern: "I run greet",',
+    '  description: "Runs greet",',
+    "  args: z.object({}),",
+    "  returns: z.object({ stdout: z.string() }),",
+    "  async run() {",
+    '    return { stdout: "" };',
+    "  },",
+    "});",
+    "",
+  ].join("\n");
+  const consumer = (specifier: string) =>
+    [
+      'import { z } from "zod";',
+      'import { defineStep } from "nukadoko";',
+      `import runGreet from ${JSON.stringify(specifier)};`,
+      "",
+      "export default defineStep({",
+      '  pattern: "the output says {text:string}",',
+      '  description: "Reads the output",',
+      "  args: z.object({ text: z.string() }),",
+      "  returns: z.object({}),",
+      "  mutates: false,",
+      "  from: { text: runGreet },",
+      "  async run() {",
+      "    return {};",
+      "  },",
+      "});",
+      "",
+    ].join("\n");
+
+  async function projectWith(files: Record<string, string>): Promise<string> {
+    await ensureNukadokoShim();
+    const dir = await createEmptyTempDir();
+    await mkdir(path.join(dir, "features", "steps"), { recursive: true });
+    await writeFile(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n');
+    for (const [name, text] of Object.entries(files)) {
+      await writeFile(path.join(dir, "features", "steps", name), text);
+    }
+    return dir;
+  }
+
+  async function importFailures(dir: string): Promise<Array<{ file?: string; message: string }>> {
+    const stdout = createCaptureSink();
+    await runCli(["check", "--json"], { rootDir: dir, stdout, stderr: createCaptureSink() });
+    const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; message: string }> };
+    return report.errors
+      .filter((issue) => issue.code === "step-file-import-failed")
+      .map(({ file, message }) => ({ file, message }));
+  }
+
+  it("a renamed producer: names features/steps/run-greet.ts and the consumer to edit", async () => {
+    const dir = await projectWith({ "run-cli.ts": producer, "output-says.ts": consumer("./run-greet.js") });
+    try {
+      const failures = await importFailures(dir);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]!.file).toBe("features/steps/output-says.ts");
+      expect(failures[0]!.message).toBe(
+        `Cannot find module '${path.join(dir, "features/steps/run-greet.js")}' imported from ${path.join(dir, "features/steps/output-says.ts")}` +
+          "; features/steps/run-greet.js stands for features/steps/run-greet.ts, which does not exist; update the import in features/steps/output-says.ts",
+      );
+    } finally {
+      await removeTempDir(dir);
+    }
+  });
+
+  it("a deleted producer, imported from a parent-relative path: the same sentence", async () => {
+    const dir = await projectWith({ "output-says.ts": consumer("../steps/run-greet.js") });
+    try {
+      const failures = await importFailures(dir);
+      expect(failures.map((failure) => failure.message.slice(failure.message.indexOf("; ")))).toEqual([
+        "; features/steps/run-greet.js stands for features/steps/run-greet.ts, which does not exist; update the import in features/steps/output-says.ts",
+      ]);
+    } finally {
+      await removeTempDir(dir);
+    }
+  });
+
+  it("a missing package gets Node's text alone", async () => {
+    const dir = await projectWith({ "output-says.ts": consumer("no-such-package-anywhere") });
+    try {
+      const failures = await importFailures(dir);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]!.message).toContain("Cannot find package 'no-such-package-anywhere'");
+      expect(failures[0]!.message).not.toContain("stands for");
+    } finally {
+      await removeTempDir(dir);
+    }
+  });
+});
+
+describe("missingTsSourceSentence", () => {
+  const root = path.resolve("/project");
+  const at = (relative: string) => path.join(root, relative);
+  const nodeText = (missing: string, importer: string, eol = "") =>
+    `Cannot find module '${missing}' imported from ${importer}${eol}`;
+
+  it("appends nothing when the .ts file exists, so the cause is something else", () => {
+    const message = nodeText(at("features/steps/a.js"), at("features/steps/b.ts"));
+    expect(missingTsSourceSentence(message, root, (file) => file === at("features/steps/a.ts"))).toBe("");
+  });
+
+  it("maps .mjs to .mts", () => {
+    const message = nodeText(at("features/steps/a.mjs"), at("features/steps/b.mts"));
+    expect(missingTsSourceSentence(message, root, () => false)).toBe(
+      "; features/steps/a.mjs stands for features/steps/a.mts, which does not exist; update the import in features/steps/b.mts",
+    );
+  });
+
+  it("stops the importer at a CRLF line ending", () => {
+    const message = nodeText(at("features/steps/a.js"), at("features/steps/b.ts"), "\r\n    at resolve (node:internal)");
+    expect(missingTsSourceSentence(message, root, () => false)).toBe(
+      "; features/steps/a.js stands for features/steps/a.ts, which does not exist; update the import in features/steps/b.ts",
+    );
+  });
+
+  it("appends nothing for a file inside node_modules or a non-JavaScript extension", () => {
+    expect(
+      missingTsSourceSentence(nodeText(at("node_modules/pkg/x.js"), at("features/steps/b.ts")), root, () => false),
+    ).toBe("");
+    expect(missingTsSourceSentence(nodeText(at("features/steps/a.json"), at("features/steps/b.ts")), root, () => false)).toBe("");
+  });
+
+  it("names the source file exactly when it is absent, for any name and extension", () =>
+    hegel.test((tc) => {
+      const name = tc.draw(gs.sampledFrom(["run-greet", "a", "step.v2", "deep/nested/step"]));
+      const [jsExt, tsExt] = tc.draw(
+        gs.sampledFrom([
+          [".js", ".ts"],
+          [".mjs", ".mts"],
+          [".cjs", ".cts"],
+        ] as const),
+      );
+      const present = tc.draw(gs.booleans());
+      const eol = tc.draw(gs.sampledFrom(["", "\n", "\r\n"]));
+      const source = at(`features/steps/${name}${tsExt}`);
+      const message = nodeText(at(`features/steps/${name}${jsExt}`), at("features/steps/importer.ts"), eol);
+      const sentence = missingTsSourceSentence(message, root, (file) => present && file === source);
+      if (present) {
+        expect(sentence).toBe("");
+      } else {
+        expect(sentence).toBe(
+          `; features/steps/${name}${jsExt} stands for features/steps/${name}${tsExt}, which does not exist; update the import in features/steps/importer.ts`,
+        );
+      }
+    }));
 });

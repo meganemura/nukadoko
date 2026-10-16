@@ -3841,6 +3841,7 @@ nuka experimental webmcp-tools <url> [--json]
 それぞれがファイル単位で step を発見します。
 そのため、import に失敗した 1 ファイルが、プロジェクトの残り全体がまだ見せられるはずのものまで空にしてしまうことはありません。
 `nuka check` はその失敗を `step-file-import-failed` として名指しします。
+原因が相対パスの `.js`、`.mjs`、`.cjs` の import で、それが指す `.ts`、`.mts`、`.cts` ファイルが存在しない場合は、Node 自身の文の後ろに、そのファイルと import を直すべきファイルを、どちらもプロジェクトのルートからの相対パスで付け足します。
 `nuka steps`/`nuka describe` は同じ事実を(前述の)`import_failures` として運びます。
 `nuka tend` は読めなかったファイルの周りで静かに数を減らす代わりに、`import-failures-unseen` という 1 件だけの note を足します(「Tending(手入れ)」を参照)。
 `nuka run`、`nuka do`、`nuka init` はこれから step を実行しよう、あるいはこれから実行するプロジェクトを立ち上げようとしている道具なので、fail-fast のままです。

@@ -31,6 +31,7 @@ import {
 } from "./done-callback.js";
 import { checkExploreDeclarations } from "./explore-check.js";
 import { checkFeatures } from "./feature-check.js";
+import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing } from "./playwright-check.js";
 import type { CheckIssue, CheckReport } from "./types.js";
@@ -273,13 +274,18 @@ async function reportFor(
   // a broken glue file is a report entry here rather than the fundamental
   // failure it still is for `run`/`do`/`steps`/`init`.
   //
-  // `cjsTsMismatchExplanation` appends the one sentence that names a
-  // CommonJS/.ts mismatch when that's the real cause (its own doc comment,
-  // src/config/module-kind.ts); everywhere else it appends nothing, so
-  // Node's message passes through exactly as it came.
+  // `missingTsSourceSentence` appends the `.ts` file a missing `.js` import
+  // stands for, and `cjsTsMismatchExplanation` the one sentence that names a
+  // CommonJS/.ts mismatch, each only when that is the cause
+  // (src/check/missing-ts-source.ts, src/config/module-kind.ts); everywhere
+  // else they append nothing, so Node's message passes through exactly as
+  // it came.
   const cjsProject = isCommonJsProject(rootDir);
   for (const failure of importFailures) {
-    const message = `${failure.message}${cjsTsMismatchExplanation(cjsProject, failure.filePath)}`;
+    const message =
+      failure.message +
+      missingTsSourceSentence(failure.message, rootDir, existsSync) +
+      cjsTsMismatchExplanation(cjsProject, failure.filePath);
     errors.push({
       code: "step-file-import-failed",
       message,
