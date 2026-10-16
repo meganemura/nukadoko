@@ -830,13 +830,16 @@ Each additional process performs the action again.
 
 Teardown uses the reverse build order, whether the step passes or fails.
 A step failure does not make fixture cleanup optional.
-SIGINT or SIGTERM during `nuka run` or `nuka do` does not make fixture cleanup optional either.
+SIGINT, SIGTERM, or SIGHUP during `nuka run` or `nuka do` does not make fixture cleanup optional either.
 The process that built the fixtures tears down the scenario-scope cache, disposes the context, tears down the process-scope cache, and exits with 128 plus the signal number.
 `use()` receives `"failed"`, because that invocation did not finish.
-A second SIGINT or SIGTERM exits at once.
+A second signal exits at once.
 Under `nuka run --concurrency <n>` the parent forwards each signal to every worker.
 On the first, each worker tears its fixtures down and exits, no further worker starts, and the parent prints the summary of what was written and exits with 128 plus the signal number.
 On the second, each worker and the parent exit at once.
+Each worker runs in its own process group, so a signal to the terminal's group reaches it only through the parent.
+When the parent ends without forwarding (a SIGKILL, or a killed process group), each worker treats that as its first signal and tears its fixtures down.
+On Windows the parent does not forward, because every process on the console already receives Ctrl-C.
 This reverse order is correct because nukadoko builds and tears down fixtures
 *serially* within one process.
 The reverse order makes each dependency outlive its dependents.
@@ -2060,11 +2063,12 @@ config file is the wrong place to keep it.
 
 Each run uses two output channels for two readers. stdout contains only NDJSON,
 with one scenario record per line for scripts to parse. Text project code
-writes to the process stdout, with `console.log` or `process.stdout.write`,
-is delivered on stderr. That covers a step, a Before or After hook, a
-BeforeAll or AfterAll, a fixture's setup and teardown, a World constructor,
-a step file while it loads, and a step that keeps running after its
-timeout. The same split holds for `nuka do`,
+writes through `console.log` or `process.stdout.write` is delivered on
+stderr. That covers a step, a Before or After hook, a BeforeAll or
+AfterAll, a fixture's setup and teardown, a World constructor, a step file
+while it loads, and a step that keeps running after its timeout. A child
+process that project code spawns with `stdio: "inherit"` writes to file
+descriptor 1 directly, so its output still lands on stdout. The same split holds for `nuka do`,
 whose stdout is the one step record, and for a worker process under
 `--concurrency`, whose own stdout is the envelope stream the parent parses.
 stderr contains the
@@ -2159,8 +2163,9 @@ nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
 Executes one typed step and prints its step record to stdout (exit 0 on ok, 1 on
-failed). Text the step, its fixtures, or a step file writes to the process
-stdout is delivered on stderr, so that record stays one JSON value. This is the adaptive loop: the agent
+failed). Text the step, its fixtures, or a step file writes through
+`console.log` or `process.stdout.write` is delivered on stderr, so that
+record stays one JSON value. This is the adaptive loop: the agent
 reads the validated result and decides the next call. The agent can only choose which step to call with
 which args; it cannot choose what gets recorded. There is deliberately no
 grouping label on `do`: ad-hoc sequences are working records, not evidence.
@@ -4055,8 +4060,8 @@ sequence. A process-scope fixture is set up once for the invocation, as
 under `nuka run`: every run and every shrink attempt shares it, and it is
 torn down after the last sequence. A fixture's `use()` returns `"failed"`
 for a sequence whose step failed or whose `post` did not hold, and the
-process scope gets `"failed"` when any sequence did. SIGINT or SIGTERM
-tears down the open sequence's fixtures and then the process-scope ones
+process scope gets `"failed"` when any sequence did. SIGINT, SIGTERM, or
+SIGHUP tears down the open sequence's fixtures and then the process-scope ones
 before the process exits, as for `nuka do`. The target itself is not reset, and a
 model whose initial state assumes an empty target needs that fixture. A
 step runs through the same function `nuka do` and a live session use: the
@@ -4136,9 +4141,9 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always. Text project code writes to the process
-                              stdout (a step, a hook, a fixture) is delivered
-                              on stderr.
+                              always. Text project code (a step, a hook, a
+                              fixture) writes through console.log or
+                              process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
                               files to n worker processes while the parent
                               keeps one run_id, one summary, one exit code, one
@@ -4157,8 +4162,9 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --env and --session as on nuka run; against a
                               live session the step runs in that session's
                               own ctx.
-                              Text the step or its fixtures write to the
-                              process stdout is delivered on stderr.
+                              Text the step or its fixtures write through
+                              console.log or process.stdout.write is
+                              delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result

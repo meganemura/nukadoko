@@ -78,7 +78,13 @@ just until 0.1.
   prints the summary and exits with 128 plus the signal number, as at
   `--concurrency 1`. A second signal is forwarded too, and every process
   exits at once. Workers run in their own process group, so a terminal's
-  Ctrl-C reaches them only through the parent.
+  Ctrl-C reaches them only through the parent. A worker whose parent ends
+  without forwarding, from a SIGKILL or a killed process group, tears its
+  fixtures down on its own. On Windows the parent does not forward,
+  because each worker already receives the console's Ctrl-C.
+- **SIGHUP tears fixtures down like SIGINT and SIGTERM.** Closing the
+  terminal or losing an ssh connection during `nuka run`, `nuka do`, or
+  `nuka explore` ended the process with no fixture teardown.
 
 - **Only records reach stdout when a hook, a fixture, or a late step
   writes there.** Text written to the process stdout went to stderr only
@@ -88,9 +94,11 @@ just until 0.1.
   stream. Under `nuka run` the text glued onto the next NDJSON record and
   the run still exited 0. Under `--concurrency 2` the parent read every
   worker line as unreadable and ended with no records and exit 1. `nuka
-  run`, `nuka do`, `nuka explore`, and each worker now send every write to
-  the process stdout to stderr for the whole invocation, and write their
-  records through the stream they saved before that.
+  run`, `nuka do`, `nuka explore`, and each worker now send every
+  `console.log` and `process.stdout.write` to stderr for the whole
+  invocation, and write their records through the stream they saved before
+  that. A child process spawned with `stdio: "inherit"` still writes to
+  stdout directly.
 
 - **`nuka harvest` writes a docstring line that starts with three quotes
   so it reads back.** The line was written as a backslash and three

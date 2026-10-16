@@ -60,9 +60,10 @@ nothing.
    and, once the run ends, every path it actually wrote plus a summary
    line; `--quiet` drops the progress lines when the terminal gets noisy.
    stdout stays NDJSON, one scenario record per line, unaffected either
-   way. Text a step, a hook, or a fixture writes to the process stdout is
-   delivered on stderr, so a `console.log` there does not break that
-   stream. A compat World
+   way. Text a step, a hook, or a fixture writes through `console.log` or
+   `process.stdout.write` is delivered on stderr, so it does not break
+   that stream. A child process spawned with `stdio: "inherit"` still
+   writes to stdout directly. A compat World
    constructor that throws fails that scenario only: stderr gets one setup
    line, later scenarios still run, and the messages export is finalized.
    When a scenario fails, diagnose it before repeating the whole run

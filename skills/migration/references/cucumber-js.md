@@ -62,10 +62,11 @@ present but cannot be read, or a directory at that path, is refused
 before any step runs. The refusal names the configured path and the errno.
 
 A compat step, a hook, a BeforeAll or AfterAll, or a World constructor
-that writes to the process stdout (`console.log`, `process.stdout.write`)
-has that text delivered on stderr under `nuka run`. A typed step and its
-fixtures do the same under `nuka do` and `nuka run`. stdout stays the
-record stream.
+that writes through `console.log` or `process.stdout.write` has that text
+delivered on stderr under `nuka run`. A typed step and its fixtures do the
+same under `nuka do` and `nuka run`. stdout stays the record stream. A
+child process spawned with `stdio: "inherit"` writes to file descriptor 1
+directly, so its output still lands on stdout.
 
 The directory walk for `.feature` files skips `node_modules` and any
 directory whose name starts with `.`, at every depth, and reports nothing
@@ -268,7 +269,7 @@ alone, which scenarios actually need it. If that setup exceeds the fixture
 timeout, the scenario still fails, and a later `use()` resolves as
 `"failed"` so the cleanup after it still runs. A failure in that cleanup
 is written to stderr. That cleanup still runs if `nuka run` or `nuka do`
-is stopped with SIGINT or SIGTERM. `defineFixtures` (from the
+is stopped with SIGINT, SIGTERM, or SIGHUP. `defineFixtures` (from the
 `nukadoko` package) keeps the fixture fully typed; any typed step reaches
 it the same way it reaches `page` or `request`, by destructuring the name.
 A fixture names setup builtins such as `page` or `request`.

@@ -240,10 +240,18 @@ async function main(): Promise<void> {
   const restoreAllureRuntime = registerAllureRuntime();
   let allPassed = true;
   let processSignal: ProcessSignal | undefined;
+  // The parent holds this worker's stdin open and never writes to it, so
+  // its end means the parent is gone (spawn-run-worker.ts). Nothing will
+  // forward a signal any more, so it counts as the first one.
+  const onParentGone = (): void => {
+    processSignal?.trigger("SIGHUP");
+  };
   try {
     const fixtureProcessCache = createFixtureCache();
     let processOutcome: FixtureOutcome = "failed";
     processSignal = installProcessSignalHandlers();
+    process.stdin.once("end", onParentGone);
+    process.stdin.resume();
     const tearDownProcessFixtures = runOnce(async () => {
       const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
       const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
@@ -393,6 +401,8 @@ async function main(): Promise<void> {
     processOutcome = allPassed ? "passed" : "failed";
     await tearDownProcessFixtures();
   } finally {
+    process.stdin.off("end", onParentGone);
+    process.stdin.destroy();
     processSignal?.stop();
     restoreAllureRuntime();
   }

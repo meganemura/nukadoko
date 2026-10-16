@@ -19,7 +19,7 @@ import {
 import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "./line-buffer.js";
-import { exitCodeForSignal } from "./process-signal.js";
+import { exitCodeForSignal, HANDLED_SIGNALS } from "./process-signal.js";
 import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 
 // Responsibility: `nuka run --concurrency <n>`'s own parent-side
@@ -78,13 +78,16 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // file and fails the whole invocation, regardless of what any other
 // worker's own files did.
 //
-// SIGINT and SIGTERM follow the `--concurrency 1` rule (src/run/
+// SIGINT, SIGTERM, and SIGHUP follow the `--concurrency 1` rule (src/run/
 // process-signal.ts) with the fixtures living in the workers. The first
 // signal is forwarded to every running worker, each tears its fixtures
 // down and exits, no further worker starts, and the run ends with the
 // summary of what was written and exit code 128 plus the signal number. A
 // second signal is forwarded too, which makes each worker exit at once,
-// and the parent exits at once.
+// and the parent exits at once. On Windows nothing is forwarded
+// (src/run/spawn-run-worker.ts says why). A parent that dies without
+// handling a signal ends each worker's stdin, which the worker treats as
+// its first signal.
 
 const SERIAL_TAG = "@nukadoko:serial";
 
@@ -299,6 +302,10 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   let interruptedBy: NodeJS.Signals | null = null;
 
   async function runWorkerGroup(files: readonly SelectedFeature[], worker: number): Promise<WorkerGroupResult> {
+    const filesWithRecords = new Set<string>();
+    if (interruptedBy !== null) {
+      return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
+    }
     const tmpDir = await mkdtemp(path.join(tmpdir(), "nukadoko-run-"));
     const featureListPath = path.join(tmpDir, "features.txt");
     try {
@@ -308,7 +315,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
       );
       await writeFile(featureListPath, `${featureTargets.join("\n")}\n`, "utf8");
-      const filesWithRecords = new Set<string>();
+      // A signal can arrive during the two awaits above.
       if (interruptedBy !== null) {
         return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
       }
@@ -375,12 +382,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const failedFiles = new Set<string>();
 
   const onSignal = (signal: NodeJS.Signals): void => {
-    for (const child of liveWorkers) child.kill(signal);
+    if (process.platform !== "win32") {
+      for (const child of liveWorkers) child.kill(signal);
+    }
     if (interruptedBy !== null) process.exit(exitCodeForSignal(signal));
     interruptedBy = signal;
   };
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
+  for (const signal of HANDLED_SIGNALS) process.on(signal, onSignal);
   try {
     const workerCount = Math.min(concurrency, parallelFeatures.length);
     if (workerCount > 0) {
@@ -413,12 +421,15 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       }
     }
   } finally {
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
+    for (const signal of HANDLED_SIGNALS) process.off(signal, onSignal);
   }
 
   if (interruptedBy !== null) {
-    stderr.write(`${interruptedBy} stopped this run before every scenario ran, so it is incomplete.\n`);
+    stderr.write(
+      scenariosWritten === flatPickles.length * repeat
+        ? `${interruptedBy} arrived after every scenario had a record, so AfterAll hooks may not have run.\n`
+        : `${interruptedBy} stopped this run before every scenario had a record, so it is incomplete.\n`,
+    );
     allPassed = false;
   } else if (failedFiles.size > 0) {
     stderr.write(

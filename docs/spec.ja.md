@@ -650,13 +650,16 @@ fixture の値は素の JavaScript オブジェクトであり、別のプロセ
 
 step の成否にかかわらず、teardown は構築の逆順を使います。
 step の失敗によって fixture の片付けが省略可能になることはありません。
-`nuka run` または `nuka do` の途中で SIGINT か SIGTERM を受けても、fixture の片付けは省略できません。
+`nuka run` または `nuka do` の途中で SIGINT、SIGTERM、SIGHUP のどれかを受けても、fixture の片付けは省略できません。
 fixture を構築したプロセスは、scenario スコープを teardown し、context を dispose し、process スコープを teardown して、128 にシグナル番号を足したコードで終了します。
 その実行は完了していないので、`use()` は `"failed"` を受け取ります。
-2 回目の SIGINT または SIGTERM は、すぐに終了します。
+2 回目のシグナルでは、すぐに終了します。
 `nuka run --concurrency <n>` では、親プロセスが各シグナルをすべての worker に転送します。
 1 回目では、各 worker が fixture を片付けて終了し、新しい worker は起動せず、親プロセスは書き込んだ分の summary を出力して 128 にシグナル番号を足した値で終了します。
 2 回目では、各 worker と親プロセスがすぐに終了します。
+各 worker は自分のプロセスグループで動くので、端末のグループへのシグナルは親プロセスを通してだけ届きます。
+親プロセスが転送せずに終了したとき (SIGKILL や、プロセスグループごとの kill) は、各 worker がそれを 1 回目のシグナルとして扱い、fixture を片付けます。
+Windows では、コンソール上のすべてのプロセスがすでに Ctrl-C を受け取るので、親プロセスは転送しません。
 nukadoko は 1 つのプロセス内で fixture の構築と teardown を**直列に**行うため、この逆順は正しく機能します。
 逆順によって、各依存はその依存先より長く生きます。
 `nuka run --concurrency <n>` も、この規則を保ちます。
@@ -1775,8 +1778,9 @@ session は、ログイン状態を 1 つの scenario から次の scenario へ�
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
-プロジェクトのコードがプロセスの stdout に書いたテキスト (`console.log` や `process.stdout.write`) は、stderr に渡されます。
+プロジェクトのコードが `console.log` や `process.stdout.write` で書いたテキストは、stderr に渡されます。
 これは step、Before と After の hook、BeforeAll と AfterAll、fixture の setup と teardown、World のコンストラクタ、読み込み中の step ファイル、timeout の後も動き続ける step に当てはまります。
+プロジェクトのコードが `stdio: "inherit"` で起動した子プロセスは file descriptor 1 に直接書くので、その出力は stdout に残ります。
 `nuka do` でも同じであり、その stdout は 1 件の step record です。
 `--concurrency` の worker プロセスでも同じです。
 worker の stdout は、親プロセスが読む envelope の列です。
@@ -1844,7 +1848,7 @@ nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
 1 つの型付き step を実行し、その step record を stdout に出力します(ok なら exit 0、failed なら 1)。
-step、その fixture、または step ファイルがプロセスの stdout に書いたテキストは stderr に渡されるので、その record は 1 つの JSON 値のままです。
+step、その fixture、または step ファイルが `console.log` や `process.stdout.write` で書いたテキストは stderr に渡されるので、その record は 1 つの JSON 値のままです。
 これが適応的なループです。
 agent はバリデーション済みの result を読み、次の呼び出しを決めます。
 agent が選べるのはどの step をどの args で呼ぶかだけで、何が記録されるかを選ぶことはできません。
@@ -3462,7 +3466,7 @@ process scope の fixture は、`nuka run` と同じく 1 回の起動につき 
 すべての実行とすべての縮小の試行がそれを共有し、最後の列のあとで片付けられます。
 step が失敗した列、または `post` が成り立たなかった列では、fixture の `use()` は `"failed"` を返します。
 process scope は、どれかの列が失敗したとき `"failed"` を受け取ります。
-SIGINT または SIGTERM を受けると、`nuka do` と同じく、開いている列の fixture、次に process scope の fixture を片付けてからプロセスが終了します。
+SIGINT、SIGTERM、SIGHUP のどれかを受けると、`nuka do` と同じく、開いている列の fixture、次に process scope の fixture を片付けてからプロセスが終了します。
 対象そのものはリセットされません。
 初期状態が空の対象を前提とするモデルには、その fixture が必要です。
 step は、`nuka do` と live session が使うのと同じ関数を通って実行されます。
@@ -3538,9 +3542,9 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always. Text project code writes to the process
-                              stdout (a step, a hook, a fixture) is delivered
-                              on stderr.
+                              always. Text project code (a step, a hook, a
+                              fixture) writes through console.log or
+                              process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
                               files to n worker processes while the parent
                               keeps one run_id, one summary, one exit code, one
@@ -3559,8 +3563,9 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --env and --session as on nuka run; against a
                               live session the step runs in that session's
                               own ctx.
-                              Text the step or its fixtures write to the
-                              process stdout is delivered on stderr.
+                              Text the step or its fixtures write through
+                              console.log or process.stdout.write is
+                              delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
