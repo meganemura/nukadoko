@@ -95,7 +95,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/client": ">=2.2.0 <3",
-    "playwright": "1.61.1"
+    "playwright": "^1.61.1"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/client": {

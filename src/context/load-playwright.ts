@@ -14,9 +14,12 @@ import type * as Playwright from "playwright";
 // and `nuka check`, which never need it.
 
 const SPECIFIER = "playwright";
-// The version this package is built and tested against, the same exact pin
-// as `peerDependencies` and `devDependencies` in package.json. A test reads
-// package.json and compares, so the two cannot drift.
+// The version this package is built and tested against: the exact
+// `devDependencies` pin in package.json, and the floor of the
+// `peerDependencies` caret range. The install hint names this exact version
+// because it is the one CI runs; the peer range is a caret so that a project
+// already on a later Playwright 1.x installs without npm's ERESOLVE. A test
+// reads package.json and compares, so the three cannot drift.
 export const PLAYWRIGHT_VERSION = "1.61.1";
 
 export type PlaywrightModule = typeof Playwright;

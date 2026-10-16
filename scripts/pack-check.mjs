@@ -327,6 +327,82 @@ async function writeNoBrowserProject(projectDir) {
   );
 }
 
+// A Playwright 1.x newer than the exact devDependency pin, at least 7 days
+// past its release when it was chosen. The peer range is `^1.61.1` so that a
+// project already on a later 1.x installs nukadoko without npm's ERESOLVE;
+// this project proves that against a real registry version rather than
+// against the range string.
+const LATER_PLAYWRIGHT = "1.64.0";
+
+async function verifyBesideLaterPlaywright(tmpDir, tarballPath) {
+  const projectDir = path.join(tmpDir, "later-playwright");
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(
+    path.join(projectDir, "package.json"),
+    `${JSON.stringify({ name: "later-playwright", private: true, type: "module" }, null, 2)}\n`,
+  );
+  // `--ignore-scripts`: the package is what the peer range is about; a
+  // browser download would add minutes and prove nothing about resolution.
+  await runInherit("npm", ["install", "-D", "-E", "--ignore-scripts", `playwright@${LATER_PLAYWRIGHT}`], {
+    cwd: projectDir,
+  });
+  // No `--omit=peer`: npm resolves the optional peer against the project's
+  // own `playwright`, which is the step that refused a different version.
+  await runInherit("npm", ["install", "--ignore-scripts", tarballPath], { cwd: projectDir });
+
+  const installed = JSON.parse(
+    await readFile(path.join(projectDir, "node_modules", "playwright", "package.json"), "utf8"),
+  );
+  if (installed.version !== LATER_PLAYWRIGHT) {
+    throw new Error(`expected playwright ${LATER_PLAYWRIGHT} beside nukadoko, found ${installed.version}`);
+  }
+  try {
+    await access(path.join(projectDir, "node_modules", "nukadoko", "node_modules", "playwright"));
+    throw new Error("nukadoko installed a second copy of playwright beside the project's own");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  log(`installed beside playwright ${LATER_PLAYWRIGHT} with one copy of playwright`);
+
+  const nukaBin = path.join(projectDir, "node_modules", ".bin", "nuka");
+  await runInherit(nukaBin, ["init"], { cwd: projectDir });
+  await writeNoBrowserProject(projectDir);
+  await runInherit(nukaBin, ["check", "features/cli.feature"], { cwd: projectDir });
+  await runInherit(nukaBin, ["run", "features/cli.feature"], { cwd: projectDir });
+
+  // The step files, `page` included, typecheck against the later version's
+  // own types with library checking on.
+  const configPath = path.join(projectDir, "tsconfig.later-playwright.json");
+  await writeFile(
+    configPath,
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          target: "ES2022",
+          strict: true,
+          noEmit: true,
+          skipLibCheck: false,
+          typeRoots: [path.join(repoRoot, "node_modules", "@types")],
+          types: ["node"],
+        },
+        include: ["features/**/*", "nukadoko.config.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const outputPath = path.join(projectDir, "later-playwright.out");
+  const code = await runTypeScriptCapture(["--pretty", "false", "-p", configPath], projectDir, outputPath);
+  if (code !== 0) {
+    throw new Error(
+      `step files failed tsc beside playwright ${LATER_PLAYWRIGHT}:\n${await readFile(outputPath, "utf8")}`,
+    );
+  }
+  log(`step files passed tsc beside playwright ${LATER_PLAYWRIGHT}`);
+}
+
 async function main() {
   // Named after the step about to run, not the step that just finished,
   // so a thrown error always describes the stage that was in progress.
@@ -449,6 +525,9 @@ async function main() {
 
     stage = "verify optional peer type isolation";
     await verifyOptionalPeerTypeIsolation(projectDir);
+
+    stage = `install beside playwright ${LATER_PLAYWRIGHT}`;
+    await verifyBesideLaterPlaywright(tmpDir, tarballPath);
 
     log("all stages passed");
   } catch (err) {

@@ -36,6 +36,8 @@ npm install -D -E playwright@1.61.1
 npx playwright install chromium
 ```
 
+peer の範囲は `^1.61.1` なので、すでに 1.61.1 より新しい Playwright 1.x を使っているプロジェクトは、その版のままで構いません。
+
 入れていなければ、何かが実行される前に `nuka check` がその step とこのインストールコマンドを示し、それ以外のコマンドは `tsc` も含めてすべて動きます。
 nukadoko の `page` と `request` の型は、Playwright をインストールするまで `any` です。
 

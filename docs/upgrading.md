@@ -132,6 +132,12 @@ This part does not change release to release.
   retention no longer reads as proof that they ended, so it keeps them
   until they are older than `retention.adHocDays`; `nuka clean --records`
   removes them now.
+- **A project on a later Playwright 1.x keeps it.** The `playwright` peer
+  range is `^1.61.1` now, not the exact `1.61.1`, so npm installs nukadoko
+  beside any later 1.x without `ERESOLVE`. A project that pinned its own
+  `playwright` to 1.61.1 only for nukadoko can move it forward. nukadoko is
+  still tested against 1.61.1, and the `playwright-missing` install line
+  still names that version.
 
 ## 0.15.0 to 0.16.1
 

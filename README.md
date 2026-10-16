@@ -38,6 +38,9 @@ npm install -D -E playwright@1.61.1
 npx playwright install chromium
 ```
 
+The peer range is `^1.61.1`, so a project already on a later Playwright
+1.x keeps its own version.
+
 Without it, `nuka check` names that step and this install command before
 anything runs, and every other command works, `tsc` included: nukadoko's
 types for `page` and `request` are `any` until Playwright is installed.

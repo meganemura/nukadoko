@@ -111,6 +111,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   0.16.1 以前が書いた run には `complete.json` しかありません。
   retention はもうそれを run が終わった証拠として読まないので、そうした run は `retention.adHocDays` より古くなるまで残ります。
   `nuka clean --records` を使えば今すぐ消せます。
+- **1.61.1 より新しい Playwright 1.x を使うプロジェクトは、その版のままで構いません。**
+  `playwright` の peer の範囲は、正確な `1.61.1` ではなく `^1.61.1` になりました。
+  npm は、それより新しい 1.x の横にも `ERESOLVE` なしで nukadoko をインストールします。
+  nukadoko のためだけに自分の `playwright` を 1.61.1 に固定していたプロジェクトは、新しい版へ進めて構いません。
+  nukadoko がテストしている版は 1.61.1 のままで、`playwright-missing` のインストール行もその版を示します。
 
 ## 0.15.0 から 0.16.1 へ
 

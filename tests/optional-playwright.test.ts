@@ -386,7 +386,7 @@ describe("the shipped declarations under the project's own tsc", () => {
 });
 
 describe("PLAYWRIGHT_VERSION", () => {
-  it("is the exact version package.json pins as the peer and the devDependency", async () => {
+  it("is the devDependency's exact pin and the floor of the peer's caret range", async () => {
     const pkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
@@ -394,7 +394,7 @@ describe("PLAYWRIGHT_VERSION", () => {
       peerDependenciesMeta: Record<string, { optional?: boolean }>;
     };
     expect(pkg.dependencies.playwright).toBeUndefined();
-    expect(pkg.peerDependencies.playwright).toBe(PLAYWRIGHT_VERSION);
+    expect(pkg.peerDependencies.playwright).toBe(`^${PLAYWRIGHT_VERSION}`);
     expect(pkg.peerDependenciesMeta.playwright?.optional).toBe(true);
     expect(pkg.devDependencies.playwright).toBe(PLAYWRIGHT_VERSION);
   });

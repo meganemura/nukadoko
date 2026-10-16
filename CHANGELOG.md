@@ -170,6 +170,14 @@ just until 0.1.
   add one" instead of "run `nuka scaffold <name>` to add one". The code,
   `file`, `line`, and the hint and unbound-step suffixes are unchanged.
 
+- **The `playwright` peer range is `^1.61.1`, not the exact `1.61.1`.**
+  npm refused (`ERESOLVE`) to install nukadoko beside any other Playwright,
+  so a project on a later 1.x had to downgrade. The devDependency stays
+  exact at 1.61.1, the version CI runs, and `playwright-missing` and the
+  run-time install line still name it. `npm run pack-check` now installs the
+  tarball beside Playwright 1.64.0 and runs `nuka init`, `nuka check`,
+  `nuka run`, and `tsc` with `skipLibCheck: false` there.
+
 ### Fixed
 
 - **Discovery, the `.feature` walk, and the oath walk follow symbolic links.**
