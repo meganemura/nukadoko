@@ -91,4 +91,16 @@ describe("nuka check: from's scenario-order check", () => {
     expect(issues).toHaveLength(2);
     expect(issues.map((issue) => issue.line).sort()).toEqual([12, 24]);
   });
+
+  it("errors on a step whose from names itself at each line no earlier line binds it", async () => {
+    const { exitCode, report } = await checkReport(fixture("from-self-project"));
+    expect(exitCode).toBe(1);
+    expect(report.warnings).toEqual([]);
+    const message =
+      'Step "next-page-read"\'s from.cursor needs step "next-page-read" to have already run earlier in this scenario, but "next-page-read" is bound in this scenario, but only at or after this line, never before it. This line would fail args validation with certainty';
+    expect(report.errors).toEqual([
+      { code: "from-order-violation", message, file: "features/pages.feature", line: 4, step: "next-page-read" },
+      { code: "from-order-violation", message, file: "features/pages.feature", line: 7, step: "next-page-read" },
+    ]);
+  });
 });
