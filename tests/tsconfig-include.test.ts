@@ -140,3 +140,134 @@ describe("appendIncludeEntries", () => {
       expect(edited.endsWith(after)).toBe(true);
     }));
 });
+
+// What `tsc --init` (TypeScript 6.0.3) writes, with an `include` added: the
+// JSONC dialect most projects start from.
+const tscInitWithInclude = `{
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "compilerOptions": {
+    // File Layout
+    // "rootDir": "./src",
+    // "outDir": "./dist",
+
+    // Environment Settings
+    // See also https://aka.ms/tsconfig/module
+    "module": "nodenext",
+    "target": "esnext",
+    "types": [],
+    // For nodejs:
+    // "lib": ["esnext"],
+    // "types": ["node"],
+    // and npm install -D @types/node
+
+    // Other Outputs
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // Stricter Typechecking Options
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Style Options
+    // "noImplicitReturns": true,
+    // "noImplicitOverride": true,
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
+    // "noFallthroughCasesInSwitch": true,
+    // "noPropertyAccessFromIndexSignature": true,
+
+    // Recommended Options
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+  },
+  "include": ["src"],
+}
+`;
+
+describe("appendIncludeEntries on JSONC", () => {
+  it("adds the entries to a tsc --init file and leaves every other byte alone", () => {
+    expect(appendIncludeEntries(tscInitWithInclude, ["features/**/*", "nukadoko.config.ts"])).toBe(
+      tscInitWithInclude.replace('"include": ["src"],', '"include": ["src", "features/**/*", "nukadoko.config.ts"],'),
+    );
+  });
+
+  it("does not take a [ or an include key inside a // comment for the array", () => {
+    const text = '{\n  // "include": [ "old" ]\n  "include": [\n    "src" // [ "x" ]\n  ]\n}\n';
+    expect(appendIncludeEntries(text, ["a"])).toBe(
+      '{\n  // "include": [ "old" ]\n  "include": [\n    "src", // [ "x" ]\n    "a"\n  ]\n}\n',
+    );
+  });
+
+  it("finds the array past a /* */ comment between the key and the [", () => {
+    expect(appendIncludeEntries('{ "include": /* sources */ ["src"] }', ["a"])).toBe(
+      '{ "include": /* sources */ ["src", "a"] }',
+    );
+  });
+
+  it("keeps a trailing comma after the last element of a multi-line array", () => {
+    expect(appendIncludeEntries('{\n  "include": [\n    "src",\n  ],\n}\n', ["a", "b"])).toBe(
+      '{\n  "include": [\n    "src",\n    "a",\n    "b",\n  ],\n}\n',
+    );
+  });
+
+  it("keeps a trailing comma in a one-line array", () => {
+    expect(appendIncludeEntries('{ "include": ["src",], }', ["a", "b"])).toBe('{ "include": ["src", "a", "b",], }');
+    expect(appendIncludeEntries('{ "include": ["src", ] }', ["a"])).toBe('{ "include": ["src", "a", ] }');
+  });
+
+  it("keeps CRLF line endings and the comment that ends the last element's line", () => {
+    expect(appendIncludeEntries('{\r\n  "include": [\r\n    "src", // mine\r\n  ],\r\n}\r\n', ["a"])).toBe(
+      '{\r\n  "include": [\r\n    "src", // mine\r\n    "a",\r\n  ],\r\n}\r\n',
+    );
+  });
+
+  it("fills an array that holds only a comment, and keeps the comment", () => {
+    expect(appendIncludeEntries('{ "include": [ /* none yet */ ] }', ["a"])).toBe('{ "include": ["a" /* none yet */ ] }');
+  });
+
+  // Whitespace and comments in every gap a token boundary allows, chosen to
+  // hold the characters the scanner must not take for structure.
+  const gaps = gs.sampledFrom([
+    "",
+    " ",
+    "\n  ",
+    "\r\n\t",
+    ' // "include": [ "x", ]\n',
+    "\n  // a, b ]\n  ",
+    ' /* "include": [ */ ',
+    "/* a\n ] */",
+  ]);
+  it("appends the entries to the parsed include and keeps the text outside the brackets, for any JSONC layout", () =>
+    hegel.test((tc) => {
+      const gap = () => tc.draw(gaps);
+      const comma = () => (tc.draw(gs.booleans()) ? `,${gap()}` : "");
+      const list = (items: readonly string[], open: string, close: string): string =>
+        items.length === 0
+          ? `${open}${gap()}${close}`
+          : `${open}${gap()}${items.join(`${gap()},${gap()}`)}${gap()}${comma()}${close}`;
+      const include = tc.draw(gs.arrays(jsonStrings, { maxSize: 4 }));
+      const exclude = tc.draw(gs.arrays(jsonStrings, { maxSize: 2 }));
+      const entries = tc.draw(gs.arrays(literalPaths, { minSize: 1, maxSize: 2 }));
+      const member = (key: string, value: string) => `${JSON.stringify(key)}${gap()}:${gap()}${value}`;
+      const prefix = `${gap()}{${gap()}${member("compilerOptions", list([member("strict", "true")], "{", "}"))}${gap()},${gap()}"include"${gap()}:${gap()}`;
+      const array = list(include.map((entry) => JSON.stringify(entry)), "[", "]");
+      const suffix = `${gap()},${gap()}${member("exclude", list(exclude.map((entry) => JSON.stringify(entry)), "[", "]"))}${gap()}${comma()}}${gap()}`;
+      const text = `${prefix}${array}${suffix}`;
+
+      const edited = appendIncludeEntries(text, entries);
+
+      expect(parseJsonc(edited)).toEqual({
+        compilerOptions: { strict: true },
+        include: [...include, ...entries],
+        exclude,
+      });
+      expect(edited.startsWith(`${prefix}[`)).toBe(true);
+      expect(edited.endsWith(`]${suffix}`)).toBe(true);
+    }));
+});

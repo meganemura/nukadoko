@@ -296,8 +296,8 @@ describe("nuka init", () => {
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
-  it("hints on stderr, and leaves the file byte-identical, when tsconfig.json holds a comment", async () => {
-    const text = '{\n  // the project\'s own sources\n  "include": ["src"],\n}\n';
+  it("adds the entries in place to a tsconfig.json with a comment and trailing commas, and keeps both", async () => {
+    const text = '{\n  // the project\'s own sources\n  "include": ["src",],\n}\n';
     await writeFile(path.join(rootDir, "tsconfig.json"), text);
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -305,11 +305,11 @@ describe("nuka init", () => {
     const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(stdout.text()).not.toContain("tsconfig.json");
-    expect(stderr.text()).toBe(
-      'tsconfig.json\'s include leaves out these paths, so tsc does not check them; nuka init left the file alone because it holds comments or trailing commas, so add "features/**/*" and "nukadoko.config.ts" to it\n',
+    expect(stdout.text()).toContain("tsconfig.json\n");
+    expect(stderr.text()).toBe("");
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(
+      '{\n  // the project\'s own sources\n  "include": ["src", "features/**/*", "nukadoko.config.ts",],\n}\n',
     );
-    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
   it("says nothing about tsconfig.json, and writes nothing to it, when its include already covers both", async () => {

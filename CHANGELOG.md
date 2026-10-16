@@ -160,17 +160,20 @@ just until 0.1.
 - **`nuka init` adds the steps and the config to `tsconfig.json`'s `include` itself.**
   It used to print a line naming the entries and leave the edit to a
   person, the one hand edit of a config file left in the walkthrough. Now,
-  when `tsconfig.json` is plain JSON and its own `include` array leaves
-  out `<featuresDir>/**/*` or the config file, `init` appends the missing
+  when the `include` array of `tsconfig.json` leaves out
+  `<featuresDir>/**/*` or the config file, `init` appends the missing
   entries in the array's own layout (one per line, or on the same line,
   with the same indentation and line endings), changes no other byte, and
-  prints `tsconfig.json` on stdout with the other written paths. A file
-  with comments or trailing commas is left byte-identical and gets the
-  stderr line instead, now saying why, since rewriting it would drop the
-  comments. A tsconfig with no `include` of its own (TypeScript's default,
-  or one inherited through `extends`), one whose `include` already covers
-  both paths, and one that does not parse are left alone with nothing
-  printed, as before.
+  prints `tsconfig.json` on stdout with the other written paths. This holds
+  for the JSONC dialect `tsc --init` writes too: comments stay where they
+  are (a comment that ends the last element's line stays on that line),
+  a comment holding `[` or `"include"` does not move the edit, and an
+  array that ends in a trailing comma keeps one after the new last entry.
+  The stderr line that named the entries for a file with comments is gone.
+  A tsconfig with no `include` of its own (TypeScript's default, or one
+  inherited through `extends`), one whose `include` already covers both
+  paths, and one that does not parse are left alone with nothing printed,
+  as before.
 - **`nuka run` performs the static check first, and runs `featuresDir` with no target.**
   Before it executes anything, `nuka run` now reports what `nuka check`
   reports for the scenarios it selected: every project-wide finding, plus

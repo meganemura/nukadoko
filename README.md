@@ -65,9 +65,8 @@ tsconfig.json
 
 `init` adds `.nukadoko/` to `.gitignore`, a `test:scenarios` script to
 `package.json` (the one command a person or CI runs), and the steps and the
-config to the `include` of `tsconfig.json`. The CommonJS case, a
-`tsconfig.json` with comments, and the `--allure` and `--env` flags are in
-[Setup details](#setup-details).
+config to the `include` of `tsconfig.json`. The CommonJS case and the
+`--allure` and `--env` flags are in [Setup details](#setup-details).
 
 Scaffold the When step. `--command` writes a step that runs a program
 in `scratch.dir()`, an empty directory that is removed after the scenario,
@@ -552,9 +551,8 @@ for those scenarios and stops before executing anything when one is an
 error.
 When `tsconfig.json` has an `include` that leaves out `features/` or the
 config file, `init` appends the missing entries to it and keeps the rest of
-the file as it was. A `tsconfig.json` with comments or trailing commas is
-left alone, since a rewrite would drop them; `init` prints one line naming
-the entries to add instead. A `tsconfig.json` with no `include` of its own
+the file as it was, comments and trailing commas included. A
+`tsconfig.json` with no `include` of its own
 already checks every file. Two flags
 add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
 (see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and

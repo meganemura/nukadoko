@@ -447,8 +447,6 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   const tsconfig = await ensureTsconfigInclude(rootDir, featuresDirPosix, configFileName);
   if (tsconfig.kind === "written") {
     stdout.write("tsconfig.json\n");
-  } else if (tsconfig.kind === "hint") {
-    stderr.write(`${tsconfig.line}\n`);
   }
 
   try {

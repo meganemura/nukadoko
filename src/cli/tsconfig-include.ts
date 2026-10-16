@@ -6,19 +6,68 @@ import path from "node:path";
 // project's type check sees the step files. Reads and writes tsconfig.json
 // and nothing else.
 //
-// `init` appends the missing entries itself only when the file is plain
-// JSON, so the edit can be made in place: the array gains the entries in
-// its own layout and every other byte stays. A file with comments or
-// trailing commas gets a one-line hint instead, since no rewrite through a
-// JSON value keeps a comment, and editing JSONC text in place is a second
-// parser this tool has no other use for.
+// `init` appends the missing entries in place, so the array gains them in
+// its own layout and every other byte stays, comments and trailing commas
+// included: tsconfig.json is JSONC (`tsc --init` writes comments), and no
+// rewrite through a JSON value keeps a comment. The parser and the edit
+// read the text through one scanner, so they agree on what is a comment.
 //
 // Every other case stays silent, because each is a claim that can end only
 // one way: an `include` entry with a wildcard in it counts as covering, a
 // tsconfig with no `include` of its own (TypeScript's default, or one
 // inherited through `extends`) is left alone, and so is a file that does
-// not parse. A false hint, or an edit nobody needed, would teach people to
-// ignore the true ones.
+// not parse. An edit nobody needed would teach people to distrust the
+// ones they did.
+
+/** One span of JSONC text. Whitespace between spans is not a token;
+ * `literal` is a run of anything else (a number, `true`, or a stray
+ * character JSON.parse will refuse). */
+type Token = { kind: "string" | "comment" | "punct" | "literal"; start: number; end: number };
+
+const PUNCT = new Set(["{", "}", "[", "]", ":", ","]);
+
+function scan(text: string): Token[] {
+  const tokens: Token[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i] ?? "";
+    const start = i;
+    if (/\s/.test(ch)) {
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      i = stringEnd(text, i);
+      tokens.push({ kind: "string", start, end: i });
+    } else if (ch === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i += 1;
+      tokens.push({ kind: "comment", start, end: i });
+    } else if (ch === "/" && text[i + 1] === "*") {
+      const close = text.indexOf("*/", i + 2);
+      i = close === -1 ? text.length : close + 2;
+      tokens.push({ kind: "comment", start, end: i });
+    } else if (PUNCT.has(ch)) {
+      i += 1;
+      tokens.push({ kind: "punct", start, end: i });
+    } else {
+      i += 1;
+      while (i < text.length && !/[\s"{}[\]:,]/.test(text[i] ?? "") && !/^\/[/*]/.test(text.slice(i, i + 2))) {
+        i += 1;
+      }
+      tokens.push({ kind: "literal", start, end: i });
+    }
+  }
+  return tokens;
+}
+
+/** The tokens JSON.parse would see: no comments. */
+function significant(text: string): Token[] {
+  return scan(text).filter((token) => token.kind !== "comment");
+}
+
+function isPunct(text: string, token: Token | undefined, ch: string): boolean {
+  return token?.kind === "punct" && text[token.start] === ch;
+}
 
 /**
  * Parses JSON with comments and trailing commas, the dialect tsconfig.json
@@ -27,50 +76,13 @@ import path from "node:path";
  * cannot do: `"$schema": "https://..."` holds a `//`.
  */
 export function parseJsonc(text: string): unknown {
-  let out = "";
-  let i = 0;
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '"') {
-      const end = stringEnd(text, i);
-      out += text.slice(i, end);
-      i = end;
-    } else if (ch === "/" && text[i + 1] === "/") {
-      while (i < text.length && text[i] !== "\n") i += 1;
-    } else if (ch === "/" && text[i + 1] === "*") {
-      const end = text.indexOf("*/", i + 2);
-      i = end === -1 ? text.length : end + 2;
-    } else {
-      out += ch;
-      i += 1;
-    }
-  }
-  return JSON.parse(stripTrailingCommas(out));
-}
-
-function stripTrailingCommas(text: string): string {
-  let out = "";
-  let i = 0;
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '"') {
-      const end = stringEnd(text, i);
-      out += text.slice(i, end);
-      i = end;
-      continue;
-    }
-    if (ch === ",") {
-      let j = i + 1;
-      while (j < text.length && /\s/.test(text[j] ?? "")) j += 1;
-      if (text[j] === "}" || text[j] === "]") {
-        i += 1;
-        continue;
-      }
-    }
-    out += ch;
-    i += 1;
-  }
-  return out;
+  const tokens = significant(text);
+  const kept = tokens.filter(
+    (token, index) =>
+      !(isPunct(text, token, ",") && (isPunct(text, tokens[index + 1], "}") || isPunct(text, tokens[index + 1], "]"))),
+  );
+  // A space between tokens keeps two literals apart, so `1 2` still fails.
+  return JSON.parse(kept.map((token) => text.slice(token.start, token.end)).join(" "));
 }
 
 function segments(value: string): string[] {
@@ -85,7 +97,7 @@ function segments(value: string): string[] {
  * path). A literal entry covers the file itself and everything under a
  * directory it names. Any wildcard counts as covering, from the segment it
  * appears in on: telling exactly what `*.ts` or `src/**` matches is
- * TypeScript's job, and a guess here would be a hint that can be wrong.
+ * TypeScript's job, and a guess here would be an edit that can be wrong.
  */
 export function includeMayCover(entry: string, target: string): boolean {
   const entrySegments = segments(entry);
@@ -119,62 +131,89 @@ export function missingIncludeEntries(
 }
 
 /**
- * Appends `entries` to the top-level `include` array of `text`, a strict
- * JSON object whose `include` is an array, and changes nothing else. A
+ * Appends `entries` to the top-level `include` array of `text`, a JSONC
+ * object whose `include` is an array, and changes nothing else. A
  * multi-line array gets one entry per line at its last element's
- * indentation; a one-line array gets them on that line, after the
- * separator it already uses.
+ * indentation, after any comment that ends that line; a one-line array
+ * gets them on that line, after the separator it already uses. An array
+ * that ends in a trailing comma keeps one after the new last entry.
  */
 export function appendIncludeEntries(text: string, entries: readonly string[]): string {
-  const { open, close } = includeArraySpan(text);
-  const inner = text.slice(open + 1, close);
+  if (entries.length === 0) return text;
+  const tokens = scan(text);
+  const { open, close } = includeArraySpan(text, tokens);
+  const openAt = tokens[open]?.end ?? 0;
+  const closeAt = tokens[close]?.start ?? 0;
   const quoted = entries.map((entry) => JSON.stringify(entry));
-  if (inner.trim() === "") {
-    return `${text.slice(0, open + 1)}${quoted.join(", ")}${text.slice(close)}`;
+  const inside = tokens.slice(open + 1, close).filter((token) => token.kind !== "comment");
+  if (inside.length === 0) {
+    const rest = text.slice(openAt, closeAt).trim() === "" ? closeAt : openAt;
+    return `${text.slice(0, openAt)}${quoted.join(", ")}${text.slice(rest)}`;
   }
-  const content = inner.trimEnd();
-  const lastEnd = open + 1 + content.length;
-  const lastLineStart = content.lastIndexOf("\n");
-  let separator: string;
-  if (lastLineStart !== -1) {
-    const newline = content[lastLineStart - 1] === "\r" ? "\r\n" : "\n";
-    const indent = /^[ \t]*/.exec(content.slice(lastLineStart + 1))?.[0] ?? "";
-    separator = `,${newline}${indent}`;
+  const trailing = isPunct(text, inside[inside.length - 1], ",");
+  const last = inside[inside.length - (trailing ? 2 : 1)];
+  if (last === undefined) throw new Error("tsconfig.json's include array starts with a comma");
+  const lastEnd = last.end;
+  const anchor = trailing ? (inside[inside.length - 1]?.end ?? lastEnd) : lastEnd;
+  const before = text.slice(openAt, lastEnd);
+  const lineBreak = before.lastIndexOf("\n");
+  let space: string;
+  let insertAt = anchor;
+  if (lineBreak !== -1) {
+    const newline = before[lineBreak - 1] === "\r" ? "\r\n" : "\n";
+    const lineStart = openAt + lineBreak + 1;
+    space = `${newline}${/^[ \t]*/.exec(text.slice(lineStart))?.[0] ?? ""}`;
+    insertAt = lineEndAfter(text, tokens, anchor, closeAt) ?? anchor;
   } else {
-    separator = /,[ \t]/.test(inner) || !inner.includes(",") ? ", " : ",";
+    // Only the commas between elements show the file's style; a lone
+    // trailing comma says nothing about it.
+    space = /,[ \t]/.test(before) || !before.includes(",") ? " " : "";
   }
-  const added = quoted.map((entry) => `${separator}${entry}`).join("");
-  return `${text.slice(0, lastEnd)}${added}${text.slice(lastEnd)}`;
+  const body = quoted.join(`,${space}`);
+  if (trailing) return `${text.slice(0, insertAt)}${space}${body},${text.slice(insertAt)}`;
+  return `${text.slice(0, lastEnd)},${text.slice(lastEnd, insertAt)}${space}${body}${text.slice(insertAt)}`;
 }
 
-/** The positions of the `[` and `]` of the top-level `include` value. The
- * last `include` key wins, as it does for JSON.parse. */
-function includeArraySpan(text: string): { open: number; close: number } {
+/** Where the line holding `from` ends (before its `\r\n` or `\n`) when
+ * only whitespace and comments sit between `from` and that line break and
+ * the break comes before `limit`; a comment that ends the last element's
+ * line then stays on that line. */
+function lineEndAfter(text: string, tokens: readonly Token[], from: number, limit: number): number | undefined {
+  let i = from;
+  for (const token of tokens) {
+    if (token.end <= from) continue;
+    if (token.start >= limit) break;
+    const gapBreak = text.slice(i, token.start).indexOf("\n");
+    if (gapBreak !== -1) return newlineStart(text, i + gapBreak);
+    if (token.kind !== "comment") return undefined;
+    i = token.end;
+  }
+  const gapBreak = text.slice(i, limit).indexOf("\n");
+  return gapBreak === -1 ? undefined : newlineStart(text, i + gapBreak);
+}
+
+function newlineStart(text: string, at: number): number {
+  return text[at - 1] === "\r" ? at - 1 : at;
+}
+
+/** The indexes in `tokens` of the `[` and `]` of the top-level `include`
+ * value. The last `include` key wins, as it does for JSON.parse. */
+function includeArraySpan(text: string, tokens: readonly Token[]): { open: number; close: number } {
+  const indexes = tokens.flatMap((token, index) => (token.kind === "comment" ? [] : [index]));
+  const at = (k: number): Token | undefined => tokens[indexes[k] ?? -1];
   let depth = 0;
   let open = -1;
-  let i = 0;
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '"') {
-      const end = stringEnd(text, i);
-      if (depth === 1) {
-        let j = end;
-        while (/\s/.test(text[j] ?? "")) j += 1;
-        if (text[j] === ":" && JSON.parse(text.slice(i, end)) === "include") {
-          j += 1;
-          while (/\s/.test(text[j] ?? "")) j += 1;
-          open = j;
-        }
-      }
-      i = end;
-      continue;
+  for (let k = 0; k < indexes.length; k += 1) {
+    const token = at(k);
+    if (token === undefined) continue;
+    if (token.kind === "string" && depth === 1 && isPunct(text, at(k + 1), ":")) {
+      if (JSON.parse(text.slice(token.start, token.end)) === "include") open = indexes[k + 2] ?? -1;
     }
-    if (ch === "{" || ch === "[") depth += 1;
-    if (ch === "}" || ch === "]") depth -= 1;
-    i += 1;
+    if (isPunct(text, token, "{") || isPunct(text, token, "[")) depth += 1;
+    if (isPunct(text, token, "}") || isPunct(text, token, "]")) depth -= 1;
   }
-  if (text[open] !== "[") throw new Error("tsconfig.json has no top-level include array");
-  return { open, close: matchingBracket(text, open) };
+  if (!isPunct(text, tokens[open], "[")) throw new Error("tsconfig.json has no top-level include array");
+  return { open, close: matchingBracket(text, tokens, open) };
 }
 
 function stringEnd(text: string, start: number): number {
@@ -185,32 +224,24 @@ function stringEnd(text: string, start: number): number {
   return j + 1;
 }
 
-function matchingBracket(text: string, open: number): number {
+function matchingBracket(text: string, tokens: readonly Token[], open: number): number {
   let depth = 0;
-  let i = open;
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '"') {
-      i = stringEnd(text, i);
-      continue;
-    }
-    if (ch === "[" || ch === "{") depth += 1;
-    if (ch === "]" || ch === "}") {
+  for (let i = open; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (isPunct(text, token, "[") || isPunct(text, token, "{")) depth += 1;
+    if (isPunct(text, token, "]") || isPunct(text, token, "}")) {
       depth -= 1;
       if (depth === 0) return i;
     }
-    i += 1;
   }
   throw new Error("tsconfig.json's include array is not closed");
 }
 
-/** What `init` did about tsconfig.json: wrote the entries, or has a hint
- * line (without a trailing newline) to print, or nothing to say. */
-export type TsconfigIncludeOutcome = { kind: "written" } | { kind: "hint"; line: string } | { kind: "silent" };
+/** What `init` did about tsconfig.json: wrote the entries, or nothing to
+ * say (see this file's header for each silent case). */
+export type TsconfigIncludeOutcome = { kind: "written" } | { kind: "silent" };
 
-/** Adds the missing `include` entries to tsconfig.json when the file is
- * plain JSON, and otherwise says which ones to add (see this file's header
- * for each case). */
+/** Adds the missing `include` entries to tsconfig.json in place. */
 export async function ensureTsconfigInclude(
   rootDir: string,
   featuresDir: string,
@@ -232,23 +263,6 @@ export async function ensureTsconfigInclude(
   }
   const missing = missingIncludeEntries(include, featuresDir, configFileName);
   if (missing.length === 0) return { kind: "silent" };
-  if (isStrictJson(text)) {
-    await writeFile(tsconfigPath, appendIncludeEntries(text, missing));
-    return { kind: "written" };
-  }
-  const quoted = missing.map((entry) => JSON.stringify(entry)).join(" and ");
-  const paths = missing.length === 1 ? "this path" : "these paths";
-  return {
-    kind: "hint",
-    line: `tsconfig.json's include leaves out ${paths}, so tsc does not check them; nuka init left the file alone because it holds comments or trailing commas, so add ${quoted} to it`,
-  };
-}
-
-function isStrictJson(text: string): boolean {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
-  }
+  await writeFile(tsconfigPath, appendIncludeEntries(text, missing));
+  return { kind: "written" };
 }
