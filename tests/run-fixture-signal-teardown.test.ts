@@ -41,25 +41,59 @@ async function readLog(rootDir: string): Promise<LogEntry[]> {
   }
 }
 
-function spawnNuka(rootDir: string, args: readonly string[]): ChildProcess {
+const workerPids: number[] = [];
+
+function spawnNuka(rootDir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): ChildProcess {
   const child = spawn(
     process.execPath,
     [path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"), path.join(repoRoot, "src", "cli.ts"), ...args],
-    { cwd: rootDir, stdio: ["ignore", "pipe", "pipe"] },
+    { cwd: rootDir, stdio: ["ignore", "pipe", "pipe"], env },
   );
   children.push(child);
   return child;
 }
 
-async function waitForSetups(rootDir: string): Promise<void> {
+async function waitForSetups(rootDir: string, perFixture = 1): Promise<void> {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    const log = await readLog(rootDir);
-    const setups = new Set(log.filter((entry) => entry.phase === "setup").map((entry) => entry.fixture));
-    if (setups.has("tenant") && setups.has("ledger")) return;
+    const setups = (await readLog(rootDir)).filter((entry) => entry.phase === "setup");
+    const count = (fixture: string): number => setups.filter((entry) => entry.fixture === fixture).length;
+    if (count("tenant") >= perFixture && count("ledger") >= perFixture) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error(`fixture setup was not logged within 20s:\n${JSON.stringify(await readLog(rootDir))}`);
+}
+
+async function readFixturePids(rootDir: string): Promise<number[]> {
+  const text = await readFile(path.join(rootDir, "fixture-pids.txt"), "utf8");
+  const pids = text.trim().split("\n").map(Number);
+  workerPids.push(...pids);
+  return pids;
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForGone(pids: readonly number[], timeoutMs: number): Promise<number[]> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && pids.some(isAlive)) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return pids.filter(isAlive);
+}
+
+function collect(stream: NodeJS.ReadableStream | null): () => string {
+  let text = "";
+  stream?.on("data", (chunk: Buffer) => {
+    text += chunk.toString("utf8");
+  });
+  return () => text;
 }
 
 function waitForClose(child: ChildProcess, timeoutMs: number): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
@@ -92,6 +126,10 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       }
     }
     children.length = 0;
+    for (const pid of workerPids) {
+      if (isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+    workerPids.length = 0;
     await removeTempDir(rootDir);
   });
 
@@ -136,6 +174,58 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       expect(teardowns.map((entry) => entry.fixture)).toEqual(["tenant", "ledger"]);
       expect(teardowns.every((entry) => entry.outcome === "failed")).toBe(true);
     });
+
+    it(`tears every worker's fixtures down when nuka run --concurrency 2 receives ${signal}`, async () => {
+      const child = spawnNuka(rootDir, [
+        "run",
+        "features/hold.feature",
+        "features/hold-again.feature",
+        "--quiet",
+        "--concurrency",
+        "2",
+      ]);
+      const stdout = collect(child.stdout);
+      const stderr = collect(child.stderr);
+      await waitForSetups(rootDir, 2);
+      const pids = await readFixturePids(rootDir);
+      child.kill(signal);
+      const closed = await waitForClose(child, 20_000);
+
+      expect(stoppedBy(signal, closed.code, closed.signal), stderr()).toBe(true);
+      expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
+      const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
+      expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
+        "ledger:failed",
+        "ledger:failed",
+        "tenant:failed",
+        "tenant:failed",
+      ]);
+      expect(stdout()).toBe("");
+      expect(stderr()).toMatch(/^0 scenarios: 0 passed, 0 failed/m);
+    }, 40_000);
+
+    it(`exits at once on a second ${signal} to nuka run --concurrency 2 and leaves no worker behind`, async () => {
+      const child = spawnNuka(
+        rootDir,
+        ["run", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+        { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: "120000" },
+      );
+      await waitForSetups(rootDir, 2);
+      const pids = await readFixturePids(rootDir);
+      child.kill(signal);
+      const deadline = Date.now() + 20_000;
+      while ((await readLog(rootDir)).filter((entry) => entry.phase === "teardown").length < 2) {
+        if (Date.now() > deadline) throw new Error("tenant teardown did not start within 20s");
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      child.kill(signal);
+      const closed = await waitForClose(child, 5_000);
+
+      expect(stoppedBy(signal, closed.code, closed.signal)).toBe(true);
+      expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
+      const log = await readLog(rootDir);
+      expect(log.filter((entry) => entry.fixture === "ledger" && entry.phase === "teardown")).toEqual([]);
+    }, 60_000);
 
     it(`tears both scopes down when nuka do receives ${signal}`, async () => {
       const child = spawnNuka(rootDir, ["do", "hold-fixture", "--args", "{}"]);
