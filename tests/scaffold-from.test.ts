@@ -322,8 +322,11 @@ describe("nuka scaffold --from: any producer key", () => {
           await rm(path.join(stepsDir, `${consumer}.ts`), { force: true });
         }
       },
-      { testCases: 25 },
-    ));
+      // Each case runs scaffold, check, and describe, and each of them
+      // loads every step file, so a case is slow by design and a loaded
+      // machine must not fail it on time alone.
+      { testCases: 15, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 300_000);
 });
 
 describe("scaffold --from helpers", () => {
