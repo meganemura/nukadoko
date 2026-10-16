@@ -585,6 +585,10 @@ describe("every scaffolded variant", () => {
       "",
     ].join("\n");
     await writeFile(stepPath(rootDir, "maybe-name"), maybeName);
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ parameterTypes: [{ name: "colour", regexp: /red|blue/ }] });\n',
+    );
     const variants: readonly (readonly string[])[] = [
       ["scaffold", "bare-when"],
       ["scaffold", "bare-then", "--then"],

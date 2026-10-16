@@ -8,9 +8,11 @@ import { UndefinedParameterTypeError } from "@cucumber/cucumber-expressions/dist
 import { duplicateCaptureKeys } from "../binding/capture.js";
 import { buildExpression } from "../binding/expression.js";
 import { type Capture, stripCaptureNames } from "../binding/pattern.js";
+import { ParameterTypeCollisionError } from "../binding/parameter-type-errors.js";
+import type { RegisteredParameterType } from "../binding/parameter-type-config.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import type { PrimitiveClass } from "../binding/schema-shape.js";
-import { CAPTURED_CLASS } from "../check/binding-check.js";
+import { availableParameterTypeNames, CAPTURED_CLASS } from "../check/binding-check.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
@@ -49,11 +51,16 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // error. A built-in type gets the schema of the value it produces (the same
 // table `nuka check` compares captures against); a custom type gets
 // `z.unknown()`, because only its transformer knows what it produces. A
-// pattern that `nuka check` would refuse whatever the project declares
-// (an unnamed or repeated capture, an unterminated `{`, a
-// cucumber-expressions syntax error) is refused here instead, before a file
-// exists. An unknown type name is not refused: it may be a custom type the
-// project registers, and only `nuka check` sees the whole registry.
+// pattern that `nuka check` would refuse in this project is refused here
+// instead, before a file exists: an unnamed or repeated capture, an
+// unterminated `{`, a cucumber-expressions syntax error, and a type name
+// the project does not register. The registry is the one `nuka check`
+// builds, the built-ins plus `config.parameterTypes` plus each compat
+// `defineParameterType` discovery finds, so a type the project does
+// register is written as it is. Discovery imports every step file, so it
+// runs only when the pattern names a type the built-ins lack. That refusal
+// lists the registered names, and for `number`, the word a zod schema uses,
+// names `int` and `float`, the Gherkin ones.
 //
 // `--then` is for an assertion step. It writes `mutates: false`, which a
 // step bound to a Then line must declare (`then-mutates`), and no `returns`,
@@ -376,17 +383,25 @@ function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, r
   ].join("\n");
 }
 
-/** The pattern's captures, or the reason `nuka check` would refuse it in
- * any project. */
-function readPattern(pattern: string): { captures: readonly Capture[] } | { refusal: string } {
+/** What the pattern captures, read against the built-in types alone, or
+ * the reason `nuka check` would refuse it in any project. `projectTypes`
+ * holds each type name the built-ins lack, which only the project's own
+ * registry can settle. */
+interface ReadPattern {
+  readonly captures: readonly Capture[];
+  readonly projectTypes: readonly string[];
+}
+
+function readPattern(pattern: string): ReadPattern | { refusal: string } {
   if (pattern === "") {
     // defineStep reads an empty `pattern` as no pattern at all, so the step
     // would quietly match no feature line.
     return { refusal: "the pattern is empty" };
   }
+  const builtins = createParameterTypeRegistry();
   let captures: readonly Capture[];
   try {
-    captures = buildExpression(pattern, createParameterTypeRegistry()).captures;
+    captures = buildExpression(pattern, builtins).captures;
   } catch (error) {
     if (!(error instanceof UndefinedParameterTypeError)) {
       return { refusal: error instanceof Error ? error.message : String(error) };
@@ -397,7 +412,41 @@ function readPattern(pattern: string): { captures: readonly Capture[] } | { refu
   if (repeated.length > 0) {
     return { refusal: `the pattern captures ${repeated.map((key) => `"${key}"`).join(", ")} more than once, and one args field holds one value` };
   }
-  return { captures };
+  const projectTypes = [
+    ...new Set(captures.map((capture) => capture.type).filter((type) => builtins.lookupByTypeName(type) === undefined)),
+  ];
+  return { captures, projectTypes };
+}
+
+/** Why the pattern names a type this project does not register, or `null`
+ * when every type it names is registered. */
+function projectTypeRefusal(
+  pattern: string,
+  captures: readonly Capture[],
+  registeredTypes: readonly RegisteredParameterType[],
+  importFailureCount: number,
+): string | null {
+  let registry: ReturnType<typeof createParameterTypeRegistry>;
+  try {
+    registry = createParameterTypeRegistry(registeredTypes);
+  } catch (error) {
+    // The project's registry itself is broken; `nuka check` reports it as
+    // parameter-type-invalid, with the same message.
+    if (error instanceof ParameterTypeCollisionError) return error.message;
+    throw error;
+  }
+  try {
+    buildExpression(pattern, registry);
+    return null;
+  } catch (error) {
+    if (!(error instanceof UndefinedParameterTypeError)) throw error;
+    const type = error.undefinedParameterTypeName;
+    const key = captures.find((capture) => capture.type === type)?.key ?? "value";
+    const hint = type === "number" ? `; did you mean {${key}:int} or {${key}:float}?` : "";
+    const unread =
+      importFailureCount === 0 ? "" : `; ${importFailureCount} step file(s) did not import, and \`nuka check\` names them`;
+    return `the pattern names type ${JSON.stringify(type)}, and this project registers none by that name; registered types: ${availableParameterTypeNames(registry).join(", ")}${hint}${unread}`;
+  }
 }
 
 /** The `--from` requests, or why they cannot all fill a distinct args key
@@ -521,7 +570,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     }
   }
 
-  const read = pattern === null ? { captures: [] } : readPattern(pattern);
+  const read: ReadPattern | { refusal: string } = pattern === null ? { captures: [], projectTypes: [] } : readPattern(pattern);
   if ("refusal" in read) {
     stderr.write(`Refusing to scaffold: ${read.refusal}\n`);
     return 1;
@@ -556,12 +605,24 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
 
   let chained: readonly ChainedField[] = [];
-  if (fromFlags.requests.length > 0) {
+  if (fromFlags.requests.length > 0 || read.projectTypes.length > 0) {
     // Tolerant, as `nuka check` is: an unrelated broken step file must not
     // stop a chain to a producer that loads.
-    const { vocabulary, importFailures } = await discoverSteps(rootDir, config.featuresDir, {
+    const { vocabulary, importFailures, compatParameterTypes } = await discoverSteps(rootDir, config.featuresDir, {
       tolerateImportFailures: true,
     });
+    if (read.projectTypes.length > 0 && pattern !== null) {
+      const refusal = projectTypeRefusal(
+        pattern,
+        read.captures,
+        [...config.parameterTypes, ...compatParameterTypes],
+        importFailures.length,
+      );
+      if (refusal !== null) {
+        stderr.write(`Refusing to scaffold: ${refusal}\n`);
+        return 1;
+      }
+    }
     const typedSteps = new Map<string, TypedVocabularyEntry>();
     for (const entry of vocabulary.values()) {
       if (entry.kind === "typed") typedSteps.set(entry.name, entry);

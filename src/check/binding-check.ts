@@ -128,7 +128,7 @@ function captureErrorToIssue(error: unknown, stepName: string, pattern: string):
  * colon, so listing it would only read as a stray blank entry. Sorted so the
  * message is stable across runs, not insertion order (built-ins first,
  * config entries after). */
-function availableParameterTypeNames(registry: ParameterTypeRegistry): readonly string[] {
+export function availableParameterTypeNames(registry: ParameterTypeRegistry): readonly string[] {
   const names: string[] = [];
   for (const parameterType of registry.parameterTypes) {
     if (parameterType.name !== undefined && parameterType.name.length > 0) {

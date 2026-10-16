@@ -114,6 +114,20 @@ just until 0.1.
 
 ### Changed
 
+- **`nuka scaffold --pattern` refuses a capture type the project does not register.**
+  `{a:number}` used to be written as `a: z.unknown()`, and the next
+  `nuka check` reported `unknown-parameter-type`, so `nuka run` refused to
+  start; fixing the pattern in the step file then left `z.unknown()`
+  behind. scaffold now reads the pattern against the registry `nuka check`
+  builds (the built-in types, `config.parameterTypes`, and each compat
+  `defineParameterType` in the step files) and refuses with nothing
+  written: `Refusing to scaffold: the pattern names type "number", and
+  this project registers none by that name; registered types: bigdecimal,
+  biginteger, ..., word; did you mean {a:int} or {a:float}?`. The hint is
+  for `number` only. A custom type the project does register is still
+  written as `z.unknown()`. A config that fails to load is reported as
+  such before the type is looked up. The step files are imported for
+  this only when the pattern names a type the built-ins lack.
 - **nukadoko runs tsx with its disk cache off.**
   tsx reads the whole index of its cache directory under the OS temp
   directory when it starts. That index is shared by every tsx user on the

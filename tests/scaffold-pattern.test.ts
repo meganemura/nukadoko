@@ -5,7 +5,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka scaffold <name> --pattern <text> [--then]`. The
 // file it writes has to pass `nuka check` against a feature line as
@@ -27,6 +27,17 @@ async function cli(rootDir: string, argv: string[]): Promise<{ exitCode: number;
   const stderr = createCaptureSink();
   const exitCode = await runCli(argv, { rootDir, stdout, stderr });
   return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+}
+
+const BUILTIN_TYPES = "bigdecimal, biginteger, byte, double, float, int, long, short, string, word";
+
+/** Replaces the project's config with one that registers these types. */
+async function registerTypes(rootDir: string, names: readonly string[]): Promise<void> {
+  const entries = names.map((name) => `{ name: ${JSON.stringify(name)}, regexp: /[a-z]+/ }`).join(", ");
+  await writeFile(
+    path.join(rootDir, "nukadoko.config.ts"),
+    `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ parameterTypes: [${entries}] });\n`,
+  );
 }
 
 describe("nuka scaffold --pattern", () => {
@@ -66,6 +77,7 @@ describe("nuka scaffold --pattern", () => {
   });
 
   it("gives each built-in capture type the schema of the value it produces, and a custom type z.unknown()", async () => {
+    await registerTypes(rootDir, ["colour"]);
     const result = await cli(rootDir, [
       "scaffold",
       "set-values",
@@ -119,6 +131,67 @@ describe("nuka scaffold --pattern", () => {
     expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);
   });
 
+  it("refuses a capture typed number, lists the registered types, and names int and float", async () => {
+    const result = await cli(rootDir, ["scaffold", "run-sum", "--pattern", "I add {a:number} and {b:number}"]);
+
+    expect(result.stderr).toBe(
+      `Refusing to scaffold: the pattern names type "number", and this project registers none by that name; registered types: ${BUILTIN_TYPES}; did you mean {a:int} or {a:float}?\n`,
+    );
+    expect(result.stdout).toBe("");
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(path.join(rootDir, "features", "steps", "run-sum.ts"))).toBe(false);
+  });
+
+  it("refuses a type the project does not register, and writes it as z.unknown() once the config registers it", async () => {
+    const refused = await cli(rootDir, ["scaffold", "wait-for", "--pattern", "I wait {d:duration}"]);
+    expect(refused.stderr).toBe(
+      `Refusing to scaffold: the pattern names type "duration", and this project registers none by that name; registered types: ${BUILTIN_TYPES}\n`,
+    );
+    expect(refused.exitCode).toBe(1);
+    expect(existsSync(path.join(rootDir, "features", "steps", "wait-for.ts"))).toBe(false);
+
+    await registerTypes(rootDir, ["duration"]);
+    const written = await cli(rootDir, ["scaffold", "wait-for", "--pattern", "I wait {d:duration}"]);
+    expect(written.stderr).toBe("");
+    expect(written.exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "wait-for.ts"), "utf8")).toContain("    d: z.unknown(),\n");
+
+    // A second unknown type is still refused, with the project's type in the list.
+    const second = await cli(rootDir, ["scaffold", "paint", "--pattern", "paint it {c:colour}"]);
+    expect(second.stderr).toBe(
+      'Refusing to scaffold: the pattern names type "colour", and this project registers none by that name; registered types: bigdecimal, biginteger, byte, double, duration, float, int, long, short, string, word\n',
+    );
+  });
+
+  it("counts a compat defineParameterType in the steps directory as registered", async () => {
+    // A relative import of this checkout's compat entry: the bare
+    // "nukadoko/compat" resolves to dist/ from a project nested in this
+    // repository, a module instance discovery from src/ does not share.
+    const stepsDir = path.join(rootDir, "features", "steps");
+    const compat = path.relative(stepsDir, path.join(repoRoot, "src", "compat", "index.js")).split(path.sep).join("/");
+    await writeFile(
+      path.join(stepsDir, "glue.ts"),
+      `import { defineParameterType } from ${JSON.stringify(compat)};\n\ndefineParameterType({ name: "shout", regexp: /[A-Z]+/ });\n`,
+    );
+
+    const result = await cli(rootDir, ["scaffold", "say", "--pattern", "I say {word:shout}"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "say.ts"), "utf8")).toContain("    word: z.unknown(),\n");
+  });
+
+  it("reports a config that fails to load, not the type, when the pattern needs the project's types", async () => {
+    await writeFile(path.join(rootDir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ typo: 1 });\n');
+
+    const result = await cli(rootDir, ["scaffold", "run-sum", "--pattern", "I add {a:number}"]);
+
+    expect(result.stderr).toContain("typo");
+    expect(result.stderr).not.toContain("Refusing to scaffold");
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(path.join(rootDir, "features", "steps", "run-sum.ts"))).toBe(false);
+  });
+
   it("passes nuka check against the feature as written, fails until implemented, and runs green with an assertion-only body", async () => {
     await cli(rootDir, ["scaffold", "add-numbers", "--pattern", "I add {a:int} and {b:int}"]);
     await cli(rootDir, ["scaffold", "sum-is", "--pattern", "the sum is {sum:int}", "--then"]);
@@ -153,6 +226,65 @@ describe("nuka scaffold --pattern", () => {
     expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
     expect(green.exitCode).toBe(0);
   });
+});
+
+// Property: a capture whose type the project registers, a built-in or one
+// of its own, is written, and `nuka check` reports no unknown type for the
+// file; a capture whose type it does not register is refused with nothing
+// written. Type names are drawn from both sets and from arbitrary words.
+describe("nuka scaffold --pattern: any capture type", () => {
+  let rootDir: string;
+  let counter = 0;
+  const builtins = BUILTIN_TYPES.split(", ");
+  const registered = ["colour", "duration"];
+  const known = gs.sampledFrom([...builtins, ...registered]);
+
+  beforeAll(async () => {
+    rootDir = await initProject();
+    await registerTypes(rootDir, registered);
+  });
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("writes a step check accepts iff every captured type is registered", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const types = tc.draw(
+          gs.arrays(
+            // A known name three times as often as a random word, so both outcomes are common.
+            gs.oneOf(known, known, known, gs.text({ minSize: 1, maxSize: 8, alphabet: "abcdenrtu" })),
+            { minSize: 1, maxSize: 3 },
+          ),
+        );
+        const words = tc.draw(gs.arrays(gs.sampledFrom(["set", "the", "to", "and"]), { minSize: types.length, maxSize: types.length }));
+        const pattern = types.map((type, index) => `${words[index]} {k${index}:${type}}`).join(" ");
+        const expected = types.every((type) => builtins.includes(type) || registered.includes(type));
+        counter += 1;
+        const name = `typed-${counter}`;
+        const filePath = path.join(rootDir, "features", "steps", `${name}.ts`);
+        try {
+          const scaffold = await cli(rootDir, ["scaffold", name, "--pattern", pattern]);
+          if (!expected) {
+            expect(scaffold.stderr).toMatch(/^Refusing to scaffold: the pattern names type "[a-z]+", and this project registers none by that name; registered types: /);
+            expect(scaffold.exitCode).toBe(1);
+            expect(existsSync(filePath)).toBe(false);
+            return;
+          }
+          expect(scaffold.stderr).toBe("");
+          expect(scaffold.exitCode).toBe(0);
+          const check = await cli(rootDir, ["check", "--json"]);
+          const codes = [...JSON.parse(check.stdout).errors, ...JSON.parse(check.stdout).warnings].map(
+            (issue: { code: string }) => issue.code,
+          );
+          expect(codes).not.toContain("unknown-parameter-type");
+        } finally {
+          await rm(filePath, { force: true });
+        }
+      },
+      { testCases: 30, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 300_000);
 });
 
 // Property: whatever text --pattern is given, scaffold either refuses it

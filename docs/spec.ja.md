@@ -3625,8 +3625,10 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               under noUnusedParameters. --pattern writes
                               the pattern and one args field per
                               {key:type} capture, and
-                              refuses a pattern check would refuse in any
-                              project. --then writes mutates: false and no
+                              refuses a pattern check would refuse in
+                              this project, a type it does not register
+                              included, with the registered type names.
+                              --then writes mutates: false and no
                               returns, for a step a Then line binds.
                               --from (repeatable) chains one key of an
                               earlier step's returns: the import of that

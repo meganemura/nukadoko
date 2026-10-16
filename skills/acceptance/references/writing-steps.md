@@ -28,7 +28,10 @@ criterion's wording doesn't match a pattern verbatim.
 
 1. `nuka scaffold <name> --pattern "<feature line>"`, kebab-case, one
    file per step. Each `{key:type}` capture becomes an args field, so the
-   file passes `nuka check` against that line before `run` is written.
+   file passes `nuka check` against that line before `run` is written. A
+   type the project does not register is refused with the registered
+   names listed: a number is `{key:int}` or `{key:float}`, not
+   `{key:number}`.
    Add `--then` for a step a Then line binds: it writes `mutates: false`
    and no `returns`. Add `--from <step>.<key>` for each value the step
    reads from an earlier step's result: it writes the import, the args
