@@ -1,12 +1,7 @@
 import { existsSync } from "node:fs";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
-import {
-  runWithTimeout,
-  classifyCaughtError,
-  withStepStdoutOnStderr,
-} from "../run/run-scenario.js";
+import { executeTypedStep } from "../run/execute-typed-step.js";
 import path from "node:path";
-import { formatValidationIssues } from "../issues/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -16,11 +11,7 @@ import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { probeVersion } from "../environment/probe-version.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
-import {
-  createFixtureCache,
-  resolveFixtures,
-  teardownFixtureCache,
-} from "../fixture/resolver.js";
+import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
   ReadOnlyEnvironmentError,
@@ -32,7 +23,7 @@ import { removeLiveSockDir } from "../session/live-sock.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
-import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
+import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -43,8 +34,6 @@ import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
-import { stepFixtureNames } from "../step/step-fixture-names.js";
-import { strictArgsSchema } from "../step/strict-args.js";
 import {
   formatFixtureDefinitionIssues,
   formatFixtureIssues,
@@ -54,6 +43,7 @@ import {
 } from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
+import { reviveStoredForm } from "../stored-form/revive.js";
 import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -667,6 +657,9 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
     // resolved `--use` could touch, because the `from` structural check
     // above already required `entry.step.args` to be an object schema for
     // every one of that step's own `from` keys.
+    // --args is JSON, which has no bigint or Date, so a value this step's
+    // args declare as one arrives as its stored string.
+    parsedArgs = reviveStoredForm(entry.step.args, parsedArgs, "input");
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const resolved of resolvedUses) {
@@ -688,93 +681,21 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
       }
     }
 
-    let status: "ok" | "failed";
-    let result: unknown;
-    let errorMessage = "";
-    // Classified at each branch
-    // that already knows *why* the step failed, not by inspecting the
-    // message afterward. `nuka do` only ever runs a typed step (compat is
-    // refused in setup, above) — a typed step's `run(fixtures, args)` never
-    // receives `this` and has no timeout mechanism, so its own throw is
-    // always `"step_error"` here, never `world_invalid`/`timeout` (those are
-    // only reachable from a compat step's/hook's own execution, src/run/
-    // run-scenario.ts).
-    let errorKind: ErrorKind | undefined;
-    // Every `config.fixtures` entry this step's own bag actually resolved —
-    // `[]` (hence omitted on the step record)
-    // when args validation failed before fixture resolution ever ran.
-    let fixtureUsage: FixtureUsageEntry[] = [];
-    // Defaults to the merged-but-unvalidated value (`--use` already applied
-    // above); overwritten with the schema-validated value below on success,
-    // so a step record's own `args` never shows a key validation actually
-    // rejected or a default validation actually filled in silently.
-    let recordedArgs: unknown = parsedArgs;
-
-    const argsResult = strictArgsSchema(entry.step.args).safeParse(parsedArgs);
-    if (!argsResult.success) {
-      status = "failed";
-      errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
-      errorKind = "args_invalid";
-    } else {
-      recordedArgs = argsResult.data;
-      try {
-        // Bag construction happens inside this try, same as the `run()`
-        // call itself below (this also resolves `config.fixtures`
-        // entries): a step that names `page`
-        // only launches the browser here, never earlier, and a launch
-        // failure, a fixture setup failure, or a fixture use()-contract
-        // violation are all a step failure ("step_error") this same way,
-        // the same outcome a step's own `ctx.page()` throwing used to
-        // produce when that call lived inside `run()`. `stepFixtureNames`
-        // (src/step/step-fixture-names.ts) is `fixtureParameterNames` closed
-        // transitively over `entry.step.parts` (docs/spec.md "Parts") — a
-        // part that reaches for `page` gets the browser open here too,
-        // before `run()` starts. Memoized and already validated in setup
-        // above, so it is not expected to throw here.
-        const resolved = await resolveFixtures({
-          names: stepFixtureNames(entry.step),
-          graph: fixtureGraph,
-          ctx: contextHandle.ctx,
-          scenarioCache: fixtureScenarioCache,
-          processCache: fixtureProcessCache,
-          defaultTimeoutMs: config.fixtureTimeout,
-        });
-        fixtureUsage = resolved.usage;
-        const fixtures = resolved.fixtures;
-        // Opens this step's own root call frame and hands `ctx.call` the
-        // exact bag any part it calls (direct or nested) subsets from
-        // (docs/spec.md "Parts") — must run before `entry.step.run` so
-        // `ctx.call` is ready the moment the step's own body could reach
-        // for it.
-        contextHandle.beginStepRun(entry.step, fixtures);
-        const runResult = await withStepStdoutOnStderr(() =>
-          runWithTimeout(
-            () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(fixtures, argsResult.data))),
-            entry.step.timeout ?? config.stepTimeout,
-            "Step",
-            name,
-            entry.step.timeout === undefined ? "config" : "step",
-          ),
-        );
-        const returnsResult = entry.step.returns.safeParse(runResult);
-        if (!returnsResult.success) {
-          status = "failed";
-          errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
-          errorKind = "result_invalid";
-        } else {
-          status = "ok";
-          result = returnsResult.data;
-        }
-      } catch (error) {
-        // `classifyCaughtError` for the same reason src/run/run-scenario.ts
-        // routes its own typed catch through it: this `run` executes under
-        // `runWithTimeout` now, so the limit firing has to record as
-        // `"timeout"` rather than as the step's own throw.
-        status = "failed";
-        errorMessage = error instanceof Error ? error.message : String(error);
-        errorKind = classifyCaughtError(error);
-      }
-    }
+    const outcome = await executeTypedStep({
+      name,
+      step: entry.step,
+      args: parsedArgs,
+      handle: contextHandle,
+      fixtureGraph,
+      scenarioCache: fixtureScenarioCache,
+      processCache: fixtureProcessCache,
+      config,
+    });
+    const { status, fixtureUsage } = outcome;
+    const recordedArgs = outcome.args;
+    const result = outcome.status === "ok" ? outcome.result : undefined;
+    const errorMessage = outcome.status === "failed" ? outcome.error.message : "";
+    const errorKind: ErrorKind | undefined = outcome.status === "failed" ? outcome.error.kind : undefined;
 
     // A read-only environment already refused a *declared* mutator above, in
     // setup, before anything ran; a step that declared `mutates: false` yet

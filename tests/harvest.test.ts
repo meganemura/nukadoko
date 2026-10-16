@@ -114,6 +114,20 @@ describe("nuka harvest", () => {
     expect(stdoutText).not.toContain("p_acme");
   });
 
+  it("a {biginteger} capture renders from its stored decimal string and reads back", async () => {
+    const atoms = await doStep(rootDir, "count-atoms", '{"count":"123456789012345678901234567890"}');
+    expect(atoms.exitCode).toBe(0);
+    expect(atoms.record.args).toEqual({ count: "123456789012345678901234567890" });
+
+    const { exitCode, stdoutText, stderrText } = await harvest(rootDir, [atoms.record.step_record_id as string]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutText.split("\n").filter((line) => line.trim().length > 0).slice(2)).toEqual([
+      "    * there are 123456789012345678901234567890 atoms",
+    ]);
+    expect(stderrText).not.toContain("does not read back");
+  });
+
   it("a step with no pattern becomes a comment, never a `*` line", async () => {
     const note = await doStep(rootDir, "internal-note", '{"note":"remember this"}');
 

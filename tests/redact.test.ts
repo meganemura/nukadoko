@@ -588,6 +588,28 @@ describe("redact property-based", () => {
     });
   });
 
+  it("stores a bigint as its decimal string, which JSON.stringify can then write and BigInt reads back", () => {
+    hegel.test((tc) => {
+      const big = tc.draw(gs.bigIntegers());
+      const stored = redact({ args: { v: big }, list: [big] }, []);
+      const decimal = big.toString();
+      expect(stored).toEqual({ args: { v: decimal }, list: [decimal] });
+      const reread = JSON.parse(JSON.stringify(stored)) as { args: { v: string } };
+      expect(BigInt(reread.args.v)).toBe(big);
+      expect(redact(stored, [])).toEqual(stored);
+    });
+  });
+
+  it("replaces a bigint whose digits are an eligible secret with that secret's token, and a second redact changes nothing", () => {
+    hegel.test((tc) => {
+      const big = tc.draw(gs.bigIntegers({ minValue: 1000n }));
+      const secrets: SecretEntry[] = [{ name: "PIN", value: big.toString() }];
+      const once = redact({ v: big, other: big + 1n }, secrets);
+      expect(once).toEqual({ v: "{{secret.PIN}}", other: redactString((big + 1n).toString(), secrets) });
+      expect(redact(once, secrets)).toEqual(once);
+    });
+  });
+
   it("redacts the percent-encoded and JSON-escaped spelling of any eligible secret inside toJSON text", () => {
     hegel.test((tc) => {
       const body = tc.draw(gs.text({ minSize: MIN_REDACTABLE_LENGTH, maxSize: 40 }));

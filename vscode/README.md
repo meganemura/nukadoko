@@ -20,12 +20,17 @@ agent-first engine that runs Gherkin with typed step contracts.
   the same as a step with no declaration at all. The declaration itself
   still gets a diagnostic, described below, so this case is never silent.
 - Completion: suggests every statically-resolved pattern while typing a step
-  line.
+  line. Accepting one inserts the step text with a tab stop for each
+  parameter. Each stop starts with a value of the parameter's type (`1`
+  for `{int}`, `"title"` for `{title:string}`), so the line binds before
+  you edit it. A custom parameter type gets its name as a hint instead.
 - Static-unresolved diagnostics: a step declaration with a pattern this
   extension cannot read without running the file (a variable, a function
   call, or a template literal with a substitution) gets a warning on its
-  own line. This warning appears on open or save; no command run is
-  needed. It comes from the same static parse as Go to definition and
+  own line. This warning appears once the extension is active, which is
+  when a `.feature` file is opened or the `nukadoko: Check` command runs,
+  and it is refreshed whenever a step file is saved, created, or deleted.
+  It comes from the same static parse as Go to definition and
   Completion, never from a `nuka` process -- unlike the `nuka check`
   diagnostics below.
 - Diagnostics: the `nukadoko: Check` command (Command Palette) runs `nuka

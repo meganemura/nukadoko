@@ -47,4 +47,15 @@ describe("assessFrozenResult", () => {
       expect(assessFrozenResult(schema, frozen)).toEqual({ ok: true });
     });
   });
+
+  it("accepts the decimal string a record stores for any bigint, and rejects one that is not that string", () => {
+    hegel.test((tc) => {
+      const big = tc.draw(gs.bigIntegers());
+      const schema = z.object({ total: z.bigint(), coerced: z.coerce.bigint() });
+      const frozen = JSON.parse(JSON.stringify({ total: big.toString(), coerced: big.toString() }));
+      expect(assessFrozenResult(schema, frozen)).toEqual({ ok: true });
+      const padded = assessFrozenResult(schema, { total: `0${big < 0n ? -big : big}`, coerced: big.toString() });
+      expect(padded).toEqual({ ok: false, detail: "total: Invalid input: expected bigint, received string" });
+    });
+  });
 });

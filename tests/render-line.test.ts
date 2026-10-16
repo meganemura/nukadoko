@@ -3,7 +3,7 @@ import {
   renderAttachmentBlock,
   renderPatternLine,
   type DocStringAttachment,
-} from "../src/harvest/render-line.js";
+} from "../src/draft/render-line.js";
 
 // Responsibility: the pattern-escape and docstring-escape paths
 // tests/build-draft.test.ts's own end-to-end harvest coverage never reaches
@@ -73,7 +73,7 @@ describe("renderAttachmentBlock: docstring content colliding with the closing fe
     expect(block).toEqual([
       '  """',
       "  plain line",
-      '  \\"""not a real close',
+      '  \\"\\"\\"not a real close',
       "  last line",
       '  """',
     ]);

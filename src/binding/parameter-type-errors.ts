@@ -2,7 +2,9 @@
 // `config.parameterTypes` (src/binding/registry.ts) — a custom entry's name
 // collides with either one of cucumber-expressions' own built-in types (int,
 // float, word, string, the anonymous type, ...) or another custom entry
-// earlier in the same config's `parameterTypes` list. Kept separate from
+// earlier in the same config's `parameterTypes` list, or a compat
+// `preferForRegexpMatch` entry prefers a regexp that another type already
+// prefers. Kept separate from
 // registry.ts so callers (src/check/binding-check.ts, src/check/feature-
 // check.ts, src/run/match-step.ts) can `instanceof` it without pulling in the
 // registry-building code itself — same convention as config/errors.ts,
@@ -12,17 +14,28 @@
 // reports it as a `parameter-type-invalid` issue, `nuka do`/`nuka run` treat
 // it as a setup failure (stderr + exit 1, no step record).
 
-export type ParameterTypeCollisionReason = "built-in" | "duplicate";
+export type ParameterTypeCollisionReason = "built-in" | "duplicate" | "preferential";
+
+/** The type that already prefers the regexp, for a "preferential" collision. */
+export interface PreferredRegexp {
+  readonly regexp: string;
+  /** Empty for cucumber-expressions' anonymous built-in type. */
+  readonly preferredBy: string;
+}
 
 export class ParameterTypeCollisionError extends Error {
   readonly typeName: string;
   readonly reason: ParameterTypeCollisionReason;
 
-  constructor(typeName: string, reason: ParameterTypeCollisionReason) {
+  constructor(typeName: string, reason: "built-in" | "duplicate");
+  constructor(typeName: string, reason: "preferential", preferred: PreferredRegexp);
+  constructor(typeName: string, reason: ParameterTypeCollisionReason, preferred?: PreferredRegexp) {
     const detail =
       reason === "built-in"
         ? `collides with one of cucumber-expressions' own built-in parameter types; redefining what {${typeName}} means would quietly change the meaning of every pattern that already uses it`
-        : "is registered more than once in parameterTypes";
+        : reason === "duplicate"
+          ? "is registered more than once in parameterTypes"
+          : `sets preferForRegexpMatch on /${preferred?.regexp}/, which ${preferred?.preferredBy ? `{${preferred.preferredBy}}` : "the anonymous parameter type"} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them`;
     super(`Custom parameter type "${typeName}" ${detail}`);
     this.name = "ParameterTypeCollisionError";
     this.typeName = typeName;

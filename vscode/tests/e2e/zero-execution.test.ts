@@ -115,7 +115,7 @@ describe("dist/extension.js: zero execution", () => {
     const completions = (await stub.completionProvider?.provideCompletionItems(fakeDocument, {
       line: 0,
       character: 0,
-    })) as { label: string }[] | undefined;
+    })) as { label: string; insertText?: unknown }[] | undefined;
     // Both patterns, not just the definitely-harmless one: proves
     // side-effecting.ts's own declaration was actually found (parsed, never
     // executed), the paired positive proof the marker-absence assertions
@@ -123,6 +123,9 @@ describe("dist/extension.js: zero execution", () => {
     expect(completions?.map((item) => item.label).sort()).toEqual(
       ["a side effecting step is parsed", "a todo titled {title:string} is added"].sort(),
     );
+    expect(completions?.find((item) => item.label === "a todo titled {title:string} is added")?.insertText).toEqual({
+      value: 'a todo titled "${1:title}" is added',
+    });
 
     expect(existsSync(markerPath)).toBe(false);
   });

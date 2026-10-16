@@ -206,8 +206,9 @@ export function checkBindings(
     registry = createParameterTypeRegistry(registeredTypes);
   } catch (error) {
     if (error instanceof ParameterTypeCollisionError) {
+      const file = compatParameterTypes.findLast((entry) => entry.name === error.typeName)?.filePath;
       return {
-        issues: [{ code: "parameter-type-invalid", message: error.message }],
+        issues: [{ code: "parameter-type-invalid", message: error.message, ...(file === undefined ? {} : { file }) }],
         warnings,
         patterns: [],
         standIns: [],

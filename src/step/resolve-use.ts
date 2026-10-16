@@ -1,4 +1,5 @@
 import type { StepRecord, UsedEntryWithResult } from "../record/types.js";
+import { reviveStoredForm } from "../stored-form/revive.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
 // Responsibility: `nuka do --use <record-id>`'s own lookup (docs/spec.md
@@ -148,7 +149,9 @@ export function resolveUse(
 
   return {
     ok: true,
-    filled,
+    // The record holds the stored form, so a bigint this step's args
+    // declare arrives as its decimal string until it is revived here.
+    filled: reviveStoredForm(step.args, filled, "input") as Record<string, unknown>,
     used: { step_record_id: recordId, step: stepRecord.step, result: stepRecord.result },
   };
 }

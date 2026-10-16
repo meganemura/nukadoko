@@ -326,6 +326,10 @@ preprocess, and a custom parameter type are never reported. It does not fire whe
 coerce still is that finding. The one-line description is `nuka check
 --codes`.
 
+A record stores a bigint as its decimal string, and `nuka do --args`
+takes a `z.bigint()` field the same way (`{"count":"123"}`), not as a JSON
+number.
+
 Capturing the same key twice in one pattern is refused too. One args
 field holds one value, and keeping the last capture would drop the
 earlier one. `nuka check` reports it and `nuka run` refuses the binding

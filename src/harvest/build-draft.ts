@@ -1,30 +1,19 @@
-import type { PickleStep } from "@cucumber/messages";
-import { parseFeatureSource } from "../feature/load-features.js";
-import type { StepRecord } from "../record/types.js";
-import { bindStepArgs, matchPickleStep, type StepBinding } from "../run/match-step.js";
-import type { Step } from "../step/define-step.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
-import { categorizeArgs, deepEqual, toArgsRecord } from "./categorize-args.js";
-import { renderAttachmentBlock, renderPatternLine, type Attachment } from "./render-line.js";
+import { flatten, formatValue, readBack, renderPatternLine, renderScenarioLines, type DraftEntry } from "../draft/index.js";
+import type { StepRecord } from "../record/types.js";
+import type { StepBinding } from "../run/match-step.js";
+import type { Step } from "../step/define-step.js";
+import { categorizeArgs, toArgsRecord } from "./categorize-args.js";
 
 // Responsibility: turn one ordered list of step records into the feature
 // draft `nuka harvest` prints and the notices it writes to stderr
 // (docs/spec.md "Harvesting"). Three things happen per record, in this
-// order: render its pattern's first entry into text (render-line.ts), sort
+// order: render its pattern's first entry into text (src/draft), sort
 // its remaining args keys into chain/attachment/unfillable/omitted-measured
 // (categorize-args.ts), then read the *rendered* text back through the
-// exact matching `nuka run` uses (src/run/match-step.ts) to confirm it
-// lands on the same step with the same non-chain args — never a second
-// implementation of that question, only ever this one call.
-//
-// The round trip parses the whole assembled draft once, through
-// src/feature/load-features.ts's own `parseFeatureSource` — the same
-// @cucumber/gherkin entry point `nuka run`/`nuka check` parse a real
-// feature file through — rather than hand-building a PickleStepArgument for
-// each table/docstring. That is what actually exercises render-line.ts's
-// own escaping: a synthetic argument object would let a broken `\|`/`"""`
-// escape pass unnoticed, since the bug would never reach a parser that
-// could catch it.
+// round trip src/draft shares with `nuka explore`, which matches the way
+// `nuka run` does, to confirm it lands on the same step with the same
+// non-chain args.
 //
 // A record that cannot become a line at all (no pattern, not in the
 // current vocabulary, a pattern that fails to parse) contributes a comment
@@ -52,36 +41,6 @@ export interface DraftResult {
   readonly notices: readonly string[];
 }
 
-const STEP_INDENT = "    ";
-const ATTACHMENT_INDENT = "      ";
-
-// Every CSI sequence (`ESC [ <params> <final byte>`) — colors and text
-// styling included — is a display instruction for a terminal, not part of
-// the message a reader or `.feature` file needs. Playwright's own "Call
-// log:" text carries exactly this shape (dim/reset around each waited-for
-// locator), and every message this file assembles is destined for a
-// `.feature` comment or stderr, neither of which renders ANSI. A second
-// pass drops any stray ESC byte that survives (a truncated or malformed
-// sequence): the guarantee this makes is "no ESC reaches the output", not
-// "every well-formed CSI sequence was recognized".
-const ANSI_CSI_PATTERN = /\u001b\[[0-9;]*[a-zA-Z]/g;
-
-function stripAnsi(message: string): string {
-  return message.replace(ANSI_CSI_PATTERN, "").replace(/\u001b/g, "");
-}
-
-function flatten(message: string): string {
-  return stripAnsi(message).replace(/\s*\n\s*/g, " ");
-}
-
-function formatValue(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
 function buildStepNameOf(vocabulary: Vocabulary): ReadonlyMap<Step, string> {
   const stepNameOf = new Map<Step, string>();
   for (const entry of vocabulary.values()) {
@@ -92,27 +51,8 @@ function buildStepNameOf(vocabulary: Vocabulary): ReadonlyMap<Step, string> {
   return stepNameOf;
 }
 
-interface NoLineEntry {
-  readonly kind: "no-line";
-  readonly recordId: string;
-  readonly stepName: string;
-  readonly reason: string;
-}
-
-interface LineEntry {
-  readonly kind: "line";
-  readonly recordId: string;
-  readonly stepName: string;
-  readonly text: string;
-  readonly attachment?: Attachment;
-  readonly expectedInlineArgs: Record<string, unknown>;
-  readonly comments: readonly string[];
-  /** Filled in by `runRoundTrip`; absent until then, and absent afterward
-   * too when the line read back cleanly. */
-  roundTripFailure?: string;
-}
-
-type Entry = NoLineEntry | LineEntry;
+/** A draft entry and the record it came from, for the notices. */
+type Entry = DraftEntry & { readonly recordId: string };
 
 function buildEntry(
   recordId: string,
@@ -216,115 +156,10 @@ function buildEntry(
   };
 }
 
-function renderEntryBody(entry: Entry): string[] {
-  if (entry.kind === "no-line") {
-    return [`${STEP_INDENT}# ${entry.reason}`];
-  }
-  const lines: string[] = entry.comments.map((comment) => `${STEP_INDENT}# ${comment}`);
-  if (entry.roundTripFailure !== undefined) {
-    lines.push(`${STEP_INDENT}# ${entry.roundTripFailure}`);
-  }
-  lines.push(`${STEP_INDENT}* ${entry.text}`);
-  if (entry.attachment !== undefined) {
-    lines.push(...renderAttachmentBlock(entry.attachment, ATTACHMENT_INDENT));
-  }
-  return lines;
-}
-
 function assembleFeatureText(entries: readonly Entry[]): string {
-  const body = entries.flatMap((entry) => renderEntryBody(entry));
-  return `Feature: (name me)\n\n  Scenario: (name me)\n${body.map((line) => `${line}\n`).join("")}`;
-}
-
-async function describeMatchFailure(
-  text: string,
-  expectedStepName: string,
-  bindings: readonly StepBinding[],
-): Promise<string> {
-  // No scenario World exists while a draft is being read back. `null` is
-  // the same "nothing to bind" this function can offer a transformer.
-  const outcome = await matchPickleStep(text, bindings, null);
-  if (outcome.kind === "undefined") {
-    return `wrote "${text}"; read back as an undefined step`;
-  }
-  if (outcome.kind === "ambiguous") {
-    return `wrote "${text}"; read back as ambiguous between: ${outcome.stepNames.join(", ")}`;
-  }
-  return `wrote "${text}"; read back as step "${outcome.stepName}" instead of "${expectedStepName}"`;
-}
-
-/**
- * The round trip this file's own header describes: parses the whole draft
- * once (`assembleFeatureText`, without any round-trip comment yet — none
- * exist before this runs), then re-matches and re-binds each rendered
- * line's own pickle step the same way `nuka run` would, mutating each
- * `LineEntry`'s `roundTripFailure` in place when it disagrees with what
- * `buildEntry` set out to write.
- */
-async function runRoundTrip(
-  entries: readonly Entry[],
-  bindings: readonly StepBinding[],
-  vocabulary: Vocabulary,
-): Promise<void> {
-  const lineEntries = entries.filter((entry): entry is LineEntry => entry.kind === "line");
-  if (lineEntries.length === 0) {
-    return;
-  }
-
-  const preText = assembleFeatureText(entries);
-  let pickleSteps: readonly PickleStep[];
-  try {
-    const parsed = parseFeatureSource(preText, "<nuka harvest>");
-    if (parsed.pickles.length !== 1) {
-      throw new Error(`expected exactly one scenario, parsed ${parsed.pickles.length}`);
-    }
-    pickleSteps = parsed.pickles[0]!.steps;
-  } catch (error) {
-    const message = `this draft failed to parse as Gherkin: ${flatten(error instanceof Error ? error.message : String(error))}`;
-    for (const entry of lineEntries) {
-      entry.roundTripFailure = message;
-    }
-    return;
-  }
-
-  if (pickleSteps.length !== lineEntries.length) {
-    const message = `this draft parsed into ${pickleSteps.length} step(s), not the ${lineEntries.length} rendered`;
-    for (const entry of lineEntries) {
-      entry.roundTripFailure = message;
-    }
-    return;
-  }
-
-  for (const [index, entry] of lineEntries.entries()) {
-    const pickleStep = pickleSteps[index]!;
-    const outcome = await matchPickleStep(pickleStep.text, bindings, null);
-    if (outcome.kind !== "matched" || outcome.stepName !== entry.stepName) {
-      entry.roundTripFailure = `this line does not read back to the same step: ${await describeMatchFailure(pickleStep.text, entry.stepName, bindings)}`;
-      continue;
-    }
-    const vocabularyEntry = vocabulary.get(entry.stepName);
-    if (vocabularyEntry === undefined || vocabularyEntry.kind !== "typed") {
-      entry.roundTripFailure = `this line's step "${entry.stepName}" is no longer a typed step in the current vocabulary`;
-      continue;
-    }
-    const bound = bindStepArgs(
-      entry.stepName,
-      outcome.captures,
-      outcome.values,
-      pickleStep.argument,
-      vocabularyEntry.step.args,
-      new Set(Object.keys(vocabularyEntry.step.from)),
-    );
-    if (!bound.ok) {
-      entry.roundTripFailure = `this line does not read back to the same args: ${flatten(bound.message)}`;
-      continue;
-    }
-    if (!deepEqual(bound.value, entry.expectedInlineArgs)) {
-      entry.roundTripFailure =
-        `this line does not read back to the same args: wrote ${formatValue(entry.expectedInlineArgs)}; ` +
-        `read back as ${formatValue(bound.value)}`;
-    }
-  }
+  return `Feature: (name me)\n\n${renderScenarioLines("(name me)", entries)
+    .map((line) => `${line}\n`)
+    .join("")}`;
 }
 
 export async function buildDraft(input: DraftInput): Promise<DraftResult> {
@@ -337,7 +172,7 @@ export async function buildDraft(input: DraftInput): Promise<DraftResult> {
     return buildEntry(recordId, record, vocabulary, harvestedIds, recordsById, stepNameOf);
   });
 
-  await runRoundTrip(entries, bindings, vocabulary);
+  await readBack(entries, vocabulary, bindings, "<nuka harvest>");
 
   const featureText = assembleFeatureText(entries);
 

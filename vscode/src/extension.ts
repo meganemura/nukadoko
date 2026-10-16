@@ -20,26 +20,44 @@ import path from "node:path";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
 import {
-  buildDiagnosticsFromCheckReport,
+  buildUnreadableDiagnostics,
   buildUnresolvedDiagnostics,
+  readCheckReport,
   type DiagnosticsEntry,
 } from "./diagnostics/index.js";
-import { matchStepText, type ExtractionResult } from "./extraction/index.js";
+import { matchStepText } from "./extraction/index.js";
 import {
   buildCompletionCandidates,
   buildStepIndex,
   parseStepLine,
   type FileSource,
+  type StepIndex,
 } from "./index/index.js";
 
 const execFileAsync = promisify(execFile);
 
 const GHERKIN_LANGUAGE = "gherkin";
-const STEP_FILE_GLOB = "**/*.{ts,tsx}";
+// The extensions `nuka` itself loads a step from (src/discover/discover-
+// steps.ts in the root package). A declaration file shares a matched
+// extension but holds no step, so listFiles drops it after the glob.
+const STEP_FILE_GLOB = "**/*.{ts,mts,js,mjs}";
+const DECLARATION_FILE = /\.d\.m?ts$/;
 // Explicit, rather than relying on the user's own files.exclude: a
 // workspace that never configured that setting would otherwise have this
-// extension read every file under node_modules.
-const STEP_FILE_EXCLUDE = "**/{node_modules,dist,out,.git,.nukadoko}/**";
+// extension read every file under node_modules. The build output folders
+// matter because .js and .mjs are step file extensions too.
+const EXCLUDED_DIRECTORIES = ["node_modules", "dist", "out", "build", "coverage", ".next", ".git", ".nukadoko"];
+const STEP_FILE_EXCLUDE = `**/{${EXCLUDED_DIRECTORIES.join(",")}}/**`;
+
+// The watcher takes no exclude glob, so without this an npm install or a
+// bundler in watch mode would start a full re-index on every file it
+// writes. Relative to the workspace folder, so a folder that itself sits
+// under a directory named like an excluded one still gets its events.
+function isUnderExcludedDirectory(fsPath: string): boolean {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const relative = workspaceRoot === undefined ? fsPath : path.relative(workspaceRoot, fsPath);
+  return relative.split(/[\\/]/).some((segment) => EXCLUDED_DIRECTORIES.includes(segment));
+}
 
 const CHECK_COMMAND = "nukadoko.check";
 const DIAGNOSTIC_COLLECTION_NAME = "nukadoko";
@@ -54,7 +72,7 @@ function createWorkspaceFileSource(): FileSource {
   return {
     async listFiles() {
       const uris = await vscode.workspace.findFiles(STEP_FILE_GLOB, STEP_FILE_EXCLUDE);
-      return uris.map((uri) => uri.fsPath);
+      return uris.map((uri) => uri.fsPath).filter((filePath) => !DECLARATION_FILE.test(filePath));
     },
     async readFile(filePath) {
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
@@ -163,7 +181,20 @@ async function runCheckCommand(collection: vscode.DiagnosticCollection): Promise
     stdout = stdoutFromError;
   }
 
-  applyDiagnostics(collection, workspaceRoot, buildDiagnosticsFromCheckReport(stdout));
+  const reading = readCheckReport(stdout);
+  if (reading.kind === "empty") {
+    collection.clear();
+    vscode.window.showErrorMessage("nukadoko: Check got no output from nuka check --json, so there is no report to show.");
+    return;
+  }
+  if (reading.kind === "unreadable") {
+    collection.clear();
+    vscode.window.showErrorMessage(
+      `nukadoko: Check could not read the output of nuka check --json as a report. The output starts with ${JSON.stringify(reading.firstLine)}. A step file may print to stdout when it is imported.`,
+    );
+    return;
+  }
+  applyDiagnostics(collection, workspaceRoot, reading.entries);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -185,22 +216,35 @@ export function activate(context: vscode.ExtensionContext): void {
   // build's unresolved declarations into a newer sweep (applyDiagnostics
   // always clears the collection before it sets, so whichever call lands
   // last wins outright).
-  function refreshUnresolvedDiagnostics(result: Promise<ExtractionResult>): void {
-    void result.then((index) => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-      applyDiagnostics(unresolvedDiagnosticCollection, workspaceRoot, buildUnresolvedDiagnostics(index.unresolved));
-    });
+  function refreshUnresolvedDiagnostics(result: Promise<StepIndex>): void {
+    result.then(
+      (index) => {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+        applyDiagnostics(unresolvedDiagnosticCollection, workspaceRoot, [
+          ...buildUnresolvedDiagnostics(index.unresolved),
+          ...buildUnreadableDiagnostics(index.unreadable),
+        ]);
+      },
+      (error: unknown) => {
+        unresolvedDiagnosticCollection.clear();
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`nukadoko: indexing step files failed: ${message}`);
+      },
+    );
   }
 
   // Built once here and awaited by every provider call below, not rebuilt
   // per call -- only a file save (via the watcher) replaces it. A provider
   // that rebuilt on every keystroke would re-parse the whole workspace on
   // every definition lookup and completion request.
-  let indexPromise: Promise<ExtractionResult> = buildStepIndex(createWorkspaceFileSource());
+  let indexPromise: Promise<StepIndex> = buildStepIndex(createWorkspaceFileSource());
   refreshUnresolvedDiagnostics(indexPromise);
 
   const watcher = vscode.workspace.createFileSystemWatcher(STEP_FILE_GLOB);
-  const rebuildIndex = () => {
+  const rebuildIndex = (uri: vscode.Uri) => {
+    if (isUnderExcludedDirectory(uri.fsPath)) {
+      return;
+    }
     indexPromise = buildStepIndex(createWorkspaceFileSource());
     refreshUnresolvedDiagnostics(indexPromise);
   };
@@ -236,7 +280,8 @@ export function activate(context: vscode.ExtensionContext): void {
       async provideCompletionItems() {
         const index = await indexPromise;
         return buildCompletionCandidates(index.patterns).map((candidate) => {
-          const item = new vscode.CompletionItem(candidate.insertText);
+          const item = new vscode.CompletionItem(candidate.label);
+          item.insertText = new vscode.SnippetString(candidate.snippet);
           item.detail = candidate.detail;
           return item;
         });

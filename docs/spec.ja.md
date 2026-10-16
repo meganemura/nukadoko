@@ -1304,13 +1304,17 @@ import { Given, When, Then } from "nukadoko/compat";
   `defineStep` への昇格によって、単体 step の実行が可能になります。
 - compat コードの `defineParameterType` と `config.parameterTypes` は、1 つのレジストリを使います。
   登録を config へ移しても pattern のマッチは変わらないため、チームはこの移動を早く行えます。
-  `nuka check` は support 由来の登録を警告として列挙します。
+  例外は `preferForRegexpMatch` を設定する登録です(後述)。
+  `nuka tend` は support 由来の登録を note として列挙します(「Tending(手入れ)」を参照)。
   config が、それらの引退先です。
   transformer の `this` は、その scenario の World です。
   step と hook が動くのと同じオブジェクトです。
   transformer が返した Promise は、step が走る前に await されます。
-  これは string の pattern での話です。
-  RegExp の pattern では違います([docs/migration.ja.md](migration.ja.md) の「既知の限界」を参照)。
+  string の pattern でも RegExp の pattern でも同じです。
+  compat の登録の `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
+  `config.parameterTypes` にはこのキーがないため、これを設定する登録は、RegExp の step がそれに頼っている間は compat コードに残ります。
+  キーごと config へ移すと config のエラーになり、キーを外して移すと 2 つの型が一致する RegExp のグループは再び失敗します。
+  2 つの型が 1 つの正規表現を優先する場合や、ある型が `{int}` のような組み込み型の正規表現を優先する場合は、`parameter-type-invalid` エラーです。
 - 実行は 2 つの形をサポートします。
   自前で Playwright を起動する glue は計測されないまま動き続けます。
   World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。
@@ -2040,6 +2044,17 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `failed` な record では与えられたものをそのまま保持します。
   スキーマがすでに拒否した値を、検証済みの形に組み立て直すことはできないからです。
   compat の step の `args` は、検証対象のスキーマが無いため、どちらの結果でも検証されません。
+- bigint は、`args` でも `result` でも record のほかのどこでも、10 進数の文字列として保存されます。
+  JSON には bigint が無いからです。
+  `{biginteger}` のキャプチャを `z.bigint()` に結び付けると、`"v": "123456789012345678901234567890"` と記録されます。
+  1 つの `nuka run` の scenario の中では、`from` の連鎖は次の step に bigint そのものを渡します。
+  `nuka do` は `--use` の値を保存された record から読み、`--args` を JSON として読みます。
+  そのため、step の `args` スキーマが bigint や Date を期待するところでは、保存された文字列を先にそれへ戻します。
+  それ以外の文字列は、文字列のままスキーマに届きます。
+  このとき読むのは、スキーマが受け取る側の型です。
+  `z.coerce.bigint()` へ pipe した文字列、文字列を decode する codec、`z.preprocess()` の関数は、与えられた文字列をそのまま受け取ります。
+  `z.bigint().transform(...)` は bigint を受け取ります。
+  union のどれかの選択肢が、与えられた文字列をそのまま受け付けるなら、選択肢を宣言した順序にかかわらず、文字列はそのまま残ります。
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
@@ -3254,8 +3269,9 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   記録は、受け入れた feature のソースと、その run のすべての step record を持ちます。
   凍結された `result` がその step の現在の `returns` スキーマをもはや通らない場合、あるいは凍結された feature のソースが元のファイルともはや一致しない場合、あるいはそれが引用する step が語彙から消えている場合、その記録はディスク上に残ったまま、もはや裏付けられない主張をし続けます。
   記録はその result を JSON として保存します。
-  `tend` は、保存された JSON が、現在の `returns` スキーマが受け入れる値に対して `JSON.stringify` が書くものと一致するとき、それを受け入れます。
-  そのため、ISO 文字列として残った Date は `z.date()` をなお通ります。
+  `tend` は、保存された JSON が、現在の `returns` スキーマが受け入れる値の保存形と一致するとき、それを受け入れます。
+  保存形とは、`JSON.stringify` が書くものに、bigint を 10 進数の文字列にする 1 点を加えたものです。
+  そのため、ISO 文字列として残った Date は `z.date()` をなお通り、10 進数の文字列として残った bigint は `z.bigint()` をなお通ります。
   引用された step が消えたと呼ばれるのは、すべての step ファイルの import が成功したときだけです。
   いずれかのファイルの import に失敗している間は、その step が読めなかったファイルの中にまだ定義されているかもしれないため、その判定は控えられます。
   これは、ここでの所見のうち唯一、注記ではなくエラーになるものです。
@@ -3318,6 +3334,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 - **support コード側にまだ登録されたままの `defineParameterType`。**
   それは動き続けます。
   `config.parameterTypes` がその typed 時代の住まいであり、登録をそちらへ移してもマッチは何も変わりません。
+  例外は `preferForRegexpMatch` を設定する登録です。
+  config はこのキーを拒否するため、この note は、RegExp の step がそれに頼っている間は support コードに残すよう伝えます。
   これはかつて `nuka check` の warning でしたが、その分類は誤りでした。
   これは、スイートに compat が少しでも残っている限り現れ続けるものであり、それは正常な状態です。
   毎回の run の前にそれを出力すれば、人々に本当に run を止める行を読み飛ばすことを覚えさせてしまいます。
@@ -3422,10 +3440,12 @@ model と relation は、step の語彙の隣に置く宣言です。
 `nuka check` はそれらを読みます。
 `initial`、`args`、`pre`、`next`、`post`、`follow`、`relate` は呼びません。
 step も実行しません。
+それらを実行するのは `nuka explore` です(「モデルまたは関係を探索する」を参照)。
 
 `defineModel(initial).commands({ ... })` は、初期状態のあと、step の basename ごとに 1 つの command を取ります。
 command は `modelCommand(step)({ args, pre, next, post })` です。
 `args` と `post` は、その step の args と result に対して型が付きます。
+`args` は状態と、唯一の変化の源である `draw` を受け取ります。
 `next` は、状態と args から model を更新します。
 basename は、拡張子を除いた step ファイルの名前です。
 2 回に分かれているのは、callback を検査する前に状態の型が決まっている必要があるからです。
@@ -3437,6 +3457,14 @@ basename は、拡張子を除いた step ファイルの名前です。
 check が読むのは `source` だけです。
 2 本目の列は `follow` を呼んだ結果だからです。
 
+`source` は生成させることもできます。
+関数 `(draw, length) => [...]` は、最大 `length` 個の要素を返し、変化する値はすべて `draw` から取ります。
+モデルの command で生成することもできます。
+その場合、モデルの実行と同じく `pre`、`args`、`next` が各 step を選び、モデルの `post` は呼ばれません。
+関数の source では、`relate` が受け取る source の result にはその step の型が付きます。
+モデルの source では `unknown` です。
+check は、モデルの source の command をモデルと同じように読み、関数の source は呼びません。
+
 discovery は、どちらかの宣言の default export を step ではなくその宣言として扱います。
 ファイルは `featuresDir` の下ならどこでも置けます。
 `examples/todo/features/explore/` は、request だけを使う model と relation です。
@@ -3444,6 +3472,124 @@ discovery は、どちらかの宣言の default export を step ではなくそ
 `nuka check` は、command のキーがその step の basename でないとき、または列の step が登録されていないとき、`explore-unknown-step` を報告します。
 その step が `page` または `context` を必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
 `request` だけを必要とする step は許されます。
+
+宣言を読んで、結果が 1 通りにしかならない所見がさらに 2 つあります。
+`explore-empty-model` は、command を 1 つも持たないモデルを報告します。
+それが組み立てる列はすべて空なので、どの実行も合格し、何も分かりません。
+関係のモデルの source が command を持たない場合は報告しません。
+空の source でも `follow` と `relate` は実行され、そこで失敗しうるからです。
+`explore-unseeded-random` は、command の `args`、`pre`、`next`、または関係の draw する source の中で、`Math.random` を直接呼ぶことを報告します。
+その値は seed が決めないので、実行を seed から再現できず、縮小の編集もそれまでと同じ意味を持ちません。
+check はこのために関数のソーステキストを読み、関数を呼びません。
+文字列、コメント、正規表現、テンプレートの文字部分にある呼び出しは、呼び出しではありません。
+check が見るのはソーステキストだけなので、関数の外の束縛（モジュールのスコープや import）は届かない範囲にあります。
+そのため `crypto.random*` は報告しません。
+モジュールのスコープの `crypto` は、seed を持つ生成器かもしれないからです。
+ヘルパーや別名を経由する呼び出しと、関数が自分で束縛した `Math` も、届かない範囲にあります。
+check はそのどれについても何も言いません。
+推測する check は、check がないより悪いからです。
+
+### モデルまたは関係を探索する
+
+`nuka explore <file>` は、1 つのモデルまたは 1 つの関係を実行します。
+ファイルは、discovery が `featuresDir` の下で見つけたものです。
+step を 1 つも実行する前に、このコマンドはそれらの step について `nuka check` と `nuka do` が行う拒否を行います。
+対象は、上の 4 つの `explore-*` の所見のどれか、fixture の問題、未知の `--env` です。
+どれかに当てはまると、何も実行しません。
+
+モデルの実行は、各列をモデルだけから組み立てます。
+状態から `pre` が成り立つ command を集め、1 つを選び、`args(state, draw)` を呼び、`next` で状態を進めます。
+変化の源は `draw.int(min, max)` と `draw.pick(items)` だけです。
+したがって列は、それが行った選択の関数です。
+`next` は新しい状態を返し、受け取った状態は変更しません。
+その状態のオブジェクトを、後で `post` が受け取るからです。
+その後、列を 1 step ずつ実行し、`post` が各 result をその step の前の状態に照らして判定します。
+最初に失敗した step、または最初に成り立たなかった `post` が、その列を失敗にします。
+step は `nuka do` で失敗するどの理由でも失敗し、fixture の準備や拒否された接続も含みます。
+`--runs`(既定値 20)は実行する列の数を、`--length`(既定値 10)は 1 つの列の最大 step 数を決めます。
+1 つの `--seed` がすべての実行のすべての選択を決め、出力は必ずそれを表示します。
+そのため、同じコマンドは同じ列を再実行します。
+
+失敗は縮小されます。
+縮小は、記録した選択を編集して列を組み立て直します。
+まず 1 つの step の選択を削除し、次に隣り合う 2 つの step の選択を削除し、次に 1 つの選択を 0 に向けて小さくします。
+編集を残すのは、新しい列がまだ同じように失敗するときだけです。
+小さい選択は、宣言順で前の command、`min` に近い `draw.int`、`draw.pick` のより前の要素を意味します。
+残した編集はどれも選択の列を短くするか小さくするので、縮小は終わります。
+また 200 回試すと止まります。
+
+同じように失敗するとは、失敗の種類が同じで、`post` の失敗なら command も同じであることです。
+種類は 3 つあります。
+step が失敗した(`step`)、`post` が false を返した(`post-false`)、`post` が例外を投げた(`post-threw`)です。
+違う失敗をするもっと短い列は、別の問題を示します。
+それを表示すると、実行が見つけた問題が隠れます。
+メッセージは比べません。
+メッセージには step の result と args が入っており、縮小が変えるのはまさにそれだからです。
+重複した追加を小さい値へ縮小しても、同じ `post` が失敗し、メッセージの数字だけが変わります。
+`step` の失敗は command も比べません。
+拒否された接続や失敗する fixture は、最初に実行される step がどれでも失敗させるからです。
+
+関係の実行は、`source` を 1 つの world で実行し、`follow` を呼び、その 2 本目の列を新しい world で実行し、2 つの result の並びについて `relate` を呼びます。
+宣言された `source` は 1 回だけ実行され、seed はなく、縮小もしません。
+生成される `source` は、モデルと同じく `--seed`、`--runs`、`--length` を取ります。
+各実行は新しい source を引き、それについて関係を実行します。
+最初の失敗は同じやり方で縮小されます。
+関数の source の step は選択と対応付けられないため、選択を 1 つずつ削除します。
+編集を残すのは、関係がまだ同じように失敗するときだけです。
+つまり同じ列で失敗し、`relate` なら前と同じく false を返すか例外を投げるかのどちらかです。
+出力には、実行の番号、見つかった source の step 数、縮小後の step 数のコメントが加わります。
+2 本目の列、または関数が引いた source に、語彙にない step、またはブラウザを必要とする step があると、関係は実行される前に止まります。
+
+各列は新しい `ctx` と新しい scenario scope の fixture のキャッシュを受け取ります。
+そのため、対象をリセットする scenario scope の fixture は、各列の前に動きます。
+process scope の fixture は、`nuka run` と同じく 1 回の起動につき 1 回だけ準備されます。
+すべての実行とすべての縮小の試行がそれを共有し、最後の列のあとで片付けられます。
+step が失敗した列、または `post` が成り立たなかった列では、fixture の `use()` は `"failed"` を返します。
+process scope は、どれかの列が失敗したとき `"failed"` を受け取ります。
+SIGINT または SIGTERM を受けると、`nuka do` と同じく、開いている列の fixture、次に process scope の fixture を片付けてからプロセスが終了します。
+対象そのものはリセットされません。
+初期状態が空の対象を前提とするモデルには、その fixture が必要です。
+step は、`nuka do` と live session が使うのと同じ関数を通って実行されます。
+args を検証し、fixture の袋を開き、step の期限の下で `run` を呼び、result を検証します。
+step record は書きません。
+1 回の実行は多くの列を試し、そのほとんどは成功します。
+失敗の記録は人が残す scenario であり、その scenario を `nuka run` すると記録が書かれます。
+
+失敗すると、stdout には feature に貼り付ける scenario が出ます。
+中身は、それを再実行するコマンドのコメント、どう失敗したかのコメント、そして step ごとに 1 行の `*` の行です。
+行は、`nuka harvest` と同じ描画器で、その step の最初の pattern から書かれます。
+capture も `from` も受け持たない必須の args のキーが 1 つだけあるとき、それは `nuka run` が束縛するのと同じく書かれます。
+文字列の行のリストなら table として、文字列なら docstring として書かれます。
+失敗した step の上には、そのメッセージのコメントが付きます。
+関係は、source と follow の 2 つの scenario を表示します。
+すべての行は `nuka run` が読むのと同じやり方で読み戻されます。
+同じ step と args に戻らない行、または行が運べない args のキーは、その行の上のコメントで名指しされます。
+成功したとき stdout は空のままで、stderr にはどちらの場合も 1 行の要約が出ます。
+終了コードが 0 になるのは成功したときだけです。
+
+`--json` は、stdout のテキストを 1 つの JSON オブジェクトに置き換え、成功したときも表示します。
+どのオブジェクトにも `kind`(`"model"` または `"relation"`)、`file`、`verdict`、`rerun` があります。
+`verdict` は `"passed"`、`"failed"`、または `"error"` です。
+`"error"` は、step を実行する前にモデルや関係の callback が例外を投げたことを表します。
+モデルは `seed`、`runs`、`length` を加え、成功すると実行した step の数 `steps` を加えます。
+失敗したモデルは、`run`、`found_steps`、`shrunk_steps`、`shrink_attempts`、`failure`(`index`、`kind`、`command`、`message`)、`steps`、`scenario` を加えます。
+これらはすべて縮小した列についての値です。
+関係は `name` を加えます。
+失敗した関係は、`failure`(`sequence`、`sequence` が `relate` でなければ `index`、`relate` なら `threw`、そして `message`)と、`source` と `follow` を加えます。
+`source` と `follow` には、それぞれ `steps` と `scenario` があります。
+source を生成する関係は、さらに `seed`、`runs`、`length` を加え、失敗すると `run`、`found_steps`、`shrunk_steps`、`shrink_attempts` を加えます。
+step 数は source の step で数えます。
+`steps` の各要素には `step`、`args`、`status` があります。
+`status` は、`result` を伴う `"ok"`、`message` を伴う `"failed"`、同じ列の中で失敗した step のあとにある step を表す `"not-run"` のいずれかです。
+`scenario` は、通常の出力が表示するテキストから先頭の 2 行のコメントを除いたものです。
+`error` は `message` を持ち、モデルと source を生成する関係では `run` も持ちます。
+step を実行する前の拒否では、`--json` がないときと同じく stdout には何も出ません。
+explore はオブジェクトを stdout にだけ書き、`.nukadoko/` の下には書きません。
+そのため `nuka accept` と `nuka tend` がそれを実行として読むことはありません。
+
+scenario はどの feature にも追加されません。
+それが scenario になるか、間違っていたのはシステムかモデルか、その scenario が何を主張するかは、それを読んだ人だけが決めます。
+成功した生成済みの列は残しません。
 
 ## CLI summary
 
@@ -3519,6 +3665,20 @@ nuka harvest <step-record-id>...
                               record it came from are named in the draft and
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
+nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
+                              run one model or relation file found under
+                              featuresDir, request-only steps only, with no
+                              step record. A model runs --runs sequences
+                              (default 20) of at most --length steps (default
+                              10) from one --seed, and shrinks the first
+                              failure; so does a relation whose source is
+                              generated. On a failure stdout gets the scenario to
+                              paste (two for a relation) and the command that
+                              reruns it; stdout is empty on a pass. --json
+                              prints one object instead, on a pass too: the
+                              verdict, the seed and counts, and on a failure
+                              each step's result, the failure, and the
+                              scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, timeout
                               when the step declared one, which
@@ -3810,6 +3970,9 @@ nuka experimental webmcp-tools <url> [--json]
 - **M13(Markdown oaths)**: Gherkin の隣にある 2 つ目の表側です。
   名指しされた Markdown ファイルは同じ pickle にコンパイルされ、同じ `defineStep` の語彙に結び付き、どの pattern にもマッチしない文では `nuka check` が失敗します(「Markdown oaths」を参照)。
   これは oath の表面であり、Varar のエンジンではありません。
+- **M14(exploring)**: `nuka explore` です。
+  request だけを使う step に対してモデルまたは関係を実行し、モデルの失敗を seed から再生できる選択の列で縮小し、貼り付ける scenario を表示します(「モデルまたは関係を探索する」を参照)。
+  feature ファイルは、人が残すと決めた列の集まりのままです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
   Varar の完全な対応(すべての方言、step の戻り値と文中の語句の比較、doc string、tag、Markdown の中の `@nukadoko:serial`)もここに残します。
 

@@ -243,10 +243,16 @@ Two independent, incremental moves, safe to take alone, in either order:
 - **Parameter types**: a support-side `defineParameterType` call still
   works, but `nuka tend` notes it (`parameter-type-support-origin`) and
   points at `config.parameterTypes` as the typed-era home: moving the
-  registration changes nothing about what any pattern matches. A
-  transformer's `this` is the scenario's World, and a Promise it returns
-  is awaited before the step. This holds for a string pattern. A RegExp
-  pattern differs; see [Known limits](#known-limits).
+  registration changes nothing about what any pattern matches, unless it
+  sets `preferForRegexpMatch`. A transformer's `this` is the scenario's
+  World, and a Promise it returns is awaited before the step, for a string
+  pattern and a RegExp pattern alike. `preferForRegexpMatch` picks the
+  type for a RegExp group that several types match, as in cucumber-js.
+  `config.parameterTypes` has no such key, so a registration that sets it
+  stays in support code while a RegExp step relies on it. Moved to config
+  with the key, it is a config error. Moved without it, a RegExp group that
+  two types match fails the step with "matches multiple parameter types"
+  again.
 
 ## Stage 2: promote steps
 
@@ -365,11 +371,6 @@ each one before you rely on the run.
 
 - `AfterStep` hooks run in registration order. cucumber-js runs them in
   reverse registration order, the order both tools use for `After` hooks.
-- In a RegExp pattern, a group whose source is a `defineParameterType`
-  regexp is converted by that type's transformer, but the transformer's
-  `this` is `null`, not the World, and a Promise it returns reaches the step
-  unawaited. A string pattern (`{color}`) gets the World and the awaited
-  value.
 - A hook's `result.message` is the error message only (`boom`).
   cucumber-js gives the stack text (`Error: boom` and the frames below it).
   `result.exception` is not set.
@@ -378,11 +379,3 @@ each one before you rely on the run.
   seconds.
 - `table.raw()` returns a copy. In cucumber-js, a change to a row of the
   returned array also changes what `table.hashes()` returns later.
-
-Two more differences fail, but where cucumber-js passes:
-
-- `preferForRegexpMatch` on `defineParameterType` is ignored. A RegExp
-  group that two parameter types match fails the step with "matches
-  multiple parameter types". cucumber-js uses the preferred type.
-- A `{biginteger}` capture stops `nuka run` after the step runs, with "Do
-  not know how to serialize a BigInt". The scenarios after it do not run.

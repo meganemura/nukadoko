@@ -18,6 +18,15 @@ export const RELATION_BRAND: unique symbol = Symbol.for("nukadoko.relation");
 type ArgsOf<S extends Step> = z.infer<S["args"]>;
 type ResultOf<S extends Step> = z.infer<S["returns"]>;
 
+/** The one source of variation a model's `args` gets. Each call is one
+ * recorded choice, so `nuka explore` can replay and shrink a sequence. A
+ * lower choice is a smaller `int` or an earlier item of `pick`. */
+export interface Draw {
+  /** A whole number from `min` to `max`, both included. */
+  int(min: number, max: number): number;
+  pick<T>(items: readonly T[]): T;
+}
+
 /** One command in a model. `step` carries the args and result types. The
  * record key is the step's basename, the name discovery gives the file.
  * `post` sees the validated result. `next` sees the model and the args
@@ -25,7 +34,7 @@ type ResultOf<S extends Step> = z.infer<S["returns"]>;
  * declare. */
 export interface ModelCommand<TState, S extends Step> {
   readonly step: S;
-  args: (state: TState) => ArgsOf<S>;
+  args: (state: TState, draw: Draw) => ArgsOf<S>;
   pre: (state: TState) => boolean;
   next: (state: TState, args: ArgsOf<S>) => TState;
   post: (state: TState, args: ArgsOf<S>, result: ResultOf<S>) => boolean;
@@ -39,7 +48,7 @@ export interface Model {
       string,
       {
         readonly step: Step;
-        args: (state: unknown) => unknown;
+        args: (state: unknown, draw: Draw) => unknown;
         pre: (state: unknown) => boolean;
         next: (state: unknown, args: unknown) => unknown;
         post: (state: unknown, args: unknown, result: unknown) => boolean;
@@ -57,7 +66,7 @@ export interface Model {
  */
 export function modelCommand<S extends Step>(step: S) {
   return <TState>(body: {
-    args: (state: TState) => ArgsOf<S>;
+    args: (state: TState, draw: Draw) => ArgsOf<S>;
     pre: (state: TState) => boolean;
     next: (state: TState, args: ArgsOf<S>) => TState;
     post: (state: TState, args: ArgsOf<S>, result: ResultOf<S>) => boolean;
@@ -102,10 +111,19 @@ type ResultsOf<T extends readonly RelationStep[]> = {
   [I in keyof T]: T[I] extends RelationStep<infer S> ? ResultOf<S> : never;
 };
 
+/** A source `nuka explore` generates from `draw`, at most `length` steps
+ * long. Every value that varies comes from `draw`, so the source replays
+ * from a seed and shrinks. */
+export type SourceDraw<S extends Step = Step> = (draw: Draw, length: number) => readonly RelationStep<S>[];
+
+/** A declared sequence, a model whose commands generate the sequence (its
+ * `post` is not called), or a function of `draw`. */
+export type RelationSource = readonly RelationStep[] | Model | SourceDraw;
+
 export interface Relation {
   readonly [RELATION_BRAND]: true;
   readonly name: string;
-  readonly source: readonly RelationStep[];
+  readonly source: RelationSource;
   readonly follow: (source: readonly RelationStep[]) => readonly RelationStep[];
   readonly relate: (sourceResults: readonly unknown[], followResults: readonly unknown[]) => boolean;
 }
@@ -122,6 +140,11 @@ export function relationEntry<S extends Step>(step: S, args: ArgsOf<S>): Relatio
  * sequence, and `relate` over the two runs' results. `follow` is not a
  * second copy of the system: check stores it and a later run is what calls
  * it. `relate` receives results only, so its type has no `Step` to call.
+ *
+ * `source` is either the declared sequence, or one `nuka explore`
+ * generates: a function of `draw` and the most steps it may return, or a
+ * model whose `pre`, `args`, and `next` pick the steps. A generated source
+ * is shrunk when the relation fails.
  */
 export function defineRelation<
   const TSource extends readonly RelationStep[],
@@ -131,13 +154,31 @@ export function defineRelation<
   readonly source: TSource;
   follow: (source: TSource) => TFollow;
   relate: (sourceResults: ResultsOf<TSource>, followResults: ResultsOf<TFollow>) => boolean;
+}): Relation;
+export function defineRelation<S extends Step, const TFollow extends readonly RelationStep[]>(definition: {
+  readonly name: string;
+  readonly source: SourceDraw<S>;
+  follow: (source: readonly RelationStep<S>[]) => TFollow;
+  relate: (sourceResults: readonly ResultOf<S>[], followResults: ResultsOf<TFollow>) => boolean;
+}): Relation;
+export function defineRelation<const TFollow extends readonly RelationStep[]>(definition: {
+  readonly name: string;
+  readonly source: Model;
+  follow: (source: readonly RelationStep[]) => TFollow;
+  relate: (sourceResults: readonly unknown[], followResults: ResultsOf<TFollow>) => boolean;
+}): Relation;
+export function defineRelation(definition: {
+  readonly name: string;
+  readonly source: RelationSource;
+  follow: (source: never) => readonly RelationStep[];
+  relate: (sourceResults: never, followResults: never) => boolean;
 }): Relation {
   return {
     [RELATION_BRAND]: true,
     name: definition.name,
-    source: definition.source as readonly RelationStep[],
+    source: definition.source,
     follow: definition.follow as unknown as Relation["follow"],
-    relate: definition.relate as Relation["relate"],
+    relate: definition.relate as unknown as Relation["relate"],
   };
 }
 

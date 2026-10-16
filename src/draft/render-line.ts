@@ -1,11 +1,12 @@
 import { parseCaptureToken, type Capture } from "../binding/capture.js";
 
 // Responsibility: turn one step's pattern plus a `used`/`from`-independent
-// value bag into the literal Gherkin text `nuka harvest` writes for a line,
-// and the table/docstring block that follows it when one is needed
+// value bag into the literal Gherkin text `nuka harvest` and `nuka explore`
+// write for a line, and the table/docstring block that follows it when one
+// is needed
 // (docs/spec.md "Harvesting"). This module only renders text — it never
 // judges whether the result is right, that is what the round trip in
-// src/harvest/build-draft.ts is for (docs/spec.md: "Rather than pick
+// src/draft/scenario.ts is for (docs/spec.md: "Rather than pick
 // quietly, harvest reads every line it wrote back").
 //
 // `renderPatternLine` walks the pattern text itself rather than reusing
@@ -37,7 +38,7 @@ export interface RenderLineError {
  * `float`, a compat `word`, the anonymous type, or a custom parameter type
  * — is written bare via `String(value)`. Getting a custom type's own
  * textual form wrong is not this function's problem to solve: docs/spec.md
- * "Harvesting" puts that judgment on the round trip in build-draft.ts,
+ * "Harvesting" puts that judgment on the round trip in scenario.ts,
  * which reads every line back and names the ones that do not return the
  * args they came from. A per-type reverse table here would be a second
  * answer to a question that already has one.
@@ -96,9 +97,11 @@ export function renderPatternLine(pattern: string, args: PrimitiveArgs): Rendere
  * @cucumber/gherkin's own reader guards against: a content line that,
  * once left-trimmed, starts with `"""` is read as the *closing* separator,
  * not content (GherkinClassicTokenMatcher's own `match_DocStringSeparator`
- * checks `startsWith`, not "contains"). Prefixing that line's own leading
- * `"""` with `\` is what the reader's own `unescapeDocString` expects to
- * undo. A `"""` occurring mid-line is left alone: it can never be mistaken
+ * checks `startsWith`, not "contains"). The reader's own
+ * `unescapeDocString` turns `\"\"\"` back into `"""`, one backslash before
+ * each quote, so that is what the leading `"""` becomes. A single `\`
+ * before all three would read back with the backslash still in it. A
+ * `"""` occurring mid-line is left alone: it can never be mistaken
  * for the separator, and escaping it too would ask the reader's own
  * single, non-global unescape to undo two occurrences on one line, which it
  * does not.
@@ -109,7 +112,7 @@ function escapeDocStringLine(line: string): string {
     return line;
   }
   const leadingWhitespace = line.slice(0, line.length - trimmed.length);
-  return `${leadingWhitespace}\\${trimmed}`;
+  return `${leadingWhitespace}\\"\\"\\"${trimmed.slice(3)}`;
 }
 
 /** Escapes one table cell for @cucumber/gherkin's own reader

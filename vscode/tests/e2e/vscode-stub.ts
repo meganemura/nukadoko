@@ -7,12 +7,13 @@
 // src/extension.ts's activate() and its diagnostics command actually touch:
 // registering providers/commands/watchers, one diagnostic collection, two
 // user-facing messages, and the handful of value classes those calls
-// construct (Uri, Position, Range, Location, CompletionItem, Diagnostic,
-// DiagnosticSeverity). Not a general vscode mock -- a new API surface
+// construct (Uri, Position, Range, Location, CompletionItem, SnippetString,
+// Diagnostic, DiagnosticSeverity). Not a general vscode mock -- a new API surface
 // src/extension.ts starts using belongs here too, on purpose, so this
 // file's own shape stays proof that "what the e2e tests exercise" and
 // "what activate() actually calls" never quietly drift apart.
 import Module, { createRequire } from "node:module";
+import path from "node:path";
 
 export interface FakeUri {
   readonly fsPath: string;
@@ -70,6 +71,11 @@ export interface VscodeStub {
   diagnosticCollection?: FakeDiagnosticCollection;
   readonly errorMessages: string[];
   readonly warningMessages: string[];
+  /** Calls every listener the extension registered on its file system
+   * watchers for this event, as VS Code would on a file write. */
+  fireFileEvent(event: "change" | "create" | "delete", fsPath: string): void;
+  /** How many times the extension has called workspace.findFiles. */
+  findFilesCalls: number;
 }
 
 export function createVscodeStub(): VscodeStub {
@@ -77,6 +83,7 @@ export function createVscodeStub(): VscodeStub {
   const commands = new Map<string, (...args: unknown[]) => unknown>();
   const errorMessages: string[] = [];
   const warningMessages: string[] = [];
+  const fileListeners: { event: "change" | "create" | "delete"; listener: (uri: FakeUri) => unknown }[] = [];
 
   const stub: VscodeStub = {
     module: undefined,
@@ -85,6 +92,14 @@ export function createVscodeStub(): VscodeStub {
     commands,
     errorMessages,
     warningMessages,
+    fireFileEvent(event, fsPath) {
+      for (const entry of fileListeners) {
+        if (entry.event === event) {
+          entry.listener(Uri.file(fsPath));
+        }
+      }
+    },
+    findFilesCalls: 0,
   };
 
   class Uri implements FakeUri {
@@ -118,8 +133,13 @@ export function createVscodeStub(): VscodeStub {
     ) {}
   }
 
+  class SnippetString {
+    constructor(public readonly value: string) {}
+  }
+
   class CompletionItem {
     detail: string | undefined;
+    insertText: string | SnippetString | undefined;
     constructor(public readonly label: string) {}
   }
 
@@ -139,8 +159,14 @@ export function createVscodeStub(): VscodeStub {
       get workspaceFolders(): FakeWorkspaceFolder[] | undefined {
         return stub.workspaceFolders;
       },
-      async findFiles(): Promise<Uri[]> {
-        return Array.from(files.keys()).map((fsPath) => Uri.file(fsPath));
+      // Honors both globs, so a test can see which files the extension asks
+      // for, not only what it does with every file the stub holds.
+      async findFiles(include: string, exclude?: string): Promise<Uri[]> {
+        stub.findFilesCalls += 1;
+        return Array.from(files.keys())
+          .filter((fsPath) => path.matchesGlob(fsPath, include))
+          .filter((fsPath) => exclude === undefined || !path.matchesGlob(fsPath, exclude))
+          .map((fsPath) => Uri.file(fsPath));
       },
       fs: {
         async readFile(uri: Uri): Promise<Buffer> {
@@ -152,10 +178,14 @@ export function createVscodeStub(): VscodeStub {
         },
       },
       createFileSystemWatcher() {
+        const listen = (event: "change" | "create" | "delete") => (listener: (uri: FakeUri) => unknown) => {
+          fileListeners.push({ event, listener });
+          return { dispose(): void {} };
+        };
         return {
-          onDidChange: () => ({ dispose(): void {} }),
-          onDidCreate: () => ({ dispose(): void {} }),
-          onDidDelete: () => ({ dispose(): void {} }),
+          onDidChange: listen("change"),
+          onDidCreate: listen("create"),
+          onDidDelete: listen("delete"),
           dispose(): void {},
         };
       },
@@ -196,6 +226,7 @@ export function createVscodeStub(): VscodeStub {
     Range,
     Location,
     CompletionItem,
+    SnippetString,
     Diagnostic,
     DiagnosticSeverity,
   };

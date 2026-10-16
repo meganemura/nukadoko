@@ -100,12 +100,40 @@ just until 0.1.
   `nuka tend` code, and every quoted heading must exist in the file it points
   at. The spec's CLI summary must list every command and flag. Each of these
   drifted before with no test failing.
+- **`nuka explore <file>` runs a model or a relation.** A model builds
+  each sequence from `draw.int` and `draw.pick` choices taken from one
+  `--seed`, runs `--runs` sequences of at most `--length` request-only
+  steps, and shrinks the first failure by deleting a step and then
+  lowering a choice. Shrinking keeps an edit only when the sequence still
+  fails the same way: the same failure kind, and for a `post` failure the
+  same command. A process-scope fixture lasts the whole invocation, and
+  SIGINT or SIGTERM tears fixtures down as under `nuka do`. `--json`
+  prints one object on stdout with the verdict, the seed and counts, and
+  on a failure each step's result, the failure kind and message, and the
+  scenario. A step whose args take a table or a docstring prints one,
+  through the renderer and read-back `nuka harvest` uses. A relation's
+  source can be generated, from a function of `draw` or a model's
+  commands; it then takes `--seed`, `--runs`, and `--length`, and a
+  failing source is shrunk while the relation fails the same way.
+  Shrinking also deletes two adjacent steps at once. A relation runs
+  its source and its follow and calls `relate`. On a failure stdout gets
+  the scenario to paste (two for a relation) and the command that reruns
+  it. No step record is written, and nothing is added to a feature. A model's `args` now receives
+  `(state, draw)`; a model written for `(state)` still compiles.
+  `examples/todo/features/explore/add-model.ts` now adds and completes
+  todos.
 - **Models and relations are declarations `nuka check` can read.**
   `defineModel(initial).commands(...)` and `defineRelation` name steps by
   basename. `explore-unknown-step` reports a name that is not in the
   vocabulary. `explore-browser-step` reports a step that needs `page` or
   `context`. A request-only step is allowed. Check does not run the steps.
   `examples/todo/features/explore/` is the request-only case.
+  `explore-empty-model` reports a model with no commands, whose every run
+  passes. `explore-unseeded-random` reports a direct `Math.random` call in
+  a command's `args`, `pre`, or `next`, or in a relation's drawn source,
+  since the seed cannot replay or shrink that value. Check reads only the
+  function's source text, so it stays silent for `crypto.random*` and for
+  any binding outside the function, which it cannot see.
 - **`nuka steps` and `nuka describe` show a step's declared `timeout`.**
   A step's own `defineStep({ timeout })` deadline was visible only in its
   source, so a reader could not tell which steps run under `stepTimeout`.
@@ -126,6 +154,55 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka harvest` writes a docstring line that starts with three quotes
+  so it reads back.** The line was written as a backslash and three
+  quotes, which the Gherkin reader keeps as written, so the draft carried
+  a "does not read back to the same args" comment and a pasted line ran
+  with a stray backslash. Each quote now gets its own backslash, which
+  the reader removes.
+
+- **A live session records a step timeout as a timeout.** A step run
+  through `nuka do --session` against a live session that outlived its
+  deadline was recorded with `error.kind: "step_error"`, and the message
+  named the session instead of the step. It now records `"timeout"` and
+  names the step, as `nuka do` without a live session does. Text the step
+  writes to stdout now goes to stderr there too, as under `nuka do`. `nuka
+  do`, a live session, and `nuka explore` now run a step through one
+  function.
+- **A `{biginteger}` capture no longer aborts `nuka run`.** A typed step
+  that bound a `{biginteger}` capture to `z.bigint()`, or a compat step with
+  a `{biginteger}` capture, stopped the whole run with
+  "Do not know how to serialize a BigInt", because JSON has no bigint and
+  the step record was never written. A record now stores a bigint as its
+  decimal string, in `args`, in `result`, and anywhere else, for `nuka run`,
+  `nuka do`, a live session, and the Allure and messages emitters. `nuka
+  harvest` compares a read-back line in that same form, so a
+  `{biginteger}` line reads back instead of being named as a mismatch.
+  `nuka tend` accepts a sign-off whose frozen result holds that string
+  where the `returns` schema says `z.bigint()`. `nuka do`, in a live
+  session too, turns the stored string back into a bigint where the
+  step's `args` schema expects one, for a value `--use` reads from a
+  record and for `--args` JSON, which cannot spell a bigint either; a
+  Date in `--args` is read back from its ISO string the same way. This
+  follows the schema's input side, so a string piped into
+  `z.coerce.bigint()` or a string codec still gets the string, and a
+  string that an option of a union already accepts is left as it is.
+  `docs/migration.md` no longer lists this as a compat difference.
+
+- **`defineParameterType({ preferForRegexpMatch })` picks the type for a RegExp group.**
+  The option never reached the parameter type registry, so a RegExp group
+  that two types matched failed the step with "matches multiple parameter
+  types". cucumber-js 13.2.0 converts it with the preferred type, and
+  `nuka run` now does too. `config.parameterTypes` does not take the key.
+  Two types that prefer one regexp, or a type that prefers a built-in
+  type's regexp such as `{int}`'s, are a `parameter-type-invalid` error in
+  `nuka check` that names the file, and a setup failure in `nuka run`.
+- **A RegExp step's transformed group gets the World and the awaited value.**
+  In a compat RegExp pattern, a group converted by a `defineParameterType`
+  transformer ran that transformer with `this` set to `null`, and an async
+  transformer's Promise reached the step unawaited. A `{color}` string
+  pattern already got the World and the resolved value, as cucumber-js
+  13.2.0 gives both. A RegExp group is now resolved the same way.
 - **`nuka tend` reads a `from`-filled arg's description from its producer.**
   An args field that `from` fills was reported as undescribed unless the
   consumer repeated the producer's `.describe()`. A six-step CLI scenario

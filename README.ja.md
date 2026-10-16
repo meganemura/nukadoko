@@ -175,6 +175,27 @@ Varar 式の Markdown oath は、もう 1 つの表側です。
 `examples/todo/features/todo.md` は、`features/todo.feature` と同じ todo の基準に、outline の行を 1 つ足したものです。
 このスライスが読むもの、後に残すものは [docs/spec.ja.md](docs/spec.ja.md#markdown-oaths) にあります。
 
+## モデルを探索する
+
+scenario は、人が選んだ 1 つの列です。
+モデルは、request だけを使う step のどんな列が何をすべきかを述べ、`nuka explore` はそこから列を生成します。
+
+```
+nuka explore features/explore/add-model.ts --seed 1
+```
+
+各列は、1 つの seed から取った `draw.int` と `draw.pick` の選択で組み立てられます。
+そのため、同じコマンドは同じ列を再実行します。
+最初の失敗は縮小されます。
+step を削除し、次に選択を小さくし、列がまだ失敗する間だけその編集を残します。
+その後 stdout には、見つかった最も短い scenario が、プロジェクト自身の step の pattern で書かれて出ます。
+そのまま feature に貼り付けられます。
+関係は、宣言された列と、そこから組み立てた 2 本目の列を実行し、結果が食い違うと両方の scenario を表示します。
+feature には何も勝手に追加されません。
+表示された scenario を人が読んで決めます。
+`examples/todo/features/explore/` のモデルは todo アプリに対して動きます。
+規則は [docs/spec.ja.md](docs/spec.ja.md#モデルまたは関係を探索する) にあります。
+
 ## Why this exists now
 
 **いま、これが存在する理由**
@@ -240,7 +261,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、MCP のツール一覧(`nuka mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、モデルと関係(`nuka explore`)、MCP のツール一覧(`nuka mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と、Varar の残り(step の戻り値と文中の語句の比較、すべての方言)です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。

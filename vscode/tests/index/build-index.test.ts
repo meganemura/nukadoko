@@ -40,7 +40,28 @@ describe("buildStepIndex", () => {
   it("returns an empty index when the source lists no files", async () => {
     const result = await buildStepIndex(fakeFileSource([]));
 
-    expect(result).toEqual({ patterns: [], unresolved: [] });
+    expect(result).toEqual({ patterns: [], unresolved: [], unreadable: [] });
+  });
+
+  it("records a file it cannot read and still indexes the rest", async () => {
+    const compatPath = path.join(fixturesDir, "compat-steps.ts");
+    const lockedPath = path.join(fixturesDir, "locked-steps.ts");
+    const source: FileSource = {
+      async listFiles() {
+        return [lockedPath, compatPath];
+      },
+      async readFile(filePath) {
+        if (filePath === lockedPath) {
+          throw new Error("EACCES: permission denied");
+        }
+        return readFile(filePath, "utf8");
+      },
+    };
+
+    const result = await buildStepIndex(source);
+
+    expect(result.patterns).toHaveLength(4);
+    expect(result.unreadable).toEqual([{ file: lockedPath, reason: "EACCES: permission denied" }]);
   });
 
   describe("zero execution", () => {

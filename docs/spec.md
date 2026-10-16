@@ -1527,13 +1527,20 @@ import { Given, When, Then } from "nukadoko/compat";
   `defineStep` enables single-step execution.
 - `defineParameterType` in compat code and `config.parameterTypes` use one
   registry. Moving a registration to the config does not change pattern
-  matching, so a team can make this move early. `nuka check` warns about
-  registrations that still come from support code. The config is their
-  final location. A transformer's `this` is that scenario's World, the
+  matching, so a team can make this move early. A registration that sets
+  `preferForRegexpMatch` is the exception (below). `nuka tend` lists
+  registrations that still come from support code (see "Tending"). The
+  config is their final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
   transformer returns is awaited before the step runs. This holds for a
-  string pattern. A RegExp pattern differs; see [docs/migration.md](migration.md)
-  "Known limits".
+  string pattern and a RegExp pattern alike. `preferForRegexpMatch` on a
+  compat registration picks the type for a RegExp group that several types
+  match, as in cucumber-js. `config.parameterTypes` has no such key, so a
+  registration that sets it stays in compat code while a RegExp step
+  relies on it. Moved to config with the key, it is a config error; moved
+  without it, a RegExp group that two types match fails again. Two types
+  that prefer one regexp, or a type that prefers a built-in type's regexp
+  such as `{int}`'s, are a `parameter-type-invalid` error.
 - Execution supports two forms. Glue that starts its own Playwright
   continues to work without measurement. A World subclass assigns that
   page and request with `this.page = ...` and `this.request = ...`, and
@@ -2399,6 +2406,19 @@ array identifies each step record by id, so either record leads to the other.
   given, since a value the schema already rejected cannot be reconstructed
   into the validated shape. A compat step's `args` is never validated
   either way, having no schema to validate against.
+- A bigint is stored as its decimal string, in `args`, in `result`, and
+  anywhere else in a record, because JSON has no bigint. A `{biginteger}`
+  capture bound to `z.bigint()` records `"v": "123456789012345678901234567890"`.
+  Inside one `nuka run` scenario, a `from` chain hands the next step the
+  bigint itself. `nuka do` reads `--use` values from the stored record and
+  `--args` as JSON, so where the step's `args` schema expects a bigint or
+  a Date, it turns the stored string back into one first. Any other
+  string still reaches the schema as a string. It reads the schema's
+  input side: a string piped into `z.coerce.bigint()`, a codec that
+  decodes a string, and a `z.preprocess()` function get the string as
+  given, and `z.bigint().transform(...)` gets the bigint. Where an option
+  of a union already accepts the string as given, the string is left as
+  it is, whatever order the options are declared in.
 - `scenario_record_id` and `run_id` identify what this execution belongs to:
   the owning scenario record's id and the `nuka run` invocation's own id
   for a `run`-originated step (`kind: "run"`), both `null` for a
@@ -3825,9 +3845,10 @@ The following findings show what `tend` inspects and why each item is rot rather
   taken from, or a step it cites is gone from the vocabulary, then the
   record remains on disk with a claim it can no longer support. The
   record stores that result as JSON. `tend` accepts the stored JSON when
-  it is what `JSON.stringify` would write for a value the current
-  `returns` schema accepts, so a Date kept as its ISO string still
-  passes `z.date()`. A cited
+  it is the stored form of a value the current `returns` schema accepts
+  (what `JSON.stringify` would write, with a bigint as its decimal
+  string), so a Date kept as its ISO string still passes `z.date()`, and
+  a bigint kept as its decimal string still passes `z.bigint()`. A cited
   step is called gone only when every step file imported. While any file
   failed to import, that judgment is withheld, because the step may still
   be defined in the file that could not be read. This
@@ -3893,7 +3914,10 @@ The following findings show what `tend` inspects and why each item is rot rather
   configuration, reported like any other.
 - **A `defineParameterType` still registered in support code.** It continues
   to work, and `config.parameterTypes` is its typed-era home; moving the
-  registration changes no match. This one used to be a `nuka check`
+  registration changes no match. A registration that sets
+  `preferForRegexpMatch` is the exception: config rejects the key, so the
+  note says to keep it in support code while a RegExp step relies on it.
+  This one used to be a `nuka check`
   warning, but that classification was wrong: it appears for as long as a suite has any
   compat left, which is a normal state to be in, and printing it before
   every run trains people past the lines that do stop a run.
@@ -4015,11 +4039,13 @@ fixes up a dirty tree.
 
 A model and a relation sit next to the step vocabulary. They are declarations.
 `nuka check` reads them. It does not run them, and it does not call `initial`,
-`args`, `pre`, `next`, `post`, `follow`, or `relate`.
+`args`, `pre`, `next`, `post`, `follow`, or `relate`. `nuka explore` runs them
+(see "Exploring a model or a relation").
 
 `defineModel(initial).commands({ ... })` takes the initial state, then one
 command per step basename. A command is `modelCommand(step)({ args, pre, next,
 post })`. `args` and `post` are typed against that step's args and result.
+`args` receives the state and a `draw`, the one source of variation.
 `next` updates the model from the state and the args. The basename is the
 step file's name, without its extension. The two calls exist so the state
 type is known before those callbacks are checked. One object literal widens
@@ -4031,6 +4057,15 @@ over the two runs' results. `relationEntry` checks `args` against that step.
 `follow` and `relate` are stored. Check reads `source` only, because the
 second sequence is the result of calling `follow`.
 
+`source` can instead be generated. A function `(draw, length) => [...]`
+returns at most `length` entries and takes every varying value from
+`draw`. A model's commands can also generate it: `pre`, `args`, and
+`next` pick each step as in a model run, and the model's `post` is not
+called. For a function source, `relate` receives the source results
+typed by its step. For a model source they are `unknown`. Check reads a
+model source's commands as it reads a model, and does not call a
+function source.
+
 Discovery treats a default export of either declaration as that declaration,
 not as a step. The file can live anywhere under `featuresDir`.
 `examples/todo/features/explore/` is a request-only model and relation.
@@ -4040,6 +4075,135 @@ basename of the step it holds, or when a sequence entry's step was never
 registered. It reports `explore-browser-step` when that step needs `page` or
 `context`, including through a fixture that reaches one. A step that needs
 only `request` is allowed.
+
+Two more findings read the declaration and end only one way.
+`explore-empty-model` reports a model with no commands: every sequence it
+builds is empty, so every run passes and says nothing. A relation whose
+model source has no commands is not reported, because `follow` and
+`relate` still run on the empty source and can fail there.
+`explore-unseeded-random` reports a direct call to `Math.random` in a
+command's `args`, `pre`, or `next`, or in a relation's drawn source. The
+seed does not drive that value, so a run cannot be replayed from its seed
+and a shrink edit does not mean what it meant. Check reads the function's
+source text for this and does not call the function. A call in a string, a
+comment, a regular expression, or a template's text is not a call. The
+source text is all check sees, so a binding outside the function (at
+module scope or from an import) is out of reach. For that reason
+`crypto.random*` is not reported: a module-level `crypto` can be a seeded
+generator. A call reached through a helper or an alias, and a `Math` the
+function binds itself, are out of reach too. Check says nothing about any
+of them, because a check that guesses is worse than none.
+
+### Exploring a model or a relation
+
+`nuka explore <file>` runs one model or one relation. The file is one that
+discovery found under `featuresDir`. Before any step runs, the command makes
+the refusals `nuka check` and `nuka do` make for those steps: any of the
+four `explore-*` findings above, a fixture problem, and an unknown `--env`. Nothing runs when one of them applies.
+
+A model run builds each sequence from the model alone. From the state, it
+takes the commands whose `pre` holds, picks one, calls `args(state, draw)`,
+and moves the state with `next`. `draw.int(min, max)` and `draw.pick(items)`
+are the only sources of variation, so a sequence is a function of the
+choices it made. `next` returns a new state and leaves the one it was
+given unchanged, because that state object is the one `post` later
+receives. The sequence then runs step by step, and `post` judges each
+result against the state from before that step. The first step that fails,
+or the first `post` that does not hold, fails the sequence. A step fails
+for any reason it fails under `nuka do`, a fixture setup or a refused
+connection included. `--runs`
+(default 20) sets how many sequences run, and `--length` (default 10) sets
+the most steps one sequence has. One `--seed` drives every choice of every
+run, and the output always prints it, so the same command reruns the same
+sequences.
+
+A failure is shrunk. Shrinking edits the recorded choices and builds the
+sequence again: first it deletes one step's choices, then two adjacent
+steps' choices, then it lowers one choice toward zero, and it keeps an edit only when the new sequence still
+fails the same way. A lower choice means an earlier command in declaration order, a
+`draw.int` nearer its `min`, or an earlier item of `draw.pick`. Each kept edit makes
+the choice list shorter or smaller, so shrinking ends, and it stops after
+200 attempts.
+
+The same way means the same failure kind, and for a `post` failure the
+same command. There are three kinds: the step failed (`step`), `post`
+returned false (`post-false`), and `post` threw (`post-threw`). A shorter
+sequence that fails another way shows a different problem, and printing it
+would hide the one the run found. The message is not compared. It carries
+the step's result and args, and those are what shrinking changes: a
+duplicate add shrunk from one value to a smaller one still fails the same
+`post` with a different number in its message. A `step` failure does not
+compare the command either, because a refused connection or a failing
+fixture fails whichever step runs first.
+
+A relation run runs `source` in one world, calls `follow`, runs that second
+sequence in a fresh world, and calls `relate` on the two lists of results.
+A declared `source` runs once, with no seed, and does not shrink. A
+generated `source` takes `--seed`, `--runs`, and `--length` as a model
+does: each run draws a new source and runs the relation on it, and the
+first failure is shrunk by the same passes. A function source's steps
+are not known by choice, so each choice is deleted on its own. An edit is kept only when the relation still fails the
+same way: in the same sequence, and for `relate`, by returning false or
+by throwing as before. The output adds a comment with the run, the
+number of source steps found, and the number after shrinking. A step of
+the second sequence, or of a source drawn by a function, that is not in
+the vocabulary, or needs a browser, stops the relation before it runs.
+
+Each sequence gets a fresh `ctx` and a fresh scenario-scope fixture cache,
+so a scenario-scope fixture that resets the target runs before every
+sequence. A process-scope fixture is set up once for the invocation, as
+under `nuka run`: every run and every shrink attempt shares it, and it is
+torn down after the last sequence. A fixture's `use()` returns `"failed"`
+for a sequence whose step failed or whose `post` did not hold, and the
+process scope gets `"failed"` when any sequence did. SIGINT or SIGTERM
+tears down the open sequence's fixtures and then the process-scope ones
+before the process exits, as for `nuka do`. The target itself is not reset, and a
+model whose initial state assumes an empty target needs that fixture. A
+step runs through the same function `nuka do` and a live session use: the
+args are validated, the fixture bag is opened, `run` is called under the
+step's deadline, and the result is validated. No step record is written. A
+run tries many sequences and most of them pass. The record of a failure is
+the scenario a person keeps, and `nuka run` of that scenario writes the
+records.
+
+On a failure, stdout gets a scenario to paste into a feature: a comment with
+the command that reruns it, a comment that says how the run failed, and one
+`*` line per step, written from the step's first pattern by the renderer
+`nuka harvest` uses. The one required args key that no capture and no
+`from` speaks for is written as a table when it is a list of string rows,
+or as a docstring when it is a string, the way `nuka run` binds it. The
+failing step has a comment above it with its message. A
+relation prints two scenarios, the source and the follow. Every line is
+read back the way `nuka run` reads it, and a line that does not return the
+same step and args, or an args key the line cannot carry, is named in
+a comment above it. stdout stays empty on a pass, stderr gets one summary
+line either way, and the exit code is 0 only for a pass.
+
+`--json` replaces the stdout text with one JSON object, printed on a pass
+too. Every object has `kind` (`"model"` or `"relation"`), `file`, `verdict`
+(`"passed"`, `"failed"`, or `"error"` for a model or relation callback that
+threw before a step ran), and `rerun`. A model adds `seed`, `runs`, and
+`length`; a pass adds `steps`, the number of steps run. A failing model
+adds `run`, `found_steps`, `shrunk_steps`, `shrink_attempts`, `failure`
+(`index`, `kind`, `command`, `message`), `steps`, and `scenario`, all for
+the shrunk sequence. A relation adds `name`, and a failing one adds
+`failure` (`sequence`; `index` unless the sequence is `relate`, and
+`threw` when it is; and `message`) plus `source` and `follow`, each with
+`steps` and `scenario`. A relation with a generated source also adds
+`seed`, `runs`, and `length`, and on a failure `run`, `found_steps`,
+`shrunk_steps`, and `shrink_attempts`, counted in source steps.
+Each entry of `steps` has `step`, `args`, and `status`: `"ok"` with
+`result`, `"failed"` with `message`, or `"not-run"` for a step after the
+failed step in the same sequence. `scenario` is the text the plain output prints, without
+the two leading comments. An `error` carries `message`, and `run` for a
+model or a relation with a generated source. A refusal before
+any step runs prints nothing on stdout, as without `--json`. Explore
+writes the object to stdout only, never under the state directory, so
+`nuka accept` and `nuka tend` never read it as a run.
+
+The scenario is not added to any feature. Only a person who read it decides
+whether it becomes a scenario, whether the system or the model was wrong,
+and what the scenario claims. Generated sequences that passed are not kept.
 
 ## CLI summary
 
@@ -4115,6 +4279,20 @@ nuka harvest <step-record-id>...
                               record it came from are named in the draft and
                               on stderr. Provenance goes to stderr only. A
                               `nuka run` record is refused
+nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
+                              run one model or relation file found under
+                              featuresDir, request-only steps only, with no
+                              step record. A model runs --runs sequences
+                              (default 20) of at most --length steps (default
+                              10) from one --seed, and shrinks the first
+                              failure; so does a relation whose source is
+                              generated. On a failure stdout gets the scenario to
+                              paste (two for a relation) and the command that
+                              reruns it; stdout is empty on a pass. --json
+                              prints one object instead, on a pass too: the
+                              verdict, the seed and counts, and on a failure
+                              each step's result, the failure, and the
+                              scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, patterns, description, mutates, timeout
                               when the step declared one, which
@@ -4450,6 +4628,11 @@ would be running against glue it never actually read.
   Markdown files compile into the same pickles, bind the same `defineStep`
   vocabulary, and fail `nuka check` on a sentence no pattern matches (see
   "Markdown oaths"). This is the oath surface, not Varar's engine.
+- **M14 (exploring)**: `nuka explore`, which runs a model or a relation
+  against request-only steps, shrinks a model's failure with a seeded,
+  replayable list of choices, and prints the scenario to paste (see
+  "Exploring a model or a relation"). The feature file stays the set of
+  sequences a person chose to keep.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs
   in-place coexistence rather than migration. Full Varar parity (every

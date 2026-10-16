@@ -279,6 +279,16 @@
       "note": "defineRelation が宣言する、2 つの step 列の結果の間の関係。defineRelation と relationEntry は英語のまま"
     },
     {
+      "en": ["shrink", "shrinking", "shrunk"],
+      "ja": "縮小",
+      "note": "nuka explore が失敗した列を短く、小さくすること"
+    },
+    {
+      "en": ["choice", "choices"],
+      "ja": "選択",
+      "note": "nuka explore が列を組み立てるときに記録する 1 つの整数。seed と --seed は英語のまま"
+    },
+    {
       "en": ["percent-encoded form", "percent-encoded"],
       "ja": "パーセントエンコードされた形",
       "note": "encodeURIComponent が返す綴り。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。コード上の encodeURIComponent は識別子なので原文のまま"

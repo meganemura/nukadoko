@@ -11,6 +11,7 @@ import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
 import { runClean } from "./clean.js";
 import { runDo } from "./do.js";
+import { DEFAULT_EXPLORE_LENGTH, DEFAULT_EXPLORE_RUNS, runExplore } from "./explore.js";
 import { runHarvest } from "./harvest.js";
 import { runInit } from "./init.js";
 import { runMcpTools } from "./mcp-tools.js";
@@ -146,6 +147,17 @@ interface HarvestArgs {
    * line — `nuka harvest`'s own handler re-sorts them by each record's
    * `started_at` before rendering anything (docs/spec.md "Harvesting"). */
   stepRecordIds: string[];
+}
+
+interface ExploreArgs {
+  file: string;
+  /** yargs' `type: "number"` passes `NaN` or a fraction through; explore.ts
+   * refuses both. */
+  seed?: number;
+  runs?: number;
+  length?: number;
+  env?: string;
+  json?: boolean;
 }
 
 interface SessionListArgs {
@@ -585,6 +597,40 @@ export async function runCli(
       exitCode = await runHarvest({
         rootDir,
         stepRecordIds: args.stepRecordIds,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const exploreCommand: CommandModule<Record<string, never>, ExploreArgs> = {
+    command: "explore <file>",
+    describe:
+      "run one model or relation file against request-only steps; on a failure, the shortest scenario " +
+      "found goes to stdout with the command that reruns it",
+    builder: (y: Argv) =>
+      y
+        .positional("file", { type: "string", demandOption: true, describe: "a model or relation file under featuresDir" })
+        .option("seed", { type: "number", describe: "the seed every choice comes from (printed when omitted)" })
+        .option("runs", { type: "number", describe: `how many sequences a model runs (default ${DEFAULT_EXPLORE_RUNS})` })
+        .option("length", { type: "number", describe: `the most steps in one sequence (default ${DEFAULT_EXPLORE_LENGTH})` })
+        .option("env", { type: "string", describe: 'target a named environment (omit for the "default" environment)' })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "one JSON object on stdout: the verdict, the seed and counts, and on a failure each step's result and the scenario",
+        })
+        .check(rejectRepeatedFlags(["seed", "runs", "length", "env"])) as Argv<ExploreArgs>,
+    handler: async (args: Arguments<ExploreArgs>) => {
+      if (argsFailed) return;
+      exitCode = await runExplore({
+        rootDir,
+        file: args.file,
+        seed: args.seed ?? null,
+        runs: args.runs ?? DEFAULT_EXPLORE_RUNS,
+        length: args.length ?? DEFAULT_EXPLORE_LENGTH,
+        env: args.env ?? null,
+        json: args.json ?? false,
         stdout,
         stderr,
       });
@@ -1039,6 +1085,7 @@ export async function runCli(
     .command(doCommand)
     .command(runCommand)
     .command(harvestCommand)
+    .command(exploreCommand)
     .command(sessionCommand)
     .command(initCommand)
     .command(scaffoldCommand)

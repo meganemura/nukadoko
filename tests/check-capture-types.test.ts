@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
@@ -7,8 +9,7 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 // agrees. Every step in the fixture is named bad-* (always fails args
 // validation) or ok-* (passes, including the near misses check stays silent
 // on: a coerce, a union, a preprocess, a custom type, a transform whose input
-// side matches). The bigint steps are check-only because a run cannot record
-// a bigint argument.
+// side matches).
 
 interface CheckIssue {
   code: string;
@@ -81,9 +82,31 @@ describe("nuka check: capture type against args schema", () => {
       .filter((line) => line.startsWith("{"))
       .map((line) => JSON.parse(line) as { scenario: string; status: string });
 
-    expect(rows).toHaveLength(22);
+    expect(rows).toHaveLength(24);
     for (const row of rows) {
       expect([row.scenario, row.status]).toEqual([row.scenario, row.scenario.startsWith("bad-") ? "failed" : "passed"]);
     }
+  });
+
+  it("nuka run writes a bound bigint into the step record as its decimal string", async () => {
+    tempDir = await copyFixtureToTempDir("check-capture-types-project");
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/capture-types.feature"], {
+      rootDir: tempDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+    const rows = stdout
+      .text()
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as { scenario: string; steps: { step_record_id: string }[] });
+    const row = rows.find((candidate) => candidate.scenario === "ok-biginteger-bigint");
+    const recordPath = path.join(tempDir, ".nukadoko", "records", "steps", row!.steps[0]!.step_record_id, "record.json");
+    const stepRecord = JSON.parse(await readFile(recordPath, "utf8")) as { status: string; args: unknown };
+
+    expect(exitCode).toBe(1);
+    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.args).toEqual({ v: "123456789012345678901234567890" });
   });
 });

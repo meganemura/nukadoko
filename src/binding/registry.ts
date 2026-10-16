@@ -1,5 +1,5 @@
 import { ParameterType, ParameterTypeRegistry } from "@cucumber/cucumber-expressions";
-import type { ParameterTypeConfig } from "./parameter-type-config.js";
+import type { RegisteredParameterType } from "./parameter-type-config.js";
 import { ParameterTypeCollisionError } from "./parameter-type-errors.js";
 
 // Responsibility: the one ParameterTypeRegistry `nuka check` and `nuka run`
@@ -28,7 +28,7 @@ import { ParameterTypeCollisionError } from "./parameter-type-errors.js";
 // problem — cucumber-expressions' own `UndefinedParameterTypeError`, thrown
 // when the pattern's expression is built, not here.
 export function createParameterTypeRegistry(
-  customTypes: readonly ParameterTypeConfig[] = [],
+  customTypes: readonly RegisteredParameterType[] = [],
 ): ParameterTypeRegistry {
   const registry = new ParameterTypeRegistry();
 
@@ -49,13 +49,34 @@ export function createParameterTypeRegistry(
     }
     configuredNames.add(entry.name);
 
-    // `type: null` — the constructor's third argument is only ever consulted
-    // for snippet generation (cucumber-expressions' own
-    // CucumberExpressionGenerator), which this project doesn't use; matching
-    // and transformation both go through `regexps`/`transform` alone.
-    registry.defineParameterType(
-      new ParameterType(entry.name, entry.regexp, null, entry.transformer),
+    // `type: null` and the default `useForSnippets`: both are only ever
+    // consulted for snippet generation (cucumber-expressions' own
+    // CucumberExpressionGenerator), which this project doesn't use.
+    // `preferForRegexpMatch` decides a RegExp group that several types match.
+    const parameterType = new ParameterType(
+      entry.name,
+      entry.regexp,
+      null,
+      entry.transformer,
+      undefined,
+      entry.preferForRegexpMatch,
     );
+    // cucumber-expressions refuses a second preferential type for one regexp
+    // with its own CucumberExpressionError, which names no registration.
+    if (parameterType.preferForRegexpMatch) {
+      for (const existing of registry.parameterTypes) {
+        const regexp = existing.preferForRegexpMatch
+          ? parameterType.regexpStrings.find((source) => existing.regexpStrings.includes(source))
+          : undefined;
+        if (regexp !== undefined) {
+          throw new ParameterTypeCollisionError(entry.name, "preferential", {
+            regexp,
+            preferredBy: existing.name ?? "",
+          });
+        }
+      }
+    }
+    registry.defineParameterType(parameterType);
   }
 
   return registry;

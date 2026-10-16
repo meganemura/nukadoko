@@ -1,10 +1,9 @@
 import { existsSync } from "node:fs";
-import { runWithTimeout } from "../run/run-scenario.js";
+import { executeTypedStep } from "../run/execute-typed-step.js";
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { formatValidationIssues } from "../issues/format-issues.js";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type StepContextHandle } from "../context/create-context.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -20,15 +19,11 @@ import {
 } from "../environment/resolve-environment.js";
 import { probeVersion } from "../environment/probe-version.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
-import {
-  createFixtureCache,
-  resolveFixtures,
-  teardownFixtureCache,
-} from "../fixture/resolver.js";
+import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
-import type { ErrorKind, EvidenceMeta, FixtureUsageEntry, StepRecord } from "../record/types.js";
+import type { ErrorKind, EvidenceMeta, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -40,8 +35,6 @@ import { sessionFilePath, sessionLockPath, sessionsDir } from "../session/paths.
 import { readSessionFile, writeSessionFile } from "../session/store.js";
 import { LIVE_SOCK_DIR_PREFIX, LIVE_SOCK_FILE_NAME } from "../session/live-sock.js";
 import type { Step } from "../step/define-step.js";
-import { stepFixtureNames } from "../step/step-fixture-names.js";
-import { strictArgsSchema } from "../step/strict-args.js";
 import {
   formatFixtureIssues,
   knownFixtureNames,
@@ -49,6 +42,7 @@ import {
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
+import { reviveStoredForm } from "../stored-form/revive.js";
 import { encodeLine, type LiveDoRequest, type LiveRequest, type LiveResponse } from "./protocol.js";
 
 // Responsibility: one live session's own process — everything cli/session.ts's
@@ -517,7 +511,9 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // `--use`'s own effect, applied only now: `contextHandle.recordUsed`
     // writes into the `used` collector `beginStep` just reset, so applying
     // it any earlier would be silently wiped out.
-    let parsedArgs = request.args;
+    // --args is JSON, which has no bigint or Date, so a value this step's
+    // args declare as one arrives as its stored string.
+    let parsedArgs = reviveStoredForm(entry.step.args, request.args, "input");
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const resolved of resolvedUses) {
@@ -535,59 +531,21 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     }
 
     const startedAt = new Date();
-    let status: "ok" | "failed";
-    let result: unknown;
-    let errorMessage = "";
-    let errorKind: ErrorKind | undefined;
-    let fixtureUsage: FixtureUsageEntry[] = [];
-    // Defaults to the merged-but-unvalidated value (`--use` already applied
-    // above); overwritten with the schema-validated value below on success,
-    // matching do.ts's own `recordedArgs` so a step record's own `args`
-    // never shows a key validation actually rejected or a default
-    // validation actually filled in silently, regardless of which of the
-    // two `nuka do` ever reaches this step through.
-    let recordedArgs: unknown = parsedArgs;
-
-    const argsResult = strictArgsSchema(entry.step.args).safeParse(parsedArgs);
-    if (!argsResult.success) {
-      status = "failed";
-      errorMessage = `args validation failed: ${formatValidationIssues(argsResult.error.issues)}`;
-      errorKind = "args_invalid";
-    } else {
-      recordedArgs = argsResult.data;
-      try {
-        const resolved = await resolveFixtures({
-          names: stepFixtureNames(entry.step),
-          graph: fixtureGraph,
-          ctx: contextHandle.ctx,
-          scenarioCache: fixtureScenarioCache,
-          processCache: fixtureProcessCache,
-          defaultTimeoutMs: config.fixtureTimeout,
-        });
-        fixtureUsage = resolved.usage;
-        contextHandle.beginStepRun(entry.step, resolved.fixtures);
-        const runResult = await runWithTimeout(
-          () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(resolved.fixtures, argsResult.data))),
-          entry.step.timeout ?? config.stepTimeout,
-          "Step",
-          name,
-          entry.step.timeout === undefined ? "config" : "step",
-        );
-        const returnsResult = entry.step.returns.safeParse(runResult);
-        if (!returnsResult.success) {
-          status = "failed";
-          errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
-          errorKind = "result_invalid";
-        } else {
-          status = "ok";
-          result = returnsResult.data;
-        }
-      } catch (error) {
-        status = "failed";
-        errorMessage = error instanceof Error ? error.message : String(error);
-        errorKind = "step_error";
-      }
-    }
+    const outcome = await executeTypedStep({
+      name: request.step,
+      step: entry.step,
+      args: parsedArgs,
+      handle: contextHandle,
+      fixtureGraph,
+      scenarioCache: fixtureScenarioCache,
+      processCache: fixtureProcessCache,
+      config,
+    });
+    const { status, fixtureUsage } = outcome;
+    const recordedArgs = outcome.args;
+    const result = outcome.status === "ok" ? outcome.result : undefined;
+    const errorMessage = outcome.status === "failed" ? outcome.error.message : "";
+    const errorKind: ErrorKind | undefined = outcome.status === "failed" ? outcome.error.kind : undefined;
 
     const observed = contextHandle.observedCounts();
     const sections = contextHandle.sectionsSnapshot();

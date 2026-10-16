@@ -28,6 +28,9 @@ Feature: capture types against schemas
   Scenario: bad-bigdecimal-number
     Given bad-bigdecimal-number 5
 
+  Scenario: bad-biginteger-number
+    Given bad-biginteger-number 5
+
   Scenario: bad-int-optional-string
     Given bad-int-optional-string 5
 
@@ -48,6 +51,9 @@ Feature: capture types against schemas
 
   Scenario: ok-bigdecimal-string
     Given ok-bigdecimal-string 5
+
+  Scenario: ok-biginteger-bigint
+    Given ok-biginteger-bigint 123456789012345678901234567890
 
 
   Scenario: ok-int-number-transform

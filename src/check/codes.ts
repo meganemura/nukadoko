@@ -85,9 +85,19 @@ const CHECK_CODES = {
       "A model command or a relation sequence entry names a step that needs a browser (page or context). Explore does not run that step.",
     severity: "error",
   },
+  "explore-empty-model": {
+    description:
+      "A model declares no commands, so every sequence it builds is empty and passes.",
+    severity: "error",
+  },
   "explore-unknown-step": {
     description:
       "A model command or a relation sequence entry names a step that is not in the vocabulary.",
+    severity: "error",
+  },
+  "explore-unseeded-random": {
+    description:
+      "A model command's args, pre, or next, or a relation's drawn source, calls Math.random directly. The seed does not drive that value, so a run cannot be replayed or shrunk.",
     severity: "error",
   },
   "feature-parse-error": {
@@ -142,7 +152,7 @@ const CHECK_CODES = {
   },
   "parameter-type-invalid": {
     description:
-      "Two parameter types share the same name, whether both come from config.parameterTypes or one comes from a compat defineParameterType call.",
+      "A custom parameter type takes the name of a built-in type, two parameter types share the same name (from config.parameterTypes or a compat defineParameterType call), or a type sets preferForRegexpMatch on a regexp that another type, built-in or custom, already prefers.",
     severity: "error",
   },
   "part-cycle": {

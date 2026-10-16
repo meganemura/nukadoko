@@ -189,10 +189,13 @@ World のサブクラスは、その page と request を `this.page = ...` と 
   `defineWorld` は import 時にどちらの名前も拒みます。
   `nuka check` は `step-file-import-failed` を報告し、`nuka run` は同じメッセージで止まります。
   そのメッセージはフィールド名を含みます。
-- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(登録を移してもどの pattern のマッチも変わりません)。
+- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(`preferForRegexpMatch` を設定していなければ、登録を移してもどの pattern のマッチも変わりません)。
   transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
-  これは string の pattern での話です。
-  RegExp の pattern では違います(下の「既知の限界」を参照)。
+  string の pattern でも RegExp の pattern でも同じです。
+  `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
+  `config.parameterTypes` にはこのキーがないため、これを設定する登録は、RegExp の step がそれに頼っている間は support コードに残ります。
+  キーごと config へ移すと config のエラーになります。
+  キーを外して移すと、2 つの型が一致する RegExp のグループは、再び "matches multiple parameter types" で step を失敗させます。
 
 ## Stage 2: step を昇格させる
 
@@ -272,9 +275,6 @@ run の結果に頼る前に、それぞれを glue の中で探してくださ�
 - `AfterStep` の hook は登録順に走ります。
   cucumber-js は登録の逆順に走らせます。
   `After` の hook については、どちらのツールも逆順です。
-- RegExp の pattern で、ソースが `defineParameterType` の regexp であるグループは、その型の transformer で変換されます。
-  ただし transformer の `this` は World ではなく `null` であり、返した Promise は await されないまま step に届きます。
-  string の pattern(`{color}`)では、World と await 済みの値が届きます。
 - hook の `result.message` は、エラーのメッセージだけです(`boom`)。
   cucumber-js は stack のテキストを与えます(`Error: boom` とその下のフレーム)。
   `result.exception` は設定されません。
@@ -282,11 +282,3 @@ run の結果に頼る前に、それぞれを glue の中で探してくださ�
   cucumber-js は 5 秒でそれを失敗させます。
 - `table.raw()` はコピーを返します。
   cucumber-js では、返った配列の行を変えると、あとで `table.hashes()` が返すものも変わります。
-
-あと 2 つの違いは失敗しますが、cucumber-js では pass するところで失敗します:
-
-- `defineParameterType` の `preferForRegexpMatch` は無視されます。
-  2 つの parameter type が一致する RegExp のグループは、「matches multiple parameter types」で step を失敗させます。
-  cucumber-js は優先された型を使います。
-- `{biginteger}` のキャプチャは、step が走ったあと「Do not know how to serialize a BigInt」で `nuka run` を止めます。
-  それより後の scenario は走りません。

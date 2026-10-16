@@ -7,7 +7,7 @@ import { type Capture } from "../binding/pattern.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import { asObjectShape, unconsumedRequiredKeys } from "../binding/schema-shape.js";
 import type { ParameterTypeConfig } from "../config/schema.js";
-import type { Vocabulary } from "../discover/discover-steps.js";
+import type { CompatParameterTypeEntry, Vocabulary } from "../discover/discover-steps.js";
 
 // Responsibility: the run-time half of the shared seam — build the matching
 // CucumberExpression for every string pattern in the vocabulary directly
@@ -81,7 +81,7 @@ export type StepBinding =
 export function buildStepBindings(
   vocabulary: Vocabulary,
   customTypes: readonly ParameterTypeConfig[] = [],
-  compatParameterTypes: readonly ParameterTypeConfig[] = [],
+  compatParameterTypes: readonly CompatParameterTypeEntry[] = [],
 ): readonly StepBinding[] {
   const registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);
   const bindings: StepBinding[] = [];
@@ -178,9 +178,9 @@ export type MatchOutcome =
  * `lastIndex` must not carry state across the many pickle-step texts this
  * function is called with, one at a time, over a `nuka run` invocation's
  * lifetime (the same state src/check/feature-check.ts's own
- * `checkedPatternMatches` already guards against). Values come from
- * `Argument.getValue`, the same call the expression branch makes, so a
- * group is converted by the parameter type registered for its source.
+ * `checkedPatternMatches` already guards against). Its values are
+ * resolved exactly as an expression's are, so a group is converted by the
+ * parameter type registered for its source, with the World as `this`.
  */
 export async function matchPickleStep(
   text: string,
@@ -194,21 +194,13 @@ export async function matchPickleStep(
     if (byStep.has(binding.stepName)) {
       continue;
     }
-    if (binding.matcherKind === "regexp") {
-      const expression = new RegularExpression(
-        new RegExp(binding.regexp.source, binding.regexp.flags),
-        binding.parameterTypeRegistry,
-      );
-      const args = expression.match(text);
-      if (args !== null) {
-        byStep.set(binding.stepName, {
-          binding,
-          values: args.map((argument) => argument.getValue(null)),
-        });
-      }
-      continue;
-    }
-    const args = binding.expression.match(text);
+    const args =
+      binding.matcherKind === "regexp"
+        ? new RegularExpression(
+            new RegExp(binding.regexp.source, binding.regexp.flags),
+            binding.parameterTypeRegistry,
+          ).match(text)
+        : binding.expression.match(text);
     if (args !== null) {
       byStep.set(binding.stepName, {
         binding,

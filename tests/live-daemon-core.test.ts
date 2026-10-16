@@ -127,6 +127,36 @@ describe("createSessionCore: request dispatch", () => {
     return { core: result.core, exitCalls };
   }
 
+  it("records a step that outlives its own timeout as a timeout, named after the step", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "steps", "never-ends.ts"),
+      [
+        'import { z } from "zod";',
+        'import { defineStep } from "../../nukadoko-shim.js";',
+        "export default defineStep({",
+        '  description: "Waits on a promise that never settles",',
+        "  args: z.object({}),",
+        "  returns: z.object({}),",
+        "  mutates: false,",
+        "  timeout: 200,",
+        "  async run() {",
+        "    await new Promise(() => {});",
+        "    return {};",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const { core } = await newCore({ name: "timeout-core" });
+    const record = expectRecord(await core.dispatchRequest({ kind: "do", step: "never-ends", args: {} }));
+    expect(record.status).toBe("failed");
+    if (record.status !== "failed") throw new Error("unreachable");
+    expect(record.error).toEqual({
+      kind: "timeout",
+      message: 'Step "never-ends" timed out after 200ms (the step\'s own timeout)',
+    });
+  });
+
   it("an unknown step is rejected", async () => {
     const { core } = await newCore();
     const response = await core.dispatchRequest({ kind: "do", step: "no-such-step", args: {} });
@@ -246,6 +276,47 @@ describe("createSessionCore: request dispatch", () => {
     expect(used.status).toBe("ok");
     expect(used.status === "ok" && used.result).toEqual({ id: createdId });
     expect(used.used?.[0]?.step).toBe("create-thing");
+  });
+
+  it("--args and --use hand a z.bigint() key the bigint its stored decimal string spells", async () => {
+    const { core } = await newCore();
+    const counted = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "count-atoms", args: { count: "123456789012345678901234567890" } }),
+    );
+    expect(counted.status === "ok" && counted.result).toEqual({ total: "123456789012345678901234567890" });
+
+    const doubled = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "double-atoms", args: {}, use: [counted.step_record_id] }),
+    );
+    expect(doubled.status === "ok" && doubled.result).toEqual({ doubled: "246913578024691357802469135780" });
+  });
+
+  it("--args and --use hand a pipe, a codec, and a transform the input side of their schema", async () => {
+    const { core } = await newCore();
+    const counted = expectRecord(await core.dispatchRequest({ kind: "do", step: "count-atoms", args: { count: "5" } }));
+    const shaped = expectRecord(
+      await core.dispatchRequest({
+        kind: "do",
+        step: "shape-atoms",
+        args: { coded: "6", stamped: "2024-01-01T00:00:00.000Z", epoch: "2024-01-01T00:00:00.000Z" },
+        use: [counted.step_record_id],
+      }),
+    );
+    expect(shaped.status === "ok" && shaped.result).toEqual({
+      piped: "5",
+      coded: "6",
+      stamped: "2024-01-01T00:00:00.000Z",
+      doubled: "10",
+      epoch: 1704067200000,
+    });
+  });
+
+  it("--args leaves a string alone where a union option accepts it, whichever option is declared first", async () => {
+    const { core } = await newCore();
+    const sorted = expectRecord(
+      await core.dispatchRequest({ kind: "do", step: "sort-atoms", args: { first: "5", second: "5" } }),
+    );
+    expect(sorted.status === "ok" && sorted.result).toEqual({ first: "string", second: "string" });
   });
 
   it("does not treat a --use-filled key as extra, but still rejects a genuinely extra key given alongside it", async () => {

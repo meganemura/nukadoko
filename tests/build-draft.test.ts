@@ -306,4 +306,38 @@ describe("buildDraft: a message with ANSI escapes embedded", () => {
     expect(result.featureText.includes(ESC)).toBe(false);
     expect(result.notices.some((notice) => notice.includes(ESC))).toBe(false);
   });
+
+  it("writes a docstring line that starts with three quotes so the reader gives the same text back", async () => {
+    const step = defineStep({
+      pattern: "a note is written",
+      description: "d",
+      args: z.object({ body: z.string() }),
+      returns: z.object({}),
+      run: () => ({}),
+    });
+    const vocabulary: Vocabulary = new Map([["write-note", typedEntry("write-note", step)]]);
+    const record = makeRecord("r-1", "write-note", { body: 'first\n"""quoted\nlast' });
+
+    const result = await draftFor({
+      orderedIds: ["r-1"],
+      recordsById: new Map([["r-1", record]]),
+      vocabulary,
+      bindings: buildStepBindings(vocabulary),
+    });
+
+    expect(result.featureText).toBe(
+      [
+        "Feature: (name me)",
+        "",
+        "  Scenario: (name me)",
+        "    * a note is written",
+        '      """',
+        "      first",
+        '      \\"\\"\\"quoted',
+        "      last",
+        '      """',
+        "",
+      ].join("\n"),
+    );
+  });
 });

@@ -1,3 +1,4 @@
+import { toStoredForm } from "../stored-form/stored-form.js";
 import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 
 // Responsibility: the one place a secret value actually becomes
@@ -46,9 +47,11 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //     are equal, and among derived forms that no raw value claimed, the
 //     alphabetically-first key name wins, so which name a step record
 //     shows is deterministic rather than dependent on iteration order;
-//   - a value with toJSON is redacted as the result of that call. Date and
-//     URL have no enumerable properties, so walking them with Object.entries
-//     stores {}. JSON.stringify would have stored the ISO string or the href;
+//   - the value is redacted in its stored form (src/stored-form): toJSON
+//     applied and a bigint as its decimal string. Date and URL have no
+//     enumerable properties, so walking them as objects would store {}
+//     where the record holds the ISO string or the href, and a href can
+//     carry a secret. A bigint's digits are redacted like any other string;
 //   - object keys are redacted exactly like string values are, and if two
 //     distinct keys end up identical after redaction, redact throws rather
 //     than picking one and dropping the other's subtree (see redactInner).
@@ -142,25 +145,7 @@ export function versionProbeWarning(environment: string, reason: string, secrets
   return `Warning: version probe for environment "${environment}" failed: ${redactString(reason, secrets)}`;
 }
 
-function hasToJson(value: unknown): value is { toJSON: () => unknown } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    typeof (value as { toJSON?: unknown }).toJSON === "function"
-  );
-}
-
 function redactInner(value: unknown, replacements: readonly Replacement[]): unknown {
-  // JSON.stringify calls toJSON before it enumerates properties. Date and
-  // URL have no enumerable properties, so Object.entries stores {}, while
-  // the record on disk is JSON and would have stored the ISO string or
-  // the href. Redact that JSON form, then keep walking it: the form is
-  // still data, and a href can carry a secret. A toJSON that returns its
-  // receiver would recurse forever, so that one falls through to the walk.
-  if (hasToJson(value)) {
-    const produced = value.toJSON();
-    if (produced !== value) return redactInner(produced, replacements);
-  }
   if (typeof value === "string") {
     return applyReplacements(value, replacements);
   }
@@ -200,10 +185,9 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
   return value;
 }
 
-/** Recursively redacts every string found anywhere inside `value`. A value
- * with toJSON is redacted as the result of that call, which is the form
- * JSON.stringify would store, and then the same way as any other value.
- * Returns a new value; `value` itself is never mutated. */
+/** Recursively redacts every string found anywhere inside the stored form
+ * of `value` (src/stored-form), and returns that redacted stored form.
+ * `value` itself is never mutated. */
 export function redact(value: unknown, secrets: SecretSet): unknown {
-  return redactInner(value, buildReplacements(secrets));
+  return redactInner(toStoredForm(value), buildReplacements(secrets));
 }
