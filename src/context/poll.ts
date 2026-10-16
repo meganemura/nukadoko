@@ -147,7 +147,7 @@ export interface PollOutcome {
  *
  * `fn`'s own throw is rethrown unchanged (`throw error`, not wrapped) — this
  * function only ever observes it to classify it as `"failed"`, never
- * swallows it (docs/spec.md's design principle: nothing breaks silently).
+ * swallows it, because a failure that vanishes cannot be traced.
  *
  * `onProgress`, when given, is called once per loop iteration, right after
  * `attempts` is incremented and before `fn` runs. A poll waiting on a value

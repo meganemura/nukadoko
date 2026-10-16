@@ -196,7 +196,7 @@ export interface RunDoOptions {
   argsJson: string;
   /** Carries login state across `do` calls as Playwright storageState;
    * `null` means a clean start — no session file is read or written
-   * (docs/spec.md "Sessions..."). */
+   * (docs/spec.md "Sessions, environments, secrets"). */
   session: string | null;
   /** `--env`'s value, or `null` when it was omitted. `null` is not the same
    * as the string `"default"`: it is what tells resolveEnvironment() not to

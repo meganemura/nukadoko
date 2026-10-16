@@ -232,7 +232,7 @@ function stripInlineComment(line: string): { readonly text: string; readonly unc
 /**
  * Parses `source` as one oath. `relativePath` is the feature uri stored
  * on the document and the feature name when the file has no `#` heading.
- * Throws `OathParseError` on a table or fence this slice cannot read.
+ * Throws `OathParseError` on a table or fence this parser cannot read.
  * A file with no steps is a document with no pickles, not an error: the
  * caller decides whether an empty oath is worth running.
  */

@@ -12,7 +12,7 @@ import type { ObservedCollector } from "./observed.js";
 // evidence is collected by the harness, not asserted by the step). `url` is
 // the one field that can carry a secret (e.g. a token in a query string): it
 // is redacted at the same point the line is built, before it ever reaches
-// disk — one of the three exits docs/spec.md "Secrets" requires redaction
+// disk — one of the three exits docs/spec.md "Sessions, environments, secrets" requires redaction
 // at, alongside record.json and `do`'s stdout copy (both handled by
 // cli/do.ts).
 //

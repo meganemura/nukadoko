@@ -171,10 +171,8 @@ export function waitForDaemonStartup(
 // to `os.tmpdir()`) has to fit inside, in bytes. Measured directly on
 // macOS, in this repository's own dev
 // environment, rather than assumed: `net.createServer().listen()` against a
-// generated path succeeds up to 104 bytes and fails with `EINVAL` at 105 —
-// the same "declaration and measurement answer different questions" split
-// this repository's own CLAUDE.md states for project config applies here to
-// a platform constant. Linux's own limit is wider (`sizeof(sun_path)` in
+// generated path succeeds up to 104 bytes and fails with `EINVAL` at 105.
+// The value is a measurement, not a declaration taken on trust. Linux's own limit is wider (`sizeof(sun_path)` in
 // the kernel's own `include/uapi/linux/un.h`) and is not measured here —
 // this package has no Linux machine to measure on — so it is cited from
 // that header instead and named as a citation, not presented as equally

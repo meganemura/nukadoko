@@ -183,10 +183,9 @@ function mapPickleSteps(
       startMs = Date.parse(stepRecord.started_at);
       stopMs = Date.parse(stepRecord.finished_at);
     } else {
-      // Same zero-width-pinned-to-previous-stop rule as
-      // src/report/allure/map-scenario.ts:483-496 (it would be a bug for
-      // the two emitters to show
-      // different timelines built from the same record).
+      // A step with no step record has no time of its own: it is
+      // zero-width at the previous step's stop, so the timeline stays in
+      // step order.
       startMs = previousStopMs;
       stopMs = previousStopMs;
     }

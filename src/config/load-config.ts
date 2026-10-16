@@ -97,8 +97,9 @@ function knownKeysAt(path: readonly PropertyKey[]): readonly string[] | undefine
 
 /**
  * Names the one known key an unrecognized key case-insensitively matches,
- * when there is exactly one — never an edit-distance guess (CLAUDE.md: "a
- * check that guesses is worse than no check"). A case-insensitive exact
+ * when there is exactly one, and never an edit-distance guess: a check that
+ * guesses is worse than no check, because a wrong suggestion teaches the
+ * reader to ignore the right ones. A case-insensitive exact
  * match is not a guess: the two strings already agree on every character,
  * only their case differs, so naming the known key states a fact about the
  * schema rather than proposing one candidate among several plausible ones.

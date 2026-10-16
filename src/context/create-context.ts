@@ -139,7 +139,7 @@ import { createUsedCollector } from "./used.js";
 // SecretSet itself, once, and hands both down — this module never reads an
 // envFile and never decides what is secret. `secrets` only ever reaches
 // http-log.ts's redaction; nothing here exposes it on `ctx`, matching
-// docs/spec.md "Secrets": redaction is applied by the executor, never
+// docs/spec.md "Sessions, environments, secrets": redaction is applied by the executor, never
 // controllable from a step's `run`.
 //
 // `resultOf`: the *lookup* — "does

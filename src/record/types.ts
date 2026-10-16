@@ -633,7 +633,7 @@ export interface StepRecordBase {
    * environment that may or may not itself be configured. */
   environment: string;
   /** The `--session` name this run carried, or `null` when none was given
-   * (docs/spec.md "Sessions...": no `--session` means a clean start, never
+   * (docs/spec.md "Sessions, environments, secrets": no `--session` means a clean start, never
    * an implicit shared session). */
   session: string | null;
   /** This execution's own 1-based position in a live session's sequence
