@@ -174,6 +174,8 @@ interface SessionStopArgs {
 interface InitArgs {
   baseUrl?: string;
   featuresDir?: string;
+  allure?: boolean;
+  env?: boolean;
 }
 
 interface ScaffoldArgs {
@@ -710,6 +712,14 @@ export async function runCli(
           type: "string",
           describe: "featuresDir to use instead of the default, recorded in the generated config",
         })
+        .option("allure", {
+          type: "boolean",
+          describe: "turn the Allure emitter on in the generated config and write allurerc.mjs",
+        })
+        .option("env", {
+          type: "boolean",
+          describe: "add .env, .env.*, and !.env.example to .gitignore, for a project that keeps env files",
+        })
         .check(rejectRepeatedFlags(["base-url", "features-dir"])) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
@@ -717,6 +727,8 @@ export async function runCli(
         rootDir,
         baseUrl: args.baseUrl ?? null,
         featuresDir: args.featuresDir ?? null,
+        allure: args.allure ?? false,
+        env: args.env ?? false,
         stdout,
         stderr,
       });

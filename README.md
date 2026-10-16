@@ -20,9 +20,19 @@ Node 20+ (`package.json`'s `engines.node` is `">=20"`).
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .gitignore entries
+npx nuka init          # writes nukadoko.config.ts (or .mts, see below), features/steps/, .gitignore, and a package.json script
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
+
+`nuka init` sets up a CLI or API project. It adds `.nukadoko/` to
+`.gitignore` and `"test:scenarios": "nuka check && nuka run features"` to
+the `package.json` scripts, unless a script by that name already exists.
+`npm run test:scenarios` is then the one command a person or CI runs.
+When `tsconfig.json` has an `include` that leaves out `features/` or the
+config file, `init` prints one line naming the entries to add. Two flags
+add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
+(see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
+`!.env.example` to `.gitignore` for a project that keeps env files.
 
 nukadoko is a devDependency. It ships its TypeScript source alongside
 `dist/`, so stack traces point to the actual code. An agent reading
@@ -50,10 +60,11 @@ of the two paths above. Leaving it out is still supported (see the CommonJS
 paragraph above). However, manually writing `nukadoko.config.ts` in such a
 project fails to import. The error names that file and the cause, and says
 to rename it to `nukadoko.config.mts`. `nuka init` writes
-`nukadoko.config.mts` instead. You do not need to add `.nukadoko/`, `.env`,
-or `.env.*` to `.gitignore` yourself because `nuka init` does that, and it
-leaves `.env.example` tracked. Traces and screenshots
-inside it are not redacted, so the state directory contains sensitive data.
+`nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
+`.gitignore` yourself because `nuka init` does that. `nuka init --env` also
+adds `.env` and `.env.*`, and leaves `.env.example` tracked. Traces and
+screenshots inside the state directory are not redacted, so it contains
+sensitive data.
 
 </details>
 
@@ -398,9 +409,10 @@ running our own stream through `@cucumber/junit-xml-formatter`, not just
 asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
 [Messages emitter](docs/spec.md#messages-emitter).
 
-Both emitters run with zero configuration; there is no flag to turn
-either on. The `allure` and `messages` keys in `nukadoko.config.ts`
-only move where their output lands, from the defaults
+Both emitters are off by default. The key turns one on: `allure: {}` or
+`messages: {}` in `nukadoko.config.ts`, and `nuka init --allure` writes
+the first. Inside the key, `allure.resultsDir` and `messages.output` move
+where the output lands, from the defaults
 `.nukadoko/export/allure-results` and `.nukadoko/export/messages.ndjson`.
 
 Since nukadoko writes results and never HTML, rendering them is Allure 3's
@@ -420,7 +432,7 @@ look valid at a glance. This problem occurs after someone downloads a CI
 report artifact and opens `index.html` locally. Serve the report with
 `npx allure open` or `npx allure watch` instead.
 
-`nuka init` writes `allurerc.mjs` at the project root (skipped, with a
+`nuka init --allure` writes `allurerc.mjs` at the project root (skipped, with a
 message, if a project already has one under any name Allure auto-detects);
 without it, every nukadoko failure lands in Allure 3's one built-in
 "Product errors" category instead of one of the seven `error.kind` ones. A
@@ -438,7 +450,7 @@ Use `watch` while iterating. Leave it running in one terminal and run
 `nuka run` in another. Temporary scenario snapshots update the report
 after each completed step. The final result replaces their live view when
 the scenario ends. `watch` serves on a random port (`--port` selects one)
-and opens a browser only with `--open`. `nuka init` creates
+and opens a browser only with `--open`. `nuka init --allure` creates
 `.nukadoko/export/allure-results/` so `watch` can start before the first
 `nuka run`. See [Allure emitter](docs/spec.md#allure-emitter) for the
 snapshot mechanics and the live retry display.

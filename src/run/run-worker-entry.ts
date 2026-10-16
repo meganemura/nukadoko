@@ -6,6 +6,7 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { emitterTargets } from "../config/emitter-targets.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
@@ -185,10 +186,10 @@ async function main(): Promise<void> {
 
   const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
 
-  const allureResultsDirRel = config.allure?.resultsDir ?? path.join(config.stateDir, "export", "allure-results");
+  const allureResultsDirRel = emitterTargets(config).allureResultsDir;
 
   let allureEmitter: AllureEmitter | null = null;
-  if (hasPickles) {
+  if (hasPickles && allureResultsDirRel !== null) {
     try {
       allureEmitter = createAllureEmitter({
         resultsDir: path.resolve(rootDir, allureResultsDirRel),

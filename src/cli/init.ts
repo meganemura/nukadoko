@@ -6,6 +6,7 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
+import { tsconfigIncludeHint } from "./tsconfig-include.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -30,9 +31,14 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //     since a project that hits this without the notice would only see the
 //     step files it later writes fail to import, with no link back to why.
 //   - Otherwise, generate the config, the (empty) steps directory, the
-//     `.gitignore` entry, and `allurerc.mjs`, printing each path actually
-//     written to stdout as it happens (diagnostics go to stderr — an agent
-//     parses stdout, so it carries only paths).
+//     `.gitignore` entry, and the package.json `test:scenarios` script,
+//     printing each path actually written to stdout as it happens
+//     (diagnostics go to stderr: an agent parses stdout, so it carries
+//     only paths). The default targets a CLI or API project: the Allure
+//     and messages emitters are off, so nothing Allure-shaped is written
+//     unless `--allure` asks for it, and the `.env*` ignore lines are
+//     written only under `--env`. Every adopter of the earlier
+//     always-written set deleted those files by hand.
 //   - Finish with a self-check: load the config just written and discover
 //     its vocabulary for real, the same two calls `nuka steps`/`nuka do`
 //     make. A failure here is reported (stderr + exit 1) but the generated
@@ -64,6 +70,10 @@ export interface RunInitOptions {
   baseUrl: string | null;
   /** `--features-dir`'s value, or `null` when the flag was omitted. */
   featuresDir: string | null;
+  /** `--allure`: write `allurerc.mjs` and turn the Allure emitter on. */
+  allure: boolean;
+  /** `--env`: ignore `.env` files, for a project that keeps one. */
+  env: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -101,17 +111,17 @@ function normalizeFeaturesDirArg(rootDir: string, raw: string): string | null {
 // secrets, fixtures, and the rest) already has its own row in
 // docs/spec.md's key table; pointing there, rather than repeating any of
 // them here, is the one form of this comment that cannot go stale when
-// that table gains a key. The two example keys below are commented out
-// and only added when neither `--base-url` nor `--features-dir` filled
-// the object, so a flag-driven field is never shown twice.
+// that table gains a key.
 const CONFIG_KEYS_COMMENT =
   '  // Every config key nukadoko reads, one line each: docs/spec.md, "Sessions, environments, secrets"';
-const EXAMPLE_KEY_LINES = [
-  '  // baseURL: "https://example.com",',
-  '  // environments: { staging: { baseURL: "https://staging.example.com" } },',
-];
 
-function configTemplate(baseUrl: string | null, featuresDir: string | null): string {
+interface ConfigFields {
+  baseUrl: string | null;
+  featuresDir: string | null;
+  allure: boolean;
+}
+
+function configTemplate({ baseUrl, featuresDir, allure }: ConfigFields): string {
   const fields: string[] = [];
   if (featuresDir !== null) {
     fields.push(`  featuresDir: ${JSON.stringify(featuresDir)},`);
@@ -119,8 +129,10 @@ function configTemplate(baseUrl: string | null, featuresDir: string | null): str
   if (baseUrl !== null) {
     fields.push(`  baseURL: ${JSON.stringify(baseUrl)},`);
   }
-  const exampleLines = fields.length === 0 ? EXAMPLE_KEY_LINES : [];
-  const body = `{\n${[CONFIG_KEYS_COMMENT, ...exampleLines, ...fields].join("\n")}\n}`;
+  if (allure) {
+    fields.push("  allure: {},");
+  }
+  const body = `{\n${[CONFIG_KEYS_COMMENT, ...fields].join("\n")}\n}`;
   return [
     'import { defineConfig } from "nukadoko";',
     "",
@@ -287,8 +299,62 @@ async function ensureAllurercFile(
   return "allurerc.mjs";
 }
 
+const SCENARIOS_SCRIPT = "test:scenarios";
+
+/**
+ * Adds `"test:scenarios": "nuka check && nuka run <featuresDir>"` to
+ * package.json's scripts, the line every early adopter wrote by hand, so
+ * `npm run test:scenarios` is the one command a person or CI needs. A
+ * script already under that name is the project's own choice and is left
+ * alone. The file keeps its own indentation and trailing newline, since a
+ * reformatted package.json is a diff nobody asked for. Returns whether the
+ * file was written; a missing or unparseable package.json gets a stderr
+ * line instead, because the script is what the rest of the setup assumes.
+ */
+async function ensureScenariosScript(
+  rootDir: string,
+  featuresDirPosix: string,
+  stderr: WritableSink,
+): Promise<boolean> {
+  // Quoted only when it has to be: double quotes read the same under sh
+  // and cmd.exe, which is what npm runs a script with on Windows.
+  const target = /^[A-Za-z0-9_./-]+$/.test(featuresDirPosix) ? featuresDirPosix : JSON.stringify(featuresDirPosix);
+  const command = `nuka check && nuka run ${target}`;
+  const packageJsonPath = path.join(rootDir, "package.json");
+  let text: string;
+  let parsed: unknown;
+  try {
+    text = await readFile(packageJsonPath, "utf8");
+    parsed = JSON.parse(text);
+  } catch {
+    stderr.write(
+      `No readable package.json, so no ${SCENARIOS_SCRIPT} script was added; run "${command}" directly\n`,
+    );
+    return false;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    stderr.write(`package.json is not a JSON object, so no ${SCENARIOS_SCRIPT} script was added\n`);
+    return false;
+  }
+  const manifest = parsed as { scripts?: unknown };
+  const scriptsValue = manifest.scripts ?? {};
+  if (typeof scriptsValue !== "object" || scriptsValue === null || Array.isArray(scriptsValue)) {
+    stderr.write(`package.json's scripts is not a JSON object, so no ${SCENARIOS_SCRIPT} script was added\n`);
+    return false;
+  }
+  const scripts = scriptsValue as Record<string, unknown>;
+  if (SCENARIOS_SCRIPT in scripts) {
+    return false;
+  }
+  manifest.scripts = { ...scripts, [SCENARIOS_SCRIPT]: command };
+  const indent = /^\{\r?\n([ \t]+)"/.exec(text)?.[1] ?? "  ";
+  const trailing = text.endsWith("\n") ? "\n" : "";
+  await writeFile(packageJsonPath, `${JSON.stringify(manifest, null, indent)}${trailing}`);
+  return true;
+}
+
 export async function runInit(options: RunInitOptions): Promise<number> {
-  const { rootDir, baseUrl, featuresDir, stdout, stderr } = options;
+  const { rootDir, baseUrl, featuresDir, allure, env, stdout, stderr } = options;
 
   const existingConfigPaths = CONFIG_FILE_NAMES.map((fileName) => path.join(rootDir, fileName)).filter(
     (candidate) => existsSync(candidate),
@@ -317,9 +383,10 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   }
 
   const defaults = configSchema.parse({});
-  const stepsDirRelative = path.join(featuresDirOverride ?? defaults.featuresDir, "steps");
+  const featuresDirRelative = featuresDirOverride ?? defaults.featuresDir;
+  const stepsDirRelative = path.join(featuresDirRelative, "steps");
 
-  await writeFile(configPath, configTemplate(baseUrl, featuresDirOverride));
+  await writeFile(configPath, configTemplate({ baseUrl, featuresDir: featuresDirOverride, allure }));
   stdout.write(`${configFileName}\n`);
   if (isCjs) {
     stderr.write(
@@ -330,8 +397,11 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   await mkdir(path.join(rootDir, stepsDirRelative), { recursive: true });
   stdout.write(`${stepsDirRelative}\n`);
 
-  // .env/.env.* are ignored because a tracked env file that matches HEAD is
-  // plain configuration, not a secret source (src/secrets/classify-env-files.ts):
+  // `.env` files are ignored only under `--env`: three of eight early
+  // adopters removed these lines, since a CLI or API project often keeps no
+  // env file at all. A project that does keep one asks for them. They are
+  // ignored because a tracked env file that matches HEAD is plain
+  // configuration, not a secret source (src/secrets/classify-env-files.ts):
   // those committed values are read into ctx.env like any other config and
   // are not redacted from a run's own records. An uncommitted edit is a
   // secret source. Committing .env by mistake is still the path that writes
@@ -341,38 +411,48 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   // only re-includes a path an earlier pattern already excluded.
   const gitignoreWritten = await ensureGitignoreEntries(rootDir, [
     `${defaults.stateDir}/`,
-    ".env",
-    ".env.*",
-    "!.env.example",
+    ...(env ? [".env", ".env.*", "!.env.example"] : []),
   ]);
   if (gitignoreWritten) {
     stdout.write(".gitignore\n");
   }
 
-  // Allure's own CLI (`watch`/`generate`) refuses to start against a
-  // results directory that doesn't exist yet, but an empty one is enough
-  // (verified against allure 3.14.3: `watch` serves and `generate` produces
-  // an empty report). Creating it here — always the schema default, since
-  // `--features-dir` never touches `stateDir` — lets `allure watch` already
-  // be running before the first `nuka run`, instead of requiring one run to
-  // exist first just to make the directory appear.
-  const allureResultsDirRelative = path.join(defaults.stateDir, "export", "allure-results");
-  await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
-  stdout.write(`${allureResultsDirRelative}\n`);
+  const featuresDirPosix = featuresDirRelative.split(path.sep).join("/");
+  if (await ensureScenariosScript(rootDir, featuresDirPosix, stderr)) {
+    stdout.write("package.json\n");
+  }
 
-  // A sibling of allure-results/, in the same export/ directory — a file,
-  // not a directory, and never created here: Allure's own history.appendHistory
-  // creates its own parent directory on first write (@allurereport/core's own
-  // history.js), and creating an empty placeholder ahead of that would only
-  // risk the two disagreeing about whether "empty" and "no history yet" are
-  // the same thing. Posix-joined (not `path.join`) since this becomes a
-  // string literal inside a generated .mjs file, which should read the same
-  // on every host OS regardless of which one generated it.
-  const historyPathRelative = [defaults.stateDir, "export", "allure-history.jsonl"].join("/");
+  if (allure) {
+    // Allure's own CLI (`watch`/`generate`) refuses to start against a
+    // results directory that doesn't exist yet, but an empty one is enough
+    // (verified against allure 3.14.3: `watch` serves and `generate`
+    // produces an empty report). Creating it here, always at the schema
+    // default since `--features-dir` never touches `stateDir`, lets
+    // `allure watch` already be running before the first `nuka run`.
+    const allureResultsDirRelative = path.join(defaults.stateDir, "export", "allure-results");
+    await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
+    stdout.write(`${allureResultsDirRelative}\n`);
 
-  const allurercWritten = await ensureAllurercFile(rootDir, historyPathRelative, stderr);
-  if (allurercWritten !== null) {
-    stdout.write(`${allurercWritten}\n`);
+    // A sibling of allure-results/, in the same export/ directory: a file,
+    // not a directory, and never created here. Allure's own
+    // history.appendHistory creates its own parent directory on first write
+    // (@allurereport/core's own history.js), and creating an empty
+    // placeholder ahead of that would only risk the two disagreeing about
+    // whether "empty" and "no history yet" are the same thing.
+    // Posix-joined (not `path.join`) since this becomes a string literal
+    // inside a generated .mjs file, which should read the same on every
+    // host OS regardless of which one generated it.
+    const historyPathRelative = [defaults.stateDir, "export", "allure-history.jsonl"].join("/");
+
+    const allurercWritten = await ensureAllurercFile(rootDir, historyPathRelative, stderr);
+    if (allurercWritten !== null) {
+      stdout.write(`${allurercWritten}\n`);
+    }
+  }
+
+  const hint = await tsconfigIncludeHint(rootDir, featuresDirPosix, configFileName);
+  if (hint !== null) {
+    stderr.write(`${hint}\n`);
   }
 
   try {

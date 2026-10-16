@@ -333,7 +333,7 @@ describe("nuka run applies retention", () => {
     rootDir = await copyFixtureToTempDir("accept-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 } });\n',
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 }, allure: {}, messages: {} });\n',
     );
   });
 
@@ -371,7 +371,7 @@ describe("nuka run applies retention", () => {
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
       'import { defineConfig } from "./nukadoko-shim.js";\n\n' +
-        'export default defineConfig({ retention: { runs: 1 }, messages: { output: "reports/messages.ndjson" } });\n',
+        'export default defineConfig({ retention: { runs: 1 }, allure: {}, messages: { output: "reports/messages.ndjson" } });\n',
     );
     // A separate process: this one has already loaded and kept the first config.
     const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -400,7 +400,7 @@ describe("nuka run --concurrency applies retention", () => {
     rootDir = await copyFixtureToTempDir("run-concurrency-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 } });\n',
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 }, allure: {}, messages: {} });\n',
     );
   });
 

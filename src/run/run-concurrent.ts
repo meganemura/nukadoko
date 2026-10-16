@@ -104,8 +104,10 @@ export interface RunConcurrentOptions {
   readonly repeat: number;
   readonly selected: SelectedScenarios;
   readonly flatPickles: readonly { readonly feature: SelectedFeature; readonly pickle: Pickle }[];
-  readonly allureResultsDirRel: string;
-  readonly messagesOutputRel: string;
+  /** `null`: the emitter is off (src/config/emitter-targets.ts). */
+  readonly allureResultsDirRel: string | null;
+  /** `null`: the emitter is off. */
+  readonly messagesOutputRel: string | null;
   /** Hears every scenario record the parent forwards, so the parent writes
    * one run summary for the whole run (src/run/run-summary.ts). */
   readonly onRecord: (record: ScenarioRecord) => void;
@@ -166,7 +168,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   }
 
   let allureEmitter: AllureEmitter | null = null;
-  if (hasPickles) {
+  if (hasPickles && allureResultsDirRel !== null) {
     try {
       const resultsDir = path.resolve(rootDir, allureResultsDirRel);
       allureEmitter = createAllureEmitter({
@@ -186,7 +188,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   }
 
   let messagesEmitter: MessagesEmitter | null = null;
-  if (hasPickles) {
+  if (hasPickles && messagesOutputRel !== null) {
     try {
       const output = path.resolve(rootDir, messagesOutputRel);
       messagesEmitter = createMessagesEmitter({

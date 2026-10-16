@@ -684,6 +684,29 @@ just until 0.1.
   way two identical names already were: the second gets `-2` before the
   extension. A step that attached a harness file name has to pick a
   different one. See docs/upgrading.md.
+- **The Allure and messages emitters are off until their config key is present.**
+  `nuka run` wrote Allure results and two messages NDJSON files on every
+  run, twelve files for one two-step scenario, and every early adopter
+  deleted the Allure files `nuka init` wrote. `allure: {}` or `messages: {}` in `nukadoko.config.ts` now turns
+  each on; `allure.resultsDir` and `messages.output` keep their meaning
+  inside it, so a project that already set either changes nothing. The
+  output-location lines on stderr name only an emitter that is on.
+  Retention and `nuka clean --export` still remove what earlier runs wrote.
+  See docs/upgrading.md.
+- **`nuka init` sets up a CLI or API project and wires it into package.json.**
+  It writes `nukadoko.config.ts` with one comment line, `features/steps/`,
+  and `.nukadoko/` in `.gitignore`, then adds
+  `"test:scenarios": "nuka check && nuka run features"` (the
+  `--features-dir` value in place of `features`) to `package.json` scripts
+  unless a script of that name exists, keeping the file's indentation.
+  With no `package.json`, stderr says no script was added. When
+  `tsconfig.json` has an `include` that leaves out the steps directory or
+  the config file, one stderr line names the entries to add; a tsconfig
+  with no `include` of its own, or one that does not parse, gets no line.
+  `--allure` writes `allurerc.mjs`, creates the results directory, and puts
+  `allure: {}` in the config; without it none of the three happen. `--env`
+  adds `.env`, `.env.*`, and `!.env.example` to `.gitignore`, which used to
+  happen every time. stdout still lists only the paths written.
 
 ## 0.14.1 — 2026-10-10
 

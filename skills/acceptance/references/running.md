@@ -105,14 +105,14 @@ Commit the record `accept` wrote.
 
 ## What a run writes
 
-Every `nuka run` also writes two report streams, both with zero
-configuration and no flag to turn either on: Allure results under
-`.nukadoko/export/allure-results/`, and a cucumber-messages NDJSON stream
-under `.nukadoko/export/messages.ndjson`. `allure.resultsDir` and
-`messages.output` in `nukadoko.config.ts` only relocate where each writes;
-neither ever needs enabling. `nuka run`'s own stderr names every path it
-actually wrote at the end of the run, so where output landed is never a
-guess.
+`nuka run` can also write two report streams, each off until its key is
+in `nukadoko.config.ts`: `allure: {}` writes Allure results under
+`.nukadoko/export/allure-results/`, and `messages: {}` writes a
+cucumber-messages NDJSON stream under `.nukadoko/export/messages.ndjson`.
+`nuka init --allure` writes the first key. `allure.resultsDir` and
+`messages.output` inside them move where each writes. `nuka run`'s own
+stderr names every path it actually wrote at the end of the run, so where
+output landed is never a guess.
 
 Open the two for different reasons. Allure is nukadoko's own dashboard:
 every step's trace, HTTP log, and validated result, plus a per-step

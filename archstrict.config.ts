@@ -182,7 +182,14 @@ export default {
     {
       name: "config",
       glob: "src/config/**",
-      surface: ["define-config.ts", "errors.ts", "load-config.ts", "module-kind.ts", "schema.ts"],
+      surface: [
+        "define-config.ts",
+        "emitter-targets.ts",
+        "errors.ts",
+        "load-config.ts",
+        "module-kind.ts",
+        "schema.ts",
+      ],
     },
     {
       name: "context",

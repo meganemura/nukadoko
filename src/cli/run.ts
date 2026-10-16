@@ -4,6 +4,7 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
+import { emitterTargets, messagesOutputPath } from "../config/emitter-targets.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
@@ -298,6 +299,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   } finally {
     for (const unregister of unregisters) await unregister();
   }
+}
+
+/** The output-location rows for the emitters that are on; a row for one
+ * that is off would name a path nothing wrote. The messages row names this
+ * run's own suffixed file, which a concurrent invocation cannot replace. */
+function exportLocations(
+  allureResultsDirRel: string | null,
+  messagesOutputRel: string | null,
+  runId: string,
+): Array<{ label: string; relativePath: string; kind: "dir" | "file" }> {
+  return [
+    ...(allureResultsDirRel === null ? [] : [{ label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const }]),
+    ...(messagesOutputRel === null
+      ? []
+      : [{ label: "messages", relativePath: messagesRunOutputPath(messagesOutputRel, runId), kind: "file" as const }]),
+  ];
 }
 
 async function runRunInner(options: RunRunOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
@@ -635,7 +652,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
           stateDir: config.stateDir,
           policy: config.retention,
           now: new Date(),
-          messagesOutputRel,
+          messagesOutputRel: messagesOutputPath(config),
           liveSessions: await findLiveSessions(rootDir, config.stateDir),
           currentRunId: runId,
         });
@@ -707,9 +724,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     // run-concurrent.ts) and the unchanged path right after it need the
     // exact same resolved value for the output-location line near this
     // function's own `return`.
-    const allureResultsDirRel =
-      config.allure?.resultsDir ?? path.join(config.stateDir, "export", "allure-results");
-    const messagesOutputRel = config.messages?.output ?? path.join(config.stateDir, "export", "messages.ndjson");
+    const { allureResultsDir: allureResultsDirRel, messagesOutput: messagesOutputRel } = emitterTargets(config);
 
     // `--concurrency` above 1 has two disqualifying cases, each dropping it
     // straight back to 1 with a one-line, `--quiet`-proof reason (docs/
@@ -773,16 +788,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
               },
             ]
           : []),
-        ...(flatPickles.length > 0
-          ? [
-              { label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const },
-              {
-                label: "messages",
-                relativePath: messagesRunOutputPath(messagesOutputRel, runId),
-                kind: "file" as const,
-              },
-            ]
-          : []),
+        ...(flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
         ...summaryLocation(runSummaryPath),
       ]);
       writeRunSummary(stderr, {
@@ -875,7 +881,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       // `begin()` are wrapped together, and why a failure here never fails
       // the run.
       let allureEmitter: AllureEmitter | null = null;
-      if (hasPickles) {
+      if (hasPickles && allureResultsDirRel !== null) {
         try {
           const resultsDir = path.resolve(rootDir, allureResultsDirRel);
           allureEmitter = createAllureEmitter({
@@ -905,7 +911,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       // See this file's own header for the gate, the try/catch shape, and
       // the output-file truncate semantics.
       let messagesEmitter: MessagesEmitter | null = null;
-      if (hasPickles) {
+      if (hasPickles && messagesOutputRel !== null) {
         try {
           const output = path.resolve(rootDir, messagesOutputRel);
           messagesEmitter = createMessagesEmitter({
@@ -1214,16 +1220,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
               },
             ]
           : []),
-        ...(hasPickles
-          ? [
-              { label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const },
-              {
-                label: "messages",
-                relativePath: messagesRunOutputPath(messagesOutputRel, runId),
-                kind: "file" as const,
-              },
-            ]
-          : []),
+        ...(hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
         ...summaryLocation(runSummaryPath),
       ]);
       writeRunSummary(stderr, {

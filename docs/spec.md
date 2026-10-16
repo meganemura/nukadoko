@@ -106,7 +106,7 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
 | Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote, its verdict, its Markdown summary) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
 | Sign-off | `<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
-| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter) | the tool | no | with the run that wrote it | other tools |
+| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter), each only while its emitter is on | the tool | no | with the run that wrote it | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
 The table names files. The distinctions between its columns answer two
@@ -2112,13 +2112,10 @@ plus `--env <name>` when the run was given one, quoted for a POSIX shell
 where a word needs it. These lines appear for serial and concurrent runs,
 and `--quiet` keeps them.
 
-The paths line matters even when nothing was configured: `allure` and
-`messages` output already exist with zero configuration, and their config
-keys only relocate where each writes. A key sitting in a config file reads as
-something switched on, not something already running by default, and that
-misreading is exactly what printing every actual location, every time,
-removes: a project can move its output without ever discovering it already
-had some.
+The paths line names an `allure` or `messages` location only while that
+emitter is on, which is while its config key is present (see "Allure
+emitter" and "Messages emitter"). A line for an emitter that wrote nothing
+would send a reader to a path that does not exist.
 
 A scenario record's own `browser` field (`{ "type": "firefox", "version":
 "133.0" }`) names the engine and version this particular run actually
@@ -2910,8 +2907,8 @@ missing file.
 | `fixtures` | user-defined fixtures (see "Fixtures") |
 | `fixtureTimeout` | default setup/teardown timeout per fixture instance, in ms (see "Fixtures") |
 | `stepTimeout` | how long a typed step's own `run` may take, in ms (default 1,200,000; `defineStep({ timeout })` overrides it, compat steps are not covered) |
-| `allure` | only `resultsDir` (see "Allure emitter") |
-| `messages` | only `output` (see "Messages emitter") |
+| `allure` | turns the Allure emitter on when present; only `resultsDir` inside (see "Allure emitter") |
+| `messages` | turns the messages emitter on when present; only `output` inside (see "Messages emitter") |
 
 `additionalFeatureDirs` defaults to `[]` and has a different purpose from
 `featuresDir`. `featuresDir` defines the set that runs unattended. With no
@@ -3096,7 +3093,7 @@ for separate purposes (see "Artifacts"):
 - `export/allure-results/`: the emitter's output, holding the same runs
   `records/` holds, since a run's files leave with the run (see
   "Artifacts"), and safe to delete whenever a fresh Allure launch is
-  wanted; `init` also
+  wanted; `init --allure` also
   creates it empty, since Allure's own CLI refuses to start against a
   missing directory but accepts an empty one, letting `allure watch` already
   be running before the first `nuka run`
@@ -3456,17 +3453,19 @@ names the source scenario record instead.
 
 `nuka run` writes one Allure test result for each scenario pickle.
 The emitter uses the Allure 2 file format, which Allure 2 and Allure 3 can read.
-By default, nukadoko writes results to `.nukadoko/export/allure-results/`.
+The emitter is off by default and on while the config has an `allure` key: `allure: {}` turns it on, and `nuka init --allure` writes that key.
+Most projects that run nukadoko beside their unit tests read no Allure report, and a two-step scenario used to leave a dozen export files behind for nobody.
+When on, nukadoko writes results to `.nukadoko/export/allure-results/`.
 nukadoko does not render HTML.
 
 `allure.resultsDir` moves the output to another path.
 A relative path is resolved against the project root, and an absolute path is used as given.
 `nuka clean` removes that directory when it stays inside the project, unless the directory is a parent of the state directory.
 It refuses the command when the path resolves to the project root, to a path outside the project, or to a parent of the state directory.
-The emitter has no enable flag and runs when an invocation selects at least one pickle.
+There is no CLI flag: a report a project reads belongs in its config, not in each invocation. When on, the emitter runs when an invocation selects at least one pickle.
 It is skipped, the same reason BeforeAll/AfterAll are, when an invocation selects zero pickles: no `allure-results/` directory is created at all in that case.
 `categories.json` and `environment.properties` are written once, at the very start of a run, before the first step runs.
-`nuka init` creates the default directory so `allure watch` can start before the first run.
+`nuka init --allure` creates the default directory so `allure watch` can start before the first run.
 
 Each result uses the pickle name and stores its Gherkin steps in `steps[]`.
 A step name preserves the Gherkin keyword and its AST whitespace, including `And`.
@@ -3510,7 +3509,7 @@ A wrong link is worse than no link, and every scheme tried produced one, so a st
 
 The `historyPath` setting makes the scenario history visible. It belongs in `allurerc.mjs`, which configures Allure 3, not nukadoko. Without this setting, Allure 3 does not build history for `generate`, `watch`, or `report`, even with a stable scenario `historyId`.
 A project with a perfectly stable identity and no `historyPath` still sees no trend, no regressed/fixed transition, no flaky detection, and nothing in the report itself points at a missing config key as the reason.
-`nuka init` writes it unconditionally into the `allurerc.mjs` it generates, pointing at `.nukadoko/export/allure-history.jsonl`, kept beside the disposable `allure-results/` directory rather than inside it, so clearing results between runs never discards it.
+`nuka init --allure` writes it unconditionally into the `allurerc.mjs` it generates, pointing at `.nukadoko/export/allure-history.jsonl`, kept beside the disposable `allure-results/` directory rather than inside it, so clearing results between runs never discards it.
 [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) carries the same field for a project not using `nuka init`.
 Setting `historyPath` never makes a step entry's own history visible: a step entry has no identity to build one from in the first place.
 
@@ -3562,7 +3561,7 @@ The two Allure generations turn that into a category by different paths, and the
 - **Allure 3** does not read `categories.json` from a results directory during `allure generate` or `allure report`.
   Allure 3 gets categories only from its configuration and matches them against result labels.
   `nukadoko.failure` supplies that label.
-  `nuka init` writes `allurerc.mjs` at the project root with seven label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the emitter itself uses.
+  `nuka init --allure` writes `allurerc.mjs` at the project root with seven label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the emitter itself uses.
   Dropped at a project's root it is picked up automatically (Allure 3 auto-detects `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory, no `--config` flag needed).
   `nuka init` checks all six extensions first and writes nothing, naming the file it found on stderr, when a project already has one.
   Without any of them, every nukadoko failure lands in Allure 3's one built-in "Product errors" category instead.
@@ -3657,14 +3656,16 @@ The Allure emitter is where nukadoko's measurement surplus becomes visible, auto
 
 For each invocation, `nuka run` writes one cucumber messages stream through
 `@cucumber/messages`. The stream uses NDJSON with one envelope per line and
-defaults to `.nukadoko/export/messages.ndjson`. `messages.output` in
+defaults to `.nukadoko/export/messages.ndjson`. The emitter is off by
+default and on while the config has a `messages` key, so `messages: {}`
+turns it on. `messages.output` in
 `nukadoko.config.ts` can set another path. A relative path is resolved
 against the project root, and an absolute path is used as given. `nuka clean` removes
 that file, and the run-id-suffixed files beside it, when the path stays
 inside the project, unless the path is a parent of the state directory. It refuses
 the command when the path resolves to the project root, to a path outside
 the project, or to a parent of the state directory. Like Allure, this
-emitter has no `enabled` or CLI flag. It runs unless the invocation selects
+emitter has no CLI flag. When on, it runs unless the invocation selects
 zero pickles.
 
 - One run produces one stream in one file, and concurrent invocations use
@@ -4046,7 +4047,8 @@ The npm package is `nukadoko`. The one command it installs is `nuka`.
 
 ```
 nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
-                              execute scenarios; step records + allure-results.
+                              execute scenarios; step records, plus the Allure
+                              and messages exports their config keys turn on.
                               --env targets a named environment ("default"
                               when omitted); --session carries login state
                               across calls via a named session.
@@ -4258,8 +4260,17 @@ nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
 nuka session stop <name> [--env <name>]
                               persist the session's storageState, then end
                               its process
-nuka init [--base-url <url>] [--features-dir <dir>]
-                              set up a project; ends with a self-check
+nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
+                              set up a project; ends with a self-check.
+                              Writes nukadoko.config.ts, <featuresDir>/steps/,
+                              .nukadoko/ in .gitignore, and a package.json
+                              "test:scenarios" script ("nuka check && nuka run
+                              <featuresDir>") unless one exists; prints one
+                              stderr line when tsconfig.json's include leaves
+                              out the steps or the config. --allure turns the
+                              Allure emitter on and writes allurerc.mjs;
+                              --env adds .env, .env.*, !.env.example to
+                              .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 nuka mcp-tools [--json] -- <command> [args...]

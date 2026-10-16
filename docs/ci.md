@@ -16,6 +16,12 @@ every push and pull request (seconds, no browser), `nuka run` after it
 passes (the gate that actually executes), and `nuka tend` on a weekly
 schedule, since nothing else here reminds anyone to run it.
 
+A project set up with `nuka init` already has `npm run test:scenarios`,
+which runs `nuka check` and then `nuka run features`. One job that runs it
+is the shortest form of this workflow. The file below splits the two
+commands into two jobs, so a failed check stops the run before a browser
+is installed.
+
 ```yaml
 name: nukadoko
 
@@ -269,7 +275,9 @@ equivalent, confirming each names the commit its comment claims and
 nothing else. Read the workflow as a starting shape to adapt, not as a
 file this project has watched go green on a real runner.
 
-It also says nothing about where the Allure output goes after the job.
+It also says nothing about where the Allure output goes after the job,
+for a project that turns the Allure emitter on (`allure: {}`; it is off by
+default).
 Traces and screenshots are not redacted (see "Sessions, environments,
 secrets" in [docs/spec.md](spec.md#sessions-environments-secrets)): the
 `http.jsonl` beside them has secrets replaced, but a trace holds the

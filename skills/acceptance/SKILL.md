@@ -58,8 +58,14 @@ before every command is its own way of being hard to follow.
 
 ## Where to start
 
-If the project is not initialized, run `nuka init` first. A CommonJS
-project (no `"type": "module"` in `package.json`) gets
+If the project is not initialized, run `nuka init` first. It writes the
+config, `features/steps/`, a `.gitignore` entry, and a `test:scenarios`
+script in `package.json`, so `npm run test:scenarios` runs `nuka check`
+and then `nuka run features`. If it prints a `tsconfig.json` line, add the
+entries it names. Add `--allure` only when someone reads Allure reports,
+and `--env` when the project keeps `.env` files; both report emitters are
+off until their config key (`allure: {}`, `messages: {}`) is present. A
+CommonJS project (no `"type": "module"` in `package.json`) gets
 `nukadoko.config.mts`, and step files need `.mts` too. A hand-written
 `nukadoko.config.ts` there fails to import, and the error names the file.
 

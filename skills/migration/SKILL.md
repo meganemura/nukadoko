@@ -38,7 +38,10 @@ If the project is not initialized yet (no `nukadoko.config.ts` or
 CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there instead, and step files need the same `.mts`
 extension. A hand-written `nukadoko.config.ts` there fails to import, and
-the error names the file.
+the error names the file. Both report emitters are off by default: a suite
+whose existing formatter or JUnit-based CI reads cucumber messages turns
+the stream on with `messages: {}` in the config, and `allure: {}` (or
+`nuka init --allure`) does the same for Allure results.
 
 A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`

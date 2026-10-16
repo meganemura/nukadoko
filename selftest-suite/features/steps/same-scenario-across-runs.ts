@@ -87,7 +87,7 @@ async function runNuka(args: readonly string[], cwd: string, extraEnv?: Record<s
 
 async function setUpProject(): Promise<SameScenarioState> {
   const tempDir = await mkdtemp(path.join(suiteDir, ".tmp-same-scenario-"));
-  const initResult = await runNuka(["init"], tempDir);
+  const initResult = await runNuka(["init", "--allure"], tempDir);
   if (initResult.exitCode !== 0) {
     throw new Error(`expected nuka init to exit 0, got ${initResult.exitCode}: ${initResult.stdout} ${initResult.stderr}`);
   }

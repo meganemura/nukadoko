@@ -107,7 +107,7 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
 | Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧、その断定、その Markdown のサマリ) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
 | Sign-off | `<feature のファイル名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
-| Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも) | ツール | しない | 書いた run と同じ | 他のツール |
+| Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも)。どちらも、その emitter が有効なときだけ | ツール | しない | 書いた run と同じ | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
 この表が名指しているのはファイルです。
@@ -1817,11 +1817,8 @@ run を見守る人向けの出力は stderr に置きます: 各 pickle の前�
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
 
-書き込み先の行は、何も設定していないときにこそ効きます。
-`allure` と `messages` の出力はすでにゼロ設定で動いており、それぞれの config キーは書き込み先を移動させるだけです。
-config ファイルに載っているキーは、設定して初めて有効になるものだと読まれがちです。
-その誤読を、実際に書き込んだ場所を毎回すべて出力することが取り除きます。
-この行のおかげで、プロジェクトは最初から出力を持っていたことに気付かないまま出力先だけを動かしてしまう、ということがなくなります。
+書き込み先の行が `allure` や `messages` の場所を出すのは、その emitter が有効なとき、つまり config にそのキーがあるときだけです(「Allure emitter」と「Messages emitter」を参照)。
+何も書かなかった emitter の行は、読み手を存在しないパスへ送ってしまいます。
 
 scenario record 自身の `browser` フィールド(`{ "type": "firefox", "version": "133.0" }`)には、この run が実際に起動したエンジンとバージョンが入ります。
 これは Playwright が返す実際の `Browser` オブジェクトから読んだ値であり、`config.browserType` から読んだ値ではありません。
@@ -2411,8 +2408,8 @@ default export が無いファイル、または default export が Promise で�
 | `fixtures` | ユーザー定義の fixture(「Fixtures」を参照) |
 | `fixtureTimeout` | fixture インスタンスごとの setup/teardown の既定タイムアウト(ms)(「Fixtures」を参照) |
 | `stepTimeout` | typed step 自身の `run` に許す時間(ms、既定 1,200,000。`defineStep({ timeout })` が上書きし、compat step は対象外) |
-| `allure` | `resultsDir` のみ(Allure emitter を参照) |
-| `messages` | `output` のみ(Messages emitter を参照) |
+| `allure` | あれば Allure emitter を有効にする。中身は `resultsDir` のみ(Allure emitter を参照) |
+| `messages` | あれば messages emitter を有効にする。中身は `output` のみ(Messages emitter を参照) |
 
 `additionalFeatureDirs`(デフォルトは `[]`)は、`featuresDir` とは違う問いに答えます。
 `featuresDir` は無人で *実行される* 集合です。
@@ -2577,7 +2574,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   `records/` が持つのと同じ run を持ちます。
   run のファイルは run と一緒に消えるからです(「成果物」を参照)。
   新しい Allure launch が欲しければ削除してよい)。
-  `init` もこれを空のまま作ります。
+  `init --allure` もこれを空のまま作ります。
   Allure 自身の CLI は、存在しないディレクトリでは起動を拒む一方、空のディレクトリなら受け付けるからです。
   これにより、最初の `nuka run` より前から `allure watch` を起動しておけます。
 - `export/messages.ndjson`(messages emitter の出力)。
@@ -2855,18 +2852,23 @@ commit された feature がこれらの id を示すと、読み手がたどれ
 
 `nuka run` は scenario の pickle ごとに 1 つの Allure test result を書きます。
 emitter は Allure 2 のファイル形式を使い、Allure 2 と Allure 3 の両方が読めます。
-既定では、nukadoko は `.nukadoko/export/allure-results/` に result を書きます。
+emitter は既定で無効で、config に `allure` キーがあるときに有効になります。
+`allure: {}` で有効になり、`nuka init --allure` はこのキーを書きます。
+nukadoko を単体テストの隣で走らせるプロジェクトの多くは Allure のレポートを読まず、以前は 2 step の scenario 1 つで、誰も読まない export ファイルが十数個残っていました。
+有効なとき、nukadoko は `.nukadoko/export/allure-results/` に result を書きます。
 nukadoko は HTML をレンダリングしません。
 
 `allure.resultsDir` は出力先を別のパスへ移します。
 相対パスはプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 `nuka clean` は、そのディレクトリがプロジェクトの中にあり、state directory の親でないときに、そのディレクトリを消します。
 パスがプロジェクトの root、プロジェクトの外、または state directory の親に解決されるときは、コマンドを拒否します。
-emitter に有効化のフラグはなく、呼び出しが 1 件以上の pickle を選んだときに動きます。
+CLI フラグはありません。
+プロジェクトが読むレポートは、呼び出しごとではなく config に置くものだからです。
+有効なとき、emitter は呼び出しが 1 件以上の pickle を選んだときに動きます。
 呼び出しが 0 件の pickle を選んだときはスキップされます。
 これは BeforeAll/AfterAll がスキップされるのと同じ理由で、その場合 `allure-results/` ディレクトリはまったく作られません。
 `categories.json` と `environment.properties` は、run の最初、最初の step が始まる前に、一度だけ書き込まれます。
-`nuka init` は既定のディレクトリを作るため、最初の run より前に `allure watch` を開始できます。
+`nuka init --allure` は既定のディレクトリを作るため、最初の run より前に `allure watch` を開始できます。
 
 各 result は pickle の名前を使い、Gherkin の step を `steps[]` に格納します。
 step 名は Gherkin keyword と AST の空白を保ち、`And` も正規化しません。
@@ -2923,7 +2925,7 @@ feature ファイルの冒頭にコメント行を 1 行足しただけで、す
 この設定は nukadoko ではなく Allure 3 を設定する `allurerc.mjs` に書きます。
 この設定がないと、scenario の `historyId` が安定していても、Allure 3 は `generate`、`watch`、`report` の history を組み立てません。
 identity が完全に安定していて `historyPath` の無いプロジェクトは、trend も、regressed/fixed の遷移も、flaky の検出も一切見えず、レポート自身のどこにも、config のキーが欠けていることを指すものがありません。
-`nuka init` は生成する `allurerc.mjs` にこれを無条件で書き込み、`.nukadoko/export/allure-history.jsonl` を指します。
+`nuka init --allure` は生成する `allurerc.mjs` にこれを無条件で書き込み、`.nukadoko/export/allure-history.jsonl` を指します。
 使い捨ての `allure-results/` ディレクトリの中ではなく、その隣に置かれるため、run のたびに result をクリアしても消えません。
 [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) は、`nuka init` を使わないプロジェクト向けに同じフィールドを持ちます。
 `historyPath` を設定しても、step entry 自身の history が見えるようになるわけではありません。
@@ -2999,7 +3001,7 @@ marker は、失敗した step の step record(hook が scenario を止めた場
 - **Allure 3** は `allure generate` または `allure report` の実行時に、results directory の `categories.json` を読みません。
   Allure 3 は category を config だけから取得し、result の label と照合します。
   `nukadoko.failure` がその label を供給します。
-  `nuka init` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、7 個の label-matcher rule を持たせます。
+  `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、7 個の label-matcher rule を持たせます。
   この 7 個の名前は `NAME_BY_KIND`(`src/report/allure/categories.ts`)から組み立てられるため、emitter 自身が使う名前と決してずれません。
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
   `nuka init` はこの 6 つの拡張子すべてを先にチェックし、プロジェクトに既にどれか 1 つあれば何も書かず、見つけたファイル名を stderr に出します。
@@ -3120,12 +3122,13 @@ Allure emitter は、nukadoko の計測の余剰が自動で、しかも今日�
 
 `nuka run` は呼び出しごとに、`@cucumber/messages` を通して 1 つの cucumber messages ストリームを書きます。
 ストリームは 1 行 1 envelope の NDJSON を使い、既定の出力先は `.nukadoko/export/messages.ndjson` です。
+emitter は既定で無効で、config に `messages` キーがあるときに有効になるため、`messages: {}` で有効になります。
 `nukadoko.config.ts` の `messages.output` で、別のパスを設定できます。
 相対パスはプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 `nuka clean` は、そのパスがプロジェクトの中にあり、state directory の親でないときに、そのファイルと隣にある run-id 付きのファイルを消します。
 パスがプロジェクトの root、プロジェクトの外、または state directory の親に解決されるときは、コマンドを拒否します。
-Allure と同様に、この emitter には `enabled` フラグも CLI フラグもありません。
-呼び出しが 0 件の pickle を選んだ場合を除き、emitter は実行されます。
+Allure と同様に、この emitter には CLI フラグがありません。
+有効なとき、呼び出しが 0 件の pickle を選んだ場合を除き、emitter は実行されます。
 
 - 1 回の run は 1 つのファイルに 1 つのストリームを生成し、同時並行の呼び出しは別々のファイルを使います。
   各呼び出し自身の本当のファイルは、設定されたパス自身の名前に run id を差し込んだもので(既定のパスなら `messages.<run_id>.ndjson`、`messages.output: "out/stream.ndjson"` なら代わりに `out/stream.<run_id>.ndjson`)、設定されたパスの隣に置かれます。
@@ -3448,7 +3451,8 @@ npm パッケージは `nukadoko` で、それがインストールするただ 
 
 ```
 nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
-                              execute scenarios; step records + allure-results.
+                              execute scenarios; step records, plus the Allure
+                              and messages exports their config keys turn on.
                               --env targets a named environment ("default"
                               when omitted); --session carries login state
                               across calls via a named session.
@@ -3660,8 +3664,17 @@ nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
 nuka session stop <name> [--env <name>]
                               persist the session's storageState, then end
                               its process
-nuka init [--base-url <url>] [--features-dir <dir>]
-                              set up a project; ends with a self-check
+nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
+                              set up a project; ends with a self-check.
+                              Writes nukadoko.config.ts, <featuresDir>/steps/,
+                              .nukadoko/ in .gitignore, and a package.json
+                              "test:scenarios" script ("nuka check && nuka run
+                              <featuresDir>") unless one exists; prints one
+                              stderr line when tsconfig.json's include leaves
+                              out the steps or the config. --allure turns the
+                              Allure emitter on and writes allurerc.mjs;
+                              --env adds .env, .env.*, !.env.example to
+                              .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 nuka mcp-tools [--json] -- <command> [args...]

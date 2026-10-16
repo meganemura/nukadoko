@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
@@ -89,19 +89,28 @@ const ALLURE_CONFIG_FILENAMES = [
   "allurerc.yml",
 ];
 
+const ESM_PACKAGE_JSON = `${JSON.stringify({ name: "esm-project", private: true, type: "module" }, null, 2)}\n`;
+
+/** Every file and directory under `rootDir`, root-relative and sorted. */
+async function fileSet(rootDir: string): Promise<string[]> {
+  const entries = await readdir(rootDir, { recursive: true });
+  return entries.map((entry) => entry.split(path.sep).join("/")).sort();
+}
+
 describe("nuka init", () => {
   let rootDir: string;
 
   beforeEach(async () => {
     rootDir = await createEmptyTempDir();
     await ensureNukadokoShim();
+    await writeFile(path.join(rootDir, "package.json"), ESM_PACKAGE_JSON);
   });
 
   afterEach(async () => {
     await removeTempDir(rootDir);
   });
 
-  it("generates the config, steps directory, and .gitignore entry, and passes its self-check", async () => {
+  it("writes the config, the steps directory, .gitignore, and the package.json script, and nothing Allure-shaped", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
@@ -109,37 +118,156 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
+    expect(stdout.text()).toBe("nukadoko.config.ts\nfeatures/steps\n.gitignore\npackage.json\n".replace(/\//g, path.sep));
+    expect(await fileSet(rootDir)).toEqual([
+      ".gitignore",
+      "features",
+      "features/steps",
+      "nukadoko.config.ts",
+      "package.json",
+    ]);
+
+    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).toBe(
+      [
+        'import { defineConfig } from "nukadoko";',
+        "",
+        "export default defineConfig({",
+        '  // Every config key nukadoko reads, one line each: docs/spec.md, "Sessions, environments, secrets"',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(".nukadoko/\n");
+    expect(JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"))).toEqual({
+      name: "esm-project",
+      private: true,
+      type: "module",
+      scripts: { "test:scenarios": "nuka check && nuka run features" },
+    });
+
+    const config = await loadConfig(rootDir);
+    expect(config.allure).toBeUndefined();
+    expect(config.messages).toBeUndefined();
+  });
+
+  it("with --allure, also writes allurerc.mjs and the results directory, and turns the Allure emitter on", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init", "--allure"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
     expect(stdout.text().trim().split("\n")).toEqual([
       "nukadoko.config.ts",
       path.join("features", "steps"),
       ".gitignore",
+      "package.json",
       path.join(".nukadoko", "export", "allure-results"),
       "allurerc.mjs",
     ]);
+    expect(await fileSet(rootDir)).toEqual([
+      ".gitignore",
+      ".nukadoko",
+      ".nukadoko/export",
+      ".nukadoko/export/allure-results",
+      "allurerc.mjs",
+      "features",
+      "features/steps",
+      "nukadoko.config.ts",
+      "package.json",
+    ]);
+    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).toContain("  allure: {},\n");
 
-    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
-    const configContent = await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8");
-    expect(configContent).toContain('from "nukadoko"');
-    expect(configContent).toContain("defineConfig");
-
-    expect(existsSync(path.join(rootDir, "features", "steps"))).toBe(true);
-
-    const gitignore = await readFile(path.join(rootDir, ".gitignore"), "utf8");
-    expect(gitignore).toContain(".nukadoko/");
+    const config = await loadConfig(rootDir);
+    expect(config.allure).toEqual({});
+    expect(config.messages).toBeUndefined();
   });
 
-  it("creates <stateDir>/export/allure-results and reports its path on stdout", async () => {
-    const stdout = createCaptureSink();
+  it("keeps an existing test:scenarios script and the file's own indentation", async () => {
+    const own = `${JSON.stringify({ type: "module", scripts: { "test:scenarios": "mine" } }, null, 4)}\n`;
+    await writeFile(path.join(rootDir, "package.json"), own);
 
-    const exitCode = await runCli(["init"], {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr: createCaptureSink() });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("package.json");
+    expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(own);
+  });
+
+  it("adds the script beside the existing ones, in the file's own indentation", async () => {
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      `${JSON.stringify({ type: "module", scripts: { test: "vitest" } }, null, 4)}\n`,
+    );
+
+    const exitCode = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+
+    expect(exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(
+      `${JSON.stringify(
+        { type: "module", scripts: { test: "vitest", "test:scenarios": "nuka check && nuka run features" } },
+        null,
+        4,
+      )}\n`,
+    );
+  });
+
+  it("runs the --features-dir directory from the script", async () => {
+    const exitCode = await runCli(["init", "--features-dir", "e2e/acceptance"], {
       rootDir,
-      stdout,
+      stdout: createCaptureSink(),
       stderr: createCaptureSink(),
     });
 
     expect(exitCode).toBe(0);
-    expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(true);
-    expect(stdout.text()).toContain(path.join(".nukadoko", "export", "allure-results"));
+    const manifest = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    expect(manifest.scripts["test:scenarios"]).toBe("nuka check && nuka run e2e/acceptance");
+  });
+
+  it("says on stderr that no script was added when there is no package.json", async () => {
+    await rm(path.join(rootDir, "package.json"));
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("package.json");
+    expect(stderr.text()).toBe(
+      'No readable package.json, so no test:scenarios script was added; run "nuka check && nuka run features" directly\n',
+    );
+  });
+
+  it("hints on stderr when tsconfig.json's include leaves out the steps and the config", async () => {
+    await writeFile(
+      path.join(rootDir, "tsconfig.json"),
+      '{\n  // the project\'s own sources\n  "include": ["src"],\n}\n',
+    );
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe(
+      'tsconfig.json\'s include leaves out these paths, so tsc does not check them; add "features/**/*" and "nukadoko.config.ts" to it\n',
+    );
+  });
+
+  it("says nothing about tsconfig.json when its include already covers both", async () => {
+    await writeFile(
+      path.join(rootDir, "tsconfig.json"),
+      JSON.stringify({ include: ["src", "features/**/*.ts", "nukadoko.config.ts"] }),
+    );
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
   });
 
   it("reflects --base-url in the generated config", async () => {
@@ -170,8 +298,7 @@ describe("nuka init", () => {
       "nukadoko.config.ts",
       path.join("e2e", "steps"),
       ".gitignore",
-      path.join(".nukadoko", "export", "allure-results"),
-      "allurerc.mjs",
+      "package.json",
     ]);
 
     expect(existsSync(path.join(rootDir, "e2e", "steps"))).toBe(true);
@@ -215,7 +342,7 @@ describe("nuka init", () => {
   });
 
   it("creates <stateDir>/export/allure-results at the default location even when --features-dir is given", async () => {
-    const exitCode = await runCli(["init", "--features-dir", "e2e"], {
+    const exitCode = await runCli(["init", "--allure", "--features-dir", "e2e"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -267,11 +394,11 @@ describe("nuka init", () => {
     expect(existsSync(path.join(rootDir, ".gitignore"))).toBe(false);
   });
 
-  it("appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
+  it("with --env, appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n");
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init"], {
+    const exitCode = await runCli(["init", "--env"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -290,7 +417,7 @@ describe("nuka init", () => {
     );
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init"], {
+    const exitCode = await runCli(["init", "--env"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -306,7 +433,7 @@ describe("nuka init", () => {
 
   it("appends .env, .env.*, and !.env.example (in that order) to a fresh .gitignore", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init"], {
+    const exitCode = await runCli(["init", "--env"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -327,7 +454,7 @@ describe("nuka init", () => {
   it("does not duplicate an already-present .env line, and still adds the other two", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n.env\n");
 
-    const exitCode = await runCli(["init"], {
+    const exitCode = await runCli(["init", "--env"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -464,7 +591,7 @@ describe("nuka init: allurerc.mjs", () => {
   });
 
   it("writes allurerc.mjs with exactly the seven categories.ts (NAME_BY_KIND) rules, no more, no fewer", async () => {
-    const exitCode = await runCli(["init"], {
+    const exitCode = await runCli(["init", "--allure"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -490,7 +617,7 @@ describe("nuka init: allurerc.mjs", () => {
   });
 
   it("writes historyPath under .nukadoko/export/, a sibling of allure-results rather than inside it", async () => {
-    const exitCode = await runCli(["init"], {
+    const exitCode = await runCli(["init", "--allure"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -517,7 +644,7 @@ describe("nuka init: allurerc.mjs", () => {
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["init", "--allure"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toContain(filename);
@@ -549,7 +676,7 @@ describe("nuka init: allurerc.mjs is actually read by `allure generate`", () => 
   });
 
   it("classifies a real failure under its own category, not Allure 3's built-in Product errors", async () => {
-    const initExit = await runCli(["init"], {
+    const initExit = await runCli(["init", "--allure"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),

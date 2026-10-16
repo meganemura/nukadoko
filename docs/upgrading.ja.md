@@ -38,6 +38,8 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
 古い読み方に依存していた env file があるプロジェクトは、次の実行の前に、その値を確認してください。
 
 `nuka session clear --env` と `nuka session stop` も、以前は終了コード 0 で何も出さなかった打ち間違いを名指すようになりました。
+Allure と messages の emitter は既定で無効になりました。
+どちらかの export を読むプロジェクトは対応が必要です。
 
 - **`nuka accept` は完了マーカーのない run を拒否します。**
   run は最後の書き込みとして、断定を入れた `.nukadoko/records/runs/<run_id>/complete.json` を書くようになり、`nuka accept` は断定が `passed` の run だけを凍結します。
@@ -128,6 +130,17 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
   `returns` を宣言した step は、今までどおりその schema が検証する値を返す必要があります。
   引数 1 つの `run({ page })` は、今までどおり fixture を名指します。
   `returns` が `z.object({})` の step は、その行と `return {}` を消せますが、消す必要はありません。
+- **Allure と messages の emitter は、config にそのキーがあるまで無効です。**
+  以前の `nuka run` は、設定なしで `.nukadoko/export/allure-results/` と `.nukadoko/export/messages.ndjson` を書いていました。
+  Allure の result を読むプロジェクトは、`nukadoko.config.ts` に `allure: {}` を追加します。
+  cucumber messages を formatter や JUnit ベースの CI に渡すプロジェクトは、`messages: {}` を追加します。
+  すでに `allure.resultsDir` や `messages.output` を設定しているプロジェクトは、キーがすでにあるので何も変える必要はありません。
+  どちらも読まないプロジェクトは、`allurerc.mjs` と export ディレクトリを消して構いません。
+  以前の run が書いたものは、今までどおり `nuka clean --export` で消せます。
+- **`nuka init` が書くものは減り、つなぐものは増えました。**
+  `--allure` や `--env` で求めない限り、`allurerc.mjs`、result のディレクトリ、`.gitignore` の `.env` の行を書かなくなりました。
+  また、`package.json` に `test:scenarios` script を追加します。
+  変わるのは新しく `init` したときに書かれるものだけで、すでに初期化したプロジェクトは何もする必要がありません。
 
 ## 0.12.0 から 0.13.0 へ
 

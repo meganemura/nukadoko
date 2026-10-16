@@ -21,9 +21,17 @@ Node 20+(`package.json` の `engines.node` は `">=20"`)。
 
 ```sh
 npm install -D nukadoko
-npx nuka init          # writes nukadoko.config.ts (or .mts, see below) and .gitignore entries
+npx nuka init          # writes nukadoko.config.ts (or .mts, see below), features/steps/, .gitignore, and a package.json script
 npx nuka steps         # the vocabulary, empty until you add a step
 ```
+
+`nuka init` は CLI や API のプロジェクトを前提に準備をします。
+`.gitignore` に `.nukadoko/` を、`package.json` の scripts に `"test:scenarios": "nuka check && nuka run features"` を追加します。
+同じ名前の script が既にあれば、そのままにします。
+以後、人も CI も `npm run test:scenarios` の 1 つだけを実行すれば済みます。
+`tsconfig.json` の `include` が `features/` や config ファイルを外しているときは、追加すべきエントリを 1 行で伝えます。
+2 つのフラグで書くものを増やせます。
+`--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
 
 nukadoko は devDependency です。
 `dist/` と並べて TypeScript のソースも同梱しているため、stack trace は実際のコードを指します。
@@ -52,10 +60,10 @@ nukadoko は devDependency です。
 ただし、このようなプロジェクトで `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
 そのエラーはそのファイルと原因を名指しし、`nukadoko.config.mts` へのリネームを案内します。
 代わりに `nuka init` は `nukadoko.config.mts` を書きます。
-`.nukadoko/`、`.env`、`.env.*` を自分で `.gitignore` に追加する必要はありません。
+`.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
 `nuka init` が追加します。
-`.env.example` は追跡されたままにします。
-中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
+`nuka init --env` は `.env` と `.env.*` も追加し、`.env.example` は追跡されたままにします。
+state directory の中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
 
 </details>
 
@@ -368,8 +376,10 @@ step record が後から何を得ても、2 つ目の対応表を覚える必要
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 [Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
 
-どちらの emitter も設定ゼロで動き、有効化するためのフラグはありません。
-`nukadoko.config.ts` の `allure` と `messages` は、出力先を既定の `.nukadoko/export/allure-results` と `.nukadoko/export/messages.ndjson` から移すだけのキーです。
+どちらの emitter も既定では無効です。
+`nukadoko.config.ts` の `allure: {}` または `messages: {}` というキーが、それぞれを有効にします。
+`nuka init --allure` は前者を書きます。
+キーの中の `allure.resultsDir` と `messages.output` は、出力先を既定の `.nukadoko/export/allure-results` と `.nukadoko/export/messages.ndjson` から移します。
 
 nukadoko が書くのは結果であって HTML ではないため、それを描画するのは Allure 3 の CLI です(`npm i -g allure`、または以下のように `npx allure`)。
 
@@ -386,7 +396,7 @@ npx allure open .nukadoko/allure-report                  # serve one already gen
 この問題は、CI からレポートの artifact をダウンロードし、手元で `index.html` を開いたときに起きます。
 代わりに、上の `npx allure open` または `npx allure watch` でレポートを配信します。
 
-`nuka init` はプロジェクトの root に `allurerc.mjs` を書き出します(Allure が自動検出するいずれかの名前で既にあれば、書かずにその旨を伝えます)。
+`nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出します(Allure が自動検出するいずれかの名前で既にあれば、書かずにその旨を伝えます)。
 これを置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、7 個の `error.kind` のどれにも分類されません。
 `init` を使わないプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
 
@@ -401,7 +411,7 @@ Allure はこれを省くとカレントディレクトリの `allure-report/` �
 scenario が終わると、最終 result がライブ表示を置き換えます。
 待ち受けるポートはランダムで、`--port` で指定できます。
 ブラウザを開くのは `--open` を渡したときだけです。
-`nuka init` は `.nukadoko/export/allure-results/` を作るため、最初の `nuka run` より前に `watch` を開始できます。
+`nuka init --allure` は `.nukadoko/export/allure-results/` を作るため、最初の `nuka run` より前に `watch` を開始できます。
 snapshot の仕組みとライブ視聴中のリトライ表示は [Allure emitter](docs/spec.ja.md#allure-emitter) を参照してください。
 
 `allure-results/` にある完了済みのファイルは書き換えられません。

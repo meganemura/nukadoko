@@ -219,3 +219,54 @@ describe("nuka run: allure-results wiring", () => {
     ]);
   });
 });
+
+// Both report emitters are off until their config key is present
+// (src/config/emitter-targets.ts). The fixture projects above turn both on,
+// so this block writes a config with neither key, for the single-process
+// path and for the concurrent coordinator and its workers.
+describe("nuka run: report emitters off by default", () => {
+  let rootDir: string;
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  async function useEmptyConfig(fixture: string): Promise<void> {
+    rootDir = await copyFixtureToTempDir(fixture);
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({});\n',
+    );
+  }
+
+  it("writes no export file and names no export path when neither allure nor messages is set", async () => {
+    await useEmptyConfig("run-project");
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["run", "features/passing.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toBe(true);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "export"))).toBe(false);
+    expect(stderr.text()).not.toMatch(/allure|messages/);
+  });
+
+  it("writes no export file under --concurrency either", async () => {
+    await useEmptyConfig("run-concurrency-project");
+    const stderr = createCaptureSink();
+
+    await runCli(["run", "features/", "--concurrency", "2"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toBe(true);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "export"))).toBe(false);
+    expect(stderr.text()).not.toMatch(/allure|messages/);
+  }, 60_000);
+});

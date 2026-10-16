@@ -417,9 +417,11 @@ export const configSchema = z
      * `<stateDir>/export/allure-results` (docs/spec.md "The state directory") —
      * that default is applied where `stateDir` is resolved (src/cli/run.ts),
      * not here, since this schema alone doesn't know `stateDir`'s final
-     * value. No `enabled` key: the
-     * emitter is always on — zero configuration already gets a full report,
-     * so there is nothing to opt into. No CLI flag either. */
+     * value. The key's presence is the switch: `allure: {}` turns the
+     * emitter on, and without the key it is off
+     * (src/config/emitter-targets.ts), so a project that reads no Allure
+     * report gets no results directory. No CLI flag: a report a project
+     * reads belongs in its config, not in each invocation. */
     allure: z.object({ resultsDir: z.string().optional() }).strict().optional(),
     /** `output` is resolved against the project root, so an absolute path
      * is used as given; omitted, it defaults to
@@ -431,10 +433,8 @@ export const configSchema = z
      * is a run-id-suffixed sibling file beside it instead
      * (src/report/messages/emitter.ts), so two concurrent `nuka run`
      * invocations against this same path never interleave their writes.
-     * No `enabled` key: the emitter is always
-     * on, same reason as `allure`
-     * above — zero configuration already gets a full stream. No CLI flag
-     * either. */
+     * The key's presence is the switch, same as `allure` above:
+     * `messages: {}` turns the emitter on. No CLI flag either. */
     messages: z.object({ output: z.string().optional() }).strict().optional(),
     /** How long a typed step's own `run` may take before the execution is
      * failed with `error.kind: "timeout"`, in milliseconds. A step's own

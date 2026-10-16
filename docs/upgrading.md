@@ -37,6 +37,7 @@ This part does not change release to release.
 
 Compat behaviour a project can notice, one redaction change, one evidence-name change, and one change to `nuka accept`.
 `nuka session clear --env` and `nuka session stop` also name a typo that used to exit 0 with no output.
+The Allure and messages emitters are off by default now, which a project that reads either export has to act on.
 
 The env file parser now follows dotenv for comments, quotes, escapes, and
 values that span lines. A project whose env files relied on the old reading
@@ -130,6 +131,20 @@ has to look at those values before the next run.
   one-parameter `run({ page })` still names a fixture. A step whose
   `returns` is `z.object({})` may drop that line and its `return {}`, and
   does not have to.
+- **The Allure and messages emitters are off until their config key is
+  present.** `nuka run` used to write `.nukadoko/export/allure-results/`
+  and `.nukadoko/export/messages.ndjson` with no configuration. A project
+  that reads Allure results adds `allure: {}` to `nukadoko.config.ts`, and
+  a project that feeds cucumber messages to a formatter or JUnit-based CI
+  adds `messages: {}`. A project that already sets `allure.resultsDir` or
+  `messages.output` changes nothing, since the key is already there. A
+  project that reads neither can delete `allurerc.mjs` and the export
+  directory; `nuka clean --export` still removes what earlier runs wrote.
+- **`nuka init` writes less and wires more.** It no longer writes
+  `allurerc.mjs`, the results directory, or the `.env` lines in
+  `.gitignore` unless `--allure` or `--env` asks for them, and it adds a
+  `test:scenarios` script to `package.json`. This changes only what a new
+  `init` writes; a project already initialized needs nothing.
 
 ## 0.12.0 to 0.13.0
 

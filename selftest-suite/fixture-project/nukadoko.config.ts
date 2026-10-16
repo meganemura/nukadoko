@@ -13,4 +13,7 @@ import { defineConfig } from "nukadoko";
 // exception -- its own step and Before hook
 // do launch a browser, but only ever navigate a `data:` URL, so there is
 // still no real app for a `baseURL` to point at.
-export default defineConfig({});
+//
+// `allure: {}` turns the Allure emitter on, which is off by default: the
+// outer steps assert on its results.
+export default defineConfig({ allure: {} });

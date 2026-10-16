@@ -227,7 +227,7 @@ Given(
     // the working tree.
     const tempDir = await mkdtemp(path.join(suiteDir, ".tmp-init-"));
     try {
-      await execFileAsync(process.execPath, [cliPath, "init"], { cwd: tempDir });
+      await execFileAsync(process.execPath, [cliPath, "init", "--allure"], { cwd: tempDir });
       await copyFile(path.join(tempDir, "allurerc.mjs"), path.join(fixtureProjectDir, "allurerc.mjs"));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
