@@ -1725,7 +1725,7 @@ scenario record は feature のパス、scenario 名、順序付けられた ste
 
 `nuka run` は何かを実行する前に、選んだ scenario について `nuka check` が報告するはずの内容を報告します。
 その中に error が 1 つでもあれば、error を stderr に書き、record を書かずに `1` で終了します。
-報告されるのは、選ばれた各ファイルについて `nuka check <feature>` が出すものです。
+報告されるのは、同じ対象について `nuka check` が出すものです。
 すなわち、プロジェクト全体に関わる指摘(config、binding、各 step 自身の宣言、fixture の定義、import に失敗する step ファイル)と、この run が実行する scenario についての指摘です。
 `:line` の対象が絞るのは scenario についての指摘だけなので、1 つの scenario の run が、実行しない隣の scenario のせいで拒否されることはありません。
 警告は run を止めず、出力もされません。
@@ -3621,7 +3621,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command] [--from <step>.<key
                               const cli = resolve("<TODO: the entry
                               point>") line as the only TODO. --command
                               with --then is refused
-nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
+nuka check [feature..] [--json]
+                              static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern
@@ -3660,13 +3661,16 @@ nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
                               has an unreadable line, a tracked envFile key that
                               looks secret but is not in secrets.redact, a
                               secrets.redact key too short to redact; with no
-                              argument, scans
-                              featuresDir plus additionalFeatureDirs; a
-                              feature argument checks that one file instead,
-                              for a feature living outside both. :line and a
-                              directory are refused; a directory is a nuka
-                              run argument. Any other failed read keeps the
-                              error's own text
+                              target, scans featuresDir plus
+                              additionalFeatureDirs and every path in oaths;
+                              targets select files the way nuka run's do
+                              (several files, a directory walked for .feature
+                              files and the oaths under it), so the errors
+                              nuka run prints before executing equal nuka
+                              check's for the same targets. :line is refused,
+                              since check analyzes whole files. A path that
+                              does not exist is named; any other failed read
+                              keeps the error's own text
 nuka check --codes [--json]   list every finding code nuka check can produce,
                               with a one-line description, instead of
                               checking a project

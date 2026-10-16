@@ -1,6 +1,12 @@
-import { analyzeProject } from "../check/analyze.js";
+import { statSync } from "node:fs";
+import path from "node:path";
+import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
 import { listCheckCodes } from "../check/codes.js";
-import type { CheckIssue } from "../check/types.js";
+import type { CheckIssue, CheckReport } from "../check/types.js";
+import { loadConfig } from "../config/load-config.js";
+import { describeFailedFeatureRead } from "../feature/feature-arg-read.js";
+import { resolveOathPaths } from "../feature/resolve-oaths.js";
+import { readFeaturesForCheck, resolveFeatureTargets } from "../run/select-pickles.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -13,11 +19,16 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // Exit code is exactly "1 or more errors" (docs/spec.md "CLI summary":
 // warnings alone are exit 0).
 //
-// `featureArg` is passed straight through to `analyzeProject` unchanged
-// (`null`/absent means "no argument", the existing featuresDir-wide
-// behavior). `CheckFeatureNotFoundError` needs no
-// special handling here — it is an `Error` like every other setup failure
-// this catch already turns into stderr + exit 1 via `formatVocabularyError`.
+// `targets` select files the way `nuka run`'s do (src/run/select-pickles.ts:
+// files, directories walked for .feature files and configured oaths), so
+// the errors `nuka run` prints before executing are this report's errors
+// for the same targets. No target keeps the project-wide walk
+// (featuresDir, additionalFeatureDirs, every oath), which is wider than a
+// bare `nuka run`'s featuresDir. `:line` is refused: check analyzes whole
+// files, and a narrowed file would hide findings in its other scenarios.
+// A file that does not parse stays a `feature-parse-error` finding here,
+// where `nuka run` refuses it, so one broken file does not hide the
+// findings in the rest of a directory.
 //
 // `codes` answers a different question than everything else in this file:
 // not "what is wrong with this project" (`analyzeProject`'s own report) but
@@ -25,7 +36,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // keeps in sync with the checker at compile time. It short-circuits before
 // `analyzeProject` runs at all, on purpose: the catalog holds even for a
 // project whose config or discovery is currently broken, which is exactly
-// the state a reader reaching for this flag is often in. `featureArg` is
+// the state a reader reaching for this flag is often in. `targets` are
 // silently ignored when `codes` is set, the same way `--help` ignores every
 // other flag.
 
@@ -33,7 +44,8 @@ export interface RunCheckOptions {
   rootDir: string;
   json: boolean;
   codes?: boolean;
-  featureArg?: string;
+  /** Feature files, oaths, or directories; empty checks the whole project. */
+  targets?: readonly string[];
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -143,7 +155,8 @@ function formatCodeLine(entry: ReturnType<typeof listCheckCodes>[number]): strin
 }
 
 export async function runCheck(options: RunCheckOptions): Promise<number> {
-  const { rootDir, json, codes, featureArg, stdout, stderr } = options;
+  const { rootDir, json, codes, stdout, stderr } = options;
+  const targets = options.targets ?? [];
 
   if (codes) {
     const entries = listCheckCodes();
@@ -159,7 +172,7 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
 
   let report;
   try {
-    report = await analyzeProject(rootDir, featureArg);
+    report = targets.length === 0 ? await analyzeProject(rootDir) : await analyzeTargets(rootDir, targets);
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;
@@ -175,6 +188,29 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   }
 
   return report.errors.length > 0 ? 1 : 0;
+}
+
+async function analyzeTargets(rootDir: string, targets: readonly string[]): Promise<CheckReport> {
+  const config = await loadConfig(rootDir);
+  // A target that resolves to nothing is named before any selection, so a
+  // `:line` suffix reads as refused rather than as a missing file.
+  for (const target of targets) {
+    const relativePath = path.relative(rootDir, path.resolve(rootDir, target));
+    try {
+      statSync(path.join(rootDir, relativePath));
+    } catch (error) {
+      throw new Error(describeFailedFeatureRead("nuka check", rootDir, relativePath, error).message);
+    }
+  }
+  let selected;
+  try {
+    const oaths = resolveOathPaths(rootDir, config.oaths);
+    const files = resolveFeatureTargets(rootDir, targets, oaths.files, oaths.directories);
+    selected = readFeaturesForCheck(rootDir, files.map(([relativePath]) => relativePath));
+  } catch (error) {
+    throw new Error(`nuka check: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return analyzeRunSelection(rootDir, selected.features, selected.parseErrors);
 }
 
 /**

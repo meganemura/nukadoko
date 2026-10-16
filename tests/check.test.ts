@@ -233,7 +233,7 @@ describe("nuka check", () => {
   });
 });
 
-describe("nuka check [feature]", () => {
+describe("nuka check [feature..]", () => {
   it("detects an undefined step in a feature outside featuresDir when given as an argument", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "acceptance/outside.feature", "--json"], {

@@ -16,6 +16,22 @@ export class FeatureFileNotFoundError extends Error {
   }
 }
 
+/** Thrown when a feature file exists but cannot be read (permission
+ * denied, a file used as a directory). Calling that "not found" sends the
+ * reader looking for a file that is right there, so the system error's own
+ * text is kept. */
+export class FeatureReadFailedError extends Error {
+  readonly relativePath: string;
+
+  constructor(relativePath: string, cause: unknown) {
+    super(`Failed to read feature file "${relativePath}": ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+    this.name = "FeatureReadFailedError";
+    this.relativePath = relativePath;
+  }
+}
+
 export class FeatureParseFailedError extends Error {
   readonly relativePath: string;
 

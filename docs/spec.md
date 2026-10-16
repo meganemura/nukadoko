@@ -1994,7 +1994,7 @@ name, ordered step record ids, and per-step status.
 Before it executes anything, `nuka run` reports what `nuka check` would
 report for the scenarios it selected, and when one of those findings is an
 error it writes the errors to stderr, writes no record, and exits `1`. The
-findings are the ones `nuka check <feature>` gives for each selected file:
+findings are the ones `nuka check` gives for the same targets:
 every project-wide finding (config, bindings, each step's own declaration,
 fixture definitions, a step file that fails to import), plus the
 scenario-level findings for the scenarios this run executes. A `:line`
@@ -4184,7 +4184,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command] [--from <step>.<key
                               const cli = resolve("<TODO: the entry
                               point>") line as the only TODO. --command
                               with --then is refused
-nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
+nuka check [feature..] [--json]
+                              static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern
@@ -4223,13 +4224,16 @@ nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
                               has an unreadable line, a tracked envFile key that
                               looks secret but is not in secrets.redact, a
                               secrets.redact key too short to redact; with no
-                              argument, scans
-                              featuresDir plus additionalFeatureDirs; a
-                              feature argument checks that one file instead,
-                              for a feature living outside both. :line and a
-                              directory are refused; a directory is a nuka
-                              run argument. Any other failed read keeps the
-                              error's own text
+                              target, scans featuresDir plus
+                              additionalFeatureDirs and every path in oaths;
+                              targets select files the way nuka run's do
+                              (several files, a directory walked for .feature
+                              files and the oaths under it), so the errors
+                              nuka run prints before executing equal nuka
+                              check's for the same targets. :line is refused,
+                              since check analyzes whole files. A path that
+                              does not exist is named; any other failed read
+                              keeps the error's own text
 nuka check --codes [--json]   list every finding code nuka check can produce,
                               with a one-line description, instead of
                               checking a project

@@ -172,4 +172,84 @@ describe("the findings nuka run reports before executing", () => {
       ),
     180_000,
   );
+
+  // A target here is one generated file or the directory that holds them
+  // all, so a set of targets can name a file twice: once on its own and
+  // once through the directory.
+  async function writeGeneratedTargets(files: readonly (readonly (readonly string[])[])[]): Promise<string[]> {
+    const featuresRoot = path.join(rootDir, "features");
+    for (const name of ["mixed.feature", "generated"]) {
+      await rm(path.join(featuresRoot, name), { recursive: true, force: true });
+    }
+    await rm(path.join(rootDir, ".nukadoko"), { recursive: true, force: true });
+    await mkdir(path.join(featuresRoot, "generated"));
+    const paths = files.map((_, index) => `features/generated/f${index}.feature`);
+    for (const [index, scenarios] of files.entries()) {
+      await writeFile(path.join(rootDir, paths[index]!), featureSource(index, scenarios));
+    }
+    return [...paths, "features/generated"];
+  }
+
+  it(
+    "equal nuka check's errors for the same several targets, files and a directory mixed",
+    () =>
+      hegel.testAsync(
+        async (tc) => {
+          const candidates = await writeGeneratedTargets(tc.draw(featureSet));
+          const targets = tc.draw(gs.arrays(gs.sampledFrom(candidates), { minSize: 1, maxSize: 4 }));
+
+          const checked = await run(rootDir, ["check", ...targets]);
+          const ran = await run(rootDir, ["run", ...targets]);
+
+          expect(errorLines(ran.stderr)).toEqual(errorLines(checked.stdout));
+        },
+        { testCases: 10, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+      ),
+    180_000,
+  );
+});
+
+describe("nuka check with several targets", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("run-check-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it(
+    "reports the union of each target's own report, each finding once",
+    () =>
+      hegel.testAsync(
+        async (tc) => {
+          const files = tc.draw(featureSet);
+          const featuresRoot = path.join(rootDir, "features");
+          await rm(path.join(featuresRoot, "generated"), { recursive: true, force: true });
+          await mkdir(path.join(featuresRoot, "generated"));
+          const paths = files.map((_, index) => `features/generated/f${index}.feature`);
+          for (const [index, scenarios] of files.entries()) {
+            await writeFile(path.join(rootDir, paths[index]!), featureSource(index, scenarios));
+          }
+          const candidates = [...paths, "features/generated", "features/mixed.feature"];
+          const a = tc.draw(gs.sampledFrom(candidates));
+          const b = tc.draw(gs.sampledFrom(candidates));
+
+          // "ok: no issues found" stands for an empty report, not a finding.
+          const findings = async (targets: string[]) =>
+            nonEmptyLines((await run(rootDir, ["check", ...targets])).stdout).filter((line) => !line.startsWith("ok: "));
+          const both = await findings([a, b]);
+          const onlyA = await findings([a]);
+          const onlyB = await findings([b]);
+
+          expect(new Set(both).size).toBe(both.length);
+          expect([...both].sort()).toEqual([...new Set([...onlyA, ...onlyB])].sort());
+        },
+        // Three checks per case, each importing every step file.
+        { testCases: 10, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+      ),
+    180_000,
+  );
 });

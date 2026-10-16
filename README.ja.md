@@ -286,6 +286,8 @@ agent の探索ループも、この呼び出しから始まります。
 何かが実行される前に、`nuka check` があらゆる feature ファイルと step ファイルを読み、各問題を報告します。
 未定義の step は、最も単純なケースです。
 どの step 定義もその行のテキストに一致しないため、run がたどり着く前に `check` がその行を名指しします。
+`nuka check` は `nuka run` と同じ対象、つまり複数のファイルやディレクトリ(`nuka check features/checkout`)を受け、`nuka run` がそれについて選ぶファイルを check します。
+対象を渡さなければ、プロジェクト全体を check します。
 
 ```
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
@@ -840,7 +842,8 @@ step は 1 つで足ります。
 そのため、失敗しかありえない scenario にブラウザや数分を払うことはありません。
 `--no-check` はこの check を飛ばし、そうした scenario をそれでも実行します。
 run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、ブラウザ不要)として置き、`nuka run` は merge や deploy の側に残してください。
-`nuka check` は `additionalFeatureDirs` も対象にしますが、対象を渡さない `nuka run` はそれを含みません。
+このゲートは run と同じファイルやディレクトリを名指しでき(`nuka check features/checkout`)、run が止まるはずの error を報告します。
+対象を渡さない `nuka check` は `additionalFeatureDirs` も対象にしますが、対象を渡さない `nuka run` はそれを含みません。
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
 stdout はどちらの場合も NDJSON のままです。

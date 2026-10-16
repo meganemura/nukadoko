@@ -203,7 +203,7 @@ interface ScaffoldArgs {
 interface CheckArgs {
   json?: boolean;
   codes?: boolean;
-  feature?: string;
+  feature?: string[];
 }
 
 interface TendArgs {
@@ -841,15 +841,17 @@ export async function runCli(
   };
 
   const checkCommand: CommandModule<Record<string, never>, CheckArgs> = {
-    command: "check [feature]",
+    command: "check [feature..]",
     describe:
       "static checks: pattern/schema mismatches, Then binding to mutating steps, undefined steps per feature, duplicate patterns, config coherence",
     builder: (y: Argv) =>
       y
         .positional("feature", {
           type: "string",
+          array: true,
           describe:
-            "check only this feature file or Markdown oath instead of every feature under featuresDir and every path in oaths (no :line)",
+            "feature file, Markdown oath, or directory, selected the way nuka run selects them (no :line); " +
+            "omit to check every feature under featuresDir and additionalFeatureDirs and every path in oaths",
         })
         .option("json", {
           type: "boolean",
@@ -868,7 +870,7 @@ export async function runCli(
         rootDir,
         json: args.json ?? false,
         codes: args.codes ?? false,
-        featureArg: args.feature,
+        targets: args.feature ?? [],
         stdout,
         stderr,
       });

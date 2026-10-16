@@ -38,11 +38,12 @@ a list kept anywhere else.
 
 If the feature's directory is in `additionalFeatureDirs` (see "What not to
 do" in `SKILL.md`), a bare `nuka check` already covers it, the same as any
-feature under `featuresDir`. Otherwise pass the feature path directly:
-`nuka check <feature>` checks that one file, since without either the
-argument or the config entry the one file you care about is the one that
-goes unchecked. `nuka check` takes that one file. `:line` and a directory
-belong to `nuka run`.
+feature under `featuresDir`. Otherwise pass the feature path directly,
+since without either the argument or the config entry the one file you care
+about is the one that goes unchecked. `nuka check` takes the targets
+`nuka run` takes (several files, or a directory) and selects the same
+files, so `nuka check <targets>` reports the errors `nuka run <targets>`
+would stop on. `:line` belongs to `nuka run`.
 
 The walk that finds those feature files skips `node_modules` and any
 directory whose name starts with `.`, at every depth. A `.feature` file

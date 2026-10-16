@@ -287,7 +287,10 @@ import. This field is always present and is empty when all imports succeed.
 Before anything runs, `nuka check` reads every feature file and step file,
 then reports each problem. An undefined step is the simplest case. No step
 definition matches the line's text, so `check` identifies the exact line
-before a run can reach it.
+before a run can reach it. `nuka check` takes the targets `nuka run` takes,
+several files or a directory (`nuka check features/checkout`), and checks
+the files `nuka run` would select for them; with no target it checks the
+whole project.
 
 ```
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
@@ -900,8 +903,11 @@ scenarios it selected and exits `1` before executing anything when one is an
 error, so a scenario that can only fail never costs a browser or minutes.
 `--no-check` skips that check to run such a scenario anyway. When the run
 is slow, put `nuka check` on its own as the fast PR gate (seconds, no
-browser) and keep `nuka run` for merge or deploy; `nuka check` also covers
-`additionalFeatureDirs`, which `nuka run` with no target leaves out.
+browser) and keep `nuka run` for merge or deploy. The gate can name the
+same files or directories the run does (`nuka check features/checkout`),
+and reports the errors that run would stop on; with no target,
+`nuka check` also covers `additionalFeatureDirs`, which `nuka run` with no
+target leaves out.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only); stdout stays NDJSON either way.

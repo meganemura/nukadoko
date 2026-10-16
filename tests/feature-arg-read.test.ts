@@ -5,17 +5,16 @@ import { describeFeatureArgRead } from "../src/feature/feature-arg-read.js";
 
 // Responsibility: the decision in src/feature/feature-arg-read.ts is a pure
 // function of an error code, a path, and whether the path with `:<digits>`
-// removed exists. These properties pin that a directory, a `:line` suffix,
-// a missing file, and every other code stay four different answers, including combinations a single example would not pair.
-
-const DIRECTORY_HINT = "pass a .feature or .md file, or use nuka run for a directory";
+// removed exists. These properties pin that a `:line` suffix, a missing
+// file, and every other code stay three different answers, including
+// combinations a single example would not pair.
 const LINE_SUFFIX = /^(.+):(\d+)$/;
 
 const commandGen = gs.sampledFrom(["nuka check"] as const);
 const plainPath = gs.fromRegex("features/[a-z]{1,12}\\.(feature|md)");
 const linePath = gs.fromRegex("features/[a-z]{1,12}\\.feature:[1-9][0-9]{0,3}");
 const anyPath = gs.oneOf(plainPath, linePath);
-const otherCode = gs.sampledFrom(["EACCES", "EPERM", "ENOTDIR", "ELOOP", "ENAMETOOLONG", "EIO"]);
+const otherCode = gs.sampledFrom(["EACCES", "EPERM", "ENOTDIR", "EISDIR", "ELOOP", "ENAMETOOLONG", "EIO"]);
 
 const LINE_SENTENCE = "check analyzes the whole file, not one scenario.";
 
@@ -34,24 +33,7 @@ describe("describeFeatureArgRead", () => {
     );
   });
 
-  it("names a directory without calling it a missing file", () =>
-    hegel.test((tc) => {
-      const command = tc.draw(commandGen);
-      const relativePath = tc.draw(anyPath);
-      const described = describeFeatureArgRead({
-        command,
-        relativePath,
-        code: "EISDIR",
-        errorMessage: tc.draw(gs.text()),
-        lineBaseExists: tc.draw(gs.booleans()),
-      });
-      expect(described.kind).toBe("directory");
-      expect(described.message).toBe(`${command}: ${relativePath}: ${DIRECTORY_HINT}`);
-      expect(described.message).not.toContain("feature file not found");
-      expect(described.message.includes("\u2014")).toBe(false);
-    }));
-
-  it("keeps every code other than ENOENT and EISDIR as the error's own text", () =>
+  it("keeps every code other than ENOENT as the error's own text", () =>
     hegel.test((tc) => {
       const command = tc.draw(commandGen);
       const errorMessage = tc.draw(gs.text());

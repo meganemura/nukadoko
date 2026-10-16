@@ -45,8 +45,8 @@ that fails at the same import for the same ESM-only reason, and `nuka
 check` says so as `step-file-import-failed`.
 
 Then run `nuka check <feature>` and `nuka run <feature>` and read what they
-say. `nuka check` takes one file. A directory, and `<feature>:<line>`, are
-`nuka run` arguments. `nuka run` stops on any error `nuka check` reports
+say. Both take several files or a directory, and select the same files;
+`<feature>:<line>` is a `nuka run` argument only. `nuka run` stops on any error `nuka check` reports
 for the scenarios it selected; `nuka run --no-check <feature>` executes
 anyway, to see how a scenario `check` refuses actually fails. Fix whatever they point at, and run them again.
 Repeat until the existing suite is green: that is Stage 1's completion

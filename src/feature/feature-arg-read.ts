@@ -1,16 +1,15 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-// Responsibility: the stderr line `nuka check` writes when reading one
-// feature argument fails. `nuka run` walks a directory; check reads one
-// file, so a directory is a usage mistake rather than
-// a walk. A missing file, a `:line` suffix, a directory, and any other
-// read error all fail the same `readFileSync`. Reporting every one of them
-// as "feature file not found" sends the reader looking for a file that is
-// right there, or for a file that was never a file. Only ENOENT is a
-// missing file. A `:line` suffix is ENOENT on the suffixed path, so it is
-// told apart by whether the path with `:<digits>` removed exists. EISDIR
-// is a directory. Every other code keeps the error's own text.
+// Responsibility: the stderr line `nuka check` writes when a target does
+// not resolve to a file or a directory. A missing path, a `:line` suffix,
+// and any other error (a file used as a directory) all fail the same
+// `statSync`. Reporting every one of them as "feature file not found"
+// sends the reader looking for a file that is right there. Only ENOENT is
+// a missing path. A `:line` suffix is ENOENT on the suffixed path, so it
+// is told apart by whether the path with `:<digits>` removed exists, and
+// refused: check analyzes whole files. Every other code keeps the error's
+// own text.
 //
 // The suffix pattern matches `nuka run`'s own trailing `:<digits>` and
 // nothing else. It lives here, not in the runner: check sits below the
@@ -19,11 +18,9 @@ import path from "node:path";
 
 const LINE_SUFFIX_PATTERN = /^(.+):(\d+)$/;
 
-const DIRECTORY_HINT = "pass a .feature or .md file, or use nuka run for a directory";
-
 export type FeatureArgCommand = "nuka check";
 
-export type FeatureArgReadKind = "not-found" | "line" | "directory" | "other";
+export type FeatureArgReadKind = "not-found" | "line" | "other";
 
 export interface FeatureArgReadInput {
   readonly command: FeatureArgCommand;
@@ -31,7 +28,7 @@ export interface FeatureArgReadInput {
   readonly relativePath: string;
   /** `code` from a Node system error, when the failure has one. */
   readonly code: string | undefined;
-  /** The thrown error's own message. Used for every code other than ENOENT and EISDIR. */
+  /** The thrown error's own message. Used for every code other than ENOENT. */
   readonly errorMessage: string;
   /**
    * Whether the path with a trailing `:<digits>` removed exists.
@@ -48,12 +45,6 @@ export interface FeatureArgReadDescription {
 }
 
 export function describeFeatureArgRead(input: FeatureArgReadInput): FeatureArgReadDescription {
-  if (input.code === "EISDIR") {
-    return {
-      kind: "directory",
-      message: `${input.command}: ${input.relativePath}: ${DIRECTORY_HINT}`,
-    };
-  }
   if (input.code !== "ENOENT") {
     return {
       kind: "other",

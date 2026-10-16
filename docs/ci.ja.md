@@ -34,6 +34,7 @@ jobs:
 単独の `nuka check` には、まだ 2 つの使い道があります。
 1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` と `nuka tend` だけです。
 もう 1 つは、run が数秒で終わらないときにも数秒で終わらなければならないゲートです。
+このゲートは run と同じ対象、つまりファイルやディレクトリ(`npx nuka check features/checkout`)を受け、それについて run が止まるはずの error を報告します。
 
 ## ブラウザのプロジェクト: そのままコピーできる workflow
 

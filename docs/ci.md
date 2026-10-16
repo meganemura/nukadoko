@@ -39,7 +39,9 @@ project that lists it in its own `devDependencies`.
 
 `nuka check` on its own still has two uses: `additionalFeatureDirs`, which
 only `nuka check` and `nuka tend` walk, and a gate that has to stay seconds
-long when the run does not.
+long when the run does not. That gate takes the targets the run takes,
+files or directories (`npx nuka check features/checkout`), and reports the
+errors the run would stop on for them.
 
 ## A browser project: a workflow you can copy whole
 

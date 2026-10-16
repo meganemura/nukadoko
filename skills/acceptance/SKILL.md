@@ -128,7 +128,8 @@ those four; the rest carries the result to a person.
    `fixture-structural-violation` for a config fixture whose
    destructuring cannot be read, and that finding names the fixture.
    Application-specific evidence: `references/evidence.md`.
-3. **`nuka check <feature>`.** `references/running.md`. A schema that
+3. **`nuka check <feature>`**, or several files or a directory, the
+   targets step 4 runs. `references/running.md`. A schema that
    coerces the capture is not `capture-type-mismatch`
    (`references/writing-steps.md`). Compat glue that declares a done()
    callback is `done-callback-arity`.

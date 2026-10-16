@@ -1,13 +1,14 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
-import { parseFeatureSource, walkFeatureFiles } from "../feature/load-features.js";
-import { parseOathSource } from "../feature/parse-oath.js";
+import { parseFeatureSource, walkFeatureFiles, type FeatureParseError } from "../feature/load-features.js";
+import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
 import { isOathPath } from "../feature/resolve-oaths.js";
 import {
   DirectoryTargetLineError,
   FeatureFileNotFoundError,
   FeatureParseFailedError,
+  FeatureReadFailedError,
   NoFeatureFilesFoundError,
   NoMatchingScenarioError,
 } from "./errors.js";
@@ -91,34 +92,60 @@ export interface SelectedScenarios {
   readonly totalPickles: number;
 }
 
-/**
- * Reads and parses one `.feature` file already known to exist at
- * `relativePath` (rootDir-relative) — the single-file half of
- * `selectPickles`'s own work, factored out so both the file-target branch
- * and the directory-target branch (one call per file the walk found) share
- * it rather than each re-implementing "read, parse, wrap the failure".
- */
-function parseOneFeatureFile(rootDir: string, relativePath: string): SelectedFeature {
-  const absolutePath = path.join(rootDir, relativePath);
-
-  let source: string;
+function readFeatureSource(rootDir: string, relativePath: string): string {
   try {
-    source = readFileSync(absolutePath, "utf8");
-  } catch {
-    throw new FeatureFileNotFoundError(relativePath);
+    return readFileSync(path.join(rootDir, relativePath), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new FeatureFileNotFoundError(relativePath);
+    }
+    throw new FeatureReadFailedError(relativePath, error);
   }
+}
 
-  let gherkinDocument: GherkinDocument;
-  let pickles: readonly Pickle[];
+function parseSelectedSource(relativePath: string, source: string): SelectedFeature {
+  const { gherkinDocument, pickles } = isOathPath(relativePath)
+    ? parseOathSource(source, relativePath)
+    : parseFeatureSource(source, relativePath);
+  return { relativePath, gherkinDocument, pickles, selectedLines: null };
+}
+
+/** One selected file for `nuka run`: a file that does not parse refuses
+ * the run, since none of its scenarios can be executed. */
+function readSelectedFeature(rootDir: string, relativePath: string): SelectedFeature {
+  const source = readFeatureSource(rootDir, relativePath);
   try {
-    ({ gherkinDocument, pickles } = isOathPath(relativePath)
-      ? parseOathSource(source, relativePath)
-      : parseFeatureSource(source, relativePath));
+    return parseSelectedSource(relativePath, source);
   } catch (error) {
     throw new FeatureParseFailedError(relativePath, error);
   }
+}
 
-  return { relativePath, gherkinDocument, pickles, selectedLines: null };
+/**
+ * The selected files for `nuka check`, which reports a file that does not
+ * parse as a `feature-parse-error` finding beside every other file's
+ * findings, the same as its walk of featuresDir does. A file that cannot
+ * be read is still a refusal: the target is wrong, not the file.
+ */
+export function readFeaturesForCheck(
+  rootDir: string,
+  relativePaths: readonly string[],
+): { readonly features: readonly SelectedFeature[]; readonly parseErrors: readonly FeatureParseError[] } {
+  const features: SelectedFeature[] = [];
+  const parseErrors: FeatureParseError[] = [];
+  for (const relativePath of relativePaths) {
+    const source = readFeatureSource(rootDir, relativePath);
+    try {
+      features.push(parseSelectedSource(relativePath, source));
+    } catch (error) {
+      parseErrors.push({
+        relativePath,
+        message: error instanceof Error ? error.message : String(error),
+        line: error instanceof OathParseError ? error.line : undefined,
+      });
+    }
+  }
+  return { features, parseErrors };
 }
 
 /** Plain UTF-16 code-unit comparison (`<`/`>`), deliberately not
@@ -152,29 +179,26 @@ function featureFilesInDirectory(rootDir: string, relativePath: string): string[
     .sort(compareByteOrder);
 }
 
+/** Which lines of one selected file run: `null` selects the whole file. */
+export type SelectedFileLines = ReadonlySet<number> | null;
+
 /**
- * Loads the `.feature` file(s) `featureArg` names and selects which of
- * their pickles `nuka run` executes: every pickle, in file order, when no
- * `:line` was given, or (a single-file target only) only the pickle(s)
- * whose own gherkin `location.line` equals it — a Scenario Outline's
- * Examples row included, since `@cucumber/gherkin`'s `compile()` assigns
- * each expanded pickle the location of the row that produced it, not the
- * outline's own line (verified against this repo's own check-clean-project
- * fixture). `featureArg`'s target is a directory when it resolves
- * (`statSync`) to one; every other case, including a path that doesn't
- * exist at all, is a single-file target.
+ * Resolves `nuka run`'s targets to the files they select, sorted in byte
+ * order, without reading any of them. A target is a directory when it
+ * resolves (`statSync`) to one; every other case, including a path that
+ * doesn't exist at all, is a single-file target, which the read in
+ * `readSelectedFeature` then reports.
  */
-export function selectPickles(
+export function resolveFeatureTargets(
   rootDir: string,
-  featureArgs: string | readonly string[],
+  featureArgs: readonly string[],
   oathFiles: readonly string[] = [],
   oathDirectories: readonly string[] = [],
-): SelectedScenarios {
-  const args = typeof featureArgs === "string" ? [featureArgs] : featureArgs;
+): ReadonlyArray<readonly [string, SelectedFileLines]> {
   const selections = new Map<string, Set<number> | null>();
   const scannedDirectories: { readonly relativePath: string; readonly absolutePath: string }[] = [];
 
-  for (const featureArg of args) {
+  for (const featureArg of featureArgs) {
     const target = parseFeatureTarget(featureArg);
     const absolutePath = path.join(rootDir, target.relativePath);
     const normalizedRelativePath = path.relative(rootDir, path.resolve(rootDir, target.relativePath));
@@ -223,11 +247,29 @@ export function selectPickles(
     throw new NoFeatureFilesFoundError(relativePaths, absolutePaths, oathFiles.length > 0, onlyOathDirectories);
   }
 
+  return [...selections.entries()].sort(([a], [b]) => compareByteOrder(a, b));
+}
+
+/**
+ * Loads the `.feature` file(s) `featureArgs` names and selects which of
+ * their pickles `nuka run` executes: every pickle, in file order, when no
+ * `:line` was given, or (a single-file target only) only the pickle(s)
+ * whose own gherkin `location.line` equals it. A Scenario Outline's
+ * Examples row counts, since `@cucumber/gherkin`'s `compile()` assigns
+ * each expanded pickle the location of the row that produced it, not the
+ * outline's own line.
+ */
+export function selectPickles(
+  rootDir: string,
+  featureArgs: string | readonly string[],
+  oathFiles: readonly string[] = [],
+  oathDirectories: readonly string[] = [],
+): SelectedScenarios {
+  const args = typeof featureArgs === "string" ? [featureArgs] : featureArgs;
   let totalPickles = 0;
-  const features = [...selections.entries()]
-    .sort(([a], [b]) => compareByteOrder(a, b))
-    .map(([relativePath, selectedLines]) => {
-      const feature = parseOneFeatureFile(rootDir, relativePath);
+  const features = resolveFeatureTargets(rootDir, args, oathFiles, oathDirectories).map(
+    ([relativePath, selectedLines]) => {
+      const feature = readSelectedFeature(rootDir, relativePath);
       totalPickles += feature.pickles.length;
       if (selectedLines === null) {
         return feature;
@@ -239,7 +281,8 @@ export function selectPickles(
       }
       const pickles = feature.pickles.filter((pickle) => selectedLines.has(pickle.location?.line ?? 0));
       return { ...feature, pickles, selectedLines: [...selectedLines].sort((a, b) => a - b) };
-    });
+    },
+  );
 
   return { features, totalPickles };
 }

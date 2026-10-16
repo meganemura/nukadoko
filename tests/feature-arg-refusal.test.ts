@@ -6,14 +6,13 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 // Responsibility: `nuka check` used to report every failed
 // read of the feature argument as "feature file not found". A `:line`
-// suffix, a directory, and any other read error (permission denied, a file
-// used as a directory) are different mistakes, and the message has to name
-// the one that happened. `nuka check` already names `:line` (see
+// suffix and any other read error (permission denied, a file used as a
+// directory) are different mistakes, and the message has to name the one
+// that happened. A directory is not a mistake: check selects the files
+// under it the way `nuka run` does (check-targets.test.ts). `nuka check` already names `:line` (see
 // check-line-not-supported.test.ts). This file pins the cases that still
 // collapsed. A genuinely
 // missing file stays "feature file not found" in the existing suites.
-
-const DIRECTORY_HINT = "pass a .feature or .md file, or use nuka run for a directory";
 
 async function invoke(
   command: "check",
@@ -27,20 +26,6 @@ async function invoke(
 }
 
 describe("nuka check: a feature argument that is not a missing file", () => {
-  it("tells the reader to pass a file when the argument is a directory", async () => {
-    const rootDir = await copyFixtureToTempDir("check-step-line-project");
-    try {
-      const { exitCode, stdout, stderr } = await invoke("check", "features", rootDir);
-      expect(exitCode).toBe(1);
-      expect(stdout).toBe("");
-      expect(stderr).toContain(DIRECTORY_HINT);
-      expect(stderr).toContain("features");
-      expect(stderr).not.toContain("feature file not found");
-    } finally {
-      await removeTempDir(rootDir);
-    }
-  });
-
   it("prints the read error when the feature file cannot be read", async () => {
     const rootDir = await copyFixtureToTempDir("check-step-line-project");
     const feature = path.join(rootDir, "features", "probe.feature");
@@ -80,7 +65,6 @@ describe("nuka check: a feature argument that is not a missing file", () => {
       expect(stdout).toBe("");
       expect(stderr).toContain(":line is not supported");
       expect(stderr).toContain("nuka check features");
-      expect(stderr).not.toContain(DIRECTORY_HINT);
       expect(stderr).not.toContain("feature file not found");
     } finally {
       await removeTempDir(rootDir);

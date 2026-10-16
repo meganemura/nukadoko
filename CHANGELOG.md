@@ -28,6 +28,20 @@ just until 0.1.
   first failed run shows what the feature line bound. A stub with no args
   throws `not implemented: <name>` as before. An args key named `Error`,
   `JSON`, or `String`, which the stub's body reads, is now refused.
+- **`nuka check [feature..]` takes the targets `nuka run` takes.**
+  Several files, a directory walked for `.feature` files and the oaths
+  configured under it, or both, selected by the same code `nuka run` uses,
+  so the errors `nuka run <targets>` prints before executing are the errors
+  `nuka check <targets>` reports, and a PR gate can name a directory. With
+  no target, `nuka check` still checks featuresDir, additionalFeatureDirs,
+  and every oath. `:line` is still refused, since check analyzes whole
+  files. A selected file that does not parse stays a `feature-parse-error`
+  finding beside the other files' findings. The `--json` report keeps its
+  shape. A directory argument is no longer refused with "pass a .feature or
+  .md file, or use nuka run for a directory". `nuka run` and `nuka check`
+  now name a feature file that exists but cannot be read (permission
+  denied) with the system error's own text instead of "Feature file not
+  found".
 
 - **`nuka scaffold <name> --from <step>.<key>` writes the chain to an earlier step.**
   Repeat the flag for each key. For each one, the scaffolded file imports

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
@@ -6,18 +6,14 @@ import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
 import { discoverSteps } from "../discover/discover-steps.js";
-import { describeFailedFeatureRead, describeFeatureArgRead } from "../feature/feature-arg-read.js";
 import {
   attachStepLines,
   findOutlinesThatDoNotRun,
   findSerialTagOnScenario,
   loadFeaturesFromDirs,
-  parseFeatureSource,
   type LoadFeaturesResult,
   type OutlineDoesNotRun,
 } from "../feature/load-features.js";
-import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
-import { isOathPath } from "../feature/resolve-oaths.js";
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../fixture/validate-fixtures.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
@@ -80,117 +76,6 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 // keeps its own pre-existing category (`feature-parse-error`) for the same
 // reason: one broken file must not stop every other feature's issues from
 // being reported.
-//
-// `featureArg`, when given, *replaces*
-// which feature(s) get checked — the `featuresDir` (+`additionalFeatureDirs`)
-// walk above is skipped entirely in favor of that
-// one file (not added to it: an existing error under `featuresDir` would
-// otherwise bury the very feature this argument exists to single out).
-// `discoverSteps` above is untouched by this parameter (config/binding
-// checks and the vocabulary they check features against always come from
-// `featuresDir`) — only the `loadFeaturesFromDirs` call
-// below is conditional. A `featureArg` that doesn't exist, names a `:line`,
-// names a directory, or can't be read is a usage mistake, not a project
-// finding. The message names which of those it was: only a missing file is
-// `CheckFeatureNotFoundError`. src/cli/check.ts's existing catch-all
-// (already used for ConfigError/DuplicateStepError) turns that error into
-// stderr + exit 1 unchanged. A file that *does* exist but
-// fails to parse, by contrast, stays a `feature-parse-error` report entry —
-// the same category a broken file under `featuresDir` gets — since that is
-// a real property of the feature file itself, not a bad argument.
-
-export class CheckFeatureNotFoundError extends Error {
-  readonly relativePath: string;
-
-  constructor(relativePath: string) {
-    super(
-      describeFeatureArgRead({
-        command: "nuka check",
-        relativePath,
-        code: "ENOENT",
-        errorMessage: "",
-        lineBaseExists: false,
-      }).message,
-    );
-    this.name = "CheckFeatureNotFoundError";
-    this.relativePath = relativePath;
-  }
-}
-
-class CheckLineNotSupportedError extends Error {
-  readonly relativePath: string;
-
-  constructor(relativePath: string, line: string) {
-    super(
-      describeFeatureArgRead({
-        command: "nuka check",
-        relativePath: `${relativePath}:${line}`,
-        code: "ENOENT",
-        errorMessage: "",
-        lineBaseExists: true,
-      }).message,
-    );
-    this.name = "CheckLineNotSupportedError";
-    this.relativePath = relativePath;
-  }
-}
-
-// Path resolution matches `nuka run` (relative to `rootDir`,
-// absolute paths accepted as-is). No `:line`
-// support: check is a static analysis over a whole
-// file, not one scenario.
-function loadSingleFeature(rootDir: string, featureArg: string): LoadFeaturesResult {
-  const relativePath = path.relative(rootDir, path.resolve(rootDir, featureArg));
-  const absolutePath = path.join(rootDir, relativePath);
-
-  let source: string;
-  try {
-    source = readFileSync(absolutePath, "utf8");
-  } catch (error) {
-    // Missing, `:line`, a directory, and an unreadable file all fail this
-    // read. The code on the error is what separates them; `:line` needs
-    // one more question, asked inside describeFailedFeatureRead, because
-    // the suffixed path is ENOENT whether or not the file itself exists.
-    const described = describeFailedFeatureRead("nuka check", rootDir, relativePath, error);
-    if (described.kind === "line") {
-      throw new CheckLineNotSupportedError(described.basePath!, described.line!);
-    }
-    if (described.kind === "not-found") {
-      throw new CheckFeatureNotFoundError(relativePath);
-    }
-    throw new Error(described.message);
-  }
-
-  try {
-    // `attachStepLines`/`findSerialTagOnScenario` mirror src/feature/
-    // load-features.ts's own `loadFeaturesFromDirs` — the same two
-    // "read the GherkinDocument before it's dropped" steps, done here too
-    // since this function is the featureArg path's own equivalent of that
-    // walk, not a call through it.
-    const { gherkinDocument, pickles } = isOathPath(relativePath)
-      ? parseOathSource(source, relativePath)
-      : parseFeatureSource(source, relativePath);
-    return {
-      features: [{ relativePath, pickles: attachStepLines(pickles, gherkinDocument) }],
-      parseErrors: [],
-      serialTagOnScenario: findSerialTagOnScenario(gherkinDocument, relativePath),
-      outlinesThatDoNotRun: findOutlinesThatDoNotRun(gherkinDocument, relativePath),
-    };
-  } catch (error) {
-    return {
-      features: [],
-      parseErrors: [
-        {
-          relativePath,
-          message: error instanceof Error ? error.message : String(error),
-          line: error instanceof OathParseError ? error.line : undefined,
-        },
-      ],
-      serialTagOnScenario: [],
-      outlinesThatDoNotRun: [],
-    };
-  }
-}
 
 // esbuild's own transform-error format, measured directly rather than
 // guessed:
@@ -231,18 +116,17 @@ function extractImportFailureLine(message: string, rootDir: string, issueFile: s
   return Number(rawLine);
 }
 
-export async function analyzeProject(rootDir: string, featureArg?: string): Promise<CheckReport> {
+/** The report a `nuka check` with no target gives: every feature under
+ * featuresDir and additionalFeatureDirs, and every configured oath. */
+export async function analyzeProject(rootDir: string): Promise<CheckReport> {
+  // additionalFeatureDirs joins featuresDir here: a no-target `nuka check`
+  // is one of the two commands whose default scan includes it (`nuka tend`
+  // is the other), while `nuka run`'s default scan does not. A config
+  // mistake in additionalFeatureDirs itself is config-check.ts's own
+  // `additional-feature-dir-missing`, not repeated here;
+  // `missingAdditionalDirs` is intentionally unread.
   return analyze(rootDir, (config) =>
-    featureArg === undefined
-      ? // additionalFeatureDirs joins featuresDir here too: a no-argument
-        // `nuka check` is one of the two commands whose default scan
-        // includes it (`nuka tend` is the other), while `nuka run`'s
-        // default scan does not. A config mistake in additionalFeatureDirs
-        // itself is config-check.ts's own `additional-feature-dir-missing`,
-        // not repeated here; `missingAdditionalDirs` is intentionally
-        // unread.
-        loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths)
-      : loadSingleFeature(rootDir, featureArg),
+    loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths),
   );
 }
 
@@ -255,26 +139,31 @@ export interface SelectedFeatureForCheck {
 }
 
 /**
- * The report `nuka check` would give, with the feature-level checks run
- * over exactly the pickles `nuka run` is about to execute instead of a walk
- * of featuresDir. Every project-wide finding (config, bindings, every
- * step's own declaration, fixture definitions, step files that fail to
- * import) is the same as `analyzeProject`'s, because those break a run no
- * matter which scenario it selects. A `:line` target narrows only the
- * scenario-level findings: a run of one scenario is not refused over a
- * sibling scenario it does not execute.
+ * The report for the features a `nuka run` or `nuka check` target
+ * selects, with the feature-level checks run over exactly those pickles
+ * instead of a walk of featuresDir. Every project-wide finding (config,
+ * bindings, every step's own declaration, fixture definitions, step files
+ * that fail to import) is the same as `analyzeProject`'s, because those
+ * break a run no matter which scenario it selects. A `:line` target
+ * narrows only the scenario-level findings: a run of one scenario is not
+ * refused over a sibling scenario it does not execute.
+ *
+ * `parseErrors` is empty for `nuka run`, which refuses a target that does
+ * not parse. `nuka check` passes the selected files that failed to parse,
+ * so one broken file is a finding beside the others' findings, the same
+ * as in a walk of featuresDir.
  */
 export async function analyzeRunSelection(
   rootDir: string,
   selected: readonly SelectedFeatureForCheck[],
+  parseErrors: LoadFeaturesResult["parseErrors"] = [],
 ): Promise<CheckReport> {
   return analyze(rootDir, () => ({
     features: selected.map((feature) => ({
       relativePath: feature.relativePath,
       pickles: attachStepLines(feature.pickles, feature.gherkinDocument),
     })),
-    // `nuka run` has already refused a target that does not parse.
-    parseErrors: [],
+    parseErrors,
     serialTagOnScenario: selected.flatMap((feature) =>
       findSerialTagOnScenario(feature.gherkinDocument, feature.relativePath),
     ),
