@@ -114,6 +114,8 @@ interface RunArgs {
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
   quiet?: boolean;
+  /** Writes the scenario records to stdout when stdout is a terminal too. */
+  records?: boolean;
   /** Same `NaN`/fraction caveat as `concurrency` below; run.ts refuses
    * anything but a whole number of 1 or more. */
   repeat?: number;
@@ -562,6 +564,13 @@ export async function runCli(
           default: false,
           describe: "suppress the per-step/per-scenario progress lines (output locations and the summary still print)",
         })
+        .option("records", {
+          type: "boolean",
+          default: false,
+          describe:
+            "write one JSON scenario record per line to stdout even when stdout is a terminal " +
+            "(they are written there whenever stdout is a pipe or a file)",
+        })
         .option("concurrency", {
           type: "number",
           default: 1,
@@ -594,6 +603,7 @@ export async function runCli(
         session: args.session ?? null,
         env: args.env ?? null,
         quiet: args.quiet ?? false,
+        records: args.records ?? false,
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
         summaryPath: args.summary ?? null,

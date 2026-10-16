@@ -1737,7 +1737,7 @@ scenario は見出しか `---` で分け、narration は引用かフェンスに
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--summary <path>]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1851,6 +1851,11 @@ session は、ログイン状態を 1 つの scenario から次の scenario へ�
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
+これは stdout が端末でないとき(パイプ、ファイル、エージェントのシェル、CI のログ)に出力され、端末では `--records` を渡したときだけ出力されます。
+端末の前にいる人は stderr を読み、record はどちらの場合もディスクにあり、`scenarios` の行がそのディレクトリを示します。
+そのため、端末に scenario ごとの JSON の行を出すのは雑音になります。
+疑似端末を通して stdout を読むツールは `--records` を渡します。
+`--concurrency` でも同じ規則です。
 プロジェクトのコードが `console.log` や `process.stdout.write` で書いたテキストは、stderr に渡されます。
 これは step、Before と After の hook、BeforeAll と AfterAll、fixture の setup と teardown、World のコンストラクタ、読み込み中の step ファイル、timeout の後も動き続ける step に当てはまります。
 プロジェクトのコードが `stdio: "inherit"` で起動した子プロセスは file descriptor 1 に直接書くので、その出力は stdout に残ります。
@@ -3559,8 +3564,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
-                              stdout stays NDJSON, one record per scenario,
-                              always. Text project code (a step, a hook, a
+                              stdout is NDJSON, one record per scenario,
+                              when it is not a terminal; in a terminal
+                              only under --records. Text project code (a step, a hook, a
                               fixture) writes through console.log or
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature

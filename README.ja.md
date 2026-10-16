@@ -182,9 +182,6 @@ summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
 1 scenario: 1 passed, 0 failed  (2s)
 ```
 
-(`nuka run` は stdout にも scenario ごとに JSON の scenario record を 1 行出力します。
-上ではそれを省いています。)
-
 `nuka run` は、何かを実行する前に、その scenario について `nuka check` が報告する内容を報告し、error があれば止まります。
 そのため、どの step にも一致しない行が run に届くことはありません。
 `nuka check` を単独で実行すると、同じ check が数秒で済みます。
@@ -943,7 +940,8 @@ run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、�
 対象を渡さない `nuka check` は `additionalFeatureDirs` も対象にしますが、対象を渡さない `nuka run` はそれを含みません。
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
-stdout はどちらの場合も NDJSON のままです。
+stdout が端末でないとき(パイプ、ファイル、CI のログ)は、stdout に 1 行 1 件の JSON の scenario record が出力されます。
+端末では `--records` を渡したときだけ出力されます。
 失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
 そのため、CI のログだけで失敗の理由が分かります。
 失敗した step が、プログラムが 0 以外で終わった step から値を読んでいたときは、その 2 行の間に `used` 行が入ります。

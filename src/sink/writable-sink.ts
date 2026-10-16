@@ -7,4 +7,7 @@
 
 export interface WritableSink {
   write(chunk: string): unknown;
+  /** `true` when the stream is a terminal, as `process.stdout.isTTY` says.
+   * Absent reads as not a terminal: a pipe, a file, or a test's capture. */
+  readonly isTTY?: boolean;
 }

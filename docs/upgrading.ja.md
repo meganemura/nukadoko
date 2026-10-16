@@ -28,6 +28,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.16.0 から次のリリースへ
+
+- **`nuka run` は、stdout が端末のとき、stdout に scenario record を出力しません。**
+  パイプ、ファイル、CI のログ、エージェントがパイプ越しに動かすシェルには、これまでどおり 1 行 1 件の JSON の record が出力されます。
+  疑似端末の下で `nuka run` を動かし、その stdout を解析するツールは `--records` を渡します。
+  `--records` を渡すと、端末にも record が出力されます。
+  ディスク上の record、stderr の行、`nuka do` の stdout は変わりません。
+
 ## 0.15.0 から 0.16.0 へ
 
 - **`nuka tend` は、求められない限り `step-rationale-missing` と `schema-field-undescribed` を外します。**

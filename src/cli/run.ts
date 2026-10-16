@@ -224,9 +224,11 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // call, and is undefined under `--quiet`. `--quiet` suppresses only the
 // step and scenario boundary lines. `writeOutputLocations` and
 // `writeRunSummary` near the return are unconditional: each is written
-// once, and naming where output landed is not what that flag is for. There
-// is no TTY check. A CI log wants the same progress, and stderr staying
-// busy is invisible to stdout's NDJSON readers.
+// once, and naming where output landed is not what that flag is for. The
+// progress has no TTY check. A CI log wants the same progress, and stderr
+// staying busy is invisible to stdout's NDJSON readers. The records on
+// stdout do have one: in a terminal they are left out unless `--records`
+// asks for them (see `runRunInner`).
 //
 // The Markdown run summary (src/run/run-summary.ts) is the reader-facing
 // counterpart of those stderr lines. Every written record is noted as it is
@@ -277,6 +279,9 @@ export interface RunRunOptions {
    * output-location and summary lines at the
    * end of a run are written either way; see this file's own header. */
   quiet: boolean;
+  /** `--records`: write the scenario records to stdout when it is a
+   * terminal as well. Off a terminal they are written either way. */
+  records: boolean;
   /** `--concurrency`'s raw value; default 1 (cli/run-cli.ts's own `??`). At
    * 1, every other paragraph in this file's own header describes what
    * happens — the branch near this function's own `restoreAllureRuntime`
@@ -330,7 +335,14 @@ function exportLocations(
 }
 
 async function runRunInner(options: RunRunOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
-  const { rootDir, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stdout, stderr } = options;
+  const { rootDir, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
+  // A person at a terminal reads stderr; the records are on disk and the
+  // `scenarios` line names them, so a line of JSON per scenario there is
+  // noise. A pipe, a file, an agent's shell, and a CI log are not terminals,
+  // so every machine reader still gets the stream without asking. A driver
+  // that reads stdout through a pseudo-terminal passes `--records`.
+  const stdout: WritableSink =
+    options.records || options.stdout.isTTY !== true ? options.stdout : { write: () => true };
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a

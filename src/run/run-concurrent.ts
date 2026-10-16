@@ -124,6 +124,8 @@ export interface RunConcurrentOptions {
   /** Hears every scenario record the parent forwards, so the parent writes
    * one run summary for the whole run (src/run/run-summary.ts). */
   readonly onRecord: (record: ScenarioRecord) => void;
+  /** Where each forwarded record goes. In a terminal without `--records`,
+   * src/cli/run.ts passes a sink that drops it, the same rule as at 1. */
   readonly stdout: WritableSink;
   readonly stderr: WritableSink;
 }

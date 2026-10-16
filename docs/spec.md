@@ -2009,7 +2009,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2157,7 +2157,13 @@ machine can run at once is a fact about that machine, and a committed
 config file is the wrong place to keep it.
 
 Each run uses two output channels for two readers. stdout contains only NDJSON,
-with one scenario record per line for scripts to parse. Text project code
+with one scenario record per line for scripts to parse. It is written when
+stdout is not a terminal (a pipe, a file, an agent's shell, a CI log), and
+in a terminal only under `--records`. A person at a terminal reads stderr,
+the records are on disk either way, and the `scenarios` line names their
+directory, so a line of JSON per scenario there would be noise. A tool that
+reads stdout through a pseudo-terminal passes `--records`. The same rule
+holds under `--concurrency`. Text project code
 writes through `console.log` or `process.stdout.write` is delivered on
 stderr. That covers a step, a Before or After hook, a BeforeAll or
 AfterAll, a fixture's setup and teardown, a World constructor, a step file
@@ -4132,8 +4138,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
-                              stdout stays NDJSON, one record per scenario,
-                              always. Text project code (a step, a hook, a
+                              stdout is NDJSON, one record per scenario,
+                              when it is not a terminal; in a terminal
+                              only under --records. Text project code (a step, a hook, a
                               fixture) writes through console.log or
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature

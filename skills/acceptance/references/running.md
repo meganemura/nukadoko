@@ -67,8 +67,9 @@ nothing.
    line. A failed step adds its error's first line and its step record
    path, and each failed scenario gets a `rerun` line after the summary;
    `--quiet` drops the other progress lines when the terminal gets noisy.
-   stdout stays NDJSON, one scenario record per line, unaffected either
-   way. Text a step, a hook, or a fixture writes through `console.log` or
+   stdout is NDJSON, one scenario record per line, when it is not a
+   terminal (your shell's pipe or a CI log); in a terminal it is empty
+   unless you pass `--records`. Text a step, a hook, or a fixture writes through `console.log` or
    `process.stdout.write` is delivered on stderr, so it does not break
    that stream. A child process spawned with `stdio: "inherit"` still
    writes to stdout directly. The run also

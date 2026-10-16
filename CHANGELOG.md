@@ -7,6 +7,20 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **`nuka run` writes its scenario records to stdout only when stdout is not a terminal, or under `--records`.**
+  In a terminal, one JSON line per scenario sat between a person and the
+  progress they were reading, and the README had to explain it away. The
+  records are on disk either way, and the `scenarios` line on stderr names
+  their directory. A pipe, a file, an agent's shell, and a CI log are not
+  terminals, so they get the same NDJSON stream as before without asking.
+  The new `--records` flag writes the stream to a terminal too, for a tool
+  that drives `nuka run` through a pseudo-terminal. The rule holds under
+  `--concurrency`; worker processes are always piped. `nuka do`'s step
+  record on stdout is unchanged. Breaking for a pseudo-terminal driver
+  that parses stdout: see docs/upgrading.md.
+
 ## 0.16.0 — 2026-10-17
 
 ### Added

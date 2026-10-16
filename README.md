@@ -187,9 +187,6 @@ summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
 1 scenario: 1 passed, 0 failed  (2s)
 ```
 
-(`nuka run` also prints one JSON scenario record per scenario on stdout;
-it is left out above.)
-
 Before it executes anything, `nuka run` reports what `nuka check` reports
 for those scenarios and stops on an error, so a line no step matches never
 reaches a run. `nuka check` alone is the same check, in seconds.
@@ -1010,7 +1007,9 @@ and reports the errors that run would stop on; with no target,
 target leaves out.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
-goes (`--quiet` quiets the progress only); stdout stays NDJSON either way.
+goes (`--quiet` quiets the progress only). stdout carries one JSON
+scenario record per line when it is not a terminal (a pipe, a file, a CI
+log), and in a terminal only under `--records`.
 A failed step prints the first line of its error and the path of its step
 record under its progress line, so a CI log says why it failed. When the
 failed step read from a step whose program exited nonzero, a `used` line

@@ -24,5 +24,5 @@ import type { WritableSink } from "../sink/writable-sink.js";
 export function divertProcessStdoutToStderr(): WritableSink {
   const recordWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
-  return { write: (chunk: string) => recordWrite(chunk) };
+  return { write: (chunk: string) => recordWrite(chunk), isTTY: process.stdout.isTTY === true };
 }

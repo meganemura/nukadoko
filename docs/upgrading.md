@@ -33,6 +33,15 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.16.0 to the next release
+
+- **`nuka run` writes no scenario record to stdout when stdout is a
+  terminal.** A pipe, a file, a CI log, and a shell an agent drives through
+  a pipe still get one JSON record per line, unchanged. A tool that runs
+  `nuka run` under a pseudo-terminal and parses its stdout passes
+  `--records`, which writes them to a terminal too. The records on disk,
+  the stderr lines, and `nuka do`'s stdout do not change.
+
 ## 0.15.0 to 0.16.0
 
 - **`nuka tend` leaves out `step-rationale-missing` and
