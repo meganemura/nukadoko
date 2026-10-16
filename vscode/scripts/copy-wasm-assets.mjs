@@ -3,7 +3,7 @@
 // needs where the bundled extension can find them at runtime.
 //
 // esbuild bundles JavaScript; it does not bundle a WebAssembly binary into
-// that output. web-tree-sitter's own engine and the TypeScript/TSX grammars
+// that output. web-tree-sitter's own engine and the TypeScript grammar
 // each ship as a separate .wasm file in their npm package, so this script
 // copies them next to the bundled `dist/extension.js` instead. Nothing in
 // `src/extension.ts` loads them yet (that is a later phase's work), but the
@@ -28,7 +28,6 @@ const wasmOutDir = path.join(vscodeRoot, "dist", "wasm");
 const assets = [
   path.join(vscodeRoot, "node_modules", "web-tree-sitter", "web-tree-sitter.wasm"),
   path.join(vscodeRoot, "node_modules", "tree-sitter-typescript", "tree-sitter-typescript.wasm"),
-  path.join(vscodeRoot, "node_modules", "tree-sitter-typescript", "tree-sitter-tsx.wasm"),
 ];
 
 async function main() {

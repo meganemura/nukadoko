@@ -1,5 +1,5 @@
 // Responsibility: initialize the web-tree-sitter WASM engine exactly once
-// and hand back the TypeScript/TSX Language objects, memoized so every
+// and hand back the TypeScript Language object, memoized so every
 // caller in this package shares one Parser.init() call and one Language.load
 // per grammar rather than repeating the (slow) WASM instantiation on every
 // file. Running tree-sitter itself is the extension's own dependency
@@ -79,22 +79,13 @@ async function ensureInitialized(): Promise<void> {
 }
 
 let typescriptLanguagePromise: Promise<Language> | undefined;
-let tsxLanguagePromise: Promise<Language> | undefined;
 
-/** The TypeScript (`.ts`/`.mts`) grammar, loaded once and reused for every
- * file this package parses. */
+/** The TypeScript grammar, loaded once and reused for every step file this
+ * package parses, `.js` and `.mjs` included, since TypeScript syntax
+ * covers plain JavaScript. */
 export async function getTypeScriptLanguage(): Promise<Language> {
   await ensureInitialized();
   typescriptLanguagePromise ??= Language.load(resolveWasmPath("tree-sitter-typescript.wasm"));
   return typescriptLanguagePromise;
 }
 
-/** The TSX (`.tsx`) grammar -- a separate wasm from plain TypeScript
- * (tree-sitter-typescript ships the two as distinct grammars, since JSX
- * syntax changes how `<` is parsed). Loaded once and reused, same as
- * {@link getTypeScriptLanguage}. */
-export async function getTsxLanguage(): Promise<Language> {
-  await ensureInitialized();
-  tsxLanguagePromise ??= Language.load(resolveWasmPath("tree-sitter-tsx.wasm"));
-  return tsxLanguagePromise;
-}

@@ -18,7 +18,7 @@
 // other name this module doesn't recognize, never reported as unresolved
 // (it was never a candidate declaration to begin with).
 import type { Node } from "web-tree-sitter";
-import { getTsxLanguage, getTypeScriptLanguage, Parser } from "./tree-sitter-runtime.js";
+import { getTypeScriptLanguage, Parser } from "./tree-sitter-runtime.js";
 
 export interface SourcePosition {
   readonly row: number;
@@ -332,7 +332,7 @@ function collectImportInfo(root: Node): ImportInfo {
  * comment.
  */
 export async function extractStepDeclarations(filePath: string, sourceText: string): Promise<ExtractionResult> {
-  const language = filePath.endsWith(".tsx") ? await getTsxLanguage() : await getTypeScriptLanguage();
+  const language = await getTypeScriptLanguage();
   const parser = new Parser();
   try {
     parser.setLanguage(language);

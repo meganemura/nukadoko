@@ -6,7 +6,8 @@
   read the same step files `nuka` loads: `.ts`, `.mts`, `.js`, and `.mjs`.
   A `.mts`, `.js`, or `.mjs` step file was not read before. A `.tsx` file
   and a `.d.ts` or `.d.mts` declaration file are no longer read, because
-  `nuka` never loads a step from one.
+  `nuka` never loads a step from one. The package no longer ships the TSX
+  grammar.
 - The step index skips `build`, `coverage`, and `.next` as well as
   `node_modules`, `dist`, `out`, `.git`, and `.nukadoko`. A file written
   under one of them no longer rebuilds the index, so an `npm install` or
