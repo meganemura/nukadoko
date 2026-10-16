@@ -179,10 +179,10 @@ feature ファイルとそれを支えるコードは、`features/` の下に一
 discovery は `featuresDir` を歩き、`.ts`、`.mts`、`.js`、`.mjs` の各ファイルを対象にします。
 step 名は、ファイル名から拡張子を取り除いた名前です。
 discovery は、どの深さでも `node_modules` と `.git`、`.nukadoko`、`.vscode` などのドットディレクトリをスキップします。
-`.d.ts` と `.d.mts` は step 定義ではなく型宣言であるため、対象から除外します。
+`.d.ts`、`.d.mts`、`.d.cts` は step 定義ではなく型宣言であるため、対象から除外します。
 
-discovery は `.cjs` ファイルを特定しますが、インポートしません。
-nukadoko は ESM-only です。
+discovery は `.cjs` と `.cts` のファイルを特定しますが、インポートしません。
+どちらの拡張子も定義上 CommonJS であり、nukadoko は ESM-only です。
 同じ CommonJS の go/no-go については、後述の「Compat steps」を参照してください。
 `nuka check` は、そのファイルを `step-file-unsupported-extension` として報告します。
 この報告により、そのファイルの定義が説明のつかない `undefined-step` として再び現れることを防ぎます。
@@ -1491,7 +1491,7 @@ import { Given, When, Then } from "nukadoko/compat";
   単一の `@tag` / `not @tag` を超える hook のタグ式は、`unsupported-hook-tag-expression` エラーになります。
   どちらも、何かが実行される前に、そのファイルのテキストだけから分かります。
   その隣にはさらに 2 つの所見があり、どちらも 1 つのファイルの中身についてではなく discovery 自身が歩く範囲についてのものです。
-  `.cjs` ファイルが `featuresDir` の下にあるときの `step-file-unsupported-extension`(nukadoko がそれを import しない理由は前述の「型付き step」を参照)と、歩いた結果として試せるものが何もなかったときの `no-step-files-found` です。
+  `.cjs` または `.cts` のファイルが `featuresDir` の下にあるときの `step-file-unsupported-extension`(nukadoko がそれを import しない理由は前述の「型付き step」を参照)と、歩いた結果として試せるものが何もなかったときの `no-step-files-found` です。
   どちらも、実際に何を見た結果なのかを名指しします。
   これは、`nuka tend` 自身の `scanned:` 行が従っているのと同じ「所見が嘘のとき、それに気づけるように」という論拠です。
   `undefined-step` の所見は、引用符の付け忘れも示せます。
@@ -3765,7 +3765,7 @@ nuka check [feature..] [--json]
                               override that owns neither page nor context,
                               config coherence, unreadable step files
                               (reported, not fatal, the rest of the project
-                              is still checked), a `.cjs` file discovery
+                              is still checked), a `.cjs` or `.cts` file discovery
                               walks but never imports, a featuresDir scan
                               that found nothing loadable, unsupported hook
                               tag expressions, a compat hook or step declaring more

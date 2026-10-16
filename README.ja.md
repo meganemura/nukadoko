@@ -897,7 +897,7 @@ glue をテキストとして読むことは、glue の中に見える障害を�
 つまり CommonJS のスイートには、他の何より先にモジュール形式の変更が必要です。
 監査した 8 本のうち 2 本は、全体が CommonJS でした。
 これはファイル拡張子の話ではなく、モジュール形式の話です。
-`.js` や `.mjs` の glue は他と同じように読まれ、`.cjs` のファイルは、後になって何も定義していない step として現れる代わりに、`nuka check` がそれを名指しします。
+`.js` や `.mjs` の glue は他と同じように読まれ、`.cjs` や `.cts` のファイルは、後になって何も定義していない step として現れる代わりに、`nuka check` がそれを名指しします。
 
 手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
 

@@ -197,7 +197,7 @@ const CHECK_CODES = {
     severity: "error",
   },
   "step-file-unsupported-extension": {
-    description: "Discovery found a .cjs step file; nukadoko is ESM-only and never imports it.",
+    description: "Discovery found a .cjs or .cts step file; nukadoko is ESM-only and never imports it.",
     severity: "error",
   },
   "table-docstring-key-mismatch": {

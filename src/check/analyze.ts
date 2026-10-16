@@ -262,7 +262,7 @@ async function reportFor(
   for (const filePath of unsupportedExtensionFiles) {
     errors.push({
       code: "step-file-unsupported-extension",
-      message: `discovery found "${filePath}", which is CommonJS (.cjs extension); nukadoko is ESM-only and never imports it, so any step it defines never reaches the vocabulary`,
+      message: `discovery found "${filePath}", which is CommonJS (${path.extname(filePath)} extension); nukadoko is ESM-only and never imports it, so any step it defines never reaches the vocabulary`,
       file: filePath,
     });
   }

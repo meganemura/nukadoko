@@ -42,8 +42,8 @@ should carry the trace.
 Extension decides what discovery reads, not the suite's own history: `.ts`,
 `.mts`, `.js`, and `.mjs` glue are all read the same way, so a suite that
 was always plain JavaScript needs no rewrite to TypeScript just to start
-this stage. A `.cjs` file is the one exception: nukadoko is ESM-only, so
-discovery never imports one; `nuka check` names it instead
+this stage. A `.cjs` or `.cts` file is the one exception: both are CommonJS
+by extension and nukadoko is ESM-only, so discovery never imports one; `nuka check` names it instead
 (`step-file-unsupported-extension`) rather than letting it disappear as an
 unexplained `undefined-step`. Renaming it to `.js` only helps if the file's
 own code is already ES module syntax; if it still calls `require(...)`,

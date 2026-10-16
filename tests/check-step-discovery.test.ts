@@ -34,6 +34,27 @@ describe("nuka check: step-file-unsupported-extension", () => {
     expect(exitCode).toBe(1);
   });
 
+  it("names a .cts file the same way, and skips a .d.cts declaration", async () => {
+    const stdout = createCaptureSink();
+    await runCli(["check", "--json"], {
+      rootDir: fixture("check-cjs-project"),
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    const report = JSON.parse(stdout.text()) as {
+      errors: Array<{ code: string; message: string; file?: string }>;
+    };
+    const issues = report.errors.filter((entry) => entry.code === "step-file-unsupported-extension");
+    expect(issues.map((entry) => entry.file)).toEqual([
+      path.join("features", "steps", "legacy.cjs"),
+      path.join("features", "steps", "legacy.cts"),
+    ]);
+    expect(issues[1]?.message).toBe(
+      `discovery found "${path.join("features", "steps", "legacy.cts")}", which is CommonJS (.cts extension); nukadoko is ESM-only and never imports it, so any step it defines never reaches the vocabulary`,
+    );
+  });
+
   it("does not fire when no .cjs file exists under featuresDir", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {

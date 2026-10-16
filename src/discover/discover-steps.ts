@@ -167,11 +167,11 @@ export interface DiscoveryResult {
    * src/check/feature-check.ts's `file`). `message` and `line` come from
    * src/discover/import-failure.ts. */
   readonly importFailures: readonly { filePath: string; message: string; line?: number }[];
-  /** rootDir-relative paths of every `.cjs` file this run's walk found
+  /** rootDir-relative paths of every `.cjs` or `.cts` file this run's walk found
    * under `featuresDir` (skipping `node_modules` and any dot-directory, the
    * same walk every other file here goes through) and never attempted to
    * import: nukadoko is ESM-only (docs/migration.md's own go/no-go for
-   * CommonJS glue), and `.cjs` always resolves to CommonJS regardless of
+   * CommonJS glue), and `.cjs` and `.cts` always resolve to CommonJS regardless of
    * the nearest `package.json`'s own `"type"`, so importing one the way a
    * `.ts`/`.mts`/`.js`/`.mjs` file is imported below would just be a
    * different, more confusing way to fail. `nuka check`'s
@@ -207,17 +207,17 @@ function compatPatternSource(pattern: string | RegExp): string {
 // `.d.ts`/`.d.mts` checked (and skipped) ahead of the plain extensions below
 // since a declaration file's own name also ends in `.ts`/`.mts` -- checking
 // order matters here, the plain-extension check must never see one first.
-const DECLARATION_FILE_EXTENSIONS = [".d.ts", ".d.mts"];
+const DECLARATION_FILE_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
 // Node loads all four directly (docs/spec.md "Implementation notes");
-// `.cjs` is deliberately absent -- see `unsupportedExtensionFiles`
-// on `DiscoveryResult` for why it is walked and named, but never imported.
+// `.cjs` and `.cts` are deliberately absent -- see `unsupportedExtensionFiles`
+// on `DiscoveryResult` for why they are walked and named, but never imported.
 const STEP_FILE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs"];
-const UNSUPPORTED_STEP_FILE_EXTENSION = ".cjs";
+const UNSUPPORTED_STEP_FILE_EXTENSIONS = [".cjs", ".cts"];
 
 interface WalkStepFilesResult {
   /** Absolute paths, sorted, of every candidate step file found. */
   readonly files: string[];
-  /** Absolute paths, sorted, of every `.cjs` file found alongside them. */
+  /** Absolute paths, sorted, of every `.cjs` or `.cts` file found alongside them. */
   readonly unsupportedExtensionFiles: string[];
 }
 
@@ -271,7 +271,7 @@ function walkStepFiles(dir: string): WalkStepFilesResult {
       files.push(fullPath);
       continue;
     }
-    if (entry.name.endsWith(UNSUPPORTED_STEP_FILE_EXTENSION)) {
+    if (UNSUPPORTED_STEP_FILE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
       unsupportedExtensionFiles.push(fullPath);
     }
   }

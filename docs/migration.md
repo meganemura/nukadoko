@@ -178,8 +178,8 @@ lists the measured ones.
 - **CommonJS glue**: nukadoko is ESM-only. Extension decides how discovery
   treats a file: `.ts`, `.mts`, `.js`, and `.mjs` are all walked and
   imported now (a suite written entirely in plain `.js`, not just `.ts`, is
-  no longer invisible to discovery the way it used to be); a `.cjs` file is
-  walked far enough to be named, never imported at all, so it never reaches
+  no longer invisible to discovery the way it used to be); a `.cjs` or `.cts`
+  file is walked far enough to be named, never imported at all, so it never reaches
   an import to fail -- `nuka check` reports it as
   `step-file-unsupported-extension` instead. Inside a file discovery does
   import, `require("nukadoko/compat")` still fails outright with
@@ -187,7 +187,7 @@ lists the measured ones.
   alone does not make a file's own code ES module glue. Two of the eight
   suites are CommonJS throughout; the door admits ES module glue only.
   Caught before anything runs either way: `step-file-unsupported-extension`
-  for a `.cjs` file, or `nuka check`'s `step-file-import-failed` (or the
+  for a `.cjs` or `.cts` file, or `nuka check`'s `step-file-import-failed` (or the
   first `nuka run` if `check` was skipped) for a `require()` call inside a
   file discovery does open.
 - **Deep subpath imports** such as
@@ -294,7 +294,7 @@ step has.
   project is still discovered and reported alongside it: a migrating
   suite's normal state is some glue still broken, not a reason for the
   dashboard to go blank.
-- `step-file-unsupported-extension` errors on a `.cjs` file discovery walked
+- `step-file-unsupported-extension` errors on a `.cjs` or `.cts` file discovery walked
   under `featuresDir` and never imported: unlike the gaps above, there is
   no import attempt behind this one to fail, so it gets its own code rather
   than reusing `step-file-import-failed`. Names the file path either way.

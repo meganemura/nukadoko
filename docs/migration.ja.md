@@ -145,13 +145,13 @@ glue はテキストとして読むだけで、実行はしていません。
   `WorldConstructorParams`/`HookParameter` のエイリアスとして、他の compat の名前と同じように typecheck を通ります。)
 - **CommonJS の glue**: nukadoko は ESM 専用です。
   discovery がファイルをどう扱うかは拡張子で決まります: `.ts`、`.mts`、`.js`、`.mjs` はいずれも歩かれて import されます(`.ts` だけでなく素の `.js` だけで書かれたスイートも、以前のように discovery から見えなくなることはもうありません)。
-  `.cjs` ファイルは名指しできる程度には歩きますが、まったく import されないため、失敗すべき import そのものが存在しません。
+  `.cjs` と `.cts` のファイルは名指しできる程度には歩きますが、まったく import されないため、失敗すべき import そのものが存在しません。
   `nuka check` は代わりにそれを `step-file-unsupported-extension` として報告します。
   discovery が実際に import するファイルの中では、`require("nukadoko/compat")` は今までどおり `ERR_PACKAGE_PATH_NOT_EXPORTED` で即座に失敗します。
   拡張子だけでは、そのファイル自身のコードが ES module の glue になるわけではないからです。
   8 本のうち 2 本は、全体が CommonJS のスイートでした。
   この扉が受け入れるのは ES module の glue だけです。
-  どちらの経路でも、何かが実行されるより前に捕まります: `.cjs` ファイルなら `step-file-unsupported-extension`、discovery が実際に開いたファイルの中の `require()` 呼び出しなら `nuka check` の `step-file-import-failed`(または `check` を省略していた場合は最初の `nuka run`)です。
+  どちらの経路でも、何かが実行されるより前に捕まります: `.cjs` または `.cts` のファイルなら `step-file-unsupported-extension`、discovery が実際に開いたファイルの中の `require()` 呼び出しなら `nuka check` の `step-file-import-failed`(または `check` を省略していた場合は最初の `nuka run`)です。
 - **深い subpath の import**(`import DataTable from "@cucumber/cucumber/lib/models/data_table"` など)には、ここでは対応するものがありません。
   代わりに `nukadoko/compat` から `DataTable` を import してください。
   同じ経路で捕まります: `nuka check` の `step-file-import-failed`、または `check` を省略していた場合は最初の `nuka run` です。
@@ -223,7 +223,7 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   未サポートの名前を値として使っている、CommonJS の `require`、深い subpath の import(上の「切り替えで引き継がれないもの」の最初の 3 つの gap です)のいずれかで、Node 自身のエラーメッセージとファイルパスを運びます。
   プロジェクトの残りはそれと並行して引き続き discovery され報告されます。
   移行中のスイートの通常の状態は一部の glue がまだ壊れていることであり、ダッシュボードを空白にする理由にはなりません。
-- `step-file-unsupported-extension` は、discovery が `featuresDir` の下で歩いたものの一度も import しなかった `.cjs` ファイルにエラーを出します。
+- `step-file-unsupported-extension` は、discovery が `featuresDir` の下で歩いたものの一度も import しなかった `.cjs` または `.cts` のファイルにエラーを出します。
   上の gap 群と違い、この所見の背後には失敗すべき import の試みそのものがないため、`step-file-import-failed` を使い回さずに独自のコードを持ちます。
   どちらの所見も、ファイルパスを名指しします。
 - `no-step-files-found` は、`featuresDir` の下を歩いた結果として読み込めるものが 1 つも見つからなかったときにエラーを出し、実際にスキャンしたディレクトリを名指しします。

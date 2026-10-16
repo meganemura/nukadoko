@@ -86,7 +86,7 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 | `secrets-redact-key-too-short` | warning | A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted. |
 | `serial-tag-on-scenario` | error | A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there. |
 | `step-file-import-failed` | error | A step file under featuresDir failed to import, so any step it defines never reaches the vocabulary. |
-| `step-file-unsupported-extension` | error | Discovery found a .cjs step file; nukadoko is ESM-only and never imports it. |
+| `step-file-unsupported-extension` | error | Discovery found a .cjs or .cts step file; nukadoko is ESM-only and never imports it. |
 | `table-docstring-key-mismatch` | error | A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures (exactly one must be left for the attachment to fill), or the one key it fills is of a type the attachment can never satisfy (a table is string[][], a docstring is a string). |
 | `then-compat-step` | warning | A compat step is bound in Then position; compat has no mutates declaration to check that position against. |
 | `then-mutates` | warning | A step bound in Then position declares mutates: true, so its declaration and its position are in tension. |

@@ -970,7 +970,7 @@ a pass: **a CommonJS suite cannot use the door at all.**
 CommonJS suite needs a module-format change before anything else. Two of
 the eight audited suites were CommonJS throughout. This is about the
 module format, not the file extension: glue in `.js` or `.mjs` is read
-like any other, and a `.cjs` file is named by `nuka check` rather than
+like any other, and a `.cjs` or `.cts` file is named by `nuka check` rather than
 turning up later as a step nothing defined.
 
 See [docs/migration.md](docs/migration.md) for the step-by-step guide with

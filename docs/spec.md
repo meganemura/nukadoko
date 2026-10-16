@@ -191,11 +191,11 @@ name is the step name.
 Discovery walks `featuresDir` for each `.ts`, `.mts`, `.js`, and `.mjs` file.
 The step name omits the file's extension. At every depth, discovery skips
 `node_modules` and dot-directories such as `.git`, `.nukadoko`, and `.vscode`.
-It also excludes `.d.ts` and `.d.mts` type declarations because they are not
-step definitions.
+It also excludes `.d.ts`, `.d.mts`, and `.d.cts` type declarations because
+they are not step definitions.
 
-Discovery identifies each `.cjs` file but never imports it. nukadoko is
-ESM-only. See "Compat steps" below for the same CommonJS decision. `nuka check`
+Discovery identifies each `.cjs` and `.cts` file but never imports it. Both
+extensions are CommonJS by definition, and nukadoko is ESM-only. See "Compat steps" below for the same CommonJS decision. `nuka check`
 reports the file as `step-file-unsupported-extension`. This report prevents its
 definitions from resurfacing as unexplained `undefined-step` findings.
 
@@ -1738,7 +1738,7 @@ import { Given, When, Then } from "nukadoko/compat";
   `unsupported-hook-tag-expression` error. The file text establishes both
   failures before execution. Two additional findings describe the area
   that discovery scans:
-  `step-file-unsupported-extension` reports a `.cjs` file under
+  `step-file-unsupported-extension` reports a `.cjs` or `.cts` file under
   `featuresDir` (see "Typed steps" for the import rule).
   `no-step-files-found` reports a scan that found no candidate files. Each
   finding identifies what discovery inspected. The `scanned:` line from
@@ -4344,7 +4344,7 @@ nuka check [feature..] [--json]
                               override that owns neither page nor context,
                               config coherence, unreadable step files
                               (reported, not fatal, the rest of the project
-                              is still checked), a `.cjs` file discovery
+                              is still checked), a `.cjs` or `.cts` file discovery
                               walks but never imports, a featuresDir scan
                               that found nothing loadable, unsupported hook
                               tag expressions, a compat hook or step declaring more

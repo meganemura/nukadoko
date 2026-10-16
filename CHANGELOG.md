@@ -121,6 +121,15 @@ just until 0.1.
   add one" instead of "run `nuka scaffold <name>` to add one". The code,
   `file`, `line`, and the hint and unbound-step suffixes are unchanged.
 
+### Fixed
+
+- **`nuka check` names a `.cts` step file as `step-file-unsupported-extension`, the same as a `.cjs` file.**
+  A `.cts` file is CommonJS by extension, so discovery never imports it.
+  Before, discovery skipped it without a word, and every step it defined
+  turned up as `undefined-step` with a scaffold hint. The finding message
+  now names the file's own extension. Discovery also skips a `.d.cts` type
+  declaration, as it already skips `.d.ts` and `.d.mts`.
+
 ## 0.16.0 — 2026-10-17
 
 ### Added
