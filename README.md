@@ -29,9 +29,12 @@ npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
 `nuka init` sets up a CLI or API project. It adds `.nukadoko/` to
-`.gitignore` and `"test:scenarios": "nuka check && nuka run features"` to
-the `package.json` scripts, unless a script by that name already exists.
-`npm run test:scenarios` is then the one command a person or CI runs.
+`.gitignore` and `"test:scenarios": "nuka run"` to the `package.json`
+scripts, unless a script by that name already exists. `npm run
+test:scenarios` is then the one command a person or CI runs: `nuka run`
+with no target runs `featuresDir`, and it reports what `nuka check` reports
+for those scenarios and stops before executing anything when one is an
+error.
 When `tsconfig.json` has an `include` that leaves out `features/` or the
 config file, `init` prints one line naming the entries to add. Two flags
 add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
@@ -667,14 +670,16 @@ manually.
 
 ```yaml
 # excerpt from a CI workflow
-- run: npx nuka check              # PR gate: static, seconds, no browser
-- run: npx nuka run features/      # merge/deploy gate: executes, writes step records
+- run: npm run test:scenarios      # nuka run: checks, then executes featuresDir, writes step records
 ```
 
-Put `nuka check` on every PR: it is the cheap gate, and it can fail before
-anything runs. Put `nuka run` on the gate that actually has to be true,
-merge or deploy, since that is the one that executes and leaves a step record
-trail behind.
+One step is enough. `nuka run` reports what `nuka check` reports for the
+scenarios it selected and exits `1` before executing anything when one is an
+error, so a scenario that can only fail never costs a browser or minutes.
+`--no-check` skips that check to run such a scenario anyway. When the run
+is slow, put `nuka check` on its own as the fast PR gate (seconds, no
+browser) and keep `nuka run` for merge or deploy; `nuka check` also covers
+`additionalFeatureDirs`, which `nuka run` with no target leaves out.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only); stdout stays NDJSON either way.

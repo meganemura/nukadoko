@@ -168,31 +168,44 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   if (json) {
     stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
-    const importFailureGroups = groupImportFailuresByMessage(report.errors);
-    // Printed at the position of each message's first occurrence in
-    // `report.errors` (report order is otherwise untouched) — a message
-    // already printed once is skipped on every later occurrence, since its
-    // whole file list already went out with the first.
-    const printedImportFailureMessages = new Set<string>();
-    for (const issue of report.errors) {
-      if (issue.code === STEP_FILE_IMPORT_FAILED_CODE) {
-        if (printedImportFailureMessages.has(issue.message)) {
-          continue;
-        }
-        printedImportFailureMessages.add(issue.message);
-        const files = importFailureGroups.get(issue.message) ?? [];
-        stdout.write(`${formatImportFailureGroup(issue.message, files, issue.line)}\n`);
-        continue;
-      }
-      stdout.write(`${formatIssueLine("error", issue)}\n`);
-    }
-    for (const issue of report.warnings) {
-      stdout.write(`${formatIssueLine("warning", issue)}\n`);
-    }
+    writeCheckIssueLines(report.errors, report.warnings, stdout);
     if (report.errors.length === 0 && report.warnings.length === 0) {
       stdout.write("ok: no issues found\n");
     }
   }
 
   return report.errors.length > 0 ? 1 : 0;
+}
+
+/**
+ * The human-readable report lines, one per finding. `nuka run` writes the
+ * errors it refuses over through this same function, so a finding reads
+ * the same whichever command found it.
+ */
+export function writeCheckIssueLines(
+  errors: readonly CheckIssue[],
+  warnings: readonly CheckIssue[],
+  sink: WritableSink,
+): void {
+  const importFailureGroups = groupImportFailuresByMessage(errors);
+  // Printed at the position of each message's first occurrence in
+  // `errors` (report order is otherwise untouched). A message already
+  // printed once is skipped on every later occurrence, since its whole
+  // file list already went out with the first.
+  const printedImportFailureMessages = new Set<string>();
+  for (const issue of errors) {
+    if (issue.code === STEP_FILE_IMPORT_FAILED_CODE) {
+      if (printedImportFailureMessages.has(issue.message)) {
+        continue;
+      }
+      printedImportFailureMessages.add(issue.message);
+      const files = importFailureGroups.get(issue.message) ?? [];
+      sink.write(`${formatImportFailureGroup(issue.message, files, issue.line)}\n`);
+      continue;
+    }
+    sink.write(`${formatIssueLine("error", issue)}\n`);
+  }
+  for (const issue of warnings) {
+    sink.write(`${formatIssueLine("warning", issue)}\n`);
+  }
 }

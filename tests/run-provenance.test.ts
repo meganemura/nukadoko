@@ -36,7 +36,7 @@ describe("nuka run: run_id", () => {
 
   it("is the same on every scenario record one invocation writes, across multiple pickles", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/table.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/table.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -70,7 +70,7 @@ describe("nuka run: git provenance", () => {
     const commit = await initGitRepo(rootDir);
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -86,7 +86,7 @@ describe("nuka run: git provenance", () => {
     await writeFile(path.join(rootDir, "untracked.txt"), "never added or committed");
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -115,7 +115,7 @@ describe("nuka run: git provenance", () => {
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
         rootDir,
         stdout,
         stderr,

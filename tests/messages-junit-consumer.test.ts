@@ -47,7 +47,7 @@ describe("messages.ndjson through the real @cucumber/junit-xml-formatter consume
   });
 
   it("a passing run: the printer never throws, and the XML it writes is well-formed and accurate", async () => {
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -72,7 +72,7 @@ describe("messages.ndjson through the real @cucumber/junit-xml-formatter consume
   });
 
   it("a failing run: the printer never throws, and the failure carries the failed step's own text and its error message", async () => {
-    const exitCode = await runCli(["run", "features/failing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),

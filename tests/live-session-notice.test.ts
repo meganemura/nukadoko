@@ -59,7 +59,7 @@ describe("live session notice (nuka run)", () => {
     it("stays silent when no session is live", async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).not.toContain("Live session");
@@ -70,7 +70,7 @@ describe("live session notice (nuka run)", () => {
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toContain('Live session "alice" (environment default) is still open.');
@@ -83,7 +83,7 @@ describe("live session notice (nuka run)", () => {
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toContain('Live session "alice" (environment default) is still open.');
@@ -96,7 +96,7 @@ describe("live session notice (nuka run)", () => {
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).not.toContain("Live session");
@@ -111,7 +111,7 @@ describe("live session notice (nuka run)", () => {
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).not.toContain("Live session");

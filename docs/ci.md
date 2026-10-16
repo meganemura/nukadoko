@@ -9,18 +9,42 @@ workflow file, why three of its lines exist, and the four things a
 project coming from `npx playwright test` usually has to add by hand
 that `nuka run` never does on its own.
 
-## A workflow you can copy whole
+## A CLI or API project: one job
+
+A project set up with `nuka init` already has `npm run test:scenarios`,
+which runs `nuka run`. With no target, `nuka run` runs `featuresDir`, and
+before it executes anything it reports what `nuka check` reports for those
+scenarios and exits `1` when one is an error. One job is therefore the
+whole gate for a project whose steps never open a browser:
+
+```yaml
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts
+      - run: npm run test:scenarios
+```
+
+`nuka check` on its own still has two uses: `additionalFeatureDirs`, which
+only `nuka check` and `nuka tend` walk, and a gate that has to stay seconds
+long when the run does not.
+
+## A browser project: a workflow you can copy whole
 
 This is one file, `.github/workflows/nukadoko.yml`. It runs `nuka check` on
 every push and pull request (seconds, no browser), `nuka run` after it
 passes (the gate that actually executes), and `nuka tend` on a weekly
-schedule, since nothing else here reminds anyone to run it.
-
-A project set up with `nuka init` already has `npm run test:scenarios`,
-which runs `nuka check` and then `nuka run features`. One job that runs it
-is the shortest form of this workflow. The file below splits the two
-commands into two jobs, so a failed check stops the run before a browser
-is installed.
+schedule, since nothing else here reminds anyone to run it. The two
+commands sit in two jobs so a failed check stops the work before a browser
+is installed. `nuka run` checks its own scenarios again before it executes,
+which costs one more step discovery and no browser.
 
 ```yaml
 name: nukadoko

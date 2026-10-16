@@ -1,4 +1,5 @@
 import path from "node:path";
+import { analyzeRunSelection } from "../check/analyze.js";
 import { checkBindings } from "../check/binding-check.js";
 import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback.js";
 import { matchPickleStepText } from "../check/feature-check.js";
@@ -73,6 +74,7 @@ import {
 } from "../fixture/validate-fixtures.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
+import { writeCheckIssueLines } from "./check.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -84,7 +86,11 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      a parse failure: src/run/select-pickles.ts), a config or discovery
 //      error, an unknown `--env` name, or an invalid `--session` name or a
 //      lock held by another live process. None of these write anything: the
-//      run never started, so there is nothing to attest to.
+//      run never started, so there is nothing to attest to. An error
+//      `nuka check` reports for the selected scenarios is a setup failure
+//      too (src/check/analyze.ts's `analyzeRunSelection`), unless
+//      `--no-check` skips that check: a scenario that can only fail is not
+//      worth a browser and minutes, and the check costs one more discovery.
 //   2. Execution. From the first pickle onward, every pickle that begins
 //      executing gets a scenario record no matter what happens inside it
 //      (src/run/run-scenario.ts). A malformed session file discovered before
@@ -257,8 +263,13 @@ const UNBUILDABLE_PATTERN_CODES: ReadonlySet<string> = new Set([
 
 export interface RunRunOptions {
   rootDir: string;
-  /** One or more `<feature[:line]>` or directory targets. */
+  /** `<feature[:line]>` or directory targets. None means `featuresDir`,
+   * the same default `nuka check` walks (without `additionalFeatureDirs`,
+   * which only `nuka check` and `nuka tend` read). */
   featureArgs: readonly string[];
+  /** `false` under `--no-check`: skip the static check this run otherwise
+   * performs over its own selection before it executes anything. */
+  check: boolean;
   session: string | null;
   env: string | null;
   /** Suppresses the per-step and per-scenario progress lines — the
@@ -318,8 +329,7 @@ function exportLocations(
 }
 
 async function runRunInner(options: RunRunOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
-  const { rootDir, featureArgs, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stdout, stderr } =
-    options;
+  const { rootDir, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stdout, stderr } = options;
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -350,6 +360,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;
   }
+  const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
 
   // A live session (docs/spec.md "Live sessions") is reported, never
   // refused — see live-session-notice.ts's own header for why this stays a
@@ -392,6 +403,43 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
   }
 
   try {
+    const select = (): ReturnType<typeof selectPickles> | null => {
+      try {
+        const oaths = resolveOathPaths(rootDir, config.oaths);
+        return selectPickles(rootDir, featureArgs, oaths.files, oaths.directories);
+      } catch (error) {
+        stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return null;
+      }
+    };
+
+    // The static check runs before this run's own discovery, so a step file
+    // that fails to import is reported the way `nuka check` reports it,
+    // grouped and with its line, rather than as the first import error
+    // discovery happens to throw. It needs the selection first. Under
+    // `--no-check`, discovery keeps its place ahead of selection.
+    let selected: ReturnType<typeof selectPickles> | null = null;
+    if (options.check) {
+      selected = select();
+      if (selected === null) return 1;
+      let report;
+      try {
+        report = await analyzeRunSelection(rootDir, selected.features);
+      } catch (error) {
+        stderr.write(`${formatVocabularyError(error)}\n`);
+        return 1;
+      }
+      if (report.errors.length > 0) {
+        writeCheckIssueLines(report.errors, [], stderr);
+        const count = report.errors.length;
+        stderr.write(
+          `nuka run did not start: nuka check reports ${count} ${count === 1 ? "error" : "errors"} ` +
+            "for these scenarios. Fix them, or pass --no-check to run anyway.\n",
+        );
+        return 1;
+      }
+    }
+
     let vocabulary;
     let compatParameterTypes;
     let instantiateCompatWorld;
@@ -429,14 +477,8 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       return 1;
     }
 
-    let selected;
-    try {
-      const oaths = resolveOathPaths(rootDir, config.oaths);
-      selected = selectPickles(rootDir, featureArgs, oaths.files, oaths.directories);
-    } catch (error) {
-      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      return 1;
-    }
+    selected ??= select();
+    if (selected === null) return 1;
 
     // Flattened once, here, into the `{ feature, pickle }` pairs every use
     // below actually needs: `selected.
@@ -494,13 +536,11 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     const { patterns, issues: bindingIssues } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
     // A pattern that failed to build matches nothing, so every line meant
     // for it reports as undefined below, in the same red an assertion
-    // failure gets. The cause is known right here, so it is said once,
-    // before anything runs. `nuka check` reports the same issue as an
-    // error, but a run started without check would otherwise leave a reader
-    // to tell "not registered" from "does not pass" on their own. A warning
-    // rather than a refusal: the broken step may be one no selected
-    // scenario uses, and refusing the whole run for it would block every
-    // other feature over a mistake check already names. The parent alone
+    // failure gets. The static check above already refuses this, so this
+    // line is reached only under `--no-check`, where a reader would
+    // otherwise have to tell "not registered" from "does not pass" on
+    // their own. A warning rather than a refusal: `--no-check` asked to run
+    // anyway. The parent alone
     // says it: a worker rebuilds the same patterns for itself but its own
     // notes would repeat this line once per worker. Only the issues that
     // mean a pattern did not build are said here: `checkBindings` also

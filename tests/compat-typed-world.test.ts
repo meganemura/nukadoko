@@ -52,7 +52,7 @@ describe("nuka run: typed World measurement + declaration", () => {
 
   it("measures a bag field's reads/writes, deduplicated and in order; a step that never touches the World gets no world field", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/measurement.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/measurement.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -83,7 +83,7 @@ describe("nuka run: typed World measurement + declaration", () => {
 
   it("an undeclared key created mid-step is not in that step's own step record, but is measured from the next step onward", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/measurement.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/measurement.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -105,7 +105,7 @@ describe("nuka run: typed World measurement + declaration", () => {
 
   it("a #private field stays reachable through a method (no crash)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/measurement.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/measurement.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -120,7 +120,7 @@ describe("nuka run: typed World measurement + declaration", () => {
 
   it("a valid declared write passes and is measured; an invalid one fails the step and is never recorded as a write", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/declared.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/declared.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -153,7 +153,7 @@ describe("nuka run: typed World measurement + declaration", () => {
 
   it("reassigning a reserved key at run time fails the step with a clear runtime error", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/reserved.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/reserved.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -179,7 +179,7 @@ describe("nuka run: a typed-only scenario is unaffected", () => {
     const rootDir = await copyFixtureToTempDir("run-project");
     try {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/passing.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),

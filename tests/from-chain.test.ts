@@ -37,7 +37,7 @@ describe("from: scenario-path injection", () => {
 
   it("fills a required key from the upstream step's most recent result when the pattern doesn't capture it", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:3"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -64,7 +64,7 @@ describe("from: scenario-path injection", () => {
 
   it("a captured value wins over from; no injection means no used entry", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:7"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:7"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -93,7 +93,7 @@ describe("from: scenario-path injection", () => {
     // upstream step, now from the guard instead of from args validation.
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:11"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:11"], {
       rootDir,
       stdout,
       stderr,
@@ -114,7 +114,7 @@ describe("from: scenario-path injection", () => {
 
   it("the upstream ran twice in one scenario: the most recent result is what from injects", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:14"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:14"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -134,7 +134,7 @@ describe("from: scenario-path injection", () => {
 
   it("from and ctx.resultOf reading the same upstream in one execution still dedupe in used", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:19"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:19"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -156,7 +156,7 @@ describe("from: scenario-path injection", () => {
 
   it("a failed step's step record carries the from-injected value's own result", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:33"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:33"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

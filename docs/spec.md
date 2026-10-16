@@ -1976,7 +1976,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -1986,7 +1986,24 @@ the steps in order. It writes one step record for each step and one scenario
 record for each pickle. The scenario record contains the feature path, scenario
 name, ordered step record ids, and per-step status.
 
-`nuka run` takes one or more targets. Each target can be a feature file, a
+Before it executes anything, `nuka run` reports what `nuka check` would
+report for the scenarios it selected, and when one of those findings is an
+error it writes the errors to stderr, writes no record, and exits `1`. The
+findings are the ones `nuka check <feature>` gives for each selected file:
+every project-wide finding (config, bindings, each step's own declaration,
+fixture definitions, a step file that fails to import), plus the
+scenario-level findings for the scenarios this run executes. A `:line`
+target narrows only the scenario-level part, so a run of one scenario is
+not refused over a sibling scenario it does not execute. Warnings do not
+stop a run and are not printed. `--no-check` skips the check, for a
+deliberate run of a scenario `check` refuses; the run-time refusals
+described below still apply. `nuka check` stays the separate command for a
+gate that has to stay seconds long and for `additionalFeatureDirs`.
+
+`nuka run` takes zero or more targets. With none, it runs `featuresDir`,
+the directory `nuka check` walks by default (without
+`additionalFeatureDirs`, which only `nuka check` and `nuka tend` read).
+Each target can be a feature file, a
 Markdown oath (a path ending in `.md`; see "Markdown oaths"), a
 `file:line` selection, or a directory. A directory target is walked
 recursively for `.feature` files. At every depth the walk skips
@@ -4021,8 +4038,12 @@ and what the scenario claims. Generated sequences that passed are not kept.
 The npm package is `nukadoko`. The one command it installs is `nuka`.
 
 ```
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
-                              execute scenarios; step records, plus the Allure
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>]
+                              check, then execute scenarios (featuresDir when
+                              no target is given). An error nuka check reports
+                              for the selected scenarios stops the run before
+                              anything executes (exit 1, no record);
+                              --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
                               --env targets a named environment ("default"
                               when omitted); --session carries login state
@@ -4253,8 +4274,8 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
                               .nukadoko/ in .gitignore, and a package.json
-                              "test:scenarios" script ("nuka check && nuka run
-                              <featuresDir>") unless one exists; prints one
+                              "test:scenarios" script ("nuka run") unless one
+                              exists; prints one
                               stderr line when tsconfig.json's include leaves
                               out the steps or the config. --allure turns the
                               Allure emitter on and writes allurerc.mjs;

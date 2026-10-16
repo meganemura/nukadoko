@@ -17,7 +17,7 @@ describe("nuka run: BeforeAll/AfterAll refusal shapes", () => {
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/one-scenario.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/one-scenario.feature"], {
         rootDir,
         stdout,
         stderr,

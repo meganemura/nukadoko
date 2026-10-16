@@ -26,7 +26,7 @@ describe("nuka run: a scenario nested under Rule", () => {
 
   it("runs to completion, step records and all", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/rule.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/rule.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

@@ -55,7 +55,10 @@ nothing.
    and says whether the tree had uncommitted changes, so a run on a dirty
    tree tells the reviewer it may not match what the pull request holds.
    Debugging against a dirty tree is fine.
-2. `nuka run <feature>`, repeat until every scenario is green. stderr
+2. `nuka run <feature>`, repeat until every scenario is green. It first
+   reports what `nuka check` reports for the selected scenarios and exits
+   1 before executing anything on an error; `--no-check` skips that check
+   to run a scenario `check` refuses. stderr
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary
    line. A failed step adds its error's first line and its step record

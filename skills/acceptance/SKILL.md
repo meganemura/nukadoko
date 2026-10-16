@@ -60,8 +60,8 @@ before every command is its own way of being hard to follow.
 
 If the project is not initialized, run `nuka init` first. It writes the
 config, `features/steps/`, a `.gitignore` entry, and a `test:scenarios`
-script in `package.json`, so `npm run test:scenarios` runs `nuka check`
-and then `nuka run features`. If it prints a `tsconfig.json` line, add the
+script in `package.json`, so `npm run test:scenarios` runs `nuka run`,
+which checks `featuresDir` and then executes it. If it prints a `tsconfig.json` line, add the
 entries it names. Add `--allure` only when someone reads Allure reports,
 and `--env` when the project keeps `.env` files; both report emitters are
 off until their config key (`allure: {}`, `messages: {}`) is present. A
@@ -129,14 +129,15 @@ proves the wrong thing.
    coerces the capture is not `capture-type-mismatch`
    (`references/writing-steps.md`). Compat glue that
    declares a done() callback is `done-callback-arity`.
-5. `nuka run <feature>` until green. `references/running.md`. When it
+5. `nuka run <feature>` until green. It stops before executing on any
+   error step 4 would report; `--no-check` runs anyway. `references/running.md`. When it
    fails, stderr names the failed step's error, its step record path, and
    a `rerun` command per failed scenario. Diagnose from that step record
    before repeating the run: `references/diagnosing.md`. A compat World that
    throws while it is constructed fails that scenario only: stderr gets
    one setup line, later scenarios still run, and the messages export is
-   finalized. There is no step record for that failure. `run` needs a
-   target; `check` walks the project when given none. Every run also
+   finalized. There is no step record for that failure. With no target,
+   `run` runs `featuresDir`. Every run also
    writes a Markdown run summary for the reviewer (`--summary <path>` for
    a copy a CI step posts on the pull request). The summary states whether
    the tree had uncommitted changes, so commit before the run you report.

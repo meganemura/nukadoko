@@ -24,7 +24,7 @@ async function run(argv: readonly string[]): Promise<{ exitCode: number; stdout:
 
 describe("a step file that throws on import", () => {
   it("nuka run names the file on stderr and exits 1", async () => {
-    const result = await run(["run", "features/a.feature"]);
+    const result = await run(["run", "--no-check", "features/a.feature"]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe(reported);

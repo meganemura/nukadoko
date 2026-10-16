@@ -220,7 +220,7 @@ describe("call / parts", () => {
 
   it("nuka run: refuses a mutates: true part under a read-only environment, even though the caller declared mutates: false, and never runs the part", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/parts.feature", "--env", "readonly"], {
+    const exitCode = await runCli(["run", "--no-check", "features/parts.feature", "--env", "readonly"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

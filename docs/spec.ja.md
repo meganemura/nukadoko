@@ -1711,7 +1711,7 @@ scenario は見出しか `---` で分け、narration は引用かフェンスに
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1720,7 +1720,20 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 各 step に 1 つの step record を書き込み、各 pickle に 1 つの scenario record を書き込みます。
 scenario record は feature のパス、scenario 名、順序付けられた step record id、step ごとの status を含みます。
 
-`nuka run` は 1 つ以上の対象を受け取ります。
+`nuka run` は何かを実行する前に、選んだ scenario について `nuka check` が報告するはずの内容を報告します。
+その中に error が 1 つでもあれば、error を stderr に書き、record を書かずに `1` で終了します。
+報告されるのは、選ばれた各ファイルについて `nuka check <feature>` が出すものです。
+すなわち、プロジェクト全体に関わる指摘(config、binding、各 step 自身の宣言、fixture の定義、import に失敗する step ファイル)と、この run が実行する scenario についての指摘です。
+`:line` の対象が絞るのは scenario についての指摘だけなので、1 つの scenario の run が、実行しない隣の scenario のせいで拒否されることはありません。
+警告は run を止めず、出力もされません。
+`--no-check` はこの check を飛ばし、`check` が拒否する scenario を意図して実行するときに使います。
+その場合も、以下で述べる実行時の拒否は変わらず働きます。
+数秒で終わらなければならないゲートと `additionalFeatureDirs` のためには、`nuka check` が別のコマンドとして残ります。
+
+`nuka run` は 0 個以上の対象を受け取ります。
+対象が無ければ `featuresDir` を実行します。
+これは `nuka check` が既定で辿るディレクトリです(`additionalFeatureDirs` は含みません。
+それを読むのは `nuka check` と `nuka tend` だけです)。
 各対象には feature ファイル、Markdown oath(`.md` で終わるパス。
 「Markdown oaths」を参照)、`ファイル:行`、ディレクトリのいずれかを指定できます。
 ディレクトリは再帰的に走査され、その下の `.feature` ファイルが選ばれます。
@@ -3464,8 +3477,12 @@ scenario はどの feature にも追加されません。
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
 
 ```
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
-                              execute scenarios; step records, plus the Allure
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>]
+                              check, then execute scenarios (featuresDir when
+                              no target is given). An error nuka check reports
+                              for the selected scenarios stops the run before
+                              anything executes (exit 1, no record);
+                              --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
                               --env targets a named environment ("default"
                               when omitted); --session carries login state
@@ -3696,8 +3713,8 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
                               .nukadoko/ in .gitignore, and a package.json
-                              "test:scenarios" script ("nuka check && nuka run
-                              <featuresDir>") unless one exists; prints one
+                              "test:scenarios" script ("nuka run") unless one
+                              exists; prints one
                               stderr line when tsconfig.json's include leaves
                               out the steps or the config. --allure turns the
                               Allure emitter on and writes allurerc.mjs;

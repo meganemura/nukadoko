@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
@@ -231,6 +232,62 @@ function extractImportFailureLine(message: string, rootDir: string, issueFile: s
 }
 
 export async function analyzeProject(rootDir: string, featureArg?: string): Promise<CheckReport> {
+  return analyze(rootDir, (config) =>
+    featureArg === undefined
+      ? // additionalFeatureDirs joins featuresDir here too: a no-argument
+        // `nuka check` is one of the two commands whose default scan
+        // includes it (`nuka tend` is the other), while `nuka run`'s
+        // default scan does not. A config mistake in additionalFeatureDirs
+        // itself is config-check.ts's own `additional-feature-dir-missing`,
+        // not repeated here; `missingAdditionalDirs` is intentionally
+        // unread.
+        loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths)
+      : loadSingleFeature(rootDir, featureArg),
+  );
+}
+
+/** One feature file as `nuka run` selected it: its document, and only the
+ * pickles its targets select. */
+export interface SelectedFeatureForCheck {
+  readonly relativePath: string;
+  readonly gherkinDocument: GherkinDocument;
+  readonly pickles: readonly Pickle[];
+}
+
+/**
+ * The report `nuka check` would give, with the feature-level checks run
+ * over exactly the pickles `nuka run` is about to execute instead of a walk
+ * of featuresDir. Every project-wide finding (config, bindings, every
+ * step's own declaration, fixture definitions, step files that fail to
+ * import) is the same as `analyzeProject`'s, because those break a run no
+ * matter which scenario it selects. A `:line` target narrows only the
+ * scenario-level findings: a run of one scenario is not refused over a
+ * sibling scenario it does not execute.
+ */
+export async function analyzeRunSelection(
+  rootDir: string,
+  selected: readonly SelectedFeatureForCheck[],
+): Promise<CheckReport> {
+  return analyze(rootDir, () => ({
+    features: selected.map((feature) => ({
+      relativePath: feature.relativePath,
+      pickles: attachStepLines(feature.pickles, feature.gherkinDocument),
+    })),
+    // `nuka run` has already refused a target that does not parse.
+    parseErrors: [],
+    serialTagOnScenario: selected.flatMap((feature) =>
+      findSerialTagOnScenario(feature.gherkinDocument, feature.relativePath),
+    ),
+    outlinesThatDoNotRun: selected.flatMap((feature) =>
+      findOutlinesThatDoNotRun(feature.gherkinDocument, feature.relativePath),
+    ),
+  }));
+}
+
+async function analyze(
+  rootDir: string,
+  loadFeatures: (config: Awaited<ReturnType<typeof loadConfig>>) => LoadFeaturesResult,
+): Promise<CheckReport> {
   const config = await loadConfig(rootDir);
   // Tolerant mode — a broken step file
   // becomes a report entry (`importFailures`, handled below) instead of
@@ -502,17 +559,7 @@ export async function analyzeProject(rootDir: string, featureArg?: string): Prom
     errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
-  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun } =
-    featureArg === undefined
-      ? // additionalFeatureDirs joins featuresDir here too: a no-argument
-        // `nuka check` is one of the two commands whose default scan
-        // includes it (`nuka tend` is the other), while `nuka run`'s
-        // default scan does not — a config mistake in additionalFeatureDirs
-        // itself is config-check.ts's own `additional-feature-dir-missing`,
-        // not repeated here; `missingAdditionalDirs` is intentionally
-        // unread.
-        loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths)
-      : loadSingleFeature(rootDir, featureArg);
+  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun } = loadFeatures(config);
   for (const parseError of parseErrors) {
     errors.push({
       code: "feature-parse-error",

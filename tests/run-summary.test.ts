@@ -51,7 +51,7 @@ describe("nuka run: the run summary", () => {
   it("writes a green run's summary to the run directory", async () => {
     await initGitRepo(rootDir);
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
 
     const runId = runIdOf(stdout.text());
@@ -85,7 +85,7 @@ describe("nuka run: the run summary", () => {
   it("writes a red run's failing step, its error, its record, and the rerun command", async () => {
     await initGitRepo(rootDir);
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(1);
 
     const runId = runIdOf(stdout.text());
@@ -128,9 +128,9 @@ describe("nuka run: the run summary", () => {
     vi.stubEnv("GITHUB_STEP_SUMMARY", stepSummary);
 
     const first = createCaptureSink();
-    await runCli(["run", "features/passing.feature"], { rootDir, stdout: first, stderr: createCaptureSink() });
+    await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout: first, stderr: createCaptureSink() });
     const second = createCaptureSink();
-    await runCli(["run", "features/failing.feature"], { rootDir, stdout: second, stderr: createCaptureSink() });
+    await runCli(["run", "--no-check", "features/failing.feature"], { rootDir, stdout: second, stderr: createCaptureSink() });
 
     const firstSummary = await readRunSummary(rootDir, runIdOf(first.text()));
     const secondSummary = await readRunSummary(rootDir, runIdOf(second.text()));
@@ -141,7 +141,7 @@ describe("nuka run: the run summary", () => {
     await writeFile(path.join(rootDir, "old.md"), "stale\n");
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    await runCli(["run", "features/passing.feature", "--summary", "out/pr-comment.md"], { rootDir, stdout, stderr });
+    await runCli(["run", "--no-check", "features/passing.feature", "--summary", "out/pr-comment.md"], { rootDir, stdout, stderr });
 
     const runId = runIdOf(stdout.text());
     const runCopy = await readRunSummary(rootDir, runId);
@@ -152,7 +152,7 @@ describe("nuka run: the run summary", () => {
   it("names a summary it could not write on stderr and keeps the run's exit code", async () => {
     await writeFile(path.join(rootDir, "blocker"), "a file, not a directory\n");
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature", "--summary", "blocker/summary.md"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature", "--summary", "blocker/summary.md"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -175,7 +175,7 @@ describe("nuka run --concurrency: the run summary", () => {
 
   it("writes one summary for the whole run, with one row per scenario record", async () => {
     const stdout = createCaptureSink();
-    await runCli(["run", "features/basic/", "--concurrency", "2"], { rootDir, stdout, stderr: createCaptureSink() });
+    await runCli(["run", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout, stderr: createCaptureSink() });
 
     const records = nonEmptyLines(stdout.text()).map(
       (line) => JSON.parse(line) as { run_id: string; feature: string; line: number; scenario: string },
@@ -216,7 +216,7 @@ describe("nuka run: the summary's declared vs observed section", () => {
 
   it("lists a step that declared mutates: false and was measured posting", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/read-only-policy.feature:7"], {
+    const exitCode = await runCli(["run", "--no-check", "features/read-only-policy.feature:7"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

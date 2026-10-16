@@ -13,7 +13,7 @@ Installed package: `node_modules/nukadoko/skills/...` (this file at `node_module
 - `nuka init` — project setup with self-check
 - `nuka steps` / `nuka describe <name>` / `nuka scaffold <name> [--pattern <text>] [--then] [--from <step>.<key>]` — vocabulary and stubs
 - `nuka check [feature]` — static checks before run
-- `nuka do <name>` / `nuka run <feature..>` — execute under contracts; records on stdout; `run` also writes a Markdown run summary (`--summary <path>` for a PR comment)
+- `nuka do <name>` / `nuka run [feature..]`: execute under contracts; records on stdout; `run` first refuses what `check` refuses for its scenarios (`--no-check` skips that), runs featuresDir with no target, and writes a Markdown run summary (`--summary <path>` for a PR comment)
 - `nuka harvest <step-record-ids..>` — draft a feature from `do` record ids
 - `nuka explore <file> [--json]`: run a model or a relation against request-only steps; prints the shortest failing scenario, or one JSON object with `--json`
 - `nuka session` / `nuka clean` / `nuka tend` — sessions, cleanup, rot signals

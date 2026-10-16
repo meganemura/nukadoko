@@ -5,11 +5,40 @@
 だからどの CI システムからでも呼び出せます。
 このページが埋めるのは 2 行の抜粋には書けないもの、すなわち丸ごと 1 つの workflow ファイルと、そのうち 3 行が存在する理由と、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある、そして `nuka run` が自分では決してやらない 4 つのことです。
 
-## そのままコピーできる workflow
+## CLI や API のプロジェクト: job は 1 つ
+
+`nuka init` で準備したプロジェクトには、`nuka run` を実行する `npm run test:scenarios` が既にあります。
+対象を渡さない `nuka run` は `featuresDir` を実行します。
+何かを実行する前に、その scenario について `nuka check` が報告する内容を報告し、error が 1 つでもあれば `1` で終了します。
+そのため、step がブラウザを開かないプロジェクトでは、1 つの job がゲートのすべてです。
+
+```yaml
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts
+      - run: npm run test:scenarios
+```
+
+単独の `nuka check` には、まだ 2 つの使い道があります。
+1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` と `nuka tend` だけです。
+もう 1 つは、run が数秒で終わらないときにも数秒で終わらなければならないゲートです。
+
+## ブラウザのプロジェクト: そのままコピーできる workflow
 
 これは 1 つのファイル、`.github/workflows/nukadoko.yml` です。
 すべての push と pull request で `nuka check` を実行し(数秒、ブラウザ不要)、それが通ったら `nuka run` を実行し(実際に実行するゲート)、`nuka tend` を毎週のスケジュールで実行します。
 これを実行しろと思い出させるものが他に無いからです。
+2 つのコマンドを 2 つの job に分けているので、check が失敗すればブラウザをインストールする前に止まります。
+`nuka run` も実行の前に自分の scenario を改めて check します。
+その費用は step の discovery 1 回分で、ブラウザは要りません。
 
 ```yaml
 name: nukadoko

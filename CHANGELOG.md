@@ -26,6 +26,24 @@ just until 0.1.
 
 ### Changed
 
+- **`nuka run` performs the static check first, and runs `featuresDir` with no target.**
+  Before it executes anything, `nuka run` now reports what `nuka check`
+  reports for the scenarios it selected: every project-wide finding, plus
+  the scenario-level findings for the scenarios it is about to execute (a
+  `:line` target narrows only that part). When one is an error it prints
+  the errors on stderr in `nuka check`'s own format, then `nuka run did not
+  start: nuka check reports <n> errors for these scenarios. Fix them, or
+  pass --no-check to run anyway.`, writes no record, and exits 1. Warnings
+  are not printed and do not stop a run. `--no-check` skips the check.
+  `nuka run` with no target runs `featuresDir` instead of exiting 1, and
+  `nuka init` writes `"test:scenarios": "nuka run"` instead of `"nuka
+  check && nuka run <featuresDir>"`. Before this, an undefined step, a
+  mutating step in Then position, or a `from` binding out of order was
+  caught only when a second command was chained in front of the run,
+  which every adopter wrote by hand. Breaking: a feature `nuka check`
+  rejects no longer runs, and a run-scope error such as `duplicate-pattern`
+  now stops every run; see docs/upgrading.md. `nuka check` stays for a
+  seconds-long gate and for `additionalFeatureDirs`.
 - **`nuka tend` reports only structural rot by default.** The two
   declaration notes, `step-rationale-missing` and
   `schema-field-undescribed`, are left out of text and `--json` output

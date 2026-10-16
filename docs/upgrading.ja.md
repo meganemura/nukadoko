@@ -39,6 +39,28 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   どちらかの code を素の `nuka tend --json` から読むジョブやスクリプトは、`--all` を足します。
   注記を黙らせるためだけに書いたプレースホルダーの `rationale: ""` は消してかまいません。
 
+`nuka run` が `nuka check` の拒否するものを拒否するようになりました。
+`check` が error を報告する feature を実行しているプロジェクトは、対応が必要です。
+
+**`nuka run` は先に静的チェックを行います。**
+`nuka run` は何かを実行する前に、選んだ scenario について `nuka check` が報告する内容を報告します。
+その中に error が 1 つでもあれば、error を stderr に出力し、record を書かずに 1 で終了します。
+対応は次のとおりです。
+
+- **`nuka check && nuka run features` とつなげた script はそのまま動きます。**
+  check が 2 回走るので、step の discovery が 1 回分増えます。
+  `nuka run` だけに縮めることもできます。
+  対象を渡さない `nuka run` は、今は `featuresDir` を実行します(以前は対象を求めて 1 で終了していました)。
+  `additionalFeatureDirs` に feature を置いているなら、別の `nuka check` を残してください。
+  対象を渡さない `nuka run` はそれを辿りません。
+- **`nuka check` が拒否する feature は、もう実行されません。**
+  指摘を直すか、意図して実行するときは `--no-check` を渡してください。
+  たとえば移行中のスイートに `undefined-step` がまだ残っているときです。
+  `duplicate-pattern` や import に失敗する step ファイルのような run 全体に関わる error は、それに触れる scenario だけでなく、プロジェクトのすべての `nuka run` を止めるようになりました。
+- **こうした error の実行時の失敗に合わせていた script は、拒否の方を見ることになります。**
+  未定義の step は以前は record 付きでその scenario を失敗させていました。
+  今はどの scenario も実行されず、stderr には `nuka check` の行が出ます。
+
 ## 0.14.1 から 0.15.0 へ
 
 `nuka accept` と sign-off の所見はすべて削除されました。

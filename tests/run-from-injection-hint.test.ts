@@ -39,7 +39,7 @@ describe("nuka run: from's own hint on a genuine args validation failure", () =>
 
   it("begins execution (a real step record), fails args validation, and names the still-missing upstream", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/from-injection-hint.feature:3"], {
+    const exitCode = await runCli(["run", "--no-check", "features/from-injection-hint.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -69,7 +69,7 @@ describe("nuka run: from's own hint on a genuine args validation failure", () =>
 
   it("stays silent about an unfilled from key when a different key is what actually failed", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/from-injection-hint.feature:6"], {
+    const exitCode = await runCli(["run", "--no-check", "features/from-injection-hint.feature:6"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -89,7 +89,7 @@ describe("nuka run: from's own hint on a genuine args validation failure", () =>
 
   it("adds no hint suffix at all when the failing step declares no from", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/from-injection-hint.feature:9"], {
+    const exitCode = await runCli(["run", "--no-check", "features/from-injection-hint.feature:9"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

@@ -39,7 +39,7 @@ describe("nuka run: the general per-step backstop", () => {
   it("still writes a failed step record when the validated result can't reach disk, and skips the rest of the scenario", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/unserializable-result.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/unserializable-result.feature"], {
       rootDir,
       stdout,
       stderr,

@@ -31,7 +31,7 @@ describe("nuka run --repeat", () => {
   it("runs the selection n times under one run_id and counts executions in the summary", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/greeting.feature", "--repeat", "3"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/greeting.feature", "--repeat", "3"], { rootDir, stdout, stderr });
     expect(exitCode, stderr.text()).toBe(0);
 
     const seen = records(stdout.text());
@@ -48,7 +48,7 @@ describe("nuka run --repeat", () => {
   it("tallies a scenario that failed at least once, after the failed list", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature", "--repeat", "2"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature", "--repeat", "2"], { rootDir, stdout, stderr });
     expect(exitCode).toBe(1);
 
     const seen = records(stdout.text());
@@ -61,7 +61,7 @@ describe("nuka run --repeat", () => {
   });
 
   it("emits one testCase per execution into the messages stream", async () => {
-    const exitCode = await runCli(["run", "features/greeting.feature", "--repeat", "3"], {
+    const exitCode = await runCli(["run", "--no-check", "features/greeting.feature", "--repeat", "3"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -80,7 +80,7 @@ describe("nuka run --repeat", () => {
   it("refuses anything but a whole number of 1 or more", async () => {
     for (const value of ["0", "1.5", "abc"]) {
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/greeting.feature", "--repeat", value], {
+      const exitCode = await runCli(["run", "--no-check", "features/greeting.feature", "--repeat", value], {
         rootDir,
         stdout: createCaptureSink(),
         stderr,
@@ -105,7 +105,7 @@ describe("nuka run --repeat with --concurrency", () => {
   it("has each worker repeat its own files, under one run_id", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/basic/", "--concurrency", "2", "--repeat", "2"], {
+    const exitCode = await runCli(["run", "--no-check", "features/basic/", "--concurrency", "2", "--repeat", "2"], {
       rootDir,
       stdout,
       stderr,
@@ -127,7 +127,7 @@ describe("nuka run --repeat with --concurrency", () => {
     );
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failure/", "--concurrency", "2", "--repeat", "2", "--quiet"], {
+    const exitCode = await runCli(["run", "--no-check", "features/failure/", "--concurrency", "2", "--repeat", "2", "--quiet"], {
       rootDir,
       stdout,
       stderr,

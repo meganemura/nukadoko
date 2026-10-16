@@ -51,7 +51,7 @@ describe("nuka run: allure-results wiring", () => {
   it("writes categories.json, environment.properties, and one result file per scenario under the default .nukadoko/export/allure-results/", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -88,7 +88,7 @@ describe("nuka run: allure-results wiring", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -109,7 +109,7 @@ describe("nuka run: allure-results wiring", () => {
   it("creates no allure-results directory at all for a run that selects zero pickles", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/empty.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/empty.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -126,11 +126,11 @@ describe("nuka run: allure-results wiring", () => {
     try {
       const loudStdout = createCaptureSink();
       const loudStderr = createCaptureSink();
-      await runCli(["run", "features/passing.feature"], { rootDir, stdout: loudStdout, stderr: loudStderr });
+      await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout: loudStdout, stderr: loudStderr });
 
       const quietStdout = createCaptureSink();
       const quietStderr = createCaptureSink();
-      await runCli(["run", "features/passing.feature", "--quiet"], {
+      await runCli(["run", "--no-check", "features/passing.feature", "--quiet"], {
         rootDir: quietDir,
         stdout: quietStdout,
         stderr: quietStderr,
@@ -167,7 +167,7 @@ describe("nuka run: allure-results wiring", () => {
 
     const firstStdout = createCaptureSink();
     const firstStderr = createCaptureSink();
-    const firstExit = await runCli(["run", "features/passing.feature"], {
+    const firstExit = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: firstStdout,
       stderr: firstStderr,
@@ -181,7 +181,7 @@ describe("nuka run: allure-results wiring", () => {
 
     const secondStdout = createCaptureSink();
     const secondStderr = createCaptureSink();
-    const secondExit = await runCli(["run", "features/passing.feature"], {
+    const secondExit = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: secondStdout,
       stderr: secondStderr,
@@ -203,7 +203,7 @@ describe("nuka run: allure-results wiring", () => {
   it("writes the result of a scenario whose step returns nothing (`returns: z.void()`), with no result attachment", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/void-result.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/void-result.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
     expect(stripRunProgressLines(stderr.text())).toBe("");
@@ -243,7 +243,7 @@ describe("nuka run: report emitters off by default", () => {
     await useEmptyConfig("run-project");
     const stderr = createCaptureSink();
 
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -259,7 +259,7 @@ describe("nuka run: report emitters off by default", () => {
     await useEmptyConfig("run-concurrency-project");
     const stderr = createCaptureSink();
 
-    await runCli(["run", "features/", "--concurrency", "2"], {
+    await runCli(["run", "--no-check", "features/", "--concurrency", "2"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,

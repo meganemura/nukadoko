@@ -18,7 +18,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
   it("rejects an unknown --env name", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/whatever.feature", "--env", "no-such-env"], {
+    const exitCode = await runCli(["run", "--no-check", "features/whatever.feature", "--env", "no-such-env"], {
       rootDir: fixture("basic-project"),
       stdout,
       stderr,
@@ -33,7 +33,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/whatever.feature", "--session", "Not Valid!"],
+      ["run", "--no-check", "features/whatever.feature", "--session", "Not Valid!"],
       { rootDir: fixture("basic-project"), stdout, stderr },
     );
 
@@ -56,7 +56,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(
-        ["run", "features/whatever.feature", "--session", "busy"],
+        ["run", "--no-check", "features/whatever.feature", "--session", "busy"],
         { rootDir, stdout, stderr },
       );
 
@@ -71,7 +71,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
   it("propagates a step discovery failure (a broken glue file) as exit 1 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/whatever.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/whatever.feature"], {
       rootDir: fixture("discover-import-failure-project"),
       stdout,
       stderr,
@@ -102,7 +102,7 @@ describe("nuka run --session: a malformed session file fails mid-run, not setup"
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/session-flow.feature", "--session", "corrupt"],
+      ["run", "--no-check", "features/session-flow.feature", "--session", "corrupt"],
       { rootDir, stdout, stderr },
     );
 
@@ -125,7 +125,7 @@ describe("nuka run --session: a malformed session file fails mid-run, not setup"
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/session-flow.feature", "--session", "bad", "--repeat", "3"],
+      ["run", "--no-check", "features/session-flow.feature", "--session", "bad", "--repeat", "3"],
       { rootDir, stdout, stderr },
     );
 

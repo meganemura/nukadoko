@@ -34,7 +34,7 @@ describe("nuka run: a part called through a scenario", () => {
 
   it("runs the part to completion and names it on calls[0]", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/numeric-part.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/numeric-part.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

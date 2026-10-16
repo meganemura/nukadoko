@@ -301,24 +301,18 @@ async function ensureAllurercFile(
 const SCENARIOS_SCRIPT = "test:scenarios";
 
 /**
- * Adds `"test:scenarios": "nuka check && nuka run <featuresDir>"` to
- * package.json's scripts, the line every early adopter wrote by hand, so
- * `npm run test:scenarios` is the one command a person or CI needs. A
+ * Adds `"test:scenarios": "nuka run"` to package.json's scripts, so
+ * `npm run test:scenarios` is the one command a person or CI needs. `nuka
+ * run` with no target runs featuresDir, which the config this command
+ * writes already names, and checks it before executing. A
  * script already under that name is the project's own choice and is left
  * alone. The file keeps its own indentation and trailing newline, since a
  * reformatted package.json is a diff nobody asked for. Returns whether the
  * file was written; a missing or unparseable package.json gets a stderr
  * line instead, because the script is what the rest of the setup assumes.
  */
-async function ensureScenariosScript(
-  rootDir: string,
-  featuresDirPosix: string,
-  stderr: WritableSink,
-): Promise<boolean> {
-  // Quoted only when it has to be: double quotes read the same under sh
-  // and cmd.exe, which is what npm runs a script with on Windows.
-  const target = /^[A-Za-z0-9_./-]+$/.test(featuresDirPosix) ? featuresDirPosix : JSON.stringify(featuresDirPosix);
-  const command = `nuka check && nuka run ${target}`;
+async function ensureScenariosScript(rootDir: string, stderr: WritableSink): Promise<boolean> {
+  const command = "nuka run";
   const packageJsonPath = path.join(rootDir, "package.json");
   let text: string;
   let parsed: unknown;
@@ -417,7 +411,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   }
 
   const featuresDirPosix = featuresDirRelative.split(path.sep).join("/");
-  if (await ensureScenariosScript(rootDir, featuresDirPosix, stderr)) {
+  if (await ensureScenariosScript(rootDir, stderr)) {
     stdout.write("package.json\n");
   }
 

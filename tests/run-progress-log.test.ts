@@ -44,7 +44,7 @@ describe("nuka run: progress output", () => {
   it("writes exactly one step line per pickle step, never duplicated", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -63,7 +63,7 @@ describe("nuka run: progress output", () => {
   it("also writes one scenario boundary line, naming the feature path, line, and scenario name", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -80,7 +80,7 @@ describe("nuka run: progress output", () => {
   it("a failed step's own line is recognizable as failed, distinct from passed/skipped", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -106,7 +106,7 @@ describe("nuka run: progress output", () => {
   it("every step line carries a duration, so a slow step reads differently from a stuck one", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+    await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
     for (const line of stepLines(stderr.text())) {
       expect(line).toMatch(/\d+\.\d+s/);
@@ -116,7 +116,7 @@ describe("nuka run: progress output", () => {
   it("--quiet suppresses step and scenario lines; output locations and the summary still print", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature", "--quiet"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature", "--quiet"], {
       rootDir,
       stdout,
       stderr,
@@ -137,7 +137,7 @@ describe("nuka run: progress output", () => {
   it("names each failed scenario after the summary, including under --quiet", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature", "--quiet"], {
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature", "--quiet"], {
       rootDir,
       stdout,
       stderr,
@@ -167,7 +167,7 @@ describe("nuka run: progress output", () => {
   it("names a failed step's error and step record, and how to rerun the scenario", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     expect(normalizeRun(stderr.text())).toBe(
@@ -194,7 +194,7 @@ describe("nuka run: progress output", () => {
   it("--quiet still writes a failed step's lines, and only those", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature", "--quiet"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature", "--quiet"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const lines = nonEmptyLines(normalizeRun(stderr.text()));
@@ -213,7 +213,7 @@ describe("nuka run: progress output", () => {
     );
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature", "--env", "staging", "--quiet"], {
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature", "--env", "staging", "--quiet"], {
       rootDir,
       stdout,
       stderr,
@@ -228,7 +228,7 @@ describe("nuka run: progress output", () => {
   it("writes no failed scenario line when every scenario passes", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
     expect(failedScenarioLines(stderr.text())).toHaveLength(0);
@@ -237,7 +237,7 @@ describe("nuka run: progress output", () => {
   it("output-location lines name only what this run actually wrote: none for a run that selects zero pickles", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/empty.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/empty.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -275,7 +275,7 @@ describe("nuka run: progress output", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -301,7 +301,7 @@ describe("nuka run: progress output", () => {
   it("the messages output-location line names this run's own run-id-suffixed file, not the stable configured path", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -323,7 +323,7 @@ describe("nuka run: progress output", () => {
   it("stdout carries only the NDJSON scenario records; every non-empty line parses, one per scenario", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/table.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/table.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -343,7 +343,7 @@ describe("nuka run: progress output", () => {
   it("the summary line's numbers match this run's own actual results", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/table.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/table.feature"], {
       rootDir,
       stdout,
       stderr,

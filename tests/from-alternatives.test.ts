@@ -41,7 +41,7 @@ describe("from: injection picks whichever candidate actually ran", () => {
 
   it("fills projectId from create-project when only that candidate is bound earlier", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:3"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -60,7 +60,7 @@ describe("from: injection picks whichever candidate actually ran", () => {
 
   it("fills projectId from import-project, the exact same consumer step, when only that candidate is bound earlier", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:7"], {
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:7"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -149,7 +149,7 @@ describe("nuka run: fails a scenario with two bound candidates before any step r
   it("refuses the whole scenario, no step records, no browser session ever opened", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chain.feature:11"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:11"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);

@@ -220,7 +220,7 @@ describe("nuka run: strict args validation", () => {
     const rootDir = await copyFixtureToTempDir("args-strict-run-project");
     try {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/greet.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/greet.feature"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -259,7 +259,7 @@ describe("nuka run: strict args validation", () => {
     const rootDir = await copyFixtureToTempDir("args-strict-run-project");
     try {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/defaults.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/defaults.feature"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),

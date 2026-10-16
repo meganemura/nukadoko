@@ -142,7 +142,7 @@ describe("nuka init", () => {
       name: "esm-project",
       private: true,
       type: "module",
-      scripts: { "test:scenarios": "nuka check && nuka run features" },
+      scripts: { "test:scenarios": "nuka run" },
     });
 
     const config = await loadConfig(rootDir);
@@ -207,14 +207,14 @@ describe("nuka init", () => {
     expect(exitCode).toBe(0);
     expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(
       `${JSON.stringify(
-        { type: "module", scripts: { test: "vitest", "test:scenarios": "nuka check && nuka run features" } },
+        { type: "module", scripts: { test: "vitest", "test:scenarios": "nuka run" } },
         null,
         4,
       )}\n`,
     );
   });
 
-  it("runs the --features-dir directory from the script", async () => {
+  it("leaves the --features-dir directory to the config, which a bare nuka run reads", async () => {
     const exitCode = await runCli(["init", "--features-dir", "e2e/acceptance"], {
       rootDir,
       stdout: createCaptureSink(),
@@ -225,7 +225,10 @@ describe("nuka init", () => {
     const manifest = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
-    expect(manifest.scripts["test:scenarios"]).toBe("nuka check && nuka run e2e/acceptance");
+    expect(manifest.scripts["test:scenarios"]).toBe("nuka run");
+    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).toContain(
+      'featuresDir: "e2e/acceptance",',
+    );
   });
 
   it("says on stderr that no script was added when there is no package.json", async () => {
@@ -238,7 +241,7 @@ describe("nuka init", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("package.json");
     expect(stderr.text()).toBe(
-      'No readable package.json, so no test:scenarios script was added; run "nuka check && nuka run features" directly\n',
+      'No readable package.json, so no test:scenarios script was added; run "nuka run" directly\n',
     );
   });
 

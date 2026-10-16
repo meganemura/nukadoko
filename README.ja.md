@@ -28,9 +28,11 @@ npx nuka steps         # the vocabulary, empty until you add a step
 ```
 
 `nuka init` は CLI や API のプロジェクトを前提に準備をします。
-`.gitignore` に `.nukadoko/` を、`package.json` の scripts に `"test:scenarios": "nuka check && nuka run features"` を追加します。
+`.gitignore` に `.nukadoko/` を、`package.json` の scripts に `"test:scenarios": "nuka run"` を追加します。
 同じ名前の script が既にあれば、そのままにします。
 以後、人も CI も `npm run test:scenarios` の 1 つだけを実行すれば済みます。
+対象を渡さない `nuka run` は `featuresDir` を実行します。
+その scenario について `nuka check` が報告する内容を報告し、error が 1 つでもあれば何も実行せずに止まります。
 `tsconfig.json` の `include` が `features/` や config ファイルを外しているときは、追加すべきエントリを 1 行で伝えます。
 2 つのフラグで書くものを増やせます。
 `--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
@@ -609,14 +611,15 @@ access to a document you need, say so rather than assuming.
 
 ```yaml
 # excerpt from a CI workflow
-- run: npx nuka check              # PR gate: static, seconds, no browser
-- run: npx nuka run features/      # merge/deploy gate: executes, writes step records
+- run: npm run test:scenarios      # nuka run: checks, then executes featuresDir, writes step records
 ```
 
-`nuka check` はあらゆる PR に置いてください。
-安価なゲートであり、何かが実行されるより前に落とせます。
-`nuka run` は、実際に真でなければならないゲート、すなわち merge や deploy の側に置いてください。
-実行して step record の証跡を残すのはこちらだからです。
+step は 1 つで足ります。
+`nuka run` は、選んだ scenario について `nuka check` が報告する内容を報告し、error が 1 つでもあれば何も実行せずに `1` で終了します。
+そのため、失敗しかありえない scenario にブラウザや数分を払うことはありません。
+`--no-check` はこの check を飛ばし、そうした scenario をそれでも実行します。
+run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、ブラウザ不要)として置き、`nuka run` は merge や deploy の側に残してください。
+`nuka check` は `additionalFeatureDirs` も対象にしますが、対象を渡さない `nuka run` はそれを含みません。
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
 stdout はどちらの場合も NDJSON のままです。

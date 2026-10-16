@@ -273,7 +273,7 @@ function cliSummaryOf(relativePath: string): string {
 
 /** The commands and flags a CLI summary block leaves out. An entry is a
  * line starting with `nuka ` plus the indented lines under it; a flag counts
- * as listed when one of its command's entries names it. */
+ * as listed when one of its command's entries names it or its `--no-` form. */
 function summaryOmissions(tree: CommandNode, summary: string): string[] {
   const entries = summary.split(/\n(?=nuka )/).filter((entry) => entry.startsWith("nuka "));
   const missing: string[] = [];
@@ -286,7 +286,9 @@ function summaryOmissions(tree: CommandNode, summary: string): string[] {
     }
     for (const flag of [...node.flags].sort()) {
       if (flag === "help" || flag === "version") continue;
-      if (!own.some((entry) => new RegExp(`--${flag}(?![\\w-])`).test(entry))) missing.push(`${name} --${flag}`);
+      // A boolean flag that defaults to true is written the way it is used,
+      // as its negation (`--no-check`).
+      if (!own.some((entry) => new RegExp(`--(?:no-)?${flag}(?![\\w-])`).test(entry))) missing.push(`${name} --${flag}`);
     }
   }
   return missing;

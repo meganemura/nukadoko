@@ -37,7 +37,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
     it("a step exceeding its own timeout fails at the configured value, not at how long it actually runs, and the scenario moves on", async () => {
       const stdout = createCaptureSink();
       const startedAt = Date.now();
-      const exitCode = await runCli(["run", "features/step-timeout.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/step-timeout.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -78,7 +78,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
       try {
         const stdout = createCaptureSink();
-        const exitCode = await runCli(["run", "features/step-timeout.feature:7"], {
+        const exitCode = await runCli(["run", "--no-check", "features/step-timeout.feature:7"], {
           rootDir,
           stdout,
           stderr: createCaptureSink(),
@@ -107,7 +107,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
   describe('"pending"/"skipped" returns are not interpreted (item 4)', () => {
     it('a step returning "pending" fails with a readable message pointing at docs/migration.md', async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/step-pending-skip.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/step-pending-skip.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -127,7 +127,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it('a step returning "skipped" fails with a readable message pointing at docs/migration.md', async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/step-pending-skip.feature:6"], {
+      const exitCode = await runCli(["run", "--no-check", "features/step-pending-skip.feature:6"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -147,7 +147,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
     it("a step expecting a done callback fails instead of hanging, with a readable message", async () => {
       const stdout = createCaptureSink();
       const startedAt = Date.now();
-      const exitCode = await runCli(["run", "features/step-done-callback.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/step-done-callback.feature"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -174,7 +174,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
   describe("hook timeout / done-callback / pending (items 1, 2, 4, 5 applied to hooks)", () => {
     it("a Before hook exceeding its own timeout fails at the configured value, skipping this scenario's step", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-timeout.feature:4"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-timeout.feature:4"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -198,7 +198,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("a Before hook expecting a done callback fails instead of hanging", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-done-callback.feature:4"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-done-callback.feature:4"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -216,7 +216,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it('a Before hook returning "pending" fails', async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-pending.feature:4"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-pending.feature:4"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -236,7 +236,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
   describe("HookParameter reaches every hook (item 3)", () => {
     it("Before destructures { gherkinDocument, pickle, testCaseStartedId, willBeRetried } without crashing; the feature's own name is readable", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -256,7 +256,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("After receives result.status \"PASSED\" for a passing scenario", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -271,7 +271,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("After receives result.status \"FAILED\" for a failing scenario, using cucumber's own Status string value", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:6"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:6"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -304,7 +304,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("AfterStep receives pickleStep, testStepId, and result.duration for each step that ran", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:9"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:9"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -334,7 +334,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("After and AfterStep receive result.message and error when the step throws", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:6"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:6"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -365,7 +365,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("a passing After receives result.duration and no message", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -384,7 +384,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("Before does not receive pickleStep, testStepId, result, or error", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -407,7 +407,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
   describe("Status", () => {
     it("result.status === Status.FAILED is false for a passing scenario", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:3"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
@@ -421,7 +421,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
 
     it("result.status === Status.FAILED is true for a failing scenario", async () => {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/hook-parameter.feature:6"], {
+      const exitCode = await runCli(["run", "--no-check", "features/hook-parameter.feature:6"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),

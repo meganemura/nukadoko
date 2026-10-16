@@ -46,6 +46,28 @@ This part does not change release to release.
   `--all`. A placeholder `rationale: ""` written only to quiet the note
   can go.
 
+`nuka run` now refuses what `nuka check` refuses, which a project that runs a feature `check` reports an error for has to act on.
+
+**`nuka run` performs the static check first.** Before it executes
+anything, `nuka run` reports what `nuka check` reports for the scenarios it
+selected. When one finding is an error, it prints the errors on stderr,
+writes no record, and exits 1. What to do:
+
+- **A script that chains `nuka check && nuka run features` keeps
+  working.** It checks twice, which costs one more step discovery. It can
+  shrink to `nuka run`: with no target, `nuka run` now runs `featuresDir`
+  (it used to exit 1 asking for a target). Keep the separate `nuka check`
+  where `additionalFeatureDirs` holds features, since `nuka run` with no
+  target does not walk them.
+- **A feature `nuka check` rejects no longer runs.** Fix the finding, or
+  pass `--no-check` for a deliberate run of it, for example while a
+  migrating suite still has an `undefined-step`. A run-scope error, such
+  as a `duplicate-pattern` or a step file that fails to import, now stops
+  every `nuka run` in the project, not only the scenarios that reach it.
+- **A script that matched a run-time failure for one of these now sees
+  the refusal.** An undefined step used to fail its scenario with a record;
+  now no scenario runs, and stderr carries the `nuka check` line instead.
+
 ## 0.14.1 to 0.15.0
 
 `nuka accept` and every sign-off finding are removed, which a project that signs off features, or gates CI on a sign-off, has to act on.

@@ -48,7 +48,7 @@ describe("nuka run: messages.ndjson wiring", () => {
   it("writes .nukadoko/export/messages.ndjson by default: every line parses, and every envelope kind expected is present", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -92,7 +92,7 @@ describe("nuka run: messages.ndjson wiring", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -124,7 +124,7 @@ describe("nuka run: messages.ndjson wiring", () => {
       );
 
       const stderr = createCaptureSink();
-      expect(await runCli(["run", "features/passing.feature"], { rootDir, stdout: createCaptureSink(), stderr })).toBe(0);
+      expect(await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout: createCaptureSink(), stderr })).toBe(0);
 
       expect(existsSync(output)).toBe(true);
       expect(existsSync(path.join(resultsDir, "categories.json"))).toBe(true);
@@ -137,7 +137,7 @@ describe("nuka run: messages.ndjson wiring", () => {
   it("writes no messages.ndjson at all for a run that selects zero pickles", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/empty.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/empty.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -152,14 +152,14 @@ describe("nuka run: messages.ndjson wiring", () => {
   it("truncates on a second run to the same output: exactly one testRunStarted, not two", async () => {
     const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
 
-    const first = await runCli(["run", "features/passing.feature"], {
+    const first = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
     });
     expect(first).toBe(0);
 
-    const second = await runCli(["run", "features/passing.feature"], {
+    const second = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -173,7 +173,7 @@ describe("nuka run: messages.ndjson wiring", () => {
 
   it("testRunFinished.success is false, agreeing with the non-zero exit code, for a run with a failing scenario", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/failing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

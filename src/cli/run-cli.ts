@@ -120,7 +120,9 @@ interface DoArgs {
 }
 
 interface RunArgs {
-  feature: string[];
+  feature?: string[];
+  /** `false` under `--no-check` (yargs' own boolean negation). */
+  check?: boolean;
   session?: string;
   env?: string;
   /** Suppresses the per-step/per-scenario progress lines — the
@@ -505,18 +507,25 @@ export async function runCli(
   };
 
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
-    command: "run <feature..>",
+    command: "run [feature..]",
     describe:
-      "execute scenarios from a feature file, a Markdown oath, or a directory of them; step records + scenario records",
+      "check, then execute scenarios from a feature file, a Markdown oath, or a directory of them (featuresDir when none is given); step records + scenario records",
     builder: (y: Argv) =>
       y
         .positional("feature", {
           type: "string",
           array: true,
-          demandOption: true,
           describe:
             "feature file or Markdown oath, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
-            "walked recursively for .feature files and for Markdown files named in oaths (:line is refused on a directory)",
+            "walked recursively for .feature files and for Markdown files named in oaths (:line is refused on a directory); " +
+            "omit to run featuresDir",
+        })
+        .option("check", {
+          type: "boolean",
+          default: true,
+          describe:
+            "before executing, report what nuka check reports for the selected scenarios and stop on an error; " +
+            "--no-check skips it to run a scenario check refuses",
         })
         .option("session", {
           type: "string",
@@ -557,7 +566,8 @@ export async function runCli(
       if (argsFailed) return;
       exitCode = await runRun({
         rootDir,
-        featureArgs: args.feature,
+        featureArgs: args.feature ?? [],
+        check: args.check ?? true,
         session: args.session ?? null,
         env: args.env ?? null,
         quiet: args.quiet ?? false,

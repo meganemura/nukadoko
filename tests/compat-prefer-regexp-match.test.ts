@@ -28,7 +28,7 @@ describe("nuka run: preferForRegexpMatch", () => {
   it("converts a RegExp group with the preferred type when two types match it", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/code.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--no-check", "features/code.feature"], { rootDir, stdout, stderr });
 
     expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(exitCode).toBe(0);
@@ -49,7 +49,7 @@ describe("nuka run: preferForRegexpMatch", () => {
   it("fails setup naming both types when two types prefer one regexp", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/code.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/code.feature"], {
       rootDir: fixture("check-compat-preferential-regexp-project"),
       stdout,
       stderr,

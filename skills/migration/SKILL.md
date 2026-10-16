@@ -99,7 +99,9 @@ the same rule.
 - **Don't let the suite stop running while it's partway migrated.** Compat
   and typed steps coexist in the same feature file; a suite with some
   steps promoted and others still compat must keep passing throughout.
-  Never make "fully typed" a precondition for "runs."
+  Never make "fully typed" a precondition for "runs." `nuka run` refuses
+  a scenario `nuka check` reports an error for; fix the finding, or pass
+  `--no-check` while the rest of the migration catches up.
 - **Don't delete compat glue before its typed replacement is written and
   passing.** Write the new step, get it running with `nuka do`, only then
   remove the old one, never the other order.

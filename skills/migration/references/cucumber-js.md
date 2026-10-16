@@ -46,7 +46,9 @@ check` says so as `step-file-import-failed`.
 
 Then run `nuka check <feature>` and `nuka run <feature>` and read what they
 say. `nuka check` takes one file. A directory, and `<feature>:<line>`, are
-`nuka run` arguments. Fix whatever they point at, and run them again.
+`nuka run` arguments. `nuka run` stops on any error `nuka check` reports
+for the scenarios it selected; `nuka run --no-check <feature>` executes
+anyway, to see how a scenario `check` refuses actually fails. Fix whatever they point at, and run them again.
 Repeat until the existing suite is green: that is Stage 1's completion
 condition, nothing more. That condition is `nuka check` and `nuka run` going green, not `tsc`
 typechecking cleanly; the two can disagree in either direction. `nuka check
