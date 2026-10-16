@@ -14,8 +14,9 @@ import {
 
 // Responsibility: SIGINT, SIGTERM, and SIGHUP during `nuka run` or `nuka
 // do` still run fixture teardown, in every worker under `--concurrency`
-// too, and so does a SIGKILL of the concurrent parent. A normal finish
-// still tears down as well.
+// too, and so does a SIGKILL of the concurrent parent, before or after it
+// forwarded a signal. A normal finish still tears down as well. A worker's
+// stdin reads as empty, as a terminal-less run's stdin should.
 //
 // The signal cases spawn a real process. Delivering the signal to this
 // vitest process would tear the runner down, so the child is `src/cli.ts`
@@ -191,6 +192,78 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "tenant:failed",
     ]);
   }, 40_000);
+
+  it("gives a step under nuka run --concurrency 2 an empty stdin", async () => {
+    const child = spawnNuka(rootDir, [
+      "run",
+      "features/read-stdin.feature",
+      "features/read-stdin-stream.feature",
+      "--quiet",
+      "--concurrency",
+      "2",
+    ]);
+    const stdout = collect(child.stdout);
+    const stderr = collect(child.stderr);
+    const closed = await waitForClose(child, 20_000);
+
+    expect(closed, stderr()).toEqual({ code: 0, signal: null });
+    const records = stdout()
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { status: string });
+    expect(records.map((record) => record.status)).toEqual(["passed", "passed"]);
+  }, 40_000);
+
+  it("finishes a forwarded signal's teardown in every worker when the parent is then killed with SIGKILL", async () => {
+    const child = spawnNuka(
+      rootDir,
+      ["run", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+      { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: "3000" },
+    );
+    await waitForSetups(rootDir, 2);
+    const pids = await readFixturePids(rootDir);
+    child.kill("SIGTERM");
+    const deadline = Date.now() + 20_000;
+    while ((await readLog(rootDir)).filter((entry) => entry.phase === "teardown").length < 2) {
+      if (Date.now() > deadline) throw new Error("tenant teardown did not start within 20s");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    child.kill("SIGKILL");
+    await waitForClose(child, 5_000);
+
+    expect(await waitForGone(pids, 15_000), "worker processes still alive").toEqual([]);
+    const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
+    expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
+      "ledger:failed",
+      "ledger:failed",
+      "tenant:failed",
+      "tenant:failed",
+    ]);
+  }, 60_000);
+
+  it("names a signal that arrives after every scenario had a record under nuka run --concurrency 2", async () => {
+    const child = spawnNuka(
+      rootDir,
+      ["run", "features/finish.feature", "features/finish-again.feature", "--quiet", "--concurrency", "2"],
+      { ...process.env, LEDGER_TEARDOWN_HOLD_MS: "3000" },
+    );
+    const stdout = collect(child.stdout);
+    const stderr = collect(child.stderr);
+    const deadline = Date.now() + 20_000;
+    while ((await readLog(rootDir)).filter((entry) => entry.fixture === "ledger" && entry.phase === "teardown").length < 2) {
+      if (Date.now() > deadline) throw new Error(`ledger teardown did not start within 20s:\n${stderr()}`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const pids = await readFixturePids(rootDir);
+    child.kill("SIGTERM");
+    const closed = await waitForClose(child, 20_000);
+
+    expect(stoppedBy("SIGTERM", closed.code, closed.signal), stderr()).toBe(true);
+    expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
+    expect(stdout().trim().split("\n")).toHaveLength(2);
+    expect(stderr()).toContain("SIGTERM arrived after every scenario had a record, so AfterAll hooks may not have run.\n");
+    expect(stderr()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
+  }, 60_000);
 
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     it(`tears both scopes down when nuka run receives ${signal}`, async () => {
