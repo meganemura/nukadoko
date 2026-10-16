@@ -1,3 +1,4 @@
+import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,6 +19,7 @@ import {
 import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "./line-buffer.js";
+import { exitCodeForSignal } from "./process-signal.js";
 import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 
 // Responsibility: `nuka run --concurrency <n>`'s own parent-side
@@ -75,6 +77,14 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // promised as if nothing happened) — `failedFiles`, below, names every such
 // file and fails the whole invocation, regardless of what any other
 // worker's own files did.
+//
+// SIGINT and SIGTERM follow the `--concurrency 1` rule (src/run/
+// process-signal.ts) with the fixtures living in the workers. The first
+// signal is forwarded to every running worker, each tears its fixtures
+// down and exits, no further worker starts, and the run ends with the
+// summary of what was written and exit code 128 plus the signal number. A
+// second signal is forwarded too, which makes each worker exit at once,
+// and the parent exits at once.
 
 const SERIAL_TAG = "@nukadoko:serial";
 
@@ -124,6 +134,8 @@ export interface RunConcurrentResult {
   readonly failedScenarios: readonly FailedScenario[];
   /** Empty unless `repeat` is above 1. */
   readonly repeatTallies: readonly RepeatTally[];
+  /** The first SIGINT or SIGTERM this run received, or `null`. */
+  readonly interruptedBy: NodeJS.Signals | null;
 }
 
 /**
@@ -283,6 +295,9 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     messagesEmitter?.emitScenario({ record, pickle: match.pickle });
   }
 
+  const liveWorkers = new Set<ChildProcess>();
+  let interruptedBy: NodeJS.Signals | null = null;
+
   async function runWorkerGroup(files: readonly SelectedFeature[], worker: number): Promise<WorkerGroupResult> {
     const tmpDir = await mkdtemp(path.join(tmpdir(), "nukadoko-run-"));
     const featureListPath = path.join(tmpDir, "features.txt");
@@ -293,8 +308,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
       );
       await writeFile(featureListPath, `${featureTargets.join("\n")}\n`, "utf8");
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath, repeat });
       const filesWithRecords = new Set<string>();
+      if (interruptedBy !== null) {
+        return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
+      }
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath, repeat });
+      liveWorkers.add(child);
 
       const stdoutBuffer = createLineBuffer((line) => {
         if (line.length === 0) {
@@ -340,6 +359,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         child.once("close", (code) => finish(code ?? 1));
         child.once("error", () => finish(1));
       });
+      liveWorkers.delete(child);
       stdoutBuffer.flush();
       stderrBuffer.flush();
 
@@ -354,38 +374,53 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
 
   const failedFiles = new Set<string>();
 
-  const workerCount = Math.min(concurrency, parallelFeatures.length);
-  if (workerCount > 0) {
-    const buckets: SelectedFeature[][] = Array.from({ length: workerCount }, () => []);
-    parallelFeatures.forEach((feature, index) => {
-      buckets[index % workerCount]!.push(feature);
-    });
+  const onSignal = (signal: NodeJS.Signals): void => {
+    for (const child of liveWorkers) child.kill(signal);
+    if (interruptedBy !== null) process.exit(exitCodeForSignal(signal));
+    interruptedBy = signal;
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  try {
+    const workerCount = Math.min(concurrency, parallelFeatures.length);
+    if (workerCount > 0) {
+      const buckets: SelectedFeature[][] = Array.from({ length: workerCount }, () => []);
+      parallelFeatures.forEach((feature, index) => {
+        buckets[index % workerCount]!.push(feature);
+      });
 
-    const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1)));
-    for (const [bucketIndex, result] of results.entries()) {
-      if (result.exitCode !== 0) {
-        for (const feature of buckets[bucketIndex]!) {
-          if (!result.filesWithRecords.has(feature.relativePath)) {
-            failedFiles.add(feature.relativePath);
+      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1)));
+      for (const [bucketIndex, result] of results.entries()) {
+        if (result.exitCode !== 0) {
+          for (const feature of buckets[bucketIndex]!) {
+            if (!result.filesWithRecords.has(feature.relativePath)) {
+              failedFiles.add(feature.relativePath);
+            }
           }
         }
       }
     }
-  }
 
-  // One worker at a time, strictly after every parallel worker has already
-  // exited (the `await` above already guarantees that) — a `@nukadoko:serial` file's
-  // whole reason to exist is that nothing else may be running while it is.
-  for (const feature of serialFeatures) {
-    // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
-    // second number to tell it apart from.
-    const result = await runWorkerGroup([feature], 1);
-    if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
-      failedFiles.add(feature.relativePath);
+    // One worker at a time, strictly after every parallel worker has already
+    // exited (the `await` above already guarantees that) — a `@nukadoko:serial` file's
+    // whole reason to exist is that nothing else may be running while it is.
+    for (const feature of serialFeatures) {
+      // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
+      // second number to tell it apart from.
+      const result = await runWorkerGroup([feature], 1);
+      if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
+        failedFiles.add(feature.relativePath);
+      }
     }
+  } finally {
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
   }
 
-  if (failedFiles.size > 0) {
+  if (interruptedBy !== null) {
+    stderr.write(`${interruptedBy} stopped this run before every scenario ran, so it is incomplete.\n`);
+    allPassed = false;
+  } else if (failedFiles.size > 0) {
     stderr.write(
       `A worker exited without writing any record for: ${[...failedFiles].sort().join(", ")}. ` +
         "This run is incomplete and cannot be treated as a pass.\n",
@@ -416,5 +451,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     allureEmitter,
     messagesEmitter,
     failedScenarios,
+    interruptedBy,
   };
 }

@@ -38,7 +38,7 @@ import {
   writeRepeatTallies,
   createRepeatTally,
 } from "../run/progress-log.js";
-import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
+import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
 import { writeRunMarker } from "../record/run-marker.js";
@@ -681,8 +681,16 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     }
 
     if (effectiveConcurrency > 1) {
-      const { allPassed, scenariosWritten, scenariosPassed, stepRecordsWritten, messagesEmitter, failedScenarios, repeatTallies } =
-        await runConcurrentPickles({
+      const {
+        allPassed,
+        scenariosWritten,
+        scenariosPassed,
+        stepRecordsWritten,
+        messagesEmitter,
+        failedScenarios,
+        repeatTallies,
+        interruptedBy,
+      } = await runConcurrentPickles({
           rootDir,
           config: runConfig,
           runId,
@@ -739,6 +747,9 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       });
       writeFailedScenarios(stderr, failedScenarios);
       writeRepeatTallies(stderr, repeatTallies);
+      // An interrupted run prunes nothing, as at `--concurrency 1`, where
+      // the signal handler exits before the prune.
+      if (interruptedBy !== null) return exitCodeForSignal(interruptedBy);
       await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
 
       return allPassed ? 0 : 1;

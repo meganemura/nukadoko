@@ -834,6 +834,9 @@ SIGINT or SIGTERM during `nuka run` or `nuka do` does not make fixture cleanup o
 The process that built the fixtures tears down the scenario-scope cache, disposes the context, tears down the process-scope cache, and exits with 128 plus the signal number.
 `use()` receives `"failed"`, because that invocation did not finish.
 A second SIGINT or SIGTERM exits at once.
+Under `nuka run --concurrency <n>` the parent forwards each signal to every worker.
+On the first, each worker tears its fixtures down and exits, no further worker starts, and the parent prints the summary of what was written and exits with 128 plus the signal number.
+On the second, each worker and the parent exit at once.
 This reverse order is correct because nukadoko builds and tears down fixtures
 *serially* within one process.
 The reverse order makes each dependency outlive its dependents.

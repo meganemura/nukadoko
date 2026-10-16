@@ -4,11 +4,11 @@ import { fileURLToPath } from "node:url";
 import type { Readable } from "node:stream";
 
 // Responsibility: turns "run run-worker-entry.ts against this argument
-// list" into an actual child process, attached (never `detached`, unlike
-// src/live/spawn-daemon.ts's own session daemon: `nuka run --concurrency
-// <n>` waits for every worker to finish before it can print its own
-// summary and exit, so the parent must keep each worker as a real child it
-// can await, not one it hands off and forgets).
+// list" into an actual child process the parent keeps (never unref'd,
+// unlike src/live/spawn-daemon.ts's own session daemon: `nuka run
+// --concurrency <n>` waits for every worker to finish before it can print
+// its own summary and exit, so the parent must keep each worker as a real
+// child it can await, not one it hands off and forgets).
 //
 // The interpreter choice mirrors src/live/spawn-daemon.ts's own
 // `spawnDaemon` exactly, for the same reason: run-worker-entry.ts's own
@@ -46,6 +46,14 @@ function packageRoot(here: string): string {
   return path.resolve(path.dirname(here), "..", "..");
 }
 
+// `detached` on POSIX puts each worker in its own process group, so a
+// terminal's Ctrl-C reaches only the parent. The parent forwards each
+// signal once (src/run/run-concurrent.ts). A worker that also got the
+// terminal's copy would count the forwarded one as a second signal and
+// exit without teardown. Windows has no process-group signals, and
+// `detached` there opens a console window.
+const detached = process.platform !== "win32";
+
 export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
   const { rootDir, runId, env, quiet, featureListPath, repeat } = options;
   const here = fileURLToPath(import.meta.url);
@@ -56,8 +64,10 @@ export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessBySt
   return ext === ".ts"
     ? spawn(path.join(packageRoot(here), "node_modules", ".bin", "tsx"), [workerEntry, ...args], {
         stdio: ["ignore", "pipe", "pipe"],
+        detached,
       })
     : spawn(process.execPath, [workerEntry, ...args], {
         stdio: ["ignore", "pipe", "pipe"],
+        detached,
       });
 }

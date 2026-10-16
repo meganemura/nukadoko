@@ -654,6 +654,9 @@ step の失敗によって fixture の片付けが省略可能になることは
 fixture を構築したプロセスは、scenario スコープを teardown し、context を dispose し、process スコープを teardown して、128 にシグナル番号を足したコードで終了します。
 その実行は完了していないので、`use()` は `"failed"` を受け取ります。
 2 回目の SIGINT または SIGTERM は、すぐに終了します。
+`nuka run --concurrency <n>` では、親プロセスが各シグナルをすべての worker に転送します。
+1 回目では、各 worker が fixture を片付けて終了し、新しい worker は起動せず、親プロセスは書き込んだ分の summary を出力して 128 にシグナル番号を足した値で終了します。
+2 回目では、各 worker と親プロセスがすぐに終了します。
 nukadoko は 1 つのプロセス内で fixture の構築と teardown を**直列に**行うため、この逆順は正しく機能します。
 逆順によって、各依存はその依存先より長く生きます。
 `nuka run --concurrency <n>` も、この規則を保ちます。

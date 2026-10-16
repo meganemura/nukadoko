@@ -70,6 +70,16 @@ just until 0.1.
 
 ### Fixed
 
+- **A signal to `nuka run --concurrency` tears every worker down.** The
+  parent had no SIGINT or SIGTERM handler. It died at once, with no
+  summary, and its workers kept running with their fixtures open. The
+  parent now forwards the first signal to every worker, each worker tears
+  its fixtures down and exits, no further worker starts, and the parent
+  prints the summary and exits with 128 plus the signal number, as at
+  `--concurrency 1`. A second signal is forwarded too, and every process
+  exits at once. Workers run in their own process group, so a terminal's
+  Ctrl-C reaches them only through the parent.
+
 - **Only records reach stdout when a hook, a fixture, or a late step
   writes there.** Text written to the process stdout went to stderr only
   while a step body ran. A Before or After hook, a BeforeAll or AfterAll, a
