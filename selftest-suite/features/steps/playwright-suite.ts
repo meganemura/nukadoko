@@ -12,9 +12,8 @@ import { startServer, type RunningServer } from "../../fixture-project/playwrigh
 // implementation (its own features/steps/lib/cart.ts) between a genuine
 // `playwright test` run and a genuine `nuka run`/`nuka do`, never a
 // stand-in for either. State kept in a plain module-local variable
-// (`current` below), the same reasoning features/steps/acceptance-
-// lifecycle.ts's own header already gives: this suite's own scenarios run
-// one at a time, in one process, on both tracks.
+// (`current` below): this suite's own scenarios run one at a time, in one
+// process, on both tracks.
 
 const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -183,8 +182,7 @@ Then("that step record carries the id the shared helper returned", function () {
 });
 
 // Untagged: this suite's other scenarios (features/nuka-run.feature,
-// features/acceptance-lifecycle.feature, features/same-scenario-across-
-// runs.feature) never set `current`, so this is a no-op for them.
+// features/same-scenario-across-runs.feature) never set `current`, so this is a no-op for them.
 After(async function () {
   if (current !== null) {
     await current.server.close();

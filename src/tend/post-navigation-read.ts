@@ -50,19 +50,10 @@ import type { TendIssue } from "./types.js";
 //
 // Reads every live step record under `<stateDir>/records/steps/`
 // (`readStepRecord`, src/record/read-step-record.ts - the same reader
-// src/report/allure/emitter.ts and `nuka do --use` already share), never a
-// copy embedded in a committed acceptance record. `do`, `run`, and
-// `external` step records all count the same way: this note is about a
-// step's own body, and that body runs the same whichever of the three
-// executors ran it. A step that has never been signed off still shows up
-// here, since sign-off is no longer this note's gate - reporting used to
-// stop at whatever `nuka accept` had frozen, which meant the many steps a
-// project never accepts were never looked at here at all. A record accepted
-// before `render-record.ts` started stripping `actions`/`polls` can still
-// carry an older step record's own copy of either, but that copy is never
-// read here: it is what was true when someone last ran `nuka accept`, not
-// a live measurement, and reading it again would let this note report on a
-// step nobody has actually run since.
+// src/report/allure/emitter.ts and `nuka do --use` already share). `do`,
+// `run`, and `external` step records all count the same way: this note is
+// about a step's own body, and that body runs the same whichever of the
+// three executors ran it.
 //
 // A Background step runs once per scenario, so a suite with two dozen
 // scenarios produces two dozen step records for that one step every time

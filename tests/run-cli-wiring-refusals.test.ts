@@ -1,6 +1,4 @@
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
@@ -30,25 +28,6 @@ describe("nuka <command> --unknown-flag: the matched handler never runs", () => 
       expect(exitCode).toBe(1);
       expect(stderr.text()).toContain("unknown-flag");
       expect(stdout.text()).toBe("");
-    } finally {
-      await removeTempDir(rootDir);
-    }
-  });
-
-  it("nuka accept: writes no acceptance record", async () => {
-    const rootDir = await copyFixtureToTempDir("accept-project");
-    try {
-      const stdout = createCaptureSink();
-      const stderr = createCaptureSink();
-      const exitCode = await runCli(
-        ["accept", "features/greeting.feature", "--unknown-flag"],
-        { rootDir, stdout, stderr },
-      );
-
-      expect(exitCode).toBe(1);
-      expect(stderr.text()).toContain("unknown-flag");
-      const entries = await readdir(path.join(rootDir, "features"));
-      expect(entries.filter((name) => name.endsWith(".md"))).toEqual([]);
     } finally {
       await removeTempDir(rootDir);
     }

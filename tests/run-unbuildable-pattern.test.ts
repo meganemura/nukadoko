@@ -16,7 +16,7 @@ describe("nuka run with a pattern that cannot be built", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("accept-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
     await writeFile(
       path.join(rootDir, "features", "steps", "viewer-state.ts"),
       [

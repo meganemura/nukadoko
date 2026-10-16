@@ -22,10 +22,9 @@ one is already there from another project, the tests pass without this step
 and you will not learn that you skipped it. On a clean machine they fail
 with Playwright's own message telling you to run it.
 
-Chromium is the only browser the suite launches. Five tests name `firefox`
-in a config, and none starts one: four check what a sign-off record writes
-down about which browser was declared, and one checks that the config
-accepts the name.
+Chromium is the only browser the suite launches. The tests that name
+`firefox` or `webkit` check that the config accepts the name, or what a
+message says about those engines, and none starts one.
 
 `ignore-scripts` is on because every npm supply-chain compromise this year
 arrived through an install hook in a package nobody chose directly, running

@@ -21,7 +21,7 @@ describe("nuka run --repeat", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("accept-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
   });
 
   afterEach(async () => {

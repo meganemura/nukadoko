@@ -4,7 +4,6 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missing.js";
-import { findNeverSignedFeatures } from "./feature-never-signed.js";
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
@@ -16,9 +15,6 @@ import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { findPostNavigationReads } from "./post-navigation-read.js";
 import { findRepeatedScenarioPrefixes } from "./repeated-prefix.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
-import { findSignedFeatureUnscanned } from "./signed-feature-unscanned.js";
-import { findSignoffConditionMismatch } from "./signoff-condition-mismatch.js";
-import { findSignoffRot } from "./signoff-rot.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
 import { findUnusedParameterTypes } from "./unused-parameter-type.js";
@@ -30,37 +26,16 @@ import type { TendIssue, TendReport } from "./types.js";
 // reading text output sees findings grouped by kind without this module
 // needing to sort anything after the fact — src/cli/tend.ts pushes each
 // category's array through in one block rather than interleaving.
-// `findUnusedFixtures`/`findFixturesTouchingApp` are two later additions —
-// `fixtureGraph` (`buildFixtureGraph`, src/fixture/graph.ts) is
-// built once, here, and passed to both, the same "never a second computation
-// path" rule `patterns` just below already follows for `checkBindings`. Two
-// of the nine — `findSupportOriginParameterTypes` and `findUnknownSecretsKeys`
-// — did not start here: they were `nuka check` warnings
-// (`parameter-type-support-origin`, `secrets-public-key-unknown`/
-// `secrets-redact-key-unknown`) that were later reclassified, on the
-// same "does this have to be known before the run" test docs/spec.md
-// "Tending" states — their own detection logic is untouched, only where a
-// caller reads the finding from. Two more —
-// `findMissingAdditionalFeatureDirs` and `findSignedFeatureUnscanned` — are
-// two later additions: the first reports a configured-but-absent
-// `additionalFeatureDirs` entry, the second makes visible the exact gap that
-// motivated adding `additionalFeatureDirs` in the first place — an accepted
-// feature outside every scanned directory, which is what made
-// `pattern-unbound` misreport a bound step as unbound before
-// `additionalFeatureDirs` existed to name where it lives.
-//
-// `findNeverSignedFeatures` is a further later addition, called with the
-// same `features` `resolveStepOccurrences` above already consumed rather
-// than a second walk of the same directories: every scanned feature that no
-// acceptance record's own `feature:` frontmatter has ever named. It is the
-// mirror question `findSignedFeatureUnscanned` does not ask — that finding
-// starts from a record and asks whether it is looking at the right feature
-// set, this one starts from the feature set and asks whether any record
-// exists for each member at all — so the two can never fire on the same
-// feature for the same reason. A note, not an error: `nuka accept` is an
-// explicit, later act in the acceptance loop (see "The acceptance loop"),
-// so a feature nobody has run it against yet is the ordinary state of one
-// still being drafted, not a broken one.
+// `fixtureGraph` (`buildFixtureGraph`, src/fixture/graph.ts) is built once,
+// here, and passed to both fixture findings, the same "never a second
+// computation path" rule `patterns` just below already follows for
+// `checkBindings`. `findSupportOriginParameterTypes` and
+// `findUnknownSecretsKeys` did not start here: they were `nuka check`
+// warnings that were later reclassified, on the same "does this have to be
+// known before the run" test docs/spec.md "Tending" states — their own
+// detection logic is untouched, only where a caller reads the finding from.
+// `findMissingAdditionalFeatureDirs` reports a configured-but-absent
+// `additionalFeatureDirs` entry.
 //
 // `patterns` is built once, here, via src/check/binding-check.ts's own
 // `checkBindings` — the same parsed-pattern array src/check/feature-check.ts
@@ -86,21 +61,11 @@ import type { TendIssue, TendReport } from "./types.js";
 // is a different question from which feature files get walked for
 // occurrences (src/check/analyze.ts's own header makes the same split).
 //
-// `errors` is populated by `findSignoffRot` alone: sign-off staleness is
-// the one docs/spec.md "Tending" finding marked
-// as an error rather than a note (a record that has quietly stopped meaning
-// what it says is worse than no record, because it is still being counted),
-// and it is the only tend finding that reads outside `vocabulary`/
-// `features` — it walks the whole project for acceptance records
-// (src/tend/record-parse.ts) and checks each one against this same
-// `vocabulary`, never a second one it builds itself. `config.featuresDir`
-// is passed through so it can stay silent about a record whose own feature
-// now lives there (that file's own header) — `additionalFeatureDirs` is
-// deliberately not part of that check, since a feature there never runs
-// unattended either. `importFailures` is passed through so a cited step
-// absent from the vocabulary that loaded is not reported missing while
-// any step file failed to import: the definition may sit in the unread
-// file, and reporting it gone would turn the import failure into an error.
+// `errors` is always empty today. Every finding here is a note: a project is
+// allowed to carry each of them, and `--fail-on` (src/cli/tend.ts) is how a
+// team turns a chosen one red. The field stays in the report so a `--json`
+// reader keeps one shape, and so a later finding that genuinely cannot be
+// carried has somewhere to go without a breaking change.
 //
 // `summary` is built
 // from the same `vocabulary` plus `rationaleIssues`/`fieldDescriptions`,
@@ -110,26 +75,11 @@ import type { TendIssue, TendReport } from "./types.js";
 // never feeds `errors` or `notes` and never changes the caller's exit code
 // (src/cli/tend.ts still derives that from `errors` alone).
 //
-// `findSignoffConditionMismatch` is a later addition — a note, not an error,
-// unlike `findSignoffRot` just above:
-// nothing about a sign-off's own claim has gone stale (that is still
-// `findSignoffRot`'s exclusive question), only that a *different* condition
-// is what `nuka accept` would now pick for this feature. It shares
-// `findSignoffRot`'s own record-walking source (src/tend/record-parse.ts)
-// but does its own independent walk of it (that file's own header) rather
-// than being folded into `findSignoffRot`'s loop, since one produces
-// `errors` and the other `notes` — never the same collection.
-//
-// `findPostNavigationReads` is another later addition, a note,
-// the same severity call `findSignoffConditionMismatch` makes just above and
-// for the same reason: nothing here is wrong right now, only a fact worth a
-// human's attention (that module's own header explains why it is never a
-// verdict). Unlike the other record-walking findings above, it never reads
-// an acceptance record at all: it walks `<stateDir>/records/steps/`
-// directly, so `config.stateDir` is passed through to it rather than a
-// `featuresDir`-shaped path. Every step record counts, signed off or not -
-// this finding is about a step's own body, not about what `nuka accept`
-// has frozen.
+// `findPostNavigationReads` is a note: nothing here is wrong right now, only
+// a fact worth a human's attention (that module's own header explains why
+// it is never a verdict). It walks `<stateDir>/records/steps/` directly, so
+// `config.stateDir` is passed through to it rather than a
+// `featuresDir`-shaped path. Every step record counts.
 //
 // `findRepeatedScenarioPrefixes` also reads live records, but starts from
 // `<stateDir>/records/scenarios/`. It limits its timing groups to the latest
@@ -154,7 +104,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   );
   const occurrences = resolveStepOccurrences(features, patterns);
 
-  const errors: TendIssue[] = [...findSignoffRot(rootDir, vocabulary, config.featuresDir, importFailures)];
+  const errors: TendIssue[] = [];
 
   // Called once each, their results reused for both `notes` below and the
   // summary's declaration-coverage numbers — never re-walked a second time
@@ -173,11 +123,8 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findSupportOriginParameterTypes(compatParameterTypes),
     ...findUnknownSecretsKeys(rootDir, config),
     ...findMissingAdditionalFeatureDirs(missingAdditionalDirs),
-    ...findSignedFeatureUnscanned(rootDir, scannedFeatureDirs),
-    ...findNeverSignedFeatures(rootDir, features),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
-    ...findSignoffConditionMismatch(rootDir, config.browserType, config.featuresDir),
     ...findPostNavigationReads(rootDir, config.stateDir),
     ...findRepeatedScenarioPrefixes(rootDir, config.stateDir),
   ];

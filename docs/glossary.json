@@ -137,7 +137,7 @@
     {
       "en": ["partial run", "partial runs"],
       "ja": "部分実行",
-      "note": "nuka run <feature>:<line> が実行するもの。対語は full run = フル実行。sign-off できるのは後者だけ"
+      "note": "nuka run <feature>:<line> が実行するもの。対語は full run = フル実行。部分実行の run サマリは選んだ scenario しか扱わない"
     },
     { "en": ["full run"], "ja": "フル実行" },
     {
@@ -333,10 +333,6 @@
       "term": "scenario record",
       "why": "step record と同じ問いを scenario 粒度で答える記録。ScenarioRecord 型、scenario record 自身の record.json と直接対応する"
     },
-    {
-      "term": "acceptance record",
-      "why": "nuka accept が step record と scenario record から組み立てて書く記録の呼び名。sign-off という行為が残す実体を指す"
-    },
     { "term": "scenario", "why": "Gherkin の Scenario: キーワードと直接対応する" },
     {
       "term": "agent",
@@ -364,7 +360,8 @@
       "term": "mutate",
       "why": "mutates フィールド名と地続きの動詞として常に英語。「状態を mutate する」のように活用させずに使う"
     },
-    { "term": "sign-off", "why": "nuka accept が書く記録の呼び名。常にハイフン付きの英語" },
+    { "term": "pull request", "why": "GitHub などの forge の機能名。docs/ci.ja.md と docs/spec.ja.md で英語のまま使っている。レビュアーが feature の差分と run サマリを読む場所" },
+    { "term": "sign-off", "why": "pull request の承認を指す語。以前は nuka accept が書く記録の呼び名だったが、そのコマンドは削除済み。docs/upgrading の移行の説明と、承認が sign-off だと言う文でだけ使う。常にハイフン付きの英語" },
     {
       "term": "Export",
       "why": "docs/spec.md \"Artifacts\" の成果物分類表にある行名。allure-results/ と messages.ndjson を指す。TypeScript の export キーワード(小文字、常に英語のまま)とは別の語で、行名としては大文字のまま訳さない"
@@ -436,7 +433,7 @@
     "docs/spec.ja.md": {
       "rule": "見出しの主題が keep_english に載っている語なら英語のまま。説明的な句なら日本語化。どちらとも言い切れない英語の術語が単独で立つ場合だけ、丸括弧で短い日本語の言い換えを添える",
       "examples": {
-        "english": ["Context API", "Records", "Sign-off", "Allure emitter", "CLI summary"],
+        "english": ["Context API", "Records", "Allure emitter", "CLI summary"],
         "japanese": ["nukadoko とは", "課題", "成果物", "キーワードの意味論", "実行", "ロードマップ"],
         "parenthetical": [
           "Compat steps(移行の扉)",

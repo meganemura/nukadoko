@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka explore` against the todo example and its real
 // app. The v1 app passes the model and the relation. The v2 app renames
@@ -287,7 +287,7 @@ describe("nuka explore", () => {
     });
   });
 
-  it("leaves what nuka tend and nuka accept read unchanged after a failing explore", async () => {
+  it("leaves the state directory and what nuka tend reads unchanged after a failing explore", async () => {
     const started = await startTodoApp(false);
     server = started.server;
     rootDir = await copyExampleToTempDir("todo");
@@ -297,8 +297,6 @@ describe("nuka explore", () => {
       path.join(rootDir, "nukadoko.config.ts"),
       ['import { defineConfig } from "nukadoko";', "", `export default defineConfig({ baseURL: "${started.baseURL}" });`, ""].join("\n"),
     );
-    await writeFile(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
-    await initGitRepo(rootDir);
     const cli = async (args: string[]) => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
@@ -314,11 +312,6 @@ describe("nuka explore", () => {
 
     expect((await readdir(path.join(rootDir, ".nukadoko"), { recursive: true })).sort()).toEqual(stateBefore);
     expect(await cli(["tend", "--json"])).toEqual(tendBefore);
-    const accepted = await cli(["accept", "features/todo.feature"]);
-    expect({ exitCode: accepted.exitCode, stdout: accepted.stdout.replace(/\d{4}-\d{2}-\d{2}-[0-9a-f]{7}/, "<date>-<sha>") }).toEqual({
-      exitCode: 0,
-      stdout: "features/todo.feature.<date>-<sha>.default.no-browser.md\n",
-    });
   });
 
   it("prints a table and a docstring that nuka run reads back to the same args", async () => {

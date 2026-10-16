@@ -4,9 +4,11 @@ Project context for agent sessions working in this repository.
 
 ## What this is
 
-nukadoko is an agent-first engine that runs Gherkin: typed step contracts,
-tool-measured execution records (step records), and sign-offs. The design source
-of truth is `docs/spec.md` — read it before changing behavior.
+nukadoko is an agent-first engine that runs Gherkin: typed step contracts
+checked before anything runs, tool-measured execution records (step
+records), and a run summary the pull request carries, so the person
+approving it reads the `.feature` in the diff and what ran beside it. The
+design source of truth is `docs/spec.md` — read it before changing behavior.
 
 **What it is for.** Implementations are increasingly generated: someone
 describes what they want and a model produces something plausible. Calling
@@ -34,9 +36,12 @@ that is the whole 0.x range rather than something that ends at 0.1. M1
 (engine core) and M2 (compat) are implemented, both real-world
 gates have been run (typed-step drafting, and the compat audit reported
 under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
-cucumber-messages emitter, sign-off (`nuka accept`), both agent skills, and
-compat gap detection in `nuka check` (the migration skill's prerequisite)
-are all implemented, closing out M1-M5. M6 (chained arguments) is
+cucumber-messages emitter, both agent skills, and compat gap detection in
+`nuka check` (the migration skill's prerequisite) are all implemented,
+closing out M1-M5. Sign-off (M4) shipped as `nuka accept` and was later
+removed: no project kept the records it wrote, and approving the pull
+request beside its run summary makes the same claim, bound to the commit by
+the forge. M6 (chained arguments) is
 implemented too: `from` on `defineStep`, the binding-order check `nuka
 check` and `nuka run` share, `nuka do --use`, and `used` naming the step
 beside each step record. M7 (tending) is in: `nuka tend`, for what is rotting
@@ -156,8 +161,8 @@ change against before writing it.
   a user actually reaches a feature, so a skill describing the previous CLI
   teaches the previous CLI — the feature ships and nobody can find it. Both
   need checking on every such change: `skills/acceptance/SKILL.md` (write a
-  scenario, run it, sign it off) and `skills/migration/SKILL.md` (move an
-  existing cucumber-js suite across). Skills never copy a fact the CLI
+  scenario, run it, open the pull request a person approves) and
+  `skills/migration/SKILL.md` (move an existing cucumber-js suite across). Skills never copy a fact the CLI
   itself answers — vocabulary, contracts, refusal reasons go stale the
   moment a command changes — but they must name the commands, flags, and
   checks that exist, and must not name ones that don't.

@@ -30,10 +30,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.14.1 から次のリリースへ
 
+`nuka accept` と sign-off の所見はすべて削除されました。
+feature に sign-off しているプロジェクトや、CI を sign-off でゲートしているプロジェクトは対応が必要です。
 compat の修正で、上げる前に知っておくものがあります。
 redact の変化も 1 つあります。
 evidence の名前の変化も 1 つあります。
-`nuka accept` の変化も 1 つあります。
 env file のパーサは、コメント、引用符、エスケープ、複数行にまたがる値について、dotenv に従うようになりました。
 古い読み方に依存していた env file があるプロジェクトは、次の実行の前に、その値を確認してください。
 
@@ -41,13 +42,36 @@ env file のパーサは、コメント、引用符、エスケープ、複数�
 Allure と messages の emitter は既定で無効になりました。
 どちらかの export を読むプロジェクトは対応が必要です。
 
-- **`nuka accept` は完了マーカーのない run を拒否します。**
-  run は最後の書き込みとして、断定を入れた `.nukadoko/records/runs/<run_id>/complete.json` を書くようになり、`nuka accept` は断定が `passed` の run だけを凍結します。
-  以前の版が書いた run にはマーカーがないため、最後の green な run がアップグレード前のものである feature は、そう述べる拒否を受けます。
-  `nuka run` でその feature をもう一度実行してから accept してください。
-  すでに sign-off 済みの record には影響しません。
-  AfterAll hook が throw して 1 で終了した run は、以前は受け入れられましたが、今は受け入れられません。
-  retention は、マーカーのない run を `retention.adHocDays` より古くなるまで残します。
+**`nuka accept` は無くなり、run サマリがそれを置き換えます。**
+それが書いた記録を残し続けたプロジェクトはありませんでした。
+run サマリの横で pull request を承認することは同じ主張(「このコミットで green」)をし、forge がそれをコミットに結び付けます。
+すべての `nuka run` がそのサマリを書くようになりました。
+pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります。
+やることは次のとおりです。
+
+- **スクリプトと CI から `nuka accept` を取り除きます。**
+  コマンドはもう存在しないので、`nuka accept <feature>` は yargs の unknown argument のエラーで 1 を返して終わります。
+  green の `nuka run` の後でジョブがそれを実行していたところでは、代わりに run サマリを投稿します。
+  `nuka run <features> --summary <path>` を実行し、そのファイルを pull request にコメントする step を続けます([docs/ci.ja.md](ci.ja.md) の workflow にあります)。
+- **feature に sign-off の記録があるかを見る PR の検査を置き換えます。**
+  変更された各 feature の隣に `<feature>.*.md` のファイルを探すジョブや、`nuka tend --fail-on feature-never-signed` を実行するジョブには、もう確かめるものがありません。
+  レビュアーは差分の中の `.feature` と pull request 上の run サマリを読み、pull request の承認が sign-off になります。
+  削除された code(`feature-never-signed`、`signed-feature-unscanned`、`signoff-condition-mismatch`、`signoff-feature-changed`、`signoff-feature-missing`、`signoff-record-old-format`、`signoff-record-unreadable`、`signoff-result-invalid`、`signoff-step-missing`)のどれかを付けた `nuka tend --fail-on` は、何も解析する前に 1 で終わります。
+  stderr はその code を名指し、run サマリが置き換えたと述べます。
+  フラグを外すか、`nuka tend` がまだ報告する code でゲートしてください。
+- **古い `*.feature.*.md` の記録は何もしません。**
+  もう何もそれを読みません。
+  `nuka tend` はそれについて何も言わず、`oaths` が名指さない限り scenario にもなりません。
+  削除しても、履歴として残してもかまいません。
+  どちらも安全です。
+- **`nuka tend` は `--fail-on` が発火しない限り 0 で終わります。**
+  以前の唯一のエラーは古くなった sign-off でした。
+  今は所見がすべて note で、`--json` は `errors` を空の配列として保つので、そのフィールドを読む側は変える必要がありません。
+- **`:line` の run が stderr に出す告知が変わりました。**
+  以前は、部分実行は accept できないと述べていました。
+  今は、run サマリが選んだ scenario しか扱わないと述べます。
+  古い文に一致させていたスクリプトは、新しい文に一致させてください。
+
 - **`nuka tend --json` は fixture の名前を `step` ではなく `fixture` に入れます。**
   `fixture-unused` と `fixture-touches-app` の note は、以前は fixture の名前を `step` に入れていました。
   今は新しい `fixture` フィールドに入れ、`step` は設定しません。

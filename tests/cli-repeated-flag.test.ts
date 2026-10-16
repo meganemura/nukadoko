@@ -23,7 +23,6 @@ const REPEATED: ReadonlyArray<{ readonly flag: string; readonly argv: readonly s
   { flag: "--env", argv: ["session", "start", "s", "--env", "a", "--env", "b"] },
   { flag: "--idle-timeout", argv: ["session", "start", "s", "--idle-timeout", "1", "--idle-timeout", "2"] },
   { flag: "--env", argv: ["session", "stop", "s", "--env", "a", "--env", "b"] },
-  { flag: "--env", argv: ["accept", "features/x.feature", "--env", "a", "--env", "b"] },
   { flag: "--pattern", argv: ["scaffold", "step", "--pattern", "a", "--pattern", "b"] },
 ];
 

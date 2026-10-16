@@ -46,7 +46,7 @@ import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js"
 // to paste, with the command that reruns it. stdout stays empty on a pass,
 // so a caller can tell the two apart without reading stderr. `--json`
 // prints one object on stdout instead, for a pass too. It is written to
-// stdout only, never under the state directory, so `nuka accept` and
+// stdout only, never under the state directory, so the run summary and
 // `nuka tend` never read an explore run as the newest run.
 
 export const DEFAULT_EXPLORE_RUNS = 20;

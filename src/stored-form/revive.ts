@@ -6,15 +6,14 @@ import { toStoredForm } from "./stored-form.js";
 // Date was stored as its ISO string and a bigint as its decimal string;
 // each is revived only where the schema asks for that type and only when
 // the string is exactly the stored form of one, so any other string still
-// reaches the schema as a string and fails it there. tend checks a frozen
-// result this way, and `nuka do` reads --args and --use values this way,
-// so a contract that says z.bigint() is satisfied by what a record holds.
+// reaches the schema as a string and fails it there. `nuka do` reads
+// --args and --use values this way, so a contract that says z.bigint() is satisfied by what a record holds.
 //
 // A pipe, a codec, or a transform has two types, and the caller names the
 // side. --args and --use are what the schema parses, so they follow its
 // input side: a string piped into z.coerce.bigint() stays a string, and a
-// preprocess function receives what was given. A frozen result is what the
-// schema produced, so tend follows its output side.
+// preprocess function receives what was given. A stored result is what the
+// schema produced, so reading one back follows its output side.
 
 export type Parsed =
   | { success: true; data: unknown }

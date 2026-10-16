@@ -46,7 +46,7 @@ describe("a typed step that never returns", () => {
   }
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("accept-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
   });
 
   afterEach(async () => {

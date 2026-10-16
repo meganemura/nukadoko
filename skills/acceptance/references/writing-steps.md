@@ -426,7 +426,8 @@ that reader, not information.
 Ask two questions, in order. Does the operation mean something to the
 person reading the scenario, not to the code moving data between steps?
 
-- Yes: make it a step. The acceptance record gains a step record for it.
+- Yes: make it a step. The run gains a step record for it, and the run
+  summary a line.
 - No: ask the second question.
 
 After a failure, what should be knowable about it?
@@ -470,7 +471,7 @@ its body moves.
    declares `mutates: true` is an error: the composite's own flag has to
    account for what it may call.
 4. Run the original scenario. Its feature file did not change, so a
-   sign-off over it still describes what is on disk.
+   reviewer who approved that sentence has nothing new to read.
 
 `parts` takes the imported step objects themselves, never their names,
 the same way `from` names its producer:
@@ -531,8 +532,8 @@ args key accepts, so the refactor is judged before anything runs.
 
 This refactor does change the sentence in the feature file, which the
 split above does not. Treat it as needing the same agreement that sentence
-had in the first place, and expect `nuka tend` to report a sign-off over
-that feature as no longer describing what is on disk. Prefer it anyway
+had in the first place: the changed line shows up in the pull request's
+diff, and a person reads it again before approving. Prefer it anyway
 when the hardcoded value is one the feature's reader should have been able
 to see. Reach for the split instead when what varies is not a value, but
 which half of the step the next scenario wants.

@@ -57,7 +57,7 @@ import type { Step } from "./define-step.js";
 // turned out to be the step record, not that live log: `sections: string[]`
 // (docs/spec.md "Records",
 // src/context/sections.ts) lets a failed step's step record say which stage
-// it reached, a fact this file's own read (accept, a report, an agent
+// it reached, a fact this file's own read (the run summary, a report, an agent
 // re-reading a step record later) needs regardless of whether anyone was
 // watching stderr while the step ran. It is a bare label-in, nothing-out
 // call (no span, no timing) on purpose: a function that wraps a block would

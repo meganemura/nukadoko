@@ -205,9 +205,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // order.
 //
 // A `:line` target writes one stderr line after `selectPickles`, naming
-// that the run is partial and that `nuka accept` refuses it, rather than
-// leaving that fact for accept to reveal several commands later
-// (docs/spec.md "Scenarios (the scripted path)"). stdout is untouched: its
+// that the run is partial and that its run summary covers only the
+// selected scenarios, so a summary pasted onto a pull request is not read
+// as the whole feature (docs/spec.md "Scenarios (the scripted path)"). stdout is untouched: its
 // one-record-per-line contract is read by machines, and this notice is not
 // part of it.
 //
@@ -276,7 +276,7 @@ export interface RunRunOptions {
    * and then again, each execution its own scenario record under the one
    * run_id. Exists for a failure that reproduces one time in several: the
    * alternative is a shell loop of `nuka run`, which spreads the evidence
-   * over that many run ids, and `nuka accept` and `nuka tend` read one.
+   * over that many run ids, and the run summary reads one.
    * Under `--concurrency`, each worker repeats its own files; a target
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
@@ -463,7 +463,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
             `${selected.totalPickles} scenarios across all targets.`;
       stderr.write(
         `Partial run: ${selectionDescription} ` +
-          "A partial run cannot be accepted; `nuka accept` needs a run of the whole feature.\n",
+          "Its run summary covers only those scenarios; run the whole feature for the summary a pull request carries.\n",
       );
     }
 

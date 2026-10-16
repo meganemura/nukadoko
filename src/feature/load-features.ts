@@ -22,8 +22,8 @@ import {
 // a pickle's steps at all (matching them against the vocabulary is
 // src/check/feature-check.ts's job) — it only turns `.feature` text into
 // the pickles @cucumber/gherkin produces. `oaths` names Markdown files
-// compiled by parse-oath.ts into that same shape, so a sign-off record
-// or a README is not a scenario unless it is named. A malformed feature
+// compiled by parse-oath.ts into that same shape, so a README or other
+// Markdown file is not a scenario unless it is named. A malformed feature
 // file is collected as a per-file parse error rather than thrown, so one broken
 // file doesn't stop `nuka check` from reporting every other feature's
 // issues too (mirrors src/discover/discover-steps.ts's own tolerance for a
@@ -433,7 +433,7 @@ export function loadFeaturesFromDirs(
   }
 
   // Oaths are selected by name, not by living under featuresDir, so a
-  // sign-off record or a README beside a feature is not an oath unless
+  // README or other Markdown file beside a feature is not an oath unless
   // `oaths` says so. Parsed after the `.feature` walk and de-duplicated
   // by the same absolute-path set, so a path named twice is one document.
   const resolved = resolveOathPaths(rootDir, oaths);

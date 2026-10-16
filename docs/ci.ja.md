@@ -91,8 +91,8 @@ jobs:
       # `nuka tend` reports what is rotting rather than what is broken
       # (docs/spec.md "Tending"); it never gates a PR, which is why it
       # sits on its own schedule rather than beside `check`/`run` above.
-      # It exits non-zero only for a sign-off that no longer matches the
-      # code it froze; every other finding is a note.
+      # Every finding is a note, so it exits 0; `--fail-on <code>` turns
+      # a chosen note red for a team that wants one to gate.
       - run: npx nuka tend
 ```
 
@@ -163,11 +163,12 @@ jobs:
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 4 つあります。
+上の workflow がチームに委ねているものが 3 つあります。
 どれも小さいものです。
 
 - **pull request のコメントとしての run サマリ。**
   ジョブのサマリページにはすでに表示されますが、レビュアーが読むのは pull request です。
+  差分の中の feature とその横のサマリを読み、pull request の承認が sign-off になります(docs/spec.ja.md の「レビュー」を参照)。
   `--summary <path>` は同じ Markdown をファイルにも書き、もう 1 つの step がそれを投稿します。
 
   ```yaml
@@ -192,27 +193,13 @@ jobs:
   suite を走らせるジョブが pull request に書き込めるようになります。
   fork からの pull request は読み取り専用のトークンを受け取るので、そこではこの step は失敗します。
   fork からの pull request を受け付けるチームは、この step を別のジョブに移します。
-- **PR が触った feature すべてに sign-off が在ることを確かめる PR の検査。**
-  `feature-never-signed` は `nuka tend` の note です。
-  週次で、終了コードを赤にすることはありません。
-  だから `nuka accept` 無しで merge された feature は、誰かがその note を読むまで署名されないままです。
-  PR のジョブが自分でその問いを立てられます。
-
-  ```sh
-  for f in $(git diff --name-only origin/main...HEAD -- 'features/**/*.feature'); do
-    ls "${f%.feature}".*.md >/dev/null 2>&1 || { echo "no sign-off beside $f"; exit 1; }
-  done
-  ```
-
-  record の名前は feature のベース名で始まります(docs/spec.ja.md の「Sign-off」を参照)。
-  この検査が知る必要があるのはそれだけです。
-  PR が触った feature だけでなくすべての feature に署名を求めるチームは、そのジョブで代わりに `npx nuka tend --fail-on feature-never-signed` を回します。
 - **`tend` のジョブへの通知 step。**
-  終了コードを赤にする finding は、古くなった sign-off record の 1 つだけです。
-  Actions のタブでだけ赤くなる週次のジョブは、誰も読まないジョブです。
+  `tend` の finding はどれも note です。
+  出力が Actions のタブに留まる週次のジョブは、誰も読まないジョブです。
+  人が見る場所へ出力を投稿するか、チームが対処すると決めた note に `--fail-on <code>` を付けます。
 - **ランナー自身の速さに合わせた `retention.runs`。**
   既定は最新 20 回の run を残します。
-  merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka accept` は保持された run しか読みません。
+  merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka tend` と `nuka do --use` は保持された run しか読みません。
   数字を決める前に、1 週間の速さを測ってください。
 
 ## このページが主張しないこと
@@ -220,7 +207,7 @@ jobs:
 上の workflow は GitHub Actions の中で実際に実行してはいません。
 このリポジトリの中では、それを実行する手段が無いからです。
 代わりに確かめたのは次のことです。
-この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否や、`nuka accept` を実行した瞬間に `feature-never-signed` の finding が消えることも含めて)です。
+この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否も含めて)です。
 「チームがその上に足すもの」にある pull request のコメント step も実行していません。
 その `gh pr comment` のフラグは `gh` 自身のヘルプから読んだもので、実際の pull request に対して試してはいません。
 `npx playwright install --with-deps chromium` は自身の `--dry-run` で確かめただけで、最後まで実行してはいません。

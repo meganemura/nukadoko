@@ -5,10 +5,8 @@ import type { TendIssue } from "./types.js";
 // specifically to widen what `nuka check`/`nuka tend` scan, so a typo or a
 // removed directory left behind in config is a config mistake, the same way
 // `featuresDir` not existing is (src/check/config-check.ts's own
-// `features-dir-missing`, an error there) — but `tend` has no error bucket
-// for config mistakes, only `signoff-rot` (src/tend/types.ts's own header),
-// so this is a note here, matching every other tend finding's severity
-// except that one.
+// `features-dir-missing`, an error there) — but every `tend` finding is a
+// note (src/tend/analyze.ts's own header), so this is one too.
 //
 // `missingDirs` is `loadFeaturesFromDirs`'s own answer
 // (src/feature/load-features.ts) — this module only turns that list into

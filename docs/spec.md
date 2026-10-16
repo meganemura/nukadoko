@@ -8,8 +8,7 @@ below) is implemented too (`nukadoko/compat`, typed World measurement, and
 a migration guide). Both real-world gates have now been run: typed steps
 drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Still 0.x; of M3+, the Allure emitter and the
-messages emitter are both implemented, and so are sign-off (`nuka accept`)
-and both of M5's skills. Compat gap detection in `nuka check` (the
+messages emitter are both implemented, and so are both of M5's skills. Compat gap detection in `nuka check` (the
 migration skill's own prerequisite) is implemented too (see "Compat steps"
 and docs/migration.md's "The dashboard is `nuka check`"), closing out
 M1-M5.
@@ -17,8 +16,9 @@ M1-M5.
 ## What nukadoko is
 
 nukadoko is an agent-first engine that runs Gherkin. Humans write and review
-the durable artifacts: feature files, typed step definitions, and sign-off
-records. Agents execute those artifacts. The runtime supports an agent's
+the durable artifacts: feature files and typed step definitions, reviewed
+in a pull request beside the run summary CI posts there. Agents execute
+those artifacts. The runtime supports an agent's
 trial-and-error loop. Every step has a typed contract and can run alone from
 the CLI. Every execution leaves a step record that the tool wrote, not the
 agent. An agent with shell access can write any file, so it can forge this
@@ -72,7 +72,7 @@ nukadoko deliberately owns as little as possible:
 | **Execution and measurement (records)** | **nukadoko** |
 | **Sessions, environments, secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
-| **Sign-off records** | **nukadoko** |
+| **The run summary a pull request carries** | **nukadoko** |
 | Markdown oaths (the subset in "Markdown oaths") | **nukadoko**: compiled into the same pickles a `.feature` file becomes |
 
 ## Problem
@@ -98,14 +98,13 @@ trusting a person's account.
 
 ## Artifacts
 
-Everything nukadoko touches belongs to one of five kinds. The kind depends on
+Everything nukadoko touches belongs to one of four kinds. The kind depends on
 who writes it, whether it belongs in the repository, and its intended lifetime:
 
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote, its verdict, its Markdown summary) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
-| Sign-off | `<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
+| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote, its verdict, its Markdown summary) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | a person reviewing the run (its summary), the Allure and messages emitters, `nuka do --use`, `nuka tend` |
 | Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter), each only while its emitter is on | the tool | no | with the run that wrote it | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
@@ -118,9 +117,10 @@ questions: "what happens if this is deleted" and "who gets to change it":
 - **Cache is disposable for a different reason.** It does not record anything
   that happened. It only represents avoided work: a session file lets a later
   call skip another login. Deleting it costs a login but never correctness.
-- **Only Contract and Sign-off are committed.** Contract is the promise that
-  a human wrote and reviewed. Sign-off is the claim that the tool froze after
-  the promise ran green. Measurement is never committed. `nuka init`
+- **Only Contract is committed.** Contract is the promise that a human wrote
+  and reviewed. Whether the promise ran green is in the run summary CI posts
+  on the pull request (see "Review"), kept by the forge with the pull
+  request rather than in the repository. Measurement is never committed. `nuka init`
   gitignores its state directory because the working record from one run says
   nothing about the next run.
 - **Measurement has a lifetime, and `nuka run` enforces it.** At the end of
@@ -129,8 +129,8 @@ questions: "what happens if this is deleted" and "who gets to change it":
   they cite, the export files its own `records/runs/<run_id>/exports`
   lists, and its messages stream. A run is every scenario record that
   shares one `run_id`, dated by its earliest `started_at`: the same rule
-  `nuka accept` and `nuka tend` use to name the newest run, so the three
-  commands never disagree about which run that is. All three read a
+  `nuka tend` uses to name the newest run, so the two commands never
+  disagree about which run that is. Both read a
   scenario record whose `started_at` does not parse as one whose
   `record.json` cannot be read: it belongs to no run. A run that may still be
   writing is never removed. When a run ends, `nuka run` writes
@@ -1297,7 +1297,7 @@ interface.
 
 Splitting the step and rewriting the first scenario would change an
 agreed record. The people who decide the purpose of the software agreed
-to that feature, and the feature may already have a sign-off. An
+to that feature, and a reviewer may already have approved it. An
 implementation refactor must preserve the agreed sentence.
 
 A step may call another step instead. `parts` declares which ones, and
@@ -1413,7 +1413,7 @@ the part's declaration.
 
 Choose among a helper, a part, and a step by extending the axis from
 "Chaining steps." If an operation has meaning to a scenario reader, make
-it a step. The acceptance record then includes its step record. Otherwise,
+it a step. The scenario record then cites its step record. Otherwise,
 consider what a failure record must show. Use a part when the operation
 has a useful contract, useful inputs, and a useful result. Use an ordinary
 function under `features/steps/lib/` when it has none of these. A helper
@@ -1483,10 +1483,11 @@ per-occurrence fact:
   Such a claim would treat the HTTP-method proxy as a settled fact. It would
   report every GraphQL read, RPC-over-POST read, or vendor POST read as a
   false positive. For the same reason, nukadoko does not enforce mutation
-  semantics at run time. The `nuka accept` record is the only place that
-  writes this comparison (see Sign-off). At sign-off, a person already
-  reads and judges the run. The record can show the raw facts there without
-  adding false-positive noise to every `nuka run` or `nuka check` invocation.
+  semantics at run time. The run summary is the only place that writes
+  this comparison (its "Declared vs observed" section, see "Records"). A
+  person reviewing the pull request already reads and judges the run there.
+  The summary can show the raw facts without turning them into a failure of
+  any `nuka run` or `nuka check` invocation.
 - Compat (untyped) steps have no `mutates` declaration (see "Compat steps (the
   migration door)"). The `then-compat-step` warning from `nuka check` identifies
   this coverage gap when a compat step is bound in Then position. It does
@@ -1557,7 +1558,7 @@ import { Given, When, Then } from "nukadoko/compat";
   `Before(fn)`, `Before({ tags }, fn)`, and `Before("@tag", fn)`. They
   also accept `{ name }` beside `tags` and `timeout`. The string is stored
   on the registration and, when it is non-empty, on that invocation's
-  `hooks` entry. Allure fixture names, acceptance headings, trace chunk
+  `hooks` entry. Allure fixture names, run summary rows, trace chunk
   titles, and hook failure messages use it as the title. It does not change
   which scenarios the hook runs for, its timeout, or its order. `AfterStep`
   does not accept `name`: cucumber-js step-hook options have no such field.
@@ -1833,12 +1834,11 @@ later call. Third, nukadoko refuses a browser-dependent step before it
 creates a record unless the call supplies a `page`. This path never starts
 a browser.
 
-The **sign-off** still requires a different path. `nuka accept` requires a
-successful full `nuka run` and its scenario record. An external record does
-not meet this requirement. Nukadoko can guarantee only an execution that
-it drove. An external record is a working record like a `do` record. It is
-source material for a harvested scenario, and it is not acceptance
-evidence.
+The **run summary** still requires a different path. It is built from a
+`nuka run` and its scenario records, and an external record has neither.
+Nukadoko can guarantee only an execution that it drove. An external record
+is a working record like a `do` record. It is source material for a
+harvested scenario, and it is not what a reviewer reads as evidence.
 
 This migration opens both nukadoko paths. `nuka run` fixes a path in a
 feature file, and `nuka do` runs each step alone. Operations that the
@@ -1893,7 +1893,7 @@ asserts inside `run`, and `returns` still validates what came back.
 Measurement stays here.
 
 `oaths` in `nukadoko.config.ts` names the files, or a directory of
-`*.md` files. The default is `[]`: a sign-off record, a README, and any
+`*.md` files. The default is `[]`: a README and any
 other Markdown under the project are not scenarios until named. A
 directory walk skips `node_modules` and dot-directories, and reads only
 files that end in lowercase `.md`. A missing path, a directory that holds
@@ -2013,8 +2013,8 @@ uses. The parent keeps the
 run's identity throughout: one run_id, one stdout stream, one messages
 stream, one Allure results tree, one summary, one exit code. A scenario
 record therefore reads the same whether a worker produced it or a serial
-run did, and `nuka accept` still sees one run covering every line of a
-feature.
+run did, and the run summary still describes one run covering every line
+of a feature.
 
 The spec names worker processes because that choice decides what the flag
 can promise, so swapping in threads or promises later would change the
@@ -2057,16 +2057,15 @@ line after the failed list, `<passed> of <n> passed`, with no verdict
 attached: a scenario that fails every time is not flaky, and the count is
 what a reader needs. The flag exists for a failure that reproduces one time
 in several. Without it, the answer was a shell loop of `nuka run`, which
-spreads the evidence over that many run ids, while `nuka accept` and `nuka
-tend` read one. In the messages stream each execution is its own
+spreads the evidence over that many run ids, while the run summary and
+`nuka tend` read one. In the messages stream each execution is its own
 `testCase`, not a retry of one, so a formatter that lists test cases lists
 every execution. In Allure, every execution carries the scenario's own
 identity, so a report shows one test with the other executions as its
 retries, which is where a scenario that sometimes fails is easiest to read.
-`nuka accept` on a green repeated run embeds each scenario's last execution
-and says in its Condition section how many times each ran: green three
-times is a different claim from green once, and a reader of the record
-gets the count without the other two copies. `nuka tend` counts a scenario
+The run summary lists each execution as its own row: green three times is
+a different claim from green once, and a reviewer sees the count. `nuka
+tend` counts a scenario
 once however many times it ran. Under `--concurrency`, each worker repeats
 its own files, so the unit of distribution stays the file: a target naming
 one file still runs at 1, and running one scenario on several workers at
@@ -2137,10 +2136,10 @@ field never names a browser that never ran.
 `:12` selects one scenario, which is the iteration path: a feature's full
 run costs every scenario's minutes, and getting one of them right is
 usually what the next few runs are about. It is not a smaller version of
-the same thing: a partial run can never be signed off (see "Sign-off"), so
-a green one is a debugging result and nothing else. `nuka run` says so
-where the line number is given, rather than leaving it for `nuka accept`
-to reveal several runs later, once the road has already been taken.
+the same thing: its run summary covers only the scenarios it selected, so a
+green one is a debugging result and nothing else, not what a reviewer
+should read as the feature passing (see "Review"). `nuka run` says so on
+stderr where the line number is given.
 
 Steps in one pickle share one context (the World semantics Cucumber users
 expect): a Background that logs in hands its browser and cookies to every
@@ -2321,16 +2320,16 @@ from the last result, and two callers deciding at once is not that.
 
 Nothing here can become evidence, and no new fence is needed to keep it
 that way. A live session produces step records and no scenario record, and
-`nuka accept` refuses without a green full run (see "Sign-off"), so the
-path from an exploration to a sign-off runs through `nuka harvest` and a
-real `nuka run` or it does not exist.
+the run summary a reviewer reads is built from scenario records (see
+"Review"), so the path from an exploration to that summary runs through
+`nuka harvest` and a real `nuka run` or it does not exist.
 
-`nuka run` and `nuka accept` report a live session when they find one,
+`nuka run` reports a live session when it finds one,
 naming it and how to stop it, and refuse nothing on its account. The fact
 worth surfacing is that the application may be holding state an
 exploration put there, which is exactly the kind of thing that makes a
 scenario pass for a reason nobody wrote down. Whether that session has
-anything to do with the feature being accepted is not knowable from here,
+anything to do with the feature being run is not knowable from here,
 so this is reported as a fact and never as a verdict.
 
 The socket a live session listens on holds the same live credentials the
@@ -2575,8 +2574,8 @@ array identifies each step record by id, so either record leads to the other.
   name is redundant with the cited step record and is written down anyway,
   because a record that has to be resolved against other files to be read
   is worse for a reader than one that is legible alone, and the file it
-  would be resolved against is a local working record that a sign-off (see
-  Sign-off) long outlives. Entries are deduplicated by record id, in the
+  would be resolved against is a local working record that retention may
+  already have removed. Entries are deduplicated by record id, in the
   order first read. The dependency is thus visible twice over: statically
   as `from` or an import, at run time as provenance in the step record
   chain. Which upstream *step* a value came from was settled when the step
@@ -2779,14 +2778,14 @@ array identifies each step record by id, so either record leads to the other.
   carries the same value even when a step edits a tracked file mid-run
   (with `--concurrency`, each worker measures it once as it starts). It is
   absent outside a git repository, before the first commit, and when the
-  git call fails; the run itself never fails over it. `nuka accept` reads
-  it (see "Sign-off"): a run with no `git`, a `commit` other than the
-  current HEAD, or `clean: false` is refused.
+  git call fails; the run itself never fails over it. The run summary
+  reports it (below), so a reviewer sees which commit ran and whether the
+  tree had uncommitted changes.
 - Step records are stored under `.nukadoko/records/steps/<id>/`. Scenario
   records are stored under `.nukadoko/records/scenarios/<id>/` (see
   "Artifacts"). Both are
-  local working measurements; the durable artifacts built from them are
-  sign-offs.
+  local working measurements; what a person keeps is the run summary on the
+  pull request (below).
 
 **The run summary.** Records are written for a machine and an agent. Each
 `nuka run` that runs at least one pickle also writes one Markdown summary of
@@ -2809,8 +2808,17 @@ run gets one summary from the parent, not one per worker. It holds:
   failed hook), the first line of that error, the last command the step ran
   through `runCommand` that did not exit 0, and the record's path. Under
   `--repeat`, each execution is its own row;
-- "Declared vs observed", the same section a sign-off ends with (see
-  "Sign-off"), over every step that ran and has a step record;
+- "Declared vs observed", over every step that ran and has a step record:
+  each step that declared `mutates: false` but made at least one measured
+  write (`observed.http_writes > 0`, see "Keyword semantics"), stated as a
+  raw fact (the declared value beside the observed count), never a verdict.
+  A step that reads over POST lands here every time, by design: the same
+  HTTP-method proxy that made run-time `mutates` enforcement unreliable. It
+  is one section for the whole run, so it cannot be scanned past by
+  accident, and it is written even when nothing disagrees, so "compared,
+  found nothing" stays distinguishable from "never compared". A compat step
+  (`mutates: null`, see "Compat steps (the migration door)") has no
+  declaration to compare and is counted separately;
 - for a failed run, the `nuka run <feature>:<line>` command for each failed
   scenario, with `--env` when the run had one.
 
@@ -2836,8 +2844,8 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 - **Environments** name deployment targets. Each environment can define a
   `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
-  probe result as `target_version`. A sign-off freezes the environment and
-  version, so the record identifies the deployment where the run was green.
+  probe result as `target_version`. The run summary states the environment
+  and version, so a reviewer knows the deployment where the run was green.
 - **Secrets** use git to classify their *origin*. An ignored or untracked env
   file is a secret source. Nukadoko does not distinguish between those two git
   states. Every value in a secret source is a secret without a declaration.
@@ -2936,11 +2944,12 @@ argument, `nuka run` processes exactly that directory. The additional list
 does not widen the run set. Static checks bind vocabulary against both
 `featuresDir` and `additionalFeatureDirs`. Thus, `nuka check` with no argument
 and `nuka tend` walk the wider set. Pattern binding is a project property,
-independent of the current unattended run. An acceptance feature outside
-`featuresDir` belongs in `additionalFeatureDirs` (see "Sign-off"). Its steps
-then count as bound instead of producing `pattern-unbound`, but the feature
-does not run unattended. An accepted feature that describes a core product
-path moves into `featuresDir` and needs no additional entry. A missing entry
+independent of the current unattended run. A feature for a change that has
+landed, kept outside `featuresDir`, belongs in `additionalFeatureDirs` (see
+"Review"). Its steps then count as bound instead of producing
+`pattern-unbound`, but the feature does not run unattended. A feature that
+describes a core product path moves into `featuresDir` and needs no
+additional entry. A missing entry
 is a config error. `nuka check` reports `additional-feature-dir-missing`, and
 `nuka tend` reports the same condition as a note.
 
@@ -2953,7 +2962,7 @@ same directories. A `.feature` file inside one is not part of `nuka check`,
 `oaths` defaults to `[]`. Each entry is a Markdown file, or a directory
 of `*.md` files, compiled into the same pickles as a `.feature` file
 (see "Markdown oaths"). Nothing under the project is an oath until it
-is named, so a sign-off record is not a scenario. `nuka check` and
+is named, so a README is not a scenario. `nuka check` and
 `nuka tend` read the list. `nuka run` reads an entry when the path is
 given, or when a directory target contains it.
 
@@ -3143,201 +3152,42 @@ The command never touches `export/allure-history.jsonl`. This file is beside
 `export/allure-results/`, outside that directory. It is the only artifact under
 `.nukadoko/` that a new run cannot reproduce.
 
-The repository contains the durable artifacts: feature files, typed steps, and
-sign-off records.
+The repository contains the durable artifacts: feature files and typed steps.
 
-## Sign-off
+## Review
 
-A sign-off records that an agreed scenario was green at a named commit. The
-claim applies to that commit and does not provide an ongoing check. The scenario
-comes from the ticket's acceptance criteria. After a green run, the project
-keeps it as an acceptance record. Nukadoko does not rerun it automatically.
+A person decides whether a change meets its acceptance criteria, and nukadoko
+gives that person two things to read, both in the pull request: the feature
+file in the diff, and the run summary that CI posts beside it (see the run
+summary under "Records"). The feature says what was agreed, in the
+reviewer's own words. The summary says what ran, at which commit, under
+which condition, and what was measured. Approving the pull request is the
+sign-off. nukadoko writes no separate record of that approval and needs none:
+the forge already binds the CI check and the approval to one commit, keeps
+both with the pull request, and shows any later change as a new diff.
 
-Signing off and running a feature answer different questions. A sign-off records
-that the criteria were met at one commit. A later run, in CI or elsewhere,
-checks whether they still hold. After sign-off, the project selects the future
-role of the scenario. Most acceptance criteria describe a requested change.
-After that change lands, another run has no remaining claim to confirm. The
-feature stays in place and appears in `additionalFeatureDirs` (see "Sessions,
-environments, secrets"). Static checks continue to bind its steps, but it does
-not run unattended. Some scenarios describe a lasting path through the product.
-Those features move into `featuresDir`, where `nuka run` selects them on each
-future commit. See "Tending" for the treatment of their sign-offs.
+A green run is a past-tense claim, "these scenarios passed at commit X", and
+the summary states it that way: the commit, whether the tree had uncommitted
+changes, the environment, the browsers, and the times. It makes no claim
+about the software after that commit. This scope prevents the decay of a
+requirements traceability matrix, which claims to describe the current
+system and drifts with every change.
 
-```sh
-nuka run acceptance/PROJ-123.feature     # execute, as often as needed
-nuka accept acceptance/PROJ-123.feature  # freeze the last green run
-```
+The ticket needs no link field either. A tag and the free description under
+`Feature:` carry the ticket id, its URL, and the criteria in the reviewer's
+own words, and the diff shows all of it. nukadoko has no concept of a ticket.
+It has no plan subsystem or reasoning field: the feature file and its bound
+typed steps answer what would prove the criteria, and the reviewer decides
+during the pull request review whether the scenarios express them.
 
-- `accept` does not execute the feature. Sign-off is an explicit act and is
-  never a side effect of a green run. Thus, repeated acceptance until success
-  is not a meaningful loop. The command freezes the newest green run of the
-  feature. The feature path identifies runs. Run ids are for machines that read
-  `nuka run` output, so people do not type them here.
-- The frozen run must cover the complete feature. A run selected with
-  `<feature>:<line>` covers one scenario and cannot qualify, even when green.
-  Freezing it would place a record beside a feature that the run mostly did not
-  reach. The command reports four outcomes separately: no run exists for the
-  feature, the latest full run was red, only partial runs exist, or no green
-  full run exists for the current condition (described below). A run
-  qualifies as green only when every scenario record passed and the run's
-  completion marker (`records/runs/<run_id>/complete.json`, see "Artifacts")
-  records verdict `passed`, or records `failed` because of scenarios (it
-  counts them: a run of several features can fail in another feature while
-  this one is green). The marker catches what no scenario record shows: an
-  AfterAll hook that threw after every scenario passed makes `nuka run`
-  exit 1 with no failed scenario, and the run is refused. A run with no marker is refused too, since
-  nothing shows that it ended; this covers a run that was killed and a run
-  written by a version that wrote no marker, so a project upgrading runs the
-  feature once more before it accepts. A refusal for either reason names the
-  run and says which. A refusal names
-  the data used for its decision. This includes the run, its start time, its
-  failed scenarios, or the conditions that have a run. The record then supports
-  the choice of the next command.
-- A sign-off applies to one `(environment, browser)` condition. Both values
-  come from measurements of the run. They do not come from declarations.
-  `environment` is
-  `nuka run`'s own `--env` (or the implicit `default`); `browser` is the
-  engine `ScenarioRecord.browser` measured, present only for a run that
-  launched one at all (see "Running"). "Chromium accepted, firefox not
-  yet" is a normal state, not a stale one: a sign-off is a claim about one
-  specific measured condition, and freezing two of them is two separate
-  claims, not one claim updated. `nuka accept` takes its own `--env`,
-  resolved the exact same way `nuka run`'s is, and selects among runs that
-  match the *current* condition on both axes: `environment`, matched
-  against each candidate's own measured `environment`, and `browser`,
-  `config.browserType`, matched against each candidate's own measured
-  `browser.type` (the same measured-vs-measured comparison every other
-  declaration/measurement question in this spec makes, never the other
-  way, and never against anything a candidate merely declared). A run that
-  never launched a browser at all is a candidate regardless of
-  `browserType`: an unmeasured axis is not part of what that run actually
-  confirmed, which is why an API-only scenario's acceptance never depends
-  on engine choice. When nothing matches, the refusal lists every
-  `(environment, browser)` pair that does have a green full run instead.
-- The command requires a completely clean working tree, including untracked
-  files. It also requires a run from the current HEAD. The
-  record's whole claim is "this scenario was green at commit X"; an
-  untracked step file the discovery would have loaded, or a commit made
-  between the run and the sign-off, makes that claim false. The scenario
-  record grows one field to make this checkable: the commit the working
-  tree was at when the run started (`git`, see "Records"). An acceptance record, of any feature,
-  is never part of what counts as dirty here: it is what accepting itself
-  produces, never an input the run being frozen read, so its sitting there
-  untracked or changed cannot make that run's own claim any less true.
-  Judged the same way `nuka tend` already tells a record apart from an
-  ordinary file (frontmatter carrying
-  `run_id`/`commit`/`feature`/`scenarios`, see "Tending"), never by
-  whether git happens to be tracking it yet. A path this cannot even
-  read, most likely one deleted since it was measured, still counts as
-  dirty: a missing record is a real change, not the thing this carve-out
-  is for.
-- A red run produces no acceptance record. There is no verdict field or failure
-  record. The project fixes and reruns a scenario that did not pass. It keeps
-  the outcome instead of the attempts.
-- Nukadoko writes the record beside its source feature. The name is
-  `<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, extension
-  included (`launcher.feature.2026-09-03-42a4e15.default.no-browser.md`),
-  so a listing shows the record right after its feature rather than before
-  it, where a date sorted. Nothing reads a record by its name: the tool
-  finds records by their frontmatter, so a record written under the older
-  `<feature-basename>.` form keeps working. `<date>-<sha>` is the
-  accepted run's own condition folded into the name (`<browser>` is the
-  literal `no-browser` when the run launched none) so two conditions never
-  collide, silently overwriting one another, at the same commit on the
-  same day. The browser's *version* is never in the filename: the engine's
-  type is enough to identify which condition a record is for, and the
-  version lives in the record body only (below). nukadoko does not choose
-  a directory: where a feature lives, and whether it moves into
-  `featuresDir`, is the project's own decision (above). The record is
-  always written beside the feature, wherever that is, so moving the
-  feature carries its record along.
-- On success, `nuka accept` writes the record path to stdout. The rules below
-  do not change this output. On stderr, it asks whether the feature describes
-  the change or a product path. It also explains the location for each answer.
-  This output is guidance because the command cannot measure the feature's
-  role. It can only identify the choice.
-- Near the top, the record body contains a "Condition" section. It contains the
-  `environment` and the measured browser engine and version when a browser ran.
-  Otherwise, the section explicitly says that no browser ran. This statement
-  distinguishes that condition from an unchecked blank field. It also
-  carries the count from the closing "Declared vs observed" section (below):
-  how many steps declared `mutates: false` and were measured making writes,
-  or that none did. The list stays at the end, since it is computed from
-  the detail above it; the count is up front, since a reviewer of a record
-  with several scenarios may never reach the end, and the count is what
-  says whether to. Older records
-  can lack this section. `nuka tend` treats their condition as unknown, does
-  not infer a condition, and excludes them from comparisons (see "Tending").
-- The tool builds the acceptance record from the frozen run. It includes the
-  complete feature text, the scenario record, and each step record. It limits
-  the content to fields named by the step contract. Incidental browser actions
-  stay outside the record. A person never transcribes it because transcription
-  would turn a measurement back into a claim.
-- A step record kept here carries `step_record_id`, `step`, `kind`,
-  `status`, `args`, `result`, `error`, `used`, `mutates`, `observed`,
-  `calls`, `fixtures`, `required_env`, `world`, `started_at`,
-  `finished_at`, `environment`, `session`, `session_execution`,
-  `scenario_record_id`, `run_id`, and `target_version`. It drops
-  `evidence`, `actions`, `truncated`, `page_events`, `http_omitted`,
-  `http_log_failed`, `declared`, `sections`, and `polls`: a live step record under
-  `.nukadoko/` still carries every one of them (see "Records"), but none
-  is something the step's own contract named. A hook entry in the
-  scenario record (see "Records") keeps `type`, `status`, `error`,
-  `step_index`, and `name`, and drops `declared`, `trace`, `actions`, and `truncated`
-  for the same reason.
-- An allowlist controls the embedded step record. Only a field named above
-  survives. A field the live
-  step record gains later is stripped by default until it is named
-  above. The record states, once near the top rather than once per step,
-  every key it stripped from the step and hook records below it. A
-  reader never has to guess what was withheld.
-- Browser traces cause the stripped fields to grow fastest. In one measured
-  suite, two scenarios with 14 steps produced a 3,844-line record. The
-  `actions` field used 2,288 lines, or 60% of the total. A record of that size
-  gets gitignored, which removes the sign-off from the repository and review.
-- Each scenario includes a summary table that fits on one screen. Its columns
-  are `step`, `status`, `ms`, `mutates`, `reads`, and `writes`. `ms` is the gap
-  between that step's own `started_at` and `finished_at`. `mutates` is
-  the step's own declaration; `reads` and `writes` are its `observed`
-  counts, the same pair "Declared vs observed" compares below. With the
-  JSON this narrow, the summary table is where a reviewer actually reads
-  the record.
-- The record ends with a "Declared vs observed" section. It includes each step
-  in every scenario that declared `mutates: false` but made at least one
-  measured write
-  (`observed.http_writes > 0`, see Keyword semantics), stated as a raw
-  fact (declared value beside the observed count), never a verdict. It
-  never refuses: none of the refusal conditions above read it, and a step
-  that reads over POST is expected to land here every time it is accepted,
-  by design (the same HTTP-method proxy that made run-time `mutates`
-  enforcement itself unreliable, above). Rolled into one section covering
-  every scenario, not spread one line per scenario, so it cannot be
-  scanned past by accident. Written even when nothing disagrees, so
-  "compared, found nothing" stays distinguishable from "never compared at
-  all". A compat step (`mutates: null`, see "Compat steps (the migration
-  door)") has no declaration to compare against `observed` at all; it is counted
-  separately, never folded into either outcome above, since "nothing to
-  compare" and "compared and matched" are different facts.
-- The record has no separate ticket link because Gherkin already provides the
-  required space. A tag and the free description under `Feature:` carry the ticket
-  id, its URL, and the acceptance criteria in the reviewer's own words;
-  freezing the feature freezes all of it. nukadoko has no concept of a
-  ticket and needs none.
-- Nukadoko has no plan subsystem or reasoning field. The feature file and its
-  bound typed steps answer what would prove the criteria. Reviewers decide
-  whether the scenario expresses those criteria during the feature's PR review.
-  A sign-off records that the agreed check ran.
-
-A sign-off makes only a past-tense claim. This scope prevents the decay of a
-requirements traceability matrix. A matrix claims to describe the current
-system, so a system change makes it drift. The statement "green at commit X"
-remains true. The record makes no claim about current software behavior.
-
-The record is unsigned plain-text markdown. Nukadoko does not verify that it
-still matches the original output from `nuka accept`. Git detects later edits.
-The project commits the record like any other file, so later changes appear as
-diffs against the commit that added it.
+After the change lands, the project chooses the feature's future role. Most
+acceptance criteria describe a requested change; once it lands, another run
+has no remaining claim to confirm. Such a feature can stay outside
+`featuresDir` and be listed in `additionalFeatureDirs` (see "Sessions,
+environments, secrets"), so static checks keep binding its steps while
+nothing runs it unattended, or it can be deleted. Some scenarios describe a
+lasting path through the product. Those features move into `featuresDir`,
+where `nuka run` selects them on each future commit.
 
 ### The acceptance loop
 
@@ -3352,20 +3202,22 @@ An agent follows this process for a ticket's acceptance criteria:
    those criteria translated into the vocabulary.
 4. `nuka check <feature>` (undefined steps, pattern/schema mismatches, a
    Then bound to a mutating step) before anything runs. Pass the path
-   unless the directory the acceptance feature lives in is listed in
+   unless the directory the feature lives in is listed in
    `additionalFeatureDirs`: a bare `nuka check` walks `featuresDir` and that
    list, so a feature deliberately kept outside `featuresDir` and named
    nowhere else is exactly what it does not reach.
-5. Commit. A run can only be frozen if it happened on a clean tree at the
-   commit still checked out, so debugging runs against a dirty tree are
-   fine; they simply cannot be accepted.
-6. `nuka run <feature>` until green.
-7. `nuka accept <feature>`, then commit the record it wrote.
+5. `nuka run <feature>` until green. A `<feature>:<line>` run is fine while
+   debugging; its summary covers only the scenarios it selected.
+6. Open the pull request. CI runs the feature and posts the run summary on
+   it (see `docs/ci.md`).
+7. A person reads the feature in the diff and the summary beside it.
+   Approving the pull request is the sign-off.
 
-Steps 1 through 4 contain the work and review. New typed steps and the feature
-are ordinary PR material. A reviewer checks the translation from criteria to
-scenarios. Steps 5 through 7 are mechanical, and the tool refuses an invalid
-operation explicitly.
+Steps 1 through 4 contain the work. New typed steps and the feature are
+ordinary pull request material. Steps 5 and 6 are mechanical. Step 7 is the
+one judgment nukadoko leaves to a person: whether the scenarios say what the
+ticket asked for, and whether the run that the summary describes is the one
+that counts.
 
 This loop starts from criteria. "Harvesting" starts from exploration and joins
 this loop at step 3.
@@ -3443,9 +3295,9 @@ Harvest records three unresolved cases in both the draft and stderr.
 - **A record whose execution failed** becomes a line with a comment that
   states how it failed. This preserves a useful case: an exploration that
   reproduced a bug becomes a red scenario. The scenario becomes green
-  after the behavior changes and can then be accepted. A red draft cannot
-  become evidence accidentally because `nuka accept` requires a green full
-  run (see "Sign-off"). A failed record cannot supply a chain either,
+  after the behavior changes. A red draft cannot become evidence
+  accidentally: the run summary a reviewer reads reports it red until the
+  behavior changes (see "Review"). A failed record cannot supply a chain either,
   because `--use` already refuses it. The reconstruction therefore remains
   sound.
 - **A line that does not read back** to its source record remains unresolved.
@@ -3760,7 +3612,7 @@ zero pickles.
 Honest limits, named rather than hidden: hooks collapse to one generic
 Before and one generic After, because one Hook envelope is shared by every
 hook of that type (a stored `name` titles the Allure fixture, the
-acceptance heading, the trace chunk, and the failure message, and is not
+run summary's failing hook, the trace chunk, and the failure message, and is not
 that envelope's name); a hook's own duration is always zero,
 the same limit the Allure emitter carries; `declared` labels, links, and
 parameters have no slot in the protocol's closed schema and are dropped;
@@ -3793,8 +3645,8 @@ deviation record prevents that loss from staying hidden.
 ## Tending
 
 `nuka check` answers one question: can this project run right now. A
-project can pass every check and still rot. A sign-off can stop describing
-the code it froze. A declaration can remain unexercised for years. A
+project can pass every check and still rot. A declaration can remain
+unexercised for years. A
 contract can be unreadable to the agent that must select it. These problems
 do not stop a run, but each becomes more costly with time. This failure mode
 gives the tool its name: a nukadoko matures with daily tending and dies from
@@ -3838,46 +3690,6 @@ command devoted to the bed's health makes the information visible.
 
 The following findings show what `tend` inspects and why each item is rot rather than style:
 
-- **A sign-off that no longer matches the code it froze.** A record
-  contains the accepted feature source and every step record from that run.
-  If a frozen `result` no longer passes its step's current `returns`
-  schema, or the frozen feature source no longer matches the file it was
-  taken from, or a step it cites is gone from the vocabulary, then the
-  record remains on disk with a claim it can no longer support. The
-  record stores that result as JSON. `tend` accepts the stored JSON when
-  it is the stored form of a value the current `returns` schema accepts
-  (what `JSON.stringify` would write, with a bigint as its decimal
-  string), so a Date kept as its ISO string still passes `z.date()`, and
-  a bigint kept as its decimal string still passes `z.bigint()`. A cited
-  step is called gone only when every step file imported. While any file
-  failed to import, that judgment is withheld, because the step may still
-  be defined in the file that could not be read. This
-  is the one finding here that is an error rather than a note: a sign-off
-  that has quietly stopped meaning what it says is worse than no sign-off,
-  because it is still being counted. A file that looks like a record (its
-  frontmatter has `run_id`, `commit`, `feature`, and `scenarios`) but cannot
-  be read is reported as `signoff-record-unreadable`, with the reason it did
-  not parse. A broken record skipped silently would read as healthy. None of
-  this is checked once the
-  feature the record names has moved into `featuresDir`: from then on the
-  running suite carries the guarantee, not a record frozen at one commit,
-  and a warning that fires on every ordinary edit to a feature already
-  running unattended would stop being read. The one exception is a record
-  `tend` cannot even parse (`signoff-record-unreadable`, described above): its own
-  `feature:` value may not have parsed either, so there is no placement
-  to judge it by, and a file that looks like a record but cannot be read
-  is a fact about the file, not about whether its claim is still current.
-- **A sign-off's recorded condition drifting from the config.** A
-  sign-off is scoped to a condition (see "Sign-off"): `(environment,
-  browser)`, both measured, never declared. If the most recent sign-off for
-  a feature recorded a browser the project's config no longer declares,
-  nothing about that sign-off is wrong right now, which is why this is a
-  note rather than an error, unlike the finding above. A record accepted
-  before this note existed carries no condition to compare against at all,
-  so this finding omits it instead of guessing. Like
-  the finding above, this stops once the feature has moved into
-  `featuresDir`: the drifting condition belongs to a claim nothing depends
-  on any more.
 - **A step file that failed to import.** `tend` uses the same tolerant
   step discovery as `nuka check` (see "Tolerant reporting, fail-fast
   execution"): a broken glue file is skipped rather than stopping the run,
@@ -3886,9 +3698,7 @@ The following findings show what `tend` inspects and why each item is rot rather
   the whole run, not one per file: a broken file's own cause is `nuka
   check`'s own finding (`step-file-import-failed`), so this one only says
   how many steps went unseen and names the files, and does not touch the
-  exit code. That includes withholding `signoff-step-missing` for the
-  whole run: a step absent from the vocabulary that loaded is not called
-  missing while any file failed to import, so the note stays a note.
+  exit code.
 - **A `from` declaration that nothing exercises.** Every occurrence of the step
   across every feature captures that key from the line, so the declared
   producer never supplies anything. Reported as the fact it is (the
@@ -3932,35 +3742,9 @@ The following findings show what `tend` inspects and why each item is rot rather
 - **A configured `additionalFeatureDirs` entry that is absent from
   disk.** It exists specifically to widen what `nuka check`/`nuka tend`
   scan, so an absent directory is a config mistake to report, the same way
-  a missing `featuresDir` is, except `tend` has no error bucket for a
-  config mistake the way `check` does, so this is a note here even though
+  a missing `featuresDir` is, except every `tend` finding is a note, so
+  this is a note here even though
   `nuka check` reports the identical fact as an error.
-- **An accepted feature outside all directories that `nuka check`/`nuka tend`
-  scan.** A sign-off record already proves that feature ran green, but a
-  feature nothing here walks still leaves the steps it binds looking
-  `pattern-unbound` to every other finding in this report. Sign-off
-  records provide visibility for this finding only and never decide
-  what gets scanned: growing the scanned set from them would only ever
-  notice a feature that has already been accepted at least once, silently
-  missing the one still being drafted: exactly the feature a false
-  `pattern-unbound` would most mislead someone about. Naming the
-  directory in `additionalFeatureDirs` is what actually fixes it.
-- **A feature that no acceptance record has ever named**
-  (`feature-never-signed`), the mirror of the finding above: that one
-  starts from a record and asks whether it points to the right
-  feature set, this one starts from the scanned feature set itself and
-  asks whether any record exists for each member at all, so the two can
-  never fire on the same feature for the same reason. A note, not an
-  error: `nuka accept` is a later, explicit step in the acceptance loop
-  (see "Sign-off"), so a feature still being drafted having no sign-off
-  yet is the ordinary state, and treating that as broken would leave
-  every feature in progress red until the day it is finished. No age
-  threshold either, since "has this ever been signed" has one answer and
-  "long enough to worry about" would need an invented one. Being inside
-  `featuresDir` does not silence it, unlike the sign-off staleness
-  findings above: those go quiet once the running suite carries the
-  guarantee a frozen record used to, but whether a record was ever made
-  is a different question, unaffected by where the feature runs.
 - **Scenarios that begin with the same steps, and what the repetition
   cost.** A shared opening is ordinary: several scenarios about one page
   reasonably start by getting to that page. It turns into rot when the
@@ -3988,12 +3772,8 @@ The following findings show what `tend` inspects and why each item is rot rather
   which nothing here measured.
 - **A step whose trace shows another call soon after a navigation
   call.** `tend` reads this from the tool's step records under
-  `.nukadoko/records/steps/` (see "Records"). A committed sign-off record
-  holds a copy frozen at accept time, so the live step record is the one
-  that still carries what a run measured (see "Sign-off"). This reaches
-  every step that still has a step record on disk, whether or not anyone
-  signed it off: a step nobody has signed off yet already has a step
-  record from the run that exercised it. For each `goto`, `reload`, `goBack`,
+  `.nukadoko/records/steps/` (see "Records"), so it reaches every step
+  that still has a step record on disk. For each `goto`, `reload`, `goBack`,
   or `goForward` in that step record's own `actions`, the gap to whatever
   call the step made next. A read that lands inside the same step
   record's own `poll` window is left out: a step written to `poll()`
@@ -4020,20 +3800,22 @@ a race it happens to be running" is exactly the kind of health that
 question is for. Reporting this as an error would treat a symptom that has
 not appeared as if it had.
 
-Findings support `--json`, like the other output. The sign-off finding exits
-non-zero so a periodic job can act on it; the rest do not, because a
-project is allowed to carry them. `--fail-on <code>` (repeatable, or
+Findings support `--json`, like the other output. Every finding is a note,
+and a note does not change the exit code, because a project is allowed to
+carry them. `--fail-on <code>` (repeatable, or
 comma-separated) makes one invocation exit non-zero when a finding with
 that code is reported, and says so on stderr. The finding itself stays a
 note in the output: what changed is the team's policy for that job, not
 the finding's nature. A code `tend` never reports is refused up front, so a
-typo cannot become a flag that never fires. This is how a PR job gates on
-`feature-never-signed` without `tend` turning red for everyone else.
+typo cannot become a flag that never fires. A code an earlier release
+reported, such as the sign-off codes that went away with the `accept`
+command, is refused by name, with what replaced it (see
+`docs/upgrading.md`). This is how a PR job gates on `pattern-unbound`
+without `tend` turning red for everyone else.
 
 `tend` reports but does not repair. Repair means writing a description,
-deleting a step, or re-accepting a feature: decisions with an author
-behind them, which is the same reason `accept` refuses rather than
-fixes up a dirty tree.
+deleting a step, or moving a feature: decisions with an author behind
+them.
 
 ## Models and relations
 
@@ -4199,7 +3981,7 @@ the two leading comments. An `error` carries `message`, and `run` for a
 model or a relation with a generated source. A refusal before
 any step runs prints nothing on stdout, as without `--json`. Explore
 writes the object to stdout only, never under the state directory, so
-`nuka accept` and `nuka tend` never read it as a run.
+the run summary and `nuka tend` never read it as a run.
 
 The scenario is not added to any feature. Only a person who read it decides
 whether it becomes a scenario, whether the system or the model was wrong,
@@ -4216,8 +3998,8 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               --env targets a named environment ("default"
                               when omitted); --session carries login state
                               across calls via a named session.
-                              :line runs one scenario, for iteration only. A
-                              partial run can never be accepted. Each target
+                              :line runs one scenario, for iteration only;
+                              its summary covers only that scenario. Each target
                               can be a file, file:line, or directory. Targets
                               form one deduplicated set in deterministic byte
                               order and one invocation: one run_id, one
@@ -4389,24 +4171,17 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka accept <feature> [--env <name>]
-                              freeze that feature's last green run as a
-                              committed acceptance record beside it. :line
-                              and a directory are refused, same as nuka check.
-                              --env names the environment whose run is
-                              frozen ("default" when omitted)
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
                               vocabulary is typed rather than compat, how
                               many typed steps are read-only, and how much
-                              of it declares what it could, then a sign-off
-                              that no longer matches the code it froze, or a record
-                              that is unreadable or in an old format (the
-                              one finding that exits non-zero; --fail-on
-                              <code> makes a named note exit non-zero too,
-                              for that invocation), a step file
+                              of it declares what it could, then notes, none
+                              of which changes the exit code (--fail-on
+                              <code> makes a named note exit non-zero, for
+                              that invocation; a removed sign-off code is
+                              refused by name): a step file
                               that failed to import, a `from` nothing
                               exercises, a patterned step no
                               feature binds, a schema field with no
@@ -4416,12 +4191,8 @@ nuka tend [--json] [--fail-on <code>]
                               support code, a secrets entry naming a key no
                               envFile defines, a configured
                               additionalFeatureDirs entry absent from disk,
-                              an accepted feature outside every scanned
-                              directory, a feature no acceptance record has
-                              ever named, a fixture no typed step requires,
-                              a fixture reaching page/context, a sign-off whose
-                              recorded browser differs from what the config
-                              would accept today, a step that made a call soon
+                              a fixture no typed step requires, a fixture
+                              reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps (measured, no advice)
 nuka session list [--json]    list every session, across all environments;
@@ -4502,14 +4273,14 @@ would be running against glue it never actually read.
 - nukadoko cannot stop an agent with shell access from reading `.env`
   directly. It removes the structural necessity of secrets passing through
   the agent's context.
-- A sign-off is not a proof that the software is correct. It records that an
-  agreed scenario was green at one named commit, and says nothing about
-  today. It does not even claim that same commit would be green now. A
-  defect that depends on when the run happened (a date computed in one
-  timezone and read in another, a boundary the clock crosses) is missing
-  from the record exactly as it was missing from the run, and nukadoko does
-  not re-run a frozen scenario to find out. The honesty is that a record
-  only ever speaks about one execution. The limit is that a whole class of
+- A green run summary is not a proof that the software is correct. It
+  records that the agreed scenarios were green at one named commit, and
+  says nothing about today. It does not even claim that same commit would
+  be green now. A defect that depends on when the run happened (a date
+  computed in one timezone and read in another, a boundary the clock
+  crosses) is missing from the summary exactly as it was missing from the
+  run, and nukadoko does not re-run a scenario to find out. The honesty is
+  that a summary only ever speaks about one execution. The limit is that a whole class of
   defect is invisible to any single one.
 - **This package ships ESM and only ESM, on purpose.** `package.json`'s
   `exports` carries an `import` condition and no `require` one. There is no
@@ -4555,7 +4326,7 @@ would be running against glue it never actually read.
   <n>`, see "Scenarios"), but only across worker processes inside one
   invocation. There is no flag that splits one suite across several
   invocations, because a suite whose records are spread over several run
-  ids is one `nuka accept` cannot read as a single run.
+  ids is one no run summary can describe as a single run.
 
 ## Roadmap
 
@@ -4567,8 +4338,10 @@ would be running against glue it never actually read.
   scenario runs (the compatibility surface that keeps a migrating team's
   existing formatters, JUnit-based CI, and HTML reports working), plus the
   allure-results emitter as the flagship dashboard.
-- **M4 (sign-off)**: `nuka accept`, the commit and cleanliness checks it
-  refuses on, and the frozen record written beside the feature.
+- **M4 (sign-off)**: implemented as a command that froze a green run into a
+  committed record beside the feature, then removed: no project kept the
+  records, and the run summary on the pull request carries the same claim,
+  bound to the commit by the forge (see "Review").
 - **M5 (skills)**: the skills nukadoko ships, and `nuka skill path`. The
   CLI is deliberately a set of small verbs. A skill turns them into a
   workflow an agent can follow without being told, and none of it changes
@@ -4581,7 +4354,7 @@ would be running against glue it never actually read.
   diverge. Two ship. The **acceptance skill** drives the acceptance loop
   end to end: criteria in, vocabulary read with `steps` and `describe`,
   missing operations scaffolded and implemented, the scenario written, then
-  `run` until green and `accept`. The **migration skill** carries what the
+  `run` until green, and the pull request a person reviews. The **migration skill** carries what the
   compat audit measured: the gaps a real cucumber-js suite actually hits,
   in the order they bite rather than the order they are documented. Its
   first stage leans on `nuka check` reporting those gaps, which `nuka

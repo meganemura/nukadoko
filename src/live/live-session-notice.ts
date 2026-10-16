@@ -4,11 +4,11 @@ import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js"
 import { liveLockOwner } from "../session/lock.js";
 import { sessionLockPath, sessionsDir, sessionsRootDir } from "../session/paths.js";
 
-// Responsibility: tell `nuka run`/`nuka accept` about a live session that is
+// Responsibility: tell `nuka run` about a live session that is
 // still open when they start (docs/spec.md "Live sessions"), without acting
 // on it. A live session's `ctx` stays open across many `nuka do --session`
 // calls on purpose, so the app it points at can carry state one execution
-// left for the next to build on. A `run`/`accept` starting up right now has
+// left for the next to build on. A `run` starting up right now has
 // no way to know whether that state matters to it, so this only reports
 // what is open and how to stop it. The judgment stays with whoever reads
 // stderr, the same "fact, not verdict" rule `nuka tend`'s `from-unused`
@@ -29,7 +29,7 @@ import { sessionLockPath, sessionsDir, sessionsRootDir } from "../session/paths.
 //
 // Read-only, unlike `session list` (src/session/manage.ts): a stale lock
 // found here is left alone rather than reaped, since reaping is that other
-// command's job, not a side effect `run`/`accept` should carry.
+// command's job, not a side effect `run` should carry.
 
 const LOCK_SUFFIX = ".lock";
 

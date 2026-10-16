@@ -1,14 +1,14 @@
 import { analyzeTend } from "../tend/analyze.js";
-import { TEND_CODES, type TendIssue, type TendSummary } from "../tend/types.js";
+import { REMOVED_TEND_CODES, TEND_CODES, type TendIssue, type TendSummary } from "../tend/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka tend`'s actual work, kept out of run-cli.ts the same
 // way cli/check.ts's own `runCheck` is (unit-testable without going through
-// yargs). Exit code is "1 or more errors" (docs/spec.md "Tending": "the
-// sign-off finding exits non-zero … the rest do not, because a project is
-// allowed to carry them") — `errors` is populated by the sign-off-rot
-// finding alone: every other finding this command reports is a note.
+// yargs). Exit code is "1 or more errors, or a `--fail-on` code that
+// fired". Every finding this command reports today is a note (docs/spec.md
+// "Tending": a project is allowed to carry them), so `--fail-on` is the one
+// way a run of `nuka tend` turns red.
 //
 // `formatLocation`/`formatIssueLine` are a small, deliberate duplicate of
 // cli/check.ts's own private (unexported) helpers of the same name, not an
@@ -28,8 +28,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // The `scanned:` line prints first, ahead of `bed:` — a reader needs to
 // know what was looked at before a count derived from that look means
 // anything; this is the fact that makes `pattern-unbound` legible instead
-// of quietly wrong the moment an accepted feature lives outside
-// `featuresDir`. `read-only` joins the `bed:` line itself rather than a
+// of quietly wrong the moment a feature lives outside `featuresDir`. `read-only` joins the `bed:` line itself rather than a
 // fourth line, since it is counted in the exact same vocabulary walk as
 // `typed`/`compat` (src/tend/summary.ts).
 
@@ -87,6 +86,15 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   // Refused before anything is analyzed: a code tend never emits would
   // otherwise be a flag that never fires, and a team gating a PR on it
   // would read that silence as "nothing to fail on".
+  // A removed code is refused too, but by name and with what replaced it,
+  // so a CI job written against an earlier release learns where to go.
+  const removed = failOn.filter((code) => REMOVED_TEND_CODES.has(code));
+  if (removed.length > 0) {
+    for (const code of removed) {
+      stderr.write(`--fail-on: "${code}" ${REMOVED_TEND_CODES.get(code)}.\n`);
+    }
+    return 1;
+  }
   const unknown = failOn.filter((code) => !TEND_CODES.has(code));
   if (unknown.length > 0) {
     stderr.write(
@@ -108,8 +116,8 @@ export async function runTend(options: RunTendOptions): Promise<number> {
     stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
     // Summary first, ahead of the findings, then the findings grouped by
-    // kind: errors first (empty unless the sign-off-rot finding fired),
-    // then notes — and `analyzeTend` already builds `notes` as consecutive
+    // kind: errors first (always empty today, src/tend/analyze.ts's
+    // header), then notes — and `analyzeTend` already builds `notes` as consecutive
     // per-finding blocks, so printing it in order is grouping, with no sort
     // needed here.
     for (const line of formatSummaryLines(report.summary)) {

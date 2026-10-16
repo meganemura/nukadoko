@@ -5,7 +5,7 @@
 // `environment` is the environment's own name, plus the optional
 // `target_version`. `kind` and
 // `scenario_record_id` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a step record's origin apart — the
-// distinction matters for the Allure mapping and sign-off contexts, per
+// distinction matters for the Allure mapping, per
 // docs/spec.md — and `scenario_record_id: string | null` carries the owning
 // scenario record's id for a `run`-originated step record, `null` for a
 // `do`-originated one.
@@ -15,7 +15,7 @@
 // `nuka do`/`nuka run` is a third, distinct origin — the executor that
 // measured it is neither of the other two. `nuka harvest` treats
 // `"external"` the same as `"do"` (both are a working record, never
-// evidence a sign-off can cite), while `scenario_record_id`/`run_id` stay
+// part of a `nuka run` scenario), while `scenario_record_id`/`run_id` stay
 // `null` for it the same way they already are for a `"do"`-originated
 // record: an externally-driven step belongs to no `nuka run` scenario
 // either.
@@ -621,7 +621,7 @@ export interface StepRecordBase {
    * ran inside a scenario or via `do`"), `"external"` for one run from
    * inside a Playwright Test spec through `recordStep`
    * (src/external/record-step.ts) — a working record the same way `"do"`
-   * is, never evidence a sign-off can cite. */
+   * is, never part of a `nuka run` scenario. */
   kind: "do" | "run" | "external";
   /** Exactly what `--args` deserialized to (`do`) or what the pickle step's
    * captures/table/docstring bound (`run`) — unvalidated and uncoerced by

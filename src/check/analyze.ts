@@ -134,7 +134,7 @@ class CheckLineNotSupportedError extends Error {
   }
 }
 
-// Path resolution matches `nuka run`/`nuka accept` (relative to `rootDir`,
+// Path resolution matches `nuka run` (relative to `rootDir`,
 // absolute paths accepted as-is). No `:line`
 // support: check is a static analysis over a whole
 // file, not one scenario.

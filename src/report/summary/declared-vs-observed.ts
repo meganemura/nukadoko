@@ -1,11 +1,10 @@
 import type { StepRecord } from "../../record/types.js";
 
-// Responsibility: the "Declared vs observed" section shared by the two
-// Markdown documents a person reads about a run: the run summary `nuka run`
-// writes (src/run/run-summary.ts) and the acceptance record `nuka accept`
-// writes (src/accept/render-record.ts). Pure: callers hand in the step
-// records they already read, and decide for themselves what a missing one
-// means (accept refuses; a run summary skips a step that never ran).
+// Responsibility: the "Declared vs observed" section of the run summary
+// `nuka run` writes (src/run/run-summary.ts), the Markdown a person reads
+// about a run. Pure: callers hand in the step records they already read,
+// and decide for themselves what a missing one means (a run summary skips
+// a step that never ran).
 //
 // The section sets a step's declaration (`mutates`) against what was
 // measured (`observed.http_writes`) and states only the raw fact, never a

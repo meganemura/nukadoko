@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-// Responsibility: the stderr line `nuka check` and `nuka accept` share when
-// reading one feature argument fails. `nuka run` walks a directory; these
-// two commands read one file, so a directory is a usage mistake rather than
+// Responsibility: the stderr line `nuka check` writes when reading one
+// feature argument fails. `nuka run` walks a directory; check reads one
+// file, so a directory is a usage mistake rather than
 // a walk. A missing file, a `:line` suffix, a directory, and any other
 // read error all fail the same `readFileSync`. Reporting every one of them
 // as "feature file not found" sends the reader looking for a file that is
@@ -21,7 +21,7 @@ const LINE_SUFFIX_PATTERN = /^(.+):(\d+)$/;
 
 const DIRECTORY_HINT = "pass a .feature or .md file, or use nuka run for a directory";
 
-export type FeatureArgCommand = "nuka check" | "nuka accept";
+export type FeatureArgCommand = "nuka check";
 
 export type FeatureArgReadKind = "not-found" | "line" | "directory" | "other";
 
@@ -78,15 +78,9 @@ export function describeFeatureArgRead(input: FeatureArgReadInput): FeatureArgRe
 }
 
 function lineNotSupportedMessage(command: FeatureArgCommand, basePath: string, line: string): string {
-  if (command === "nuka check") {
-    return (
-      `nuka check: ${basePath}:${line}: :line is not supported; check analyzes the whole file, not one scenario. ` +
-      `Run: nuka check ${basePath}`
-    );
-  }
   return (
-    `nuka accept: ${basePath}:${line}: :line is not supported; only a whole-feature run can be accepted. ` +
-    `Run: nuka accept ${basePath}`
+    `${command}: ${basePath}:${line}: :line is not supported; check analyzes the whole file, not one scenario. ` +
+    `Run: ${command} ${basePath}`
   );
 }
 

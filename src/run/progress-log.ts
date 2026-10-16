@@ -6,7 +6,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // feature" before this file existed. Every function
 // here writes to stderr only; stdout's one-JSON-record-per-scenario contract
 // (src/cli/run.ts) is untouched by any of it. Display only: nothing written
-// here is read back by `nuka accept` or any other command, so its exact
+// here is read back by any command, so its exact
 // wording is free to change without a compat concern. `--quiet` is mostly not this
 // file's concern: cli/run.ts decides which of these calls to make. The one
 // exception is the step logger, which alone knows whether a step failed,
@@ -264,7 +264,7 @@ export interface RepeatTallyCollector {
 /** Counts, per scenario, how many of its executions passed: the one
  * fact a `--repeat` run exists to produce, kept as three display values
  * plus two counters per scenario rather than as every record. Keyed by
- * feature and line, the same identity `nuka accept` uses for a scenario. */
+ * feature and line, the same identity a `:line` target names. */
 export function createRepeatTally(): RepeatTallyCollector {
   const tallies = new Map<string, { feature: string; line: number; scenario: string; passed: number; total: number }>();
   return {

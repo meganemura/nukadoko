@@ -35,23 +35,51 @@ This part does not change release to release.
 
 ## 0.14.1 to the next release
 
-Compat behaviour a project can notice, one redaction change, one evidence-name change, and one change to `nuka accept`.
+`nuka accept` and every sign-off finding are removed, which a project that signs off features, or gates CI on a sign-off, has to act on.
+Compat behaviour a project can notice, one redaction change, and one evidence-name change.
 `nuka session clear --env` and `nuka session stop` also name a typo that used to exit 0 with no output.
 The Allure and messages emitters are off by default now, which a project that reads either export has to act on.
+
+**`nuka accept` is gone, and the run summary replaces it.** No project kept
+the records it wrote, and approving a pull request beside its run summary
+makes the same claim ("green at this commit"), bound to the commit by the
+forge. Every `nuka run` now writes that summary; [docs/ci.md](ci.md) shows
+how to post it on the pull request. What to do:
+
+- **Remove `nuka accept` from scripts and CI.** The command no longer
+  exists, so `nuka accept <feature>` exits 1 with yargs' unknown-argument
+  error. Where a job ran it after a green `nuka run`, post the run summary
+  instead: `nuka run <features> --summary <path>`, then a step that comments
+  that file on the pull request (the workflow in [docs/ci.md](ci.md) has
+  one).
+- **Replace a PR check that a feature has a sign-off record.** A job that
+  looked for a `<feature>.*.md` file beside each changed feature, or ran
+  `nuka tend --fail-on feature-never-signed`, has nothing left to check.
+  The reviewer now reads the `.feature` in the diff and the run summary on
+  the pull request, and approving the pull request is the sign-off. `nuka
+  tend --fail-on` with any of the removed codes (`feature-never-signed`,
+  `signed-feature-unscanned`, `signoff-condition-mismatch`,
+  `signoff-feature-changed`, `signoff-feature-missing`,
+  `signoff-record-old-format`, `signoff-record-unreadable`,
+  `signoff-result-invalid`, `signoff-step-missing`) exits 1 before
+  analyzing anything, and stderr names the code and says the run summary
+  replaced it. Drop the flag, or gate on a code `nuka tend` still reports.
+- **Old `*.feature.*.md` records are inert.** Nothing reads them any more:
+  `nuka tend` says nothing about them, and they are not scenarios unless
+  `oaths` names them. Delete them, or keep them as history; either is
+  safe.
+- **`nuka tend` exits 0 unless `--fail-on` fires.** Its one error used to
+  be a stale sign-off. Every finding is now a note, and `--json` keeps
+  `errors` as an empty array, so a reader of that field needs no change.
+- **A `:line` run's stderr notice changed.** It used to say a partial run
+  could not be accepted. It now says the run summary covers only the
+  selected scenarios. A script matching the old sentence has to match the
+  new one.
 
 The env file parser now follows dotenv for comments, quotes, escapes, and
 values that span lines. A project whose env files relied on the old reading
 has to look at those values before the next run.
 
-- **`nuka accept` refuses a run that has no completion marker.** A run now
-  writes `.nukadoko/records/runs/<run_id>/complete.json` with its verdict as
-  its last act, and `nuka accept` freezes only a run whose verdict is
-  `passed`. A run written by an earlier version has no marker, so a feature
-  whose last green run predates the upgrade is refused with a message that
-  says so. Run the feature once more with `nuka run`, then accept it. Records
-  already signed off are unaffected. A run that exited 1 because an
-  AfterAll hook threw used to be acceptable and no longer is. Retention keeps
-  a run without a marker until it is older than `retention.adHocDays`.
 - **`nuka tend --json` names a fixture in `fixture`, not `step`.** The
   `fixture-unused` and `fixture-touches-app` notes used to carry the fixture
   name in `step`. They now carry it in a new `fixture` field and leave `step`

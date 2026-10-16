@@ -10,8 +10,6 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // mechanics); this file only covers what changes once the positional names
 // a directory instead: multiple features in one invocation, deterministic
 // file order, refusing an empty directory, and refusing `:line` on one.
-// `nuka accept` after a directory run gets its own test in accept.test.ts,
-// beside every other `nuka accept` end-to-end test.
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);

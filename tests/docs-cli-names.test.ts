@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { listCheckCodes } from "../src/check/codes.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { TEND_CODES } from "../src/tend/types.js";
+import { REMOVED_TEND_CODES, TEND_CODES } from "../src/tend/types.js";
 import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: the names the reader-facing docs hand an agent (commands,
@@ -26,7 +26,7 @@ import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
 //   the command tree; every `--flag` up to a bare `--` must be one of that
 //   command's own flags.
 // - a finding code is a backticked lowercase kebab-case token whose first
-//   word at least two registered codes start with (`signoff-...`,
+//   word at least two registered codes start with (`fixture-...`,
 //   `step-...`), plus every `--fail-on <code>` value. Other kebab-case
 //   tokens (`setup-node`, `no-browser`) are not codes and are not read.
 // - a heading is `see "X"` / `See "X"`, `<file>.md "X"`, `<file>.md's "X"`,
@@ -161,6 +161,9 @@ function invocationProblem(tree: CommandNode, invocation: string): string | unde
 
 const checkCodes = new Set(listCheckCodes().map((entry) => entry.code as string));
 const allCodes = new Set([...checkCodes, ...TEND_CODES]);
+// A removed tend code is still a name the CLI answers to: `--fail-on` refuses
+// it by name and says what replaced it, so an upgrade note may cite it.
+const citableCodes = new Set([...allCodes, ...REMOVED_TEND_CODES.keys()]);
 const familyOf = (code: string): string => code.split("-")[0]!;
 // A first word counts as a family only when two or more codes share it, so
 // `no-browser` is not read as a misspelled `no-step-files-found`.
@@ -173,14 +176,14 @@ function codeProblems(file: DocFile): string[] {
   for (const paragraph of paragraphsOf(file.text)) {
     for (const match of paragraph.matchAll(/`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`/g)) {
       const token = match[1]!;
-      if (codeFamilies.has(familyOf(token)) && !allCodes.has(token)) {
+      if (codeFamilies.has(familyOf(token)) && !citableCodes.has(token)) {
         problems.push(`\`${token}\` is not a check or tend code`);
       }
     }
   }
   for (const invocation of nukaInvocations(file)) {
     for (const match of invocation.matchAll(/--fail-on[ =]([a-z][a-z0-9-]*)/g)) {
-      if (!TEND_CODES.has(match[1]!)) problems.push(`--fail-on ${match[1]} is not a tend code`);
+      if (!TEND_CODES.has(match[1]!) && !REMOVED_TEND_CODES.has(match[1]!)) problems.push(`--fail-on ${match[1]} is not a tend code`);
     }
   }
   return problems;
@@ -289,12 +292,22 @@ function summaryOmissions(tree: CommandNode, summary: string): string[] {
   return missing;
 }
 
+// A command a release removed is still named by the upgrade notes that say
+// what replaced it, and by their history. Only those two files may cite one.
+const REMOVED_COMMANDS = new Set(["accept"]);
+const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
+
+function citesRemovedCommand(file: DocFile, invocation: string): boolean {
+  return UPGRADE_NOTES.has(file.relativePath) && REMOVED_COMMANDS.has(invocation.trim().split(/\s+/)[0]!);
+}
+
 describe("names in README.md, llms.txt, docs/, and skills/", () => {
   it("every `nuka ...` names a command and flags the CLI has", async () => {
     const tree = await readCommandTree();
     expect(
       perFile((file) =>
         nukaInvocations(file).flatMap((invocation) => {
+          if (citesRemovedCommand(file, invocation)) return [];
           const problem = invocationProblem(tree, invocation);
           return problem ? [`\`nuka ${invocation}\`: ${problem}`] : [];
         }),
@@ -319,6 +332,13 @@ describe("names in README.md, llms.txt, docs/, and skills/", () => {
 });
 
 describe("the extraction itself", () => {
+  it("lets only the upgrade notes cite a removed command", () => {
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "accept features/a.feature")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.ja.md", text: "" }, "accept")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "accept features/a.feature")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "acceptx")).toBe(false);
+  });
+
   // Positive controls: each drift named in this file's header, written as
   // the docs once had it, has to be reported, so a passing run above is not
   // an extraction that found nothing.
@@ -354,10 +374,10 @@ describe("the extraction itself", () => {
       codeProblems(
         sample(
           "skills/x.md",
-          "`signoff-rot` and `signoff-feature-changed` from `setup-node`.\n\n`nuka tend --fail-on step-missing`\n",
+          "`fixture-rot` and `fixture-unused` from `setup-node`.\n\n`nuka tend --fail-on step-missing`\n",
         ),
       ),
-    ).toEqual(["`signoff-rot` is not a check or tend code", "--fail-on step-missing is not a tend code"]);
+    ).toEqual(["`fixture-rot` is not a check or tend code", "--fail-on step-missing is not a tend code"]);
   });
 
   it("reports a quoted heading that the file it points at does not have", () => {

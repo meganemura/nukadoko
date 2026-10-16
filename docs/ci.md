@@ -102,8 +102,8 @@ jobs:
       # `nuka tend` reports what is rotting rather than what is broken
       # (docs/spec.md "Tending"); it never gates a PR, which is why it
       # sits on its own schedule rather than beside `check`/`run` above.
-      # It exits non-zero only for a sign-off that no longer matches the
-      # code it froze; every other finding is a note.
+      # Every finding is a note, so it exits 0; `--fail-on <code>` turns
+      # a chosen note red for a team that wants one to gate.
       - run: npx nuka tend
 ```
 
@@ -199,10 +199,12 @@ of the above; these four are what changes.
 
 ## What a team adds on top
 
-Four things the workflow above leaves to the team, each small.
+Three things the workflow above leaves to the team, each small.
 
 - **The run summary as a pull request comment.** The job summary page
-  already shows it, but a reviewer reads the pull request. `--summary
+  already shows it, but a reviewer reads the pull request: the feature in
+  the diff and the summary beside it, and approving the pull request is the
+  sign-off (see "Review" in [docs/spec.md](spec.md#review)). `--summary
   <path>` writes the same Markdown to a file, and one more step posts it:
 
   ```yaml
@@ -230,28 +232,15 @@ Four things the workflow above leaves to the team, each small.
   suite can then write to the pull request. A pull request from a fork gets
   a read-only token, so the step fails there; a team that takes fork pull
   requests moves it to a separate job.
-- **A PR check that every feature the PR touched has a sign-off.**
-  `feature-never-signed` is a `nuka tend` note: weekly, and never a failing
-  exit code, so a feature merged without `nuka accept` stays unsigned until
-  someone reads that note. A PR job can ask the question itself:
-
-  ```sh
-  for f in $(git diff --name-only origin/main...HEAD -- 'features/**/*.feature'); do
-    ls "${f%.feature}".*.md >/dev/null 2>&1 || { echo "no sign-off beside $f"; exit 1; }
-  done
-  ```
-
-  The record's name starts with the feature's basename (see "Sign-off" in
-  [docs/spec.md](spec.md#sign-off)), which is all this needs to know. A
-  team that wants every feature signed, not only the ones a PR touched,
-  runs `npx nuka tend --fail-on feature-never-signed` in that job instead.
-- **A notification step on the `tend` job.** The only finding that turns
-  its exit code red is a stale sign-off record; a weekly job that goes red
-  in the Actions tab and nowhere else is a job nobody reads.
+- **A notification step on the `tend` job.** Its findings are notes, and
+  a weekly job whose output stays in the Actions tab is a job nobody reads;
+  post its output somewhere a person looks, or add `--fail-on <code>` for
+  the notes the team has agreed to act on.
 - **`retention.runs` sized to the runner's own pace.** The default keeps
   the newest 20 runs. A persistent runner that runs every merge and every
-  night reaches 20 in days, and `nuka accept` reads only the retained runs,
-  so measure the pace for a week before deciding the number.
+  night reaches 20 in days, and `nuka tend` and `nuka do --use` read only
+  the retained runs, so measure the pace for a week before deciding the
+  number.
 
 ## What this page does not claim
 
@@ -260,8 +249,7 @@ in this repository can execute one. What was verified instead: the YAML
 parses as valid YAML, and every `npx nuka ...` command in it (including
 `nuka run features/`, the directory form used above, not just a single
 feature file) was run against a real, freshly `npm install`ed copy of
-this package, including the live-session refusal on `nuka clean` and the
-`feature-never-signed` finding disappearing once `nuka accept` runs. The
+this package, including the live-session refusal on `nuka clean`. The
 pull request comment step under "What a team adds on top" was not run
 either: its `gh pr comment` flags were read from `gh`'s own help, not
 exercised against a real pull request.

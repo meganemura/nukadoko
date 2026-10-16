@@ -1,4 +1,4 @@
-# Running and accepting
+# Running
 
 ## Environments
 
@@ -41,8 +41,8 @@ do" in `SKILL.md`), a bare `nuka check` already covers it, the same as any
 feature under `featuresDir`. Otherwise pass the feature path directly:
 `nuka check <feature>` checks that one file, since without either the
 argument or the config entry the one file you care about is the one that
-goes unchecked. `nuka check` and `nuka accept` each take that one file.
-`:line` and a directory belong to `nuka run`.
+goes unchecked. `nuka check` takes that one file. `:line` and a directory
+belong to `nuka run`.
 
 The walk that finds those feature files skips `node_modules` and any
 directory whose name starts with `.`, at every depth. A `.feature` file
@@ -51,10 +51,10 @@ nothing.
 
 ## Running
 
-1. Commit. Anything the run reads has to be in a commit first, including
-   any step files written along the way. Records a previous `nuka accept`
-   wrote are the exception, so a second feature from the same run needs no
-   commit in between.
+1. Commit before the run you report. The run summary names the commit
+   and says whether the tree had uncommitted changes, so a run on a dirty
+   tree tells the reviewer it may not match what the pull request holds.
+   Debugging against a dirty tree is fine.
 2. `nuka run <feature>`, repeat until every scenario is green. stderr
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary
@@ -74,8 +74,8 @@ nothing.
    (see `references/diagnosing.md`) rather than treating a full re-run as
    the default first move. `<feature>:<line>` is fine for narrowing this
    while iterating, but the run this step ends on must cover the whole
-   feature: `accept` never treats a partial run as a candidate, however
-   green it was.
+   feature: a partial run's summary covers only the scenarios it selected,
+   and stderr says so.
 3. A failure that reproduces one time in several is a case for
    `nuka run <feature>:<line> --repeat <n>`, not for a shell loop: every
    execution lands under one run id, the summary counts executions, and a
@@ -84,24 +84,13 @@ nothing.
    records and screenshots (`references/diagnosing.md`) rather than the
    count alone: the count says how often, never why.
 
-## Accepting
+## The pull request
 
-`nuka accept <feature>` freezes the newest all-green run of that feature as
-a record beside it, restricted to runs matching the current condition:
-`--env` (resolved the same way `nuka run`'s is; omit for the default
-environment) and whatever `config.browserType` says right now, both
-matched against what each candidate run actually measured, never a
-declaration. A run that never opened a browser is a candidate regardless of
-`browserType` (there is no `--browserType` flag on `accept`, since it is
-fully config-derived). Every record's filename bakes its own condition in
-(environment, then browser or `no-browser`), so accepting this feature
-again later under a different measured condition writes a separate record
-instead of overwriting this one; when two runs differ only by environment,
-`--env` is what picks which one gets frozen. On success, stderr also asks
-the placement question from "What not to do" in `SKILL.md`; stdout stays
-exactly the record's own path.
-
-Commit the record `accept` wrote.
+Push the feature and its steps and open the pull request. CI runs the
+feature and posts the run summary on it (`docs/ci.md` in the nukadoko
+package has the workflow). A person reads the feature in the diff and the
+summary beside it, and approving the pull request is the sign-off. Nothing
+else is written or committed for it.
 
 ## What a run writes
 

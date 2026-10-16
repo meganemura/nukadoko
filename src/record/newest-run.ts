@@ -1,7 +1,7 @@
 // Responsibility: the one rule for which `nuka run` is newer than another.
-// Retention keeps the newest runs, `nuka accept` freezes the newest run that
-// qualifies, and `nuka tend` reads the newest run, so all three group scenario
-// records into runs here and never disagree about which run that is. Reading
+// Retention keeps the newest runs and `nuka tend` reads the newest run, so
+// both group scenario records into runs here and never disagree about which
+// run that is. Reading
 // the records, and what to do with a run once it is ranked, stay with each
 // caller.
 //
@@ -13,8 +13,7 @@
 // `record.json` that cannot be read is. nukadoko always writes an ISO 8601
 // time there, so a value that does not parse is damage, and a damaged record
 // cannot date its run or count as evidence of what the run did. Ranking such
-// a run as the newest let it displace a real run in retention, and ranking it
-// at all left `nuka accept` with a start time it could not print.
+// a run as the newest let it displace a real run in retention.
 
 export interface RunStart {
   readonly runId: string;

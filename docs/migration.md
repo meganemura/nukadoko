@@ -348,7 +348,7 @@ rather than as an argument against promoting. The import's reversibility
 exists to make the first step cost one edit, not to make the typed side
 optional: compat is where a suite arrives, and every reason to run it on
 this tool at all (a validated `result`, a contract `nuka check` can hold a
-feature against, `from`, a sign-off that attests to more than "it ran")
+feature against, `from`, a run summary that attests to more than "it ran")
 lives on the other side of the promotion. Promote the steps whose contracts
 you want, which over time should be most of the ones that matter.
 

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { runCli } from "../src/cli/run-cli.js";
 import { analyzeProject } from "../src/check/analyze.js";
-import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run --concurrency <n>` end to end, against
 // tests/fixtures/run-concurrency-project — a pure-step project (no browser,
@@ -179,30 +179,6 @@ describe("nuka run --concurrency", () => {
     const failIndex = lines.findIndex((line) => /^ {2}step 1\/1 {2}FAIL /.test(line));
     expect(lines[failIndex]).toBe("  step 1/1  FAIL  0.0s  a missing concurrent step");
     expect(lines[failIndex + 1]).toMatch(/^ {6}No step definition matches "a missing concurrent step"/);
-  });
-
-  it("a --concurrency 2 run's records can be accepted, one file at a time", async () => {
-    // `nuka accept` refuses a dirty working tree; `.nukadoko/` itself is
-    // exempted from that check (src/cli/accept.ts's own `isUnderStateDir`),
-    // so committing everything else once, up front, is enough.
-    await initGitRepo(rootDir);
-    const runExit = await runCli(["run", "features/basic/", "--concurrency", "2"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-    expect(runExit).toBe(0);
-
-    for (const feature of ["features/basic/a.feature", "features/basic/b.feature"]) {
-      const acceptStdout = createCaptureSink();
-      const acceptStderr = createCaptureSink();
-      const acceptExit = await runCli(["accept", feature], {
-        rootDir,
-        stdout: acceptStdout,
-        stderr: acceptStderr,
-      });
-      expect(acceptExit, `accept ${feature}: ${acceptStderr.text()}`).toBe(0);
-    }
   });
 
   it("a file tagged @nukadoko:serial on its Feature line never runs alongside the others", async () => {

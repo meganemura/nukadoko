@@ -1,19 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `additionalFeatureDirs` end to end — the config field
 // that widens what `nuka check` (no argument) and
 // `nuka tend` scan without adding anything to what `nuka run` (no argument)
-// executes. Four things are covered here, each with its own `it`
+// executes. Three things are covered here, each with its own `it`
 // block below: (1) it makes `pattern-unbound` stop misreporting a step bound
-// only from an accepted feature outside `featuresDir`, with an unchanged
+// only from a feature outside `featuresDir`, with an unchanged
 // regression case proving the unset default is untouched; (2) a configured-
 // but-absent entry is reported, by both commands; (3) `nuka tend`'s bed
 // output names what it scanned and counts read-only steps, in both text and
-// `--json`; (4) `signed-feature-unscanned` makes a sign-off outside every
-// scanned directory visible instead of silently feeding a false
-// pattern-unbound elsewhere.
+// `--json`.
 
 interface TendReport {
   errors: { code: string; message: string; file?: string; step?: string }[];
@@ -68,8 +66,7 @@ describe("additionalFeatureDirs", () => {
       expect(missing[0]!.file).toBe("ghost-dir");
       expect(missing[0]!.message).toContain("ghost-dir");
       // A note, not an error — a missing additionalFeatureDirs entry must
-      // not fail `nuka tend`'s exit code (only
-      // sign-off rot is an error there).
+      // not fail `nuka tend`'s exit code.
       expect(report.errors).toEqual([]);
     });
 
@@ -82,44 +79,12 @@ describe("additionalFeatureDirs", () => {
       });
       expect(exitCode).toBe(0);
       const lines = stdout.text().trim().split("\n");
-      expect(lines[0]).toBe("scanned: features, accepted, ghost-dir");
+      expect(lines[0]).toBe("scanned: features, extra, ghost-dir");
       expect(lines[1]).toBe("bed: typed 2, compat 0, read-only 1");
 
       const { report } = await runTend(fixture("tend-additional-dirs-project"));
-      expect(report.summary.scannedFeatureDirs).toEqual(["features", "accepted", "ghost-dir"]);
+      expect(report.summary.scannedFeatureDirs).toEqual(["features", "extra", "ghost-dir"]);
       expect(report.summary.readOnlySteps).toBe(1);
-    });
-
-    it("signed-feature-unscanned: fires for an accepted feature outside every scanned dir, not for one inside", async () => {
-      const rootDir = await copyFixtureToTempDir("tend-signed-unscanned-project");
-      try {
-        await initGitRepo(rootDir);
-
-        for (const featurePath of ["features/accepted-inside.feature", "elsewhere/accepted-outside.feature"]) {
-          const runExit = await runCli(["run", featurePath], {
-            rootDir,
-            stdout: createCaptureSink(),
-            stderr: createCaptureSink(),
-          });
-          expect(runExit).toBe(0);
-
-          const acceptExit = await runCli(["accept", featurePath], {
-            rootDir,
-            stdout: createCaptureSink(),
-            stderr: createCaptureSink(),
-          });
-          expect(acceptExit).toBe(0);
-        }
-
-        const { report } = await runTend(rootDir);
-        const unscanned = report.notes.filter((issue) => issue.code === "signed-feature-unscanned");
-        expect(unscanned).toHaveLength(1);
-        expect(unscanned[0]!.file).toBe("elsewhere/accepted-outside.feature");
-        expect(unscanned[0]!.message).toContain("elsewhere/accepted-outside.feature");
-        expect(unscanned[0]!.message).toContain("additionalFeatureDirs");
-      } finally {
-        await removeTempDir(rootDir);
-      }
     });
   });
 

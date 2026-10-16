@@ -12,13 +12,8 @@
 // on, docs/spec.md's own "the rest do not, because a project is allowed to
 // carry them").
 //
-// `errors` started out always `[]`: sign-off
-// staleness — the one finding docs/spec.md "Tending" marks as an error — was
-// added later, once accepted-record Markdown parsing existed to support it.
-// The field existed from the start rather than being added later, so
-// src/tend/signoff-rot.ts populating it is additive rather
-// than a breaking change to `--json` consumers who already saw an
-// always-empty `errors` array.
+// `errors` is always empty today: every finding is a note (src/tend/
+// analyze.ts's own header says why the field stays).
 
 export interface TendIssue {
   readonly code: string;
@@ -62,8 +57,8 @@ export interface TendDeclarationCoverage {
  * `scannedFeatureDirs` and `readOnlySteps` are the two exceptions to the
  * "cap at three numbers"
  * rule just above, added deliberately rather than by drift: `pattern-unbound`
- * had gone quietly wrong for any project that placed an accepted feature
- * outside `featuresDir` (docs/spec.md's own recommendation), because nothing
+ * had gone quietly wrong for any project that placed a feature outside
+ * `featuresDir`, because nothing
  * in `tend`'s own output said which directories it had actually looked at —
  * `scannedFeatureDirs` is what makes that fixable by reading the output
  * rather than the source. `readOnlySteps` is counted in the same loop as
@@ -92,7 +87,6 @@ export interface TendReport {
  * literals under src/tend/. */
 export const TEND_CODES: ReadonlySet<string> = new Set([
   "additional-feature-dir-missing",
-  "feature-never-signed",
   "fixture-touches-app",
   "fixture-unused",
   "from-unused",
@@ -105,13 +99,29 @@ export const TEND_CODES: ReadonlySet<string> = new Set([
   "schema-field-undescribed",
   "secrets-public-key-unknown",
   "secrets-redact-key-unknown",
-  "signed-feature-unscanned",
-  "signoff-condition-mismatch",
-  "signoff-feature-changed",
-  "signoff-feature-missing",
-  "signoff-record-old-format",
-  "signoff-record-unreadable",
-  "signoff-result-invalid",
-  "signoff-step-missing",
   "step-rationale-missing",
 ]);
+
+/** Codes an earlier release reported and this one does not, each with what
+ * replaced it. `nuka tend --fail-on` refuses these like any unknown code, but
+ * names the replacement: a CI job written against the old code would
+ * otherwise only learn that the code is gone, not what to gate on now. The
+ * nine sign-off codes went away with `nuka accept`; the run summary that
+ * `nuka run` writes, carried on the pull request, is what a person reads
+ * instead. */
+export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map(
+  [
+    "feature-never-signed",
+    "signed-feature-unscanned",
+    "signoff-condition-mismatch",
+    "signoff-feature-changed",
+    "signoff-feature-missing",
+    "signoff-record-old-format",
+    "signoff-record-unreadable",
+    "signoff-result-invalid",
+    "signoff-step-missing",
+  ].map((code) => [
+    code,
+    "was removed with `nuka accept`. A person now reads the run summary `nuka run` writes, on the pull request, and approving the pull request is the sign-off (docs/upgrading.md)",
+  ]),
+);

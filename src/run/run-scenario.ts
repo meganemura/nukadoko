@@ -511,10 +511,10 @@ function stepChunkTitle(stepKeywords: ReadonlyMap<string, string>, pickleStep: P
 // reader of the scenario evidence dir's own file listing) can tell one
 // hook's chunk apart from a step's chunk and from another hook invocation's,
 // the same way `stepChunkTitle` above already lets a step's chunk name
-// itself. Matches `src/accept/render-record.ts`'s own `hookLabel` wording
+// itself. Matches src/report/summary/hook-label.ts's own wording
 // ("Before hook" / "After hook" / "AfterStep hook (step N)") so the same
-// invocation reads the same way in a trace viewer and in an accepted
-// record. ---
+// invocation reads the same way in a trace viewer and in the run
+// summary. ---
 
 function hookChunkTitle(
   type: "before" | "after" | "after_step",

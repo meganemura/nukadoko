@@ -4,11 +4,11 @@ If you can reach the tracker at all (an MCP server, `gh issue view`, a Jira
 CLI, or just the ticket pasted into the prompt), carry across its id, URL,
 title, and acceptance criteria in the reviewer's own words, unparaphrased.
 How you reached it doesn't matter and isn't worth recording; that the
-record can be traced back to what it accepted does.
+feature can be traced back to what it was written for does.
 
 nukadoko has no concept of a ticket, so the feature file is the only place
-that link is recorded, and `nuka accept` freezes the whole file into the
-record read back months later. Don't write a field you couldn't fill: an
+that link is recorded, and the reviewer reads it in the pull request's diff
+next to the run summary. Don't write a field you couldn't fill: an
 empty `Ticket:` line is worse than no line at all, because it reads as a
 link that was lost rather than one that was never available.
 

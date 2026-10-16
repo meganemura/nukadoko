@@ -7,7 +7,6 @@ import yargs from "yargs";
 import type { Arguments, Argv, CommandModule } from "yargs";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { readOwnVersion } from "../version.js";
-import { runAccept } from "./accept.js";
 import { runCheck } from "./check.js";
 import { runClean } from "./clean.js";
 import { runDo } from "./do.js";
@@ -42,7 +41,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `accept`, `harvest`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
+// `clean`, `tend`, `harvest`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -61,9 +60,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // cli/do.ts/cli/run.ts); `tend`'s own analysis lives
 // in cli/tend.ts (thin wiring) and src/tend/* (the actual findings) — the
 // same split, one command answering "can this run", the other "is this
-// still healthy" (docs/spec.md "Tending"); `accept`'s own run-selection and
-// record-rendering logic lives in cli/accept.ts and src/accept/*, the same
-// split; `skill`'s own path resolution logic lives in cli/skill.ts
+// still healthy" (docs/spec.md "Tending"); `skill`'s own path resolution logic lives in cli/skill.ts
 // (`install` removed — see that file's header), the same split;
 // `experimental webmcp-tools`'s own browser launch and tool-reading logic
 // lives in cli/webmcp.ts (thin wiring) and src/webmcp/list-tools.ts (the
@@ -76,8 +73,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // protocol this whole surface is named after, not an auxiliary one
 // (docs/spec.md "MCP servers"); `harvest`'s own draft-rendering and
 // round-trip logic lives in cli/harvest.ts (thin wiring) and
-// src/harvest/* (the actual work), the same split as `check`/`tend`/
-// `accept`; this module only wires their argv shapes and reports their
+// src/harvest/* (the actual work), the same split as `check`/`tend`;
+// this module only wires their argv shapes and reports their
 // exit codes.
 //
 // `--version` reads nukadoko's own package.json via
@@ -214,11 +211,6 @@ interface CleanArgs {
   cache?: boolean;
   export?: boolean;
   json?: boolean;
-}
-
-interface AcceptArgs {
-  feature: string;
-  env?: string;
 }
 
 interface WebmcpToolsArgs {
@@ -911,7 +903,7 @@ export async function runCli(
           describe:
             "exit 1 when a finding with this code is reported (repeatable, or comma-separated); every finding " +
             "stays a note in the output, only the exit code changes. For a job that gates on one note, such as " +
-            "feature-never-signed",
+            "pattern-unbound",
         }) as Argv<TendArgs>,
     handler: async (args: Arguments<TendArgs>) => {
       if (argsFailed) return;
@@ -919,33 +911,6 @@ export async function runCli(
         rootDir,
         json: args.json ?? false,
         failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
-        stdout,
-        stderr,
-      });
-    },
-  };
-
-  const acceptCommand: CommandModule<Record<string, never>, AcceptArgs> = {
-    command: "accept <feature>",
-    describe: "freeze that feature's last green run as a committed acceptance record beside it",
-    builder: (y: Argv) =>
-      y
-        .positional("feature", {
-          type: "string",
-          demandOption: true,
-          describe: "feature file path (no :line; only a whole-feature run can be accepted)",
-        })
-        .option("env", {
-          type: "string",
-          describe: 'target a named environment (omit for the "default" environment)',
-        })
-        .check(rejectRepeatedFlags(["env"])) as Argv<AcceptArgs>,
-    handler: async (args: Arguments<AcceptArgs>) => {
-      if (argsFailed) return;
-      exitCode = await runAccept({
-        rootDir,
-        featureArg: args.feature,
-        env: args.env ?? null,
         stdout,
         stderr,
       });
@@ -1092,7 +1057,6 @@ export async function runCli(
     .command(checkCommand)
     .command(cleanCommand)
     .command(tendCommand)
-    .command(acceptCommand)
     .command(skillCommand)
     .command(mcpToolsCommand)
     .command(experimentalCommand)

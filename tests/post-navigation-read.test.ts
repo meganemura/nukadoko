@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka tend`'s `post-navigation-read` note end to end. One
 // test runs a real chromium navigation
@@ -14,10 +14,10 @@ import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } f
 // calls) through `nuka run`, so the note's own gap math runs against an
 // actual measured step record at least once, rather than guessed - and a
 // second confirms the note disappears once that live step record is
-// removed, sign-off or not. The rest hand-craft one step record's own
+// removed. The rest hand-craft one step record's own
 // `record.json` directly under `.nukadoko/records/steps/` (this finding's
-// own input, and a hand-crafted acceptance-record-shaped markdown file
-// proves that path is never read as one): these exist only to pin down
+// own input; a hand-crafted file in the shape of a sign-off record from a
+// release that still had `nuka accept` proves such a file is never read): these exist only to pin down
 // this finding's own boundary math (a gap far enough apart, a negative gap,
 // a step record with no `actions` at all, a step with no navigation call),
 // which does not need a second browser launch to prove.
@@ -65,8 +65,7 @@ async function runTendJson(rootDir: string): Promise<{ report: Report; exitCode:
 
 /** Writes one step record directly under `<rootDir>/.nukadoko/records/
  * steps/<id>/record.json`, the on-disk shape `nuka do`/`nuka run` produce
- * and src/tend/post-navigation-read.ts now reads (that finding's input,
- * once a committed acceptance record). `stepRecord` is passed straight
+ * and src/tend/post-navigation-read.ts reads. `stepRecord` is passed straight
  * through to `JSON.stringify`, so its own `actions`/`polls` (or lack of
  * either) is exactly what that finding sees. Returns the file's own path,
  * rootDir-relative - the same shape `TendIssue.file` reports. */
@@ -79,14 +78,14 @@ async function writeStepRecordFile(rootDir: string, id: string, stepRecord: Reco
 
 const COMMIT = "0".repeat(40);
 
-/** A hand-assembled acceptance record, the shape a committed record has
- * always had: valid frontmatter (the four required keys), a "## The
+/** A hand-assembled sign-off record, the shape `nuka accept` wrote before
+ * it was removed: valid frontmatter (the four required keys), a "## The
  * scenario as it ran" fenced feature, and one `#### <step>` fenced JSON
- * step record whose `actions` would trigger this finding if it were still
- * read from here. Used only to prove the negative: this finding's own
- * input moved to `.nukadoko/records/steps/`, so no markdown file anywhere
- * in the project is opened by it, however record-shaped that file's own
- * text is. */
+ * step record whose `actions` would trigger this finding if it were
+ * read. Used only to prove the negative: a project upgrading from a
+ * release with `nuka accept` keeps such files, and this finding's input is
+ * `.nukadoko/records/steps/`, so no markdown file anywhere in the project
+ * is opened by it, however record-shaped that file's own text is. */
 function buildLegacyAcceptedRecordText(options: { featurePath: string; stepText: string; stepRecord: Record<string, unknown> }): string {
   const { featurePath, stepText, stepRecord } = options;
   return [
@@ -144,15 +143,6 @@ describe("nuka tend: post-navigation-read", () => {
           "",
         ].join("\n"),
       );
-      // Matches tests/fixtures/tend-signoff-project's own .gitignore:
-      // `.nukadoko` itself (evidence, step records) and any generated record
-      // must never show up as "untracked" once `nuka run` has produced
-      // them, or `nuka accept`'s own dirty-tree check refuses every time.
-      await writeFile(path.join(rootDir, ".gitignore"), [".nukadoko/", "features/*.md", ""].join("\n"));
-      // Committed with the config already in place: `nuka accept` refuses
-      // on a dirty tree, and the config must exist before `initGitRepo`'s
-      // own `git add -A` for it to ever be tracked at all.
-      await initGitRepo(rootDir);
     });
 
     afterEach(async () => {
@@ -168,9 +158,8 @@ describe("nuka tend: post-navigation-read", () => {
       });
       expect(runExit).toBe(0);
 
-      // Never accepted - this note's own input is the live step record
-      // `nuka run` just wrote, not something `nuka accept` has to freeze
-      // first.
+      // This note's own input is the live step record `nuka run` just
+      // wrote.
       const stepIds = await readdir(path.join(rootDir, ".nukadoko", "records", "steps"));
       expect(stepIds).toHaveLength(1);
       const recordPath = path.join(".nukadoko", "records", "steps", stepIds[0]!, "record.json");
@@ -199,7 +188,7 @@ describe("nuka tend: post-navigation-read", () => {
       expect(notes[0]!.message).toContain("Not a judgment");
     });
 
-    it("stops reporting once the live step record is gone, whether or not the scenario has since been signed off", async () => {
+    it("stops reporting once the live step record is gone", async () => {
       const runExit = await runCli(["run", "features/wait-for-late-element.feature"], {
         rootDir,
         stdout: createCaptureSink(),
@@ -207,17 +196,8 @@ describe("nuka tend: post-navigation-read", () => {
       });
       expect(runExit).toBe(0);
 
-      const acceptExit = await runCli(["accept", "features/wait-for-late-element.feature"], {
-        rootDir,
-        stdout: createCaptureSink(),
-        stderr: createCaptureSink(),
-      });
-      expect(acceptExit).toBe(0);
-
-      // Remove every live step record. Whatever the committed acceptance
-      // record embeds is a separate question from what this finding reads
-      // (src/accept/render-record.ts decides the former) - this test only
-      // needs there to be no live step record left for it to read.
+      // Remove every live step record: this test only needs there to be
+      // no live step record left for the finding to read.
       await rm(path.join(rootDir, ".nukadoko", "records", "steps"), { recursive: true, force: true });
 
       const { report } = await runTendJson(rootDir);
@@ -242,7 +222,7 @@ describe("nuka tend: post-navigation-read", () => {
       expect(report.notes.filter((n) => n.code === "post-navigation-read")).toEqual([]);
     });
 
-    it("does not read a navigation-then-call pair embedded in a committed acceptance record, only in a live step record", async () => {
+    it("does not read a navigation-then-call pair embedded in a leftover sign-off record, only in a live step record", async () => {
       await writeFile(
         path.join(rootDir, "legacy-accepted.2026-01-01-0000000.md"),
         buildLegacyAcceptedRecordText({

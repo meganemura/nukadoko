@@ -330,7 +330,7 @@ describe("nuka run applies retention", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("accept-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
       'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 }, allure: {}, messages: {} });\n',

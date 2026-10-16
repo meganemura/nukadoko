@@ -14,7 +14,7 @@ describe("a from key and a docstring on the same line", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("accept-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
     await mkdir(path.join(rootDir, "features", "steps"), { recursive: true });
     await writeFile(
       path.join(rootDir, "features", "steps", "name-is-exactly.ts"),

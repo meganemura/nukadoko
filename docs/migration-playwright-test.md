@@ -203,9 +203,9 @@ No environment is selected: the record says `environment: "default"` and
 step declaring `mutates: true` runs even where `nuka do` would refuse it.
 And no version probe runs, so the record carries no `target_version`.
 
-What still does not cross is the sign-off. `nuka accept` needs a green
-full `nuka run` and its scenario record, and an external record is not
-that. This tool's guarantee is about executions it drove itself, and one
+What still does not cross is the run summary. It is built from a `nuka
+run` and its scenario records, and an external record is neither. This
+tool's guarantee is about executions it drove itself, and one
 it did not drive is one it can only take somebody's word for. So an
 external record is a working record in exactly the sense a `do` record
 is: the material a scenario gets harvested from, never the evidence.

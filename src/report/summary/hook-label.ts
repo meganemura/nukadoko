@@ -1,8 +1,9 @@
 import { hookDisplayTitle, type ScenarioHookRecord } from "../../record/scenario-record.js";
 
 // Responsibility: the one name a Before, After, or AfterStep hook goes by in
-// a Markdown document about a run (the run summary and the acceptance
-// record), so the two never name the same hook differently.
+// the run summary, the Markdown document a person reads about a run.
+// src/run/run-scenario.ts's `hookChunkTitle` uses the same wording, so a hook
+// reads the same way in the summary and in a trace viewer.
 //
 // A switch with a `never` default rather than a ternary: a ternary is what
 // once let `"after_step"` render as "After hook". If the hook type grows a

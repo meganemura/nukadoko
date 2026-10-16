@@ -84,15 +84,12 @@ just until 0.1.
   times; one table per feature with each scenario record's status,
   duration, and, when it failed, the failing step or hook, the first line
   of its error, the last command it ran through `runCommand` that did not
-  exit 0, and the record path; the "Declared vs observed" section a
-  sign-off ends with; and the `nuka run <feature>:<line>` rerun command
+  exit 0, and the record path; the "Declared vs observed" section; and the `nuka run <feature>:<line>` rerun command
   for each failed scenario. Under `--concurrency` the parent writes one
   summary for the whole run. The output-location lines gain a `summary`
   row. A summary that cannot be written is a stderr warning and never
-  changes the exit code; a setup failure writes none. `nuka accept` is
-  unchanged: its "Declared vs observed" rendering now lives in a module
-  both documents share, and its output is byte for byte the same. Before
-  this, nothing a person could read came out of CI except the stderr tail.
+  changes the exit code; a setup failure writes none. Before this, nothing
+  a person could read came out of CI except the stderr tail.
 - **A test checks the names the docs give for commands, flags, finding codes, and headings.**
   `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
   `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the
@@ -178,8 +175,7 @@ just until 0.1.
   `nuka do`, a live session, and the Allure and messages emitters. `nuka
   harvest` compares a read-back line in that same form, so a
   `{biginteger}` line reads back instead of being named as a mismatch.
-  `nuka tend` accepts a sign-off whose frozen result holds that string
-  where the `returns` schema says `z.bigint()`. `nuka do`, in a live
+  `nuka do`, in a live
   session too, turns the stored string back into a bigint where the
   step's `args` schema expects one, for a value `--use` reads from a
   record and for `--args` JSON, which cannot spell a bigint either; a
@@ -231,13 +227,11 @@ just until 0.1.
   is now split after its 。, with no change of wording. A test now fails on a
   line with two or more 。 outside a fenced code block. A table row is
   exempt, because Markdown cannot continue a row on the next line.
-- **Retention, `nuka accept`, and `nuka tend` share one newest-run rule.**
+- **Retention and `nuka tend` share one newest-run rule.**
   Each command had its own copy, and they disagreed on a scenario record whose
   `started_at` does not parse. Retention ranked a run with no parsable start as
   the newest, so with `retention.runs: 1` it removed the newest real run in its
-  place. `nuka accept` stopped with "Invalid time value" on such a run, and one
-  such record made its whole run rank as never newest. All three now read the
-  record as unreadable, as `nuka tend` already did: it belongs to no run, and
+  place. Both now read the record as unreadable, as `nuka tend` already did: it belongs to no run, and
   retention removes it by age.
 - **A failed export write no longer leaves its temp file behind.**
   The Allure writer and the messages emitter write each file to a hidden
@@ -278,13 +272,6 @@ just until 0.1.
   with many steps could draw the same id twice. The second record then reused
   the first one's directory and overwrote its `record.json` without a warning.
   The record directory is now created exclusively, and a taken id is drawn again.
-- **`nuka accept` refuses a run that exited 1 because an AfterAll hook threw.**
-  The scenario records of such a run are all green, so accept froze it although
-  `nuka run` had failed. Accept now freezes a run only when its completion marker
-  (`records/runs/<run_id>/complete.json`) records verdict `passed`, or `failed` with a failed scenario elsewhere in the run, and the
-  refusal says whether the verdict was `failed` or the marker is missing. A run
-  written by an earlier version has no marker and is refused too: run the feature
-  once more before accepting it. See docs/upgrading.md.
 - **Retention no longer removes a run that is still writing, or the run applying it.**
   With two `nuka run` processes overlapping, the one that ended first ranked the
   other as older and removed its records mid-run, and a run that ended after a
@@ -299,21 +286,10 @@ just until 0.1.
   `call(b)` look like a call from inside `a`. The current frame now follows the
   async call chain, so each call is checked against the step that made it.
   Concurrent calls appear as siblings in `calls`, in start order.
-- **The `nuka accept` missing-step-record refusal names the real records directory.**
-  The refusal always said `.nukadoko/records/steps`, so a project with another
-  `stateDir` was pointed at a directory it does not have. The message now names
-  the steps directory next to the scenario record that was read.
-- **A feature source that holds a code fence no longer breaks its sign-off record.**
-  A doc string with a line of three backticks closed the record's fence early, so
-  `nuka tend` read a truncated feature (a false "feature changed") or a json block
-  inside it as a step record. The record now fences the feature with a run longer
-  than any backtick run in it, and the reader matches the opener's length. Records
-  written before this keep their three-backtick fence and still read the same.
 - **The clean-tree check sees untracked files whatever `status.showUntrackedFiles` says.**
   With `status.showUntrackedFiles=no` in git config, `git status` hid untracked
-  files, so a tree with new files read as clean in the scenario record's `git.clean`
-  and in the `nuka accept` dirty-tree check. Both calls now pass
-  `--untracked-files=normal`.
+  files, so a tree with new files read as clean in the scenario record's
+  `git.clean`. The call now passes `--untracked-files=normal`.
 - **`ctx.request()` logs a call that throws, and logs the URL that was requested.**
   A call that threw (a refused connection, `failOnStatusCode` on a 500) wrote no
   http.jsonl line although `observed` counted it, and `url` was the string the
@@ -351,16 +327,12 @@ just until 0.1.
   The `nuka check` entry lacked the part, serial-tag, parameter-type,
   capture-syntax, table/docstring, env-file, explore, and other findings that
   `nuka check --codes` prints. The `nuka tend` entry lacked
-  `signoff-condition-mismatch`, `post-navigation-read`, and
-  `repeated-scenario-prefix`, and did not say that unreadable and old-format
-  records are stale-record findings. Both entries now cover them, in the
+  `post-navigation-read` and `repeated-scenario-prefix`. Both entries now cover them, in the
   English and the Japanese spec.
 - **The acceptance skill matches what `nuka check` and `nuka tend` print.**
   `writing-steps.md` said a line with a missing quote is reported as
   `undefined-step` "rather than naming the missing quotes", but check adds a
-  hint with the rewritten line when exactly one pattern fits. `maintenance.md`
-  named `signoff-rot`, which is not a tend code; it now names the
-  `signoff-*` stale-record codes.
+  hint with the rewritten line when exactly one pattern fits.
 - **`nuka check` reports `capture-type-mismatch` for every capture that always fails args validation.**
   It used to compare only `{int}`/`{float}` with a string field and
   `{string}`/`{word}` with a number field. `{double}`, `{long}`, `{short}`, and
@@ -510,14 +482,11 @@ just until 0.1.
   change is in docs/upgrading.md.
 - **A Date or URL in a step result is recorded as its JSON form.**
   `redact` walked every object with `Object.entries`. A Date and a URL
-  have no enumerable properties, so the step record, the sign-off, and
-  the Allure attachment stored `{}`. `redact` now redacts whatever
+  have no enumerable properties, so the step record and the Allure
+  attachment stored `{}`. `redact` now redacts whatever
   `toJSON()` returns, and still replaces a loaded secret in that text,
   including the percent-encoded spelling and the JSON-escaped spelling.
-  A JSON number equal to a numeric secret stays a number. `nuka tend`
-  accepts a frozen result when the stored JSON is what `JSON.stringify`
-  would write for a value the current returns schema accepts, so an ISO
-  string still passes `z.date()`.
+  A JSON number equal to a numeric secret stays a number.
 - **Repeated config loads in one process stay at the cost of one load.**
   `loadConfig` went through tsx's `tsImport` on every call, and each call
   left a loader on the chain. `recordStep` loads the config once per step,
@@ -609,12 +578,6 @@ just until 0.1.
   clamped it to 1ms, so the step failed as a timeout. `defineStep` now
   throws `InvalidStepDefinitionError` for those shapes. `nuka check`
   reports the throw as `step-file-import-failed`. A valid step is unchanged.
-- **`nuka tend` does not call a cited step missing when its file failed to import.**
-  A step file that fails to import used to come out as `signoff-step-missing`
-  and exit 1, beside the `import-failures-unseen` note. The definition may
-  still be in that file. `signoff-step-missing` is withheld for the whole
-  run while any step file failed to import, the same way `nuka check`
-  withholds `undefined-step`. The note still does not change the exit code.
 - **Writes through `page.request` and `context.request` are measured.**
   A step that calls `page.request.delete` or `context.request.post` used to
   leave `observed.http_writes` at 0 and write no http.jsonl line, so a wrong
@@ -662,10 +625,9 @@ just until 0.1.
   before its POST finished left the POST on the next step. `observed` had
   already counted the write on the step that sent it. The log path is now
   taken when the request starts.
-- **`nuka accept` and `nuka check` name a bad feature argument for what it is.**
-  A `:line` suffix, a directory, and an unreadable file all used to print
-  "feature file not found". `accept` now refuses `:line` the way `check`
-  already does. Both commands tell you to pass a `.feature` or `.md` file,
+- **`nuka check` names a bad feature argument for what it is.**
+  A directory and an unreadable file used to print "feature file not
+  found". It now tells you to pass a `.feature` or `.md` file,
   or to use `nuka run` for a directory, when the path is a directory. Any
   other read error keeps its own text. A path that is not there still
   reports a missing file.
@@ -679,8 +641,8 @@ just until 0.1.
   Both fields were written to records but defined nowhere in the spec. It now
   says that `session_execution` is an execution's 1-based position in a live
   session and is absent otherwise, and that `git` holds the commit and the
-  cleanliness of the working tree when the run started, which `nuka accept`
-  checks. The Japanese spec matches.
+  cleanliness of the working tree when the run started. The Japanese spec
+  matches.
 - **`recordStep` names the real cause when a `use` id cannot be matched.**
   A `use` id recorded by `nuka do`, or by another process, names a step this
   process never ran through `recordStep`, so `recordStep` has no name for
@@ -696,7 +658,7 @@ just until 0.1.
   version probe runs. They now say all four. The Japanese files match.
 - **The spec's CLI summary names every command and flag the CLI has.**
   It listed `nuka session list|clear` only, and left out `session start` and
-  `session stop`, `check --codes` and `check --json`, `accept --env`,
+  `session stop`, `check --codes` and `check --json`,
   `session list --json`, `session clear --env`, and `--env` and `--session`
   on `run` and `do`. It now lists them, with `--idle-timeout` and its default
   of 900 seconds. The acceptance skill names that default too. The Japanese
@@ -728,8 +690,7 @@ just until 0.1.
   It said typed step names and ids complete in the shell (the CLI has no
   completion), said `nuka check` passes a pattern with a bare `(` (it reports
   the feature line that would match if escaped, with a hint), said sessions
-  use no daemon (`nuka session start` starts one), and pointed to
-  `signoff-record-unreadable` "above" where nothing described it. Each
+  use no daemon (`nuka session start` starts one). Each
   statement now matches the CLI, in the English and the Japanese spec.
 - **The upgrading guide names the release that carried the 0.12.0 changes.**
   The heading "0.12.0 to the next release" stayed after 0.13.0 shipped those
@@ -751,6 +712,29 @@ just until 0.1.
   fact beside it. Both comments now say that.
 
 ### Breaking
+
+- **BREAKING: `nuka accept` and every sign-off finding are removed; the run summary replaces them.**
+  No project kept the `*.feature.*.md` records `nuka accept` wrote, and
+  the command required a clean tree, a run at HEAD, a whole-feature run,
+  no sharding, a hand-written PR check, and a weekly tend job. Approving a
+  pull request beside the run summary `nuka run` writes makes the same
+  claim, bound to the commit by the forge. Removed: the `accept` command
+  (`nuka accept <feature>` now fails as an unknown argument) and the
+  `nuka tend` codes `feature-never-signed`, `signed-feature-unscanned`,
+  `signoff-condition-mismatch`, `signoff-feature-changed`,
+  `signoff-feature-missing`, `signoff-record-old-format`,
+  `signoff-record-unreadable`, `signoff-result-invalid`, and
+  `signoff-step-missing`. `nuka tend --fail-on` with one of those codes
+  exits 1 before analyzing and names the run summary as the replacement.
+  `nuka tend` no longer reads `*.feature.*.md` files, so old records are
+  inert; every tend finding is now a note, so `nuka tend` exits 0 unless
+  `--fail-on` fires, and `--json` keeps `errors` as an empty array. A
+  `nuka run <feature>:<line>` notice now says the run summary covers only
+  the selected scenarios instead of saying the run cannot be accepted.
+  README, the spec ("Sign-off" becomes "Review"), the CI guide, the skills,
+  `llms.txt`, and the package description now describe the run summary a
+  pull request carries instead of sign-off. docs/upgrading.md says what to
+  change.
 
 - **`ctx.evidence.attach` and `ctx.evidence.path` no longer replace a harness file.**
   A name of `record.json`, `final.png`, `trace.zip`, or `http.jsonl` is

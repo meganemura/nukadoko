@@ -55,7 +55,7 @@ export default defineConfig({
     // `beforeEach`; under a loaded machine that spawn exceeds 10s and the
     // file fails with a hook timeout that has nothing to do with what it
     // was testing. Three separate runs hit exactly that on the same three
-    // sign-off files while other work was running alongside, and all three
+    // git-backed files while other work was running alongside, and all three
     // passed standalone straight afterwards. Leaving the test budget at
     // 60s while the hook budget stays at 10s means contention keeps
     // arriving as a failure in whichever file happens to be unlucky.

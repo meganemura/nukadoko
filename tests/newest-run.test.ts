@@ -3,8 +3,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { groupRunsNewestFirst, type RunGroup } from "../src/record/newest-run.js";
 
-// Responsibility: the newest-run rule retention, `nuka accept`, and
-// `nuka tend` share, through its one grouping function.
+// Responsibility: the newest-run rule retention and `nuka tend` share, through its one grouping function.
 
 interface Record {
   readonly id: string;

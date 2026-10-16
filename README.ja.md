@@ -2,7 +2,7 @@
 
 > 実装は、いま生成されるようになった。
 > それを検査するものは、そうであってはならない。
-> 自然言語の受け入れ基準と、実際に走ったものとのあいだをつなぐ、型付き step の契約とツールが計測する step record。
+> 自然言語の受け入れ基準と、実際に走ったものとのあいだをつなぐ、何かが走る前に検査される型付き step の契約、ツールが計測する step record、そして pull request が運ぶ run サマリ。
 
 > 原文は README.md。
 > 相違があれば原文が正。
@@ -12,6 +12,8 @@ Varar 式の Markdown oath も、同じ型付き step と step record の上に�
 この record は agent の報告に頼らず、ツールが計測します。
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
+どの run も、CI が pull request に投稿する Markdown の run サマリで終わります。
+人は差分の中の `.feature` とその横のサマリを読み、pull request の承認が sign-off になります。
 
 ## Install
 
@@ -147,16 +149,7 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 ただし compat の step には型付きの契約がなく、`nuka check` にはここで feature の行を突き合わせる相手がありません。
 `nuka do` は、そうした step を名前で実行することを一切拒否します。
 
-`check` は安価な静的ゲートであり、`run` は step record の証跡を残し、`accept` は 1 回の green な実行を feature の隣に置く記録として凍結し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
-
-acceptance record は `<feature-filename>.<date>-<sha>.<environment>.<browser>.md` という名前の Markdown ファイルで、feature の隣に書かれます。
-一覧では、その feature の直後に並びます。
-このファイルには feature の全文、scenario record、そして evidence を取り除いた各 step record が入ります。
-さらに `Declared vs observed` という節があり、`mutates: false` と宣言しながら書き込みを行ったと計測された各 step を一覧にします。
-これにより、レビュアーは宣言と計測の食い違いを自分で導き直さずに確認できます。
-sign-off は、宣言された組ではなく、run 中に計測された 1 組の `(environment, browser)` に適用されます。
-Chromium は accept 済みで firefox はまだ、という状態は正常であり、古びた状態ではありません。
-詳しくは [Sign-off](docs/spec.ja.md#sign-off) を参照してください。
+`check` は安価な静的ゲートであり、`run` は step record の証跡と pull request が運ぶ run サマリを残し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
 ## Markdown oaths
 
@@ -165,7 +158,7 @@ Chromium は accept 済みで firefox はまだ、という状態は正常であ
 Gherkin は、同じ型付き step と step record に対する 1 つの表側です。
 Varar 式の Markdown oath は、もう 1 つの表側です。
 `nukadoko.config.ts` の `oaths` は、ファイル、またはそのディレクトリを名指しします。
-デフォルトは `[]` なので、sign-off の記録とこの README は scenario ではありません。
+デフォルトは `[]` なので、この README は scenario ではありません。
 
 引用またはフェンスされたコードブロックの外にある文は step であり、`.feature` の行と同じ `defineStep` の pattern にマッチします。
 どの pattern にもマッチしない文は、書かれた行の `undefined-step` です。
@@ -261,7 +254,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、sign-off(`nuka accept`)、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、モデルと関係(`nuka explore`)、MCP のツール一覧(`nuka mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、Markdown の run サマリ、tending(`nuka tend`)、scenario の harvesting(`nuka harvest`)、モデルと関係(`nuka explore`)、MCP のツール一覧(`nuka mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と、Varar の残り(step の戻り値と文中の語句の比較、すべての方言)です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
@@ -477,7 +470,7 @@ step record は実行が何をしたかを示しますが、assertion がいま�
 
 nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
 
-- **acceptance** はチケットの受け入れ基準を、コミットされた記録まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、`nuka accept` します)。
+- **acceptance** はチケットの受け入れ基準を、人が承認できる pull request まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、feature とその run サマリを渡します)。
 - **migration** は cucumber-js のスイートを 2 段階で移行させ、どの違いがレシピではなく要点なのかを説明します。
 
 ```sh
@@ -514,7 +507,7 @@ evidence と `observed` の件数が付くのは、その glue がブラウザ�
 ただし、nukadoko は return 値を捨て、step record には `result: null` が入ります。
 バリデーション済みの result が必要な機能は使えません。
 `nuka check` には feature と比較する契約がなく、`from` は依存関係を宣言できません。
-sign-off が確認するのは step の実行だけであり、宣言された契約が保たれたことではありません。
+green の run サマリが確認するのは step の実行だけであり、宣言された契約が保たれたことではありません。
 これらの制限が、各 step を昇格させる理由です。
 
 import を元に戻せば、ただの cucumber-js スイートに戻ります。
@@ -670,7 +663,7 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 10 コアの機では worker 4 個が 8 個に勝ちました。
 配る単位は feature ファイル全体なので、1 つのファイルの中の作業は分割できません。
 少数の大きなファイルでできたスイートは、同じ scenario が多数のファイルに散っている場合より得が小さくなります。
-1 つのスイートを複数の invocation に分けるシャーディングは、record が複数の run id にまたがり、`nuka accept` が 1 つの run として読めなくなるため利用できません。
+1 つのスイートを複数の invocation に分けるシャーディングは、record が複数の run id にまたがり、1 つの run サマリでは記述できなくなるため利用できません。
 並列実行によって `nuka run` は速くなりましたが、ブラウザを起動するため、依然としてコストの高いゲートです。
 したがって、上で述べた分け方は変わりません。
 スイートが大きくなっても PR ゲートを速く保つため、あらゆる PR で `nuka check` を実行し、merge、deploy、夜間の build で `nuka run` を実行します。
@@ -722,8 +715,8 @@ nukadoko は、きゅうりを漬ける発酵させた米糠の床です。
 `nuka check` が問うのは、プロジェクトがいますぐ run できるかであり、あらゆる run の前に読まれることを意図しています。
 `nuka tend` が問うのは別の問い、すなわちこれのどこかが腐りつつあるかです。
 詳しくは [Tending](docs/spec.ja.md#tending手入れ) を参照してください。
-凍結された result が、その step の現在のスキーマをもはや通らない sign-off。
-その記録はいまも数えられ続けながら、もはや自分が述べている内容を言い表していません。
+import に失敗した step ファイル。
+そのせいで、あらゆる件数からその step が黙って抜け落ちます。
 何にも行使されない `from` 宣言。
 description のないスキーマフィールドは、ファイルを見る人にはそれで問題なく読めても、2 つの step のどちらかを選ぶ agent には何も伝えません。
 そのどれも run を止めはしませんが、だからこそどこか他の場所で言われる必要があったのです。
@@ -742,15 +735,14 @@ run サマリを読んで、何がどの commit で走ったかを確かめま�
 commit、environment、ブラウザ、feature ごとの表(各 scenario の状態、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
 GitHub Actions では設定なしでジョブのサマリページに載り、`--summary <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
-feature の隣に record をコミットしておきたいチームは、green の run の後で `nuka accept` を実行します。
-その sign-off の `.md` は、feature の本文、scenario ごとのサマリ表、そして同じ末尾の節を運びます。
-その step の件数は、冒頭の Condition 節に先に書かれています。
+PR の承認が sign-off です。
+forge がすでに CI のチェックと承認を 1 つの commit に結び付けるので、nukadoko は feature の隣に独自の記録を書きません([レビュー](docs/spec.ja.md#レビュー)を参照)。
 
 ## Design
 
 **設計**
 
-設計の全体、すなわち課題設定、型付き step、キーワードの意味論、record、session/environment/secret、sign-off、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
+設計の全体、すなわち課題設定、型付き step、キーワードの意味論、record、session/environment/secret、レビュー、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
 
 English: [README.md](README.md) / [docs/spec.md](docs/spec.md)
 

@@ -84,7 +84,6 @@ import { promisify } from "node:util";
 //
 const SUITE_FEATURES = [
   "features/nuka-run.feature",
-  "features/acceptance-lifecycle.feature",
   "features/same-scenario-across-runs.feature",
   "features/playwright-suite.feature",
 ];

@@ -5,7 +5,7 @@ import { runDir } from "./run-exports.js";
 // Responsibility: the completion marker one `nuka run` leaves in its own
 // `records/runs/<run_id>/` when it ends, holding the run's verdict and its
 // end time. Retention reads it to tell a finished run from one that is still
-// writing, and `nuka accept` reads it for the verdict.
+// writing.
 //
 // Why a marker and not the scenario records: a scenario record says how one
 // scenario went. It cannot say the run is over (a later scenario may still
@@ -15,9 +15,9 @@ import { runDir } from "./run-exports.js";
 // says so, last.
 //
 // A run that was killed, or written before this file existed, has no
-// marker. Both readers treat that as "not proven finished", never as
-// "failed": retention keeps such a run until it is older than
-// `retention.adHocDays`, and `nuka accept` refuses it.
+// marker. Retention treats that as "not proven finished", never as
+// "failed", and keeps such a run until it is older than
+// `retention.adHocDays`.
 
 export const RUN_MARKER_FILE_NAME = "complete.json";
 

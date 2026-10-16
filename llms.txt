@@ -1,8 +1,8 @@
 # nukadoko
 
-Typed Gherkin / step contracts with tool-measured step records. Scenarios can fail statically before run; acceptance freezes a green run. Declaration (contracts, `mutates`) is separate from observation (what the tool recorded).
+Typed Gherkin / step contracts with tool-measured step records. Scenarios can fail statically before run; every run writes a Markdown run summary that a pull request carries. Declaration (contracts, `mutates`) is separate from observation (what the tool recorded).
 
-It is not an untyped free-form agent runner, and it is not a substitute for human sign-off of accept.
+It is not an untyped free-form agent runner, and it is not a substitute for human review: a person reads the `.feature` in the diff and the run summary, and approving the pull request is the sign-off.
 
 Agent skills: [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md), [skills/migration/SKILL.md](skills/migration/SKILL.md). Each entry says when to use it and which `references/` file beside it holds the procedure. `nuka skill path` prints the skills directory.
 
@@ -13,8 +13,7 @@ Installed package: `node_modules/nukadoko/skills/...` (this file at `node_module
 - `nuka init` — project setup with self-check
 - `nuka steps` / `nuka describe <name>` / `nuka scaffold <name> [--pattern <text>] [--then]` — vocabulary and stubs
 - `nuka check [feature]` — static checks before run
-- `nuka do <name>` / `nuka run <feature..>` — execute under contracts; records on stdout
-- `nuka accept <feature>` — freeze the last green run as an acceptance record
+- `nuka do <name>` / `nuka run <feature..>` — execute under contracts; records on stdout; `run` also writes a Markdown run summary (`--summary <path>` for a PR comment)
 - `nuka harvest <step-record-ids..>` — draft a feature from `do` record ids
 - `nuka explore <file> [--json]`: run a model or a relation against request-only steps; prints the shortest failing scenario, or one JSON object with `--json`
 - `nuka session` / `nuka clean` / `nuka tend` — sessions, cleanup, rot signals

@@ -336,45 +336,36 @@ The edits above are yours to make and discard — this directory's committed
 step files stay v1-shaped, so restart the app without `--v2` (or just
 re-clone) and you're back to Part 1's starting point.
 
-## Part 3 — sign-off
+## Part 3 — review
 
 Parts 1 and 2 end at a green run. The claim this tool exists for is one
-step further: that a scenario was green at a named commit, frozen in a file
-a reviewer can read without the state directory. That is `nuka accept`.
-
-It needs two things a walkthrough copy inside this repository does not have
-by default: the example under its own git history, and a clean tree at the
-commit the run happened on. So do this part in a copy of `examples/todo`
-that you have `git init`ed and committed, with nukadoko installed as a
-dependency (the shorthand from "Prerequisites" no longer applies there).
-Gitignore the state directory before the first commit: `nuka init` does
-that for a new project, and a copy made by hand has to do it itself, or
-`accept` refuses because the run just left `.nukadoko/` in the tree.
+step further: that a scenario was green at a named commit, in a form a
+reviewer can read without the state directory. Every `nuka run` already
+writes that form, the run summary:
 
 ```sh
-echo '.nukadoko/' >> .gitignore
-git add -A && git commit -m "todo example"
-nuka run features/todo.feature          # every scenario green
-nuka accept features/todo.feature       # freezes that run beside the feature
+nuka run features/todo.feature   # every scenario green
 ```
 
-`accept` refuses unless the most recent full run of the feature is green,
-the working tree is clean, and HEAD is the commit that run recorded. It
-writes `features/todo.feature.<date>-<sha>.default.no-browser.md`: the feature's
-own text, one summary table per scenario (step, status, time, `mutates`,
-reads, writes), each step's validated `args` and `result`, and a closing
+The `summary` line `nuka run` prints on stderr names the file, under
+`.nukadoko/records/runs/<run_id>/summary.md`. It holds the
+run's verdict and scenario counts; the condition (the commit, whether the
+tree had uncommitted changes, the environment, the browsers, and the
+times); one table per feature, with a row per scenario; and a closing
 "Declared vs observed" section listing any step that declared
-`mutates: false` while measured making a write; the Condition section at
-the top states that count, so a reader knows whether to scroll to the
-list. `no-browser` is in the
-name because every step here goes through `request`, never `page`; a
-browser suite gets `chromium` there instead. Commit the `.md` with the
-feature: it is the durable artifact, and the `.nukadoko/` records it was
-built from are not.
+`mutates: false` while measured making a write. Every step here goes
+through `request`, never `page`, so the browsers line reads "none
+launched". The summary is built only from what the run measured, so the
+`.nukadoko/` records stay out of git and the summary is what a person
+keeps.
 
-A reviewer who writes no code opens two files in the PR: the `.feature`,
-to check it says what the ticket meant, and this `.md`, to check what ran.
-Nothing else is theirs to read.
+In CI, `nuka run --summary <path>` writes a copy that a workflow step posts
+on the pull request, and under GitHub Actions the job's own summary page
+shows it with no configuration (`docs/ci.md` has the workflow). A reviewer
+who writes no code then reads two things in the PR: the `.feature` in the
+diff, to check it says what the ticket meant, and the run summary beside
+it, to check what ran. Approving the pull request is the sign-off; nothing
+else is written or committed for it.
 
 To tie a feature to a ticket, write the ticket in the feature itself; there
 is no separate field, on purpose. A tag or a description line above the
@@ -386,10 +377,6 @@ Feature: Todo list
   Acceptance criteria for ACME-123 (add, complete, bulk add).
 ```
 
-The tag reaches the Allure report as a label, and the record embeds the
-feature text, so the ticket travels with both. `ACME-123` here is a
-placeholder, not a real ticket.
-
-After the record exists, `nuka check` reports `signoff-feature-changed` if
-the feature text drifts from what was accepted, and `nuka tend` reports
-`feature-never-signed` for any feature that still has no record.
+The tag reaches the Allure report as a label, and the feature text is in
+the pull request's diff, so the ticket travels with both. `ACME-123` here
+is a placeholder, not a real ticket.

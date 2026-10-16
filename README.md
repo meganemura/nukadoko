@@ -3,7 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/nukadoko?logo=npm)](https://www.npmjs.com/package/nukadoko)
 
 > Implementations are generated now. What checks them cannot be. Typed step
-> contracts and tool-measured step records between natural-language
+> contracts checked before anything runs, step records the tool measured,
+> and a run summary the pull request carries, between natural-language
 > acceptance criteria and what actually ran.
 
 nukadoko runs Gherkin scenarios under typed step contracts and writes a
@@ -12,7 +13,10 @@ well, as another front over those same typed steps and step records. The
 tool measures this record instead of relying on an agent's report. The
 criteria remain in the language used by the people who set them.
 Everything between those sentences and the system under test is typed,
-checked before execution, and reviewable in a diff.
+checked before execution, and reviewable in a diff. Every run ends in a
+Markdown run summary that CI posts on the pull request: a person reads the
+`.feature` in the diff and the summary beside it, and approving the pull
+request is the sign-off.
 
 ## Install
 
@@ -153,29 +157,16 @@ import (see [The compat door](#the-compat-door) below). But a compat step
 has no typed contract, so `nuka check` has nothing here to hold a feature
 line against, and `nuka do` refuses to run one by name at all.
 
-`check` is the cheap static gate; `run` leaves the step record trail; `accept`
-freezes one green run as a committed record beside its feature; `tend` is
-the periodic one, and the only one you are meant to *not* run before every
-change.
-
-The acceptance record is a Markdown file named
-`<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, written beside
-the feature, where a listing shows it right after that feature. It contains the full feature text, the scenario record, and
-each step record with its evidence removed. It also contains a
-`Declared vs observed` section. This section lists each step that declared
-`mutates: false` but was measured making a write. A reviewer can therefore
-see each disagreement without deriving it again. A sign-off applies to one
-`(environment, browser)` pair measured during the run, not to a declared
-pair. A state in which Chromium is accepted but firefox is not yet accepted
-is normal, not stale. See
-[Sign-off](docs/spec.md#sign-off).
+`check` is the cheap static gate; `run` leaves the step record trail and
+the run summary a pull request carries; `tend` is the periodic one, and the
+only one you are meant to *not* run before every change.
 
 ## Markdown oaths
 
 Gherkin is one front for the same typed steps and step records. A
 Varar-style Markdown oath is another.
 `nukadoko.config.ts`'s `oaths` names the files, or a directory of them.
-The default is `[]`, so a sign-off record and this README are not scenarios.
+The default is `[]`, so this README is not a scenario.
 
 A sentence outside a blockquote or a fenced code block is a step, matched
 by the same `defineStep` patterns a `.feature` line uses. A sentence no
@@ -281,7 +272,7 @@ more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, sign-off (`nuka accept`), tending (`nuka tend`), scenario
+emitters, the Markdown run summary, tending (`nuka tend`), scenario
 harvesting (`nuka harvest`), models and relations (`nuka explore`), the
 MCP tool listing (`nuka mcp-tools`), Varar-style Markdown oaths (a second
 front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
@@ -524,8 +515,9 @@ nukadoko ships two skills following the
 Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
 
 - **acceptance.** Takes a ticket's acceptance criteria through to a
-  committed record: read the vocabulary, scaffold what's missing, write the
-  feature, run it green, `nuka accept` it.
+  pull request a person can approve: read the vocabulary, scaffold what's
+  missing, write the feature, run it green, and hand over the feature and
+  its run summary.
 - **migration.** Moves a cucumber-js suite across in two stages, and
   explains which differences are the point rather than listing recipes.
 
@@ -566,8 +558,8 @@ counts follow once its glue opens the browser or request through
 [docs/migration.md](docs/migration.md)). However, nukadoko discards its return value, and its
 step record contains `result: null`. Features that require a validated
 result remain unavailable. `nuka check` has no contract to compare with a
-feature, `from` cannot declare a dependency, and a sign-off confirms only
-that the steps ran. It does not confirm that stated contracts held. These
+feature, `from` cannot declare a dependency, and a green run summary
+confirms only that the steps ran. It does not confirm that stated contracts held. These
 limits are the reasons to promote each step.
 
 Switching the import back returns a plain cucumber-js suite. That is a
@@ -738,7 +730,7 @@ workers beat eight. The distribution unit is a whole feature file, so the
 run cannot divide work within one file, and a suite in few large files
 gains less than the same scenarios spread across many. Sharding one suite across
 multiple invocations is not available because its records would span
-multiple run ids, which `nuka accept` cannot read as one run. Parallel
+multiple run ids, which no single run summary can describe. Parallel
 execution makes `nuka run` faster, but it still starts browsers and remains
 the more expensive gate. The split above therefore stays the same: run
 `nuka check` on every PR, and run `nuka run` on merge, deploy, or a nightly
@@ -796,10 +788,9 @@ a write-once asset), and it is not only a remark about the name.
 
 `nuka check` asks whether the project can run right now, and is meant to be
 read before every run. `nuka tend` asks the other question: is any of this
-rotting (see [Tending](docs/spec.md#tending)). A sign-off whose frozen
-result no longer passes its step's current schema, so the record is still
-counted while no longer meaning what it
-says. A `from` declaration nothing exercises. A schema field with no
+rotting (see [Tending](docs/spec.md#tending)). A step file that failed to
+import, so every count silently leaves its steps out. A `from` declaration
+nothing exercises. A schema field with no
 description reads fine to a person looking at the file and tells the agent
 choosing between two steps nothing at all. None of those stop a run, which
 is exactly why they needed somewhere else to be said: printed before every
@@ -821,17 +812,15 @@ and failing step, a closing section naming any step that declared
 `mutates: false` while measured making a write, and the command that reruns
 each failed scenario. On GitHub Actions it lands on the job's summary page
 with no configuration, and `--summary <path>` writes a copy a CI step can
-post as a PR comment ([docs/ci.md](docs/ci.md)).
-
-A team that wants a record committed beside the feature runs `nuka accept`
-after a green run. That sign-off `.md` carries the feature's own text, one
-summary table per scenario, and the same closing section, with the count of
-those steps already stated in the Condition section at the top.
+post as a PR comment ([docs/ci.md](docs/ci.md)). Approving the PR is the
+sign-off: the forge already binds the CI check and the approval to one
+commit, so nukadoko writes no record of its own beside the feature (see
+[Review](docs/spec.md#review)).
 
 ## Design
 
 The full design (problem statement, typed steps, keyword semantics,
-records, sessions/environments/secrets, sign-off, roadmap, and honest
+records, sessions/environments/secrets, review, roadmap, and honest
 limits) lives in a single place: [docs/spec.md](docs/spec.md).
 
 ## License

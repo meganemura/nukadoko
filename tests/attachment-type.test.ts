@@ -46,7 +46,7 @@ describe("a table or docstring attached to a key of the wrong type", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("accept-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
     await mkdir(path.join(rootDir, "features", "steps"), { recursive: true });
   });
 

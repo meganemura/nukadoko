@@ -15,9 +15,9 @@ import type { UsedEntry, UsedEntryWithResult } from "../record/types.js";
 //
 // Each entry's shape is `{ step_record_id, step }`: a step record
 // id that has to be resolved against other files to be read is a worse
-// acceptance record than one that is legible alone, and the file it would be
-// resolved against (another step record) is a local working record a sign-off
-// long outlives. `step_record_id` names the upstream step record's own id
+// record than one that is legible alone, and the file it would be
+// resolved against (another step record) is a local working record that
+// retention may already have removed. `step_record_id` names the upstream step record's own id
 // (`step-...`), the same field name (and the same value) the step record it
 // points at carries on itself — `step` is the step name that step record
 // itself carries.

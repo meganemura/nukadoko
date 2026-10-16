@@ -1,7 +1,7 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a signed-off Gherkin scenario, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka explore` should run.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka explore, nuka check, nuka run, nuka accept, nuka tend).
+description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka explore` should run.
+compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka explore, nuka check, nuka run, nuka tend).
 license: MIT
 ---
 
@@ -9,18 +9,20 @@ license: MIT
 
 ## What this is for
 
-A sign-off records that a scenario ran green at one commit. Signing off
-and running the scenario in CI answer different questions: sign-off for
-that one commit, CI for whether the criteria still hold today. nukadoko
-never re-runs a signed scenario on its own. Typed steps take `page` and
+A person approves a change by reading two things on its pull request: the
+feature file in the diff, and the run summary CI posts beside it. The
+summary says that the scenarios ran green at one commit; approving the pull
+request is the sign-off. nukadoko writes no separate record of that
+approval. Whether the criteria still hold later is a question for the next
+CI run, not for the old summary. Typed steps take `page` and
 `request` from the fixture bag. A cucumber-js World subclass assigns
 `this.page` and `this.request`, and that assignment stays unmeasured
 (the migration skill).
 
 This skill is the path from whatever you start with (raw prose, general
 acceptance criteria, a scenario ready to write, or a path already
-explored one `nuka do` call at a time) through that sign-off and the
-placement decision right after it. Open the reference named on a step
+explored one `nuka do` call at a time) through that pull request and the
+placement decision that goes with it. Open the reference named on a step
 before doing that step. This file is the order, not the procedure.
 
 ## Before the first command
@@ -28,7 +30,7 @@ before doing that step. This file is the order, not the procedure.
 The person watching has not decided to trust this tool yet. Before the
 first command, say in two or three sentences what the loop is for and
 what it will touch. After that, name anything that costs time, changes
-state, or outlives the command, one line each. Four of those surprise
+state, or outlives the command, one line each. Three of those surprise
 people:
 
 - **`nuka do` on a `mutates: true` step** changes real state. That one
@@ -41,8 +43,6 @@ people:
   `--idle-timeout` sets how long it waits, in seconds (900 when
   omitted). A value the process cannot keep is refused before it starts
   (`references/exploring.md`).
-- **`nuka accept`** writes a sign-off file meant to be committed. It is
-  the only artifact here that claims anything.
 
 Compat glue that declares a World reaches `page` and `request` through
 `await this.openPage()` and `await this.openRequest()`. `defineWorld`
@@ -128,10 +128,7 @@ proves the wrong thing.
    coerces the capture is not `capture-type-mismatch`
    (`references/writing-steps.md`). Compat glue that
    declares a done() callback is `done-callback-arity`.
-5. Commit. A run can only be frozen on a clean tree at the commit still
-   checked out. Debugging against a dirty tree is fine; it cannot be
-   accepted.
-6. `nuka run <feature>` until green. `references/running.md`. When it
+5. `nuka run <feature>` until green. `references/running.md`. When it
    fails, stderr names the failed step's error, its step record path, and
    a `rerun` command per failed scenario. Diagnose from that step record
    before repeating the run: `references/diagnosing.md`. A compat World that
@@ -140,18 +137,19 @@ proves the wrong thing.
    finalized. There is no step record for that failure. `run` needs a
    target; `check` walks the project when given none. Every run also
    writes a Markdown run summary for the reviewer (`--summary <path>` for
-   a copy a CI step posts on the pull request).
-7. `nuka accept <feature>`, then commit the record it wrote.
-   `references/running.md`. A refusal names the condition and the next
-   command: `references/diagnosing.md` ("When accept refuses").
-8. Run `nuka tend` once while reporting the sign-off, then stop.
+   a copy a CI step posts on the pull request). The summary states whether
+   the tree had uncommitted changes, so commit before the run you report.
+6. Push the feature and its steps, and open the pull request. CI runs
+   the feature and posts the run summary on it (`docs/ci.md` in the
+   nukadoko package). A person reads the feature in the diff and the
+   summary beside it; approving the pull request is the sign-off.
+7. Run `nuka tend` once while reporting the pull request, then stop.
    `references/maintenance.md`.
-9. Decide where the feature belongs. See "What not to do".
+8. Decide where the feature belongs. See "What not to do".
 
 ## What not to do
 
-- **Decide where the feature belongs, right after signing off** (`nuka
-  accept`'s own stderr asks the same question as a reminder). A feature
+- **Decide where the feature belongs, in the same pull request.** A feature
   describing the change stays outside `featuresDir`: name its directory
   in `additionalFeatureDirs` in `nukadoko.config.ts` so `nuka check` and
   `nuka tend` still see the steps it binds, instead of reporting them
@@ -176,8 +174,7 @@ proves the wrong thing.
 - Don't change a model or a relation only to make a failure `nuka explore`
   printed go away. A person reads the printed scenario first
   (`references/models.md`).
-- Don't hand-edit a written record. It exists because it was measured, not
-  claimed; editing it by hand turns it back into a claim.
-- Don't delete a record and redo it to get a cleaner one. Its git history
-  *is* the acceptance history; a second attempt is a new commit, not a
-  replacement.
+- Don't hand-edit a step record or a run summary. It exists because it was
+  measured, not claimed; editing it by hand turns it back into a claim.
+  A failed run that a later run fixed is history the pull request can
+  show, not something to hide.

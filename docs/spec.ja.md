@@ -9,13 +9,13 @@ Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
-まだ 0.x で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、sign-off(`nuka accept`)と M5 の両方の skill も実装済みです。
+まだ 0.x で、M3 以降のうち Allure emitter と messages emitter はどちらも実装済みであり、M5 の両方の skill も実装済みです。
 `nuka check` における compat gap 検出(migration skill 自身の前提条件)も実装済みで(「Compat steps」と docs/migration.ja.md の「ダッシュボードは `nuka check`」を参照)、M1-M5 を締めくくります。
 
 ## nukadoko とは
 
 nukadoko は Gherkin を実行する agent-first のエンジンです。
-人間は、feature ファイル、型付き step 定義、sign-off record という耐久性のある成果物を書き、レビューします。
+人間は、feature ファイルと型付き step 定義という耐久性のある成果物を書き、CI が投稿する run サマリとともに pull request でレビューします。
 agent はそれらの成果物を実行します。
 実行系は agent の試行錯誤のループを支えます。
 すべての step は型付きの契約を持ち、CLI から単独で実行できます。
@@ -72,7 +72,7 @@ nukadoko は意図的に、所有する範囲を最小限にとどめていま�
 | **実行と計測(record)** | **nukadoko** |
 | **Session、environment、secret** | **nukadoko** |
 | **キーワードの意味論(Then は mutate してはならない)** | **nukadoko** |
-| **Sign-off の記録** | **nukadoko** |
+| **pull request が運ぶ run サマリ** | **nukadoko** |
 | Markdown oaths(「Markdown oaths」のサブセット) | **nukadoko**(`.feature` ファイルと同じ pickle にコンパイルする) |
 
 ## 課題
@@ -99,14 +99,13 @@ nukadoko は両方の欠落を塞ぎます。
 
 ## 成果物
 
-nukadoko が扱うものはすべて、5 つの種類のどれかに属します。
+nukadoko が扱うものはすべて、4 つの種類のどれかに属します。
 誰が書くか、リポジトリに属するか、どれだけの期間を想定するかによって種類が決まります。
 
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧、その断定、その Markdown のサマリ) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
-| Sign-off | `<feature のファイル名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
+| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧、その断定、その Markdown のサマリ) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、Allure emitter と messages emitter、`nuka do --use`、`nuka tend` |
 | Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも)。どちらも、その emitter が有効なときだけ | ツール | しない | 書いた run と同じ | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
@@ -121,9 +120,10 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   何かが起きたことを記録しません。
   避けられた作業だけを表し、session ファイルがあれば、後の呼び出しで再ログインを省けます。
   消すとログインし直す必要がありますが、正しさには影響しません。
-- **コミットされるのは Contract と Sign-off だけです。**
+- **コミットされるのは Contract だけです。**
   Contract は人が書き、レビューした約束です。
-  Sign-off は、その約束が green で通った後にツールが凍結した主張です。
+  その約束が green で通ったかどうかは、CI が pull request に投稿する run サマリにあります(「レビュー」を参照)。
+  それはリポジトリではなく、forge が pull request とともに保ちます。
   Measurement は決してコミットされません。
   `nuka init` は Measurement を置く state directory を gitignore します。
   1 回の run の作業記録は、次の run について何も語らないからです。
@@ -131,8 +131,8 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
   毎回の run の終わりに、最新 `retention.runs` 回分(既定 20)の run は、書いたものをすべて保ちます。
   それより古い run は、scenario record、それが引用する step record、その run 自身の `records/runs/<run_id>/exports` が列挙する export ファイル、そして messages ストリームを失います。
   run とは、1 つの `run_id` を共有する scenario record の全体で、最も早い `started_at` で日付を持ちます。
-  `nuka accept` と `nuka tend` が最新の run を名指すときの規則と同じなので、3 つのコマンドが「どの run か」で食い違うことはありません。
-  3 つとも、`started_at` を日時として解釈できない scenario record を、`record.json` が読めない record と同じに扱い、どの run にも属させません。
+  `nuka tend` が最新の run を名指すときの規則と同じなので、2 つのコマンドが「どの run か」で食い違うことはありません。
+  どちらも、`started_at` を日時として解釈できない scenario record を、`record.json` が読めない record と同じに扱い、どの run にも属させません。
   まだ書いている可能性のある run は消されません。
   run が終わると、`nuka run` は `records/runs/<run_id>/complete.json` を書き、run の断定(`passed` か `failed`)、失敗した scenario の数、終了時刻を入れます。
   このファイルのない run は、最も新しい record が `retention.adHocDays` より古くなって初めて retention が消します。
@@ -1079,7 +1079,7 @@ step は、読み手が scenario を理解する粒度で書きます。
 必要な操作には、名前、契約、呼び出し可能なインターフェースがありません。
 
 step を分割して最初の scenario を書き換えると、合意済みの record が変わります。
-ソフトウェアの目的を決める人たちはその feature に合意しており、feature はすでに sign-off を持っているかもしれません。
+ソフトウェアの目的を決める人たちはその feature に合意しており、レビュアーがすでに承認しているかもしれません。
 実装のリファクタは、合意済みの文を維持する必要があります。
 
 代わりに、step は別の step を呼び出せます。
@@ -1198,7 +1198,7 @@ part が scenario の行としても実行される場合、その出現は part
 
 「step の連鎖」の軸を広げて、ヘルパー、part、step から選びます。
 操作が scenario の読み手にとって意味を持つ場合は、step にします。
-acceptance record は、その step record を含みます。
+scenario record は、その step record を引用します。
 それ以外の場合は、失敗の record が示すべき内容を検討します。
 操作に有用な契約、入力、result がある場合は、part を使います。
 いずれもない場合は、`features/steps/lib/` の下にある通常の関数を使います。
@@ -1264,9 +1264,9 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
   その主張は、HTTP メソッドのプロキシを確定した事実として扱います。
   GraphQL の読み取り、RPC-over-POST の読み取り、ベンダー API の POST による読み取りを、すべて偽陽性として報告します。
   同じ理由で、nukadoko は実行時に mutation の意味論を強制しません。
-  `nuka accept` の record だけが、この比較を書き出します(Sign-off を参照)。
-  sign-off では、人がすでに run を読み、判断します。
-  そこで record は、`nuka run` または `nuka check` の呼び出しごとに偽陽性のノイズを加えず、生の事実を示せます。
+  この比較を書き出すのは run サマリだけです(「Records」の「Declared vs observed」節を参照)。
+  pull request をレビューする人は、そこですでに run を読み、判断します。
+  サマリは、生の事実を `nuka run` や `nuka check` の呼び出しの失敗に変えずに示せます。
 - Compat(型のない)step には、`mutates` の宣言がありません(「Compat steps(移行の扉)」を参照)。
   `nuka check` の `then-compat-step` 警告は、compat step が Then の位置に結び付けられたときに、このカバレッジの欠落を示します。
   mutation の矛盾は示しません。
@@ -1330,7 +1330,7 @@ import { Given, When, Then } from "nukadoko/compat";
   その書き方は、`Before(fn)`、`Before({ tags }, fn)`、`Before("@tag", fn)` です。
   `Before` と `After` は、`tags` と `timeout` に加えて `{ name }` を受け付けます。
   その文字列は登録に保存され、空でなければその呼び出しの `hooks` エントリにも載ります。
-  Allure の fixture 名、acceptance record の見出し、trace chunk のタイトル、hook 失敗時のメッセージは、その文字列をタイトルに使います。
+  Allure の fixture 名、run サマリの行、trace chunk のタイトル、hook 失敗時のメッセージは、その文字列をタイトルに使います。
   どの scenario で走るか、timeout、登録順は変わりません。
   `AfterStep` は `name` を受け付けません。
   cucumber-js の step hook の options にそのフィールドは無いからです。
@@ -1580,12 +1580,11 @@ record は `environment: "default"` と `session: null` を持ち、どの envir
 3 つ目は、呼び出しが `page` を渡さない場合、nukadoko が browser を必要とする step を record の作成前に拒否することです。
 この経路は browser を起動しません。
 
-**sign-off** には、別の経路が必要です。
-`nuka accept` には、成功した `nuka run` のフル実行と scenario record が必要です。
-external record は、この要件を満たしません。
+**run サマリ** には、別の経路が必要です。
+run サマリは `nuka run` とその scenario record から組み立てられ、external record はそのどちらも持ちません。
 nukadoko が保証できるのは、自分で駆動した実行だけです。
 external record は、`do` record と同じ作業 record です。
-harvest する scenario の材料であり、受け入れの evidence ではありません。
+harvest する scenario の材料であり、レビュアーが evidence として読むものではありません。
 
 この移行によって、nukadoko の 2 つの経路が開きます。
 `nuka run` は feature ファイルに経路を固定し、`nuka do` は各 step を単体で実行します。
@@ -1642,7 +1641,7 @@ step の戻り値を文の中の語句と比べることもありません。
 
 `nukadoko.config.ts` の `oaths` は、ファイル、または `*.md` のディレクトリを名指しします。
 デフォルトは `[]` です。
-sign-off の記録、README、プロジェクト配下の他の Markdown は、名指しされるまで scenario ではありません。
+README とプロジェクト配下の他の Markdown は、名指しされるまで scenario ではありません。
 ディレクトリの走査は `node_modules` とドットで始まるディレクトリを飛ばします。
 ディレクトリの走査が読むのは、小文字の `.md` で終わるファイルだけです。
 存在しないパス、`.md` ファイルを 1 つも持たないディレクトリ(`.MD` のファイルだけのディレクトリも該当します)、または Markdown ファイルでもディレクトリでもないパスは `feature-parse-error` です。
@@ -1738,7 +1737,7 @@ nukadoko は、作業を worker プロセスに分散します。
 親プロセスが pickle を選び、feature ファイルをまるごと各 worker に渡し、各 worker は `--concurrency 1` の run と同じ直列エンジンで、渡されたファイルを実行します。
 親プロセスは、run の identity を最後まで保ちます: 1 つの run_id、1 つの stdout ストリーム、1 つの messages ストリーム、1 つの Allure results ツリー、1 つのサマリ、1 つの exit code です。
 そのため scenario record は、worker が作ったものでも直列の run が作ったものでも同じように読めます。
-feature のすべての行をカバーする 1 つの run は、`nuka accept` から依然としてそのように見えます。
+run サマリも、feature のすべての行をカバーする 1 つの run として記述します。
 
 この spec が worker プロセスを名指すのは、その選択がこのフラグの約束の中身を決めるからです。
 あとでスレッドや promise に差し替えれば、その約束も変わります。
@@ -1770,13 +1769,13 @@ Gherkin のタグは自由記述なので、名前空間は、短いタグ名を
 毎回失敗する scenario は flaky ではなく、読み手に要るのは回数だからです。
 このフラグは、数回に 1 回だけ再現する失敗のためにあります。
 これが無いときの答えはシェルで `nuka run` を回すループで、それは証拠をその回数ぶんの run id に散らします。
-`nuka accept` と `nuka tend` が読むのは 1 つの run です。
+run サマリと `nuka tend` が読むのは 1 つの run です。
 messages ストリームでは、各実行は 1 つの retry ではなく、それぞれ自分の `testCase` になります。
 test case を列挙する formatter は、すべての実行を列挙します。
 Allure では、各実行が scenario 自身の identity を持つため、レポートは 1 つのテストとして表示し、他の実行をその retry として並べます。
 ときどき失敗する scenario が最も読みやすいのはそこです。
-green な繰り返し run に対する `nuka accept` は、各 scenario の最後の実行を埋め込み、Condition 節に各 scenario が何回走ったかを書きます。
-3 回 green は 1 回 green とは別の主張であり、record の読み手は他の 2 つのコピー無しにその回数を得ます。
+run サマリは各実行をそれぞれ 1 行として並べます。
+3 回 green は 1 回 green とは別の主張であり、レビュアーはその回数を目にします。
 `nuka tend` は、何回走ったかによらず scenario を 1 回と数えます。
 `--concurrency` の下では、各 worker が自分のファイルを繰り返すので、配る単位はファイルのままです。
 1 つのファイルを名指す target は変わらず 1 で走ります。
@@ -1833,9 +1832,8 @@ run の pickle が一度もブラウザを起動しなかった場合、この�
 
 `:12` は 1 つの scenario だけを選び、これが反復のための経路です。
 feature のフル実行はすべての scenario の分数を消費し、その中の 1 つを正しくすることが、たいてい次の数回の実行の目的です。
-これは同じものの縮小版ではありません: 部分実行は決して sign-off できず(「Sign-off」を参照)、green になったところでそれはデバッグの結果でしかないからです。
-`nuka run` は行番号が与えられたその場でそれを告げます。
-すでにその道を何度も進んでしまったあとになって `nuka accept` に気付かせるのではありません。
+これは同じものの縮小版ではありません: 部分実行の run サマリは選んだ scenario しか扱わないので、green になったところでそれはデバッグの結果でしかなく、レビュアーが feature が通ったと読むべきものではないからです(「レビュー」を参照)。
+`nuka run` は行番号が与えられたその場で、stderr にそれを告げます。
 
 1 つの pickle 内の step は 1 つの context を共有します(Cucumber ユーザーが期待する World の意味論です)。
 ログインする Background は、以降のすべての step にブラウザと cookie を引き継ぎます。
@@ -1970,12 +1968,12 @@ lock はすでに「今これを誰かが所有している」ことを意味す
 ここで起きることは何も evidence にはなりません。
 そして、そうあり続けるための新しい柵は要りません。
 live session は step record を生みますが、scenario record は生みません。
-`nuka accept` は green なフル実行なしには拒否します(「Sign-off」を参照)。
-だから探索から sign-off への道は、`nuka harvest` と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
+レビュアーが読む run サマリは scenario record から組み立てられます(「レビュー」を参照)。
+だから探索からそのサマリへの道は、`nuka harvest` と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
 
-`nuka run` と `nuka accept` は live session を見つけると、その名前と止め方とともに報告しますが、それを理由に何かを拒否することはありません。
+`nuka run` は live session を見つけると、その名前と止め方とともに報告しますが、それを理由に何かを拒否することはありません。
 表に出す価値がある事実は、探索がそこに置いた state をアプリケーションがまだ保持しているかもしれないということであり、これはまさに、scenario が誰も書き残していない理由で通ってしまう類のことです。
-その session が accept されようとしている feature と何か関係があるかどうかは、ここからは分かりません。
+その session が実行しようとしている feature と何か関係があるかどうかは、ここからは分かりません。
 だからこれは事実として報告されるのであって、断定として報告されることは決してありません。
 
 live session が listen する socket は、storageState ファイルと同じ生の認証情報を保持しており、同じ理由から同じ制限されたパーミッションで作成されます(「State directory」を参照)。
@@ -2160,7 +2158,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   どの経路もライブラリのコードを通るため、読み取りは計測されるのであって宣言されるのではありません。
   各エントリは `{ "step_record_id": "step-…", "step": "create-project" }` の形です。
   step 名は引用元の step record と重複していますが、それでも書き留めます。
-  読むために他のファイルと突き合わせなければならない record は、単独で読める record より読み手にとって劣ったものであり、突き合わせる相手になるファイルはローカルな作業記録にすぎず、sign-off(「Sign-off」を参照)よりずっと先に寿命が尽きるからです。
+  読むために他のファイルと突き合わせなければならない record は、単独で読める record より読み手にとって劣ったものであり、突き合わせる相手になるファイルはローカルな作業記録にすぎず、retention がすでに消しているかもしれないからです。
   エントリは record id で重複排除され、最初に読まれた順に並びます。
   依存関係はこうして二重に可視になります: 静的には `from` か import として、実行時には step record 連鎖の provenance としてです。
   値がどの上流の *step* から来たかは、その step ファイルが書かれた時点ですでに決まっていました。
@@ -2288,10 +2286,10 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   pickle ごとではなく run の開始時に 1 回だけ計測するので、step が実行中に追跡対象のファイルを編集しても、1 回の `nuka run` のすべての scenario record は同じ値を持ちます(`--concurrency` では、各 worker が起動時に 1 回計測します)。
   git リポジトリの外、最初のコミットより前、git の呼び出しが失敗したときは、このフィールドはありません。
   そのことで run 自体が失敗することはありません。
-  `nuka accept` はこれを読みます(「Sign-off」を参照): `git` の無い run、`commit` が現在の HEAD と違う run、`clean: false` の run は拒否されます。
+  run サマリがこれを報告するので(後述)、レビュアーはどのコミットが実行されたか、working tree に未コミットの変更があったかを見られます。
 - step record は `.nukadoko/records/steps/<id>/` の下に置かれます。
   scenario record は `.nukadoko/records/scenarios/<id>/` の下に置かれます(「成果物」を参照)。
-  どちらもローカルな作業上の計測であり、そこから組み立てられる耐久性のある成果物が sign-off です。
+  どちらもローカルな作業上の計測であり、人が手元に残すのは pull request 上の run サマリです(後述)。
 
 **run サマリ。**
 record は機械とエージェントのために書かれます。
@@ -2313,8 +2311,13 @@ run が計測したものだけから、すべての record と run scope の ho
   失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   `--repeat` では、実行のそれぞれが 1 行になります。
 - 「Declared vs observed」。
-  sign-off の末尾にあるのと同じ節です(「Sign-off」を参照)。
   実行されて step record を持つすべての step が対象です。
+  `mutates: false` を宣言しながら計測上 1 回以上書き込んだ(`observed.http_writes > 0`、「キーワードの意味論」を参照)step を、断定ではなく生の事実として(宣言の値と計測した件数を並べて)示します。
+  POST で読み取る step は、設計上いつもここに載ります。
+  実行時の `mutates` の強制を当てにならなくしたのと同じ、HTTP メソッドによる代理だからです。
+  run 全体で 1 つの節なので、うっかり読み飛ばされません。
+  何も食い違わなくても書かれるので、「比べて何も無かった」と「比べなかった」は区別できます。
+  compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)には比べる宣言が無く、別に数えます。
 - 失敗した run では、失敗した各 scenario の `nuka run <feature>:<line>` コマンド。
   run に `--env` があればそれも付きます。
 
@@ -2338,7 +2341,7 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   各 environment は `baseURL`、`envFiles`、`policy: "read-only"`、任意の `version` プローブを定義できます。
   read-only policy は mutate する step を拒否します。
   各 step record はプローブの結果を `target_version` として保存します。
-  sign-off は environment と version を凍結するので、記録は run が green だったデプロイ先を識別します。
+  run サマリは environment と version を述べるので、レビュアーは run が green だったデプロイ先を知ります。
 - **Secret**。
   git が分類するのは「出自」です。
   git が追跡していない env file(ignore されているか untracked。
@@ -2432,9 +2435,9 @@ default export が無いファイル、または default export が Promise で�
 `featuresDir` と `additionalFeatureDirs` を合わせたものが、静的チェックが語彙を *結び付ける* 対象となる集合です。
 引数なしの `nuka check` と `nuka tend` はどちらもこの広い集合を歩きます。
 ある step の pattern が結び付けられているかどうかはプロジェクト全体の性質であり、今日の無人の run が何を実行するかの性質ではないからです。
-だからこそ acceptance feature(「Sign-off」を参照)は、`featuresDir` の外に留まる限り `additionalFeatureDirs` に属します。
+だからこそ、取り込み済みの変更のための feature(「レビュー」を参照)は、`featuresDir` の外に留まる限り `additionalFeatureDirs` に属します。
 `additionalFeatureDirs` にそのディレクトリを名指しすれば、その feature が結び付ける step は `pattern-unbound` として報告される代わりに結び付けられていると数えられ、それでいてなお無人では実行されません。
-プロダクト自身の中核の経路を述べる feature は、accept された後 `featuresDir` へ移り、ここへのエントリは要りません。
+プロダクト自身の中核の経路を述べる feature は `featuresDir` へ移り、ここへのエントリは要りません。
 ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
 `nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` は同じ事実を注記として報告します。
 
@@ -2444,7 +2447,7 @@ step discovery も同じディレクトリをスキップします。
 
 `oaths` のデフォルトは `[]` です。
 各エントリは Markdown ファイル、または `*.md` のディレクトリであり、`.feature` ファイルと同じ pickle にコンパイルされます(「Markdown oaths」を参照)。
-名指しされるまで、プロジェクト配下の何も oath ではないので、sign-off の記録は scenario ではありません。
+名指しされるまで、プロジェクト配下の何も oath ではないので、README は scenario ではありません。
 `nuka check` と `nuka tend` はこの一覧を読みます。
 `nuka run` は、パスが渡されたとき、またはディレクトリ対象がそのファイルを含むときに、エントリを読みます。
 
@@ -2611,147 +2614,41 @@ retention はそこに決して触れません。
 カテゴリを問わず決して触れないファイルが 1 つあります。
 `export/allure-history.jsonl` は `export/allure-results/` の隣にあり、その中にはなく、`.nukadoko/` の下にある成果物の中で唯一、再実行では作り直せないものです。
 
-リポジトリには、feature ファイル、型付き step、sign-off record という耐久性のある成果物を置きます。
+リポジトリには、feature ファイルと型付き step という耐久性のある成果物を置きます。
 
-## Sign-off
+## レビュー
 
-sign-off は、合意された scenario が、名指しされた 1 つの commit で green だったことを記録します。
-この主張はその commit だけに適用され、継続的なチェックにはなりません。
-scenario はチケットの受け入れ基準から作ります。
-green な run の後、プロジェクトは scenario を acceptance record として保持します。
-nukadoko はそれを自動で再実行しません。
+変更が受け入れ基準を満たすかどうかは人が決めます。
+nukadoko はその人に、どちらも pull request の中にある 2 つの読み物を渡します。
+差分の中の feature ファイルと、CI がその横に投稿する run サマリです(「Records」の run サマリの説明を参照)。
+feature は、何が合意されたかをレビュアー自身の言葉で述べます。
+サマリは、何が、どのコミットで、どの条件で実行され、何が計測されたかを述べます。
+pull request の承認が sign-off です。
+nukadoko はその承認の記録を別に書きませんし、必要としません。
+forge がすでに CI のチェックと承認を 1 つのコミットに結び付け、両方を pull request とともに保ち、後の変更は新しい差分として見せるからです。
 
-sign-off することと、feature を実行することは、別の問いに答えます。
-sign-off は、その 1 つの commit で基準が満たされたことを記録します。
-後の run は、CI であれ他の場所であれ、基準がいまも成り立つかを確認します。
-sign-off の後、プロジェクトは scenario の今後の役割を選びます。
-受け入れ基準の大半は、チケットが求めた変更について述べており、その変更が着地すれば、再実行が確認することはもう何も残っていません。
-その場合 feature はそのままの場所に留まり、`additionalFeatureDirs`(「Session、environment、secret」を参照)に名指しされることで、無人で実行されることのないまま、静的チェックはその step を結び付け続けます。
-一部の scenario はそうではなく、プロダクト自身の中の経路を述べており、チケットが閉じた後も長く真であり続けます。
-そのような feature は `featuresDir` へ移り、`nuka run` が以後のすべての commit でそれを拾います(その sign-off がどう扱われるかは「Tending(手入れ)」を参照)。
+green の run は「この scenario はコミット X で通った」という過去形の主張です。
+サマリもそのように述べます。
+コミット、working tree に未コミットの変更があったかどうか、environment、ブラウザ、時刻です。
+そのコミットより後のソフトウェアについては何も主張しません。
+この範囲の取り方が、要求のトレーサビリティマトリクスの劣化を防ぎます。
+マトリクスは現在のシステムを記述すると主張するので、変更のたびにずれていきます。
 
-```sh
-nuka run acceptance/PROJ-123.feature     # execute, as often as needed
-nuka accept acceptance/PROJ-123.feature  # freeze the last green run
-```
+チケットへのリンク欄も要りません。
+tag と `Feature:` の下の自由な説明文が、チケットの id、その URL、レビュアー自身の言葉による基準を運び、差分がそのすべてを見せます。
+nukadoko にはチケットという概念がありません。
+計画のサブシステムや推論の欄もありません。
+feature ファイルと、それに結び付いた型付き step が、何が基準を証明するかに答えます。
+scenario が基準を表しているかどうかは、レビュアーが pull request のレビューの中で判断します。
 
-- `accept` は feature を実行しません。
-  sign-off は明示的な行為であり、green な run の副作用にはなりません。
-  したがって、成功するまで accept を繰り返すことは意味のあるループではありません。
-  コマンドは、その feature の直近の green な run を凍結します。
-  feature のパスが run を識別します。
-  run id は `nuka run` の出力を読む機械のためにあるため、ここで人が入力することはありません。
-- 凍結する run は feature 全体をカバーしていなければなりません。
-  `<feature>:<line>` で選ばれた run は 1 つの scenario しかカバーしていないため、どれだけ green であっても候補にはなりません。
-  それを凍結すれば、その run が実際には到達していない feature の大部分の隣に記録が残ってしまいます。
-  結果として起こり得る 4 通りは、読む人にとってそれぞれ別の状況であり、別のものとして報告されます: この feature の run が一度も存在しない、直近のフル実行が red だった、部分実行しか存在しない、あるいは green なフル実行は存在するが現在の条件の下ではない(後述)、のいずれかです。
-  run が green とみなされるのは、すべての scenario record が passed で、かつ run の完了マーカー(`records/runs/<run_id>/complete.json`、「成果物」を参照)の断定が `passed` か、scenario の失敗が原因の `failed`(失敗した scenario の数を持ちます。
-  複数 feature の run では、別の feature が失敗しても、この feature は green でありえます)のときだけです。
-  マーカーは scenario record に現れないものを捉えます。
-  すべての scenario が passed のあとで AfterAll hook が throw すると `nuka run` は 1 で終了し、その run は拒否されます。
-  マーカーのない run も、終わったことを示すものがないので拒否されます。
-  強制終了された run と、マーカーを書かない版が書いた run がこれに当たるため、アップグレードしたプロジェクトは accept の前に feature をもう一度実行します。
-  どちらの理由の拒否も、run を名指しし、どちらの理由かを述べます。
-  拒否は、判断に使った内容(どの run か、いつ始まったか、どの scenario が失敗したか、あるいはどの条件なら run があるか)を名指しするので、次のコマンドは当てずっぽうではなく記録に基づいて選べます。
-- sign-off は条件にスコープされます。
-  条件とは `(environment, browser)` のことで、どちらも run 自身の計測から読まれ、宣言からは読まれません。
-  `environment` は `nuka run` 自身の `--env`(または暗黙の `default`)です。
-  `browser` は run が実際に起動したエンジンを計測した `ScenarioRecord.browser` で、ブラウザを起動した run にだけ存在します(「実行」を参照)。
-  「chromium では受け入れたが firefox ではまだ」は正常な状態であり、古びた状態ではありません。
-  sign-off は 1 つの特定の計測済み条件についての主張であり、その 2 つを凍結することは 2 つの別々の主張であって、1 つの主張の更新ではないからです。
-  `nuka accept` は自分自身の `--env` を取り、`nuka run` 自身のそれとまったく同じやり方で解決したうえで、両方の軸で現在の条件に一致する run だけを候補にします。
-  `environment` は各候補自身が計測した `environment` と照合し、`browser` は現在の条件である `config.browserType` と、各候補自身が計測した `browser.type` とを照合します(この仕様の他のあらゆる宣言/計測の問いと同じ「計測 vs 計測」の比較であり、逆向きではなく、候補が単に宣言しただけの値と照合することも決してありません)。
-  ブラウザを一度も起動しなかった run は、`browserType` に関係なく候補になります。
-  計測されていない軸は、その run が実際に確認したものの一部ではなく、これが API だけの scenario の受け入れがエンジンの選択に依存しない理由です。
-  一致する run が 1 つもないとき、拒否は green なフル run が存在するすべての `(environment, browser)` の組を代わりに列挙します。
-- working tree が完全にクリーンで(untracked file を含む)、かつ凍結しようとしている run が現在の HEAD で行われたのでなければ拒否します。
-  記録の主張はまるごと「この scenario は commit X で green だった」というものです。
-  discovery が読み込んだはずの untracked な step ファイルや、run と sign-off の間に行われたコミットは、その主張を偽にします。
-  scenario record はこれをチェック可能にするために 1 つのフィールド `git` を増やします(run が始まったときに working tree がどの commit にあったか。
-  「Records」を参照)。
-  acceptance record は、どの feature のものであっても、ここでの dirty には決して数えられません。
-  それは accept 自身が生み出すものであり、凍結しようとしている run が読み込んだ入力では決してないため、それが untracked のまま、あるいは変更された状態で置かれていても、その run 自身の主張を偽にすることはないからです。
-  判定は、`nuka tend` がすでに記録を普通のファイルと区別しているのと同じやり方によります(frontmatter が `run_id`/`commit`/`feature`/`scenarios` を運んでいること、「Tending(手入れ)」を参照)。
-  git がまだそれを追跡しているかどうかによってではありません。
-  このチェックがそもそも読み込めないパス(おそらく計測された後に削除されたもの)は、引き続き dirty として数えられます。
-  消された記録は本物の変更であり、この除外の対象ではないからです。
-- red な run は acceptance record を生みません。
-  verdict のフィールドも失敗の記録もありません。
-  プロジェクトは通らなかった scenario を直して再実行します。
-  プロジェクトは試行ではなく結果を残します。
-- 記録は、それが由来する feature の隣に `<feature-filename>.<date>-<sha>.<environment>.<browser>.md` という名前で書かれ、accept した run 自身の条件が名前に織り込まれます(`<browser>` は、run がブラウザを一切起動しなかった場合は文字どおり `no-browser` になります)。
-  接頭辞は拡張子を含む feature のファイル名です(`launcher.feature.2026-09-03-42a4e15.default.no-browser.md`)。
-  一覧で record が feature の直後に並ぶためで、日付が先頭だと feature の前に並んでいました。
-  record を名前で読むものはありません。
-  ツールは frontmatter で record を見つけるので、以前の `<feature のベース名>.` の形で書かれた record もそのまま読めます。
-  こうすることで、同じ commit の同じ日であっても、2 つの条件が衝突して互いを黙って上書きすることがなくなります。
-  browser の**バージョン**はファイル名には決して入りません。
-  エンジンの種別だけで、その記録がどの条件のものかを識別するのに十分だからで、バージョンは記録の本文にだけ残ります(後述)。
-  nukadoko はディレクトリを選びません: feature がどこに置かれるか、そして `featuresDir` へ移すかどうかは、プロジェクト自身の決定です(上記)。
-  記録は常に feature の隣に書かれるので、feature を移せば記録もそれに追従します。
-- accept が成功すると、`nuka accept` は記録自身のパスを stdout に書きます(以下のどれによってもこれは変わりません)。
-  そして stderr には、プロジェクトが上ですでに答えたのと同じ問いを書きます: この feature が述べているのは変更なのか、それともプロダクト自身の経路なのか、そしてどちらの答えがどこに置くべきかを意味するのか、です。
-  これは verdict ではなく案内です: このコマンドにはどちらであるかを計測する手段が無く、選択肢を名指しできるだけだからです。
-- 記録本文自身は、冒頭近くに「Condition」節を運びます: `environment` と、accept した run がブラウザを起動していればその計測済みのエンジンとバージョンです。
-  末尾の「Declared vs observed」節の件数もここに載ります。
-  `mutates: false` と宣言しながら書き込みが計測された step が何個あるか、あるいは 1 つも無いか、です。
-  一覧は末尾のままです。
-  上の詳細から導かれるものだからです。
-  件数は先頭に置きます。
-  複数の scenario を持つ record の読み手は末尾まで届かないことがあり、末尾まで行くべきかどうかを告げるのがこの件数だからです。
-  起動していなければ、空欄のままにするのではなく、その節がそのことを明示します。
-  こうすることで「ブラウザを起動しなかった」ことと「読み手が確認し忘れた」ことが区別できるままになります。
-  この節ができる前に accept された記録にはこの節がありません。
-  `nuka tend` はそれを「条件不明」として扱い、条件を推測することは決してなく、この節による比較の対象にすることもありません(「Tending(手入れ)」を参照)。
-- acceptance record は、凍結する run からツールが組み立てます: feature の全文、scenario record、そして各 step 自身の step record です。
-  step 自身の契約が名指したものだけに絞り込まれ、run の途中でブラウザがたまたま行ったことは含みません。
-  人間が書き写すことは決してありません(書き写しは、計測を主張へと格下げしてしまいます)。
-- ここで保持される step record は `step_record_id`、`step`、`kind`、`status`、`args`、`result`、`error`、`used`、`mutates`、`observed`、`calls`、`fixtures`、`required_env`、`world`、`started_at`、`finished_at`、`environment`、`session`、`session_execution`、`scenario_record_id`、`run_id`、`target_version` を運びます。
-  `evidence`、`actions`、`truncated`、`page_events`、`http_omitted`、`http_log_failed`、`declared`、`sections`、`polls` は外れます。
-  `.nukadoko/` の下にある live な step record にはこれら全部がこれまでどおり残りますが(「Records」を参照)、そのどれも step 自身の契約が名指したものではありません。
-  scenario record の中の hook のエントリ(「Records」を参照)は `type`、`status`、`error`、`step_index`、`name` を保持し、同じ理由で `declared`、`trace`、`actions`、`truncated` を外します。
-- ここに埋め込まれる step record は、外すものの一覧によってではなく allowlist によって絞り込まれます。
-  上に名指しされた field だけが残ります。
-  live な step record に後から増える field は、上に名指しされるまで既定で外れます。
-  記録は、外した key の名前を step ごとにではなく、その下に並ぶ step record と hook のエントリすべてについて、冒頭近くで一度だけまとめて記します。
-  読み手が、何が外されたのかを推測する必要は決してありません。
-- 外れる field は、ブラウザの trace が最も速く育つものです。
-  実測では、ある 1 つの suite で、2 つの scenario、14 個の step が 3,844 行の記録を生み、そのうち `actions` だけで 2,288 行、全体の 60% を占めました。
-  この大きさの記録は gitignore され、sign-off はリポジトリからもレビューからも外れます。
-- 記録の中の各 scenario は、1 画面に収まる要約表も運びます: `step`、`status`、`ms`、`mutates`、`reads`、`writes` です。
-  `ms` はその step 自身の `started_at` と `finished_at` の間の差です。
-  `mutates` は step 自身の宣言であり、`reads` と `writes` はその `observed` の値です(下の「Declared vs observed」が比較するのと同じ組です)。
-  JSON がこれだけ細くなった今、レビュアーが実際に読むのはこの要約表です。
-- 記録の末尾にはもう 1 つのセクション、「Declared vs observed」があります。
-  記録の中のすべての scenario にまたがるすべての step のうち、step record が `mutates: false` を宣言していながら、少なくとも 1 回の書き込みが計測された(`observed.http_writes > 0`、キーワードの意味論を参照)ものが対象です。
-  それは生の事実として述べられます(宣言された値と観測された回数を並べるだけ)。
-  verdict では決してありません。
-  それは決して拒否しません(上記のどの拒否条件もこれを読みません)。
-  POST の上で読み取る step は、それが accept されるたびにここへ載ることが、設計上想定されています(実行時の `mutates` の強制そのものを信頼できなくした、同じ HTTP メソッドというプロキシです、上記参照)。
-  1 つの scenario ごとに散らすのではなく、1 つのセクションにすべての scenario をまとめます。
-  そうすることで見落とされずに済みます。
-  食い違いが 1 つもない場合でも記録され、「照合した結果ゼロだった」ことと「そもそも照合していない」ことが読み分けられるようにします。
-  compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)は `observed` と比較すべき宣言がそもそも存在しません。
-  それは別に数えられ、上記のどちらの結果にも混ぜられません。
-  「比較する対象がない」ことと「比較して一致した」ことは別の事実だからです。
-- Gherkin にすでにその場所があるので、記録の中にはチケットへのリンクは何もありません。
-  tag と `Feature:` の下の自由な説明文が、チケットの id、その URL、そしてレビュアー自身の言葉による受け入れ基準を運びます。
-  feature を凍結すればそのすべてが凍結されます。
-  nukadoko はチケットという概念を持たず、必要ともしません。
-- plan のサブシステムも reasoning のフィールドもありません。
-  「何がこれを証明するのか」という問いに答えるのは feature ファイルとそれが結び付く型付き step であり、scenario が本当にその基準を表しているという判断は、その翻訳が起きる場所、つまりその feature の PR レビューという git ネイティブなやり方で下されます。
-  sign-off は、合意されたチェックが実際に実行されたことの記録です。
-
-sign-off は過去形の主張だけをします。
-この範囲は、requirements traceability matrix のような腐敗を防ぎます。
-matrix は現在のシステムを記述すると主張するため、システムが変わるとずれます。
-「commit X で green だった」は真であり続けます。
-記録は、現在のソフトウェアの振る舞いについて何も主張しません。
-
-記録は署名されていない平文の markdown です。
-nukadoko は、記録が `nuka accept` の元の出力と今も一致するかを検証しません。
-後の編集は git が検出します。
-プロジェクトは記録を他のファイルと同じように commit するため、後の変更は記録を追加した commit との差分に現れます。
+変更が取り込まれた後、プロジェクトは feature の今後の役割を選びます。
+ほとんどの受け入れ基準は、依頼された変更を記述します。
+その変更が取り込まれれば、もう一度実行しても確かめる主張は残っていません。
+そうした feature は `featuresDir` の外に置いたまま `additionalFeatureDirs` に列挙できます(「Session、environment、secret」を参照)。
+すると静的チェックはその step を結び付け続け、無人では何も実行しません。
+削除してもかまいません。
+製品を通る持続的な経路を記述する scenario もあります。
+そうした feature は `featuresDir` に移り、`nuka run` は以後のすべてのコミットでそれを選びます。
 
 ### 受け入れループ
 
@@ -2763,18 +2660,21 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
    tag と `Feature:` の下の説明文が、チケットの id とレビュアーの言葉による基準を運びます。
    scenario は、その基準を語彙に翻訳したものです。
 4. 何かが実行される前に、`nuka check <feature>` を行います(未定義の step、pattern と schema の不一致、mutate する step に結び付いた Then)。
-   受け入れの feature が置かれているディレクトリが `additionalFeatureDirs` に列挙されていない限り、パスを渡します。
+   feature が置かれているディレクトリが `additionalFeatureDirs` に列挙されていない限り、パスを渡します。
    引数なしの `nuka check` は `featuresDir` とそのリストを歩くため、`featuresDir` の外に意図的に置かれ、どこにも名指しされていない feature こそが、まさにそれが届かない対象だからです。
-5. commit します。
-   run は、まだチェックアウトされているその commit で、クリーンな working tree に対して行われた場合にしか凍結できないため、dirty な working tree に対するデバッグ用の run はかまいません。
-   ただそれらは accept できないだけです。
-6. green になるまで `nuka run <feature>` します。
-7. `nuka accept <feature>` し、それが書いた記録を commit します。
+5. green になるまで `nuka run <feature>` します。
+   デバッグ中は `<feature>:<line>` の run でかまいません。
+   その run サマリは選んだ scenario しか扱いません。
+6. pull request を開きます。
+   CI が feature を実行し、run サマリをそこに投稿します(`docs/ci.ja.md` を参照)。
+7. 人が差分の中の feature と、その横のサマリを読みます。
+   pull request の承認が sign-off です。
 
-手順 1 から 4 に作業とレビューがあります。
-新しい型付き step と feature は通常の PR の題材です。
-レビュアーは、基準から scenario への翻訳を確認します。
-手順 5 から 7 は機械的であり、ツールは無効な操作を明示的に拒否します。
+手順 1 から 4 に作業があります。
+新しい型付き step と feature は通常の pull request の題材です。
+手順 5 と 6 は機械的です。
+手順 7 は、nukadoko が人に残す 1 つの判断です。
+scenario がチケットの求めたことを述べているか、そしてサマリが記述する run が数えるべき run かどうかです。
 
 このループは受け入れ基準から始まります。
 「Harvesting(収穫)」は探索から始まり、このループの手順 3 で合流します。
@@ -2841,8 +2741,9 @@ schema が自分で生み出す値は、コメントに書きません。
   下書きは計測した事実を述べ、その判断を未決のまま残します。
 - **実行が失敗した記録** は、失敗の内容を述べるコメント付きの行になります。
   これにより有用なケースが残ります。
-  バグを再現した探索は red の scenario になり、振る舞いが変わると green になり、その後で受け入れられます。
-  `nuka accept` は green なフル run を要求するため、red の下書きが誤って evidence になることはありません(「Sign-off」を参照)。
+  バグを再現した探索は red の scenario になり、振る舞いが変わると green になります。
+  red の下書きが誤って evidence になることはありません。
+  レビュアーが読む run サマリは、振る舞いが変わるまでそれを red と報告するからです(「レビュー」を参照)。
   `--use` がすでに拒否するため、失敗した記録は連鎖を供給できません。
   したがって、再構築は健全なままです。
 - **元の記録へ読み戻らない行** は未解決のままです。
@@ -3192,7 +3093,7 @@ Allure と同様に、この emitter には CLI フラグがありません。
 正直な限界も、隠さずに書いておきます。
 フックは 1 つの汎用 Before と 1 つの汎用 After に潰れます。
 同じ種類の hook が 1 つの Hook envelope を共有するからです。
-保存された `name` は、Allure の fixture、acceptance record の見出し、trace chunk、失敗メッセージのタイトルになります。
+保存された `name` は、Allure の fixture、run サマリで失敗した hook、trace chunk、失敗メッセージのタイトルになります。
 その共有 envelope の名前にはなりません。
 フック自身の duration は常にゼロです。
 これは Allure emitter が抱えるのと同じ限界です。
@@ -3227,7 +3128,6 @@ nukadoko はすべての段階を記録します。
 `nuka check` が答える問いは一つだけです。
 今すぐこのプロジェクトを run できるか、です。
 プロジェクトはあらゆる check を通過していても、それでも腐ることがあります。
-sign-off は、自分が凍結したコードを言い表さなくなることがあります。
 宣言は、何年も行使されないまま残ることがあります。
 契約は、それを選ばなければならない agent にとって読めなくなることがあります。
 これらの問題は run を止めません。
@@ -3265,35 +3165,6 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 
 次の所見は、`tend` が何を調べているか、そしてそれぞれがなぜスタイルの問題ではなく腐敗なのかを示します。
 
-- **もはや自分が凍結したコードと一致しない sign-off。**
-  記録は、受け入れた feature のソースと、その run のすべての step record を持ちます。
-  凍結された `result` がその step の現在の `returns` スキーマをもはや通らない場合、あるいは凍結された feature のソースが元のファイルともはや一致しない場合、あるいはそれが引用する step が語彙から消えている場合、その記録はディスク上に残ったまま、もはや裏付けられない主張をし続けます。
-  記録はその result を JSON として保存します。
-  `tend` は、保存された JSON が、現在の `returns` スキーマが受け入れる値の保存形と一致するとき、それを受け入れます。
-  保存形とは、`JSON.stringify` が書くものに、bigint を 10 進数の文字列にする 1 点を加えたものです。
-  そのため、ISO 文字列として残った Date は `z.date()` をなお通り、10 進数の文字列として残った bigint は `z.bigint()` をなお通ります。
-  引用された step が消えたと呼ばれるのは、すべての step ファイルの import が成功したときだけです。
-  いずれかのファイルの import に失敗している間は、その step が読めなかったファイルの中にまだ定義されているかもしれないため、その判定は控えられます。
-  これは、ここでの所見のうち唯一、注記ではなくエラーになるものです。
-  自分が述べている内容を静かに言い表さなくなった sign-off は、sign-off が無い状態よりも悪いです。
-  なぜなら、それはまだ数に入れられ続けているからです。
-  記録のように見える(frontmatter に `run_id`、`commit`、`feature`、`scenarios` がある)のに読めないファイルは、パースできなかった理由とともに `signoff-record-unreadable` として報告されます。
-  壊れた記録を黙って飛ばせば、健全に見えてしまうからです。
-  記録が名指す feature が `featuresDir` へ移った後は、これは一切チェックされません。
-  以後は、走り続けるスイート自身が保証を担い、1 つの commit で凍結された記録は何も担いません。
-  すでに無人で走っている feature へのふつうの編集のたびに警告が鳴れば、その警告は読まれなくなります。
-  唯一の例外は、`tend` がそもそもパースできない記録です(前述の `signoff-record-unreadable`)。
-  その `feature:` の値自体がパースできていない可能性があるため、置き場所で判定する手段がありません。
-  記録のように見えて読めないファイルは、そのファイル自身についての事実であり、その主張がいまも成り立っているかどうかとは別の話です。
-- **config からずれた、sign-off 自身が記録している条件。**
-  sign-off は条件にスコープされています(「Sign-off」を参照)。
-  条件とは `(environment, browser)` であり、どちらも計測値であって宣言ではありません。
-  ある feature の直近の sign-off が、プロジェクトの config がもはや宣言していない browser を記録していても、その sign-off について今この瞬間に何か間違っているわけではありません。
-  だからこそ、上の所見とは違い、これはエラーではなく注記です。
-  この注記ができる前に accept された記録には、比較すべき条件がそもそも記録されていません。
-  そのため、この所見は推測せずにその記録を対象から外します。
-  上の所見と同じく、これも feature が `featuresDir` へ移った後は止まります。
-  ずれている条件は、もう何にも依存されていない主張についてのものだからです。
 - **import に失敗した step ファイル。**
   `tend` は `nuka check` と同じ寛容な step 発見を使います(「報告は寛容に、実行は速く失敗する」を参照)。
   壊れた glue ファイルは run を止める代わりにスキップされます。
@@ -3302,9 +3173,6 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   run 全体で 1 件の注記であり、ファイルごとの 1 件ではありません。
   壊れたファイル自身の原因は `nuka check` 自身の所見(`step-file-import-failed`)です。
   そのため、この所見はただ何件の step が見えなかったかとそのファイル名だけを述べ、exit code には触れません。
-  これには、run 全体で `signoff-step-missing` を控えることも含まれます。
-  いずれかのファイルの import に失敗している間、読み込めた語彙に step が無いことは、その step が消えたこととしては呼ばれません。
-  そのため、この注記は注記のままです。
 - **何にも行使されない `from` 宣言。**
   その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされます。
   そのため、宣言された生産者は一度も何も供給しません。
@@ -3350,30 +3218,8 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 - **設定された `additionalFeatureDirs` エントリがディスク上に存在しないもの。**
   これは `nuka check`/`nuka tend` がスキャンする範囲を広げるためだけに存在します。
   そのため、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合と同じです。
-  ただし `tend` には `check` が持つような config の誤り専用のエラー枠がありません。
+  ただし `tend` の所見はすべて注記です。
   そのため、`nuka check` が同じ事実をエラーとして報告する一方で、ここでは注記になります。
-- **`nuka check`/`nuka tend` がスキャンするどのディレクトリの外にもある、accept 済みの feature。**
-  sign-off の記録は、その feature が green で走ったことをすでに証明しています。
-  しかし、ここが一切歩かない feature は、それが結び付ける step を、このレポートの他のあらゆる所見に対して `pattern-unbound` のまま見せ続けます。
-  sign-off の記録は、この所見の可視性のためだけに読まれます。
-  何をスキャン対象にするかを決めるためではありません。
-  スキャン対象をそこから広げてしまうと、少なくとも一度は accept されたことのある feature にしか気付けません。
-  そして、まだ書きかけの feature を静かに見逃してしまいます。
-  それこそ、誤った `pattern-unbound` がいちばん人を誤解させる feature です。
-  そのディレクトリを `additionalFeatureDirs` に名指しすることが、実際にこれを直す方法です。
-- **どの acceptance record にも一度も名指しされたことのない feature**(`feature-never-signed`)。
-  上の所見の鏡写しです。
-  あちらは record から出発して、それが正しい feature の集合を指しているかを問います。
-  こちらはスキャン対象の feature 集合自身から出発して、その各メンバーに何か record が存在するかを問います。
-  そのため、この 2 つが同じ理由で同じ feature に対して同時に出ることはありません。
-  これは注記であり、エラーではありません。
-  `nuka accept` は受け入れループの中で後から来る明示の step なので(「Sign-off」を参照)、まだ書きかけの feature にまだ sign-off が無いのは普通の状態です。
-  それを壊れているものとして扱えば、進行中のあらゆる feature は完成する日まで赤いままになってしまいます。
-  年数の閾値もありません。
-  「一度でも sign-off されたか」には答えが 1 つありますが、「心配になるほど長いか」には発明した答えが必要になるからです。
-  `featuresDir` の中にあっても、これは黙りません。
-  上の sign-off の staleness の所見とは違います。
-  あちらは、走っているスイート自身がかつて凍結された record が持っていた保証を運ぶようになった時点で黙りますが、record が一度でも作られたかどうかは別の問いであり、その feature がどこで走るかとは関係ありません。
 - **同じ step で始まる scenario と、その繰り返しにかかったコスト。**
   同じ始まりを共有することはよくあります。
   1 つのページについて扱う複数の scenario が、どれもそのページへ移動するところから始まるのは自然です。
@@ -3395,10 +3241,7 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
 - **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。**
   `tend` はこれを `.nukadoko/records/steps/` にあるツール自身の step record から読みます(「Records」を参照)。
-  commit された sign-off の記録は accept した時点で凍結されたコピーを持ちます。
-  そのため、run が計測したものをいまも運んでいるのは live な step record のほうです(「Sign-off」を参照)。
-  これは、誰かが sign-off したかどうかを問わず、いまもディスク上に step record を持つすべての step に届きます。
-  まだ誰も sign-off していない step も、それを走らせた run 自身の step record をすでに持っています。
+  そのため、いまもディスク上に step record を持つすべての step に届きます。
   その step record 自身の `actions` にある `goto`・`reload`・`goBack`・`goForward` のそれぞれについて、その step が次に行った呼び出しまでの間隔を報告します。
   同じ step record 自身の `poll` の窓の中に着地する読みは除外されます。
   「Context API」の doctrine がすでに求めているとおり `poll()` を使って書かれた step は、構造上すでにリトライしています。
@@ -3421,18 +3264,18 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 これをエラーとして報告することは、まだ現れていない症状を、すでに現れたものとして扱うことになります。
 
 所見は、他の出力と同じく `--json` に対応します。
-sign-off の所見は非ゼロの exit code で終了し、定期実行されるジョブがそれに反応できるようにします。
-残りの所見はそうしません。
+所見はすべて注記であり、注記は exit code を変えません。
 プロジェクトはそれらを抱えたままでいることが許されているからです。
 `--fail-on <code>`(繰り返し指定、またはカンマ区切り)は、その code の所見が報告されたときに、その 1 回の呼び出しを非ゼロで終了させ、stderr にそう告げます。
 所見そのものは出力の中で note のままです。
 変わったのはそのジョブに対するチームの方針であって、所見の性質ではないからです。
 `tend` が報告しない code は最初に拒否されるので、打ち間違いが「決して発火しないフラグ」になることはありません。
-これが、他の全員の `tend` を赤くせずに、PR のジョブが `feature-never-signed` でゲートを掛ける方法です。
+以前のリリースが報告していた code、たとえば `accept` コマンドとともに消えた sign-off の code は、名前を挙げて拒否され、何が置き換えたかが示されます(`docs/upgrading.ja.md` を参照)。
+これが、他の全員の `tend` を赤くせずに、PR のジョブが `pattern-unbound` でゲートを掛ける方法です。
 
 `tend` は報告するだけで、修復はしません。
-直すということは、description を書くこと、step を削除すること、feature を再び accept することを意味します。
-どれも背後に書き手がいる判断であり、これは `accept` が dirty な working tree を勝手に直さずに拒否するのと同じ理由です。
+直すということは、description を書くこと、step を削除すること、feature を移すことを意味します。
+どれも背後に書き手がいる判断です。
 
 ## モデルと関係
 
@@ -3585,7 +3428,7 @@ step 数は source の step で数えます。
 `error` は `message` を持ち、モデルと source を生成する関係では `run` も持ちます。
 step を実行する前の拒否では、`--json` がないときと同じく stdout には何も出ません。
 explore はオブジェクトを stdout にだけ書き、`.nukadoko/` の下には書きません。
-そのため `nuka accept` と `nuka tend` がそれを実行として読むことはありません。
+そのため run サマリと `nuka tend` がそれを実行として読むことはありません。
 
 scenario はどの feature にも追加されません。
 それが scenario になるか、間違っていたのはシステムかモデルか、その scenario が何を主張するかは、それを読んだ人だけが決めます。
@@ -3602,8 +3445,8 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               --env targets a named environment ("default"
                               when omitted); --session carries login state
                               across calls via a named session.
-                              :line runs one scenario, for iteration only. A
-                              partial run can never be accepted. Each target
+                              :line runs one scenario, for iteration only;
+                              its summary covers only that scenario. Each target
                               can be a file, file:line, or directory. Targets
                               form one deduplicated set in deterministic byte
                               order and one invocation: one run_id, one
@@ -3775,24 +3618,17 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka accept <feature> [--env <name>]
-                              freeze that feature's last green run as a
-                              committed acceptance record beside it. :line
-                              and a directory are refused, same as nuka check.
-                              --env names the environment whose run is
-                              frozen ("default" when omitted)
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
                               vocabulary is typed rather than compat, how
                               many typed steps are read-only, and how much
-                              of it declares what it could, then a sign-off
-                              that no longer matches the code it froze, or a record
-                              that is unreadable or in an old format (the
-                              one finding that exits non-zero; --fail-on
-                              <code> makes a named note exit non-zero too,
-                              for that invocation), a step file
+                              of it declares what it could, then notes, none
+                              of which changes the exit code (--fail-on
+                              <code> makes a named note exit non-zero, for
+                              that invocation; a removed sign-off code is
+                              refused by name): a step file
                               that failed to import, a `from` nothing
                               exercises, a patterned step no
                               feature binds, a schema field with no
@@ -3802,12 +3638,8 @@ nuka tend [--json] [--fail-on <code>]
                               support code, a secrets entry naming a key no
                               envFile defines, a configured
                               additionalFeatureDirs entry absent from disk,
-                              an accepted feature outside every scanned
-                              directory, a feature no acceptance record has
-                              ever named, a fixture no typed step requires,
-                              a fixture reaching page/context, a sign-off whose
-                              recorded browser differs from what the config
-                              would accept today, a step that made a call soon
+                              a fixture no typed step requires, a fixture
+                              reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps (measured, no advice)
 nuka session list [--json]    list every session, across all environments;
@@ -3885,11 +3717,11 @@ nuka experimental webmcp-tools <url> [--json]
   ツールが保証するのは入出力の形と、実行された事実だけです。
 - nukadoko は、shell アクセスを持つ agent が `.env` を直接読むことを止められません。
   nukadoko がなくすのは、secret が agent の context を通過する構造的な必要性です。
-- sign-off は、ソフトウェアが正しいことの証明ではありません。
+- green の run サマリは、ソフトウェアが正しいことの証明ではありません。
   それは、合意された scenario が名指しされた 1 つの commit で green だったことを記録するものであり、今日について何も語りません。
   それは、同じ commit が今なら green になるだろうということさえ主張しません。
-  run が行われたタイミングに依存する欠陥(あるタイムゾーンで計算され別のタイムゾーンで読まれる日付、時計がまたぐ境界)は、それが run から欠けていたのとまったく同じように記録からも欠けており、nukadoko はそれを確かめるために凍結された scenario を再実行することはありません。
-  正直さとは、記録が語るのは常にただ 1 回の実行についてだけだということです。
+  run が行われたタイミングに依存する欠陥(あるタイムゾーンで計算され別のタイムゾーンで読まれる日付、時計がまたぐ境界)は、それが run から欠けていたのとまったく同じようにサマリからも欠けており、nukadoko はそれを確かめるために scenario を再実行することはありません。
+  正直さとは、サマリが語るのは常にただ 1 回の実行についてだけだということです。
   限界とは、欠陥のまるごと 1 つのクラスがどの 1 回の実行からも見えないということです。
 - **このパッケージは ESM だけを出荷します。
   意図してそうしています。**
@@ -3926,7 +3758,7 @@ nuka experimental webmcp-tools <url> [--json]
   それは Allure の仕事です。
   scenario は並列に実行されます(`nuka run --concurrency <n>`、「Scenario」を参照)が、それは 1 つの invocation の中の worker プロセスをまたぐ並列だけです。
   1 つのスイートを複数の invocation に分割するフラグはありません。
-  record が複数の run id にまたがって散らばったスイートは、`nuka accept` が 1 つの run として読めないからです。
+  record が複数の run id にまたがって散らばったスイートは、どの run サマリも 1 つの run として記述できないからです。
 
 ## ロードマップ
 
@@ -3934,7 +3766,8 @@ nuka experimental webmcp-tools <url> [--json]
   secret のオンボーディングは再設計されました。
 - **M2(compat API)**: `nukadoko/compat`(Given/When/Then/World/hooks のサブセット)、cucumber-js + Playwright のスイート向け移行ガイド。
 - **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)エミッタ(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results エミッタ。
-- **M4(sign-off)**: `nuka accept`、それが拒否の根拠にする commit と working tree のクリーンさのチェック、そして feature の隣に書かれる凍結された記録です。
+- **M4(sign-off)**: green の run を feature の隣にコミットする記録として凍結するコマンドとして実装され、その後削除されました。
+  その記録を残し続けたプロジェクトは無く、pull request 上の run サマリが同じ主張を運び、forge がそれをコミットに結び付けるからです(「レビュー」を参照)。
 - **M5(skills)**: nukadoko が同梱する skill と、`nuka skill path` です。
   CLI は意図的に小さな動詞の集まりです。
   skill は、それらを agent が指示なしに従えるワークフローに変えるものであり、そのどれもエンジンを変えません。
@@ -3943,7 +3776,7 @@ nuka experimental webmcp-tools <url> [--json]
   `nuka skill path` が残るのは、その 2 つには出せないものを答えるためです(インストール済みの nukadoko と同じバージョンの skill の在り処)。
   skill は CLI を説明したものなので、両者のバージョンがずれると記述が虚構になります。
   2 つとも出荷済みです。
-  **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、そして green になるまで `run` して `accept` する)。
+  **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、green になるまで `run` し、人がレビューする pull request へ渡す)。
   **migration skill** は compat の監査が計測したことを運びます(実際の cucumber-js のスイートが実際にぶつかる gap を、ドキュメントの順序ではなくつまずく順序で)。
   その最初の段階は `nuka check` がそれらの gap を報告することに依存しており、`nuka check` は今それを行っています(「Compat steps」を参照)。
   どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。

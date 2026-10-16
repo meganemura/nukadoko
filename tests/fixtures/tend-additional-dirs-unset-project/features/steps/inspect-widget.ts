@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Bound only from accepted/inspect.feature, outside featuresDir — proves
+// Bound only from extra/inspect.feature, outside featuresDir — proves
 // additionalFeatureDirs is what keeps pattern-unbound from misreporting
 // this step. `mutates: false` doubles
 // as this fixture's read-only-count case (decision 5).

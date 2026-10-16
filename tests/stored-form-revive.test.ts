@@ -5,10 +5,9 @@ import { z } from "zod";
 import { reviveStoredForm } from "../src/stored-form/revive.js";
 
 // Responsibility: which side of a two-typed schema reviveStoredForm follows.
-// --args and --use (side "input") are what a schema parses; a frozen result
+// --args and --use (side "input") are what a schema parses; a stored result
 // (side "output") is what it produced. The end-to-end cases run through
-// tests/do-use.test.ts, tests/live-daemon-core.test.ts, and
-// tests/date-stamp-tend.test.ts.
+// tests/do-use.test.ts and tests/live-daemon-core.test.ts.
 
 const bigintCodec = z.codec(z.string(), z.bigint(), {
   decode: (text) => BigInt(text),

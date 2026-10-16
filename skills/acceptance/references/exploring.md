@@ -183,7 +183,7 @@ Four of them, each also reported on stderr.
   name it, or leave it out if it belongs inside another step as a part.
 - **A line that failed when it ran.** The scenario is red until the
   behavior changes. That is the shape a reproduction takes here: red,
-  fixed, green, then `nuka accept`, which refuses while it is red.
+  fixed, green, then a pull request whose run summary shows it green.
 - **A line that does not read back to the record it came from.** Its
   wording has to be fixed or it will not bind. This happens where a
   pattern carries optional text or alternation, neither of which reverses

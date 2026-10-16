@@ -227,8 +227,8 @@ export const configSchema = z
     additionalFeatureDirs: z.array(z.string()).default([]),
     /** Markdown oaths compiled into the same pickles as a `.feature`
      * file (src/feature/parse-oath.ts). Each entry is a file or a
-     * directory of `*.md`. Default `[]`: a sign-off record and a README
-     * are not scenarios until named. `nuka check` and `nuka tend` read
+     * directory of `*.md`. Default `[]`: a README or other Markdown
+     * file is not a scenario until named. `nuka check` and `nuka tend` read
      * the list. `nuka run` reads an entry when the path is given, or
      * when a directory target contains it. */
     oaths: z.array(z.string()).default([]),

@@ -48,14 +48,13 @@
 // the same "a step nothing matched doesn't appear here" convention this
 // interface's own header already documents for a tag-mismatched hook.
 //
-// `ScenarioRecord.run_id` and `.git` are what `nuka accept` (docs/spec.md
-// "Sign-off") reads: src/accept/select-run.ts groups records by `run_id`,
-// and src/cli/accept.ts refuses a sign-off unless `git` names the current
-// HEAD and a clean tree.
+// `ScenarioRecord.run_id` and `.git` are what the run summary
+// (src/run/run-summary.ts) reports: the run a record belongs to, and the
+// commit and tree it ran against.
 // `run_id` identifies "every scenario record one `nuka run`
 // invocation wrote" — a fact no other field carries, since
 // `scenario_record_id` is unique per pickle. `git` is the commit and cleanliness of the working
-// tree "when the run started" (docs/spec.md "Sign-off" verbatim) — absent
+// tree when the run started — absent
 // outside a git repository, before the first commit, or when the git call
 // itself fails (src/run/probe-git.ts), the same fail-safe convention
 // `target_version`'s probe already uses
@@ -213,8 +212,7 @@ export interface ScenarioRecord {
   readonly steps: readonly ScenarioStepEntry[];
   readonly hooks: readonly ScenarioHookRecord[];
   /** The commit and cleanliness of the working tree when this run started
-   * (docs/spec.md "Sign-off": "the
-   * commit the working tree was at when the run started"). Absent outside a
+   * (docs/spec.md "Records"). Absent outside a
    * git repository, before the first commit, or when the git call fails —
    * see this file's own header. Measured once per run, not once per pickle:
    * every scenario record from the same `nuka run` invocation

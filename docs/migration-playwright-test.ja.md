@@ -181,8 +181,8 @@ environment は選択されません。
 record は `environment: "default"` と `session: null` を記し、どの environment の read-only policy も強制されないので、`mutates: true` を宣言した step は、`nuka do` なら拒否される場所でも実行されます。
 そして version プローブは走らないので、record は `target_version` を持ちません。
 
-それでも渡れないままなのが sign-off です。
-`nuka accept` が必要とするのは green なフル実行の `nuka run` とその scenario record であり、external な record はそれではありません。
+それでも渡れないままなのが run サマリです。
+run サマリは `nuka run` とその scenario record から組み立てられ、external な record はそのどちらでもありません。
 このツールが保証するのは自分自身が駆動した実行についてであり、自分が駆動しなかった実行については、誰かの言葉を受け取ることしかできません。
 だから external な record は、`do` の record とちょうど同じ意味で作業記録です: scenario が harvest される素材であり、決して evidence ではありません。
 

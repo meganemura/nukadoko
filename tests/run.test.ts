@@ -252,8 +252,7 @@ describe("nuka run", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toContain("Partial run: features/lines.feature:6 selects 1 of 2 scenarios");
-    expect(stderr.text()).toContain("A partial run cannot be accepted");
-    expect(stderr.text()).toContain("nuka accept");
+    expect(stderr.text()).toContain("Its run summary covers only those scenarios");
 
     const lines = nonEmptyLines(stdout.text());
     expect(lines).toHaveLength(1);

@@ -80,12 +80,11 @@ export interface RunInitOptions {
 
 /**
  * Normalizes `--features-dir`'s raw value relative to `rootDir`, the same
- * `path.relative(rootDir, path.resolve(rootDir, arg))` idiom `nuka check`/
- * `nuka accept` already use for their own path arguments
- * (src/check/analyze.ts's `loadSingleFeature`, src/cli/accept.ts's
- * `normalizeFeaturePath`), rather than inventing a new convention here.
- * Reusing their exact idiom means an absolute value or one containing `..`
- * is accepted as-is here too, same as it already is for those two commands'
+ * `path.relative(rootDir, path.resolve(rootDir, arg))` idiom `nuka check`
+ * already uses for its own path argument (src/check/analyze.ts's
+ * `loadSingleFeature`), rather than inventing a new convention here.
+ * Reusing that exact idiom means an absolute value or one containing `..`
+ * is accepted as-is here too, same as it already is for check's
  * own feature argument (see src/check/analyze.ts's own comment: "absolute
  * paths accepted as-is").
  *

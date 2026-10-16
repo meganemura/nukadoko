@@ -4,9 +4,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { sessionLockPath } from "../src/session/paths.js";
-import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run`/`nuka accept` reporting a live session found at
+// Responsibility: `nuka run` reporting a live session found at
 // start (docs/spec.md "Live sessions"), never refusing on its account. A
 // live session's own daemon is never actually spawned here — that is
 // tests/live-session.test.ts's own, much heavier, job — a lock file
@@ -44,7 +44,7 @@ async function writeLiveSession(
   );
 }
 
-describe("live session notice (nuka run / nuka accept)", () => {
+describe("live session notice (nuka run)", () => {
   let rootDir: string;
 
   afterEach(async () => {
@@ -115,49 +115,6 @@ describe("live session notice (nuka run / nuka accept)", () => {
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).not.toContain("Live session");
-    });
-  });
-
-  describe("nuka accept", () => {
-    beforeEach(async () => {
-      rootDir = await copyFixtureToTempDir("accept-project");
-    });
-
-    it("stays silent when no session is live", async () => {
-      await initGitRepo(rootDir);
-      const runExit = await runCli(["run", "features/greeting.feature"], {
-        rootDir,
-        stdout: createCaptureSink(),
-        stderr: createCaptureSink(),
-      });
-      expect(runExit).toBe(0);
-
-      const stdout = createCaptureSink();
-      const stderr = createCaptureSink();
-      const acceptExit = await runCli(["accept", "features/greeting.feature"], { rootDir, stdout, stderr });
-
-      expect(acceptExit).toBe(0);
-      expect(stderr.text()).not.toContain("Live session");
-    });
-
-    it("reports a live session without refusing a sign-off that otherwise qualifies", async () => {
-      await initGitRepo(rootDir);
-      const runExit = await runCli(["run", "features/greeting.feature"], {
-        rootDir,
-        stdout: createCaptureSink(),
-        stderr: createCaptureSink(),
-      });
-      expect(runExit).toBe(0);
-
-      await writeLiveSession(rootDir, "default", "alice", { withSocket: true });
-
-      const stdout = createCaptureSink();
-      const stderr = createCaptureSink();
-      const acceptExit = await runCli(["accept", "features/greeting.feature"], { rootDir, stdout, stderr });
-
-      expect(acceptExit).toBe(0);
-      expect(stdout.text().trim().length).toBeGreaterThan(0);
-      expect(stderr.text()).toContain('Live session "alice" (environment default) is still open.');
     });
   });
 });

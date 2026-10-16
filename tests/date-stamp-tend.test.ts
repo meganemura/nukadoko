@@ -1,84 +1,46 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // A step that returns a Date or a bigint has to survive the real write
-// path: the stored form, JSON.stringify into the step record, accept, then
-// tend. An empty object in the record is the bug. An ISO string or a
-// decimal string that tend then rejects is the same bug one step later.
+// path: the stored form, then JSON.stringify into the step record. An empty
+// object in the record, or a run that aborts on the bigint, is the bug.
 
-interface Report {
-  errors: { code: string; message: string; step?: string }[];
+async function runAndReadStepRecord(rootDir: string, feature: string): Promise<string> {
+  const runExit = await runCli(["run", feature], {
+    rootDir,
+    stdout: createCaptureSink(),
+    stderr: createCaptureSink(),
+  });
+  expect(runExit).toBe(0);
+  const stepsDir = path.join(rootDir, ".nukadoko", "records", "steps");
+  const stepIds = await readdir(stepsDir);
+  expect(stepIds).toHaveLength(1);
+  return readFile(path.join(stepsDir, stepIds[0]!, "record.json"), "utf8");
 }
 
-describe("a frozen Date result", () => {
+describe("a recorded Date or bigint result", () => {
   let rootDir: string;
 
   beforeEach(async () => {
     rootDir = await copyFixtureToTempDir("date-stamp-project");
-    await initGitRepo(rootDir);
   });
 
   afterEach(async () => {
     await removeTempDir(rootDir);
   });
 
-  it("records the ISO string and tend accepts the sign-off", async () => {
-    const runExit = await runCli(["run", "elsewhere/stamp.feature"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-    expect(runExit).toBe(0);
-
-    const acceptStdout = createCaptureSink();
-    const acceptExit = await runCli(["accept", "elsewhere/stamp.feature"], {
-      rootDir,
-      stdout: acceptStdout,
-      stderr: createCaptureSink(),
-    });
-    expect(acceptExit).toBe(0);
-    const recordPath = acceptStdout.text().trim();
-    const record = await readFile(path.join(rootDir, recordPath), "utf8");
+  it("records a Date as its ISO string in the step record", async () => {
+    const record = await runAndReadStepRecord(rootDir, "elsewhere/stamp.feature");
     expect(record).toContain('"createdAt": "2026-01-02T03:04:05.000Z"');
     expect(record).not.toContain('"createdAt": {}');
-
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const tendExit = await runCli(["tend", "--json"], { rootDir, stdout, stderr });
-    expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as Report;
-    expect(report.errors.filter((error) => error.code === "signoff-result-invalid")).toEqual([]);
-    expect(tendExit).toBe(0);
   });
 
-  it("records a bigint as its decimal string and tend accepts the sign-off", async () => {
-    const runExit = await runCli(["run", "elsewhere/atoms.feature"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-    expect(runExit).toBe(0);
-
-    const acceptStdout = createCaptureSink();
-    const acceptExit = await runCli(["accept", "elsewhere/atoms.feature"], {
-      rootDir,
-      stdout: acceptStdout,
-      stderr: createCaptureSink(),
-    });
-    expect(acceptExit).toBe(0);
-    const record = await readFile(path.join(rootDir, acceptStdout.text().trim()), "utf8");
+  it("records a bigint as its decimal string in the step record", async () => {
+    const record = await runAndReadStepRecord(rootDir, "elsewhere/atoms.feature");
     expect(record).toContain('"total": "123456789012345678901234567890"');
     expect(record).toContain('"coerced": "123456789012345678901234567890"');
-
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const tendExit = await runCli(["tend", "--json"], { rootDir, stdout, stderr });
-    expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as Report;
-    expect(report.errors).toEqual([]);
-    expect(tendExit).toBe(0);
   });
 });

@@ -11,7 +11,7 @@ import { readRunMarker } from "./run-marker.js";
 //
 // 1. The run rule. A run is every scenario record sharing one `run_id`,
 //    dated by the earliest `started_at` among them (src/record/newest-run.ts,
-//    the rule `nuka accept` and `nuka tend` use too). The newest
+//    the rule `nuka tend` uses too). The newest
 //    `retention.runs` runs keep everything: scenario records, the step
 //    records their `steps[]` cite, the export files their manifest lists
 //    (src/record/run-exports.ts), and their messages stream. Every older
