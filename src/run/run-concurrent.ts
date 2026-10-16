@@ -85,9 +85,9 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // summary of what was written and exit code 128 plus the signal number. A
 // second signal is forwarded too, which makes each worker exit at once,
 // and the parent exits at once. On Windows nothing is forwarded
-// (src/run/spawn-run-worker.ts says why). A parent that dies without
-// handling a signal ends each worker's stdin, which the worker treats as
-// its first signal.
+// (src/run/spawn-run-worker.ts says why). A parent that dies closes each
+// worker's IPC channel. A worker treats that as its first signal, or, when
+// a forwarded signal came first, lets the teardown it started finish.
 
 const SERIAL_TAG = "@nukadoko:serial";
 

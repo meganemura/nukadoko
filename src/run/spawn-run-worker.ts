@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Readable, Writable } from "node:stream";
+import type { Readable } from "node:stream";
 
 // Responsibility: turns "run run-worker-entry.ts against this argument
 // list" into an actual child process the parent keeps (never unref'd,
@@ -18,14 +18,20 @@ import type { Readable, Writable } from "node:stream";
 // command is a second process between the parent and the worker, and it
 // relays only SIGINT and SIGTERM.
 //
-// `stdio: ["pipe", "pipe", "pipe"]`: the parent never writes to stdin, and
-// stdin ends when the parent is gone, however it went (SIGKILL, a killed
-// process group). The worker treats that end as its first signal and tears
-// its fixtures down (run-worker-entry.ts). stdout carries this worker's own
-// envelope stream (src/run/worker-protocol.ts), stderr is kept for
-// whatever Node itself writes there before this worker's own try/catch
-// exists to turn a failure into an envelope instead, and for project
-// code's own stdout writes (that module's own header explains the split).
+// `stdio: ["ignore", "pipe", "pipe", "ipc"]`. stdin is empty, so a step
+// that reads it gets end of file at once, as it would with no terminal.
+// The IPC channel carries no message; it closes when the parent is gone,
+// however it went (SIGKILL, a killed process group), and the worker treats
+// its `disconnect` as the parent's death (run-worker-entry.ts). It is the
+// IPC channel and not stdin because project code reads, pauses, and
+// destroys stdin, and any of those would hide the parent's death or hang a
+// step. It is not an extra pipe on fd 3 either: Node closes the IPC channel
+// the same way on every platform, and a worker would have to open fd 3 by
+// number. stdout carries this worker's own envelope stream
+// (src/run/worker-protocol.ts), stderr is kept for whatever Node itself
+// writes there before this worker's own try/catch exists to turn a failure
+// into an envelope instead, and for project code's own stdout writes (that
+// module's own header explains the split).
 
 export interface SpawnRunWorkerOptions {
   readonly rootDir: string;
@@ -55,7 +61,7 @@ export interface SpawnRunWorkerOptions {
 // middle of its teardown.
 const detached = process.platform !== "win32";
 
-export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<Writable, Readable, Readable> {
+export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
   const { rootDir, runId, env, quiet, featureListPath, repeat } = options;
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
@@ -63,5 +69,10 @@ export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessBySt
   const args = [rootDir, runId, env ?? "", quiet ? "1" : "0", featureListPath, String(repeat)];
   const nodeArgs = ext === ".ts" ? ["--import", import.meta.resolve("tsx"), workerEntry] : [workerEntry];
 
-  return spawn(process.execPath, [...nodeArgs, ...args], { stdio: ["pipe", "pipe", "pipe"], detached });
+  // `spawn`'s stdio-tuple overloads stop at three entries, so the fourth
+  // ("ipc") drops the return type to a plain ChildProcess.
+  return spawn(process.execPath, [...nodeArgs, ...args], {
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    detached,
+  }) as ChildProcessByStdio<null, Readable, Readable>;
 }
