@@ -21,6 +21,10 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
+function scenarioMs(record: { started_at: string; finished_at: string }): number {
+  return Date.parse(record.finished_at) - Date.parse(record.started_at);
+}
+
 describe("nuka run: setDefaultTimeout applies to compat steps/hooks", () => {
   let rootDir: string;
 
@@ -39,21 +43,21 @@ describe("nuka run: setDefaultTimeout applies to compat steps/hooks", () => {
 
   it("applies to a step with no own timeout: fails at the default value, not the sleep duration", async () => {
     const stdout = createCaptureSink();
-    const startedAt = Date.now();
     const exitCode = await runCli(["run", "--no-check", "features/default-timeout-step.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
     });
-    const elapsedMs = Date.now() - startedAt;
 
     expect(exitCode).toBe(1);
-    // The glue's own sleep is 500ms; a run that actually waited for it (or
-    // for the first, never-overridden setDefaultTimeout(999999) call) would
-    // take far longer than this bound.
-    expect(elapsedMs).toBeLessThan(1200);
 
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    // The glue's own sleep is 500ms; a scenario that actually waited for it
+    // (or for the first, never-overridden setDefaultTimeout(999999) call)
+    // would last at least that long. The scenario's own clock is used rather
+    // than the whole command's, which also pays for loading the step files
+    // and so grows with machine load.
+    expect(scenarioMs(record)).toBeLessThan(500);
     expect(record.status).toBe("failed");
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("timed out after 20ms");
@@ -241,20 +245,18 @@ describe("nuka run: a negative compat timeout means no timeout", () => {
 
   it("a positive step timeout still applies when the default is negative", async () => {
     const stdout = createCaptureSink();
-    const startedAt = Date.now();
     const exitCode = await runCli(["run", "--no-check", "features/positive-step-timeout.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
     });
-    const elapsedMs = Date.now() - startedAt;
 
     expect(exitCode).toBe(1);
-    // The glue's own sleep is 400ms. A run that ignored the positive option
-    // and treated every timeout as off would wait that out.
-    expect(elapsedMs).toBeLessThan(1200);
 
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
+    // The glue's own sleep is 400ms. A scenario that ignored the positive
+    // option and treated every timeout as off would wait that out.
+    expect(scenarioMs(record)).toBeLessThan(400);
     expect(record.status).toBe("failed");
     expect(record.steps[0].status).toBe("failed");
     expect(record.steps[0].error.message).toContain("timed out after 30ms");
