@@ -33,7 +33,18 @@ just until 0.1.
   with no hand edit in between. The flag's value is the entry point,
   written as `const cli = resolve("src/cli.ts")` (a JSON string literal,
   so a quote or a backslash in the path is escaped), so the walkthrough's
-  When step needs no edit at all. Without a value the line is
+  When step needs no edit at all. A value that is not a regular file
+  under the directory `nuka` runs in, a typo (`src/clli.ts`) or a
+  directory (`src`), is refused with nothing written: `Refusing to
+  scaffold: entry point "src/clli.ts" is not a file (looked at
+  <absolute path>); ...`. Such a value used to pass `nuka check` and the
+  When step, and surface as an empty `stdout` in the next step. When
+  `--command` comes before the name, the parser takes the name as its
+  value (`nuka scaffold --command run-y --pattern ...`); the refusal, or
+  the missing-name error when no other word is left for the name, then
+  adds `--command before the name takes the next word as its value
+  ("run-y" here); write the name first, or give --command a value`.
+  Without a value the line is
   `const cli = resolve("<TODO: the entry point>")`, and `run` throws
   `fill in the entry point: features/steps/<name>.ts:<line>` before it
   calls `runCommand` while that placeholder is there: `nuka check` still

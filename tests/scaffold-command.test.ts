@@ -156,6 +156,8 @@ describe("nuka scaffold --command", () => {
   });
 
   it("writes a named entry point in place of the TODO, with no guard", async () => {
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(path.join(rootDir, "src", "cli.ts"), "");
     const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", "src/cli.ts"]);
 
     expect(result.stderr).toBe("");
@@ -197,12 +199,63 @@ describe("nuka scaffold --command", () => {
   });
 
   it("escapes a quote and a backslash in the entry point", async () => {
+    await mkdir(path.join(rootDir, "bin"));
+    await writeFile(path.join(rootDir, "bin", 'say "hi"\\x.mjs'), "");
     const result = await cli(rootDir, ["scaffold", "run-odd", "--command", 'bin/say "hi"\\x.mjs']);
 
     expect(result.exitCode).toBe(0);
     expect(await readFile(stepPath(rootDir, "run-odd"), "utf8")).toContain(
       'const cli = resolve("bin/say \\"hi\\"\\\\x.mjs");\n',
     );
+  });
+
+  it.each([
+    ["a missing file", "src/clli.ts"],
+    ["a directory", "features"],
+    ["a missing file given as an absolute path", "/nonexistent/cli.ts"],
+  ])("refuses %s as the entry point and writes nothing", async (_label, entry) => {
+    const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
+
+    expect(result.stderr).toBe(
+      `Refusing to scaffold: entry point "${entry}" is not a file (looked at ${path.resolve(rootDir, entry)}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\n`,
+    );
+    expect(result.stdout).toBe("");
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(stepPath(rootDir, "run-greet"))).toBe(false);
+  });
+
+  it("writes an entry point given as an absolute path when the file exists", async () => {
+    const entry = path.join(rootDir, "nukadoko.config.ts");
+    const result = await cli(rootDir, ["scaffold", "run-pkg", "--command", entry]);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(stepPath(rootDir, "run-pkg"), "utf8")).toContain(`const cli = resolve(${JSON.stringify(entry)});\n`);
+  });
+
+  it("names the option order when a step name went to --command and a name follows", async () => {
+    const result = await cli(rootDir, ["scaffold", "--command", "run-y", "--pattern", "I run y", "other"]);
+
+    expect(result.stderr).toBe(
+      `Refusing to scaffold: entry point "run-y" is not a file (looked at ${path.join(rootDir, "run-y")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\n`,
+    );
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(stepPath(rootDir, "other"))).toBe(false);
+  });
+
+  it("names the option order when a step name went to --command and no name is left", async () => {
+    const result = await cli(rootDir, ["scaffold", "--command", "run-y", "--pattern", "I run y"]);
+
+    expect(result.stderr).toBe(
+      [
+        "Not enough non-option arguments: got 0, need at least 1",
+        "Missing required argument: name",
+        '--command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value',
+        "",
+      ].join("\n"),
+    );
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(stepPath(rootDir, "run-y"))).toBe(false);
   });
 
   it("passes check with the TODO left in, and fails do and run by name at the When step", async () => {
@@ -305,9 +358,11 @@ describe("nuka scaffold --command", () => {
   });
 });
 
-// Property: whatever entry point is given, the `resolve(...)` literal the
-// file holds evaluates back to that same string, so a quote, a backslash,
-// or any other character cannot break the file or change the path.
+// Property: scaffold writes a file for an entry point exactly when a
+// regular file exists at that path under the directory it runs in, and the
+// `resolve(...)` literal it writes evaluates back to that same string, so a
+// quote, a backslash, or any other character cannot break the file or
+// change the path.
 describe("nuka scaffold --command <entry point>: any path", () => {
   let rootDir: string;
   let counter = 0;
@@ -320,7 +375,7 @@ describe("nuka scaffold --command <entry point>: any path", () => {
     await removeTempDir(rootDir);
   });
 
-  it("round trips through the written resolve() literal", () =>
+  it("writes a file iff the entry point is a regular file, and round trips through the written resolve() literal", () =>
     hegel.testAsync(
       async (tc) => {
         const entry = tc.draw(
@@ -332,12 +387,31 @@ describe("nuka scaffold --command <entry point>: any path", () => {
             gs.text({ minSize: 1, maxSize: 12, alphabet: "a/\\\"'`${}.\n" }),
           ),
         );
+        const exists = tc.draw(gs.booleans());
         // yargs reads a leading "-" as a flag; such a value never reaches scaffold.
         tc.assume(!entry.startsWith("-"));
+        const target = path.resolve(rootDir, entry);
+        // Inside the project, and not a path the project already holds.
+        tc.assume(target.startsWith(`${rootDir}${path.sep}`) && !existsSync(target));
+        if (exists) {
+          const made = await mkdir(path.dirname(target), { recursive: true })
+            .then(() => writeFile(target, ""))
+            .then(
+              () => true,
+              () => false,
+            );
+          tc.assume(made);
+        }
         counter += 1;
         const name = `run-path-${counter}`;
         try {
           const result = await cli(rootDir, ["scaffold", name, "--command", entry]);
+          if (!exists) {
+            expect(result.stderr).toContain(`Refusing to scaffold: entry point ${JSON.stringify(entry)} is not a file`);
+            expect(result.exitCode).toBe(1);
+            expect(existsSync(stepPath(rootDir, name))).toBe(false);
+            return;
+          }
           expect(result.stderr).toBe("");
           expect(result.exitCode).toBe(0);
           const text = await readFile(stepPath(rootDir, name), "utf8");
@@ -349,9 +423,10 @@ describe("nuka scaffold --command <entry point>: any path", () => {
           expect(text).not.toContain("fill in the entry point");
         } finally {
           await rm(stepPath(rootDir, name), { force: true });
+          if (exists) await rm(target, { force: true });
         }
       },
-      { testCases: 40, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+      { testCases: 40, suppressHealthCheck: [hegel.HealthCheck.TooSlow, hegel.HealthCheck.FilterTooMuch] },
     ), 300_000);
 });
 
@@ -522,6 +597,8 @@ describe("every scaffolded variant", () => {
       ["scaffold", "chained-optional", "--command", "--from", "maybe-name.name"],
       ["scaffold", "run-named", "--pattern", "run named {s:string}", "--command", "src/cli.ts"],
     ];
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(path.join(rootDir, "src", "cli.ts"), "");
     const files: Record<string, string> = { "maybe-name.ts": maybeName };
     for (const argv of variants) {
       const result = await cli(rootDir, [...argv]);

@@ -82,7 +82,8 @@ features/steps/run-greet.ts
 ```
 
 `--command src/cli.ts` names the entry point, so the file needs no edit.
-`resolve` reads it from the directory `nuka` runs in. Without a value,
+`resolve` reads it from the directory `nuka` runs in, and the scaffold
+refuses a path that is not a file there. Without a value,
 the line holds a TODO, and the step fails with the file and line until it
 is filled in. The scaffold writes:
 

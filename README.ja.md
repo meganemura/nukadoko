@@ -81,6 +81,7 @@ features/steps/run-greet.ts
 
 `--command src/cli.ts` がエントリポイントを指定するので、このファイルは編集しません。
 `resolve` は、`nuka` を実行したディレクトリから読みます。
+そこにファイルがないパスは、scaffold が拒否します。
 値を省くと、その行には TODO が残り、埋めるまで step はファイル名と行番号を示して失敗します。
 scaffold が書く内容は次のとおりです:
 

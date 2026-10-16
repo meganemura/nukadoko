@@ -7,7 +7,13 @@ import yargs from "yargs";
 import type { Arguments, Argv, CommandModule } from "yargs";
 import { readOwnVersion } from "../version.js";
 import { HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
-import { DEFAULT_EXPLORE_LENGTH, DEFAULT_EXPLORE_RUNS, MAX_IDLE_TIMEOUT_SECONDS } from "./option-defaults.js";
+import {
+  commandTookTheName,
+  DEFAULT_EXPLORE_LENGTH,
+  DEFAULT_EXPLORE_RUNS,
+  MAX_IDLE_TIMEOUT_SECONDS,
+  VALID_STEP_NAME,
+} from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
@@ -835,7 +841,7 @@ export async function runCli(
         .option("command", {
           type: "string",
           describe:
-            "[entry point] a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point is written into the file, or left as a TODO the step refuses to run with",
+            "[entry point] a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point must be an existing file and is written into the file, or left as a TODO the step refuses to run with",
         })
         .option("from", {
           type: "string",
@@ -843,7 +849,14 @@ export async function runCli(
           describe:
             "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
         })
-        .check(rejectRepeatedFlags(["pattern", "command"])) as Argv<ScaffoldArgs>,
+        .check(rejectRepeatedFlags(["pattern", "command"]))
+        // yargs has already reported the missing name by now; this adds why
+        // it is missing when the name went to --command.
+        .check((args) =>
+          args.name === undefined && typeof args.command === "string" && VALID_STEP_NAME.test(args.command)
+            ? commandTookTheName(args.command)
+            : true,
+        ) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
       if (argsFailed) return;
       const { runScaffold } = await import("./scaffold.js");
@@ -854,6 +867,8 @@ export async function runCli(
         then: args.then ?? false,
         command: typeof args.command === "string",
         entryPoint: typeof args.command === "string" && args.command !== "" ? args.command : null,
+        // `--command <value>` written before the name, rather than `--command=<value>` or after it.
+        commandBeforeName: argv.indexOf("--command") !== -1 && argv.indexOf("--command") < argv.indexOf(args.name),
         from: args.from ?? [],
         stdout,
         stderr,

@@ -4211,7 +4211,10 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               --from can chain them at once), and
                               const cli = resolve("<entry point>"), the
                               value given, relative to the working
-                              directory. Without a value that line
+                              directory; a value that is not a file
+                              there is refused, and a step name read as
+                              the value (--command before the name) is
+                              named as such. Without a value that line
                               holds a TODO, and run throws "fill in the
                               entry point: <file>:<line>" before it calls
                               runCommand, so do and run fail by name at

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
@@ -12,6 +12,7 @@ import { createParameterTypeRegistry } from "../binding/registry.js";
 import type { PrimitiveClass } from "../binding/schema-shape.js";
 import { CAPTURED_CLASS } from "../check/binding-check.js";
 import { formatVocabularyError } from "./vocabulary.js";
+import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -84,9 +85,16 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // does not exist: `runCommand` rightly treats a nonzero exit as a result,
 // so the When step passed and the cause surfaced only as an empty `stdout`
 // in the next step. The placeholder is not a program under test, so it
-// fails by name instead. `--command` and `--then` are refused together,
-// because a step that runs a program changes state and a Then step
-// declares that it does not.
+// fails by name instead. A value is the same trap with a typo in it, so
+// scaffold refuses one that does not name a regular file under the
+// directory `nuka` runs in (a directory, a missing path) before a file is
+// written: this is the one place that sees the value before it is quoted
+// into source, and the question ends only one way here. A step name as
+// the value, with `--command` before the positional, is how the parser
+// reads a name typed right after the flag (`--command run-y --pattern
+// ...`), so that refusal names the option order too. `--command` and
+// `--then` are refused together, because a step that runs a program
+// changes state and a Then step declares that it does not.
 //
 // A stub's thrown message names its args, so a project that compiles with
 // `noUnusedParameters` accepts the file as written, and the first failed
@@ -105,13 +113,14 @@ export interface RunScaffoldOptions {
   /** `--command`'s value, the entry point the step runs, or `null` to
    * leave the TODO line that `run` refuses until it is filled in. */
   entryPoint: string | null;
+  /** Whether `--command` came before the name on the command line, which
+   * is how a name ends up as its value. */
+  commandBeforeName: boolean;
   /** Each `--from` value as typed, `<step>.<key>`, in order. */
   from: readonly string[];
   stdout: WritableSink;
   stderr: WritableSink;
 }
-
-const VALID_STEP_NAME = /^[a-z0-9-]+$/;
 
 const ZOD_FOR_CLASS: ReadonlyMap<PrimitiveClass, string> = new Map([
   ["number", "z.number()"],
@@ -467,6 +476,19 @@ function resolveChain(
   return { chained };
 }
 
+/** Why `--command`'s value cannot be the program the step runs, or `null`
+ * when it names a regular file. */
+async function entryPointRefusal(rootDir: string, entryPoint: string, commandBeforeName: boolean): Promise<string | null> {
+  const resolved = path.resolve(rootDir, entryPoint);
+  const isFile = await stat(resolved).then(
+    (stats) => stats.isFile(),
+    () => false,
+  );
+  if (isFile) return null;
+  const order = commandBeforeName && VALID_STEP_NAME.test(entryPoint) ? `; ${commandTookTheName(entryPoint)}` : "";
+  return `entry point ${JSON.stringify(entryPoint)} is not a file (looked at ${resolved}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO${order}`;
+}
+
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
   const { rootDir, name, pattern, then, command, entryPoint, from, stdout, stderr } = options;
 
@@ -490,6 +512,14 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     command && entryPoint === null
       ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
       : variantShape;
+
+  if (entryPoint !== null) {
+    const refusal = await entryPointRefusal(rootDir, entryPoint, options.commandBeforeName);
+    if (refusal !== null) {
+      stderr.write(`Refusing to scaffold: ${refusal}\n`);
+      return 1;
+    }
+  }
 
   const read = pattern === null ? { captures: [] } : readPattern(pattern);
   if ("refusal" in read) {

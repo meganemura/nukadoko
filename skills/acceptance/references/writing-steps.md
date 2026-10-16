@@ -34,7 +34,8 @@ criterion's wording doesn't match a pattern verbatim.
    reads from an earlier step's result: it writes the import, the args
    field, and the `from` entry ("Chaining a value from an earlier step").
    Add `--command <entry point>` for a When step that runs a program
-   (`--command src/cli.ts`, relative to the directory `nuka` runs in): it
+   (`--command src/cli.ts`, relative to the directory `nuka` runs in, and
+   refused unless a file is there): it
    writes `const cli = resolve("<entry point>")`, the `runCommand` call in
    `scratch.dir()`, and `returns` of `exitCode`, `stdout`, and `stderr`, so
    a Then step can be scaffolded `--from` it at once. Without a value the
