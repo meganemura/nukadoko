@@ -223,7 +223,11 @@ describe("a project without playwright installed", () => {
 describe("the shipped declarations under the project's own tsc", () => {
   let typesRoot: string;
 
-  async function makeProject(name: string, hidden: ReadonlySet<string>): Promise<string> {
+  async function makeProject(
+    name: string,
+    hidden: ReadonlySet<string>,
+    emit: Record<string, unknown> = { noEmit: true },
+  ): Promise<string> {
     const dir = path.join(typesRoot, name);
     const modules = path.join(dir, "node_modules");
     const installed = path.join(modules, "nukadoko");
@@ -249,7 +253,7 @@ describe("the shipped declarations under the project's own tsc", () => {
             skipLibCheck: false,
             noUnusedLocals: true,
             noUnusedParameters: true,
-            noEmit: true,
+            ...emit,
             types: ["node"],
           },
           include: ["src/**/*"],
@@ -266,6 +270,8 @@ describe("the shipped declarations under the project's own tsc", () => {
     expect(init.stdout).toContain("tsconfig.json");
     await run(["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command"]);
     await run(["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
+    await run(["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then"]);
+    await run(["scaffold", "plain-stub", "--pattern", "nothing happens yet"]);
     await writeFile(
       path.join(dir, "features", "steps", "page-title.ts"),
       [
@@ -321,11 +327,29 @@ describe("the shipped declarations under the project's own tsc", () => {
 
   let withoutPlaywright: string;
   let withPlaywright: string;
+  let emitting: string;
 
   beforeAll(async () => {
     typesRoot = await mkdtemp(path.join(os.tmpdir(), "nukadoko-declarations-"));
     withoutPlaywright = await makeProject("without-playwright", HIDDEN);
     withPlaywright = await makeProject("with-playwright", new Set([".bin", "nukadoko"]));
+    // What `tsc --init`, every library, and every workspace with project
+    // references write: a step whose type is inferred from `defineStep` gets
+    // its own `.d.ts`, so every name that inferred type reaches has to be
+    // one the package entry exports, or tsc stops with TS2742.
+    emitting = await makeProject("emitting", HIDDEN, {
+      declaration: true,
+      declarationMap: true,
+      composite: true,
+      outDir: "out",
+    });
+    // `StepRunResult` is the other name `defineStep`'s signature reaches,
+    // through `Step.run`, so a project that annotates a step's result by hand
+    // has to be able to import it.
+    await writeFile(
+      path.join(emitting, "src", "step-result.ts"),
+      'import type { DefaultReturns, StepRunResult } from "nukadoko";\n\nexport type NoResult = StepRunResult<DefaultReturns>;\n',
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -342,6 +366,15 @@ describe("the shipped declarations under the project's own tsc", () => {
     const result = await tsc(withPlaywright, "tsconfig.json");
     expect(result.output).toBe("");
     expect(result.code).toBe(0);
+  }, 60_000);
+
+  it("emits declarations for every scaffold shape and init's config under declaration and composite", async () => {
+    const result = await tsc(emitting, "tsconfig.json");
+    expect(result.output).toBe("");
+    expect(result.code).toBe(0);
+    const emitted = await readFile(path.join(emitting, "out", "features", "steps", "output-is-empty.d.ts"), "utf8");
+    expect(emitted).toContain('import("nukadoko").DefaultReturns');
+    expect(emitted).not.toContain("node_modules");
   }, 60_000);
 
   it("types page as Playwright's Page when playwright is installed", async () => {

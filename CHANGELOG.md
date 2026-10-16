@@ -318,6 +318,22 @@ just until 0.1.
   prints and the example ships today; `tests/examples-todo.test.ts` runs
   the commands and compares.
 
+### Fixed
+
+- **A project with `declaration: true` compiles a step that declares no `returns`.**
+  The package entry now exports `DefaultReturns` and `StepRunResult`, the
+  two names `defineStep`'s signature reaches that it did not export. A
+  step's `.d.ts` is inferred from `defineStep`, so in a project that emits
+  declarations (what `tsc --init` writes, and every library and every
+  `composite` workspace) every `--then` step, every plain stub, and every
+  hand-written step without `returns` failed `tsc` with TS2742 or TS2883:
+  the inferred type could not be named without a path into
+  `node_modules/nukadoko/dist/step/define-step.js`. It is now written as
+  `import("nukadoko").DefaultReturns`. The declarations test compiles each
+  shape `nuka scaffold` writes and the config `nuka init` writes under
+  `declaration`, `declarationMap`, and `composite`, and `npm run
+  pack-check` does the same against the packed tarball.
+
 ## 0.15.0 — 2026-10-16
 
 ### Added

@@ -53,7 +53,14 @@ export type {
   StepRecordFailed,
   StepRecordOk,
 } from "./record/types.js";
-export type { FromCandidate, FromMap, Step, StepDefinitionInput } from "./step/define-step.js";
+export type {
+  DefaultReturns,
+  FromCandidate,
+  FromMap,
+  Step,
+  StepDefinitionInput,
+  StepRunResult,
+} from "./step/define-step.js";
 export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";
 export { defineModel, defineRelation, modelCommand, relationEntry } from "./step/define-explore.js";
 export type { Draw, Model, ModelCommand, Relation, RelationSource, RelationStep, SourceDraw } from "./step/define-explore.js";

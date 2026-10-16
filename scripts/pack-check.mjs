@@ -219,6 +219,52 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
   log("nukadoko/mcp failed only for the missing optional peer");
 }
 
+// A project with `declaration: true` (what `tsc --init` writes, and what
+// every library and every `composite` workspace has) emits a `.d.ts` for
+// each step file, and a step's type is inferred from `defineStep`. Every
+// name that inferred type reaches has to be exported from the package
+// entry, or tsc stops with TS2742 on a step that declares no `returns`.
+// The scaffolded steps are each shape `nuka scaffold` writes.
+async function verifyDeclarationEmit(projectDir, nukaBin) {
+  await runInherit(nukaBin, ["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then"], {
+    cwd: projectDir,
+  });
+  await runInherit(nukaBin, ["scaffold", "plain-stub", "--pattern", "nothing happens yet"], { cwd: projectDir });
+  const configPath = path.join(projectDir, "tsconfig.declarations.json");
+  await writeFile(
+    configPath,
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          target: "ES2022",
+          strict: true,
+          skipLibCheck: false,
+          declaration: true,
+          composite: true,
+          outDir: "declarations-out",
+          typeRoots: [path.join(repoRoot, "node_modules", "@types")],
+          types: ["node"],
+        },
+        include: ["features/**/*", "nukadoko.config.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const outputPath = path.join(projectDir, "declarations.out");
+  const code = await runTypeScriptCapture(["--pretty", "false", "-p", configPath], projectDir, outputPath);
+  if (code !== 0) {
+    throw new Error(`step files failed to emit declarations:\n${await readFile(outputPath, "utf8")}`);
+  }
+  const emitted = await readFile(path.join(projectDir, "declarations-out", "features", "steps", "output-is-empty.d.ts"), "utf8");
+  if (!emitted.includes('import("nukadoko").DefaultReturns') || emitted.includes("node_modules")) {
+    throw new Error(`a step's emitted declaration does not name the package entry:\n${emitted}`);
+  }
+  log("step files emitted declarations that name the package entry");
+}
+
 async function writeNoBrowserProject(projectDir) {
   const stepsDir = path.join(projectDir, "features", "steps");
   await mkdir(stepsDir, { recursive: true });
@@ -336,6 +382,9 @@ async function main() {
       throw new Error(`a page step without playwright did not fail with the install command:\n${browserRun.stderr}`);
     }
     log("a page step without playwright failed with the install command");
+
+    stage = "tsc with declaration: true";
+    await verifyDeclarationEmit(projectDir, nukaBin);
 
     stage = "verify shipped files";
     const installedPackageDir = path.join(projectDir, "node_modules", "nukadoko");
