@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka describe`'s own `needs`/`needs_browser` fields —
 // this command's own yargs description calls its output "full contract"
@@ -15,7 +15,7 @@ async function describeJson(rootDir: string, name: string): Promise<Record<strin
   const stderr = createCaptureSink();
   const exitCode = await runCli(["describe", name], { rootDir, stdout, stderr });
   expect(exitCode).toBe(0);
-  expect(stderr.text()).toBe("");
+  expect(withoutNoConfigLine(stderr.text())).toBe("");
   return JSON.parse(stdout.text()) as Record<string, unknown>;
 }
 

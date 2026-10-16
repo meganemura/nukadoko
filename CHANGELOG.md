@@ -125,6 +125,20 @@ just until 0.1.
   that says a run ended rather than two that could disagree. Breaking for
   a reader of `complete.json`: see docs/upgrading.md.
 
+- **A command run where no config file exists says so on stderr, and names a config in a parent directory.**
+  From a workspace root, every command used to answer for an empty default
+  project and name only `features`. Now `check`, `run`, `steps`,
+  `describe`, `do`, `harvest`, `explore`, `clean`, `tend`, each `session`
+  subcommand, `experimental webmcp-tools`, and `scaffold` write one line to
+  stderr when the directory they run in has neither `nukadoko.config.ts`
+  nor `nukadoko.config.mts`: `no nukadoko.config.ts or nukadoko.config.mts
+  in <dir>; nukadoko's defaults apply (featuresDir "features")`. When a
+  parent directory up to the nearest one holding `.git` has a config, the
+  line continues `; one exists at ../../nukadoko.config.ts: run nuka from
+  that directory`. nukadoko still never reads a parent's config. stdout,
+  `--json` output, and exit codes are unchanged, except for `scaffold`
+  below. `init` prints no line.
+
 ### Packaging
 
 - **A test keeps the tarball's agent-facing files shipped and their links live.**
@@ -177,6 +191,12 @@ just until 0.1.
   run-time install line still name it. `npm run pack-check` now installs the
   tarball beside Playwright 1.64.0 and runs `nuka init`, `nuka check`,
   `nuka run`, and `tsc` with `skipLibCheck: false` there.
+
+- **`nuka scaffold` refuses to write when a parent directory has the config.**
+  A step file written below the directory that holds the config is not
+  one that config reads. The refusal names the directory and the relative
+  path to the config, exits 1, and writes nothing. Without a
+  parent config, `scaffold` writes as before and prints the stderr line.
 
 ### Fixed
 

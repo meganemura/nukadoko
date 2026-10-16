@@ -2549,6 +2549,11 @@ nukadoko が読むのは、そのファイルの default export です。
 default export が無いファイル、または default export が Promise であるファイルは、そのファイルを名指す `ConfigError` で拒否されます。
 名前付き export は config ではありません。
 読み込まれるのはオブジェクトそのもので、`export default defineConfig({ ... })` もその形です。
+ファイルは `nuka` を実行したディレクトリから読み、親ディレクトリからは読みません。
+`nukadoko.config.ts` も `nukadoko.config.mts` も無い場所では、config を読むコマンドはすべて、そのディレクトリと適用される既定値を示す 1 行を stderr に書きます。
+`.git` を持つ最も近いディレクトリまでの親ディレクトリに config があるときは、その行はそのファイルも現在のディレクトリからの相対パスで示し、`nuka scaffold` は書き込みを拒否します。
+そこに書いた step ファイルは、その config が読むものではないからです。
+`nuka init` はファイルを書くので、この行は出しません。
 `export default {}` は空の config で、ファイルが無いときと同じ既定値が入ります:
 
 | キー | 内容 |

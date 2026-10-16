@@ -22,7 +22,7 @@ describe("nuka steps: CommonJS/.ts step-file-import-failed on stderr", () => {
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("Cannot use import statement outside a module");
     expect(stderr.text()).toContain('"type": "commonjs"');
-    expect(stderr.text()).toContain(".mts");
+    expect(stderr.text()).toContain("rename this file to .mts");
   });
 
   it("does not append anything when the project is not CommonJS, even for a .ts import failure (regression)", async () => {
@@ -36,7 +36,7 @@ describe("nuka steps: CommonJS/.ts step-file-import-failed on stderr", () => {
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("features/steps/broken.ts");
     expect(stderr.text()).not.toContain('"type": "commonjs"');
-    expect(stderr.text()).not.toContain(".mts");
+    expect(stderr.text()).not.toContain("rename this file to .mts");
   });
 });
 
@@ -52,6 +52,6 @@ describe("nuka describe: CommonJS/.ts step-file-import-failed on stderr", () => 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("Cannot use import statement outside a module");
     expect(stderr.text()).toContain('"type": "commonjs"');
-    expect(stderr.text()).toContain(".mts");
+    expect(stderr.text()).toContain("rename this file to .mts");
   });
 });

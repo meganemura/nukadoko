@@ -309,6 +309,23 @@ export async function runCli(
   // side effects.
   let argsFailed = false;
 
+  // Wraps a command that reads the config, so a directory without one is
+  // named on stderr. In the handler rather than a yargs middleware: global
+  // middleware runs before a command's own `.check()`, so a refused flag
+  // would print this line ahead of its error. `init` writes the config and
+  // `scaffold` names the case itself or refuses, so neither is wrapped.
+  const namingMissingConfig = <T, U>(command: CommandModule<T, U>): CommandModule<T, U> => ({
+    ...command,
+    handler: async (args) => {
+      if (!argsFailed) {
+        const { locateConfig, noConfigLine } = await import("../config/config-presence.js");
+        const line = noConfigLine(rootDir, locateConfig(rootDir));
+        if (line !== null) stderr.write(`${line}\n`);
+      }
+      await command.handler(args);
+    },
+  });
+
   const stepsCommand: CommandModule<Record<string, never>, StepsArgs> = {
     command: "steps",
     describe: "list the whole vocabulary, typed and compat: name, patterns, description, mutates",
@@ -1183,7 +1200,7 @@ export async function runCli(
     describe:
       "EXPERIMENTAL: commands this package is still trying out; any of them may change shape or " +
       "disappear release to release without the deprecation notice a stable command would get",
-    builder: (y: Argv) => y.command(mcpToolsCommand).command(webmcpToolsCommand).demandCommand(1).strict(),
+    builder: (y: Argv) => y.command(mcpToolsCommand).command(namingMissingConfig(webmcpToolsCommand)).demandCommand(1).strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
       // `mcp-tools` or `webmcp-tools`, same pattern as `skillCommand`/`sessionCommand`.
@@ -1195,10 +1212,10 @@ export async function runCli(
     describe: "list|clear|start|stop sessions",
     builder: (y: Argv) =>
       y
-        .command(sessionListCommand)
-        .command(sessionClearCommand)
-        .command(sessionStartCommand)
-        .command(sessionStopCommand)
+        .command(namingMissingConfig(sessionListCommand))
+        .command(namingMissingConfig(sessionClearCommand))
+        .command(namingMissingConfig(sessionStartCommand))
+        .command(namingMissingConfig(sessionStopCommand))
         .demandCommand(1)
         .strict(),
     handler: () => {
@@ -1213,10 +1230,20 @@ export async function runCli(
   const helpGroups: HelpGroup[] = [
     {
       heading: "Everyday",
-      commands: [initCommand, scaffoldCommand, checkCommand, runCommand, stepsCommand, describeCommand],
+      commands: [
+        initCommand,
+        scaffoldCommand,
+        namingMissingConfig(checkCommand),
+        namingMissingConfig(runCommand),
+        namingMissingConfig(stepsCommand),
+        namingMissingConfig(describeCommand),
+      ],
     },
-    { heading: "Exploring", commands: [doCommand, sessionCommand, harvestCommand, exploreCommand] },
-    { heading: "Upkeep", commands: [tendCommand, cleanCommand, skillCommand] },
+    {
+      heading: "Exploring",
+      commands: [namingMissingConfig(doCommand), sessionCommand, namingMissingConfig(harvestCommand), namingMissingConfig(exploreCommand)],
+    },
+    { heading: "Upkeep", commands: [namingMissingConfig(tendCommand), namingMissingConfig(cleanCommand), skillCommand] },
     { heading: "Experimental", commands: [experimentalCommand] },
   ];
 

@@ -2,7 +2,12 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
+import {
+  createCaptureSink,
+  createEmptyTempDir,
+  removeTempDir,
+  withoutNoConfigLine,
+} from "./helpers/fixtures.js";
 
 // Responsibility: a missing featuresDir and an empty one are different
 // facts. `nuka steps` used to answer both with the exact same output
@@ -61,7 +66,7 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
 
     expect(exitCode).toBe(0);
     expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, steps: [], import_failures: [] });
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 });
 

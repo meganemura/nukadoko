@@ -251,3 +251,13 @@ export function stripRunProgressLines(text: string): string {
     )
     .join("\n");
 }
+
+/**
+ * `text` without the one stderr line a command writes when the directory
+ * it runs in has no config file. A fixture with no config gets that line
+ * on every command; a test about something else drops it here instead of
+ * writing a config into the fixture.
+ */
+export function withoutNoConfigLine(text: string): string {
+  return text.replace(/^no nukadoko\.config\.ts or nukadoko\.config\.mts in [^\n]*\n/m, "");
+}

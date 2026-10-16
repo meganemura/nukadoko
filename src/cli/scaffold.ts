@@ -3,6 +3,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
+import { locateConfig, noConfigLine, scaffoldParentRefusal } from "../config/config-presence.js";
 import { isCommonJsProject } from "../config/module-kind.js";
 import { UndefinedParameterTypeError } from "@cucumber/cucumber-expressions/dist/Errors.js";
 import { duplicateCaptureKeys } from "../binding/capture.js";
@@ -587,6 +588,21 @@ async function unloadableImportRefusal(rootDir: string, entryPoint: string): Pro
   return null;
 }
 
+/** Writes the refusal, or the missing-config line, for both scaffold
+ * forms. True when scaffold must stop: a step file written below the
+ * directory that holds the config is not one that config reads. */
+export function refusedBelowParentConfig(rootDir: string, stderr: WritableSink): boolean {
+  const presence = locateConfig(rootDir);
+  const refusal = scaffoldParentRefusal(rootDir, presence);
+  if (refusal !== null) {
+    stderr.write(`Refusing to scaffold: ${refusal}\n`);
+    return true;
+  }
+  const line = noConfigLine(rootDir, presence);
+  if (line !== null) stderr.write(`${line}\n`);
+  return false;
+}
+
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
   const { rootDir, name, pattern, then, command, entryPoint, description, from, stdout, stderr } = options;
 
@@ -638,6 +654,8 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     stderr.write(`Refusing to scaffold: ${fromFlags.refusal}\n`);
     return 1;
   }
+
+  if (refusedBelowParentConfig(rootDir, stderr)) return 1;
 
   let config;
   try {

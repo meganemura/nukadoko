@@ -57,7 +57,8 @@ before every command is its own way of being hard to follow.
 
 ## Where to start
 
-If the project is not initialized, run `nuka init` first. It writes the
+Run every `nuka` command from the directory that holds the config; in a
+workspace, that is the package, not the root. If the project is not initialized, run `nuka init` first. It writes the
 config, `features/steps/`, a `.gitignore` entry, and a `test:scenarios`
 script in `package.json`, so `npm run test:scenarios` runs `nuka run`,
 which checks `featuresDir` and then executes it. A `test:scenarios` script the

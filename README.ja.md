@@ -571,6 +571,8 @@ API の形は [An HTTP API](#an-http-api) にあります。
 このオプションは出力するプロジェクトでもしないプロジェクトでも有効で、変わるのは `.ts` ファイルを名指しする import の出力だけです。
 2 つのフラグで書くものを増やせます。
 `--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
+`nuka` は config があるディレクトリ、workspace ならそのパッケージで実行します。
+config が無い場所で実行したコマンドはそのことを stderr に書き、親ディレクトリに config があればそれを示し、そのとき `nuka scaffold` は書き込みを拒否します。
 
 Node は step ファイルの型を除去して実行するので、2 種類の TypeScript は読み込めません。
 実行時の振る舞いを持つ構文(`enum`、`namespace`、コンストラクタのパラメータプロパティ)は拒否され、`nuka check` はその行に `step-file-import-failed` を報告し、書き換え方を示します。

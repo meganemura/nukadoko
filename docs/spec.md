@@ -3079,6 +3079,14 @@ or to the section for its feature. nukadoko reads the file's default export.
 A file with no default export, or a Promise as that export, is a
 `ConfigError` that names the file. A named export is not the config. The
 object itself is what loads, including `export default defineConfig({ ... })`.
+The file is read from the directory `nuka` runs in, never from a parent
+directory. Where neither `nukadoko.config.ts` nor `nukadoko.config.mts`
+exists, every command that reads the config writes one line to stderr that
+names that directory and the defaults that apply. When a parent directory,
+up to the nearest one that holds `.git`, has a config, the line also names
+that file relative to the current directory, and `nuka scaffold` refuses to
+write, since a step file there is not one that config reads. `nuka init`
+writes the file and prints no such line.
 `export default {}` is the empty config and receives the same defaults as a
 missing file.
 

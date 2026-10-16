@@ -188,6 +188,7 @@ export default {
       name: "config",
       glob: "src/config/**",
       surface: [
+        "config-presence.ts",
         "define-config.ts",
         "emitter-targets.ts",
         "errors.ts",

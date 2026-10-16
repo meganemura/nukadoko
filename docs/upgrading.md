@@ -132,6 +132,15 @@ This part does not change release to release.
   retention no longer reads as proof that they ended, so it keeps them
   until they are older than `retention.adHocDays`; `nuka clean --records`
   removes them now.
+- **`nuka scaffold` refuses to write below a directory that holds the
+  config.** Run where neither `nukadoko.config.ts` nor
+  `nukadoko.config.mts` exists, while a parent directory up to the nearest
+  `.git` has one, it exits 1 with `Refusing to scaffold:` and the relative
+  path to that config, where it used to write a step file the config never
+  read. Run `nuka scaffold` from the directory that holds the config; in a
+  workspace that is the package. A script that scaffolded from a
+  subdirectory moves its `cd`. Every other command keeps its exit code and
+  stdout, and adds one stderr line that names the missing config.
 - **A project on a later Playwright 1.x keeps it.** The `playwright` peer
   range is `^1.61.1` now, not the exact `1.61.1`, so npm installs nukadoko
   beside any later 1.x without `ERESOLVE`. A project that pinned its own

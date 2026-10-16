@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: check-integration tests
 // — compat participates in undefined-step/duplicate/ambiguous
@@ -82,7 +82,7 @@ describe("nuka check: compat integration", () => {
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     const report = JSON.parse(stdout.text());
     expect(report.errors).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "parameter-type-invalid" })]),
@@ -98,7 +98,7 @@ describe("nuka check: compat integration", () => {
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     const report = JSON.parse(stdout.text());
     expect(report.errors.filter((issue: { code: string }) => issue.code === "parameter-type-invalid")).toEqual([
       {
@@ -120,7 +120,7 @@ describe("nuka check: compat integration", () => {
       stderr,
     });
 
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     const report = JSON.parse(stdout.text());
     expect(report.errors.filter((issue: { code: string }) => issue.code === "parameter-type-invalid")).toEqual([
       {

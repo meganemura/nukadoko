@@ -111,6 +111,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   0.16.1 以前が書いた run には `complete.json` しかありません。
   retention はもうそれを run が終わった証拠として読まないので、そうした run は `retention.adHocDays` より古くなるまで残ります。
   `nuka clean --records` を使えば今すぐ消せます。
+- **`nuka scaffold` は、config を持つディレクトリより下では書き込みを拒否します。**
+  `nukadoko.config.ts` も `nukadoko.config.mts` も無く、`.git` を持つ最も近いディレクトリまでの親ディレクトリに config がある場所では、`Refusing to scaffold:` とその config への相対パスを出して終了コード 1 で終わります。
+  以前は、その config が読まない step ファイルを書いていました。
+  `nuka scaffold` は config があるディレクトリ、workspace ならそのパッケージで実行します。
+  サブディレクトリで scaffold していたスクリプトは、`cd` の先を変えます。
+  ほかのコマンドは終了コードと stdout を変えず、config が無いことを示す 1 行を stderr に足すだけです。
 - **1.61.1 より新しい Playwright 1.x を使うプロジェクトは、その版のままで構いません。**
   `playwright` の peer の範囲は、正確な `1.61.1` ではなく `^1.61.1` になりました。
   npm は、それより新しい 1.x の横にも `ERESOLVE` なしで nukadoko をインストールします。

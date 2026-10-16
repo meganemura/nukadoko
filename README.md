@@ -605,6 +605,10 @@ changes only the output of an import that names a `.ts` file. Two flags
 add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
 (see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
 `!.env.example` to `.gitignore` for a project that keeps env files.
+Run `nuka` from the directory that holds the config, the package in a
+workspace: a command run where there is none says so on stderr, names a
+config in a parent directory if one exists, and `nuka scaffold` then
+refuses to write.
 
 Node runs the step files by erasing their types, so two kinds of
 TypeScript do not load. Syntax with run-time behavior (an `enum`, a

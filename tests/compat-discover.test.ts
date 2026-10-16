@@ -5,7 +5,13 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { discoverSteps } from "../src/discover/discover-steps.js";
 import { DuplicateCompatStepError } from "../src/discover/errors.js";
-import { createEmptyTempDir, fixture, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import {
+  createEmptyTempDir,
+  fixture,
+  removeTempDir,
+  repoRoot,
+  withoutNoConfigLine,
+} from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -132,7 +138,7 @@ describe("discoverSteps: compat registration", () => {
         { cwd: rootDir },
       );
 
-      expect(stderr).toBe("");
+      expect(withoutNoConfigLine(stderr)).toBe("");
       const report = JSON.parse(stdout) as { steps: Array<Record<string, unknown>> };
       expect(report.steps).toEqual([
         expect.objectContaining({

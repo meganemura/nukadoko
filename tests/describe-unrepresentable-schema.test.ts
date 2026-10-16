@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka describe` on a step whose args or returns schema
 // JSON Schema cannot represent. Zod throws ("Date cannot be represented
@@ -48,7 +48,7 @@ describe("nuka describe: a schema JSON Schema cannot represent", () => {
     const described = await describeStep("note-moment");
 
     expect(described.exitCode).toBe(1);
-    expect(described.stderr).toBe("");
+    expect(withoutNoConfigLine(described.stderr)).toBe("");
     expect(described.contract.name).toBe("note-moment");
     expect(described.contract.description).toBe("Note a moment");
     expect(described.contract.args).toBeNull();
@@ -67,7 +67,7 @@ describe("nuka describe: a schema JSON Schema cannot represent", () => {
     const described = await describeStep("trim");
 
     expect(described.exitCode).toBe(0);
-    expect(described.stderr).toBe("");
+    expect(withoutNoConfigLine(described.stderr)).toBe("");
     expect(described.contract.name).toBe("trim");
     expect(described.contract.description).toBe("Trim a name");
     expect(described.contract.args).toMatchObject({
@@ -90,7 +90,7 @@ describe("nuka describe: a schema JSON Schema cannot represent", () => {
     const described = await describeStep("moment");
 
     expect(described.exitCode).toBe(1);
-    expect(described.stderr).toBe("");
+    expect(withoutNoConfigLine(described.stderr)).toBe("");
     expect(described.contract.name).toBe("moment");
     expect(described.contract.description).toBe("Name a moment");
     expect(described.contract.args).toMatchObject({
@@ -109,7 +109,7 @@ describe("nuka describe: a schema JSON Schema cannot represent", () => {
     const described = await describeStep("echo");
 
     expect(described.exitCode).toBe(0);
-    expect(described.stderr).toBe("");
+    expect(withoutNoConfigLine(described.stderr)).toBe("");
     expect(described.contract.name).toBe("echo");
     expect(described.contract.description).toBe("Echo a name");
     expect(described.contract.args).toMatchObject({

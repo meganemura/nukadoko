@@ -13,6 +13,7 @@ import {
   removeTempDir,
   repoRoot,
   sourceNodeArgs,
+  withoutNoConfigLine,
 } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -28,7 +29,7 @@ describe("nuka steps", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     // Top-level `{ steps, import_failures }`, not a bare array —
     // `import_failures` is
     // always present, `[]` here since this fixture has nothing broken.
@@ -93,7 +94,7 @@ describe("nuka describe", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     const contract = JSON.parse(stdout.text());
     expect(contract.name).toBe("create-project");
     expect(contract.mutates).toBe(true);
@@ -122,7 +123,7 @@ describe("nuka describe", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     const contract = JSON.parse(stdout.text());
     // greet-with-default's args are { name: string, tag: string default
     // "guest" }. `name` is what a caller must supply. `tag` is not: the
@@ -188,7 +189,7 @@ describe("nuka do", () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(stderr.text()).toBe("");
+      expect(withoutNoConfigLine(stderr.text())).toBe("");
       const stepRecord = JSON.parse(stdout.text());
       expect(stepRecord.status).toBe("passed");
       expect(stepRecord.step).toBe("echo");
@@ -369,7 +370,7 @@ describe("nuka do", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stderr.text()).toBe("");
+      expect(withoutNoConfigLine(stderr.text())).toBe("");
       const stepRecord = JSON.parse(stdout.text());
       expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
@@ -397,7 +398,7 @@ describe("nuka (process)", () => {
       cwd: fixture("basic-project"),
     });
 
-    expect(stderr).toBe("");
+    expect(withoutNoConfigLine(stderr)).toBe("");
     const report = JSON.parse(stdout);
     expect(report.steps.map((s: { name: string }) => s.name).sort()).toEqual([
       "create-project",
@@ -417,7 +418,7 @@ describe("nuka (process)", () => {
         { cwd: rootDir },
       );
 
-      expect(stderr).toBe("");
+      expect(withoutNoConfigLine(stderr)).toBe("");
       const stepRecord = JSON.parse(stdout);
       expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
@@ -503,7 +504,7 @@ describe("nuka (process)", () => {
       const stdout = Buffer.concat(stdoutChunks).toString("utf8");
       const stderr = Buffer.concat(stderrChunks).toString("utf8");
       expect(exitCode).toBe(0);
-      expect(stderr).toBe("");
+      expect(withoutNoConfigLine(stderr)).toBe("");
       expect(Buffer.byteLength(stdout)).toBeGreaterThan(64 * 1024);
       const report = JSON.parse(stdout) as {
         steps: { name: string; description: string }[];
@@ -540,7 +541,7 @@ describe("nuka (process)", () => {
 
       expect(child.status).toBe(1);
       expect(child.stdout).toBe("");
-      const lines = (child.stderr ?? "").split("\n").filter((line) => line.length > 0);
+      const lines = withoutNoConfigLine(child.stderr ?? "").split("\n").filter((line) => line.length > 0);
       expect(lines).toEqual([expect.stringMatching(/^EEXIST: file already exists, mkdir /)]);
     } finally {
       await removeTempDir(rootDir);

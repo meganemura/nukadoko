@@ -19,7 +19,7 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { attachStepLines, loadFeaturesFromDirs } from "../feature/load-features.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { readCheckTargets } from "./check.js";
-import { stepTemplate } from "./scaffold.js";
+import { refusedBelowParentConfig, stepTemplate } from "./scaffold.js";
 import { formatVocabularyError } from "./vocabulary.js";
 
 // Responsibility: `nuka scaffold --feature <path>`, one stub per line that
@@ -197,6 +197,7 @@ interface ProjectLine {
 
 export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Promise<number> {
   const { rootDir, feature, stdout, stderr } = options;
+  if (refusedBelowParentConfig(rootDir, stderr)) return 1;
   let config;
   let selected;
   try {

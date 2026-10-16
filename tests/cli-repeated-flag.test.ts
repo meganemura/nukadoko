@@ -2,7 +2,12 @@ import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
+import {
+  createCaptureSink,
+  createEmptyTempDir,
+  removeTempDir,
+  withoutNoConfigLine,
+} from "./helpers/fixtures.js";
 
 // Responsibility: a string or number flag that takes one value must be
 // refused when it is given again, before the command writes anything.
@@ -62,7 +67,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe("Unknown step: step\n");
+    expect(withoutNoConfigLine(stderr.text())).toBe("Unknown step: step\n");
   });
 
   it("keeps every --fail-on value", async () => {
@@ -77,7 +82,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
-    expect(stderr.text().startsWith('--fail-on: "a", "b" are not codes nuka tend reports.')).toBe(true);
+    expect(withoutNoConfigLine(stderr.text()).startsWith('--fail-on: "a", "b" are not codes nuka tend reports.')).toBe(true);
   });
 
   it("treats a repeated boolean as that boolean", async () => {
@@ -88,6 +93,6 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe(`featuresDir "features" does not exist at ${path.join(rootDir, "features")}\n`);
+    expect(withoutNoConfigLine(stderr.text())).toBe(`featuresDir "features" does not exist at ${path.join(rootDir, "features")}\n`);
   });
 });
