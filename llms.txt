@@ -10,13 +10,32 @@ Installed package: `node_modules/nukadoko/skills/...` (this file at `node_module
 
 ## Commands
 
-- `nuka init` — project setup with self-check
-- `nuka steps` / `nuka describe <name>` / `nuka scaffold <name> [--pattern <text>] [--then] [--from <step>.<key>]` — vocabulary and stubs
-- `nuka check [feature]` — static checks before run
-- `nuka do <name>` / `nuka run [feature..]`: execute under contracts; records on stdout; `run` first refuses what `check` refuses for its scenarios (`--no-check` skips that), runs featuresDir with no target, and writes a Markdown run summary (`--summary <path>` for a PR comment)
-- `nuka harvest <step-record-ids..>` — draft a feature from `do` record ids
+The everyday loop is four things: a `.feature` file, a `defineStep` per kind of line, `nuka check`, and `nuka run`. README.md "Beside your unit tests" walks through it for a CLI project.
+
+Everyday:
+
+- `nuka init`: project setup with self-check; adds `.nukadoko/` to `.gitignore` and a `test:scenarios` script
+- `nuka scaffold <name> [--pattern <text>] [--then] [--from <step>.<key>]`: a step stub that fails until implemented; `--from` writes the chain to an earlier step's returned value
+- `nuka check [feature]`: static checks before run
+- `nuka run [feature..]`: execute scenarios, featuresDir with no target; first refuses what `check` refuses for its scenarios (`--no-check` skips that); records on stdout, progress and failures on stderr, a Markdown run summary (`--summary <path>` for a PR comment)
+- `nuka steps` / `nuka describe <name>`: the vocabulary and one step's contract
+
+Exploring:
+
+- `nuka do <name>`: execute one typed step under its contract; step record on stdout
+- `nuka session`: list, clear, start, or stop sessions
+- `nuka harvest <step-record-ids..>`: draft a feature from `do` record ids
 - `nuka explore <file> [--json]`: run a model or a relation against request-only steps; prints the shortest failing scenario, or one JSON object with `--json`
-- `nuka session` / `nuka clean` / `nuka tend` — sessions, cleanup, rot signals
-- `nuka mcp-tools -- <command>`: list the tools another MCP server declares over stdio (not nukadoko's own vocabulary)
+
+Upkeep:
+
+- `nuka tend`: rot signals, never a gate by default
+- `nuka clean`: delete accumulated records and cache under the state directory
+- `nuka skill path`: where the bundled skills live
+
+Experimental (may change without notice):
+
+- `nuka experimental mcp-tools -- <command>`: list the tools another MCP server declares over stdio (not nukadoko's own vocabulary)
+- `nuka experimental webmcp-tools <url>`: list the WebMCP tools a page declares
 
 Prefer `check` before `run`. Do not treat agent narrative as the step record.

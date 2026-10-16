@@ -71,7 +71,9 @@ async function readCommandTree(commandPath: readonly string[] = []): Promise<Com
     const flag = /^ {2}(?:-[a-zA-Z], )?--([a-z][a-z0-9-]*)/.exec(line);
     if (section === "Options:" && flag) flags.add(flag[1]!);
     const command = new RegExp(`^ {2}nuka ${commandPath.map((word) => `${word} `).join("")}([a-z][a-z-]*)`).exec(line);
-    if (section === "Commands:" && command) {
+    // The top level lists its commands under group headings ("Everyday:",
+    // "Exploring:", ...) rather than one "Commands:" heading.
+    if (section !== "Options:" && section !== "Positionals:" && command) {
       subcommands.set(command[1]!, await readCommandTree([...commandPath, command[1]!]));
     }
   }
@@ -296,7 +298,7 @@ function summaryOmissions(tree: CommandNode, summary: string): string[] {
 
 // A command a release removed is still named by the upgrade notes that say
 // what replaced it, and by their history. Only those two files may cite one.
-const REMOVED_COMMANDS = new Set(["accept"]);
+const REMOVED_COMMANDS = new Set(["accept", "mcp-tools"]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 
 function citesRemovedCommand(file: DocFile, invocation: string): boolean {
@@ -350,7 +352,7 @@ describe("the extraction itself", () => {
     const tree = await readCommandTree();
     expect(invocationProblem(tree, "skill install")).toBe('"nuka skill" has no command "install"');
     expect(invocationProblem(tree, "tend --codes")).toBe('"nuka tend" has no flag --codes');
-    expect(invocationProblem(tree, "mcp-tools --json -- node server.js --port 1")).toBe(undefined);
+    expect(invocationProblem(tree, "experimental mcp-tools --json -- node server.js --port 1")).toBe(undefined);
     expect(invocationProblem(tree, "run features/ --no-quiet")).toBe(undefined);
   });
 

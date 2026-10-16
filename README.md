@@ -277,8 +277,8 @@ Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
 emitters, the Markdown run summary, tending (`nuka tend`), scenario
 harvesting (`nuka harvest`), models and relations (`nuka explore`), the
-MCP tool listing (`nuka mcp-tools`), Varar-style Markdown oaths (a second
-front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
+MCP tool listing (`nuka experimental mcp-tools`), Varar-style Markdown
+oaths (a second front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
 agent skills. Not implemented: an AI-assisted glue converter, and the rest
 of Varar (comparing a step's return value to words in the sentence, every
 dialect). See the [roadmap](docs/spec.md#roadmap).

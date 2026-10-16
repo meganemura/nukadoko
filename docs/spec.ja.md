@@ -819,7 +819,7 @@ nukadoko は `needs_inferred` を fixture グラフ全体へ展開しません�
 
 2 つのインターフェースが、stdio 経由で標準的な MCP サーバに到達します。
 どちらのインターフェースも `nuka steps` から分離されています。
-`nuka mcp-tools -- <command> [args...]` は、サーバが宣言したツールを読み取って出力します。
+`nuka experimental mcp-tools -- <command> [args...]` は、サーバが宣言したツールを読み取って出力します。
 `"nukadoko/mcp"` の `connectMcpServer` と `callMcpTool` により、手書きの step がツールを呼べます。
 宣言されたツールは、人が step の `args` を手で書くために役立ちます。
 このパッケージは、宣言されたツールを step または step 語彙に変換しません。
@@ -907,10 +907,9 @@ WebMCP ツールの呼び出しは信頼境界を越えます。
 CLI は `experimental` を `webmcp-tools` の 1 段上のコマンドに置きます。
 どちらのインターフェースを使う場合も、呼び出し側はその印を入力する必要があります。
 
-この命名は「MCP servers」のインターフェースと異なります。
-MCP は主要なプロトコルの名前であるため、`nuka mcp-tools` はトップレベルのコマンドに留まります。
-WebMCP は補助的なプロトコルであるため、そのコマンドは 1 段深くなります。
-したがって、WebMCP の各 CLI 呼び出しは `experimental` を含みます。
+`nuka experimental mcp-tools` も同じ語の下にありますが、理由は異なります。
+日常のループのどの step も、別のサーバのツール一覧を必要としません。
+そのため、トップレベルのヘルプは、このコマンドを初めて使う人の最初の画面に載せません。
 
 標準のドキュメントがこの利用方法を明確にサポートしていないため、この印は残ります。
 Chrome の WebMCP ドキュメントは、2026-08-13 に https://developer.chrome.com/docs/ai/webmcp から取得しました。
@@ -3722,7 +3721,7 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
-nuka mcp-tools [--json] -- <command> [args...]
+nuka experimental mcp-tools [--json] -- <command> [args...]
                               list the tools an MCP server declares over stdio,
                               connecting just long enough to ask. A separate
                               face from `nuka steps`; nothing this command

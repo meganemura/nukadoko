@@ -12,6 +12,7 @@ import { runClean } from "./clean.js";
 import { runDo } from "./do.js";
 import { DEFAULT_EXPLORE_LENGTH, DEFAULT_EXPLORE_RUNS, runExplore } from "./explore.js";
 import { runHarvest } from "./harvest.js";
+import { HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
 import { runInit } from "./init.js";
 import { runMcpTools } from "./mcp-tools.js";
 import { runRun } from "./run.js";
@@ -42,7 +43,8 @@ import { divertProcessStdoutToStderr } from "../run/step-stdout.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `harvest`, `skill path`, `mcp-tools`, `experimental webmcp-tools`)
+// `clean`, `tend`, `harvest`, `skill path`, `experimental mcp-tools`,
+// `experimental webmcp-tools`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -69,10 +71,10 @@ import { divertProcessStdoutToStderr } from "../run/step-stdout.js";
 // top-level command so the word is unavoidable at every call site;
 // `mcp-tools`'s own connect-list-close logic lives in cli/mcp-tools.ts
 // (thin wiring, reaching src/mcp/list-tools.ts through a dynamic
-// `import()` rather than a static one — that file's own header explains
-// why) and stays a top-level command, unlike `webmcp-tools`: MCP is the
-// protocol this whole surface is named after, not an auxiliary one
-// (docs/spec.md "MCP servers"); `harvest`'s own draft-rendering and
+// `import()` rather than a static one; that file's own header explains
+// why), under `experimental` too: it lists another server's tools, which
+// no step of the everyday loop needs, so the top-level help keeps it out
+// of a newcomer's first screen; `harvest`'s own draft-rendering and
 // round-trip logic lives in cli/harvest.ts (thin wiring) and
 // src/harvest/* (the actual work), the same split as `check`/`tend`;
 // this module only wires their argv shapes and reports their
@@ -971,7 +973,7 @@ export async function runCli(
   const mcpToolsCommand: CommandModule<Record<string, never>, McpToolsArgs> = {
     command: "mcp-tools",
     describe:
-      "list the tools an MCP server declares over stdio: `nuka mcp-tools -- <command> [args...]` " +
+      "list the tools an MCP server declares over stdio: `nuka experimental mcp-tools -- <command> [args...]` " +
       "connects to it just long enough to ask. A separate face from `nuka steps`; nothing this " +
       "command reports is ever part of that vocabulary",
     builder: (y: Argv) =>
@@ -1031,15 +1033,30 @@ export async function runCli(
     },
   };
 
+  // `mcp-tools` was a top-level command until it moved under
+  // `experimental`. The old spelling fails with the new one instead of
+  // yargs' bare "Unknown argument", so a script written against the old
+  // name says what to change. Hidden from the help: it runs nothing.
+  const movedMcpToolsCommand: CommandModule = {
+    command: "mcp-tools",
+    describe: false,
+    builder: (y: Argv) => y.strict(false).parserConfiguration({ "populate--": true }),
+    handler: () => {
+      if (argsFailed) return;
+      exitCode = 1;
+      stderr.write("`nuka mcp-tools` moved to `nuka experimental mcp-tools`; run that instead, with the same arguments\n");
+    },
+  };
+
   const experimentalCommand: CommandModule = {
     command: "experimental",
     describe:
       "EXPERIMENTAL: commands this package is still trying out; any of them may change shape or " +
       "disappear release to release without the deprecation notice a stable command would get",
-    builder: (y: Argv) => y.command(webmcpToolsCommand).demandCommand(1).strict(),
+    builder: (y: Argv) => y.command(mcpToolsCommand).command(webmcpToolsCommand).demandCommand(1).strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // `webmcp-tools`, same pattern as `skillCommand`/`sessionCommand`.
+      // `mcp-tools` or `webmcp-tools`, same pattern as `skillCommand`/`sessionCommand`.
     },
   };
 
@@ -1061,7 +1078,21 @@ export async function runCli(
     },
   };
 
-  const parser = yargs(argv)
+  // The order a newcomer meets them in: the everyday loop first, then the
+  // commands for exploring a path one step at a time, then upkeep.
+  const helpGroups: HelpGroup[] = [
+    {
+      heading: "Everyday",
+      commands: [initCommand, scaffoldCommand, checkCommand, runCommand, stepsCommand, describeCommand],
+    },
+    { heading: "Exploring", commands: [doCommand, sessionCommand, harvestCommand, exploreCommand] },
+    { heading: "Upkeep", commands: [tendCommand, cleanCommand, skillCommand] },
+    { heading: "Experimental", commands: [experimentalCommand] },
+  ];
+
+  const parser = helpGroups
+    .flatMap((group) => group.commands)
+    .reduce((y: Argv, command) => y.command(withoutFlatListing(command)), yargs(argv))
     .scriptName("nuka")
     // Pinned, not left to `LANG`: yargs translates its own chrome (usage
     // headers, "Commands:", its built-in error wording) but every command
@@ -1077,21 +1108,15 @@ export async function runCli(
       exitCode = 1;
       stderr.write(`${err instanceof Error ? err.message : (msg ?? "unknown error")}\n`);
     })
-    .command(stepsCommand)
-    .command(describeCommand)
-    .command(doCommand)
-    .command(runCommand)
-    .command(harvestCommand)
-    .command(exploreCommand)
-    .command(sessionCommand)
-    .command(initCommand)
-    .command(scaffoldCommand)
-    .command(checkCommand)
-    .command(cleanCommand)
-    .command(tendCommand)
-    .command(skillCommand)
-    .command(mcpToolsCommand)
-    .command(experimentalCommand)
+    .usage(
+      `nuka <command>\n\n${renderCommandGroups(
+        "nuka",
+        helpGroups.map((group) => ({ heading: group.heading, lines: helpLines(group) })),
+        HELP_WIDTH,
+      )}`,
+    )
+    .wrap(null)
+    .command(movedMcpToolsCommand)
     .demandCommand(1)
     .strict()
     .help();

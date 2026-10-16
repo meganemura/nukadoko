@@ -10,7 +10,7 @@ import { createCaptureSink, fixture, repoRoot, testsDir } from "./helpers/fixtur
 
 // Responsibility: this surface's own acceptance criteria, in one file. A
 // real MCP server (tests/helpers/mcp-test-server.ts) spawned over stdio,
-// A (`nuka mcp-tools`) listing its tools and B
+// A (`nuka experimental mcp-tools`) listing its tools and B
 // (connectMcpServer/callMcpTool, "nukadoko/mcp") calling one and reading
 // back its result, plus `callMcpTool`'s own `isError` check throwing on a
 // tool that reports an in-band failure, plus `connectMcpServer`'s own
@@ -51,7 +51,7 @@ describe("MCP client surface", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["mcp-tools", "--json", "--", tsxBin, serverScript], {
+      const exitCode = await runCli(["experimental", "mcp-tools", "--json", "--", tsxBin, serverScript], {
         stdout,
         stderr,
       });
@@ -174,7 +174,7 @@ describe("MCP client surface", () => {
   it("refuses when no command follows --", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["mcp-tools"], { stdout, stderr });
+    const exitCode = await runCli(["experimental", "mcp-tools"], { stdout, stderr });
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("needs the server's own command after --");

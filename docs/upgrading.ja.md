@@ -38,6 +38,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `--fail-on` で code を名指すと、その code は報告されるからです。
   どちらかの code を素の `nuka tend --json` から読むジョブやスクリプトは、`--all` を足します。
   注記を黙らせるためだけに書いたプレースホルダーの `rationale: ""` は消してかまいません。
+- **`nuka mcp-tools` は `nuka experimental mcp-tools` になりました。**
+  フラグも出力も同じです。
+  古い綴りは終了コード 1 で終わり、新しい綴りを示します。
+  そのため、`nuka mcp-tools -- <command>` を実行していた script は `nuka experimental mcp-tools -- <command>` に変えてください。
+  `experimental` の下にあるため、その形は後のリリースで、非推奨の告知なしに変わることがあります。
 
 `nuka run` が `nuka check` の拒否するものを拒否するようになりました。
 `check` が error を報告する feature を実行しているプロジェクトは、対応が必要です。

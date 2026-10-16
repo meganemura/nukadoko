@@ -324,7 +324,7 @@ export default {
           file: "list-tools.ts",
           from: "src/cli/**",
           because:
-            "nuka mcp-tools dynamic-imports this file so the optional MCP client stays off every other command. It is not part of the nukadoko/mcp package surface.",
+            "nuka experimental mcp-tools dynamic-imports this file so the optional MCP client stays off every other command. It is not part of the nukadoko/mcp package surface.",
         },
       ],
     },

@@ -61,6 +61,17 @@ just until 0.1.
 - **The acceptance skill drops `nuka tend` from the per-pull-request
   loop.** It runs as the scheduled CI job (`docs/ci.md`); an agent runs it
   when asked.
+- **`nuka --help` groups its commands, the everyday loop first.** The flat
+  list of fifteen commands is now four groups: Everyday (`init`,
+  `scaffold`, `check`, `run`, `steps`, `describe`), Exploring (`do`,
+  `session`, `harvest`, `explore`), Upkeep (`tend`, `clean`, `skill`), and
+  Experimental. yargs has no grouping for commands, so the top-level list
+  is rendered from one table in `src/cli/help-groups.ts`; each command's
+  own `nuka <command> --help` keeps its description.
+- **`nuka mcp-tools` moved to `nuka experimental mcp-tools`.** Listing
+  another MCP server's tools is not part of the everyday loop, and the top
+  level now shows only what a newcomer needs. The old spelling exits 1 and
+  names the new one. `docs/upgrading.md` has the one-line change.
 
 ## 0.15.0 — 2026-10-16
 

@@ -1,4 +1,4 @@
-This fixture project exists for `nuka mcp-tools`, `nuka steps`, and
+This fixture project exists for `nuka experimental mcp-tools`, `nuka steps`, and
 `callMcpTool`, not for a scenario that actually runs: there is no
 `.feature` file here. `steps/` holds one real step
 (calls-mcp-tool-step.ts) that reaches an MCP server exclusively through the

@@ -1,7 +1,7 @@
 import type { StdioServerParameters } from "@modelcontextprotocol/client/stdio";
 import { connectMcpServer } from "./connect.js";
 
-// Responsibility: the "A" half of this pair, `nuka mcp-tools`'s own logic
+// Responsibility: the "A" half of this pair, `nuka experimental mcp-tools`'s own logic
 // (src/cli/mcp-tools.ts is its thin CLI wiring): connect to a server just
 // long enough to read the tools it declares, then close it again. Never a
 // source of step vocabulary — `nuka steps` never reads this module and

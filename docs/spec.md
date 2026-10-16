@@ -1029,7 +1029,7 @@ nukadoko does not expand `needs_inferred` through the fixture graph.
 
 Two interfaces reach a standard MCP server over stdio.
 Both interfaces stay separate from `nuka steps`.
-`nuka mcp-tools -- <command> [args...]` reads and prints the tools that a server declares.
+`nuka experimental mcp-tools -- <command> [args...]` reads and prints the tools that a server declares.
 `connectMcpServer` and `callMcpTool` from `"nukadoko/mcp"` let a hand-written step call a tool.
 The declared tools help a person write the step's `args` by hand.
 This package does not convert a declared tool into a step or step vocabulary.
@@ -1121,10 +1121,8 @@ The prefix remains visible when autocomplete offers the function to a step autho
 The CLI places `experimental` one command above `webmcp-tools`.
 A caller must type the mark to use either interface.
 
-This naming differs from the "MCP servers" interface.
-`nuka mcp-tools` stays a top-level command because MCP names the primary protocol.
-WebMCP is an auxiliary protocol, so its command has one additional level.
-Thus, each WebMCP CLI call includes `experimental`.
+`nuka experimental mcp-tools` sits under the same word for a different reason.
+No step of the everyday loop needs another server's tool list, so the top-level help keeps the command off a newcomer's first screen.
 
 The mark remains because the standard documentation does not clearly support this use.
 The Chrome WebMCP documentation was fetched on 2026-08-13 from
@@ -4283,7 +4281,7 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
-nuka mcp-tools [--json] -- <command> [args...]
+nuka experimental mcp-tools [--json] -- <command> [args...]
                               list the tools an MCP server declares over stdio,
                               connecting just long enough to ask. A separate
                               face from `nuka steps`; nothing this command

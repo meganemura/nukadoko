@@ -45,6 +45,11 @@ This part does not change release to release.
   script that reads either code from plain `nuka tend --json` adds
   `--all`. A placeholder `rationale: ""` written only to quiet the note
   can go.
+- **`nuka mcp-tools` is now `nuka experimental mcp-tools`.** Same flags,
+  same output. The old spelling exits 1 and names the new one, so a
+  script that ran `nuka mcp-tools -- <command>` becomes
+  `nuka experimental mcp-tools -- <command>`. Under `experimental`, its
+  shape may change in a later release without a deprecation notice.
 
 `nuka run` now refuses what `nuka check` refuses, which a project that runs a feature `check` reports an error for has to act on.
 
